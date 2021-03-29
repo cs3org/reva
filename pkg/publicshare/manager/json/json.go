@@ -222,7 +222,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 // UpdatePublicShare updates the public share
 func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
 	log := appctx.GetLogger(ctx)
-	share, err := m.GetPublicShare(ctx, u, req.Ref)
+	share, err := m.GetPublicShare(ctx, u, req.Ref, false)
 	if err != nil {
 		return nil, errors.New("ref does not exist")
 	}
@@ -301,11 +301,14 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 }
 
 // GetPublicShare gets a public share either by ID or Token.
-func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (*link.PublicShare, error) {
+func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error) {
 	if ref.GetToken() != "" {
-		ps, err := m.getByToken(ctx, ref.GetToken())
+		ps, pw, err := m.getByToken(ctx, ref.GetToken())
 		if err != nil {
 			return nil, errors.New("no shares found by token")
+		}
+		if ps.PasswordProtected && sign {
+			publicshare.AddSignature(ps, pw)
 		}
 		return ps, nil
 	}
@@ -320,6 +323,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 
 	for _, v := range db {
 		d := v.(map[string]interface{})["share"]
+		passDB := v.(map[string]interface{})["password"].(string)
 
 		var ps link.PublicShare
 		if err := utils.UnmarshalJSONToProtoV1([]byte(d.(string)), &ps); err != nil {
@@ -333,6 +337,9 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 				}
 				return nil, errors.New("no shares found by id:" + ref.GetId().String())
 			}
+			if ps.PasswordProtected && sign {
+				publicshare.AddSignature(&ps, passDB)
+			}
 			return &ps, nil
 		}
 
@@ -341,7 +348,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 }
 
 // ListPublicShares retrieves all the shares on the manager that are valid.
-func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
+func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
 	var shares []*link.PublicShare
 
 	m.mutex.Lock()
@@ -361,6 +368,10 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		// skip if the share isn't created by the current user.
 		if local.Creator.GetOpaqueId() != u.Id.OpaqueId || (local.Creator.GetIdp() != "" && u.Id.Idp != local.Creator.GetIdp()) {
 			continue
+		}
+
+		if local.PublicShare.PasswordProtected && sign {
+			publicshare.AddSignature(&local.PublicShare, local.Password)
 		}
 
 		if len(filters) == 0 {
@@ -457,7 +468,7 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 			return errors.New("reference does not exist")
 		}
 	case ref.GetToken() != "":
-		share, err := m.getByToken(ctx, ref.GetToken())
+		share, _, err := m.getByToken(ctx, ref.GetToken())
 		if err != nil {
 			return err
 		}
@@ -471,10 +482,10 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 	return m.writeDb(db)
 }
 
-func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicShare, error) {
+func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicShare, string, error) {
 	db, err := m.readDb()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	m.mutex.Lock()
@@ -483,19 +494,20 @@ func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicSha
 	for _, v := range db {
 		var local link.PublicShare
 		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
 		if local.Token == token {
-			return &local, nil
+			passDB := v.(map[string]interface{})["password"].(string)
+			return &local, passDB, nil
 		}
 	}
 
-	return nil, fmt.Errorf("share with token: `%v` not found", token)
+	return nil, "", fmt.Errorf("share with token: `%v` not found", token)
 }
 
 // GetPublicShareByToken gets a public share by its opaque token.
-func (m *manager) GetPublicShareByToken(ctx context.Context, token, password string) (*link.PublicShare, error) {
+func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
 	db, err := m.readDb()
 	if err != nil {
 		return nil, err
@@ -521,7 +533,10 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 			}
 
 			if local.PasswordProtected {
-				if err := bcrypt.CompareHashAndPassword([]byte(passDB), []byte(password)); err == nil {
+				if authenticate(&local, passDB, auth) {
+					if sign {
+						publicshare.AddSignature(&local, passDB)
+					}
 					return &local, nil
 				}
 
@@ -557,6 +572,25 @@ func (m *manager) writeDb(db map[string]interface{}) error {
 	}
 
 	return nil
+}
+
+func authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuthentication) bool {
+	switch {
+	case auth.GetPassword() != "":
+		if err := bcrypt.CompareHashAndPassword([]byte(pw), []byte(auth.GetPassword())); err == nil {
+			return true
+		}
+	case auth.GetSignature() != nil:
+		sig := auth.GetSignature()
+		now := time.Now()
+		expiration := time.Unix(int64(sig.GetSignatureExpiration().GetSeconds()), int64(sig.GetSignatureExpiration().GetNanos()))
+		if now.After(expiration) {
+			return false
+		}
+		s := publicshare.CreateSignature(share.Token, pw, expiration)
+		return sig.GetSignature() == s
+	}
+	return false
 }
 
 type publicShare struct {

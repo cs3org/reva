@@ -20,11 +20,14 @@ package publicshares
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -72,9 +75,37 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		return nil, err
 	}
 
+	var auth *link.PublicShareAuthentication
+	if strings.HasPrefix(secret, "password|") {
+		secret = strings.TrimPrefix(secret, "password|")
+		auth = &link.PublicShareAuthentication{
+			Spec: &link.PublicShareAuthentication_Password{
+				Password: secret,
+			},
+		}
+	} else if strings.HasPrefix(secret, "signature|") {
+		secret = strings.TrimPrefix(secret, "signature|")
+		parts := strings.Split(secret, "|")
+		sig, expiration := parts[0], parts[1]
+		exp, _ := time.Parse(time.RFC3339, expiration)
+
+		auth = &link.PublicShareAuthentication{
+			Spec: &link.PublicShareAuthentication_Signature{
+				Signature: &link.ShareSignature{
+					Signature: sig,
+					SignatureExpiration: &typesv1beta1.Timestamp{
+						Seconds: uint64(exp.UnixNano() / 1000000000),
+						Nanos:   uint32(exp.UnixNano() % 1000000000),
+					},
+				},
+			},
+		}
+	}
+
 	publicShareResponse, err := gwConn.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{
-		Token:    token,
-		Password: secret,
+		Token:          token,
+		Authentication: auth,
+		Sign:           true,
 	})
 	switch {
 	case err != nil:

@@ -35,4 +35,3 @@ linters:
     - gocritic
     - prealloc
     #- gosec
-

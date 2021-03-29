@@ -171,16 +171,22 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				w.WriteHeader(http.StatusNotFound)
 			}
 
-			_, pass, _ := r.BasicAuth()
+			var res *gatewayv1beta1.AuthenticateResponse
 			token, _ := router.ShiftPath(r.URL.Path)
-
-			authenticateRequest := gatewayv1beta1.AuthenticateRequest{
-				Type:         "publicshares",
-				ClientId:     token,
-				ClientSecret: pass,
+			if _, pass, ok := r.BasicAuth(); ok {
+				res, err = handleBasicAuth(r.Context(), c, token, pass)
+			} else {
+				q := r.URL.Query()
+				sig := q.Get("signature")
+				expiration := q.Get("expiration")
+				// We restrict the pre-signed urls to downloads.
+				if sig != "" && expiration != "" && r.Method != http.MethodGet {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				res, err = handleSignatureAuth(r.Context(), c, token, sig, expiration)
 			}
 
-			res, err := c.Authenticate(r.Context(), &authenticateRequest)
 			switch {
 			case err != nil:
 				w.WriteHeader(http.StatusInternalServerError)
@@ -246,4 +252,24 @@ func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClien
 	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
 		Spec: &provider.Reference_Path{Path: path.Join("/public", token)},
 	}})
+}
+
+func handleBasicAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token, pw string) (*gatewayv1beta1.AuthenticateResponse, error) {
+	authenticateRequest := gatewayv1beta1.AuthenticateRequest{
+		Type:         "publicshares",
+		ClientId:     token,
+		ClientSecret: "password|" + pw,
+	}
+
+	return c.Authenticate(ctx, &authenticateRequest)
+}
+
+func handleSignatureAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token, sig, expiration string) (*gatewayv1beta1.AuthenticateResponse, error) {
+	authenticateRequest := gatewayv1beta1.AuthenticateRequest{
+		Type:         "publicshares",
+		ClientId:     token,
+		ClientSecret: "signature|" + sig + "|" + expiration,
+	}
+
+	return c.Authenticate(ctx, &authenticateRequest)
 }

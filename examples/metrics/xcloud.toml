@@ -7,5 +7,6 @@ metrics_record_interval = 5000
 xcloud_instance = "http://localhost"
 xcloud_interval = 5
 xcloud_catalog = 'https://sciencemesh-test.uni-muenster.de/api/mentix/sites?action=register'
+insecure_skip_verify = true
 
 [http.services.prometheus]
