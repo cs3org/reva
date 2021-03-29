@@ -703,12 +703,8 @@
 -   [apiWebdavProperties1/copyFile.feature:86](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L86)
 
 ### [Getting information about a folder overwritten by a file gives 500 error instead of 404](https://github.com/owncloud/ocis/issues/1239)
--   [apiWebdavProperties1/copyFile.feature:116](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L116)
--   [apiWebdavProperties1/copyFile.feature:117](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L117)
 -   [apiWebdavProperties1/copyFile.feature:129](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L129)
 -   [apiWebdavProperties1/copyFile.feature:130](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L130)
--   [apiWebdavProperties1/copyFile.feature:165](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L165)
--   [apiWebdavProperties1/copyFile.feature:166](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L166)
 -   [apiWebdavProperties1/copyFile.feature:202](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L202)
 -   [apiWebdavProperties1/copyFile.feature:203](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L203)
 -   [apiWebdavProperties1/copyFile.feature:350](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L350)
