@@ -76,6 +76,7 @@ type Options struct {
 var httpTransport *http.Transport
 var httpTransportMtx sync.Mutex
 
+// Init fills the basic fields
 func (opt *Options) Init() error {
 
 	if opt.BaseURL == "" {
@@ -136,18 +137,18 @@ func (opt *Options) Init() error {
 	return nil
 }
 
-// EosHttpClient performs HTTP-based tasks (e.g. upload, download)
+// EosHTTPClient performs HTTP-based tasks (e.g. upload, download)
 // against a EOS management node (MGM)
 // using the EOS XrdHTTP interface.
 // In this module we wrap eos-related behaviour, e.g. headers or r/w retries
-type EosHttpClient struct {
+type EosHTTPClient struct {
 	opt Options
 
 	cl *http.Client
 }
 
 // New creates a new client with the given options.
-func New(opt *Options) *EosHttpClient {
+func New(opt *Options) *EosHTTPClient {
 	log := logger.New().With().Int("pid", os.Getpid()).Logger()
 	log.Debug().Str("func", "New").Str("Creating new eoshttp client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
 
@@ -156,7 +157,7 @@ func New(opt *Options) *EosHttpClient {
 		return nil
 	}
 
-	c := new(EosHttpClient)
+	c := new(EosHTTPClient)
 	c.opt = *opt
 
 	// Let's be successful if the ping was ok. This is an initialization phase
@@ -193,7 +194,7 @@ func rspdesc(rsp *http.Response) string {
 
 // If the error is not nil, take that
 // If there is an error coming from EOS, erturn a descriptive error
-func (c *EosHttpClient) getRespError(rsp *http.Response, err error) error {
+func (c *EosHTTPClient) getRespError(rsp *http.Response, err error) error {
 	if err != nil {
 		return err
 	}
@@ -216,7 +217,7 @@ func (c *EosHttpClient) getRespError(rsp *http.Response, err error) error {
 }
 
 // From the basepath and the file path... build an url
-func (c *EosHttpClient) buildFullUrl(urlpath, uid, gid string) (string, error) {
+func (c *EosHTTPClient) buildFullURL(urlpath, uid, gid string) (string, error) {
 	s := c.opt.BaseURL
 	if len(urlpath) > 0 && urlpath[0] != '/' {
 		s += "/"
@@ -256,22 +257,22 @@ func (c *EosHttpClient) buildFullUrl(urlpath, uid, gid string) (string, error) {
 	return s, nil
 }
 
-// PUTFile does an entire PUT to upload a full file, taking the data from a stream
-func (c *EosHttpClient) GETFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.WriteCloser) (error, io.ReadCloser) {
+// GetFile does an entire GET to download a full file. Returns a stream to read the content from
+func (c *EosHTTPClient) GETFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.WriteCloser) (io.ReadCloser, error) {
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "GETFile").Str("remoteuser", remoteuser).Str("uid,gid", uid+","+gid).Str("path", urlpath).Msg("")
 
 	// Now send the req and see what happens
-	finalurl, err := c.buildFullUrl(urlpath, uid, gid)
+	finalurl, err := c.buildFullURL(urlpath, uid, gid)
 	if err != nil {
 		log.Error().Str("func", "GETFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
-		return err, nil
+		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", finalurl, nil)
 	if err != nil {
 		log.Error().Str("func", "GETFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
-		return err, nil
+		return nil, err
 	}
 
 	ntries := 0
@@ -285,7 +286,7 @@ func (c *EosHttpClient) GETFile(ctx context.Context, remoteuser, uid, gid, urlpa
 		tdiff := time.Now().Unix() - timebegin
 		if tdiff > int64(c.opt.OpTimeout) {
 			log.Error().Str("func", "GETFile").Str("url", finalurl).Int64("timeout", tdiff).Int("ntries", ntries).Msg("")
-			return errtypes.InternalError("Timeout with url" + finalurl), nil
+			return nil, errtypes.InternalError("Timeout with url" + finalurl)
 		}
 
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
@@ -301,7 +302,7 @@ func (c *EosHttpClient) GETFile(ctx context.Context, remoteuser, uid, gid, urlpa
 			loc, err := resp.Location()
 			if err != nil {
 				log.Error().Str("func", "GETFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't get a new location for a redirection")
-				return err, nil
+				return nil, err
 			}
 
 			c.cl = &http.Client{
@@ -310,7 +311,7 @@ func (c *EosHttpClient) GETFile(ctx context.Context, remoteuser, uid, gid, urlpa
 			req, err = http.NewRequestWithContext(ctx, "GET", loc.String(), nil)
 			if err != nil {
 				log.Error().Str("func", "GETFile").Str("url", loc.String()).Str("err", err.Error()).Msg("can't create redirected request")
-				return err, nil
+				return nil, err
 			}
 
 			req.Close = true
@@ -331,34 +332,34 @@ func (c *EosHttpClient) GETFile(ctx context.Context, remoteuser, uid, gid, urlpa
 				continue
 			}
 			log.Error().Str("func", "GETFile").Str("url", finalurl).Str("err", e.Error()).Msg("")
-			return e, nil
+			return nil, e
 		}
 
 		log.Debug().Str("func", "GETFile").Str("url", finalurl).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("")
 		if resp == nil {
-			return errtypes.NotFound(fmt.Sprintf("url: %s", finalurl)), nil
+			return nil, errtypes.NotFound(fmt.Sprintf("url: %s", finalurl))
 		}
 
 		if stream != nil {
 			// Streaming versus localfile. If we have bene given a dest stream then copy the body into it
 			_, err = io.Copy(stream, resp.Body)
-			return err, nil
+			return nil, err
 		}
 
 		// If we have not been given a stream to write into then return our stream to read from
-		return nil, resp.Body
+		return resp.Body, nil
 	}
 
 }
 
 // PUTFile does an entire PUT to upload a full file, taking the data from a stream
-func (c *EosHttpClient) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.ReadCloser) error {
+func (c *EosHTTPClient) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.ReadCloser) error {
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", uid+","+gid).Str("path", urlpath).Msg("")
 
 	// Now send the req and see what happens
-	finalurl, err := c.buildFullUrl(urlpath, uid, gid)
+	finalurl, err := c.buildFullURL(urlpath, uid, gid)
 	if err != nil {
 		log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
 		return err
@@ -439,14 +440,14 @@ func (c *EosHttpClient) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpa
 
 }
 
-// performs a HEAD req. Useful to check the server
-func (c *EosHttpClient) Head(ctx context.Context, remoteuser, uid, gid, urlpath string) error {
+// Head performs a HEAD req. Useful to check the server
+func (c *EosHTTPClient) Head(ctx context.Context, remoteuser, uid, gid, urlpath string) error {
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Head").Str("remoteuser", remoteuser).Str("uid,gid", uid+","+gid).Str("path", urlpath).Msg("")
 
 	// Now send the req and see what happens
-	finalurl, err := c.buildFullUrl(urlpath, uid, gid)
+	finalurl, err := c.buildFullURL(urlpath, uid, gid)
 	if err != nil {
 		log.Error().Str("func", "Head").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
 		return err

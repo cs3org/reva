@@ -133,7 +133,7 @@ type Client struct {
 }
 
 // GetHTTPCl creates an http client for immediate usage, using the already instantiated resources
-func (c *Client) GetHTTPCl() *ehttp.EosHttpClient {
+func (c *Client) GetHTTPCl() *ehttp.EosHTTPClient {
 	return ehttp.New(&c.opt.httpopts)
 }
 
@@ -1182,7 +1182,7 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 		}
 	}
 
-	err, bodystream := c.GetHTTPCl().GETFile(ctx, "", uid, gid, path, localfile)
+	bodystream, err := c.GetHTTPCl().GETFile(ctx, "", uid, gid, path, localfile)
 	if err != nil {
 		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", uid+","+gid).Str("err", err.Error()).Msg("")
 		return nil, errtypes.InternalError(fmt.Sprintf("can't GET local cache file '%s'", localTarget))
