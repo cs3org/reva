@@ -89,10 +89,13 @@ const panelTemplate = `
 					<button type="button" onClick="handleAction('assign-api-key?isScienceMesh', '{{.Email}}');" {{if .Data.APIKey}}disabled{{end}}>ScienceMesh API Key</button>
 	
 				{{if .Data.Authorized}}
-					<button type="button" onClick="handleAction('authorize?status=false', '{{.Email}}');">Unauthorize</button>
+					<button type="button" onClick="handleAction('authorize?status=false', '{{.Email}}');" {{if not .Data.APIKey}}disabled{{end}}>Unauthorize</button>
 				{{else}}
-					<button type="button" onClick="handleAction('authorize?status=true', '{{.Email}}');">Authorize</button>
+					<button type="button" onClick="handleAction('authorize?status=true', '{{.Email}}');" {{if not .Data.APIKey}}disabled{{end}}>Authorize</button>
 				{{end}}
+
+					<span style="width: 25px;">&nbsp;</span>
+					<button type="button" onClick="handleAction('unregister-site', '{{.Email}}');" {{if not .Data.APIKey}}disabled{{end}}>Unregister site</button>
 
 					<span style="width: 25px;">&nbsp;</span>
 					<button type="button" onClick="handleAction('remove', '{{.Email}}');">Remove</button>

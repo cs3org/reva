@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/siteacc/email"
 	"github.com/cs3org/reva/internal/http/services/siteacc/panel"
 	"github.com/cs3org/reva/internal/http/services/siteacc/registration"
+	"github.com/cs3org/reva/internal/http/services/siteacc/sitereg"
 	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/smtpclient"
 )
@@ -275,7 +276,7 @@ func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int)
 	}
 
 	for {
-		apiKey, err := key.GenerateAPIKey(strings.ToLower(account.Email), flags) // Use the (lowered) email address as the key's salt value
+		apiKey, err := key.GenerateAPIKey(key.SaltFromEmail(account.Email), flags)
 		if err != nil {
 			return errors.Wrap(err, "error while generating API key")
 		}
@@ -293,6 +294,29 @@ func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int)
 	mngr.writeAllAccounts()
 
 	_ = email.SendAPIKeyAssigned(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
+
+	return nil
+}
+
+// UnregisterAccountSite unregisters the site associated with the given account.
+func (mngr *Manager) UnregisterAccountSite(accountData *data.Account) error {
+	mngr.mutex.RLock()
+	defer mngr.mutex.RUnlock()
+
+	account, err := mngr.findAccount(FindByEmail, accountData.Email)
+	if err != nil {
+		return errors.Wrap(err, "no account with the specified email exists")
+	}
+
+	salt := key.SaltFromEmail(account.Email)
+	siteId, err := key.CalculateSiteID(account.Data.APIKey, salt)
+	if err != nil {
+		return errors.Wrap(err, "unable to get site ID")
+	}
+
+	if err := sitereg.UnregisterSite(mngr.conf.SiteRegistration.URL, account.Data.APIKey, siteId, salt); err != nil {
+		return errors.Wrap(err, "error while unregistering the site")
+	}
 
 	return nil
 }
