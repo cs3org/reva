@@ -41,7 +41,7 @@ require (
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.20.0
-	github.com/sciencemesh/meshdirectory-web v1.0.2
+	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/stretchr/testify v1.7.0
 	github.com/studio-b12/gowebdav v0.0.0-20200303150724-9380631c29a1
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
