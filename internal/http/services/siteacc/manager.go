@@ -309,12 +309,12 @@ func (mngr *Manager) UnregisterAccountSite(accountData *data.Account) error {
 	}
 
 	salt := key.SaltFromEmail(account.Email)
-	siteId, err := key.CalculateSiteID(account.Data.APIKey, salt)
+	siteID, err := key.CalculateSiteID(account.Data.APIKey, salt)
 	if err != nil {
 		return errors.Wrap(err, "unable to get site ID")
 	}
 
-	if err := sitereg.UnregisterSite(mngr.conf.SiteRegistration.URL, account.Data.APIKey, siteId, salt); err != nil {
+	if err := sitereg.UnregisterSite(mngr.conf.SiteRegistration.URL, account.Data.APIKey, siteID, salt); err != nil {
 		return errors.Wrap(err, "error while unregistering the site")
 	}
 

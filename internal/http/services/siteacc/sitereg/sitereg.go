@@ -19,7 +19,6 @@
 package sitereg
 
 import (
-	"fmt"
 	"net/url"
 
 	"github.com/pkg/errors"
@@ -29,8 +28,8 @@ import (
 )
 
 // UnregisterSite unregister a site using the given site registration endpoint.
-func UnregisterSite(serviceUrl string, apiKey key.APIKey, siteId key.SiteIdentifier, salt string) error {
-	if len(serviceUrl) == 0 {
+func UnregisterSite(serviceURL string, apiKey key.APIKey, siteID key.SiteIdentifier, salt string) error {
+	if len(serviceURL) == 0 {
 		return errors.Errorf("no site registration service URL provided")
 	}
 
@@ -38,7 +37,7 @@ func UnregisterSite(serviceUrl string, apiKey key.APIKey, siteId key.SiteIdentif
 		return err
 	}
 
-	fullURL, err := url.Parse(serviceUrl)
+	fullURL, err := url.Parse(serviceURL)
 	if err != nil {
 		return errors.Wrap(err, "unable to parse the site registration service URL")
 	}
@@ -46,7 +45,7 @@ func UnregisterSite(serviceUrl string, apiKey key.APIKey, siteId key.SiteIdentif
 	query := make(url.Values)
 	query.Set("action", "unregister")
 	query.Set("apiKey", apiKey)
-	query.Set("siteId", siteId)
+	query.Set("siteId", siteID)
 	fullURL.RawQuery = query.Encode()
 
 	_, err = network.WriteEndpoint(fullURL, nil, true)
