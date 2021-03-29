@@ -342,7 +342,7 @@ func (c *EosHttpClient) GETFile(ctx context.Context, remoteuser, uid, gid, urlpa
 		if stream != nil {
 			// Streaming versus localfile. If we have bene given a dest stream then copy the body into it
 			_, err = io.Copy(stream, resp.Body)
-			return nil, nil
+			return err, nil
 		}
 
 		// If we have not been given a stream to write into then return our stream to read from
