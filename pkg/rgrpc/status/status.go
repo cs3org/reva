@@ -155,6 +155,8 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		return NewUnauthenticated(ctx, err, "gateway: "+msg+": "+err.Error())
 	case errtypes.PermissionDenied:
 		return NewPermissionDenied(ctx, e, "gateway: "+msg+": "+err.Error())
+	case errtypes.AlreadyExists:
+		return NewAlreadyExists(ctx, err, "gateway: "+msg+":"+err.Error())
 	case errtypes.IsNotSupported:
 		return NewUnimplemented(ctx, err, "gateway: "+msg+":"+err.Error())
 	case errtypes.BadRequest:
