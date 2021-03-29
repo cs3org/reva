@@ -48,7 +48,7 @@ func UnregisterSite(serviceUrl string, apiKey key.APIKey, siteId key.SiteIdentif
 
 	fmt.Println(fullURL.String())
 
-	_, err = network.ReadEndpoint(fullURL, nil, true)
+	_, err = network.WriteEndpoint(fullURL, nil, true)
 	if err != nil {
 		return errors.Wrap(err, "unable to query the service registration endpoint")
 	}
