@@ -19,6 +19,7 @@
 package shares
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -28,6 +29,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -52,12 +54,12 @@ import (
 
 // Handler implements the shares part of the ownCloud sharing API
 type Handler struct {
-	gatewayAddr             string
-	publicURL               string
-	sharePrefix             string
-	homeNamespace           string
-	additionalInfoAttribute string
-	userIdentifierCache     *ttlcache.Cache
+	gatewayAddr            string
+	publicURL              string
+	sharePrefix            string
+	homeNamespace          string
+	additionalInfoTemplate *template.Template
+	userIdentifierCache    *ttlcache.Cache
 }
 
 // we only cache the minimal set of data instead of the full user metadata
@@ -73,7 +75,8 @@ func (h *Handler) Init(c *config.Config) error {
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
-	h.additionalInfoAttribute = c.AdditionalInfoAttribute
+
+	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(60 * time.Second)
@@ -975,8 +978,9 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 }
 
 func (h *Handler) getAdditionalInfoAttribute(u *userIdentifiers) string {
-	if h.additionalInfoAttribute == "username" {
-		return u.UserName
+	b := bytes.Buffer{}
+	if err := h.additionalInfoTemplate.Execute(&b, u); err != nil {
+		return ""
 	}
-	return u.Mail
+	return b.String()
 }

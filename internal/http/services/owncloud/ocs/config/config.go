@@ -55,7 +55,7 @@ func (c *Config) Init() {
 	}
 
 	if c.AdditionalInfoAttribute == "" {
-		c.AdditionalInfoAttribute = "mail"
+		c.AdditionalInfoAttribute = "{{.Mail}}"
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)

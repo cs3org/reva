@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 )
 
 // Handler implements the ownCloud sharing API
@@ -135,8 +136,5 @@ func (h *Handler) groupAsMatch(g *grouppb.Group) *conversions.MatchData {
 }
 
 func (h *Handler) getAdditionalInfoAttribute(u *userpb.User) string {
-	if h.additionalInfoAttribute == "username" {
-		return u.Username
-	}
-	return u.Mail
+	return templates.WithUser(u, h.additionalInfoAttribute)
 }
