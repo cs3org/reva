@@ -101,6 +101,18 @@ func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status
 	}
 }
 
+// NewInsufficientStorage returns a Status with INSUFFICIENT_STORAGE and logs the msg.
+func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Status {
+	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
+	log.Err(err).Msg(msg)
+
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_INSUFFICIENT_STORAGE,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 // NewUnimplemented returns a Status with CODE_UNIMPLEMENTED and logs the msg.
 func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
