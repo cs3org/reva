@@ -257,7 +257,7 @@ func (c *EosHTTPClient) buildFullURL(urlpath, uid, gid string) (string, error) {
 	return s, nil
 }
 
-// GetFile does an entire GET to download a full file. Returns a stream to read the content from
+// GETFile does an entire GET to download a full file. Returns a stream to read the content from
 func (c *EosHTTPClient) GETFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.WriteCloser) (io.ReadCloser, error) {
 
 	log := appctx.GetLogger(ctx)
