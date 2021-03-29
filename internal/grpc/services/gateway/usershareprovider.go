@@ -119,6 +119,9 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
 		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error removing grant from storage")
+		}
 		if removeGrantStatus.Code != rpc.Code_CODE_OK {
 			return &collaboration.RemoveShareResponse{
 				Status: removeGrantStatus,

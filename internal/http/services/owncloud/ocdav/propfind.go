@@ -26,9 +26,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.opencensus.io/trace"
 
@@ -660,10 +662,29 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-display-name", ""))
 					}
+				case "downloadURL": // desktop
+					if isPublic && md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+						var path string
+						if !ls.PasswordProtected {
+							path = md.Path
+						} else {
+							expiration := time.Unix(int64(ls.Signature.SignatureExpiration.Seconds), int64(ls.Signature.SignatureExpiration.Nanos))
+							var sb strings.Builder
+
+							sb.WriteString(md.Path)
+							sb.WriteString("?signature=")
+							sb.WriteString(ls.Signature.Signature)
+							sb.WriteString("&expiration=")
+							sb.WriteString(url.QueryEscape(expiration.Format(time.RFC3339)))
+
+							path = sb.String()
+						}
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:downloadURL", s.c.PublicURL+baseURI+path))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
+					}
 				case "privatelink": // phoenix only
 					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
-					fallthrough
-				case "downloadUrl": // desktop
 					fallthrough
 				case "dDC": // desktop
 					fallthrough

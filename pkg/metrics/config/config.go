@@ -25,6 +25,7 @@ type Config struct {
 	MetricsRecordInterval int    `mapstructure:"metrics_record_interval"`
 	XcloudInstance        string `mapstructure:"xcloud_instance"`
 	XcloudPullInterval    int    `mapstructure:"xcloud_pull_interval"`
+	InsecureSkipVerify    bool   `mapstructure:"insecure_skip_verify"`
 }
 
 // Init sets sane defaults

@@ -6,11 +6,12 @@ commit_share_to_storage_ref = true
 [grpc.services.storageregistry]
 [grpc.services.storageregistry.drivers.static]
 home_provider = "/home"
-
-[grpc.services.storageregistry.drivers.static.rules]
-"/home" = "localhost:17000"
-"/reva" = "localhost:18000"
-"123e4567-e89b-12d3-a456-426655440000" = "localhost:18000"
+[grpc.services.storageregistry.drivers.static.rules."/home"]
+address = "localhost:17000"
+[grpc.services.storageregistry.drivers.static.rules."/reva"]
+address = "localhost:18000"
+[grpc.services.storageregistry.drivers.static.rules."123e4567-e89b-12d3-a456-426655440000"]
+address = "localhost:18000"
 
 [grpc.services.authprovider]
 [grpc.services.authregistry]

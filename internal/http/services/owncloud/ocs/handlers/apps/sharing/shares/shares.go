@@ -55,6 +55,7 @@ type Handler struct {
 	gatewayAddr         string
 	publicURL           string
 	sharePrefix         string
+	homeNamespace       string
 	userIdentifierCache *ttlcache.Cache
 }
 
@@ -70,6 +71,7 @@ func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
+	h.homeNamespace = c.HomeNamespace
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(60 * time.Second)
@@ -173,16 +175,9 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
 	}
-	// prefix the path with the owners home, because ocs share requests are relative to the home dir
-	// TODO the path actually depends on the configured webdav_namespace
-	hRes, err := c.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get home request", err)
-		return
-	}
 
-	prefix := hRes.GetPath()
-	fn := path.Join(prefix, r.FormValue("path"))
+	// prefix the path with the owners home, because ocs share requests are relative to the home dir
+	fn := path.Join(h.homeNamespace, r.FormValue("path"))
 
 	statReq := provider.StatRequest{
 		Ref: &provider.Reference{
@@ -591,14 +586,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// we need to lookup the resource id so we can filter the list of shares later
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		// TODO the path actually depends on the configured webdav_namespace
-		hRes, err := gwc.GetHome(ctx, &provider.GetHomeRequest{})
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get home request", err)
-			return
-		}
-
-		target := path.Join(hRes.Path, r.FormValue("path"))
+		target := path.Join(h.homeNamespace, r.FormValue("path"))
 
 		statReq := &provider.StatRequest{
 			Ref: &provider.Reference{
@@ -728,33 +716,8 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	// shared with others
 	p := r.URL.Query().Get("path")
 	if p != "" {
-		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting storage grpc client", err)
-			return
-		}
-
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		// TODO the path actually depends on the configured webdav_namespace
-		hRes, err := c.GetHome(r.Context(), &provider.GetHomeRequest{})
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get home request", err)
-			return
-		}
-
-		if hRes.Status.Code != rpc.Code_CODE_OK {
-			switch hRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "path not found", nil)
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				response.WriteOCSError(w, r, response.MetaUnauthorized.StatusCode, "permission denied", nil)
-			default:
-				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", nil)
-			}
-			return
-		}
-
-		filters, linkFilters, err = h.addFilters(w, r, hRes.GetPath())
+		filters, linkFilters, err = h.addFilters(w, r, h.homeNamespace)
 		if err != nil {
 			// result has been written as part of addFilters
 			return

@@ -13,7 +13,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20210316113645-e4a74cb8761c
+	github.com/cs3org/go-cs3apis v0.0.0-20210325133324-32b03d75a535
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/go-ldap/ldap/v3 v3.2.4
@@ -41,7 +41,7 @@ require (
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.20.0
-	github.com/sciencemesh/meshdirectory-web v1.0.2
+	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/stretchr/testify v1.7.0
 	github.com/studio-b12/gowebdav v0.0.0-20200303150724-9380631c29a1
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
@@ -51,7 +51,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sys v0.0.0-20210218155724-8ebf48af031b
 	golang.org/x/term v0.0.0-20201117132131-f5c789dd3221
-	google.golang.org/grpc v1.36.0
+	google.golang.org/grpc v1.36.1
 	google.golang.org/protobuf v1.26.0
 )
 

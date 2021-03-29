@@ -116,9 +116,8 @@ func (d *CloudDriver) Configure(c *config.Config) error {
 	d.instance = c.XcloudInstance
 	d.pullInterval = c.XcloudPullInterval
 
-	// TODO(labkode): make it configurable once site adopted are prod-ready
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: c.InsecureSkipVerify},
 	}
 	client := &http.Client{Transport: tr}
 
