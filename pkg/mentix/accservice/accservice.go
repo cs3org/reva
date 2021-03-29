@@ -53,7 +53,7 @@ func Query(endpoint string, params network.URLParams) (*RequestResponse, error) 
 		return nil, errors.Wrap(err, "error while building the service accounts query URL")
 	}
 
-	data, err := network.ReadEndpoint(fullURL, &network.BasicAuth{User: settings.User, Password: settings.Password}, true)
+	data, err := network.ReadEndpoint(fullURL, &network.BasicAuth{User: settings.User, Password: settings.Password}, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to query the service accounts endpoint")
 	}
