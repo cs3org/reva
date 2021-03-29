@@ -16,210 +16,84 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gateway
+package datatx
 
 import (
 	"context"
-	"encoding/json"
-	"path"
-	"strconv"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-
-	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 )
 
-func (s *svc) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
-	granteeOpaqueID := req.GetGrantee().GetUserId().GetOpaqueId()
-	granteeIdp := req.GetGrantee().GetUserId().GetIdp()
-
-	// check if invitation has been accepted
-	imc, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
-	if err != nil {
-		err = errors.Wrap(err, "error getting OCM invite manager client")
-		return nil, err
-	}
-	acceptedUserRes, err := imc.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
-		RemoteUserId: &userpb.UserId{OpaqueId: granteeOpaqueID, Idp: granteeIdp},
-	})
-	if err != nil {
-		err = errors.Wrap(err, "error sending a grpc GetAcceptedUser request")
-		return nil, err
-	}
-	if acceptedUserRes.Status.Code != rpc.Code_CODE_OK {
-		return &datatx.CreateTransferResponse{
-			Status: acceptedUserRes.Status,
-		}, nil
-	}
-
-	// verify resource status
-	gatewayClient, err := pool.GetGatewayServiceClient(s.c.DataGatewayEndpoint)
-	if err != nil {
-		err = errors.Wrap(err, "error getting gateway client")
-		return nil, err
-	}
-	hRes, err := gatewayClient.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		err = errors.Wrap(err, "error sending a grpc GetHome request")
-		return nil, err
-	}
-	prefix := hRes.GetPath()
-	path := path.Join(prefix, req.GetRef().GetPath())
-	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path,
-			},
-		},
-	}
-	statRes, err := gatewayClient.Stat(ctx, statReq)
-	if err != nil {
-		err = errors.Wrap(err, "error sending a grpc Stat request")
-		return nil, err
-	}
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			err = errors.Wrap(err, "not found")
-			return nil, err
-		}
-		err = errors.Wrap(err, "grpc Stat request failed")
-		return nil, err
-	}
-
-	providerInfoResp, err := gatewayClient.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
-		Domain: granteeIdp,
-	})
-	if err != nil {
-		err = errors.Wrap(err, "error sending a grpc Get Info By Domain request")
-		return nil, err
-	}
-
-	permissions := conversions.PermissionWrite
-	resourcePermissions := &provider.ResourcePermissions{
-		InitiateFileDownload: true,
-	}
-
-	datatxProtocol, err := json.Marshal(
-		map[string]interface{}{
-			"name": "datatx",
-			"options": map[string]string{
-				"desired-protocol": "webdav",
-			},
-		},
-	)
-	if err != nil {
-		err = errors.Wrap(err, "error marshalling protocol data")
-		return nil, err
-	}
-
-	createShareReq := &ocm.CreateOCMShareRequest{
-		Opaque: &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"permissions": &types.OpaqueEntry{
-					Decoder: "plain",
-					Value:   []byte(strconv.Itoa(int(permissions))),
-				},
-				"name": &types.OpaqueEntry{
-					Decoder: "plain",
-					Value:   []byte(path),
-				},
-				"protocol": &types.OpaqueEntry{
-					Decoder: "json",
-					Value:   datatxProtocol,
-				},
-			},
-		},
-		ResourceId: statRes.Info.Id,
-		Grant: &ocm.ShareGrant{
-			Grantee: &provider.Grantee{
-				Type: req.GetGrantee().GetType(),
-				Id:   &provider.Grantee_UserId{UserId: req.GetGrantee().GetUserId()},
-			},
-			Permissions: &ocm.SharePermissions{
-				Permissions: resourcePermissions,
-			},
-		},
-		RecipientMeshProvider: providerInfoResp.ProviderInfo,
-	}
-
-	createShareResponse, err := gatewayClient.CreateOCMShare(ctx, createShareReq)
-	if err != nil {
-		err = errors.Wrap(err, "error sending a grpc Create OCM Share request")
-		return nil, err
-	}
-	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
-		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			err = errors.Wrap(err, "not found")
-			return nil, err
-		}
-		err = errors.Wrap(err, "grpc Create OCM Share request failed")
-		return nil, err
-	}
-
-	// We do not return a transfer ID in the datatx pull model when creating a transfer type share
-	// TODO fix CS3 CreateTransferResponse message to fit in datatx pull model
-	txID := int64(0)
-	txStatus := datatx.TxInfo_STATUS_TRANSFER_AWAITING_ACCEPTANCE
-
-	res := &datatx.CreateTransferResponse{
-		Status: status.NewOK(ctx),
-		TxInfo: &datatx.TxInfo{
-			Id: &datatx.TxId{
-				OpaqueId: strconv.FormatInt(txID, 10),
-			},
-			Ref: &storageprovider.Reference{
-				Spec: &storageprovider.Reference_Path{
-					Path: path,
-				},
-			},
-			Status: txStatus,
-		},
-	}
-
-	return res, nil
+func init() {
+	rgrpc.Register("datatx", New)
 }
 
-func (s *svc) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
-	c, err := pool.GetDataTxClient(s.c.DataTxEndpoint)
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
-		return &datatx.GetTransferStatusResponse{
-			Status: status.NewInternal(ctx, err, "error getting data transfer client"),
-		}, nil
-	}
-
-	res, err := c.GetTransferStatus(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling GetTransferStatus")
-	}
-
-	return res, nil
+type config struct {
 }
 
-func (s *svc) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
-	c, err := pool.GetDataTxClient(s.c.DataTxEndpoint)
+type service struct {
+	conf *config
+}
+
+func (c *config) init() {
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	datatx.RegisterTxAPIServer(ss, s)
+}
+
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		err = errors.Wrap(err, "error decoding conf")
+		return nil, err
+	}
+	return c, nil
+}
+
+// New creates a new datatx svc
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+
+	c, err := parseConfig(m)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
-		return &datatx.CancelTransferResponse{
-			Status: status.NewInternal(ctx, err, "error getting data transfer client"),
-		}, nil
+		return nil, err
+	}
+	c.init()
+
+	service := &service{
+		conf: c,
 	}
 
-	res, err := c.CancelTransfer(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling CancelTransfer")
-	}
+	return service, nil
+}
 
-	return res, nil
+func (s *service) Close() error {
+	return nil
+}
+
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
+	return &datatx.CreateTransferResponse{
+		Status: status.NewUnimplemented(ctx, errors.New("CreateTransfer not implemented"), "CreateTransfer not implemented"),
+	}, nil
+}
+
+func (s *service) GetTransferStatus(ctx context.Context, in *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
+	return &datatx.GetTransferStatusResponse{
+		Status: status.NewUnimplemented(ctx, errors.New("GetTransferStatus not implemented"), "GetTransferStatus not implemented"),
+	}, nil
+}
+
+func (s *service) CancelTransfer(ctx context.Context, in *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
+	return &datatx.CancelTransferResponse{
+		Status: status.NewUnimplemented(ctx, errors.New("CancelTransfer not implemented"), "CancelTransfer not implemented"),
+	}, nil
 }
