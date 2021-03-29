@@ -65,7 +65,7 @@ type Handler struct {
 // we only cache the minimal set of data instead of the full user metadata
 type userIdentifiers struct {
 	DisplayName string
-	UserName    string
+	Username    string
 	Mail        string
 }
 
@@ -904,7 +904,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, c gateway.GatewayAPICl
 		}
 		ui = &userIdentifiers{
 			DisplayName: res.Group.DisplayName,
-			UserName:    res.Group.GroupName,
+			Username:    res.Group.GroupName,
 			Mail:        res.Group.Mail,
 		}
 	} else {
@@ -933,7 +933,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, c gateway.GatewayAPICl
 		}
 		ui = &userIdentifiers{
 			DisplayName: res.User.DisplayName,
-			UserName:    res.User.Username,
+			Username:    res.User.Username,
 			Mail:        res.User.Mail,
 		}
 	}
@@ -945,7 +945,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, c gateway.GatewayAPICl
 func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s *conversions.ShareData) {
 	if s.UIDOwner != "" {
 		owner := h.mustGetIdentifiers(ctx, c, s.UIDOwner, false)
-		s.UIDOwner = owner.UserName
+		s.UIDOwner = owner.Username
 		if s.DisplaynameOwner == "" {
 			s.DisplaynameOwner = owner.DisplayName
 		}
@@ -956,7 +956,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 
 	if s.UIDFileOwner != "" {
 		fileOwner := h.mustGetIdentifiers(ctx, c, s.UIDFileOwner, false)
-		s.UIDFileOwner = fileOwner.UserName
+		s.UIDFileOwner = fileOwner.Username
 		if s.DisplaynameFileOwner == "" {
 			s.DisplaynameFileOwner = fileOwner.DisplayName
 		}
@@ -967,7 +967,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 
 	if s.ShareWith != "" && s.ShareWith != "***redacted***" {
 		shareWith := h.mustGetIdentifiers(ctx, c, s.ShareWith, s.ShareType == conversions.ShareTypeGroup)
-		s.ShareWith = shareWith.UserName
+		s.ShareWith = shareWith.Username
 		if s.ShareWithDisplayname == "" {
 			s.ShareWithDisplayname = shareWith.DisplayName
 		}
