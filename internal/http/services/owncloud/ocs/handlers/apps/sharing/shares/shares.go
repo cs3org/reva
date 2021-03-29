@@ -950,7 +950,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 			s.DisplaynameOwner = owner.DisplayName
 		}
 		if s.AdditionalInfoFileOwner == "" {
-			s.AdditionalInfoFileOwner = h.getAdditionalInfoAttribute(owner)
+			s.AdditionalInfoFileOwner = h.getAdditionalInfoAttribute(ctx, owner)
 		}
 	}
 
@@ -961,7 +961,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 			s.DisplaynameFileOwner = fileOwner.DisplayName
 		}
 		if s.AdditionalInfoOwner == "" {
-			s.AdditionalInfoOwner = h.getAdditionalInfoAttribute(fileOwner)
+			s.AdditionalInfoOwner = h.getAdditionalInfoAttribute(ctx, fileOwner)
 		}
 	}
 
@@ -972,14 +972,16 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 			s.ShareWithDisplayname = shareWith.DisplayName
 		}
 		if s.ShareWithAdditionalInfo == "" {
-			s.ShareWithAdditionalInfo = h.getAdditionalInfoAttribute(shareWith)
+			s.ShareWithAdditionalInfo = h.getAdditionalInfoAttribute(ctx, shareWith)
 		}
 	}
 }
 
-func (h *Handler) getAdditionalInfoAttribute(u *userIdentifiers) string {
+func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentifiers) string {
 	b := bytes.Buffer{}
 	if err := h.additionalInfoTemplate.Execute(&b, u); err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Warn().Err(err).Msg("failed to parse additional info template")
 		return ""
 	}
 	return b.String()
