@@ -188,7 +188,7 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	return
 }
 
-// The os not exists error is buried inside the fs.PathError error
+// The os error is buried inside the fs.PathError error
 func isNotDir(err error) bool {
 	if perr, ok := err.(*fs.PathError); ok {
 		if serr, ok2 := perr.Err.(syscall.Errno); ok2 {
