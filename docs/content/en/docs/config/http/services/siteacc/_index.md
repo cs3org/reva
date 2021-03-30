@@ -19,6 +19,15 @@ prefix = "/siteacc"
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="enable_registration_form" type="string" default="false" %}}
+If set to true, the service will expose a simple form for account registration.
+
+{{< highlight toml >}}
+[http.services.siteacc]
+enable_registration_form = true
+{{< /highlight >}}
+{{% /dir %}}
+
 {{% dir name="notifications_mail" type="string" default="" %}}
 An email address where all notifications are sent to.
 {{< highlight toml >}}
@@ -91,5 +100,14 @@ The file location.
 {{< highlight toml >}}
 [http.services.siteacc.storage.file]
 file = "/var/reva/accounts.json"
+{{< /highlight >}}
+{{% /dir %}}
+
+## Site registration settings
+{{% dir name="url" type="string" default="" %}}
+The registration service URL.
+{{< highlight toml >}}
+[http.services.siteacc.sitereg]
+url = "https://iop.example.com/sitereg"
 {{< /highlight >}}
 {{% /dir %}}

@@ -21,6 +21,8 @@ package config
 const (
 	// EndpointPanel is the endpoint path of the web interface panel.
 	EndpointPanel = "/panel"
+	// EndpointRegistration is the endpoint path of the web interface registration form.
+	EndpointRegistration = "/register"
 
 	// EndpointGenerateAPIKey is the endpoint path of the API key generator.
 	EndpointGenerateAPIKey = "/generate-api-key"
@@ -41,8 +43,10 @@ const (
 	// EndpointRemove is the endpoint path for account removal.
 	EndpointRemove = "/remove"
 
-	// EndpointAuthorize is the endpoint path for account authorization
+	// EndpointAuthorize is the endpoint path for account authorization.
 	EndpointAuthorize = "/authorize"
 	// EndpointIsAuthorized is the endpoint path used to check the authorization status of an account.
 	EndpointIsAuthorized = "/is-authorized"
+	// EndpointUnregisterSite is the endpoint path for site unregistration.
+	EndpointUnregisterSite = "/unregister-site"
 )

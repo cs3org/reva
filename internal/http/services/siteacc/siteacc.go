@@ -63,8 +63,15 @@ func (s *svc) Prefix() string {
 
 // Unprotected returns all endpoints that can be queried without prior authorization.
 func (s *svc) Unprotected() []string {
-	// This service currently only has one public endpoint used for account registration
-	return []string{config.EndpointCreate}
+	// The account creation endpoint is always unprotected
+	endpoints := []string{config.EndpointCreate}
+
+	// If enabled, the registration registrationForm endpoint is also unprotected
+	if s.conf.EnableRegistrationForm {
+		endpoints = append(endpoints, config.EndpointRegistration)
+	}
+
+	return endpoints
 }
 
 // Handler serves all HTTP requests.
@@ -76,6 +83,11 @@ func (s *svc) Handler() http.Handler {
 		case config.EndpointPanel:
 			s.handlePanelEndpoint(w, r)
 
+		case config.EndpointRegistration:
+			if s.conf.EnableRegistrationForm {
+				s.handleRegistrationEndpoint(w, r)
+			}
+
 		default:
 			s.handleRequestEndpoints(w, r)
 		}
@@ -86,6 +98,13 @@ func (s *svc) handlePanelEndpoint(w http.ResponseWriter, r *http.Request) {
 	if err := s.manager.ShowPanel(w); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface panel: %v", err)))
+	}
+}
+
+func (s *svc) handleRegistrationEndpoint(w http.ResponseWriter, r *http.Request) {
+	if err := s.manager.ShowRegistrationForm(w); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface registration registrationForm: %v", err)))
 	}
 }
 
@@ -115,6 +134,7 @@ func (s *svc) handleRequestEndpoints(w http.ResponseWriter, r *http.Request) {
 		{config.EndpointRemove, http.MethodPost, s.handleRemove},
 		{config.EndpointAuthorize, http.MethodPost, s.handleAuthorize},
 		{config.EndpointIsAuthorized, http.MethodGet, s.handleIsAuthorized},
+		{config.EndpointUnregisterSite, http.MethodPost, s.handleUnregisterSite},
 	}
 
 	// The default response is an unknown endpoint (for the specified method)
@@ -164,7 +184,7 @@ func (s *svc) handleGenerateAPIKey(values url.Values, body []byte) (interface{},
 		return nil, errors.Errorf("no email provided")
 	}
 
-	apiKey, err := key.GenerateAPIKey(strings.ToLower(email), flags)
+	apiKey, err := key.GenerateAPIKey(key.SaltFromEmail(email), flags)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to generate API key")
 	}
@@ -183,7 +203,7 @@ func (s *svc) handleVerifyAPIKey(values url.Values, body []byte) (interface{}, e
 		return nil, errors.Errorf("no email provided")
 	}
 
-	err := key.VerifyAPIKey(apiKey, strings.ToLower(email))
+	err := key.VerifyAPIKey(apiKey, key.SaltFromEmail(email))
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid API key")
 	}
@@ -271,6 +291,20 @@ func (s *svc) handleIsAuthorized(values url.Values, body []byte) (interface{}, e
 	return account.Data.Authorized, nil
 }
 
+func (s *svc) handleUnregisterSite(values url.Values, body []byte) (interface{}, error) {
+	account, err := s.unmarshalRequestData(body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unregister the account's site through the account manager
+	if err := s.manager.UnregisterAccountSite(account); err != nil {
+		return nil, errors.Wrap(err, "unable to unregister the site of the given account")
+	}
+
+	return nil, nil
+}
+
 func (s *svc) handleAuthorize(values url.Values, body []byte) (interface{}, error) {
 	account, err := s.unmarshalRequestData(body)
 	if err != nil {
@@ -292,7 +326,7 @@ func (s *svc) handleAuthorize(values url.Values, body []byte) (interface{}, erro
 
 		// Authorize the account through the account manager
 		if err := s.manager.AuthorizeAccount(account, authorize); err != nil {
-			return nil, errors.Wrap(err, "unable to remove account")
+			return nil, errors.Wrap(err, "unable to (un)authorize account")
 		}
 	} else {
 		return nil, errors.Errorf("no authorization status provided")

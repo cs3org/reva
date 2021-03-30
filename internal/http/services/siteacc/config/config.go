@@ -32,6 +32,12 @@ type Configuration struct {
 		} `mapstructure:"file"`
 	} `mapstructure:"storage"`
 
+	EnableRegistrationForm bool `mapstructure:"enable_registration_form"`
+
 	SMTP              *smtpclient.SMTPCredentials `mapstructure:"smtp"`
 	NotificationsMail string                      `mapstructure:"notifications_mail"`
+
+	SiteRegistration struct {
+		URL string `mapstructure:"url"`
+	} `mapstructure:"sitereg"`
 }

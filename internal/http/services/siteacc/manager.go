@@ -33,6 +33,8 @@ import (
 	"github.com/cs3org/reva/internal/http/services/siteacc/data"
 	"github.com/cs3org/reva/internal/http/services/siteacc/email"
 	"github.com/cs3org/reva/internal/http/services/siteacc/panel"
+	"github.com/cs3org/reva/internal/http/services/siteacc/registration"
+	"github.com/cs3org/reva/internal/http/services/siteacc/sitereg"
 	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/smtpclient"
 )
@@ -54,8 +56,9 @@ type Manager struct {
 	accounts data.Accounts
 	storage  data.Storage
 
-	panel *panel.Panel
-	smtp  *smtpclient.SMTPCredentials
+	panel            *panel.Panel
+	registrationForm *registration.Form
+	smtp             *smtpclient.SMTPCredentials
 
 	mutex sync.RWMutex
 }
@@ -86,6 +89,13 @@ func (mngr *Manager) initialize(conf *config.Configuration, log *zerolog.Logger)
 		mngr.panel = pnl
 	} else {
 		return errors.Wrap(err, "unable to create panel")
+	}
+
+	// Create the web interface registrationForm
+	if frm, err := registration.NewForm(conf, log); err == nil {
+		mngr.registrationForm = frm
+	} else {
+		return errors.Wrap(err, "unable to create registrationForm")
 	}
 
 	// Create the SMTP client
@@ -161,6 +171,11 @@ func (mngr *Manager) ShowPanel(w http.ResponseWriter) error {
 	// The panel only shows the stored accounts and offers actions through links, so let it use cloned data
 	accounts := mngr.CloneAccounts()
 	return mngr.panel.Execute(w, &accounts)
+}
+
+// ShowRegistrationForm writes the registration registrationForm HTTP output directly to the response writer.
+func (mngr *Manager) ShowRegistrationForm(w http.ResponseWriter) error {
+	return mngr.registrationForm.Execute(w)
 }
 
 // CreateAccount creates a new account; if an account with the same email address already exists, an error is returned.
@@ -261,7 +276,7 @@ func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int)
 	}
 
 	for {
-		apiKey, err := key.GenerateAPIKey(strings.ToLower(account.Email), flags) // Use the (lowered) email address as the key's salt value
+		apiKey, err := key.GenerateAPIKey(key.SaltFromEmail(account.Email), flags)
 		if err != nil {
 			return errors.Wrap(err, "error while generating API key")
 		}
@@ -279,6 +294,29 @@ func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int)
 	mngr.writeAllAccounts()
 
 	_ = email.SendAPIKeyAssigned(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
+
+	return nil
+}
+
+// UnregisterAccountSite unregisters the site associated with the given account.
+func (mngr *Manager) UnregisterAccountSite(accountData *data.Account) error {
+	mngr.mutex.RLock()
+	defer mngr.mutex.RUnlock()
+
+	account, err := mngr.findAccount(FindByEmail, accountData.Email)
+	if err != nil {
+		return errors.Wrap(err, "no account with the specified email exists")
+	}
+
+	salt := key.SaltFromEmail(account.Email)
+	siteID, err := key.CalculateSiteID(account.Data.APIKey, salt)
+	if err != nil {
+		return errors.Wrap(err, "unable to get site ID")
+	}
+
+	if err := sitereg.UnregisterSite(mngr.conf.SiteRegistration.URL, account.Data.APIKey, siteID, salt); err != nil {
+		return errors.Wrap(err, "error while unregistering the site")
+	}
 
 	return nil
 }

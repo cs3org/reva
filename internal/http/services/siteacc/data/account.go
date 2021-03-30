@@ -19,7 +19,6 @@
 package data
 
 import (
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -51,7 +50,7 @@ type Accounts = []*Account
 
 // GetSiteID returns the site ID (generated from the API key) for the given account.
 func (acc *Account) GetSiteID() key.SiteIdentifier {
-	if id, err := key.CalculateSiteID(acc.Data.APIKey, strings.ToLower(acc.Email)); err == nil {
+	if id, err := key.CalculateSiteID(acc.Data.APIKey, key.SaltFromEmail(acc.Email)); err == nil {
 		return id
 	}
 
