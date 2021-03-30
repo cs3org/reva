@@ -318,12 +318,12 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.Received
 	user := user.ContextMustGetUser(ctx)
 	uid := conversions.FormatUserID(user.Id)
 
-	params := []interface{}{uid, uid}
+	params := []interface{}{uid, uid, uid, uid}
 	for _, v := range user.Groups {
 		params = append(params, v)
 	}
 
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, id, stime, permissions, share_type, accepted FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND id not in (SELECT distinct(id) FROM oc_share_acl WHERE rejected_by=?)"
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, id, stime, permissions, share_type, accepted FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner != ? AND uid_initiator != ?) AND id not in (SELECT distinct(id) FROM oc_share_acl WHERE rejected_by=?)"
 	if len(user.Groups) > 0 {
 		query += "AND (share_with=? OR share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + "))"
 	} else {
