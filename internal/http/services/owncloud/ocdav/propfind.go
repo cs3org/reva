@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -567,6 +568,22 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-expiration", ""))
 					}
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-expiration", ""))
+				case "meta-path-for-user": // used for privatelink lookup in ocis web
+					if ns == "meta" {
+						if isCurrentUserOwner(ctx, md.Owner) {
+							// the first path segment should be "users", the second should be the userid
+							u := ctxuser.ContextMustGetUser(ctx)
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:meta-path-for-user", strings.TrimPrefix("/users/"+u.Id.OpaqueId, md.Path)))
+						} else {
+							// TODO if an internal link is passed to another user he will have to access it through a share or a space
+							// currently this means it is accessed via a /Shares path
+							u := ctxuser.ContextMustGetUser(ctx)
+							// TODO we need to look up the mountpoint for the file in the storage registry or share manager ...
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:meta-path-for-user", filepath.Join("Shares", "FIXME", strings.TrimPrefix("/users/"+u.Id.OpaqueId, md.Path))))
+						}
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:meta-path-for-user", ""))
+					}
 				case "size": // phoenix only
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					// TODO what is the difference to d:quota-used-bytes (which only exists for collections)?
