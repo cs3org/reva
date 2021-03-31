@@ -684,6 +684,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 					}
 				case "privatelink": // phoenix only
+					path := fmt.Sprintf("/f/%s", wrapResourceID(md.Id))
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:privatelink", s.c.PublicURL+path))
 					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
 					fallthrough
 				case "dDC": // desktop
