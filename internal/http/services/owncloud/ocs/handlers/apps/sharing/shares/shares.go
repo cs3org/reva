@@ -742,7 +742,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		}
 
 		shares = append(shares, data)
-		log.Info().Msgf("listSharesWithMe: %+v", *data)
+		log.Debug().Msgf("listSharesWithMe: %+v", *data)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
