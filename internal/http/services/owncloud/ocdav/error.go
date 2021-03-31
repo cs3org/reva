@@ -84,6 +84,9 @@ func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status
 	case rpc.Code_CODE_NOT_FOUND:
 		log.Debug().Interface("status", s).Msg("resource not found")
 		w.WriteHeader(http.StatusNotFound)
+	case rpc.Code_CODE_ALREADY_EXISTS:
+		log.Debug().Interface("status", s).Msg("resource already exists")
+		w.WriteHeader(http.StatusConflict)
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		log.Debug().Interface("status", s).Msg("permission denied")
 		w.WriteHeader(http.StatusForbidden)
