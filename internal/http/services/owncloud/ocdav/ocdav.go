@@ -124,7 +124,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/"}
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/f/"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -158,7 +158,9 @@ func (s *svc) Handler() http.Handler {
 
 			// yet, add it to baseURI
 			base = path.Join(base, "remote.php")
-
+		case "f":
+			s.doPrivatelink(w, r)
+			return
 		}
 		switch head {
 		// the old `/webdav` endpoint uses remote.php/webdav/$path
