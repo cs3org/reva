@@ -736,12 +736,12 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 		if data.State == ocsStateAccepted {
 			// Needed because received shares can be jailed in a folder in the users home
-			data.FileTarget = path.Join(h.sharePrefix, info.Path)
+			data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
 			data.Path = path.Join(h.sharePrefix, info.Path)
 		}
 
 		shares = append(shares, data)
-		log.Debug().Msgf("listSharesWithMe: %+v", *data)
+		log.Debug().Msgf("share: %+v", *data)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
