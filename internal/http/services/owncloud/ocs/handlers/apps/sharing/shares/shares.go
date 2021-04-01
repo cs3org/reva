@@ -733,9 +733,9 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		// TODO Storage: int
 		s.ItemSource = wrapResourceID(info.Id)
 		s.FileSource = s.ItemSource
-		s.FileTarget = path.Join("/", info.Path)
-		s.Path = path.Join("/", path.Base(info.Path)) // TODO hm this might have to be relative to the users home ... depends on the webdav_namespace config
 		s.StorageID = storageIDPrefix + s.FileTarget
+		s.FileTarget = path.Join("/", path.Base(info.Path))
+		s.Path = path.Join("/", info.Path) // TODO hm this might have to be relative to the users home ... depends on the webdav_namespace config
 		// TODO FileParent:
 		// item type
 		s.ItemType = conversions.ResourceType(info.GetType()).String()
