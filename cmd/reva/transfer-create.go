@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -60,7 +59,7 @@ func transferCreateCommand() *command {
 		}
 
 		// the resource to transfer; the path
-		rPath := cmd.Args()[0]
+		fn := cmd.Args()[0]
 
 		ctx := getAuthContext()
 		client, err := getClient()
@@ -80,16 +79,10 @@ func transferCreateCommand() *command {
 		}
 
 		// verify resource stats
-		hRes, err := client.GetHome(ctx, &provider.GetHomeRequest{})
-		if err != nil {
-			return err
-		}
-		prefix := hRes.GetPath()
-		path := path.Join(prefix, rPath)
 		statReq := &provider.StatRequest{
 			Ref: &provider.Reference{
 				Spec: &provider.Reference_Path{
-					Path: path,
+					Path: fn,
 				},
 			},
 		}
@@ -107,7 +100,7 @@ func transferCreateCommand() *command {
 		if err != nil {
 			return err
 		}
-		permissions := conversions.PermissionWrite
+		permissions := conversions.PermissionAll
 		resourcePermissions := &provider.ResourcePermissions{
 			InitiateFileDownload: true,
 		}
@@ -115,7 +108,7 @@ func transferCreateCommand() *command {
 			map[string]interface{}{
 				"name": "datatx",
 				"options": map[string]string{
-					"desired-protocol": "webdav",
+					"protocol": "webdav",
 				},
 			},
 		)
@@ -137,7 +130,7 @@ func transferCreateCommand() *command {
 					},
 					"name": &types.OpaqueEntry{
 						Decoder: "plain",
-						Value:   []byte(path),
+						Value:   []byte(statRes.Info.Path),
 					},
 					"protocol": &types.OpaqueEntry{
 						Decoder: "json",
