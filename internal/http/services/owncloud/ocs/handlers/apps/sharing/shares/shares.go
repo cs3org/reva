@@ -649,11 +649,12 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 		if data.State == ocsStateAccepted {
 			// Needed because received shares can be jailed in a folder in the users home
-			data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
-			data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+			data.FileTarget = path.Join(h.sharePrefix, info.Path)
+			data.Path = path.Join(h.sharePrefix, info.Path)
 		}
 
 		shares = append(shares, data)
+		log.Debug().Msgf("share: %+v", *data)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
@@ -791,8 +792,8 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		// TODO Storage: int
 		s.ItemSource = wrapResourceID(info.Id)
 		s.FileSource = s.ItemSource
-		s.FileTarget = path.Join("/", path.Base(info.Path))
-		s.Path = path.Join("/", path.Base(info.Path)) // TODO hm this might have to be relative to the users home ... depends on the webdav_namespace config
+		s.FileTarget = path.Join("/", info.Path)
+		s.Path = path.Join("/", info.Path)
 		// TODO FileParent:
 		// item type
 		s.ItemType = conversions.ResourceType(info.GetType()).String()
