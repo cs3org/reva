@@ -206,6 +206,11 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if statRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		response.WriteOCSError(w, r, http.StatusNotImplemented, "File sharing not supported", nil)
+		return
+	}
+
 	// check user has share permissions
 	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
 		response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
