@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -119,6 +120,9 @@ type Options struct {
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
+
+	// The EOS Version.
+	EOSVersion eosVersion
 }
 
 func (opt *Options) init() {
@@ -263,12 +267,15 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 }
 
 func (c *Client) getVersion(ctx context.Context, rootUID, rootGID string) (eosVersion, error) {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "version")
-	stdout, _, err := c.executeEOS(ctx, cmd)
-	if err != nil {
-		return "", err
+	if c.opt.EOSVersion == "" {
+		cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "version")
+		stdout, _, err := c.executeEOS(ctx, cmd)
+		if err != nil {
+			return "", err
+		}
+		c.opt.EOSVersion = c.parseVersion(ctx, stdout)
 	}
-	return c.parseVersion(ctx, stdout), nil
+	return c.opt.EOSVersion, nil
 }
 
 func (c *Client) parseVersion(ctx context.Context, raw string) eosVersion {
@@ -297,24 +304,47 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path st
 		return err
 	}
 
-	var cmd *exec.Cmd
-	if version == versionCitrine {
-		sysACL := a.CitrineSerialize()
-		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "acl", "--sys", "--recursive", sysACL, path)
-	} else {
-		acls, err := c.getACLForPath(ctx, uid, gid, path)
-		if err != nil {
+	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
+	if err != nil {
+		return err
+	}
+	if !finfo.IsDir {
+		userACLAttr := &eosclient.Attribute{
+			Type: SystemAttr,
+			Key:  "eval.useracl",
+			Val:  "1",
+		}
+		if err = c.SetAttr(ctx, uid, gid, userACLAttr, false, path); err != nil {
 			return err
 		}
+	}
 
+	var args []string
+	if version == versionCitrine {
+		sysACL := a.CitrineSerialize()
+		args = []string{"-r", rootUID, rootGID, "acl"}
+		if finfo.IsDir {
+			args = append(args, "--sys", "--recursive")
+		} else {
+			args = append(args, "--user")
+		}
+		args = append(args, sysACL, path)
+	} else {
+		acls := finfo.SysACL
 		err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
 		if err != nil {
 			return err
 		}
 		sysACL := acls.Serialize()
-		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
+		args = []string{"-r", rootUID, rootGID, "attr"}
+		if finfo.IsDir {
+			args = append(args, "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
+		} else {
+			args = append(args, "set", fmt.Sprintf("user.acl=%s", sysACL), path)
+		}
 	}
 
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, args...)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 
@@ -327,24 +357,45 @@ func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path
 		return err
 	}
 
-	var cmd *exec.Cmd
-	if version == versionCitrine {
-		sysACL := a.CitrineSerialize()
-		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "acl", "--sys", "--recursive", sysACL, path)
-	} else {
-		acls, err := c.getACLForPath(ctx, uid, gid, path)
-		if err != nil {
+	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
+	if err != nil {
+		return err
+	}
+	if !finfo.IsDir {
+		userACLAttr := &eosclient.Attribute{
+			Type: SystemAttr,
+			Key:  "eval.useracl",
+		}
+		if err = c.UnsetAttr(ctx, uid, gid, userACLAttr, path); err != nil {
 			return err
 		}
-
-		acls.DeleteEntry(a.Type, a.Qualifier)
-		sysACL := acls.Serialize()
-		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
 	}
 
+	var args []string
+	if version == versionCitrine {
+		sysACL := a.CitrineSerialize()
+		args = []string{"-r", rootUID, rootGID, "acl"}
+		if finfo.IsDir {
+			args = append(args, "--sys", "--recursive")
+		} else {
+			args = append(args, "--user")
+		}
+		args = append(args, sysACL, path)
+	} else {
+		acls := finfo.SysACL
+		acls.DeleteEntry(a.Type, a.Qualifier)
+		sysACL := acls.Serialize()
+		args = []string{"-r", rootUID, rootGID, "attr"}
+		if finfo.IsDir {
+			args = append(args, "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
+		} else {
+			args = append(args, "set", fmt.Sprintf("user.acl=%s", sysACL), path)
+		}
+	}
+
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, args...)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
-
 }
 
 // UpdateACL updates the EOS acl.
@@ -437,11 +488,9 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (
 	}
 
 	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
-		inode, err := c.getVersionFolderInode(ctx, uid, gid, path)
-		if err != nil {
-			return nil, err
+		if inode, err := c.getVersionFolderInode(ctx, uid, gid, path); err == nil {
+			info.Inode = inode
 		}
-		info.Inode = inode
 	}
 
 	return info, nil
@@ -791,7 +840,7 @@ func (c *Client) parseQuota(path, raw string) (*eosclient.QuotaInfo, error) {
 		// map[maxbytes:2000000000000 maxlogicalbytes:1000000000000 percentageusedbytes:0.49 quota:node uid:gonzalhu space:/eos/scratch/user/ usedbytes:9829986500 usedlogicalbytes:4914993250 statusfiles:ok usedfiles:334 maxfiles:1000000 statusbytes:ok]
 
 		space := m["space"]
-		if strings.HasPrefix(path, space) {
+		if strings.HasPrefix(path, filepath.Clean(space)) {
 			maxBytesString := m["maxlogicalbytes"]
 			usedBytesString := m["usedlogicalbytes"]
 			maxBytes, _ := strconv.ParseUint(maxBytesString, 10, 64)
