@@ -153,9 +153,9 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	sharetype := ocm.Share_SHARE_TYPE_REGULAR
 	protocol, ok := req.Opaque.Map["protocol"]
 	if ok {
-		var sp *shareProtocol
 		switch protocol.Decoder {
 		case "json":
+			var sp *shareProtocol
 			err := json.Unmarshal(protocol.Value, &sp)
 			if err != nil {
 				return &ocm.CreateOCMShareResponse{
