@@ -30,16 +30,19 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 )
 
 // Handler implements the ownCloud sharing API
 type Handler struct {
-	gatewayAddr string
+	gatewayAddr             string
+	additionalInfoAttribute string
 }
 
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
+	h.additionalInfoAttribute = c.AdditionalInfoAttribute
 	return nil
 }
 
@@ -116,7 +119,7 @@ func (h *Handler) userAsMatch(u *userpb.User) *conversions.MatchData {
 			ShareType: int(conversions.ShareTypeUser),
 			// api compatibility with oc10: always use the username
 			ShareWith:               u.Username,
-			ShareWithAdditionalInfo: u.Mail,
+			ShareWithAdditionalInfo: h.getAdditionalInfoAttribute(u),
 		},
 	}
 }
@@ -125,10 +128,13 @@ func (h *Handler) groupAsMatch(g *grouppb.Group) *conversions.MatchData {
 	return &conversions.MatchData{
 		Label: g.DisplayName,
 		Value: &conversions.MatchValueData{
-			ShareType: int(conversions.ShareTypeGroup),
-			// api compatibility with oc10
+			ShareType:               int(conversions.ShareTypeGroup),
 			ShareWith:               g.GroupName,
 			ShareWithAdditionalInfo: g.Mail,
 		},
 	}
+}
+
+func (h *Handler) getAdditionalInfoAttribute(u *userpb.User) string {
+	return templates.WithUser(u, h.additionalInfoAttribute)
 }
