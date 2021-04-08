@@ -64,21 +64,20 @@ func (connector *LocalFileConnector) Activate(conf *config.Configuration, log *z
 
 // RetrieveMeshData fetches new mesh data.
 func (connector *LocalFileConnector) RetrieveMeshData() (*meshdata.MeshData, error) {
-	meshData := &meshdata.MeshData{}
-
 	jsonData, err := ioutil.ReadFile(connector.filePath)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read file '%v': %v", connector.filePath, err)
+		connector.log.Warn().Err(err).Msgf("unable to read file '%v'", connector.filePath)
+		return &meshdata.MeshData{}, nil
 	}
 
-	if err := json.Unmarshal(jsonData, &meshData.Sites); err != nil {
-		return nil, fmt.Errorf("invalid file '%v': %v", connector.filePath, err)
+	meshData := &meshdata.MeshData{}
+	if err := json.Unmarshal(jsonData, &meshData.Sites); err == nil {
+		// Enforce site types
+		connector.setSiteTypes(meshData)
+		meshData.InferMissingData()
+	} else {
+		connector.log.Warn().Err(err).Msgf("invalid file '%v'", connector.filePath)
 	}
-
-	// Enforce site types
-	connector.setSiteTypes(meshData)
-
-	meshData.InferMissingData()
 
 	return meshData, nil
 }
