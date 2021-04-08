@@ -19,15 +19,15 @@
 package eoshome
 
 import (
-	"bytes"
 	"context"
-	"html/template"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -38,7 +38,7 @@ func init() {
 
 type wrapper struct {
 	storage.FS
-	mountIDTemplate *template.Template
+	mountIDTemplate string
 }
 
 func parseConfig(m map[string]interface{}) (*eosfs.Config, string, error) {
@@ -55,7 +55,7 @@ func parseConfig(m map[string]interface{}) (*eosfs.Config, string, error) {
 
 	t, ok := m["mount_id_template"].(string)
 	if !ok || t == "" {
-		t = "eoshome-{{substr 0 1 .OpaqueId}}"
+		t = "eoshome-{{substr 0 1 .Id.OpaqueId}}"
 	}
 
 	return c, t, nil
@@ -74,12 +74,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	mountIDTemplate, err := template.New("mountIDTemplate").Parse(t)
-	if err != nil {
-		return nil, err
-	}
-
-	return &wrapper{FS: eos, mountIDTemplate: mountIDTemplate}, nil
+	return &wrapper{FS: eos, mountIDTemplate: t}, nil
 }
 
 // We need to override the two methods, GetMD and ListFolder to fill the
@@ -95,7 +90,7 @@ func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	//
 	// Take the owner of the resource as the user to decide the mapping.
 	// If that is not present, leave it empty to be filled by storageprovider.
-	if res != nil && res.Owner.OpaqueId != "" {
+	if res != nil && res.Owner != nil && res.Owner.OpaqueId != "" {
 		res.Id.StorageId = w.getMountID(ctx, res.Owner)
 	}
 	return res, nil
@@ -108,7 +103,7 @@ func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		return nil, err
 	}
 	for _, r := range res {
-		if r != nil && r.Owner.OpaqueId != "" {
+		if r != nil && r.Owner != nil && r.Owner.OpaqueId != "" {
 			r.Id.StorageId = w.getMountID(ctx, r.Owner)
 		}
 	}
@@ -116,9 +111,5 @@ func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 }
 
 func (w *wrapper) getMountID(ctx context.Context, u *userpb.UserId) string {
-	b := bytes.Buffer{}
-	if err := w.mountIDTemplate.Execute(&b, u); err != nil {
-		return ""
-	}
-	return b.String()
+	return templates.WithUser(&userpb.User{Id: u}, w.mountIDTemplate)
 }
