@@ -20,11 +20,17 @@ package owncloud
 
 import (
 	"context"
+	"crypto/md5"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"hash/adler32"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -36,6 +42,8 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
+	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
@@ -363,18 +371,54 @@ func (upload *fileUpload) writeInfo() error {
 
 // FinishUpload finishes an upload and moves the file to the internal destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
+	log := appctx.GetLogger(upload.ctx)
 
-	/*
-		checksum := upload.info.MetaData["checksum"]
-		if checksum != "" {
-			// TODO check checksum
-			s := strings.SplitN(checksum, " ", 2)
-			if len(s) == 2 {
-				alg, hash := s[0], s[1]
-
-			}
+	sha1Sum := make([]byte, 0, 32)
+	md5Sum := make([]byte, 0, 32)
+	adler32Sum := make([]byte, 0, 32)
+	{
+		sha1h := sha1.New()
+		md5h := md5.New()
+		adler32h := adler32.New()
+		f, err := os.Open(upload.binPath)
+		if err != nil {
+			log.Err(err).Msg("Decomposedfs: could not open file for checksumming")
+			// we can continue if no oc checksum header is set
 		}
-	*/
+		defer f.Close()
+
+		r1 := io.TeeReader(f, sha1h)
+		r2 := io.TeeReader(r1, md5h)
+
+		if _, err := io.Copy(adler32h, r2); err != nil {
+			log.Err(err).Msg("Decomposedfs: could not copy bytes for checksumming")
+		}
+
+		sha1Sum = sha1h.Sum(sha1Sum)
+		md5Sum = md5h.Sum(md5Sum)
+		adler32Sum = adler32h.Sum(adler32Sum)
+	}
+
+	if upload.info.MetaData["checksum"] != "" {
+		parts := strings.SplitN(upload.info.MetaData["checksum"], " ", 2)
+		if len(parts) != 2 {
+			return errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
+		}
+		var err error
+		switch parts[0] {
+		case "sha1":
+			err = upload.checkHash(parts[1], sha1Sum)
+		case "md5":
+			err = upload.checkHash(parts[1], md5Sum)
+		case "adler32":
+			err = upload.checkHash(parts[1], adler32Sum)
+		default:
+			err = errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
+		}
+		if err != nil {
+			return err
+		}
+	}
 
 	ip := upload.info.Storage["InternalDestination"]
 
@@ -391,7 +435,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		}
 	}
 
-	log := appctx.GetLogger(upload.ctx)
 	err := os.Rename(upload.binPath, ip)
 	if err != nil {
 		log.Err(err).Interface("info", upload.info).
@@ -416,6 +459,11 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 			return err
 		}
 	}
+
+	// now try write all checksums
+	tryWritingChecksum(log, ip, "sha1", sha1Sum)
+	tryWritingChecksum(log, ip, "md5", md5Sum)
+	tryWritingChecksum(log, ip, "adler32", adler32Sum)
 
 	return upload.fs.propagate(upload.ctx, ip)
 }
@@ -491,4 +539,36 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 	}
 
 	return
+}
+
+func (upload *fileUpload) checkHash(expected string, h []byte) error {
+	if expected != hex.EncodeToString(h) {
+		upload.discardChunk()
+		return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %x", upload.info.MetaData["checksum"], h))
+	}
+	return nil
+}
+
+func (upload *fileUpload) discardChunk() {
+	if err := os.Remove(upload.binPath); err != nil {
+		if !os.IsNotExist(err) {
+			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("binPath", upload.binPath).Interface("info", upload.info).Msg("Decomposedfs: could not discard chunk")
+			return
+		}
+	}
+	if err := os.Remove(upload.infoPath); err != nil {
+		if !os.IsNotExist(err) {
+			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("infoPath", upload.infoPath).Interface("info", upload.info).Msg("Decomposedfs: could not discard chunk info")
+			return
+		}
+	}
+}
+
+func tryWritingChecksum(log *zerolog.Logger, path, algo string, h []byte) {
+	if err := xattr.Set(path, checksumPrefix+algo, h); err != nil {
+		log.Err(err).
+			Str("csType", algo).
+			Bytes("hash", h).
+			Msg("ocfs: could not write checksum")
+	}
 }
