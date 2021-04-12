@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -66,18 +67,16 @@ func (connector *LocalFileConnector) Activate(conf *config.Configuration, log *z
 func (connector *LocalFileConnector) RetrieveMeshData() (*meshdata.MeshData, error) {
 	jsonData, err := ioutil.ReadFile(connector.filePath)
 	if err != nil {
-		connector.log.Warn().Err(err).Msgf("unable to read file '%v'", connector.filePath)
-		return &meshdata.MeshData{}, nil
+		return nil, errors.Wrapf(err, "unable to read file '%v'", connector.filePath)
 	}
 
 	meshData := &meshdata.MeshData{}
-	if err := json.Unmarshal(jsonData, &meshData.Sites); err == nil {
-		// Enforce site types
-		connector.setSiteTypes(meshData)
-		meshData.InferMissingData()
-	} else {
-		connector.log.Warn().Err(err).Msgf("invalid file '%v'", connector.filePath)
+	if err := json.Unmarshal(jsonData, &meshData.Sites); err != nil {
+		return nil, errors.Wrapf(err, "invalid file '%v'", connector.filePath)
 	}
+
+	connector.setSiteTypes(meshData)
+	meshData.InferMissingData()
 
 	return meshData, nil
 }

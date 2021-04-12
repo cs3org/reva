@@ -39,7 +39,9 @@ type SiteType int
 
 // Site represents a single site managed by Mentix.
 type Site struct {
-	Type SiteType `json:"-"`
+	// Internal settings
+	Type         SiteType `json:"-"`
+	IsAuthorized bool     `json:"-"`
 
 	ID           string
 	Name         string
@@ -116,6 +118,8 @@ func (site *Site) Verify() error {
 // InferMissingData infers missing data from other data where possible.
 func (site *Site) InferMissingData() {
 	// Infer missing data
+	site.IsAuthorized = site.getAuthorizationStatus()
+
 	if site.Homepage == "" {
 		site.Homepage = fmt.Sprintf("http://www.%v", site.Domain)
 	} else if site.Domain == "" {
@@ -130,9 +134,7 @@ func (site *Site) InferMissingData() {
 	}
 }
 
-// IsAuthorized checks whether the site is authorized. ScienceMesh are always authorized, while for community sites,
-// the accounts service is queried.
-func (site *Site) IsAuthorized() bool {
+func (site *Site) getAuthorizationStatus() bool {
 	// ScienceMesh sites are always authorized
 	if site.Type == SiteTypeScienceMesh {
 		return true

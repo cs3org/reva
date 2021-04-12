@@ -134,7 +134,7 @@ func (exchanger *BaseExchanger) cloneMeshData(clean bool) *meshdata.MeshData {
 		cleanedSites := make([]*meshdata.Site, 0, len(meshDataClone.Sites))
 		for _, site := range meshDataClone.Sites {
 			// Only keep authorized sites
-			if site.IsAuthorized() {
+			if site.IsAuthorized {
 				cleanedSites = append(cleanedSites, site)
 			}
 		}
