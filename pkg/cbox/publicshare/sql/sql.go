@@ -437,7 +437,7 @@ func (m *manager) cleanupExpiredShares() error {
 		return nil
 	}
 
-	query := "delete from oc_share where expiration IS NOT NULL AND expiration < ?"
+	query := "update oc_share set orphan = 1 where expiration IS NOT NULL AND expiration < ?"
 	params := []interface{}{time.Now().Format("2006-01-02 03:04:05")}
 
 	stmt, err := m.db.Prepare(query)

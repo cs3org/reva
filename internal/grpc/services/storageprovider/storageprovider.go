@@ -1142,7 +1142,10 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 }
 
 func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
-	ri.Id.StorageId = s.mountID
+	if ri.Id.StorageId == "" {
+		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
+		ri.Id.StorageId = s.mountID
+	}
 	ri.Path = path.Join(s.mountPath, ri.Path)
 	return nil
 }
