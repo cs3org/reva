@@ -76,6 +76,27 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest
 		}, nil
 	}
 
+	// if we need to commit the share, we need the resource it points to.
+	var share *ocm.Share
+	if s.c.CommitShareToStorageGrant {
+		getShareReq := &ocm.GetOCMShareRequest{
+			Ref: req.Ref,
+		}
+		getShareRes, err := c.GetOCMShare(ctx, getShareReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error calling GetShare")
+		}
+
+		if getShareRes.Status.Code != rpc.Code_CODE_OK {
+			res := &ocm.RemoveOCMShareResponse{
+				Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
+					"error getting share when committing to the storage"),
+			}
+			return res, nil
+		}
+		share = getShareRes.Share
+	}
+
 	res, err := c.RemoveOCMShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
@@ -85,24 +106,6 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest
 	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
 		return res, nil
 	}
-
-	// if we need to commit the share, we need the resource it points to.
-	getShareReq := &ocm.GetOCMShareRequest{
-		Ref: req.Ref,
-	}
-	getShareRes, err := c.GetOCMShare(ctx, getShareReq)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling GetShare")
-	}
-
-	if getShareRes.Status.Code != rpc.Code_CODE_OK {
-		res := &ocm.RemoveOCMShareResponse{
-			Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
-				"error getting share when committing to the storage"),
-		}
-		return res, nil
-	}
-	share := getShareRes.Share
 
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
