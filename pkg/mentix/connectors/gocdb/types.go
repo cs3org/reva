@@ -88,3 +88,27 @@ type Service struct {
 type Services struct {
 	Services []*Service `xml:"SERVICE_ENDPOINT"`
 }
+
+// DowntimeService represents a service scheduled for downtime.
+type DowntimeService struct {
+	Type string `xml:"SERVICE_TYPE"`
+}
+
+// DowntimeServices represents a list of DowntimeService objects.
+type DowntimeServices struct {
+	Services []*DowntimeService `xml:"SERVICE"`
+}
+
+// Downtime is a scheduled downtime for a site.
+type Downtime struct {
+	Severity  string `xml:"SEVERITY"`
+	StartDate int64  `xml:"START_DATE"`
+	EndDate   int64  `xml:"END_DATE"`
+
+	AffectedServices DowntimeServices `xml:"SERVICES"`
+}
+
+// Downtimes represents a list of Downtime objects.
+type Downtimes struct {
+	Downtimes []*Downtime `xml:"DOWNTIME"`
+}

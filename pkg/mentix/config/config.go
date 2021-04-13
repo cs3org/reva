@@ -35,6 +35,8 @@ type Configuration struct {
 
 	UpdateInterval string `mapstructure:"update_interval"`
 
+	CriticalServiceTypes []string `mapstructure:"critical_services"`
+
 	Importers struct {
 		SiteRegistration struct {
 			Endpoint               string   `mapstructure:"endpoint"`
