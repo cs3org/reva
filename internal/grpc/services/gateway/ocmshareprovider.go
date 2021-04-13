@@ -316,15 +316,21 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 
 	var refPath, targetURI string
 	if true { // TODO(antoon): Check if share is transfer or not
-		// For now, we skip error checks because the folder may already exist
-		// TODO(ishank011): Add error checks
-		_, _ = s.CreateContainer(ctx, &provider.CreateContainerRequest{
+		createTransferDir, err := s.CreateContainer(ctx, &provider.CreateContainerRequest{
 			Ref: &provider.Reference{
 				Spec: &provider.Reference_Path{
 					Path: path.Join(homeRes.Path, s.c.DataTransfersFolder),
 				},
 			},
 		})
+		if err != nil {
+			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
+		}
+		if createTransferDir.Status.Code != rpc.Code_CODE_OK && createTransferDir.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
+			err := status.NewErrorFromCode(createTransferDir.Status.GetCode(), "gateway")
+			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
+		}
+
 		refPath = path.Join(homeRes.Path, s.c.DataTransfersFolder, path.Base(share.Name))
 		targetURI = fmt.Sprintf("datatx://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
 	} else {
