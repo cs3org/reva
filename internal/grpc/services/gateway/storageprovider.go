@@ -258,31 +258,30 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			}, nil
 		}
 
+		if protocol == "webdav" {
+			// TODO(ishank011): pass this through the datagateway service
+			// for now, we just expose the file server to the user
+			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
+			if err != nil {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+				}, nil
+			}
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewOK(ctx),
+				Protocols: []*gateway.FileDownloadProtocol{
+					{
+						Opaque:           opaque,
+						Protocol:         "simple",
+						DownloadEndpoint: ep,
+					},
+				},
+			}, nil
+		}
+
 		// if it is a file allow download
 		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
-
-			if protocol == "webdav" {
-				// TODO(ishank011): pass this through the datagateway service
-				// for now, we just expose the file server to the user
-				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
-				if err != nil {
-					return &gateway.InitiateFileDownloadResponse{
-						Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
-					}, nil
-				}
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewOK(ctx),
-					Protocols: []*gateway.FileDownloadProtocol{
-						{
-							Opaque:           opaque,
-							Protocol:         "simple",
-							DownloadEndpoint: ep,
-						},
-					},
-				}, nil
-			}
-
 			req.Ref = &provider.Reference{
 				Spec: &provider.Reference_Path{
 					Path: ri.Path,
@@ -290,8 +289,8 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			}
 			log.Debug().Msg("download path: " + ri.Path)
 			return s.initiateFileDownload(ctx, req)
-
 		}
+
 		log.Debug().Str("path", p).Interface("statRes", statRes).Msg("path:%s points to share name")
 		err = errtypes.PermissionDenied("gateway: cannot download share name: path=" + p)
 		log.Err(err).Str("path", p).Msg("gateway: error downloading")
@@ -471,31 +470,30 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			}, nil
 		}
 
+		if protocol == "webdav" {
+			// TODO(ishank011): pass this through the datagateway service
+			// for now, we just expose the file server to the user
+			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
+			if err != nil {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+				}, nil
+			}
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewOK(ctx),
+				Protocols: []*gateway.FileUploadProtocol{
+					{
+						Opaque:         opaque,
+						Protocol:       "simple",
+						UploadEndpoint: ep,
+					},
+				},
+			}, nil
+		}
+
 		// if it is a file allow upload
 		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
-
-			if protocol == "webdav" {
-				// TODO(ishank011): pass this through the datagateway service
-				// for now, we just expose the file server to the user
-				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
-				if err != nil {
-					return &gateway.InitiateFileUploadResponse{
-						Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
-					}, nil
-				}
-				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewOK(ctx),
-					Protocols: []*gateway.FileUploadProtocol{
-						{
-							Opaque:         opaque,
-							Protocol:       "simple",
-							UploadEndpoint: ep,
-						},
-					},
-				}, nil
-			}
-
 			req.Ref = &provider.Reference{
 				Spec: &provider.Reference_Path{
 					Path: ri.Path,
@@ -503,8 +501,8 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			}
 			log.Debug().Msg("upload path: " + ri.Path)
 			return s.initiateFileUpload(ctx, req)
-
 		}
+
 		err = errtypes.PermissionDenied("gateway: cannot upload to share name: path=" + p)
 		log.Err(err).Msg("gateway: error uploading")
 		return &gateway.InitiateFileUploadResponse{
