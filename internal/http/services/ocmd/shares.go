@@ -155,7 +155,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	desiredProtocol, ok := options["desired-protocol"].(string)
+	desiredProtocol, ok := options["protocol"].(string)
 	if !ok {
 		desiredProtocol = ""
 	}
@@ -181,7 +181,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 						Decoder: "plain",
 						Value:   []byte(token),
 					},
-					"desired-protocol": {
+					"protocol": {
 						Decoder: "plain",
 						Value:   []byte(desiredProtocol),
 					},
