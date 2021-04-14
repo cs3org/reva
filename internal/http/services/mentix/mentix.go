@@ -164,6 +164,7 @@ func applyDefaultConfig(conf *config.Configuration) {
 	addDefaultConnector(&conf.Exporters.SiteLocations.EnabledConnectors)
 
 	addDefaultConnector(&conf.Exporters.PrometheusSD.EnabledConnectors)
+	addDefaultConnector(&conf.Exporters.Metrics.EnabledConnectors)
 }
 
 // New returns a new Mentix service.
