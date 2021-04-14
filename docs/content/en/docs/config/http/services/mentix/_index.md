@@ -63,6 +63,9 @@ Mentix exposes its data via an HTTP endpoint using the `webapi` exporter. Data c
           - files:
              - '/usr/share/prom/sciencemesh_services.json'
   ```
+  
+- **metrics**
+The [Metrics](metrics) exporter exposes various site-specific metrics through Prometheus.
 
 ## Site Accounts service
 Mentix uses the Reva site accounts service to query information about site accounts. The following settings must be configured properly:
