@@ -277,7 +277,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 					"options": map[string]string{
 						"permissions": pm,
 						"token":       tokenpkg.ContextMustGetToken(ctx),
-						"protocol":    "webdav",
+						"protocol":    "datatx",
 					},
 				},
 			)
