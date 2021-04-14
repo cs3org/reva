@@ -33,7 +33,6 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
@@ -45,6 +44,8 @@ func transferCreateCommand() *command {
 	grantee := cmd.String("grantee", "", "the grantee, receiver of the transfer")
 	granteeType := cmd.String("granteeType", "user", "the grantee type, one of: user, group")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
+	// fixed for data transfer
+	rol := editorPermission
 
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
@@ -100,7 +101,11 @@ func transferCreateCommand() *command {
 		if err != nil {
 			return err
 		}
-		permissions := conversions.PermissionAll
+
+		_, pint, err := getOCMSharePerm(rol)
+		if err != nil {
+			return err
+		}
 		resourcePermissions := &provider.ResourcePermissions{
 			InitiateFileDownload: true,
 		}
@@ -126,7 +131,7 @@ func transferCreateCommand() *command {
 				Map: map[string]*types.OpaqueEntry{
 					"permissions": &types.OpaqueEntry{
 						Decoder: "plain",
-						Value:   []byte(strconv.Itoa(int(permissions))),
+						Value:   []byte(strconv.Itoa(pint)),
 					},
 					"name": &types.OpaqueEntry{
 						Decoder: "plain",
