@@ -337,6 +337,9 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 			return &collaboration.UpdateReceivedShareResponse{
 				Status: createRefStatus,
 			}, err
+		} else if req.Field.GetState() == collaboration.ShareState_SHARE_STATE_REJECTED {
+			// Nothing more to do, return the original result
+			return res, nil
 		}
 	}
 
