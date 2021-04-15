@@ -34,6 +34,8 @@ type Config struct {
 	SharePrefix             string                `mapstructure:"share_prefix"`
 	HomeNamespace           string                `mapstructure:"home_namespace"`
 	AdditionalInfoAttribute string                `mapstructure:"additional_info_attribute"`
+	ResourceInfoCacheSize   int                   `mapstructure:"resource_info_cache_size"`
+	ResourceInfoCacheTTL    int                   `mapstructure:"resource_info_cache_ttl"`
 }
 
 // Init sets sane defaults
@@ -56,6 +58,14 @@ func (c *Config) Init() {
 
 	if c.AdditionalInfoAttribute == "" {
 		c.AdditionalInfoAttribute = "{{.Mail}}"
+	}
+
+	if c.ResourceInfoCacheSize == 0 {
+		c.ResourceInfoCacheSize = 1000000
+	}
+
+	if c.ResourceInfoCacheTTL == 0 {
+		c.ResourceInfoCacheTTL = 86400
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
