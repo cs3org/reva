@@ -27,6 +27,15 @@ update_interval = "15m"
 {{< /highlight >}}
 {{% /dir %}}
 
+## Services
+{{% dir name="critical_types" type="[]string" default="[]" %}}
+The service types that are considered as critical/essential.
+{{< highlight toml >}}
+[http.services.mentix.services]
+critical_types = ["REVAD]
+{{< /highlight >}}
+{{% /dir %}}
+
 ## Connectors
 Mentix is decoupled from the actual sources of the mesh data by using so-called _connectors_. A connector is used to gather the data from a certain source, which are then converted into Mentix' own internal format.
 

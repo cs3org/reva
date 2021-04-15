@@ -11,6 +11,10 @@ address = "http://sciencemesh-test.uni-muenster.de"
 [http.services.mentix.connectors.localfile]
 file = "/usr/share/revad/sites.json"
 
+# Configure the service types that are considered as critical/essential
+[http.services.mentix.services]
+critical_types = ["REVAD"]
+
 # Enable the WebAPI exporter
 [http.services.mentix.exporters.webapi]
 endpoint = "/"

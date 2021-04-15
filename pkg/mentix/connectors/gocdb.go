@@ -239,7 +239,7 @@ func (connector *GOCDBConnector) queryDowntimes(meshData *meshdata.MeshData, sit
 		services := make([]string, 0, len(dt.AffectedServices.Services))
 		for _, service := range dt.AffectedServices.Services {
 			// Only add critical services to the list of affected services
-			for _, svcType := range connector.conf.CriticalServiceTypes {
+			for _, svcType := range connector.conf.Services.CriticalTypes {
 				if strings.EqualFold(svcType, service.Type) {
 					services = append(services, service.Type)
 				}
