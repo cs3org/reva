@@ -162,7 +162,8 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 					Status: status.NewInternal(ctx, err, "error decoding protocol"),
 				}, nil
 			}
-			if sp.Name == "datatx" {
+		case "plain":
+			if string(protocol.Value) == "datatx" {
 				sharetype = ocm.Share_SHARE_TYPE_TRANSFER
 			}
 		default:

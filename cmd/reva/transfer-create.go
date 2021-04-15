@@ -19,7 +19,6 @@
 package main
 
 import (
-	"encoding/json"
 	"io"
 	"os"
 	"strconv"
@@ -106,19 +105,9 @@ func transferCreateCommand() *command {
 		if err != nil {
 			return err
 		}
+
 		resourcePermissions := &provider.ResourcePermissions{
 			InitiateFileDownload: true,
-		}
-		datatxProtocol, err := json.Marshal(
-			map[string]interface{}{
-				"name": "datatx",
-				"options": map[string]string{
-					"protocol": "webdav",
-				},
-			},
-		)
-		if err != nil {
-			return err
 		}
 
 		gt := provider.GranteeType_GRANTEE_TYPE_USER
@@ -138,8 +127,8 @@ func transferCreateCommand() *command {
 						Value:   []byte(statRes.Info.Path),
 					},
 					"protocol": &types.OpaqueEntry{
-						Decoder: "json",
-						Value:   datatxProtocol,
+						Decoder: "plain",
+						Value:   []byte("datatx"),
 					},
 				},
 			},
