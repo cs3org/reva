@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -72,6 +73,11 @@ func (connector *GOCDBConnector) RetrieveMeshData() (*meshdata.MeshData, error) 
 		// Get services associated with the current site
 		if err := connector.queryServices(meshData, site); err != nil {
 			return nil, fmt.Errorf("could not query services of site '%v': %v", site.Name, err)
+		}
+
+		// Get downtimes scheduled for the current site
+		if err := connector.queryDowntimes(meshData, site); err != nil {
+			return nil, fmt.Errorf("could not query downtimes of site '%v': %v", site.Name, err)
 		}
 	}
 
@@ -152,6 +158,7 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 			Latitude:     site.Latitude,
 			Services:     nil,
 			Properties:   properties,
+			Downtimes:    meshdata.Downtimes{},
 		}
 		meshData.Sites = append(meshData.Sites, meshsite)
 	}
@@ -211,6 +218,35 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 			Host:                host,
 			AdditionalEndpoints: endpoints,
 		})
+	}
+
+	return nil
+}
+
+func (connector *GOCDBConnector) queryDowntimes(meshData *meshdata.MeshData, site *meshdata.Site) error {
+	var downtimes gocdb.Downtimes
+	if err := connector.query(&downtimes, "get_downtime_nested_services", false, true, network.URLParams{"topentity": site.Name, "ongoing_only": "yes"}); err != nil {
+		return err
+	}
+
+	// Copy retrieved data into the mesh data
+	site.Downtimes.Clear()
+	for _, dt := range downtimes.Downtimes {
+		if !strings.EqualFold(dt.Severity, "outage") { // Only take real outages into account
+			continue
+		}
+
+		services := make([]string, 0, len(dt.AffectedServices.Services))
+		for _, service := range dt.AffectedServices.Services {
+			// Only add critical services to the list of affected services
+			for _, svcType := range connector.conf.CriticalServiceTypes {
+				if strings.EqualFold(svcType, service.Type) {
+					services = append(services, service.Type)
+				}
+			}
+		}
+
+		_, _ = site.Downtimes.ScheduleDowntime(time.Unix(dt.StartDate, 0), time.Unix(dt.EndDate, 0), services)
 	}
 
 	return nil

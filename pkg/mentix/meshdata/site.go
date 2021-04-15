@@ -59,6 +59,8 @@ type Site struct {
 
 	Services   []*Service
 	Properties map[string]string
+
+	Downtimes Downtimes `json:"-"`
 }
 
 // AddService adds a new service; if a service with the same name already exists, the existing one is overwritten.

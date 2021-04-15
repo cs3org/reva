@@ -20,6 +20,8 @@ endpoint = "/"
 [http.services.mentix.exporters.siteloc]
 # If this setting is omitted, all connectors will be used as data sources
 enabled_connectors = ["gocdb"]
+# Enable the Metrics exporter
+[http.services.mentix.exporters.metrics]
 
 # Enable the site registration importer
 [http.services.mentix.importers.sitereg]

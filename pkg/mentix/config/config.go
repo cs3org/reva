@@ -35,6 +35,8 @@ type Configuration struct {
 
 	UpdateInterval string `mapstructure:"update_interval"`
 
+	CriticalServiceTypes []string `mapstructure:"critical_services"`
+
 	Importers struct {
 		SiteRegistration struct {
 			Endpoint               string   `mapstructure:"endpoint"`
@@ -68,6 +70,10 @@ type Configuration struct {
 			BlackboxOutputFile string   `mapstructure:"blackbox_output_file"`
 			EnabledConnectors  []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"promsd"`
+
+		Metrics struct {
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+		} `mapstructure:"metrics"`
 	} `mapstructure:"exporters"`
 
 	AccountsService struct {
