@@ -312,7 +312,7 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 	}
 
 	var refPath, targetURI string
-	if true { // TODO(antoon): Check if share is transfer or not
+	if share.ShareType == ocm.Share_SHARE_TYPE_TRANSFER {
 		createTransferDir, err := s.CreateContainer(ctx, &provider.CreateContainerRequest{
 			Ref: &provider.Reference{
 				Spec: &provider.Reference_Path{
