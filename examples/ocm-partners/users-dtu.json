@@ -1,0 +1,43 @@
+[
+
+    {  
+
+
+	    "id": {
+	             "opaque_id": "marina1234",
+		     "idp": "dtu.dk" 
+	    
+	    }, 
+	    "username": "marina",
+	    "secret": "marinapass",
+	    "mail": "marpap@dtu.dk",
+	    "display_name": "Marina Papathanasiou",
+	    "groups": ["sailing-lovers", "violin-haters", "physics-lovers"]
+    },
+    {
+            "id": {
+	              "opaque_id": "frederik7899",
+		      "idp": "dtu.dk"
+
+	    },
+	    "username": "frederik",
+	    "secret": "frederikpass",
+	    "mail": "frederik.orellana@deic.dk",
+	    "display_name": "Frederik Orellana",
+	    "groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+	    
+	    
+    },
+    {       
+            "id": {
+	              "opaque_id": "test3456",
+		      "idp": "dtu.dk"
+	    },
+	    "username": "test",
+	    "secret":  "testpass",
+	    "mail": "test7@dtu.dk",
+	    "display_name": "User_test",
+	    "groups": ["test-lovers", "bug-haters", "ai-lovers"]
+     }
+
+]
