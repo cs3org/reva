@@ -16,43 +16,29 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package runtime
+package memory
 
-import (
-	"github.com/cs3org/reva/pkg/registry"
-	"github.com/rs/zerolog"
-)
+import "fmt"
 
-// Option defines a single option function.
-type Option func(o *Options)
-
-// Options defines the available options for this package.
-type Options struct {
-	Logger   *zerolog.Logger
-	Registry registry.Registry
+// node implements the registry.Node interface.
+type node struct {
+	id       string
+	address  string
+	metadata map[string]string
 }
 
-// newOptions initializes the available default options.
-func newOptions(opts ...Option) Options {
-	opt := Options{}
-
-	for _, o := range opts {
-		o(&opt)
-	}
-
-	return opt
+func (n node) Address() string {
+	return n.address
 }
 
-// WithLogger provides a function to set the logger option.
-func WithLogger(logger *zerolog.Logger) Option {
-	return func(o *Options) {
-		o.Logger = logger
-	}
+func (n node) Metadata() map[string]string {
+	return n.metadata
 }
 
-// WithRegistry provides a function to set the registry.
-func WithRegistry(r registry.Registry) Option {
-	return func(o *Options) {
-		o.Registry = r
-	}
+func (n node) String() string {
+	return fmt.Sprintf("%v-%v", n.id, n.address)
+}
+
+func (n node) ID() string {
+	return n.id
 }

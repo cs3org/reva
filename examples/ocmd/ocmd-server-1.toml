@@ -1,6 +1,17 @@
 [shared]
 gatewaysvc = "localhost:19000"
 
+[registry]
+driver = "static"
+
+[registry.static]
+services = ["authprovider","userprovider"]
+
+[registry.static.authprovider]
+bearer = ["localhost:0123"]
+basic = ["localhost:1234"]
+publiclink = ["localhost:9876"]
+
 [grpc]
 address = "0.0.0.0:19000"
 

@@ -16,43 +16,38 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package runtime
+package registry
 
 import (
-	"github.com/cs3org/reva/pkg/registry"
-	"github.com/rs/zerolog"
+	"github.com/mitchellh/mapstructure"
 )
 
-// Option defines a single option function.
-type Option func(o *Options)
-
-// Options defines the available options for this package.
-type Options struct {
-	Logger   *zerolog.Logger
-	Registry registry.Registry
+// Config configures a registry
+type Config struct {
+	Services map[string][]*service `mapstructure:"services"`
 }
 
-// newOptions initializes the available default options.
-func newOptions(opts ...Option) Options {
-	opt := Options{}
-
-	for _, o := range opts {
-		o(&opt)
-	}
-
-	return opt
+// service implements the Service interface
+type service struct {
+	Name  string `mapstructure:"name"`
+	Nodes []node `mapstructure:"nodes"`
 }
 
-// WithLogger provides a function to set the logger option.
-func WithLogger(logger *zerolog.Logger) Option {
-	return func(o *Options) {
-		o.Logger = logger
-	}
+type node struct {
+	Address  string            `mapstructure:"address"`
+	Metadata map[string]string `mapstructure:"metadata"`
 }
 
-// WithRegistry provides a function to set the registry.
-func WithRegistry(r registry.Registry) Option {
-	return func(o *Options) {
-		o.Registry = r
+// ParseConfig translates Config file values into a Config struct for consumers.
+func ParseConfig(m map[string]interface{}) (*Config, error) {
+	c := &Config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		return nil, err
 	}
+
+	if len(c.Services) == 0 {
+		c.Services = make(map[string][]*service)
+	}
+
+	return c, nil
 }
