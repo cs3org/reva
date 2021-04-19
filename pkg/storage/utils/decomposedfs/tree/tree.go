@@ -345,16 +345,20 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 }
 
 // RestoreRecycleItemFunc returns a node and a function to restore it from the trash
-func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error) {
+func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, restorePath string) (*node.Node, func() error, error) {
 	rn, trashItem, deletedNodePath, origin, err := t.readRecycleItem(ctx, key)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	if restorePath == "" {
+		restorePath = origin
+	}
+
 	fn := func() error {
 		// link to origin
 		var n *node.Node
-		n, err = t.lookup.NodeFromPath(ctx, origin)
+		n, err = t.lookup.NodeFromPath(ctx, restorePath)
 		if err != nil {
 			return err
 		}
