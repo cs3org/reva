@@ -39,7 +39,9 @@ type Metrics struct {
 }
 
 const (
-	keySite = "site"
+	keySiteID   = "site_id"
+	keySiteName = "site"
+	keySiteType = "site_type"
 )
 
 func (m *Metrics) initialize(conf *config.Configuration, log *zerolog.Logger) error {
@@ -67,7 +69,7 @@ func (m *Metrics) registerMetrics() error {
 		Name:        m.isScheduledStats.Name(),
 		Description: m.isScheduledStats.Description(),
 		Measure:     m.isScheduledStats,
-		TagKeys:     []tag.Key{tag.MustNewKey(keySite)},
+		TagKeys:     []tag.Key{tag.MustNewKey(keySiteID), tag.MustNewKey(keySiteName), tag.MustNewKey(keySiteType)},
 		Aggregation: view.LastValue(),
 	}
 
@@ -91,7 +93,9 @@ func (m *Metrics) Update(meshData *meshdata.MeshData) error {
 
 func (m *Metrics) exportSiteMetrics(site *meshdata.Site) error {
 	mutators := make([]tag.Mutator, 0)
-	mutators = append(mutators, tag.Insert(tag.MustNewKey(keySite), site.Name))
+	mutators = append(mutators, tag.Insert(tag.MustNewKey(keySiteID), site.ID))
+	mutators = append(mutators, tag.Insert(tag.MustNewKey(keySiteName), site.Name))
+	mutators = append(mutators, tag.Insert(tag.MustNewKey(keySiteType), meshdata.GetSiteTypeName(site.Type)))
 
 	// Create a new context to serve the metrics
 	if ctx, err := tag.New(context.Background(), mutators...); err == nil {
