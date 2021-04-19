@@ -20,6 +20,7 @@ package memory
 
 import "github.com/cs3org/reva/pkg/registry"
 
+// NewService creates a new memory registry.Service.
 func NewService(name string, nodes []interface{}) registry.Service {
 	n := make([]node, 0)
 	for i := 0; i < len(nodes); i++ {
@@ -43,10 +44,12 @@ type service struct {
 	nodes []node
 }
 
+// Name implements the service interface.
 func (s service) Name() string {
 	return s.name
 }
 
+// Nodes implements the service interface.
 func (s service) Nodes() []registry.Node {
 	ret := make([]registry.Node, 0)
 	for i := range s.nodes {
