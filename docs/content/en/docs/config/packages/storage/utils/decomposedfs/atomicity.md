@@ -1,8 +1,16 @@
-# Atomicity of DecomposedFS Operations (ocis, s3ng)
+---
+title: "atomicity"
+linkTitle: "atomicity"
+weight: 10
+description: >
+    Atomicity of DecomposedFS Operations (ocis, s3ng)
+---
 
+{{% pageinfo %}}
 This document describes the atomicity of (writing) decomposedfs operations by listing the relevant steps that happen
 when doing the according operations, highlighting potential problems with concurrent operations and describing the
 negative effects.
+{{% /pageinfo %}}
 
 ## CreateDir
 ### Steps
