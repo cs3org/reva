@@ -21,7 +21,7 @@ Only the first one succeeds in that, the later ones fail because the link alread
 
 ### Negative Effects
 
-Failing calls will leave an orphened node behind (See reva issue [#1601](https://github.com/cs3org/reva/issues/1601)).
+Failing calls will leave an orphaned node behind (See reva issue [#1601](https://github.com/cs3org/reva/issues/1601)).
 
 No risk of inconsistency.
 
