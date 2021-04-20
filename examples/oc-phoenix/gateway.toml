@@ -48,16 +48,15 @@ driver = "static"
 [grpc.services.storageregistry.drivers.static]
 home_provider = "/home"
 
+[grpc.services.storageregistry.drivers.static.rules]
+
 # mount a home storage provider that uses a context based path wrapper
 # to jail users into their home dir
-[grpc.services.storageregistry.drivers.static.rules."/home"]
-address = "localhost:12000"
+"/home" = {"address" = "localhost:12000"}
 
 # mount a storage provider without a path wrapper for direct access to users.
-[grpc.services.storageregistry.drivers.static.rules."/oc"]
-address = "localhost:11000"
-[grpc.services.storageregistry.drivers.static.rules."123e4567-e89b-12d3-a456-426655440000"]
-address = "localhost:11000"
+"/oc" = {"address" = "localhost:11000"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:11000"}
 # another mount point might be "/projects/"
 
 [http]
