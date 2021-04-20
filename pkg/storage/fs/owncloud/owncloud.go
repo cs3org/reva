@@ -2152,7 +2152,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 	return items, nil
 }
 
-func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
+func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, restorePath string) error {
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
@@ -2167,16 +2167,17 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 		return nil
 	}
 
-	origin := "/"
-	if v, err := xattr.Get(src, trashOriginPrefix); err != nil {
-		log.Error().Err(err).Str("key", key).Str("path", src).Msg("could not read origin")
-	} else {
-		origin = filepath.Clean(string(v))
+	if restorePath == "" {
+		v, err := xattr.Get(src, trashOriginPrefix)
+		if err != nil {
+			log.Error().Err(err).Str("key", key).Str("path", src).Msg("could not read origin")
+		}
+		restorePath = filepath.Join("/", filepath.Clean(string(v)), strings.TrimSuffix(filepath.Base(src), suffix))
 	}
-	tgt := fs.toInternalPath(ctx, filepath.Join("/", origin, strings.TrimSuffix(filepath.Base(src), suffix)))
+	tgt := fs.toInternalPath(ctx, restorePath)
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
-		log.Error().Err(err).Str("key", key).Str("origin", origin).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
+		log.Error().Err(err).Str("key", key).Str("restorePath", restorePath).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
 		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 	// unset trash origin location in metadata

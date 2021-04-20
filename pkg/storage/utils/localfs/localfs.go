@@ -1179,7 +1179,7 @@ func (fs *localfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, er
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey, restorePath string) error {
 
 	suffix := path.Ext(restoreKey)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
@@ -1191,14 +1191,17 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) er
 		return errors.Wrap(err, "localfs: invalid key")
 	}
 
-	var originalPath string
-	if fs.isShareFolder(ctx, filePath) {
-		originalPath = fs.wrapReferences(ctx, filePath)
-	} else {
-		originalPath = fs.wrap(ctx, filePath)
+	var localRestorePath string
+	switch {
+	case restorePath != "":
+		localRestorePath = fs.wrap(ctx, restorePath)
+	case fs.isShareFolder(ctx, filePath):
+		localRestorePath = fs.wrapReferences(ctx, filePath)
+	default:
+		localRestorePath = fs.wrap(ctx, filePath)
 	}
 
-	if _, err = os.Stat(originalPath); err == nil {
+	if _, err = os.Stat(localRestorePath); err == nil {
 		return errors.New("localfs: can't restore - file already exists at original path")
 	}
 
@@ -1210,7 +1213,7 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) er
 		return errors.Wrap(err, "localfs: error stating "+rp)
 	}
 
-	if err := os.Rename(rp, originalPath); err != nil {
+	if err := os.Rename(rp, localRestorePath); err != nil {
 		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 
@@ -1219,7 +1222,7 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) er
 		return errors.Wrap(err, "localfs: error adding entry to DB")
 	}
 
-	return fs.propagate(ctx, originalPath)
+	return fs.propagate(ctx, localRestorePath)
 }
 
 func (fs *localfs) propagate(ctx context.Context, leafPath string) error {

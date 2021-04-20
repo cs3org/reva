@@ -816,7 +816,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 
 func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
-	if err := s.storage.RestoreRecycleItem(ctx, req.Key); err != nil {
+	if err := s.storage.RestoreRecycleItem(ctx, req.Key, req.RestorePath); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:

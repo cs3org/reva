@@ -80,6 +80,9 @@ func main() {
 	for _, bin := range binaries {
 		for _, o := range oses {
 			for _, arch := range archs {
+				if o == "darwin" && arch == "386" { // https://golang.org/doc/go1.14#darwin
+					continue
+				}
 				out := fmt.Sprintf("./dist/%s_%s_%s_%s", bin, *version, o, arch)
 				args := []string{"build", "-o", out, "-ldflags", ldFlags, "./cmd/" + bin}
 				cmd := exec.Command("go", args...)
