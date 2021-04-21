@@ -70,10 +70,10 @@ func (r *Registry) GetService(name string) (registry.Service, error) {
 
 // New returns an implementation of the Registry interface.
 func New(m map[string]interface{}) registry.Registry {
-	//c, err := registry.ParseConfig(m)
-	//if err != nil {
+	// c, err := registry.ParseConfig(m)
+	// if err != nil {
 	//	return nil
-	//}
+	// }
 
 	return &Registry{
 		services: map[string]registry.Service{},

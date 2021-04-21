@@ -24,7 +24,7 @@ import (
 
 // Config configures a registry
 type Config struct {
-	Services map[string]map[string]*Service `mapstructure:"services"`
+	Services map[string]map[string]*service `mapstructure:"services"`
 }
 
 // service implements the Service interface. Attributes are exported so that mapstructure can unmarshal values onto them.
@@ -46,7 +46,7 @@ func ParseConfig(m map[string]interface{}) (*Config, error) {
 	}
 
 	if len(c.Services) == 0 {
-		c.Services = make(map[string]map[string]*Service)
+		c.Services = make(map[string]map[string]*service)
 	}
 
 	return c, nil
