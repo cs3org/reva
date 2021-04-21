@@ -23,6 +23,26 @@ import (
 	"testing"
 )
 
+/*
+config example:
+
+---
+services:
+  authprovider:
+    basic:
+      name: auth-basic
+      nodes:
+      - address: 0.0.0.0:1234
+        metadata:
+          version: v0.1.0
+    bearer:
+      name: auth-bearer
+      nodes:
+      - address: 0.0.0.0:5678
+        metadata:
+          version: v0.1.0
+
+*/
 func TestParseConfig(t *testing.T) {
 	type args struct {
 		m map[string]interface{}
