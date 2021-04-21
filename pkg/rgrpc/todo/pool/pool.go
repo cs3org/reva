@@ -38,7 +38,6 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-
 	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
 )
@@ -171,15 +170,18 @@ func GetAuthRegistryServiceClient(endpoint string) (authregistry.RegistryAPIClie
 	authRegistries.m.Lock()
 	defer authRegistries.m.Unlock()
 
+	// if there is already a connection to this node, use it.
 	if c, ok := authRegistries.conn[endpoint]; ok {
 		return c.(authregistry.RegistryAPIClient), nil
 	}
 
+	// if not, create a new connection
 	conn, err := NewConn(endpoint)
 	if err != nil {
 		return nil, err
 	}
 
+	// and memoize it
 	v := authregistry.NewRegistryAPIClient(conn)
 	authRegistries.conn[endpoint] = v
 	return v, nil
@@ -412,3 +414,19 @@ func GetDataTxClient(endpoint string) (datatx.TxAPIClient, error) {
 	dataTxs.conn[endpoint] = v
 	return v, nil
 }
+
+// getEndpointByName resolve service names to ip addresses present on the registry.
+//	func getEndpointByName(name string) (string, error) {
+//		if services, err := utils.GlobalRegistry.GetService(name); err == nil {
+//			if len(services) > 0 {
+//				for i := range services {
+//					for j := range services[i].Nodes() {
+//						// return the first one. This MUST be improved upon with selectors.
+//						return services[i].Nodes()[j].Address(), nil
+//					}
+//				}
+//			}
+//		}
+//
+//		return "", fmt.Errorf("could not get service by name: %v", name)
+//	}

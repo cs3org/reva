@@ -2,6 +2,13 @@
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
+#[[registry.services.storagehome]]
+#name = 'authregistry'
+#
+#[[registry.services.storagehome.nodes]]
+#id = '65ad3270-9e87-11eb-a1aa-0fcc1edaa55e'
+#address = '0.0.0.0:9142'
+
 # This gateway.toml config file will start a reva service that:
 # - serves as a gateway for all requests
 # - looks up the storageprovider using a storageregistry

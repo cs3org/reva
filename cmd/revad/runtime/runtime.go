@@ -28,6 +28,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cs3org/reva/pkg/registry/memory"
+
+	"github.com/cs3org/reva/pkg/utils"
+
 	"contrib.go.opencensus.io/exporter/jaeger"
 	"github.com/cs3org/reva/cmd/revad/internal/grace"
 	"github.com/cs3org/reva/pkg/logger"
@@ -56,6 +60,21 @@ func RunWithOptions(mainConf map[string]interface{}, pidFile string, opts ...Opt
 	parseSharedConfOrDie(mainConf["shared"])
 	coreConf := parseCoreConfOrDie(mainConf["core"])
 
+	// TODO: one can pass the options from the config file to registry.New() and initialize a registry based upon config files.
+	if options.Registry != nil {
+		utils.GlobalRegistry = options.Registry
+	} else if _, ok := mainConf["registry"]; ok {
+		for _, services := range mainConf["registry"].(map[string]interface{}) {
+			for sName, nodes := range services.(map[string]interface{}) {
+				for _, instance := range nodes.([]interface{}) {
+					if err := utils.GlobalRegistry.Add(memory.NewService(sName, instance.(map[string]interface{})["nodes"].([]interface{}))); err != nil {
+						panic(err)
+					}
+				}
+			}
+		}
+	}
+
 	run(mainConf, coreConf, options.Logger, pidFile)
 }
 
@@ -71,6 +90,7 @@ func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Lo
 	host, _ := os.Hostname()
 	logger.Info().Msgf("host info: %s", host)
 
+	// initRegistry()
 	initTracing(coreConf, logger)
 	initCPUCount(coreConf, logger)
 
