@@ -30,7 +30,7 @@ type Registry struct {
 	// m protects async access to the services map.
 	sync.Mutex
 	// services map a service name with a set of nodes.
-	services map[string][]registry.Service
+	services map[string]registry.Service
 }
 
 // Add implements the Registry interface. If the service is already known in this registry it will only update the nodes.
@@ -38,44 +38,31 @@ func (r *Registry) Add(svc registry.Service) error {
 	r.Lock()
 	defer r.Unlock()
 
-	// init the new service in the registry storage if we have not seen it before
-	if _, ok := r.services[svc.Name()]; !ok {
-		s := []registry.Service{svc}
+	// append the nodes if the service is already registered.
+	if _, ok := r.services[svc.Name()]; ok {
+		s := service{
+			name:  svc.Name(),
+			nodes: make([]node, 0),
+		}
+
+		s.mergeNodes(svc.Nodes(), r.services[svc.Name()].Nodes())
+
 		r.services[svc.Name()] = s
 		return nil
 	}
 
-	// append the requested nodes to the existing service
-	for i := range r.services[svc.Name()] {
-		ns := make([]node, 0)
-		nodes := append(r.services[svc.Name()][i].Nodes(), svc.Nodes()...)
-		for n := range nodes {
-			ns = append(ns, node{
-				id:       nodes[n].ID(),
-				address:  nodes[n].Address(),
-				metadata: nodes[n].Metadata(),
-			})
-		}
-		r.services[svc.Name()] = []registry.Service{
-			service{
-				svc.Name(),
-				ns,
-			},
-		}
-		fmt.Printf("%+v\n", r.services[svc.Name()])
-	}
-
+	r.services[svc.Name()] = svc
 	return nil
 }
 
 // GetService implements the Registry interface. There is currently no load balance being done, but it should not be
 // hard to add.
-func (r *Registry) GetService(name string) ([]registry.Service, error) {
+func (r *Registry) GetService(name string) (registry.Service, error) {
 	r.Lock()
 	defer r.Unlock()
 
-	if services, ok := r.services[name]; ok {
-		return services, nil
+	if service, ok := r.services[name]; ok {
+		return service, nil
 	}
 
 	return nil, fmt.Errorf("service %v not found", name)
@@ -83,34 +70,12 @@ func (r *Registry) GetService(name string) ([]registry.Service, error) {
 
 // New returns an implementation of the Registry interface.
 func New(m map[string]interface{}) registry.Registry {
-	c, err := registry.ParseConfig(m)
-	if err != nil {
-		return nil
-	}
-
-	r := make(map[string][]registry.Service)
-	for sKey, services := range c.Services {
-		// allocate as much memory as total services were parsed from config
-		r[sKey] = make([]registry.Service, len(services))
-
-		for i := range services {
-			s := service{
-				name: services[i].Name,
-			}
-
-			// copy nodes
-			for j := range services[i].Nodes {
-				s.nodes = append(s.nodes, node{
-					address:  services[i].Nodes[j].Address,
-					metadata: services[i].Nodes[j].Metadata,
-				})
-			}
-
-			r[sKey][i] = &s
-		}
-	}
+	//c, err := registry.ParseConfig(m)
+	//if err != nil {
+	//	return nil
+	//}
 
 	return &Registry{
-		services: r,
+		services: map[string]registry.Service{},
 	}
 }

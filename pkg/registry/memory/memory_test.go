@@ -23,8 +23,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/cs3org/reva/pkg/registry"
-
 	"github.com/google/uuid"
 	"gotest.tools/assert"
 )
@@ -98,14 +96,7 @@ func TestAdd(t *testing.T) {
 	expectedNumberOfNodes := len(s1.nodes) + len(s2.nodes)
 	if s, err := reg.GetService(s1.name); err != nil {
 		t.Error(err)
-		collectedNumberOfNodes := 0
-		if len(s) != 0 {
-			for _, service := range s {
-				collectedNumberOfNodes += len(service.Nodes())
-			}
-		} else {
-			t.Error(fmt.Errorf("invalid number of registered services: 0"))
-		}
+		collectedNumberOfNodes := len(s.Nodes())
 
 		if expectedNumberOfNodes == collectedNumberOfNodes {
 			t.Error(fmt.Errorf("expected %v nodes, got: %v", expectedNumberOfNodes, collectedNumberOfNodes))
@@ -121,56 +112,25 @@ func TestGetService(t *testing.T) {
 				os.Exit(1)
 			}
 		}
+
 		t.Run(scenario.name, func(t *testing.T) {
 			svc, err := reg.GetService(scenario.in)
 			if err != nil {
 				t.Error(err)
 			}
 
-			totalNodes := 0
-			for i := range svc {
-				totalNodes += len(svc[i].Nodes())
-				for _, node := range svc[i].Nodes() {
-					if !contains(svc[i].Nodes(), node) {
-						t.Errorf("unexpected return value: Registry does not contain node %s", node)
-					}
-				}
-			}
+			totalNodes := len(svc.Nodes())
 			assert.Equal(t, len(scenario.expectedNodes), totalNodes)
 		})
 	}
 }
 
-func TestGetServiceInDepth(t *testing.T) {
-	for _, scenario := range scenarios {
-		// restart Registry
-		reg = New(in)
-		// register all services
-		for i := range scenario.services {
-			if err := reg.Add(&scenario.services[i]); err != nil {
-				os.Exit(1)
-			}
-		}
-		t.Run(scenario.name, func(t *testing.T) {
-			services, err := reg.GetService(scenario.in)
-			if err != nil {
-				t.Error(err)
-			}
-
-			for _, service := range services {
-				for _, nodes := range service.Nodes() {
-					fmt.Println(nodes.Address())
-				}
-			}
-		})
-	}
-}
-
-func contains(a []registry.Node, b registry.Node) bool {
-	for i := range a {
-		if a[i].Address() == b.Address() {
-			return true
-		}
-	}
-	return false
-}
+//
+//func contains(a []registry.Node, b registry.Node) bool {
+//	for i := range a {
+//		if a[i].Address() == b.Address() {
+//			return true
+//		}
+//	}
+//	return false
+//}

@@ -25,7 +25,7 @@ type Registry interface {
 
 	// GetService retrieves a Service and all of its nodes by Service name. It returns []*Service because we can have
 	// multiple versions of the same Service running alongside each others.
-	GetService(string) ([]Service, error)
+	GetService(string) (Service, error)
 }
 
 // Service defines a service.

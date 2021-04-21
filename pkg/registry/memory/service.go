@@ -57,3 +57,14 @@ func (s service) Nodes() []registry.Node {
 	}
 	return ret
 }
+
+func (s *service) mergeNodes(n1, n2 []registry.Node) {
+	n1 = append(n1, n2...)
+	for _, n := range n1 {
+		s.nodes = append(s.nodes, node{
+			id:       n.ID(),
+			address:  n.Address(),
+			metadata: n.Metadata(),
+		})
+	}
+}
