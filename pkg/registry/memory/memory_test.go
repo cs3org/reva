@@ -125,12 +125,11 @@ func TestGetService(t *testing.T) {
 	}
 }
 
-//
-//func contains(a []registry.Node, b registry.Node) bool {
-//	for i := range a {
-//		if a[i].Address() == b.Address() {
-//			return true
+//	func contains(a []registry.Node, b registry.Node) bool {
+//		for i := range a {
+//			if a[i].Address() == b.Address() {
+//				return true
+//			}
 //		}
+//		return false
 //	}
-//	return false
-//}
