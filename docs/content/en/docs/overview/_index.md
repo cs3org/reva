@@ -25,7 +25,7 @@ anywhere else.
 #### The goal
 
 Our ultimate goal is that any open source project and software vendor that provides either storage or applications to an EFSS platform
-will adopt the CS3APIS as the facto standard way to collaborate. Having all the partners using the same APIs will enable all of us for a new dimension
+will adopt the CS3APIS as a de facto standard way to collaborate. Having all the partners using the same APIs will enable all of us for a new dimension
 of portability of applications across vendors.
 
 {{< imgproc "final.png" Fit "800x600">}}
