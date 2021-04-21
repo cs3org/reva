@@ -278,6 +278,17 @@ func (m *mgr) get(ctx context.Context, ref *collaboration.ShareReference) (s *co
 		return s, nil
 	}
 
+	// or the grantee
+	if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
+		return s, nil
+	} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		// check if all user groups match this share; TODO(labkode): filter shares created by us.
+		for _, g := range user.Groups {
+			if g == s.Grantee.GetGroupId().OpaqueId {
+				return s, nil
+			}
+		}
+	}
 	// we return not found to not disclose information
 	return nil, errtypes.NotFound(ref.String())
 }
