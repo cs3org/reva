@@ -1706,6 +1706,15 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiWebdavProperties1/getQuota.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L27)
 -   [apiWebdavProperties1/getQuota.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L28)
 
+-   [apiMain/quota.feature:105](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:105)
+-   [apiMain/quota.feature:112](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:112)
+-   [apiMain/quota.feature:119](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:119)
+-   [apiMain/quota.feature:134](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:134)
+-   [apiMain/quota.feature:148](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:148)
+-   [apiMain/quota.feature:164](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:164)
+-   [apiMain/quota.feature:178](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:178)
+-   [apiMain/quota.feature:184](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:184)
+
 #### [user-sync endpoint does not exist](https://github.com/owncloud/ocis/issues/1241)
 -   [apiMain/userSync.feature:18](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/userSync.feature#L18)
 -   [apiMain/userSync.feature:19](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/userSync.feature#L19)
