@@ -26,8 +26,6 @@ import (
 	"sync"
 	"time"
 
-	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -91,23 +89,20 @@ func loadOrCreate(file string) (*shareModel, error) {
 		return nil, err
 	}
 
-	m := &shareModel{}
-	if err := json.Unmarshal(data, m); err != nil {
-		err = errors.Wrap(err, "error decoding data to json")
+	j := &jsonEncoding{}
+	if err := json.Unmarshal(data, j); err != nil {
+		err = errors.Wrap(err, "error decoding data from json")
 		return nil, err
 	}
 
-	// There are discrepancies in the marshalling of oneof fields, so these need
-	// to be stored separately
-	for i := range m.Grantees {
-		id := m.Grantees[i].(map[string]interface{})
-		if m.Shares[i].Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
-			m.Shares[i].Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id["opaque_id"].(string), Idp: id["idp"].(string)}}
-		} else if m.Shares[i].Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-			m.Shares[i].Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: id["opaque_id"].(string), Idp: id["idp"].(string)}}
+	m := &shareModel{State: j.State}
+	for _, s := range j.Shares {
+		var decShare collaboration.Share
+		if err = utils.UnmarshalJSONToProtoV1([]byte(s), &decShare); err != nil {
+			return nil, errors.Wrap(err, "error decoding share from json")
 		}
+		m.Shares = append(m.Shares, &decShare)
 	}
-	m.Grantees = nil
 
 	if m.State == nil {
 		m.State = map[string]map[string]collaboration.ShareState{}
@@ -118,28 +113,27 @@ func loadOrCreate(file string) (*shareModel, error) {
 }
 
 type shareModel struct {
-	file     string
-	State    map[string]map[string]collaboration.ShareState `json:"state"` // map[username]map[share_id]ShareState
-	Shares   []*collaboration.Share                         `json:"shares"`
-	Grantees []interface{}                                  `json:"grantees"`
+	file   string
+	State  map[string]map[string]collaboration.ShareState `json:"state"` // map[username]map[share_id]ShareState
+	Shares []*collaboration.Share                         `json:"shares"`
+}
+
+type jsonEncoding struct {
+	State  map[string]map[string]collaboration.ShareState `json:"state"` // map[username]map[share_id]ShareState
+	Shares []string                                       `json:"shares"`
 }
 
 func (m *shareModel) Save() error {
-	temp := *m
-	temp.Grantees = []interface{}{}
-	temp.Shares = []*collaboration.Share{}
-	for i := range m.Shares {
-		s := *m.Shares[i]
-		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
-			temp.Grantees = append(temp.Grantees, s.Grantee.GetUserId())
-		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-			temp.Grantees = append(temp.Grantees, s.Grantee.GetGroupId())
+	j := &jsonEncoding{State: m.State}
+	for _, s := range m.Shares {
+		encShare, err := utils.MarshalProtoV1ToJSON(s)
+		if err != nil {
+			return errors.Wrap(err, "error encoding to json")
 		}
-		s.Grantee = &provider.Grantee{Type: s.Grantee.Type}
-		temp.Shares = append(temp.Shares, &s)
+		j.Shares = append(j.Shares, string(encShare))
 	}
 
-	data, err := json.Marshal(temp)
+	data, err := json.Marshal(j)
 	if err != nil {
 		err = errors.Wrap(err, "error encoding to json")
 		return err

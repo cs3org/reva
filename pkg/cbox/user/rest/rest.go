@@ -123,7 +123,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 
 func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/Identity?filter=%s:%s&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
-		m.conf.APIBaseURL, param, val)
+		m.conf.APIBaseURL, param, url.QueryEscape(val))
 	responseData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
@@ -225,7 +225,6 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 }
 
 func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
-	value = url.QueryEscape(value)
 	opaqueID, err := m.fetchCachedParam(claim, value)
 	if err == nil {
 		return m.GetUser(ctx, &userpb.UserId{OpaqueId: opaqueID})

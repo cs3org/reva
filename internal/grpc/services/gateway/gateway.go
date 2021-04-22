@@ -82,9 +82,6 @@ func (c *config) init() {
 
 	// if services address are not specified we used the shared conf
 	// for the gatewaysvc to have dev setups very quickly.
-
-	// we're commenting this line to showcase the fact that now we don't want to point to an ip address but rather
-	// resolve an ip address from a name.
 	c.AuthRegistryEndpoint = sharedconf.GetGatewaySVC(c.AuthRegistryEndpoint)
 	c.StorageRegistryEndpoint = sharedconf.GetGatewaySVC(c.StorageRegistryEndpoint)
 	c.AppRegistryEndpoint = sharedconf.GetGatewaySVC(c.AppRegistryEndpoint)
