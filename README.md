@@ -25,11 +25,14 @@ $ git clone https://github.com/cs3org/reva
 $ cd reva
 $ make deps
 $ make build
-$ cd examples/storage-references
-$ ../../cmd/revad/revad -dev-dir .
+$ sudo mkdir -p /etc/revad
+$ sudo cp examples/storage-references/users.demo.json /etc/revad/users.json
+$ sudo cp examples/storage-references/groups.demo.json /etc/revad/groups.json
+$ sudo cp examples/storage-references/providers.demo.json /etc/revad/ocm-providers.json
+$ cmd/revad/revad -dev-dir examples/storage-references
 ```
 
-You can also read the [build from sources guide](https://reva.link/docs/getting-started/build-reva/).
+You can also read the [build from sources guide](https://reva.link/docs/getting-started/build-reva/) and the [setup tutorial](https://github.com/cs3org/reva/blob/master/docs/content/en/docs/tutorials/setup-tutorial.md).
 
 ## Run tests
 
