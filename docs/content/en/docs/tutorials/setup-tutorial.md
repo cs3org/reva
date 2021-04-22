@@ -61,9 +61,10 @@ You can start these three daemons using the `-dev-dir` flag which fires up a dae
 
 ```
 > mkdir -p /var/tmp/reva
-> cp examples/storage-references/users.demo.json /etc/revad/users.json
-> cp examples/storage-references/groups.demo.json /etc/revad/groups.json
-> cp examples/storage-references/providers.demo.json /etc/revad/ocm-providers.json
+> sudo mkdir -p /etc/revad
+> sudo cp examples/storage-references/users.demo.json /etc/revad/users.json
+> sudo cp examples/storage-references/groups.demo.json /etc/revad/groups.json
+> sudo cp examples/storage-references/providers.demo.json /etc/revad/ocm-providers.json
 > cmd/revad/revad -dev-dir examples/storage-references
 ```
 
