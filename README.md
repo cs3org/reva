@@ -24,7 +24,7 @@ You need to have [Go](https://golang.org/doc/install), [git](https://git-scm.com
 $ git clone https://github.com/cs3org/reva
 $ cd reva
 $ make deps
-$ make
+$ make build
 $ cd examples/storage-references
 $ ../../cmd/revad/revad -dev-dir .
 ```
