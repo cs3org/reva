@@ -64,9 +64,5 @@ func (c *Config) Init() {
 		c.ResourceInfoCacheSize = 1000000
 	}
 
-	if c.ResourceInfoCacheTTL == 0 {
-		c.ResourceInfoCacheTTL = 86400
-	}
-
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }

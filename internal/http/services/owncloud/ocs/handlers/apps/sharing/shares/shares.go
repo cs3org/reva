@@ -399,7 +399,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 
 	var info *provider.ResourceInfo
 	key := wrapResourceID(resourceID)
-	if infoIf, err := h.resourceInfoCache.Get(key); err == nil {
+	if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
 		logger.Debug().Msgf("cache hit for resource %+v", resourceID)
 		info = infoIf.(*provider.ResourceInfo)
 	} else {
@@ -425,7 +425,9 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 			return
 		}
 		info = statResponse.Info
-		_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
+		if h.resourceInfoCacheTTL > 0 {
+			_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
+		}
 	}
 
 	err = h.addFileInfo(ctx, share, info)
@@ -609,7 +611,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
 		target := path.Join(h.homeNamespace, r.FormValue("path"))
 
-		if infoIf, err := h.resourceInfoCache.Get(target); err == nil {
+		if infoIf, err := h.resourceInfoCache.Get(target); h.resourceInfoCacheTTL > 0 && err == nil {
 			logger.Debug().Msgf("cache hit for resource %+v", target)
 			pinfo = infoIf.(*provider.ResourceInfo)
 		} else {
@@ -640,7 +642,9 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			}
 
 			pinfo = statRes.GetInfo()
-			_ = h.resourceInfoCache.SetWithExpire(target, pinfo, time.Second*h.resourceInfoCacheTTL)
+			if h.resourceInfoCacheTTL > 0 {
+				_ = h.resourceInfoCache.SetWithExpire(target, pinfo, time.Second*h.resourceInfoCacheTTL)
+			}
 		}
 	}
 
@@ -682,7 +686,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			info = pinfo
 		} else {
 			key := wrapResourceID(rs.Share.ResourceId)
-			if infoIf, err := h.resourceInfoCache.Get(key); err == nil {
+			if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
 				logger.Debug().Msgf("cache hit for resource %+v", rs.Share.ResourceId)
 				info = infoIf.(*provider.ResourceInfo)
 			} else {
@@ -702,7 +706,9 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 				}
 
 				info = statRes.GetInfo()
-				_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
+				if h.resourceInfoCacheTTL > 0 {
+					_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
+				}
 			}
 		}
 
@@ -802,7 +808,7 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 	}
 
 	target := path.Join(prefix, r.FormValue("path"))
-	if infoIf, err := h.resourceInfoCache.Get(target); err == nil {
+	if infoIf, err := h.resourceInfoCache.Get(target); h.resourceInfoCacheTTL > 0 && err == nil {
 		info = infoIf.(*provider.ResourceInfo)
 	} else {
 		statReq := &provider.StatRequest{
@@ -830,7 +836,9 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 		}
 
 		info = res.Info
-		_ = h.resourceInfoCache.SetWithExpire(target, info, time.Second*h.resourceInfoCacheTTL)
+		if h.resourceInfoCacheTTL > 0 {
+			_ = h.resourceInfoCache.SetWithExpire(target, info, time.Second*h.resourceInfoCacheTTL)
+		}
 	}
 
 	collaborationFilters = append(collaborationFilters, &collaboration.ListSharesRequest_Filter{

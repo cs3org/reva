@@ -181,7 +181,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 
 			var info *provider.ResourceInfo
 			key := wrapResourceID(s.ResourceId)
-			if infoIf, err := h.resourceInfoCache.Get(key); err == nil {
+			if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
 				log.Debug().Msgf("cache hit for resource %+v", s.ResourceId)
 				info = infoIf.(*provider.ResourceInfo)
 			} else {
@@ -198,7 +198,9 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 					continue
 				}
 				info = statResponse.Info
-				_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
+				if h.resourceInfoCacheTTL > 0 {
+					_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
+				}
 			}
 
 			if err := h.addFileInfo(ctx, data, info); err != nil {
