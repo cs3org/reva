@@ -22,7 +22,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-// FS is the interface to implement cache warmup strategies.
+// Warmup is the interface to implement cache warmup strategies.
 type Warmup interface {
 	GetResourceInfos() ([]*provider.ResourceInfo, error)
 }
