@@ -16,19 +16,13 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package registry
+package cache
 
-import "github.com/cs3org/reva/pkg/storage"
+import (
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+)
 
-// NewFunc is the function that storage implementations
-// should register at init time.
-type NewFunc func(map[string]interface{}) (storage.FS, error)
-
-// NewFuncs is a map containing all the registered storage backends.
-var NewFuncs = map[string]NewFunc{}
-
-// Register registers a new storage backend function.
-// Not safe for concurrent use. Safe for use from package init.
-func Register(name string, f NewFunc) {
-	NewFuncs[name] = f
+// FS is the interface to implement cache warmup strategies.
+type Warmup interface {
+	GetResourceInfos() ([]*provider.ResourceInfo, error)
 }
