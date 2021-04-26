@@ -18,18 +18,21 @@ Read the [getting started guide](https://reva.link/docs/getting-started/) and th
 
 
 ## Build and run it yourself
-You need to have [Go](https://golang.org/doc/install), [git](https://git-scm.com/) and [make](https://en.wikipedia.org/wiki/Make_(software)) installed.
+You need to have [Go](https://golang.org/doc/install), [git](https://git-scm.com/) and [make](https://en.wikipedia.org/wiki/Make_(software)) installed. Some of these commands may require `sudo`, depending on your system setup.
 
 ```
 $ git clone https://github.com/cs3org/reva
 $ cd reva
 $ make deps
-$ make
-$ cd examples/storage-references
-$ ../../cmd/revad/revad -dev-dir .
+$ make build
+$ mkdir -p /etc/revad
+$ cp examples/storage-references/users.demo.json /etc/revad/users.json
+$ cp examples/storage-references/groups.demo.json /etc/revad/groups.json
+$ cp examples/storage-references/providers.demo.json /etc/revad/ocm-providers.json
+$ cmd/revad/revad -dev-dir examples/storage-references
 ```
 
-You can also read the [build from sources guide](https://reva.link/docs/getting-started/build-reva/).
+You can also read the [build from sources guide](https://reva.link/docs/getting-started/build-reva/) and the [setup tutorial](https://github.com/cs3org/reva/blob/master/docs/content/en/docs/tutorials/setup-tutorial.md).
 
 ## Run tests
 
