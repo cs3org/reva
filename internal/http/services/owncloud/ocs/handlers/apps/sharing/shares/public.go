@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -159,33 +160,43 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 			return ocsDataPayload, res.Status, nil
 		}
 
+		var info *provider.ResourceInfo
 		for _, share := range res.GetShare() {
-
-			statRequest := &provider.StatRequest{
-				Ref: &provider.Reference{
-					Spec: &provider.Reference_Id{
-						Id: share.ResourceId,
+			key := wrapResourceID(share.ResourceId)
+			if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
+				log.Debug().Msgf("cache hit for resource %+v", share.ResourceId)
+				info = infoIf.(*provider.ResourceInfo)
+			} else {
+				statRequest := &provider.StatRequest{
+					Ref: &provider.Reference{
+						Spec: &provider.Reference_Id{
+							Id: share.ResourceId,
+						},
 					},
-				},
-			}
+				}
 
-			statResponse, err := c.Stat(ctx, statRequest)
-			if err != nil || res.Status.Code != rpc.Code_CODE_OK {
-				log.Debug().Interface("share", share).Interface("response", statResponse).Err(err).Msg("could not stat share, skipping")
-				continue
+				statResponse, err := c.Stat(ctx, statRequest)
+				if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+					log.Debug().Interface("share", share).Interface("response", statResponse).Err(err).Msg("could not stat share, skipping")
+					continue
+				}
+				info = statResponse.Info
+				if h.resourceInfoCacheTTL > 0 {
+					_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
+				}
 			}
 
 			sData := conversions.PublicShare2ShareData(share, r, h.publicURL)
 
 			sData.Name = share.DisplayName
 
-			if err := h.addFileInfo(ctx, sData, statResponse.Info); err != nil {
-				log.Debug().Interface("share", share).Interface("info", statResponse.Info).Err(err).Msg("could not add file info, skipping")
+			if err := h.addFileInfo(ctx, sData, info); err != nil {
+				log.Debug().Interface("share", share).Interface("info", info).Err(err).Msg("could not add file info, skipping")
 				continue
 			}
 			h.mapUserIds(ctx, c, sData)
 
-			log.Debug().Interface("share", share).Interface("info", statResponse.Info).Interface("shareData", share).Msg("mapped")
+			log.Debug().Interface("share", share).Interface("info", info).Interface("shareData", share).Msg("mapped")
 
 			ocsDataPayload = append(ocsDataPayload, sData)
 

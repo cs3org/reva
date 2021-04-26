@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -578,7 +579,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, err
 	}
 
-	return fs.convertToResourceInfo(ctx, eosFileInfo)
+	return fs.convertToResourceInfo(ctx, eosFileInfo, false)
 }
 
 func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
@@ -601,7 +602,7 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string
 	// TODO(labkode): diff between root (dir) and children (ref)
 
 	if fs.isShareFolderRoot(ctx, p) {
-		return fs.convertToResourceInfo(ctx, eosFileInfo)
+		return fs.convertToResourceInfo(ctx, eosFileInfo, false)
 	}
 	return fs.convertToFileReference(ctx, eosFileInfo)
 }
@@ -643,6 +644,10 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 	}
 
 	fn := fs.wrap(ctx, p)
+	virtualView := false
+	if !fs.conf.EnableHome && filepath.Dir(fn) == filepath.Clean(fs.conf.Namespace) {
+		virtualView = true
+	}
 
 	eosFileInfos, err := fs.c.List(ctx, uid, gid, fn)
 	if err != nil {
@@ -660,7 +665,7 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 		}
 
 		// Remove the hidden folders in the topmost directory
-		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
+		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo, virtualView); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
 			finfos = append(finfos, finfo)
 		}
 	}
@@ -714,7 +719,7 @@ func (fs *eosfs) listHome(ctx context.Context, home string) ([]*provider.Resourc
 				}
 			}
 
-			if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
+			if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo, false); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
 				finfos = append(finfos, finfo)
 			}
 		}
@@ -1319,7 +1324,7 @@ func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eoscl
 }
 
 func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.FileVersion, error) {
-	md, err := fs.convertToResourceInfo(ctx, eosFileInfo)
+	md, err := fs.convertToResourceInfo(ctx, eosFileInfo, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1332,12 +1337,12 @@ func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.F
 	return revision, nil
 }
 
-func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
-	return fs.convert(ctx, eosFileInfo)
+func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo, virtualView bool) (*provider.ResourceInfo, error) {
+	return fs.convert(ctx, eosFileInfo, virtualView)
 }
 
 func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
-	info, err := fs.convert(ctx, eosFileInfo)
+	info, err := fs.convert(ctx, eosFileInfo, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1400,7 +1405,7 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	return grants.GetGrantPermissionSet(perm, eosFileInfo.IsDir)
 }
 
-func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
+func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo, virtualView bool) (*provider.ResourceInfo, error) {
 	path, err := fs.unwrap(ctx, eosFileInfo.File)
 	if err != nil {
 		return nil, err
@@ -1411,11 +1416,13 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		size = eosFileInfo.TreeSize
 	}
 
-	owner, err := fs.getUserIDGateway(ctx, strconv.FormatUint(eosFileInfo.UID, 10))
-	if err != nil {
-		sublog := appctx.GetLogger(ctx).With().Logger()
-		sublog.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
-		owner = &userpb.UserId{}
+	owner := &userpb.UserId{}
+	if !virtualView {
+		owner, err = fs.getUserIDGateway(ctx, strconv.FormatUint(eosFileInfo.UID, 10))
+		if err != nil {
+			sublog := appctx.GetLogger(ctx).With().Logger()
+			sublog.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
+		}
 	}
 
 	info := &provider.ResourceInfo{
@@ -1499,7 +1506,6 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	if userIDInterface, ok := fs.userIDCache.Load(uid); ok {
 		return userIDInterface.(*userpb.UserId), nil
 	}
-
 	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error getting gateway grpc client")

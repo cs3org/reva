@@ -42,6 +42,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	"github.com/bluele/gcache"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -58,8 +59,10 @@ type Handler struct {
 	publicURL              string
 	sharePrefix            string
 	homeNamespace          string
+	resourceInfoCacheTTL   time.Duration
 	additionalInfoTemplate *template.Template
 	userIdentifierCache    *ttlcache.Cache
+	resourceInfoCache      gcache.Cache
 }
 
 // we only cache the minimal set of data instead of the full user metadata
@@ -75,11 +78,14 @@ func (h *Handler) Init(c *config.Config) error {
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
+	h.resourceInfoCacheTTL = time.Duration(c.ResourceInfoCacheTTL)
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(60 * time.Second)
+
+	h.resourceInfoCache = gcache.New(c.ResourceInfoCacheSize).LFU().Build()
 
 	return nil
 }
@@ -391,31 +397,42 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 		return
 	}
 
-	// prepare the stat request
-	statReq := &provider.StatRequest{
-		// prepare the reference
-		Ref: &provider.Reference{
-			// using ResourceId from the share
-			Spec: &provider.Reference_Id{Id: resourceID},
-		},
+	var info *provider.ResourceInfo
+	key := wrapResourceID(resourceID)
+	if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
+		logger.Debug().Msgf("cache hit for resource %+v", resourceID)
+		info = infoIf.(*provider.ResourceInfo)
+	} else {
+		// prepare the stat request
+		statReq := &provider.StatRequest{
+			// prepare the reference
+			Ref: &provider.Reference{
+				// using ResourceId from the share
+				Spec: &provider.Reference_Id{Id: resourceID},
+			},
+		}
+
+		statResponse, err := client.Stat(ctx, statReq)
+		if err != nil {
+			log.Error().Err(err).Msg("error mapping share data")
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+			return
+		}
+
+		if statResponse.Status.Code != rpc.Code_CODE_OK {
+			log.Error().Err(err).Str("status", statResponse.Status.Code.String()).Msg("error mapping share data")
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+			return
+		}
+		info = statResponse.Info
+		if h.resourceInfoCacheTTL > 0 {
+			_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
+		}
 	}
 
-	statResponse, err := client.Stat(ctx, statReq)
+	err = h.addFileInfo(ctx, share, info)
 	if err != nil {
 		log.Error().Err(err).Msg("error mapping share data")
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-		return
-	}
-
-	if statResponse.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Err(err).Str("status", statResponse.Status.Code.String()).Msg("error mapping share data")
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-		return
-	}
-
-	err = h.addFileInfo(ctx, share, statResponse.Info)
-	if err != nil {
-		log.Error().Err(err).Str("status", statResponse.Status.Code.String()).Msg("error mapping share data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 	}
 	h.mapUserIds(ctx, client, share)
@@ -585,6 +602,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+	logger := appctx.GetLogger(ctx)
 
 	var pinfo *provider.ResourceInfo
 	p := r.URL.Query().Get("path")
@@ -593,33 +611,41 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
 		target := path.Join(h.homeNamespace, r.FormValue("path"))
 
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: target,
+		if infoIf, err := h.resourceInfoCache.Get(target); h.resourceInfoCacheTTL > 0 && err == nil {
+			logger.Debug().Msgf("cache hit for resource %+v", target)
+			pinfo = infoIf.(*provider.ResourceInfo)
+		} else {
+			statReq := &provider.StatRequest{
+				Ref: &provider.Reference{
+					Spec: &provider.Reference_Path{
+						Path: target,
+					},
 				},
-			},
-		}
-
-		statRes, err := gwc.Stat(ctx, statReq)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
-			return
-		}
-
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "path not found", nil)
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				response.WriteOCSError(w, r, response.MetaUnauthorized.StatusCode, "permission denied", nil)
-			default:
-				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", nil)
 			}
-			return
-		}
 
-		pinfo = statRes.GetInfo()
+			statRes, err := gwc.Stat(ctx, statReq)
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
+				return
+			}
+
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				switch statRes.Status.Code {
+				case rpc.Code_CODE_NOT_FOUND:
+					response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "path not found", nil)
+				case rpc.Code_CODE_PERMISSION_DENIED:
+					response.WriteOCSError(w, r, response.MetaUnauthorized.StatusCode, "permission denied", nil)
+				default:
+					response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", nil)
+				}
+				return
+			}
+
+			pinfo = statRes.GetInfo()
+			if h.resourceInfoCacheTTL > 0 {
+				_ = h.resourceInfoCache.SetWithExpire(target, pinfo, time.Second*h.resourceInfoCacheTTL)
+			}
+		}
 	}
 
 	lrsReq := collaboration.ListReceivedSharesRequest{}
@@ -659,22 +685,31 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// we can reuse the stat info
 			info = pinfo
 		} else {
-			// we need to do a stat call
-			statRequest := provider.StatRequest{
-				Ref: &provider.Reference{
-					Spec: &provider.Reference_Id{
-						Id: rs.Share.ResourceId,
+			key := wrapResourceID(rs.Share.ResourceId)
+			if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
+				logger.Debug().Msgf("cache hit for resource %+v", rs.Share.ResourceId)
+				info = infoIf.(*provider.ResourceInfo)
+			} else {
+				// we need to do a stat call
+				statRequest := provider.StatRequest{
+					Ref: &provider.Reference{
+						Spec: &provider.Reference_Id{
+							Id: rs.Share.ResourceId,
+						},
 					},
-				},
-			}
+				}
 
-			statRes, err := gwc.Stat(r.Context(), &statRequest)
-			if err != nil || statRes.Status.Code != rpc.Code_CODE_OK {
-				h.logProblems(statRes.GetStatus(), err, "could not stat, skipping")
-				continue
-			}
+				statRes, err := gwc.Stat(r.Context(), &statRequest)
+				if err != nil || statRes.Status.Code != rpc.Code_CODE_OK {
+					h.logProblems(statRes.GetStatus(), err, "could not stat, skipping")
+					continue
+				}
 
-			info = statRes.GetInfo()
+				info = statRes.GetInfo()
+				if h.resourceInfoCacheTTL > 0 {
+					_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
+				}
+			}
 		}
 
 		data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
@@ -773,32 +808,38 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 	}
 
 	target := path.Join(prefix, r.FormValue("path"))
-
-	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: target,
+	if infoIf, err := h.resourceInfoCache.Get(target); h.resourceInfoCacheTTL > 0 && err == nil {
+		info = infoIf.(*provider.ResourceInfo)
+	} else {
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: target,
+				},
 			},
-		},
-	}
+		}
 
-	res, err := gwClient.Stat(ctx, statReq)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
-		return nil, nil, err
-	}
-
-	if res.Status.Code != rpc.Code_CODE_OK {
-		err = errors.New(res.Status.Message)
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", err)
+		res, err := gwClient.Stat(ctx, statReq)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
 			return nil, nil, err
 		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", err)
-		return nil, nil, err
-	}
 
-	info = res.Info
+		if res.Status.Code != rpc.Code_CODE_OK {
+			err = errors.New(res.Status.Message)
+			if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", err)
+				return nil, nil, err
+			}
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", err)
+			return nil, nil, err
+		}
+
+		info = res.Info
+		if h.resourceInfoCacheTTL > 0 {
+			_ = h.resourceInfoCache.SetWithExpire(target, info, time.Second*h.resourceInfoCacheTTL)
+		}
+	}
 
 	collaborationFilters = append(collaborationFilters, &collaboration.ListSharesRequest_Filter{
 		Type: collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID,
