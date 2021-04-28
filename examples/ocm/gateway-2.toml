@@ -16,10 +16,10 @@ home_provider = "/home"
 
 [grpc.services.authprovider]
 [grpc.services.authprovider.auth_managers.json]
-users = "users.demo.json"
+users = "users-2.demo.json"
 
 [grpc.services.userprovider.drivers.json]
-users = "users.demo.json"
+users = "users-2.demo.json"
 
 [grpc.services.authregistry]
 [grpc.services.usershareprovider]
