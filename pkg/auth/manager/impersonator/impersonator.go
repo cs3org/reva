@@ -20,9 +20,13 @@ package impersonator
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 )
@@ -38,7 +42,7 @@ func New(c map[string]interface{}) (auth.Manager, error) {
 	return &mgr{}, nil
 }
 
-func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error) {
+func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	// allow passing in uid as <opaqueid>@<idp>
 	at := strings.LastIndex(clientID, "@")
 	uid := &user.UserId{}
@@ -48,8 +52,28 @@ func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (
 		uid.OpaqueId = clientID[:at]
 		uid.Idp = clientID[at+1:]
 	}
+
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: "/",
+		},
+	}
+	val, err := json.Marshal(ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	scope := map[string]*authpb.Scope{
+		"user": &authpb.Scope{
+			Resource: &types.OpaqueEntry{
+				Decoder: "json",
+				Value:   val,
+			},
+			Role: authpb.Role_ROLE_OWNER,
+		},
+	}
+
 	return &user.User{
 		Id: uid,
 		// not much else to provide
-	}, nil
+	}, scope, nil
 }

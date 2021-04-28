@@ -93,9 +93,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
-	user := res.User
-
-	token, err := s.tokenmgr.MintToken(ctx, user)
+	token, err := s.tokenmgr.MintToken(ctx, res.User, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -116,7 +114,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	// we need to pass the token to authenticate the CreateHome request.
 	// TODO(labkode): appending to existing context will not pass the token.
 	ctx = tokenpkg.ContextSetToken(ctx, token)
-	ctx = userpkg.ContextSetUser(ctx, user)
+	ctx = userpkg.ContextSetUser(ctx, res.User)
 	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
@@ -145,7 +143,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 }
 
 func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.WhoAmIResponse, error) {
-	u, err := s.tokenmgr.DismantleToken(ctx, req.Token)
+	u, err := s.tokenmgr.DismantleToken(ctx, req.Token, nil)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting user from token")
 		return &gateway.WhoAmIResponse{

@@ -21,11 +21,14 @@ package ldap
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
@@ -122,12 +125,12 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}, nil
 }
 
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error) {
+func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx)
 
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.c.Hostname, am.c.Port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer l.Close()
 
@@ -135,7 +138,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	err = l.Bind(am.c.BindUsername, am.c.BindPassword)
 	if err != nil {
 		log.Error().Err(err).Msg("bind with system user failed")
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Search for the given clientID
@@ -149,11 +152,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	sr, err := l.Search(searchRequest)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if len(sr.Entries) != 1 {
-		return nil, errtypes.NotFound(clientID)
+		return nil, nil, errtypes.NotFound(clientID)
 	}
 
 	userdn := sr.Entries[0].DN
@@ -162,7 +165,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	err = l.Bind(userdn, clientSecret)
 	if err != nil {
 		log.Debug().Err(err).Interface("userdn", userdn).Msg("bind with user credentials failed")
-		return nil, err
+		return nil, nil, err
 	}
 
 	userID := &user.UserId{
@@ -171,16 +174,16 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
 	if err != nil {
-		return nil, errors.Wrap(err, "ldap: error getting gateway grpc client")
+		return nil, nil, errors.Wrap(err, "ldap: error getting gateway grpc client")
 	}
 	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
 		UserId: userID,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "ldap: error getting user groups")
+		return nil, nil, errors.Wrap(err, "ldap: error getting user groups")
 	}
 	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
+		return nil, nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
 	}
 
 	u := &user.User{
@@ -204,9 +207,29 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 			},
 		},
 	}
+
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: "/",
+		},
+	}
+	val, err := json.Marshal(ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	scope := map[string]*authpb.Scope{
+		"user": &authpb.Scope{
+			Resource: &types.OpaqueEntry{
+				Decoder: "json",
+				Value:   val,
+			},
+			Role: authpb.Role_ROLE_OWNER,
+		},
+	}
+
 	log.Debug().Interface("entry", sr.Entries[0]).Interface("user", u).Msg("authenticated user")
 
-	return u, nil
+	return u, scope, nil
 
 }
 

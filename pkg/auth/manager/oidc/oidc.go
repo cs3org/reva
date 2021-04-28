@@ -22,12 +22,15 @@ package oidc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	oidc "github.com/coreos/go-oidc"
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -90,27 +93,27 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 // the clientID it would be empty as we only need to validate the clientSecret variable
 // which contains the access token that we can use to contact the UserInfo endpoint
 // and get the user claims.
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error) {
+func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	ctx = am.getOAuthCtx(ctx)
 
-	provider, err := am.getOIDCProvider(ctx)
+	oidcProvider, err := am.getOIDCProvider(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error creating oidc provider: +%v", err)
+		return nil, nil, fmt.Errorf("error creating oidc provider: +%v", err)
 	}
 
 	oauth2Token := &oauth2.Token{
 		AccessToken: clientSecret,
 	}
-	userInfo, err := provider.UserInfo(ctx, oauth2.StaticTokenSource(oauth2Token))
+	userInfo, err := oidcProvider.UserInfo(ctx, oauth2.StaticTokenSource(oauth2Token))
 	if err != nil {
-		return nil, fmt.Errorf("oidc: error getting userinfo: +%v", err)
+		return nil, nil, fmt.Errorf("oidc: error getting userinfo: +%v", err)
 	}
 
 	// claims contains the standard OIDC claims like issuer, iat, aud, ... and any other non-standard one.
 	// TODO(labkode): make claims configuration dynamic from the config file so we can add arbitrary mappings from claims to user struct.
 	var claims map[string]interface{}
 	if err := userInfo.Claims(&claims); err != nil {
-		return nil, fmt.Errorf("oidc: error unmarshaling userinfo claims: %v", err)
+		return nil, nil, fmt.Errorf("oidc: error unmarshaling userinfo claims: %v", err)
 	}
 	log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
 
@@ -122,11 +125,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 
 	if claims["email"] == nil {
-		return nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
+		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
 	}
 
 	if claims["preferred_username"] == nil || claims["name"] == nil {
-		return nil, fmt.Errorf("no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
+		return nil, nil, fmt.Errorf("no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
 	}
 
 	opaqueObj := &types.Opaque{
@@ -157,16 +160,16 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
 	if err != nil {
-		return nil, errors.Wrap(err, "oidc: error getting gateway grpc client")
+		return nil, nil, errors.Wrap(err, "oidc: error getting gateway grpc client")
 	}
 	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
 		UserId: userID,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "oidc: error getting user groups")
+		return nil, nil, errors.Wrap(err, "oidc: error getting user groups")
 	}
 	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, errors.Wrap(err, "oidc: grpc getting user groups failed")
+		return nil, nil, errors.Wrap(err, "oidc: grpc getting user groups failed")
 	}
 
 	u := &user.User{
@@ -183,7 +186,26 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Opaque:       opaqueObj,
 	}
 
-	return u, nil
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: "/",
+		},
+	}
+	val, err := json.Marshal(ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	scope := map[string]*authpb.Scope{
+		"user": &authpb.Scope{
+			Resource: &types.OpaqueEntry{
+				Decoder: "json",
+				Value:   val,
+			},
+			Role: authpb.Role_ROLE_OWNER,
+		},
+	}
+
+	return u, scope, nil
 }
 
 func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {

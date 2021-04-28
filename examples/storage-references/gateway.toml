@@ -9,10 +9,16 @@ home_provider = "/home"
 [grpc.services.storageregistry.drivers.static.rules]
 "/home" = {"address" = "localhost:17000"}
 "/reva" = {"address" = "localhost:18000"}
+"/public" = {"address" = "localhost:16000"}
 "123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:18000"}
 
 [grpc.services.authprovider]
 [grpc.services.authregistry]
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "localhost:19000"
+publicshares = "localhost:16000"
+
 [grpc.services.userprovider]
 [grpc.services.usershareprovider]
 [grpc.services.groupprovider]

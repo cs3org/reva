@@ -20,9 +20,13 @@ package demo
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
+	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 var ctx = context.Background()
@@ -33,12 +37,30 @@ func TestEncodeDecode(t *testing.T) {
 		Username: "marie",
 	}
 
-	encoded, err := m.MintToken(ctx, u)
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: "/",
+		},
+	}
+	val, err := json.Marshal(ref)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	decodedUser, err := m.DismantleToken(ctx, encoded)
+	encoded, err := m.MintToken(ctx, u, map[string]*auth.Scope{
+		"user": &auth.Scope{
+			Resource: &types.OpaqueEntry{
+				Decoder: "json",
+				Value:   val,
+			},
+			Role: auth.Role_ROLE_OWNER,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decodedUser, err := m.DismantleToken(ctx, encoded, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,8 +20,12 @@ package demo
 
 import (
 	"context"
+	"encoding/json"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -48,13 +52,32 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	return &manager{credentials: creds}, nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error) {
+func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: "/",
+		},
+	}
+	val, err := json.Marshal(ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	scope := map[string]*authpb.Scope{
+		"user": &authpb.Scope{
+			Resource: &types.OpaqueEntry{
+				Decoder: "json",
+				Value:   val,
+			},
+			Role: authpb.Role_ROLE_OWNER,
+		},
+	}
+
 	if c, ok := m.credentials[clientID]; ok {
 		if c.Secret == clientSecret {
-			return c.User, nil
+			return c.User, scope, nil
 		}
 	}
-	return nil, errtypes.InvalidCredentials(clientID)
+	return nil, nil, errtypes.InvalidCredentials(clientID)
 }
 
 func getCredentials() map[string]Credentials {

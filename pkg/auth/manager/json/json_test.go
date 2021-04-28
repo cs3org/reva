@@ -190,7 +190,7 @@ func TestGetAuthenticatedManager(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			authenticated, err := manager.Authenticate(ctx, tt.username, tt.secret)
+			authenticated, _, err := manager.Authenticate(ctx, tt.username, tt.secret)
 			if !tt.expectAuthenticated {
 				assert.Empty(t, authenticated)
 				assert.EqualError(t, err, tt.expectedError.message)

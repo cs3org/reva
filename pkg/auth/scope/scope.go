@@ -16,29 +16,28 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package demo
+package scope
 
 import (
-	"context"
-	"testing"
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 )
 
-var ctx = context.Background()
+type Verifier func(*authpb.Scope, interface{}) (bool, error)
 
-func TestUserManager(t *testing.T) {
-	// get manager
-	manager, _ := New(nil)
+var supportedScopes = map[string]Verifier{
+	"user":        userScope,
+	"publicshare": publicshareScope,
+}
 
-	// Authenticate - positive test
-	_, _, err := manager.Authenticate(ctx, "einstein", "relativity")
-	if err != nil {
-		t.Fatalf("error while authenticate with correct credentials")
+func VerifyScope(scopeMap map[string]*authpb.Scope, resource interface{}) (bool, error) {
+	valid := true
+	var err error
+	for k, scope := range scopeMap {
+		verifierFunc := supportedScopes[k]
+		valid, err = verifierFunc(scope, resource)
+		if err != nil {
+			return false, err
+		}
 	}
-
-	// Authenticate - negative test
-	_, _, err = manager.Authenticate(ctx, "einstein", "NotARealPassword")
-	if err == nil {
-		t.Fatalf("no error (but we expected one) while authenticate with bad credentials")
-	}
-
+	return valid, nil
 }

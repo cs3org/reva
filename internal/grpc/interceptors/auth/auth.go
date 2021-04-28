@@ -88,13 +88,15 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			// to decide the storage provider.
 			tkn, ok := token.ContextGetToken(ctx)
 			if ok {
-				u, err := tokenManager.DismantleToken(ctx, tkn)
+				u, err := tokenManager.DismantleToken(ctx, tkn, req)
 				if err == nil {
 					ctx = user.ContextSetUser(ctx, u)
 				}
 			}
 			return handler(ctx, req)
 		}
+
+		log.Info().Msgf("GRPC unary interceptor %s, %+v", info.FullMethod, req)
 
 		span.AddAttributes(trace.BoolAttribute("auth_enabled", true))
 
@@ -106,7 +108,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		}
 
 		// validate the token
-		u, err := tokenManager.DismantleToken(ctx, tkn)
+		u, err := tokenManager.DismantleToken(ctx, tkn, req)
 		if err != nil {
 			log.Warn().Msg("access token is invalid")
 			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
@@ -151,6 +153,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 		log := appctx.GetLogger(ctx)
+		log.Info().Msgf("GRPC stream interceptor %s, %+v", info.FullMethod, unprotected)
 
 		if utils.Skip(info.FullMethod, unprotected) {
 			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
@@ -159,7 +162,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			// to decide the storage provider.
 			tkn, ok := token.ContextGetToken(ctx)
 			if ok {
-				u, err := tokenManager.DismantleToken(ctx, tkn)
+				u, err := tokenManager.DismantleToken(ctx, tkn, ss)
 				if err == nil {
 					ctx = user.ContextSetUser(ctx, u)
 					ss = newWrappedServerStream(ctx, ss)
@@ -177,7 +180,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		}
 
 		// validate the token
-		claims, err := tokenManager.DismantleToken(ctx, tkn)
+		claims, err := tokenManager.DismantleToken(ctx, tkn, ss)
 		if err != nil {
 			log.Warn().Msg("access token invalid")
 			return status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
