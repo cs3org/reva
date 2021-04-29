@@ -20,9 +20,20 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
@@ -40,6 +51,7 @@ type config struct {
 	// for SkipMethods.
 	TokenManager  string                            `mapstructure:"token_manager"`
 	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
+	GatewayAddr   string                            `mapstructure:"gateway_addr"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -63,6 +75,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	if conf.TokenManager == "" {
 		conf.TokenManager = "jwt"
 	}
+	conf.GatewayAddr = sharedconf.GetGatewaySVC(conf.GatewayAddr)
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
@@ -87,8 +100,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			// to decide the storage provider.
 			tkn, ok := token.ContextGetToken(ctx)
 			if ok {
-				// TODO(ishank011): resolve resourceID/path and check
-				u, _, err := tokenManager.DismantleToken(ctx, tkn, req)
+				u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr)
 				if err == nil {
 					ctx = user.ContextSetUser(ctx, u)
 				}
@@ -108,8 +120,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		}
 
 		// validate the token
-		// TODO(ishank011): resolve resourceID/path and check
-		u, _, err := tokenManager.DismantleToken(ctx, tkn, req)
+		u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr)
 		if err != nil {
 			log.Warn().Msg("access token is invalid")
 			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
@@ -163,8 +174,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			// to decide the storage provider.
 			tkn, ok := token.ContextGetToken(ctx)
 			if ok {
-				// TODO(ishank011): resolve resourceID/path and check
-				u, _, err := tokenManager.DismantleToken(ctx, tkn, ss)
+				u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr)
 				if err == nil {
 					ctx = user.ContextSetUser(ctx, u)
 					ss = newWrappedServerStream(ctx, ss)
@@ -182,8 +192,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		}
 
 		// validate the token
-		// TODO(ishank011): resolve resourceID/path and check
-		u, _, err := tokenManager.DismantleToken(ctx, tkn, ss)
+		u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr)
 		if err != nil {
 			log.Warn().Msg("access token invalid")
 			return status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
@@ -208,4 +217,74 @@ type wrappedServerStream struct {
 
 func (ss *wrappedServerStream) Context() context.Context {
 	return ss.newCtx
+}
+
+func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string) (*userpb.User, error) {
+	u, scope, err := mgr.DismantleToken(ctx, tkn, req)
+
+	// Check if the err returned is PermissionDenied
+	if _, ok := err.(errtypes.PermissionDenied); ok {
+		// Check if req is of type *provider.Reference_Path
+		// If yes, the request might be coming from a share where the accessor is
+		// trying to impersonate the owner, since the share manager doesn't know the
+		// share path.
+		if ref, ok := req.(*provider.Reference); ok {
+			if ref.GetPath() != "" {
+
+				// Try to extract the resource ID from the scope resource.
+				// Currently, we only check for public shares, but this will be extended
+				// for OCM shares, guest accounts, etc.
+				var share *link.PublicShare
+				err = json.Unmarshal(scope["publicshare"].Resource.Value, &share)
+				if err != nil {
+					return nil, err
+				}
+
+				client, err := pool.GetGatewayServiceClient(gatewayAddr)
+				if err != nil {
+					return nil, err
+				}
+
+				// Since the public share is obtained from the scope, the current token
+				// has access to it.
+				statReq := &provider.StatRequest{
+					Ref: &provider.Reference{
+						Spec: &provider.Reference_Id{Id: share.ResourceId},
+					},
+				}
+
+				statResponse, err := client.Stat(ctx, statReq)
+				if err != nil || statResponse.Status.Code != rpc.Code_CODE_OK {
+					return nil, err
+				}
+
+				if strings.HasPrefix(ref.GetPath(), statResponse.Info.Path) {
+					// The path corresponds to the resource to which the token has access.
+					// Add it to the scope map
+					val, err := json.Marshal(ref)
+					if err != nil {
+						return nil, err
+					}
+					scopeVal := &authpb.Scope{
+						Resource: &types.OpaqueEntry{
+							Decoder: "json",
+							Value:   val,
+						},
+						Role: scope["publicshare"].Role,
+					}
+
+					tkn, err = mgr.AddScopeToToken(ctx, tkn, "publicsharepath", scopeVal)
+					if err != nil {
+						return nil, err
+					}
+					u, _, err = mgr.DismantleToken(ctx, tkn, req)
+					if err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+	}
+
+	return u, err
 }

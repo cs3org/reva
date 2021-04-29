@@ -64,6 +64,15 @@ func (m *manager) DismantleToken(ctx context.Context, token string, resource int
 	return c.User, c.Scope, nil
 }
 
+func (m *manager) AddScopeToToken(ctx context.Context, token string, scopeKey string, scope *auth.Scope) (string, error) {
+	c, err := decode(token)
+	if err != nil {
+		return "", errors.Wrap(err, "error decoding claims")
+	}
+	c.Scope[scopeKey] = scope
+	return encode(c)
+}
+
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back
 // go binary encoder
 func encode(c *claims) (string, error) {

@@ -33,14 +33,15 @@ var supportedScopes = map[string]Verifier{
 // VerifyScope is the function to be called when dismantling tokens to check if
 // the token has access to a particular resource.
 func VerifyScope(scopeMap map[string]*authpb.Scope, resource interface{}) (bool, error) {
-	valid := true
-	var err error
 	for k, scope := range scopeMap {
 		verifierFunc := supportedScopes[k]
-		valid, err = verifierFunc(scope, resource)
+		valid, err := verifierFunc(scope, resource)
 		if err != nil {
 			return false, err
 		}
+		if valid {
+			return true, nil
+		}
 	}
-	return valid, nil
+	return false, nil
 }

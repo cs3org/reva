@@ -135,3 +135,21 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string, resource inter
 
 	return nil, nil, errtypes.InvalidCredentials("invalid token")
 }
+
+func (m *manager) AddScopeToToken(ctx context.Context, tkn string, scopeKey string, scope *auth.Scope) (string, error) {
+	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(m.conf.Secret), nil
+	})
+
+	if err != nil {
+		return "", errors.Wrap(err, "error parsing token")
+	}
+
+	if claims, ok := token.Claims.(*claims); ok && token.Valid {
+		claims.Scope[scopeKey] = scope
+		return m.MintToken(ctx, claims.User, claims.Scope)
+	}
+
+	return "", errtypes.InvalidCredentials("invalid token")
+
+}
