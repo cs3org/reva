@@ -46,8 +46,7 @@ func TestEncodeDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	encoded, err := m.MintToken(ctx, u, map[string]*auth.Scope{
+	scope := map[string]*auth.Scope{
 		"user": &auth.Scope{
 			Resource: &types.OpaqueEntry{
 				Decoder: "json",
@@ -55,17 +54,23 @@ func TestEncodeDecode(t *testing.T) {
 			},
 			Role: auth.Role_ROLE_OWNER,
 		},
-	})
+	}
+
+	encoded, err := m.MintToken(ctx, u, scope)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	decodedUser, err := m.DismantleToken(ctx, encoded, nil)
+	decodedUser, decodedScope, err := m.DismantleToken(ctx, encoded, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if u.Username != decodedUser.Username {
 		t.Fatalf("mail claims differ: expected=%s got=%s", u.Username, decodedUser.Username)
+	}
+
+	if s, ok := decodedScope["user"]; !ok || s.Role != auth.Role_ROLE_OWNER {
+		t.Fatalf("scope claims differ: expected=%s got=%s", scope, decodedScope)
 	}
 }

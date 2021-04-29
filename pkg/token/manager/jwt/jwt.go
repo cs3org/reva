@@ -109,26 +109,29 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 	return tkn, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, tkn string, resource interface{}) (*user.User, error) {
+func (m *manager) DismantleToken(ctx context.Context, tkn string, resource interface{}) (*user.User, map[string]*auth.Scope, error) {
 	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(m.conf.Secret), nil
 	})
 
 	if err != nil {
-		return nil, errors.Wrap(err, "error parsing token")
+		return nil, nil, errors.Wrap(err, "error parsing token")
 	}
 
 	if claims, ok := token.Claims.(*claims); ok && token.Valid {
 		ok, err = scope.VerifyScope(claims.Scope, resource)
 		if err != nil {
-			return nil, errtypes.InternalError("error verifying scope of access token")
+			return nil, nil, errtypes.InternalError("error verifying scope of access token")
 		}
 		if !ok {
-			return nil, errtypes.PermissionDenied("token missing necessary scope access")
+			// Pass the allowed scope of the token. This might be needed for the
+			// path/resource ID resolution, because when the token was minted, the auth provider
+			// might be aware of only one of these references. In such cases, it's expectec that
+			// the caller will resolve the reference and pass the expected resource.
+			return nil, claims.Scope, errtypes.PermissionDenied("token missing necessary scope access")
 		}
-		return claims.User, nil
+		return claims.User, claims.Scope, nil
 	}
 
-	err = errtypes.InvalidCredentials("token invalid")
-	return nil, err
+	return nil, nil, errtypes.InvalidCredentials("invalid token")
 }

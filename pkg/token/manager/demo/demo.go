@@ -43,28 +43,33 @@ func New(m map[string]interface{}) (token.Manager, error) {
 
 type manager struct{}
 
+type claims struct {
+	User  *user.User             `json:"user"`
+	Scope map[string]*auth.Scope `json:"scope"`
+}
+
 func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
-	token, err := encode(u)
+	token, err := encode(&claims{u, scope})
 	if err != nil {
 		return "", errors.Wrap(err, "error encoding user")
 	}
 	return token, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, token string, resource interface{}) (*user.User, error) {
-	u, err := decode(token)
+func (m *manager) DismantleToken(ctx context.Context, token string, resource interface{}) (*user.User, map[string]*auth.Scope, error) {
+	c, err := decode(token)
 	if err != nil {
-		return nil, errors.Wrap(err, "error decoding claims")
+		return nil, nil, errors.Wrap(err, "error decoding claims")
 	}
-	return u, nil
+	return c.User, c.Scope, nil
 }
 
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back
 // go binary encoder
-func encode(u *user.User) (string, error) {
+func encode(c *claims) (string, error) {
 	b := bytes.Buffer{}
 	e := gob.NewEncoder(&b)
-	err := e.Encode(u)
+	err := e.Encode(c)
 	if err != nil {
 		return "", err
 	}
@@ -73,8 +78,8 @@ func encode(u *user.User) (string, error) {
 
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back
 // go binary decoder
-func decode(token string) (*user.User, error) {
-	u := &user.User{}
+func decode(token string) (*claims, error) {
+	c := &claims{}
 	by, err := base64.StdEncoding.DecodeString(token)
 	if err != nil {
 		return nil, err
@@ -82,9 +87,9 @@ func decode(token string) (*user.User, error) {
 	b := bytes.Buffer{}
 	b.Write(by)
 	d := gob.NewDecoder(&b)
-	err = d.Decode(&u)
+	err = d.Decode(&c)
 	if err != nil {
 		return nil, err
 	}
-	return u, nil
+	return c, nil
 }

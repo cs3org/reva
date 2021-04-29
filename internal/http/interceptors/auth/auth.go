@@ -23,7 +23,6 @@ import (
 	"net/http"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
 	tokenregistry "github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
@@ -235,16 +234,10 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			}
 
 			// validate token
-			claims, err := tokenManager.DismantleToken(r.Context(), tkn, r.URL.Path)
+			// TODO(ishank011): resolve resourceID/path and check
+			u, _, err := tokenManager.DismantleToken(r.Context(), tkn, r.URL.Path)
 			if err != nil {
 				log.Error().Err(err).Msg("error dismantling token")
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			u := &userpb.User{}
-			if err := mapstructure.Decode(claims, u); err != nil {
-				log.Error().Err(err).Msg("error decoding user claims")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}

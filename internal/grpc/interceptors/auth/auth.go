@@ -21,7 +21,6 @@ package auth
 import (
 	"context"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/token"
@@ -88,7 +87,8 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			// to decide the storage provider.
 			tkn, ok := token.ContextGetToken(ctx)
 			if ok {
-				u, err := tokenManager.DismantleToken(ctx, tkn, req)
+				// TODO(ishank011): resolve resourceID/path and check
+				u, _, err := tokenManager.DismantleToken(ctx, tkn, req)
 				if err == nil {
 					ctx = user.ContextSetUser(ctx, u)
 				}
@@ -108,7 +108,8 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		}
 
 		// validate the token
-		u, err := tokenManager.DismantleToken(ctx, tkn, req)
+		// TODO(ishank011): resolve resourceID/path and check
+		u, _, err := tokenManager.DismantleToken(ctx, tkn, req)
 		if err != nil {
 			log.Warn().Msg("access token is invalid")
 			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
@@ -162,7 +163,8 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			// to decide the storage provider.
 			tkn, ok := token.ContextGetToken(ctx)
 			if ok {
-				u, err := tokenManager.DismantleToken(ctx, tkn, ss)
+				// TODO(ishank011): resolve resourceID/path and check
+				u, _, err := tokenManager.DismantleToken(ctx, tkn, ss)
 				if err == nil {
 					ctx = user.ContextSetUser(ctx, u)
 					ss = newWrappedServerStream(ctx, ss)
@@ -180,16 +182,11 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		}
 
 		// validate the token
-		claims, err := tokenManager.DismantleToken(ctx, tkn, ss)
+		// TODO(ishank011): resolve resourceID/path and check
+		u, _, err := tokenManager.DismantleToken(ctx, tkn, ss)
 		if err != nil {
 			log.Warn().Msg("access token invalid")
 			return status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
-		}
-
-		u := &userpb.User{}
-		if err := mapstructure.Decode(claims, u); err != nil {
-			log.Warn().Msg("user claims invalid")
-			return status.Errorf(codes.Unauthenticated, "auth: claims are invalid")
 		}
 
 		// store user and core access token in context.
