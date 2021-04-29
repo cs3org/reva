@@ -508,8 +508,6 @@ func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicSha
 
 // GetPublicShareByToken gets a public share by its opaque token.
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
-	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("GetPublicShareByToken %s %+v", token, auth)
 	db, err := m.readDb()
 	if err != nil {
 		return nil, err
@@ -524,7 +522,6 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local); err != nil {
 			return nil, err
 		}
-		log.Info().Msgf("GetPublicShareByToken listing keys %s", local.Token)
 
 		if local.Token == token {
 			if !notExpired(&local) {

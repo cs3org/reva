@@ -24,7 +24,6 @@ import (
 
 	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -120,10 +119,7 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string, resource inter
 	}
 
 	if claims, ok := token.Claims.(*claims); ok && token.Valid {
-		log := appctx.GetLogger(ctx)
-		log.Info().Msgf("jwt scope: %+v", claims.Scope)
 		ok, err = scope.VerifyScope(claims.Scope, resource)
-		log.Info().Msgf("jwt ok: %+v, err %+v", ok, err)
 		if err != nil {
 			return nil, nil, errtypes.InternalError("error verifying scope of access token")
 		}

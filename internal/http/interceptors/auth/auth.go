@@ -153,7 +153,6 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			}
 
 			log := appctx.GetLogger(ctx)
-			log.Info().Msgf("HTTP interceptor %s, %+v", r.URL.Path, unprotected)
 
 			// skip auth for urls set in the config.
 			// TODO(labkode): maybe use method:url to bypass auth.
@@ -234,7 +233,6 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			}
 
 			// validate token
-			// TODO(ishank011): resolve resourceID/path and check
 			u, _, err := tokenManager.DismantleToken(r.Context(), tkn, r.URL.Path)
 			if err != nil {
 				log.Error().Err(err).Msg("error dismantling token")

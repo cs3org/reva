@@ -29,7 +29,6 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -132,8 +131,6 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 	if err != nil {
 		return nil, nil, err
 	}
-	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("publichare scope: %+v", scope)
 
 	return getUserResponse.GetUser(), scope, nil
 }

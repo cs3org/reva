@@ -112,7 +112,6 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 	switch v := err.(type) {
 	case nil:
 		log.Info().Msgf("user %s authenticated", u.String())
-		log.Info().Msgf("authprovider scope %+v", scope)
 		return &provider.AuthenticateResponse{
 			Status:     status.NewOK(ctx),
 			User:       u,

@@ -108,8 +108,6 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			return handler(ctx, req)
 		}
 
-		log.Info().Msgf("GRPC unary interceptor %s, %+v", info.FullMethod, req)
-
 		span.AddAttributes(trace.BoolAttribute("auth_enabled", true))
 
 		tkn, ok := token.ContextGetToken(ctx)
@@ -165,7 +163,6 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 		log := appctx.GetLogger(ctx)
-		log.Info().Msgf("GRPC stream interceptor %s, %+v", info.FullMethod, unprotected)
 
 		if utils.Skip(info.FullMethod, unprotected) {
 			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
@@ -221,12 +218,9 @@ func (ss *wrappedServerStream) Context() context.Context {
 
 func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string) (*userpb.User, error) {
 	u, scope, err := mgr.DismantleToken(ctx, tkn, req)
-	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("scope: %+v, req: %+v", scope["publicshare"], req)
 
 	// Check if the err returned is PermissionDenied
 	if _, ok := err.(errtypes.PermissionDenied); ok {
-		log.Info().Msgf("resolving ref %+v", req)
 		// Check if req is of type *provider.Reference_Path
 		// If yes, the request might be coming from a share where the accessor is
 		// trying to impersonate the owner, since the share manager doesn't know the
@@ -237,6 +231,8 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 				// Try to extract the resource ID from the scope resource.
 				// Currently, we only check for public shares, but this will be extended
 				// for OCM shares, guest accounts, etc.
+				log := appctx.GetLogger(ctx)
+				log.Info().Msgf("resolving path reference to ID to check token scope %+v", ref.GetPath())
 				var share link.PublicShare
 				err = utils.UnmarshalJSONToProtoV1(scope["publicshare"].Resource.Value, &share)
 				if err != nil {
@@ -280,10 +276,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 					if err != nil {
 						return nil, err
 					}
-					u, _, err = mgr.DismantleToken(ctx, tkn, req)
-					if err != nil {
-						return nil, err
-					}
+					return dismantleToken(ctx, tkn, req, mgr, gatewayAddr)
 				}
 			}
 		}

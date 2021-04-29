@@ -84,10 +84,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			Status: status.NewInternal(ctx, err, "user is nil"),
 		}, nil
 	}
-	log.Info().Msgf("gateway scope %+v", res.TokenScope)
 
-	uid := res.User.Id
-	if uid == nil {
+	if res.User.Id == nil {
 		err := errtypes.NotFound("gateway: uid after Authenticate is nil")
 		log.Err(err).Msg("user id is nil")
 		return &gateway.AuthenticateResponse{
