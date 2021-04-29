@@ -44,6 +44,12 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 		return checkStorageRef(&share, v.GetRef()), nil
 	case *provider.ListContainerRequest:
 		return checkStorageRef(&share, v.GetRef()), nil
+	case *provider.CreateContainerRequest:
+		return checkStorageRef(&share, v.GetRef()), nil
+	case *provider.DeleteRequest:
+		return checkStorageRef(&share, v.GetRef()), nil
+	case *provider.MoveRequest:
+		return checkStorageRef(&share, v.GetSource()) && checkStorageRef(&share, v.GetDestination()), nil
 	case *provider.InitiateFileDownloadRequest:
 		return checkStorageRef(&share, v.GetRef()), nil
 	case *provider.InitiateFileUploadRequest:
@@ -71,6 +77,12 @@ func publicsharepathScope(scope *authpb.Scope, resource interface{}) (bool, erro
 		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
 	case *provider.ListContainerRequest:
 		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
+	case *provider.CreateContainerRequest:
+		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
+	case *provider.DeleteRequest:
+		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
+	case *provider.MoveRequest:
+		return strings.HasPrefix(v.GetSource().GetPath(), ref.GetPath()) && strings.HasPrefix(v.GetDestination().GetPath(), ref.GetPath()), nil
 	case *provider.InitiateFileDownloadRequest:
 		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
 	case *provider.InitiateFileUploadRequest:

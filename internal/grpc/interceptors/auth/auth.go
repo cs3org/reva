@@ -260,7 +260,9 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 				if strings.HasPrefix(ref.GetPath(), statResponse.Info.Path) {
 					// The path corresponds to the resource to which the token has access.
 					// Add it to the scope map
-					val, err := utils.MarshalProtoV1ToJSON(ref)
+					val, err := utils.MarshalProtoV1ToJSON(&provider.Reference{
+						Spec: &provider.Reference_Path{Path: statResponse.Info.Path},
+					})
 					if err != nil {
 						return nil, err
 					}
@@ -293,6 +295,12 @@ func extractRef(req interface{}) (*provider.Reference, bool) {
 		return v.GetRef(), true
 	case *provider.ListContainerRequest:
 		return v.GetRef(), true
+	case *provider.CreateContainerRequest:
+		return v.GetRef(), true
+	case *provider.DeleteRequest:
+		return v.GetRef(), true
+	case *provider.MoveRequest:
+		return v.GetSource(), true
 	case *provider.InitiateFileDownloadRequest:
 		return v.GetRef(), true
 	case *provider.InitiateFileUploadRequest:
