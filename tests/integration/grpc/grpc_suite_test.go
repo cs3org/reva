@@ -19,6 +19,7 @@
 package grpc_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -30,6 +31,9 @@ import (
 	"testing"
 	"time"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/pkg/errors"
 
 	. "github.com/onsi/ginkgo"
@@ -180,4 +184,25 @@ func waitForPort(grpcAddress, expectedStatus string) error {
 		timoutCounter++
 	}
 	return nil
+}
+
+func getUserScope() (map[string]*authpb.Scope, error) {
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: "/",
+		},
+	}
+	val, err := json.Marshal(ref)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]*authpb.Scope{
+		"user": &authpb.Scope{
+			Resource: &types.OpaqueEntry{
+				Decoder: "json",
+				Value:   val,
+			},
+			Role: authpb.Role_ROLE_OWNER,
+		},
+	}, nil
 }

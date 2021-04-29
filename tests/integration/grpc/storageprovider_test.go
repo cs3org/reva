@@ -90,7 +90,9 @@ var _ = Describe("storage providers", func() {
 		// Add auth token
 		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
-		t, err := tokenManager.MintToken(ctx, user)
+		scope, err := getUserScope()
+		Expect(err).ToNot(HaveOccurred())
+		t, err := tokenManager.MintToken(ctx, user, scope)
 		Expect(err).ToNot(HaveOccurred())
 		ctx = token.ContextSetToken(ctx, t)
 		ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)

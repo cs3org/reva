@@ -22,6 +22,7 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 )
 
+// Verifier is the function signature which every scope verifier should implement.
 type Verifier func(*authpb.Scope, interface{}) (bool, error)
 
 var supportedScopes = map[string]Verifier{
@@ -29,6 +30,8 @@ var supportedScopes = map[string]Verifier{
 	"publicshare": publicshareScope,
 }
 
+// VerifyScope is the function to be called when dismantling tokens to check if
+// the token has access to a particular resource.
 func VerifyScope(scopeMap map[string]*authpb.Scope, resource interface{}) (bool, error) {
 	valid := true
 	var err error
