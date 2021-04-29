@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -83,6 +84,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			Status: status.NewInternal(ctx, err, "user is nil"),
 		}, nil
 	}
+	log.Info().Msgf("gateway scope %+v", res.TokenScope)
 
 	uid := res.User.Id
 	if uid == nil {
@@ -102,7 +104,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
-	if s.c.DisableHomeCreationOnLogin {
+	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok || scope.Role != authpb.Role_ROLE_OWNER {
 		gwRes := &gateway.AuthenticateResponse{
 			Status: status.NewOK(ctx),
 			User:   res.User,

@@ -21,7 +21,6 @@ package ldap
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -37,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -213,7 +213,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 			Path: "/",
 		},
 	}
-	val, err := json.Marshal(ref)
+	val, err := utils.MarshalProtoV1ToJSON(ref)
 	if err != nil {
 		return nil, nil, err
 	}

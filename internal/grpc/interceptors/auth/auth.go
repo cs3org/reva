@@ -20,7 +20,6 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -29,6 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -122,7 +122,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		// validate the token
 		u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr)
 		if err != nil {
-			log.Warn().Msg("access token is invalid")
+			log.Warn().Err(err).Msg("access token is invalid")
 			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
 		}
 
@@ -194,7 +194,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		// validate the token
 		u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr)
 		if err != nil {
-			log.Warn().Msg("access token invalid")
+			log.Warn().Err(err).Msg("access token is invalid")
 			return status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
 		}
 
@@ -221,21 +221,24 @@ func (ss *wrappedServerStream) Context() context.Context {
 
 func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string) (*userpb.User, error) {
 	u, scope, err := mgr.DismantleToken(ctx, tkn, req)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("scope: %+v, req: %+v", scope["publicshare"], req)
 
 	// Check if the err returned is PermissionDenied
 	if _, ok := err.(errtypes.PermissionDenied); ok {
+		log.Info().Msgf("resolving ref %+v", req)
 		// Check if req is of type *provider.Reference_Path
 		// If yes, the request might be coming from a share where the accessor is
 		// trying to impersonate the owner, since the share manager doesn't know the
 		// share path.
-		if ref, ok := req.(*provider.Reference); ok {
+		if ref, ok := extractRef(req); ok {
 			if ref.GetPath() != "" {
 
 				// Try to extract the resource ID from the scope resource.
 				// Currently, we only check for public shares, but this will be extended
 				// for OCM shares, guest accounts, etc.
-				var share *link.PublicShare
-				err = json.Unmarshal(scope["publicshare"].Resource.Value, &share)
+				var share link.PublicShare
+				err = utils.UnmarshalJSONToProtoV1(scope["publicshare"].Resource.Value, &share)
 				if err != nil {
 					return nil, err
 				}
@@ -261,7 +264,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 				if strings.HasPrefix(ref.GetPath(), statResponse.Info.Path) {
 					// The path corresponds to the resource to which the token has access.
 					// Add it to the scope map
-					val, err := json.Marshal(ref)
+					val, err := utils.MarshalProtoV1ToJSON(ref)
 					if err != nil {
 						return nil, err
 					}
@@ -287,4 +290,20 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 	}
 
 	return u, err
+}
+
+func extractRef(req interface{}) (*provider.Reference, bool) {
+	switch v := req.(type) {
+	case *registry.GetStorageProvidersRequest:
+		return v.GetRef(), true
+	case *provider.StatRequest:
+		return v.GetRef(), true
+	case *provider.ListContainerRequest:
+		return v.GetRef(), true
+	case *provider.InitiateFileDownloadRequest:
+		return v.GetRef(), true
+	case *provider.InitiateFileUploadRequest:
+		return v.GetRef(), true
+	}
+	return nil, false
 }

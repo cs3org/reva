@@ -20,7 +20,6 @@ package impersonator
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
@@ -29,6 +28,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 func init() {
@@ -58,7 +58,7 @@ func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (
 			Path: "/",
 		},
 	}
-	val, err := json.Marshal(ref)
+	val, err := utils.MarshalProtoV1ToJSON(ref)
 	if err != nil {
 		return nil, nil, err
 	}

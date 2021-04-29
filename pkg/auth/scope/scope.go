@@ -26,8 +26,9 @@ import (
 type Verifier func(*authpb.Scope, interface{}) (bool, error)
 
 var supportedScopes = map[string]Verifier{
-	"user":        userScope,
-	"publicshare": publicshareScope,
+	"user":            userScope,
+	"publicshare":     publicshareScope,
+	"publicsharepath": publicsharepathScope,
 }
 
 // VerifyScope is the function to be called when dismantling tokens to check if
@@ -37,7 +38,7 @@ func VerifyScope(scopeMap map[string]*authpb.Scope, resource interface{}) (bool,
 		verifierFunc := supportedScopes[k]
 		valid, err := verifierFunc(scope, resource)
 		if err != nil {
-			return false, err
+			continue
 		}
 		if valid {
 			return true, nil

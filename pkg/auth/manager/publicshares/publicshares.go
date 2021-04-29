@@ -20,7 +20,6 @@ package publicshares
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"time"
 
@@ -30,10 +29,12 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -131,6 +132,8 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 	if err != nil {
 		return nil, nil, err
 	}
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("publichare scope: %+v", scope)
 
 	return getUserResponse.GetUser(), scope, nil
 }
@@ -141,7 +144,7 @@ func (m *manager) getScope(ctx context.Context, share *link.PublicShare) (map[st
 		role = authpb.Role_ROLE_EDITOR
 	}
 
-	val, err := json.Marshal(share)
+	val, err := utils.MarshalProtoV1ToJSON(share)
 	if err != nil {
 		return nil, err
 	}

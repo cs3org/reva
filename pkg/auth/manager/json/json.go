@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -109,7 +110,7 @@ func (m *manager) Authenticate(ctx context.Context, username string, secret stri
 			Path: "/",
 		},
 	}
-	val, err := json.Marshal(ref)
+	val, err := utils.MarshalProtoV1ToJSON(ref)
 	if err != nil {
 		return nil, nil, err
 	}

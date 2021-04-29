@@ -22,7 +22,6 @@ package oidc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -37,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -191,7 +191,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 			Path: "/",
 		},
 	}
-	val, err := json.Marshal(ref)
+	val, err := utils.MarshalProtoV1ToJSON(ref)
 	if err != nil {
 		return nil, nil, err
 	}

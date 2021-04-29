@@ -19,30 +19,62 @@
 package scope
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
-	var share *link.PublicShare
-	err := json.Unmarshal(scope.Resource.Value, &share)
+	var share link.PublicShare
+	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
 		return false, err
 	}
 
 	switch v := resource.(type) {
-	case *provider.Reference:
-		return checkStorageRef(share, v), nil
-	case *link.PublicShareReference:
-		return checkPublicShareRef(share, v), nil
+	case *registry.GetStorageProvidersRequest:
+		return checkStorageRef(&share, v.GetRef()), nil
+	case *provider.StatRequest:
+		return checkStorageRef(&share, v.GetRef()), nil
+	case *provider.ListContainerRequest:
+		return checkStorageRef(&share, v.GetRef()), nil
+	case *provider.InitiateFileDownloadRequest:
+		return checkStorageRef(&share, v.GetRef()), nil
+	case *provider.InitiateFileUploadRequest:
+		return checkStorageRef(&share, v.GetRef()), nil
+	case *link.GetPublicShareRequest:
+		return checkPublicShareRef(&share, v.GetRef()), nil
 	case string:
-		return checkPath(share, v), nil
+		return checkPath(&share, v), nil
+	}
+
+	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
+}
+
+func publicsharepathScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+	var ref provider.Reference
+	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &ref)
+	if err != nil {
+		return false, err
+	}
+
+	switch v := resource.(type) {
+	case *registry.GetStorageProvidersRequest:
+		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
+	case *provider.StatRequest:
+		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
+	case *provider.ListContainerRequest:
+		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
+	case *provider.InitiateFileDownloadRequest:
+		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
+	case *provider.InitiateFileUploadRequest:
+		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
 	}
 
 	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
