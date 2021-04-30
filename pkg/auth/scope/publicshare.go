@@ -49,14 +49,16 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 		return checkStorageRef(&share, v.GetRef()), nil
 
 		// Editor role
+		// TODO(ishank011): Add role checks,
+		// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
-		return scope.Role == authpb.Role_ROLE_EDITOR && checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(&share, v.GetRef()), nil
 	case *provider.DeleteRequest:
-		return scope.Role == authpb.Role_ROLE_EDITOR && checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(&share, v.GetRef()), nil
 	case *provider.MoveRequest:
-		return scope.Role == authpb.Role_ROLE_EDITOR && checkStorageRef(&share, v.GetSource()) && checkStorageRef(&share, v.GetDestination()), nil
+		return checkStorageRef(&share, v.GetSource()) && checkStorageRef(&share, v.GetDestination()), nil
 	case *provider.InitiateFileUploadRequest:
-		return scope.Role == authpb.Role_ROLE_EDITOR && checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(&share, v.GetRef()), nil
 
 	case *link.GetPublicShareRequest:
 		return checkPublicShareRef(&share, v.GetRef()), nil

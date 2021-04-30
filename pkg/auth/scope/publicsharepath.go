@@ -48,14 +48,16 @@ func publicsharepathScope(scope *authpb.Scope, resource interface{}) (bool, erro
 		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
 
 		// Editor role
+		// TODO(ishank011): Add role checks,
+		// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
-		return scope.Role == authpb.Role_ROLE_EDITOR && strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
+		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
 	case *provider.DeleteRequest:
-		return scope.Role == authpb.Role_ROLE_EDITOR && strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
+		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
 	case *provider.MoveRequest:
-		return scope.Role == authpb.Role_ROLE_EDITOR && strings.HasPrefix(v.GetSource().GetPath(), ref.GetPath()) && strings.HasPrefix(v.GetDestination().GetPath(), ref.GetPath()), nil
+		return strings.HasPrefix(v.GetSource().GetPath(), ref.GetPath()) && strings.HasPrefix(v.GetDestination().GetPath(), ref.GetPath()), nil
 	case *provider.InitiateFileUploadRequest:
-		return scope.Role == authpb.Role_ROLE_EDITOR && strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
+		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
 	}
 
 	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))

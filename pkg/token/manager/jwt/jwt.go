@@ -128,7 +128,7 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string, resource inter
 			// path/resource ID resolution, because when the token was minted, the auth provider
 			// might be aware of only one of these references. In such cases, it's expectec that
 			// the caller will resolve the reference and pass the expected resource.
-			return nil, claims.Scope, errtypes.InvalidCredentials("token missing necessary scope access")
+			return nil, claims.Scope, errtypes.PermissionDenied("token missing necessary scope access")
 		}
 		return claims.User, claims.Scope, nil
 	}
