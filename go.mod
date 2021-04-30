@@ -8,8 +8,8 @@ require (
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.4.0
-	github.com/aws/aws-sdk-go v1.38.13
-	github.com/bluele/gcache v0.0.2 // indirect
+	github.com/aws/aws-sdk-go v1.38.29
+	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.5
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
