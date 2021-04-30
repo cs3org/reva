@@ -218,6 +218,7 @@ func (ss *wrappedServerStream) Context() context.Context {
 
 func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string) (*userpb.User, error) {
 	u, scope, err := mgr.DismantleToken(ctx, tkn, req)
+	log := appctx.GetLogger(ctx)
 
 	// Check if the err returned is PermissionDenied
 	if _, ok := err.(errtypes.PermissionDenied); ok {
@@ -231,7 +232,6 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 				// Try to extract the resource ID from the scope resource.
 				// Currently, we only check for public shares, but this will be extended
 				// for OCM shares, guest accounts, etc.
-				log := appctx.GetLogger(ctx)
 				log.Info().Msgf("resolving path reference to ID to check token scope %+v", ref.GetPath())
 				var share link.PublicShare
 				err = utils.UnmarshalJSONToProtoV1(scope["publicshare"].Resource.Value, &share)
@@ -274,7 +274,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 						Role: scope["publicshare"].Role,
 					}
 
-					tkn, err = mgr.AddScopeToToken(ctx, tkn, "publicsharepath", scopeVal)
+					tkn, err = mgr.AddScopeToToken(ctx, tkn, "publicshare:path", scopeVal)
 					if err != nil {
 						return nil, err
 					}

@@ -38,55 +38,30 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 	}
 
 	switch v := resource.(type) {
+	// Viewer role
 	case *registry.GetStorageProvidersRequest:
 		return checkStorageRef(&share, v.GetRef()), nil
 	case *provider.StatRequest:
 		return checkStorageRef(&share, v.GetRef()), nil
 	case *provider.ListContainerRequest:
 		return checkStorageRef(&share, v.GetRef()), nil
-	case *provider.CreateContainerRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
-	case *provider.DeleteRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
-	case *provider.MoveRequest:
-		return checkStorageRef(&share, v.GetSource()) && checkStorageRef(&share, v.GetDestination()), nil
 	case *provider.InitiateFileDownloadRequest:
 		return checkStorageRef(&share, v.GetRef()), nil
+
+		// Editor role
+	case *provider.CreateContainerRequest:
+		return scope.Role == authpb.Role_ROLE_EDITOR && checkStorageRef(&share, v.GetRef()), nil
+	case *provider.DeleteRequest:
+		return scope.Role == authpb.Role_ROLE_EDITOR && checkStorageRef(&share, v.GetRef()), nil
+	case *provider.MoveRequest:
+		return scope.Role == authpb.Role_ROLE_EDITOR && checkStorageRef(&share, v.GetSource()) && checkStorageRef(&share, v.GetDestination()), nil
 	case *provider.InitiateFileUploadRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return scope.Role == authpb.Role_ROLE_EDITOR && checkStorageRef(&share, v.GetRef()), nil
+
 	case *link.GetPublicShareRequest:
 		return checkPublicShareRef(&share, v.GetRef()), nil
 	case string:
 		return checkPath(&share, v), nil
-	}
-
-	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
-}
-
-func publicsharepathScope(scope *authpb.Scope, resource interface{}) (bool, error) {
-	var ref provider.Reference
-	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &ref)
-	if err != nil {
-		return false, err
-	}
-
-	switch v := resource.(type) {
-	case *registry.GetStorageProvidersRequest:
-		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
-	case *provider.StatRequest:
-		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
-	case *provider.ListContainerRequest:
-		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
-	case *provider.CreateContainerRequest:
-		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
-	case *provider.DeleteRequest:
-		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
-	case *provider.MoveRequest:
-		return strings.HasPrefix(v.GetSource().GetPath(), ref.GetPath()) && strings.HasPrefix(v.GetDestination().GetPath(), ref.GetPath()), nil
-	case *provider.InitiateFileDownloadRequest:
-		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
-	case *provider.InitiateFileUploadRequest:
-		return strings.HasPrefix(v.GetRef().GetPath(), ref.GetPath()), nil
 	}
 
 	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))

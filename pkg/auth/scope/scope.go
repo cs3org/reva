@@ -26,9 +26,9 @@ import (
 type Verifier func(*authpb.Scope, interface{}) (bool, error)
 
 var supportedScopes = map[string]Verifier{
-	"user":            userScope,
-	"publicshare":     publicshareScope,
-	"publicsharepath": publicsharepathScope,
+	"user":             userScope,
+	"publicshare":      publicshareScope,
+	"publicshare:path": publicsharepathScope,
 }
 
 // VerifyScope is the function to be called when dismantling tokens to check if
