@@ -20,6 +20,9 @@ package scope
 
 import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 // Verifier is the function signature which every scope verifier should implement.
@@ -45,4 +48,26 @@ func VerifyScope(scopeMap map[string]*authpb.Scope, resource interface{}) (bool,
 		}
 	}
 	return false, nil
+}
+
+// GetOwnerScope returns the default owner scope with access to all resources.
+func GetOwnerScope() (map[string]*authpb.Scope, error) {
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: "/",
+		},
+	}
+	val, err := utils.MarshalProtoV1ToJSON(ref)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]*authpb.Scope{
+		"user": &authpb.Scope{
+			Resource: &types.OpaqueEntry{
+				Decoder: "json",
+				Value:   val,
+			},
+			Role: authpb.Role_ROLE_OWNER,
+		},
+	}, nil
 }
