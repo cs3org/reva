@@ -30,7 +30,9 @@ import (
 	"strconv"
 	"strings"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
@@ -466,7 +468,77 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 }
 
 func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
-	return nil, errtypes.NotSupported("list storage spaces")
+	// TODO check filters
+
+	// for now list all user homes
+
+	// 1. how many subdirs are in the user layout?
+	parts := strings.Split(fs.o.UserLayout, "/")
+
+	var sb strings.Builder
+	sb.WriteString("*")
+	for i := 1; i < len(parts); i++ {
+		sb.WriteString("/*")
+	}
+
+	// fs.o.Root + layout(eg e/einstein)
+	// /var/lib/ocis/storage/users/nodes/root/e/einstein
+	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "nodes", "root", sb.String()))
+	if err != nil {
+		return nil, err
+	}
+
+	spaces := make([]*provider.StorageSpace, len(matches))
+	for i := range matches {
+		// use Stat to fetch metadata
+		if fi, err := os.Stat(matches[i]); err != nil {
+			// TODO log error
+			continue
+		} else {
+			// fi.Name() should be the node id
+			n, err := node.ReadNode(ctx, fs.lu, fi.Name())
+			if err != nil {
+				continue
+			}
+			owner, err := n.Owner()
+			if err != nil {
+				continue
+			}
+			space := &provider.StorageSpace{
+				Id: &provider.StorageSpaceId{OpaqueId: n.ID}, // FIXME Id should just be a string
+				Owner: &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
+					Id: owner,
+				},
+				Root: &provider.ResourceId{OpaqueId: n.ID},
+				//Name: // TODO read from extended attribute
+				//Quota: // TODO use decompesodfs to read quota
+				//Quota: &provider.Quota{
+				//	QuotaMaxBytes: 0,
+				//	QuotaMaxFiles: 0,
+				//},
+				SpaceType: "home",
+				// Mtime is set either as node.tmtime or as fi.mtime below
+			}
+			// override the stat mtime with a tmtime if it is present
+			if tmt, err := n.GetTMTime(); err == nil {
+				un := tmt.UnixNano()
+				space.Mtime = &types.Timestamp{
+					Seconds: uint64(un / 1000000000),
+					Nanos:   uint32(un % 1000000000),
+				}
+			} else {
+				un := fi.ModTime().UnixNano()
+				space.Mtime = &types.Timestamp{
+					Seconds: uint64(un / 1000000000),
+					Nanos:   uint32(un % 1000000000),
+				}
+			}
+			spaces = append(spaces, space)
+		}
+	}
+
+	return spaces, nil
+
 }
 
 func (fs *Decomposedfs) copyMD(s string, t string) (err error) {
