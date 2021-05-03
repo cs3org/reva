@@ -1238,6 +1238,10 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey, restorePa
 	return fs.propagate(ctx, localRestorePath)
 }
 
+func (fs *localfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	return nil, errtypes.NotSupported("list storage spaces")
+}
+
 func (fs *localfs) propagate(ctx context.Context, leafPath string) error {
 
 	var root string

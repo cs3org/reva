@@ -465,6 +465,10 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 	return reader, nil
 }
 
+func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	return nil, errtypes.NotSupported("list storage spaces")
+}
+
 func (fs *Decomposedfs) copyMD(s string, t string) (err error) {
 	var attrs []string
 	if attrs, err = xattr.List(s); err != nil {
