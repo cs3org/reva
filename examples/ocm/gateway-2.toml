@@ -1,3 +1,6 @@
+[shared]
+gatewaysvc = "localhost:29000"
+
 [grpc]
 address = "0.0.0.0:29000"
 
