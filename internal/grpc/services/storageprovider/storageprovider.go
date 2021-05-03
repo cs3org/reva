@@ -429,9 +429,25 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 }
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	return &provider.ListStorageSpacesResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("ListStorageSpaces not implemented"), "ListStorageSpaces not implemented"),
-	}, nil
+	if spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "not found when listing spaces")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error listing spaces")
+		}
+		return &provider.ListStorageSpacesResponse{
+			Status: st,
+		}, nil
+	} else {
+		return &provider.ListStorageSpacesResponse{
+			Status:        status.NewOK(ctx),
+			StorageSpaces: spaces,
+		}, nil
+	}
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
