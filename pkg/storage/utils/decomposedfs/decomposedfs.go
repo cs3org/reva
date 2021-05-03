@@ -488,15 +488,15 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return nil, err
 	}
 
-	spaces := make([]*provider.StorageSpace, len(matches))
+	var spaces []*provider.StorageSpace
 	for i := range matches {
 		// use Stat to fetch metadata
-		if fi, err := os.Stat(matches[i]); err != nil {
+		if target, err := os.Readlink(matches[i]); err != nil {
 			// TODO log error
 			continue
 		} else {
 			// fi.Name() should be the node id
-			n, err := node.ReadNode(ctx, fs.lu, fi.Name())
+			n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
 			if err != nil {
 				continue
 			}
@@ -516,7 +516,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 				//	QuotaMaxBytes: 0,
 				//	QuotaMaxFiles: 0,
 				//},
-				SpaceType: "home",
+				SpaceType: "personal",
 				// Mtime is set either as node.tmtime or as fi.mtime below
 			}
 			// override the stat mtime with a tmtime if it is present
@@ -526,12 +526,12 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 					Seconds: uint64(un / 1000000000),
 					Nanos:   uint32(un % 1000000000),
 				}
-			} else {
-				un := fi.ModTime().UnixNano()
-				space.Mtime = &types.Timestamp{
-					Seconds: uint64(un / 1000000000),
-					Nanos:   uint32(un % 1000000000),
-				}
+				//} else {
+				//un := TODO stat node
+				//space.Mtime = &types.Timestamp{
+				//	Seconds: uint64(un / 1000000000),
+				//	Nanos:   uint32(un % 1000000000),
+				//}
 			}
 			spaces = append(spaces, space)
 		}

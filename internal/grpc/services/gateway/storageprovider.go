@@ -123,7 +123,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		}
 	}
 	c, err := s.findByID(ctx, &provider.ResourceId{
-		OpaqueId: id.OpaqueId,
+		StorageId: id.OpaqueId, // TODO fix id is nil
 	})
 	if err != nil {
 		return &provider.ListStorageSpacesResponse{
