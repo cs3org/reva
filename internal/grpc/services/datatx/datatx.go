@@ -22,6 +22,7 @@ import (
 	"context"
 
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
@@ -82,18 +83,18 @@ func (s *service) UnprotectedEndpoints() []string {
 
 func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
 	return &datatx.CreateTransferResponse{
-		Status: status.NewUnimplemented(ctx, errors.New("CreateTransfer not implemented"), "CreateTransfer not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateTransfer not implemented"), "CreateTransfer not implemented"),
 	}, nil
 }
 
 func (s *service) GetTransferStatus(ctx context.Context, in *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
 	return &datatx.GetTransferStatusResponse{
-		Status: status.NewUnimplemented(ctx, errors.New("GetTransferStatus not implemented"), "GetTransferStatus not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("GetTransferStatus not implemented"), "GetTransferStatus not implemented"),
 	}, nil
 }
 
 func (s *service) CancelTransfer(ctx context.Context, in *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
 	return &datatx.CancelTransferResponse{
-		Status: status.NewUnimplemented(ctx, errors.New("CancelTransfer not implemented"), "CancelTransfer not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CancelTransfer not implemented"), "CancelTransfer not implemented"),
 	}, nil
 }

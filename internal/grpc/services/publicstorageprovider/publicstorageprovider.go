@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -587,12 +588,12 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token string, relativePath string, err error) {
 	if ref.GetId() != nil {
-		return "", "", errors.New("need path based ref: got " + ref.String())
+		return "", "", errtypes.BadRequest("need path based ref: got " + ref.String())
 	}
 
 	if ref.GetPath() == "" {
 		// abort, no valid id nor path
-		return "", "", errors.New("invalid ref: " + ref.String())
+		return "", "", errtypes.BadRequest("invalid ref: " + ref.String())
 	}
 
 	// i.e path: /public/{token}/path/to/subfolders

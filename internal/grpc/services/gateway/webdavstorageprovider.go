@@ -214,7 +214,7 @@ func (s *svc) webdavRefTransferEndpoint(ctx context.Context, targetURL string, n
 
 func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webdavEndpoint, error) {
 	if targetURL == "" {
-		return nil, errors.New("gateway: ref target is an empty uri")
+		return nil, errtypes.NotFound("gateway: ref target is an empty uri")
 	}
 
 	uri, err := url.Parse(targetURL)

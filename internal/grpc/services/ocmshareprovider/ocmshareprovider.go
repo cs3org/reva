@@ -20,9 +20,9 @@ package ocmshareprovider
 
 import (
 	"context"
-	"fmt"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -60,7 +60,7 @@ func getShareManager(c *config) (share.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -106,7 +106,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	if req.Opaque == nil {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, errors.New("can't find resource permissions"), ""),
+			Status: status.NewInternal(ctx, errtypes.NotFound("can't find resource permissions"), ""),
 		}, nil
 	}
 
@@ -114,14 +114,14 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	permOpaque, ok := req.Opaque.Map["permissions"]
 	if !ok {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, errors.New("resource permissions not set"), ""),
+			Status: status.NewInternal(ctx, errtypes.NotFound("resource permissions not set"), ""),
 		}, nil
 	}
 	switch permOpaque.Decoder {
 	case "plain":
 		permissions = string(permOpaque.Value)
 	default:
-		err := errors.New("opaque entry decoder not recognized: " + permOpaque.Decoder)
+		err := errtypes.NotSupported("opaque entry decoder not recognized: " + permOpaque.Decoder)
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil
@@ -131,14 +131,14 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	nameOpaque, ok := req.Opaque.Map["name"]
 	if !ok {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, errors.New("resource name not set"), ""),
+			Status: status.NewInternal(ctx, errtypes.NotFound("resource name not set"), ""),
 		}, nil
 	}
 	switch nameOpaque.Decoder {
 	case "plain":
 		name = string(nameOpaque.Value)
 	default:
-		err := errors.New("opaque entry decoder not recognized: " + nameOpaque.Decoder)
+		err := errtypes.NotSupported("opaque entry decoder not recognized: " + nameOpaque.Decoder)
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil

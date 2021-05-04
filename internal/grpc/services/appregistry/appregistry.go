@@ -20,13 +20,13 @@ package appregistry
 
 import (
 	"context"
-	"fmt"
 
 	"google.golang.org/grpc"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/registry/static"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
@@ -90,7 +90,7 @@ func getRegistry(c *config) (app.Registry, error) {
 	case "static":
 		return static.New(c.Static)
 	default:
-		return nil, fmt.Errorf("driver not found: %s", c.Driver)
+		return nil, errtypes.NotFound("driver not found: " + c.Driver)
 	}
 }
 

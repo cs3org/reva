@@ -37,7 +37,7 @@ import (
 func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
 
 	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
-		return nil, errors.New("gateway: can't share the share folder itself")
+		return nil, errtypes.AlreadyExists("gateway: can't share the share folder itself")
 	}
 
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
@@ -344,7 +344,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 	}
 
 	// TODO(labkode): implementing updating display name
-	err = errors.New("gateway: update of display name is not yet implemented")
+	err = errtypes.NotSupported("gateway: update of display name is not yet implemented")
 	return &collaboration.UpdateReceivedShareResponse{
 		Status: status.NewUnimplemented(ctx, err, "error updating received share"),
 	}, nil

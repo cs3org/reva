@@ -116,7 +116,7 @@ func parseXSTypes(xsTypes map[string]uint32) ([]*provider.ResourceChecksumPriori
 	for xs, prio := range xsTypes {
 		t := PKG2GRPCXS(xs)
 		if t == provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
-			return nil, fmt.Errorf("checksum type is invalid: %s", xs)
+			return nil, errtypes.NotFound("checksum type is invalid: " + xs)
 		}
 		xsPrio := &provider.ResourceChecksumPriority{
 			Priority: prio,
@@ -171,7 +171,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	if len(xsTypes) == 0 {
-		return nil, fmt.Errorf("no available checksum, please set in config")
+		return nil, errtypes.NotFound("no available checksum, please set in config")
 	}
 
 	registerMimeTypes(c.MimeTypes)
@@ -299,7 +299,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	}
 	if newRef.GetPath() == "/" {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, errors.New("can't upload to mount path"), "can't upload to mount path"),
+			Status: status.NewInternal(ctx, errtypes.InternalError("can't upload to mount path"), "can't upload to mount path"),
 		}, nil
 	}
 
@@ -424,25 +424,25 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return &provider.CreateStorageSpaceResponse{
-		Status: status.NewUnimplemented(ctx, errors.New("CreateStorageSpace not implemented"), "CreateStorageSpace not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateStorageSpace not implemented"), "CreateStorageSpace not implemented"),
 	}, nil
 }
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	return &provider.ListStorageSpacesResponse{
-		Status: status.NewUnimplemented(ctx, errors.New("ListStorageSpaces not implemented"), "ListStorageSpaces not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("ListStorageSpaces not implemented"), "ListStorageSpaces not implemented"),
 	}, nil
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return &provider.UpdateStorageSpaceResponse{
-		Status: status.NewUnimplemented(ctx, errors.New("UpdateStorageSpace not implemented"), "UpdateStorageSpace not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("UpdateStorageSpace not implemented"), "UpdateStorageSpace not implemented"),
 	}, nil
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	return &provider.DeleteStorageSpaceResponse{
-		Status: status.NewUnimplemented(ctx, errors.New("DeleteStorageSpace not implemented"), "DeleteStorageSpace not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("DeleteStorageSpace not implemented"), "DeleteStorageSpace not implemented"),
 	}, nil
 }
 
@@ -486,7 +486,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	}
 	if newRef.GetPath() == "/" {
 		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, errors.New("can't delete mount path"), "can't delete mount path"),
+			Status: status.NewInternal(ctx, errtypes.InternalError("can't delete mount path"), "can't delete mount path"),
 		}, nil
 	}
 
@@ -1064,7 +1064,7 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 
 func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return &provider.CreateSymlinkResponse{
-		Status: status.NewUnimplemented(ctx, errors.New("CreateSymlink not implemented"), "CreateSymlink not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateSymlink not implemented"), "CreateSymlink not implemented"),
 	}, nil
 }
 
@@ -1097,7 +1097,7 @@ func getFS(c *config) (storage.FS, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {
@@ -1116,7 +1116,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 
 	if ref.GetPath() == "" {
 		// abort, no valid id nor path
-		return nil, errors.New("ref is invalid: " + ref.String())
+		return nil, errtypes.BadRequest("ref is invalid: " + ref.String())
 	}
 
 	fn := ref.GetPath()
@@ -1138,7 +1138,7 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 	if strings.HasPrefix(fn, s.mountPath) {
 		return path.Join("/", strings.TrimPrefix(fn, s.mountPath)), nil
 	}
-	return "", errors.New(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q"+fn, s.mountPath))
+	return "", errtypes.BadRequest(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q", fn, s.mountPath))
 }
 
 func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {

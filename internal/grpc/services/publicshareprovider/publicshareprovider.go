@@ -20,7 +20,6 @@ package publicshareprovider
 
 import (
 	"context"
-	"fmt"
 
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -60,7 +59,7 @@ func getShareManager(c *config) (publicshare.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
 // TODO(labkode): add ctx to Close.
