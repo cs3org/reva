@@ -29,6 +29,7 @@ import (
 	tokenwriterregistry "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -233,9 +234,20 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			}
 
 			// validate token
-			u, _, err := tokenManager.DismantleToken(r.Context(), tkn, r.URL.Path)
+			u, tokenScope, err := tokenManager.DismantleToken(r.Context(), tkn)
 			if err != nil {
 				log.Error().Err(err).Msg("error dismantling token")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			// ensure access to the resource is allowed
+			ok, err := scope.VerifyScope(tokenScope, r.URL.Path)
+			if err != nil {
+				log.Error().Err(err).Msg("error verifying scope of access token")
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+			if !ok {
+				log.Error().Err(err).Msg("access to resource not allowed")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}

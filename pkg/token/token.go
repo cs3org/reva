@@ -36,8 +36,7 @@ const tokenKey key = iota
 // Manager is the interface to implement to sign and verify tokens
 type Manager interface {
 	MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error)
-	DismantleToken(ctx context.Context, token string, resource interface{}) (*user.User, map[string]*auth.Scope, error)
-	AddScopeToToken(ctx context.Context, token string, scopeKey string, scope *auth.Scope) (string, error)
+	DismantleToken(ctx context.Context, token string) (*user.User, map[string]*auth.Scope, error)
 }
 
 // ContextGetToken returns the token if set in the given context.

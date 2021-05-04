@@ -143,7 +143,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 }
 
 func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.WhoAmIResponse, error) {
-	u, _, err := s.tokenmgr.DismantleToken(ctx, req.Token, nil)
+	u, _, err := s.tokenmgr.DismantleToken(ctx, req.Token)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting user from token")
 		return &gateway.WhoAmIResponse{

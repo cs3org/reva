@@ -56,21 +56,12 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 	return token, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, token string, resource interface{}) (*user.User, map[string]*auth.Scope, error) {
+func (m *manager) DismantleToken(ctx context.Context, token string) (*user.User, map[string]*auth.Scope, error) {
 	c, err := decode(token)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error decoding claims")
 	}
 	return c.User, c.Scope, nil
-}
-
-func (m *manager) AddScopeToToken(ctx context.Context, token string, scopeKey string, scope *auth.Scope) (string, error) {
-	c, err := decode(token)
-	if err != nil {
-		return "", errors.Wrap(err, "error decoding claims")
-	}
-	c.Scope[scopeKey] = scope
-	return encode(c)
 }
 
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back

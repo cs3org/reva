@@ -61,7 +61,7 @@ func TestEncodeDecode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	decodedUser, decodedScope, err := m.DismantleToken(ctx, encoded, nil)
+	decodedUser, decodedScope, err := m.DismantleToken(ctx, encoded)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -24,7 +24,6 @@ import (
 
 	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
@@ -109,7 +108,7 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 	return tkn, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, tkn string, resource interface{}) (*user.User, map[string]*auth.Scope, error) {
+func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, map[string]*auth.Scope, error) {
 	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(m.conf.Secret), nil
 	})
@@ -119,37 +118,8 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string, resource inter
 	}
 
 	if claims, ok := token.Claims.(*claims); ok && token.Valid {
-		ok, err = scope.VerifyScope(claims.Scope, resource)
-		if err != nil {
-			return nil, nil, errtypes.InternalError("error verifying scope of access token")
-		}
-		if !ok {
-			// Pass the allowed scope of the token. This might be needed for the
-			// path/resource ID resolution, because when the token was minted, the auth provider
-			// might be aware of only one of these references. In such cases, it's expectec that
-			// the caller will resolve the reference and pass the expected resource.
-			return nil, claims.Scope, errtypes.PermissionDenied("token missing necessary scope access")
-		}
 		return claims.User, claims.Scope, nil
 	}
 
 	return nil, nil, errtypes.InvalidCredentials("invalid token")
-}
-
-func (m *manager) AddScopeToToken(ctx context.Context, tkn string, scopeKey string, scope *auth.Scope) (string, error) {
-	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(m.conf.Secret), nil
-	})
-
-	if err != nil {
-		return "", errors.Wrap(err, "error parsing token")
-	}
-
-	if claims, ok := token.Claims.(*claims); ok && token.Valid {
-		claims.Scope[scopeKey] = scope
-		return m.MintToken(ctx, claims.User, claims.Scope)
-	}
-
-	return "", errtypes.InvalidCredentials("invalid token")
-
 }
