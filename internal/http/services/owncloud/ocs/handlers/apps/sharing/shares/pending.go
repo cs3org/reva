@@ -109,16 +109,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 		logger.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
 	}
 
-	switch rs.GetState() {
-	case collaboration.ShareState_SHARE_STATE_PENDING:
-		data.State = ocsStatePending
-	case collaboration.ShareState_SHARE_STATE_ACCEPTED:
-		data.State = ocsStateAccepted
-	case collaboration.ShareState_SHARE_STATE_REJECTED:
-		data.State = ocsStateRejected
-	default:
-		data.State = ocsStateUnknown
-	}
+	data.State = mapState(rs.GetState())
 
 	if err := h.addFileInfo(ctx, data, info); err != nil {
 		logger.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")

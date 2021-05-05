@@ -659,16 +659,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		switch rs.GetState() {
-		case collaboration.ShareState_SHARE_STATE_PENDING:
-			data.State = ocsStatePending
-		case collaboration.ShareState_SHARE_STATE_ACCEPTED:
-			data.State = ocsStateAccepted
-		case collaboration.ShareState_SHARE_STATE_REJECTED:
-			data.State = ocsStateRejected
-		default:
-			data.State = ocsStateUnknown
-		}
+		data.State = mapState(rs.GetState())
 
 		if err := h.addFileInfo(ctx, data, info); err != nil {
 			log.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
@@ -1012,4 +1003,19 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	}
 
 	return pinfo, status, nil
+}
+
+func mapState(state collaboration.ShareState) int {
+	var mapped int
+	switch state {
+	case collaboration.ShareState_SHARE_STATE_PENDING:
+		mapped = ocsStatePending
+	case collaboration.ShareState_SHARE_STATE_ACCEPTED:
+		mapped = ocsStateAccepted
+	case collaboration.ShareState_SHARE_STATE_REJECTED:
+		mapped = ocsStateRejected
+	default:
+		mapped = ocsStateUnknown
+	}
+	return mapped
 }
