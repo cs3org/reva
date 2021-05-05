@@ -248,7 +248,6 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *conversions.Role) (*conversions.Role, []byte, error) {
 	reqRole, reqPermissions := r.FormValue("role"), r.FormValue("permissions")
 	var role *conversions.Role
-	var permissions conversions.Permissions
 
 	// the share role overrides the requested permissions
 	if reqRole != "" {
@@ -264,7 +263,7 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
 				return nil, nil, err
 			}
-			permissions, err = conversions.NewPermissions(pint)
+			perm, err := conversions.NewPermissions(pint)
 			if err != nil {
 				if err == conversions.ErrPermissionNotInRange {
 					response.WriteOCSError(w, r, http.StatusNotFound, err.Error(), nil)
@@ -273,25 +272,25 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 				}
 				return nil, nil, err
 			}
-			role = conversions.RoleFromOCSPermissions(permissions)
+			role = conversions.RoleFromOCSPermissions(perm)
 		}
 	}
 
-	permissions = role.OCSPermissions()
+	permissions := role.OCSPermissions()
 	if ri != nil && ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 		// Single file shares should never have delete or create permissions
 		permissions &^= conversions.PermissionCreate
 		permissions &^= conversions.PermissionDelete
 		if permissions == conversions.PermissionInvalid {
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Cannot set the requested share permissions", nil)
-			return nil, nil, fmt.Errorf("Cannot set the requested share permissions")
+			return nil, nil, errors.New("cannot set the requested share permissions")
 		}
 	}
 
 	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
 	if permissions == conversions.PermissionInvalid || !existingPermissions.Contain(permissions) {
 		response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions", nil)
-		return nil, nil, fmt.Errorf("Cannot set the requested share permissions")
+		return nil, nil, errors.New("cannot set the requested share permissions")
 	}
 
 	role = conversions.RoleFromOCSPermissions(permissions)
@@ -564,19 +563,7 @@ const (
 
 func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
-	var stateFilter collaboration.ShareState
-	switch r.FormValue("state") {
-	case "all":
-		stateFilter = ocsStateUnknown // no filter
-	case "0": // accepted
-		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED
-	case "1": // pending
-		stateFilter = collaboration.ShareState_SHARE_STATE_PENDING
-	case "2": // rejected
-		stateFilter = collaboration.ShareState_SHARE_STATE_REJECTED
-	default:
-		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED
-	}
+	stateFilter := getStateFilter(r.FormValue("state"))
 
 	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
@@ -830,14 +817,13 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 }
 
 // mustGetIdentifiers always returns a struct with identifiers, if the user or group could not be found they will all be empty
-func (h *Handler) mustGetIdentifiers(ctx context.Context, c gateway.GatewayAPIClient, id string, isGroup bool) *userIdentifiers {
+func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.GatewayAPIClient, id string, isGroup bool) *userIdentifiers {
 	sublog := appctx.GetLogger(ctx).With().Str("id", id).Logger()
 	if id == "" {
 		return &userIdentifiers{}
 	}
 
-	idIf, err := h.userIdentifierCache.Get(id)
-	if err == nil {
+	if idIf, err := h.userIdentifierCache.Get(id); err == nil {
 		sublog.Debug().Msg("cache hit")
 		return idIf.(*userIdentifiers)
 	}
@@ -846,7 +832,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, c gateway.GatewayAPICl
 	var ui *userIdentifiers
 
 	if isGroup {
-		res, err := c.GetGroup(ctx, &grouppb.GetGroupRequest{
+		res, err := client.GetGroup(ctx, &grouppb.GetGroupRequest{
 			GroupId: &grouppb.GroupId{
 				OpaqueId: id,
 			},
@@ -875,7 +861,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, c gateway.GatewayAPICl
 			Mail:        res.Group.Mail,
 		}
 	} else {
-		res, err := c.GetUser(ctx, &userpb.GetUserRequest{
+		res, err := client.GetUser(ctx, &userpb.GetUserRequest{
 			UserId: &userpb.UserId{
 				OpaqueId: id,
 			},
@@ -909,9 +895,9 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, c gateway.GatewayAPICl
 	return ui
 }
 
-func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s *conversions.ShareData) {
+func (h *Handler) mapUserIds(ctx context.Context, client gateway.GatewayAPIClient, s *conversions.ShareData) {
 	if s.UIDOwner != "" {
-		owner := h.mustGetIdentifiers(ctx, c, s.UIDOwner, false)
+		owner := h.mustGetIdentifiers(ctx, client, s.UIDOwner, false)
 		s.UIDOwner = owner.Username
 		if s.DisplaynameOwner == "" {
 			s.DisplaynameOwner = owner.DisplayName
@@ -922,7 +908,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 	}
 
 	if s.UIDFileOwner != "" {
-		fileOwner := h.mustGetIdentifiers(ctx, c, s.UIDFileOwner, false)
+		fileOwner := h.mustGetIdentifiers(ctx, client, s.UIDFileOwner, false)
 		s.UIDFileOwner = fileOwner.Username
 		if s.DisplaynameFileOwner == "" {
 			s.DisplaynameFileOwner = fileOwner.DisplayName
@@ -933,7 +919,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 	}
 
 	if s.ShareWith != "" && s.ShareWith != "***redacted***" {
-		shareWith := h.mustGetIdentifiers(ctx, c, s.ShareWith, s.ShareType == conversions.ShareTypeGroup)
+		shareWith := h.mustGetIdentifiers(ctx, client, s.ShareWith, s.ShareType == conversions.ShareTypeGroup)
 		s.ShareWith = shareWith.Username
 		if s.ShareWithDisplayname == "" {
 			s.ShareWithDisplayname = shareWith.DisplayName
@@ -945,13 +931,13 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 }
 
 func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentifiers) string {
-	b := bytes.Buffer{}
-	if err := h.additionalInfoTemplate.Execute(&b, u); err != nil {
+	var buf bytes.Buffer
+	if err := h.additionalInfoTemplate.Execute(&buf, u); err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Warn().Err(err).Msg("failed to parse additional info template")
 		return ""
 	}
-	return b.String()
+	return buf.String()
 }
 
 func (h *Handler) getResourceInfoByPath(ctx context.Context, client gateway.GatewayAPIClient, path string) (*provider.ResourceInfo, *rpc.Status, error) {
@@ -1005,6 +991,35 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	return pinfo, status, nil
 }
 
+func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) {
+	createShareResponse, err := client.CreateShare(ctx, req)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)
+		return
+	}
+	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
+		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create share request failed", err)
+		return
+	}
+	s, err := conversions.CS3Share2ShareData(ctx, createShareResponse.Share)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+		return
+	}
+	err = h.addFileInfo(ctx, s, info)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
+		return
+	}
+	h.mapUserIds(ctx, client, s)
+
+	response.WriteOCSSuccess(w, r, s)
+}
+
 func mapState(state collaboration.ShareState) int {
 	var mapped int
 	switch state {
@@ -1018,4 +1033,21 @@ func mapState(state collaboration.ShareState) int {
 		mapped = ocsStateUnknown
 	}
 	return mapped
+}
+
+func getStateFilter(s string) collaboration.ShareState {
+	var stateFilter collaboration.ShareState
+	switch s {
+	case "all":
+		stateFilter = ocsStateUnknown // no filter
+	case "0": // accepted
+		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED
+	case "1": // pending
+		stateFilter = collaboration.ShareState_SHARE_STATE_PENDING
+	case "2": // rejected
+		stateFilter = collaboration.ShareState_SHARE_STATE_REJECTED
+	default:
+		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED
+	}
+	return stateFilter
 }
