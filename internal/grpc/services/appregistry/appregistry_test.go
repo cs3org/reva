@@ -274,12 +274,12 @@ func TestNew(t *testing.T) {
 		{
 			name:    "not existing driver",
 			m:       map[string]interface{}{"Driver": "doesnotexist"},
-			wantErr: "driver not found: doesnotexist",
+			wantErr: "error: not found: driver not found: doesnotexist",
 		},
 		{
 			name:    "empty",
 			m:       map[string]interface{}{},
-			wantErr: "driver not found: ",
+			wantErr: "error: not found: driver not found: ",
 		},
 		{
 			name:    "extra not existing field in setting",
