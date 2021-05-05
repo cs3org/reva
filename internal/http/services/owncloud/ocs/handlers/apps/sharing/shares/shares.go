@@ -61,10 +61,10 @@ type Handler struct {
 	publicURL              string
 	sharePrefix            string
 	homeNamespace          string
-	resourceInfoCacheTTL   time.Duration
 	additionalInfoTemplate *template.Template
 	userIdentifierCache    *ttlcache.Cache
 	resourceInfoCache      gcache.Cache
+	resourceInfoCacheTTL   time.Duration
 }
 
 // we only cache the minimal set of data instead of the full user metadata
@@ -87,14 +87,13 @@ func (h *Handler) Init(c *config.Config) error {
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
-	h.resourceInfoCacheTTL = time.Duration(c.ResourceInfoCacheTTL)
+	h.resourceInfoCache = gcache.New(c.ResourceInfoCacheSize).LFU().Build()
+	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 
 	h.userIdentifierCache = ttlcache.NewCache()
-	_ = h.userIdentifierCache.SetTTL(60 * time.Second)
-
-	h.resourceInfoCache = gcache.New(c.ResourceInfoCacheSize).LFU().Build()
+	_ = h.userIdentifierCache.SetTTL(time.Second * 60)
 
 	if h.resourceInfoCacheTTL > 0 {
 		cwm, err := getCacheWarmupManager(c)
@@ -208,7 +207,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 	// get user permissions on the shared file
 
-	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -227,7 +226,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
-	statRes, err := c.Stat(ctx, &statReq)
+	statRes, err := client.Stat(ctx, &statReq)
 	if err != nil {
 		sublog.Debug().Err(err).Str("createShare", "shares").Msg("error on stat call")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
@@ -424,37 +423,17 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 		return
 	}
 
-	var info *provider.ResourceInfo
-	key := wrapResourceID(resourceID)
-	if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
-		logger.Debug().Msgf("cache hit for resource %+v", resourceID)
-		info = infoIf.(*provider.ResourceInfo)
-	} else {
-		// prepare the stat request
-		statReq := &provider.StatRequest{
-			// prepare the reference
-			Ref: &provider.Reference{
-				// using ResourceId from the share
-				Spec: &provider.Reference_Id{Id: resourceID},
-			},
-		}
+	info, status, err := h.getResourceInfoByID(ctx, client, resourceID)
+	if err != nil {
+		log.Error().Err(err).Msg("error mapping share data")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+		return
+	}
 
-		statResponse, err := client.Stat(ctx, statReq)
-		if err != nil {
-			log.Error().Err(err).Msg("error mapping share data")
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-			return
-		}
-
-		if statResponse.Status.Code != rpc.Code_CODE_OK {
-			log.Error().Err(err).Str("status", statResponse.Status.Code.String()).Msg("error mapping share data")
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-			return
-		}
-		info = statResponse.Info
-		if h.resourceInfoCacheTTL > 0 {
-			_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
-		}
+	if status.Code != rpc.Code_CODE_OK {
+		log.Error().Err(err).Str("status", status.Code.String()).Msg("error mapping share data")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+		return
 	}
 
 	err = h.addFileInfo(ctx, share, info)
@@ -487,7 +466,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	uClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -510,7 +489,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 			},
 		},
 	}
-	uRes, err := uClient.UpdateShare(ctx, uReq)
+	uRes, err := client.UpdateShare(ctx, uReq)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc update share request", err)
 		return
@@ -534,7 +513,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 			},
 		},
 	}
-	gRes, err := uClient.GetShare(ctx, gReq)
+	gRes, err := client.GetShare(ctx, gReq)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get share request", err)
 		return
@@ -563,7 +542,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		},
 	}
 
-	statRes, err := uClient.Stat(r.Context(), &statReq)
+	statRes, err := client.Stat(r.Context(), &statReq)
 	if err != nil {
 		log.Debug().Err(err).Str("shares", "update user share").Msg("error during stat")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
@@ -585,7 +564,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
 		return
 	}
-	h.mapUserIds(ctx, uClient, share)
+	h.mapUserIds(ctx, client, share)
 
 	response.WriteOCSSuccess(w, r, share)
 }
@@ -601,10 +580,12 @@ func (h *Handler) isListSharesWithMe(w http.ResponseWriter, r *http.Request) (li
 	return
 }
 
-const ocsStateUnknown = -1
-const ocsStateAccepted = 0
-const ocsStatePending = 1
-const ocsStateRejected = 2
+const (
+	ocsStateUnknown  = -1
+	ocsStateAccepted = 0
+	ocsStatePending  = 1
+	ocsStateRejected = 2
+)
 
 func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
@@ -622,14 +603,13 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED
 	}
 
-	gwc, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
 	}
 
 	ctx := r.Context()
-	logger := appctx.GetLogger(ctx)
 
 	var pinfo *provider.ResourceInfo
 	p := r.URL.Query().Get("path")
@@ -638,46 +618,26 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
 		target := path.Join(h.homeNamespace, r.FormValue("path"))
 
-		if infoIf, err := h.resourceInfoCache.Get(target); h.resourceInfoCacheTTL > 0 && err == nil {
-			logger.Debug().Msgf("cache hit for resource %+v", target)
-			pinfo = infoIf.(*provider.ResourceInfo)
-		} else {
-			statReq := &provider.StatRequest{
-				Ref: &provider.Reference{
-					Spec: &provider.Reference_Path{
-						Path: target,
-					},
-				},
+		var status *rpc.Status
+		pinfo, status, err = h.getResourceInfoByPath(ctx, client, target)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
+			return
+		}
+		if status.Code != rpc.Code_CODE_OK {
+			switch status.Code {
+			case rpc.Code_CODE_NOT_FOUND:
+				response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "path not found", nil)
+			case rpc.Code_CODE_PERMISSION_DENIED:
+				response.WriteOCSError(w, r, response.MetaUnauthorized.StatusCode, "permission denied", nil)
+			default:
+				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", nil)
 			}
-
-			statRes, err := gwc.Stat(ctx, statReq)
-			if err != nil {
-				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
-				return
-			}
-
-			if statRes.Status.Code != rpc.Code_CODE_OK {
-				switch statRes.Status.Code {
-				case rpc.Code_CODE_NOT_FOUND:
-					response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "path not found", nil)
-				case rpc.Code_CODE_PERMISSION_DENIED:
-					response.WriteOCSError(w, r, response.MetaUnauthorized.StatusCode, "permission denied", nil)
-				default:
-					response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", nil)
-				}
-				return
-			}
-
-			pinfo = statRes.GetInfo()
-			if h.resourceInfoCacheTTL > 0 {
-				_ = h.resourceInfoCache.SetWithExpire(target, pinfo, time.Second*h.resourceInfoCacheTTL)
-			}
+			return
 		}
 	}
 
-	lrsReq := collaboration.ListReceivedSharesRequest{}
-
-	lrsRes, err := gwc.ListReceivedShares(r.Context(), &lrsReq)
+	lrsRes, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc ListReceivedShares request", err)
 		return
@@ -691,17 +651,15 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc ListReceivedShares request failed", err)
 		return
 	}
-	lrsRes.GetShares()
 
-	shares := make([]*conversions.ShareData, 0)
+	shares := make([]*conversions.ShareData, 0, len(lrsRes.GetShares()))
 
-	var info *provider.ResourceInfo
 	// TODO(refs) filter out "invalid" shares
 	for _, rs := range lrsRes.GetShares() {
-
 		if stateFilter != ocsStateUnknown && rs.GetState() != stateFilter {
 			continue
 		}
+		var info *provider.ResourceInfo
 		if pinfo != nil {
 			// check if the shared resource matches the path resource
 			if rs.Share.ResourceId.StorageId != pinfo.GetId().StorageId ||
@@ -712,30 +670,11 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// we can reuse the stat info
 			info = pinfo
 		} else {
-			key := wrapResourceID(rs.Share.ResourceId)
-			if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
-				logger.Debug().Msgf("cache hit for resource %+v", rs.Share.ResourceId)
-				info = infoIf.(*provider.ResourceInfo)
-			} else {
-				// we need to do a stat call
-				statRequest := provider.StatRequest{
-					Ref: &provider.Reference{
-						Spec: &provider.Reference_Id{
-							Id: rs.Share.ResourceId,
-						},
-					},
-				}
-
-				statRes, err := gwc.Stat(r.Context(), &statRequest)
-				if err != nil || statRes.Status.Code != rpc.Code_CODE_OK {
-					h.logProblems(statRes.GetStatus(), err, "could not stat, skipping")
-					continue
-				}
-
-				info = statRes.GetInfo()
-				if h.resourceInfoCacheTTL > 0 {
-					_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
-				}
+			var status *rpc.Status
+			info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+			if err != nil || status.Code != rpc.Code_CODE_OK {
+				h.logProblems(status, err, "could not stat, skipping")
+				continue
 			}
 		}
 
@@ -760,7 +699,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			log.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
 			continue
 		}
-		h.mapUserIds(r.Context(), gwc, data)
+		h.mapUserIds(r.Context(), client, data)
 
 		if data.State == ocsStateAccepted {
 			// Needed because received shares can be jailed in a folder in the users home
@@ -836,48 +775,30 @@ func (h *Handler) logProblems(s *rpc.Status, e error, msg string) {
 func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.ListSharesRequest_Filter, []*link.ListPublicSharesRequest_Filter, error) {
 	collaborationFilters := []*collaboration.ListSharesRequest_Filter{}
 	linkFilters := []*link.ListPublicSharesRequest_Filter{}
-	var info *provider.ResourceInfo
 	ctx := r.Context()
 
 	// first check if the file exists
-	gwClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return nil, nil, err
 	}
 
 	target := path.Join(prefix, r.FormValue("path"))
-	if infoIf, err := h.resourceInfoCache.Get(target); h.resourceInfoCacheTTL > 0 && err == nil {
-		info = infoIf.(*provider.ResourceInfo)
-	} else {
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: target,
-				},
-			},
-		}
+	info, status, err := h.getResourceInfoByPath(ctx, client, target)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
+		return nil, nil, err
+	}
 
-		res, err := gwClient.Stat(ctx, statReq)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
+	if status.Code != rpc.Code_CODE_OK {
+		err = errors.New(status.Message)
+		if status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", err)
 			return nil, nil, err
 		}
-
-		if res.Status.Code != rpc.Code_CODE_OK {
-			err = errors.New(res.Status.Message)
-			if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-				response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", err)
-				return nil, nil, err
-			}
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", err)
-			return nil, nil, err
-		}
-
-		info = res.Info
-		if h.resourceInfoCacheTTL > 0 {
-			_ = h.resourceInfoCache.SetWithExpire(target, info, time.Second*h.resourceInfoCacheTTL)
-		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", err)
+		return nil, nil, err
 	}
 
 	collaborationFilters = append(collaborationFilters, &collaboration.ListSharesRequest_Filter{
@@ -1065,4 +986,55 @@ func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentif
 		return ""
 	}
 	return b.String()
+}
+
+func (h *Handler) getResourceInfoByPath(ctx context.Context, client gateway.GatewayAPIClient, path string) (*provider.ResourceInfo, *rpc.Status, error) {
+	return h.getResourceInfo(ctx, client, path, &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: path,
+		},
+	})
+}
+
+func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
+	return h.getResourceInfo(ctx, client, wrapResourceID(id), &provider.Reference{
+		Spec: &provider.Reference_Id{
+			Id: id,
+		},
+	})
+}
+
+// getResourceInfo retrieves the resource info to a target.
+// This method utilizes caching if it is enabled.
+func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPIClient, key string, ref *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
+	logger := appctx.GetLogger(ctx)
+
+	var pinfo *provider.ResourceInfo
+	var status *rpc.Status
+	if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
+		logger.Debug().Msgf("cache hit for resource %+v", key)
+		pinfo = infoIf.(*provider.ResourceInfo)
+		status = &rpc.Status{Code: rpc.Code_CODE_OK}
+	} else {
+		statReq := &provider.StatRequest{
+			Ref: ref,
+		}
+
+		statRes, err := client.Stat(ctx, statReq)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			return nil, statRes.Status, nil
+		}
+
+		pinfo = statRes.GetInfo()
+		status = statRes.Status
+		if h.resourceInfoCacheTTL > 0 {
+			_ = h.resourceInfoCache.SetWithExpire(key, pinfo, h.resourceInfoCacheTTL)
+		}
+	}
+
+	return pinfo, status, nil
 }
