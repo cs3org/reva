@@ -470,7 +470,21 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	// TODO check filters
 
-	// for now list all user homes
+	// for, now list all user homes
+	// TODO make a dedicated /spaces subfolder in the storage root, next to /nodes, /blobs and /trash
+	// it should follow /spaces/<type>/<spaceid> -> ../../nodes/<nodeid> and point to the root node of the space
+	// needs a migration step that checks if the /spaces folder exists, if not
+	// - it iterates over the /nodes/root folder to create /spaces/personal/<spaceid> symlinks
+	// - it iterates over all /nodes/<uuid> entries to create /spaces/shares/<spaceid> symlinks
+	//  - should be good enough to iterate over the /nodes/<uuid> entries, because the ext attrs should indicate personal spaces or share spaces
+	// when the space symlink is broken delete the space? yes
+	// read permissions are deduced from the node?
+	// the spaceid can be the nodeid
+
+	// this actually requires us to move all user homes into a subfolder of /nodes/root,
+	// e.g. /nodes/root/<space type> otherwise storage space names might collide even though they are of different types
+	// /nodes/root/personal/foo and /nodes/root/shares/foo might be two very different spaces, a /nodes/root/foo is not expressive enough
+	// we would not need /nodes/root if access always happened via spaceid+relative path
 
 	// 1. how many subdirs are in the user layout?
 	parts := strings.Split(fs.o.UserLayout, "/")
