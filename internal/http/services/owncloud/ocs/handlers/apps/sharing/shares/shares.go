@@ -97,8 +97,10 @@ func (h *Handler) Init(c *config.Config) error {
 	h.resourceInfoCache = gcache.New(c.ResourceInfoCacheSize).LFU().Build()
 
 	if h.resourceInfoCacheTTL > 0 {
-		cwm, _ := getCacheWarmupManager(c)
-		go h.startCacheWarmup(cwm)
+		cwm, err := getCacheWarmupManager(c)
+		if err == nil {
+			go h.startCacheWarmup(cwm)
+		}
 	}
 
 	return nil
