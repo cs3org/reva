@@ -125,7 +125,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	permOpaque, ok := req.Protocol.Opaque.Map["permissions"]
 	if !ok {
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, errtypes.NotFound("resource permissions not set"), ""),
+			Status: status.NewInternal(ctx, errtypes.BadRequest("resource permissions not set"), ""),
 		}, nil
 	}
 	switch permOpaque.Decoder {
@@ -147,7 +147,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	tokenOpaque, ok := req.Protocol.Opaque.Map["token"]
 	if !ok {
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, errtypes.NotFound("token not set"), ""),
+			Status: status.NewInternal(ctx, errtypes.PermissionDenied("token not set"), ""),
 		}, nil
 	}
 	switch tokenOpaque.Decoder {

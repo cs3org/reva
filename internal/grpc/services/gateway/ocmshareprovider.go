@@ -304,7 +304,7 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 	case "plain":
 		token = string(tokenOpaque.Value)
 	default:
-		err := errtypes.NotFound("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
+		err := errtypes.NotSupported("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
 		return status.NewInternal(ctx, err, "invalid opaque entry decoder"), nil
 	}
 

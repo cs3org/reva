@@ -106,7 +106,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	if req.Opaque == nil {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, errtypes.NotFound("can't find resource permissions"), ""),
+			Status: status.NewInternal(ctx, errtypes.BadRequest("can't find resource permissions"), ""),
 		}, nil
 	}
 
@@ -114,7 +114,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	permOpaque, ok := req.Opaque.Map["permissions"]
 	if !ok {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, errtypes.NotFound("resource permissions not set"), ""),
+			Status: status.NewInternal(ctx, errtypes.BadRequest("resource permissions not set"), ""),
 		}, nil
 	}
 	switch permOpaque.Decoder {
@@ -131,7 +131,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	nameOpaque, ok := req.Opaque.Map["name"]
 	if !ok {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, errtypes.NotFound("resource name not set"), ""),
+			Status: status.NewInternal(ctx, errtypes.BadRequest("resource name not set"), ""),
 		}, nil
 	}
 	switch nameOpaque.Decoder {

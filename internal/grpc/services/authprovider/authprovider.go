@@ -66,7 +66,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.Manager, error) {
 	if manager == "" {
-		return nil, errtypes.NotFound("authsvc: driver not configured for auth manager")
+		return nil, errtypes.InternalError("authsvc: driver not configured for auth manager")
 	}
 	if f, ok := registry.NewFuncs[manager]; ok {
 		return f(m[manager])

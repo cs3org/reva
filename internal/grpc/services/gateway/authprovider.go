@@ -191,5 +191,5 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.P
 		return nil, errtypes.NotFound("gateway: auth provider not found for type:" + authType)
 	}
 
-	return nil, errtypes.NotFound("gateway: error finding an auth provider for type: " + authType)
+	return nil, errtypes.InternalError("gateway: error finding an auth provider for type: " + authType)
 }

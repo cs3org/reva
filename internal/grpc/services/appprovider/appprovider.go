@@ -132,7 +132,7 @@ func (s *service) getWopiAppEndpoints(ctx context.Context) (map[string]interface
 	}
 	defer appsRes.Body.Close()
 	if appsRes.StatusCode != http.StatusOK {
-		return nil, errtypes.PermissionDenied(fmt.Sprintf("Request to WOPI server returned %d", appsRes.StatusCode))
+		return nil, errtypes.InternalError(fmt.Sprintf("Request to WOPI server returned %d", appsRes.StatusCode))
 	}
 	appsBody, err := ioutil.ReadAll(appsRes.Body)
 	if err != nil {
@@ -264,7 +264,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 		}
 		defer bridgeRes.Body.Close()
 		if bridgeRes.StatusCode != http.StatusFound {
-			return nil, errtypes.PermissionDenied(fmt.Sprintf("Request to WOPI bridge returned %d", bridgeRes.StatusCode))
+			return nil, errtypes.InternalError(fmt.Sprintf("Request to WOPI bridge returned %d", bridgeRes.StatusCode))
 		}
 		appProviderURL = bridgeRes.Header.Get("Location")
 	}

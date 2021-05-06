@@ -116,7 +116,7 @@ func parseXSTypes(xsTypes map[string]uint32) ([]*provider.ResourceChecksumPriori
 	for xs, prio := range xsTypes {
 		t := PKG2GRPCXS(xs)
 		if t == provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
-			return nil, errtypes.NotFound("checksum type is invalid: " + xs)
+			return nil, errtypes.BadRequest("checksum type is invalid: " + xs)
 		}
 		xsPrio := &provider.ResourceChecksumPriority{
 			Priority: prio,
@@ -299,7 +299,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	}
 	if newRef.GetPath() == "/" {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, errtypes.InternalError("can't upload to mount path"), "can't upload to mount path"),
+			Status: status.NewInternal(ctx, errtypes.BadRequest("can't upload to mount path"), "can't upload to mount path"),
 		}, nil
 	}
 
@@ -486,7 +486,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	}
 	if newRef.GetPath() == "/" {
 		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, errtypes.InternalError("can't delete mount path"), "can't delete mount path"),
+			Status: status.NewInternal(ctx, errtypes.BadRequest("can't delete mount path"), "can't delete mount path"),
 		}, nil
 	}
 
