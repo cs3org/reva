@@ -72,6 +72,9 @@ func (h *DavHandler) init(c *Config) error {
 	h.TrashbinHandler = new(TrashbinHandler)
 
 	h.SpacesHandler = new(SpacesHandler)
+	if err := h.SpacesHandler.init(c); err != nil {
+		return err
+	}
 
 	h.PublicFolderHandler = new(WebDavHandler)
 	if err := h.PublicFolderHandler.init("public", true); err != nil { // jail public file requests to /public/ prefix

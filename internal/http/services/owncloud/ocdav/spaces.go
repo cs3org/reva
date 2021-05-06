@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"net/http"
+	"path/filepath"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -119,8 +120,9 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 			}
 		}
 	}
-	req := &storageProvider.ListStorageSpacesRequest{
 
+	// retrieve a specific storage space
+	lSSReq := &storageProvider.ListStorageSpacesRequest{
 		Filters: []*storageProvider.ListStorageSpacesRequest_Filter{
 			{
 				Type: storageProvider.ListStorageSpacesRequest_Filter_TYPE_ID,
@@ -133,13 +135,43 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		},
 	}
 
+	lSSRes, err := gatewayClient.ListStorageSpaces(ctx, lSSReq)
+	if err != nil {
+		sublog.Error().Err(err).Interface("req", lSSReq).Msg("error sending a grpc stat request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if lSSRes.Status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, lSSRes.Status)
+		return
+	}
+
+	if len(lSSRes.StorageSpaces) != 1 {
+		sublog.Error().Err(err).Interface("req", lSSReq).Msg("unexpected number of spaces")
+		return
+	}
+	space := lSSRes.StorageSpaces[0]
+
 	// TODO:
 	// Use ResourceId to make request to the actual storage provider via the gateway.
 	// - Copy  the storageId from the storage space root
 	// - set the opaque Id to /storageSpaceId/relativePath in
 	// Correct fix would be to add a new Reference to the CS3API
+	ref := &storageProvider.Reference{
+		Spec: &storageProvider.Reference_Id{
+			Id: &storageProvider.ResourceId{
+				StorageId: space.Root.StorageId,
+				OpaqueId:  filepath.Join("/", spaceId, path), // FIXME this is a hack to pass storage space id and a relative path to the storage provider
+			},
+		},
+	}
 
-	res, err := gatewayClient.ListStorageSpaces(ctx, req)
+	req := &storageProvider.StatRequest{
+		Ref:                   ref,
+		ArbitraryMetadataKeys: metadataKeys,
+	}
+	res, err := gatewayClient.Stat(ctx, req)
 	if err != nil {
 		sublog.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -158,7 +190,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 			Ref:                   ref,
 			ArbitraryMetadataKeys: metadataKeys,
 		}
-		res, err := client.ListContainer(ctx, req)
+		res, err := gatewayClient.ListContainer(ctx, req)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error sending list container grpc request")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -184,7 +216,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 				Ref:                   ref,
 				ArbitraryMetadataKeys: metadataKeys,
 			}
-			res, err := client.ListContainer(ctx, req)
+			res, err := gatewayClient.ListContainer(ctx, req)
 			if err != nil {
 				sublog.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -216,7 +248,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		}
 	}
 
-	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)
+	propRes, err := s.formatPropfind(ctx, &pf, infos, spaceId)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

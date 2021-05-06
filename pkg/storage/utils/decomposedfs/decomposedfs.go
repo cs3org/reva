@@ -24,6 +24,7 @@ package decomposedfs
 import (
 	"context"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -486,30 +487,20 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// /nodes/root/personal/foo and /nodes/root/shares/foo might be two very different spaces, a /nodes/root/foo is not expressive enough
 	// we would not need /nodes/root if access always happened via spaceid+relative path
 
-	// 1. how many subdirs are in the user layout?
-	parts := strings.Split(fs.o.UserLayout, "/")
-
-	var sb strings.Builder
-	sb.WriteString("*")
-	for i := 1; i < len(parts); i++ {
-		sb.WriteString("/*")
-	}
-
-	// fs.o.Root + layout(eg e/einstein)
-	// /var/lib/ocis/storage/users/nodes/root/e/einstein
-	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "nodes", "root", sb.String()))
+	// /var/lib/ocis/storage/users/spaces/personal/nodeid
+	// /var/lib/ocis/storage/users/spaces/shared/nodeid
+	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces/*/*"))
 	if err != nil {
 		return nil, err
 	}
 
 	var spaces []*provider.StorageSpace
 	for i := range matches {
-		// use Stat to fetch metadata
+		// always read link in case storage space id != node id
 		if target, err := os.Readlink(matches[i]); err != nil {
 			// TODO log error
 			continue
 		} else {
-			// fi.Name() should be the node id
 			n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
 			if err != nil {
 				continue
@@ -518,19 +509,20 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			if err != nil {
 				continue
 			}
+
+			// TODO continue if not owner or share grantee, depending on filter?
+
 			space := &provider.StorageSpace{
 				Id: &provider.StorageSpaceId{OpaqueId: n.ID}, // FIXME Id should just be a string
 				Owner: &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
 					Id: owner,
 				},
-				Root: &provider.ResourceId{OpaqueId: n.ID},
+				Root: &provider.ResourceId{
+					StorageId: "1284d238-aa92-42ce-bdc4-0b0000009157", // FIXME storage provider id needs to be returned so the gateway can route
+					OpaqueId:  n.ID,
+				},
 				//Name: // TODO read from extended attribute
-				//Quota: // TODO use decompesodfs to read quota
-				//Quota: &provider.Quota{
-				//	QuotaMaxBytes: 0,
-				//	QuotaMaxFiles: 0,
-				//},
-				SpaceType: "personal",
+				SpaceType: filepath.Base(filepath.Dir(matches[i])),
 				// Mtime is set either as node.tmtime or as fi.mtime below
 			}
 			// override the stat mtime with a tmtime if it is present
@@ -540,13 +532,38 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 					Seconds: uint64(un / 1000000000),
 					Nanos:   uint32(un % 1000000000),
 				}
-				//} else {
-				//un := TODO stat node
-				//space.Mtime = &types.Timestamp{
-				//	Seconds: uint64(un / 1000000000),
-				//	Nanos:   uint32(un % 1000000000),
-				//}
+			} else {
+				// fall back to stat mtime
+				if fi, err := os.Stat(matches[i]); err == nil {
+					un := fi.ModTime().UnixNano()
+					space.Mtime = &types.Timestamp{
+						Seconds: uint64(un / 1000000000),
+						Nanos:   uint32(un % 1000000000),
+					}
+				}
 			}
+
+			// quota
+			v, err := xattr.Get(matches[i], xattrs.QuotaAttr)
+			switch {
+			case err == nil:
+				// make sure we have a proper signed int
+				// we use the same magic numbers to indicate:
+				// -1 = uncalculated
+				// -2 = unknown
+				// -3 = unlimited
+				if quota, err := strconv.ParseInt(string(v), 10, 64); err == nil {
+					if quota >= 0 {
+						space.Quota = &provider.Quota{
+							QuotaMaxBytes: uint64(quota),
+							QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
+						}
+					}
+				} else {
+					appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", matches[i]).Msg("could not read quota")
+				}
+			}
+
 			spaces = append(spaces, space)
 		}
 	}
