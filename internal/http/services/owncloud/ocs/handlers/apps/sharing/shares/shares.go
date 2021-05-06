@@ -665,6 +665,29 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// in a jailed namespace we have to point to the mount point in the users /Shares jail
+	// to do that we have to list the /Shares jail and use those paths instead of stating the shared resources
+	// The stat results would start with a path outside the jail and thus be inaccessible
+
+	var shareJailInfos []*provider.ResourceInfo
+
+	if h.sharePrefix != "/" {
+		// we only need the path from the share jail for accepted shares
+		if stateFilter == collaboration.ShareState_SHARE_STATE_ACCEPTED || stateFilter == ocsStateUnknown {
+			// only log errors. They may happen but we can continue trying to at least list the shares
+			lcRes, err := gwc.ListContainer(ctx, &provider.ListContainerRequest{
+				Ref: &provider.Reference{
+					Spec: &provider.Reference_Path{Path: path.Join(h.homeNamespace, h.sharePrefix)},
+				},
+			})
+			if err != nil || lcRes.Status.Code != rpc.Code_CODE_OK {
+				h.logProblems(lcRes.GetStatus(), err, "could not list container, continuing without share jail path info")
+			} else {
+				shareJailInfos = lcRes.Infos
+			}
+		}
+	}
+
 	shares := make([]*conversions.ShareData, 0)
 
 	var info *provider.ResourceInfo
@@ -717,27 +740,52 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		switch rs.GetState() {
-		case collaboration.ShareState_SHARE_STATE_PENDING:
-			data.State = ocsStatePending
-		case collaboration.ShareState_SHARE_STATE_ACCEPTED:
-			data.State = ocsStateAccepted
-		case collaboration.ShareState_SHARE_STATE_REJECTED:
-			data.State = ocsStateRejected
-		default:
-			data.State = ocsStateUnknown
-		}
-
 		if err := h.addFileInfo(ctx, data, info); err != nil {
 			log.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
 			continue
 		}
 		h.mapUserIds(r.Context(), gwc, data)
 
-		if data.State == ocsStateAccepted {
+		switch rs.GetState() {
+		case collaboration.ShareState_SHARE_STATE_PENDING:
+			data.State = ocsStatePending
+		case collaboration.ShareState_SHARE_STATE_ACCEPTED:
+			data.State = ocsStateAccepted
+			// only accepted shares can be accessed when jailing users into their home.
+			// in this case we cannot stat shared resources that are outside the users home (/home),
+			// the path (/users/u-u-i-d/foo) will not be accessible
+
+			// in a global namespace we can access the share using the full path
+			// in a jailed namespace we have to point to the mount point in the users /Shares jail
+			// - needed for oc10 hot migration
+			// or use the /dav/spaces/<space id> endpoint?
+
+			// list /Shares and match fileids with list of received shares
+			// - only works for a /Shares folder jail
+			// - does not work for freely mountable shares as in oc10 because we would need to iterate over the whole tree, there is no listing of mountpoints, yet
+
+			// can we return the mountpoint when the gateway resolves the listing of shares?
+			// - no, the gateway only sees the same list any has the same options as the ocs service
+			// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration migration
+
+			// best we can do for now is stat the /Shares jail if it is set and return those paths
+
+			// if we are in a jail and the current share has been accepted use the stat from the share jail
 			// Needed because received shares can be jailed in a folder in the users home
-			data.FileTarget = path.Join(h.sharePrefix, info.Path)
-			data.Path = path.Join(h.sharePrefix, info.Path)
+
+			// if we have share jail infos use them to build the path
+			if sji := findMatch(shareJailInfos, rs.Share.ResourceId); sji != nil {
+				// override path with info from share jail
+				data.FileTarget = path.Join(h.sharePrefix, path.Base(sji.Path))
+				data.Path = path.Join(h.sharePrefix, path.Base(sji.Path))
+			} else {
+				data.FileTarget = info.Path
+				data.Path = info.Path
+			}
+		case collaboration.ShareState_SHARE_STATE_REJECTED:
+			data.State = ocsStateRejected
+		default:
+			data.State = ocsStateUnknown
 		}
 
 		shares = append(shares, data)
@@ -745,6 +793,15 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
+}
+
+func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId) *provider.ResourceInfo {
+	for i := range shareJailInfos {
+		if shareJailInfos[i].Id != nil && shareJailInfos[i].Id.StorageId == id.StorageId && shareJailInfos[i].Id.OpaqueId == id.OpaqueId {
+			return shareJailInfos[i]
+		}
+	}
+	return nil
 }
 
 func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
