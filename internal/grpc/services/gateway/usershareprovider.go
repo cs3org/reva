@@ -196,23 +196,9 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 
 	if s.c.CommitShareToStorageGrant {
-		getShareReq := &collaboration.GetShareRequest{
-			Ref: req.Ref,
-		}
-		getShareRes, err := c.GetShare(ctx, getShareReq)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error calling GetShare")
-		}
-
-		if getShareRes.Status.Code != rpc.Code_CODE_OK {
-			return &collaboration.UpdateShareResponse{
-				Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
-					"error getting share when committing to the share"),
-			}, nil
-		}
-		updateGrantStatus, err := s.updateGrant(ctx, getShareRes.GetShare().GetResourceId(),
-			getShareRes.GetShare().GetGrantee(),
-			getShareRes.GetShare().GetPermissions().GetPermissions())
+		updateGrantStatus, err := s.updateGrant(ctx, res.GetShare().GetResourceId(),
+			res.GetShare().GetGrantee(),
+			res.GetShare().GetPermissions().GetPermissions())
 
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error calling updateGrant")
@@ -221,6 +207,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		if updateGrantStatus.Code != rpc.Code_CODE_OK {
 			return &collaboration.UpdateShareResponse{
 				Status: updateGrantStatus,
+				Share:  res.Share,
 			}, nil
 		}
 	}
@@ -309,33 +296,14 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 	// share display name and storage filename.
 	if req.Field.GetState() != collaboration.ShareState_SHARE_STATE_INVALID {
 		if req.Field.GetState() == collaboration.ShareState_SHARE_STATE_ACCEPTED {
-			getShareReq := &collaboration.GetReceivedShareRequest{Ref: req.Ref}
-			getShareRes, err := s.GetReceivedShare(ctx, getShareReq)
-			if err != nil {
-				log.Err(err).Msg("gateway: error calling GetReceivedShare")
-				return &collaboration.UpdateReceivedShareResponse{
-					Status: &rpc.Status{
-						Code: rpc.Code_CODE_INTERNAL,
-					},
-				}, nil
-			}
-
-			if getShareRes.Status.Code != rpc.Code_CODE_OK {
-				log.Error().Msg("gateway: error calling GetReceivedShare")
-				return &collaboration.UpdateReceivedShareResponse{
-					Status: &rpc.Status{
-						Code: rpc.Code_CODE_INTERNAL,
-					},
-				}, nil
-			}
-
-			share := getShareRes.Share
+			share := res.Share
 			if share == nil {
 				panic("gateway: error updating a received share: the share is nil")
 			}
 			createRefStatus, err := s.createReference(ctx, share.Share.ResourceId)
 			return &collaboration.UpdateReceivedShareResponse{
 				Status: createRefStatus,
+				Share:  share,
 			}, err
 		} else if req.Field.GetState() == collaboration.ShareState_SHARE_STATE_REJECTED {
 			// Nothing more to do, return the original result

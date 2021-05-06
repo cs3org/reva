@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -273,4 +274,9 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 		Status:         status.NewOK(ctx),
 		AppProviderUrl: appProviderURL,
 	}, nil
+}
+
+func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
+
+	return nil, errors.New("openInApp not implemented")
 }

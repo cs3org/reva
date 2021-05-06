@@ -478,31 +478,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	gReq := &collaboration.GetShareRequest{
-		Ref: &collaboration.ShareReference{
-			Spec: &collaboration.ShareReference_Id{
-				Id: &collaboration.ShareId{
-					OpaqueId: shareID,
-				},
-			},
-		},
-	}
-	gRes, err := client.GetShare(ctx, gReq)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get share request", err)
-		return
-	}
-
-	if gRes.Status.Code != rpc.Code_CODE_OK {
-		if gRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return
-		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc get share request failed", err)
-		return
-	}
-
-	share, err := conversions.CS3Share2ShareData(ctx, gRes.Share)
+	share, err := conversions.CS3Share2ShareData(ctx, uRes.Share)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 		return
@@ -511,7 +487,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	statReq := provider.StatRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Id{
-				Id: gRes.Share.ResourceId,
+				Id: uRes.Share.ResourceId,
 			},
 		},
 	}
