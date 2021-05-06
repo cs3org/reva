@@ -80,24 +80,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 		return
 	}
 
-	getRes, err := client.GetReceivedShare(ctx, &collaboration.GetReceivedShareRequest{
-		Ref: ref,
-	})
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc get received share request failed", err)
-		return
-	}
-
-	if getRes.Status.Code != rpc.Code_CODE_OK {
-		if getRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return
-		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc get share request failed", errors.Errorf("code: %d, message: %s", getRes.Status.Code, getRes.Status.Message))
-		return
-	}
-
-	rs := getRes.Share
+	rs := shareRes.GetShare()
 
 	info, status, err := h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
 	if err != nil || status.Code != rpc.Code_CODE_OK {

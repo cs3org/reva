@@ -172,7 +172,7 @@ func (s *service) ListShares(ctx context.Context, req *collaboration.ListSharesR
 }
 
 func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
-	_, err := s.sm.UpdateShare(ctx, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
+	share, err := s.sm.UpdateShare(ctx, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating share"),
@@ -181,6 +181,7 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 
 	res := &collaboration.UpdateShareResponse{
 		Status: status.NewOK(ctx),
+		Share:  share,
 	}
 	return res, nil
 }
@@ -219,7 +220,7 @@ func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetRe
 }
 
 func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
-	_, err := s.sm.UpdateReceivedShare(ctx, req.Ref, req.Field) // TODO(labkode): check what to update
+	share, err := s.sm.UpdateReceivedShare(ctx, req.Ref, req.Field) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateReceivedShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating received share"),
@@ -228,6 +229,7 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 
 	res := &collaboration.UpdateReceivedShareResponse{
 		Status: status.NewOK(ctx),
+		Share:  share,
 	}
 	return res, nil
 }
