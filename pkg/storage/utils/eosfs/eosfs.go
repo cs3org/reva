@@ -1388,21 +1388,48 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		}
 	}
 
-	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	uid, _, err := fs.getUserUIDAndGID(ctx, u)
 	if err != nil {
 		return &provider.ResourcePermissions{
 			// no permissions
 		}
 	}
 
-	var perm string
+	var perm provider.ResourcePermissions
 	for _, e := range eosFileInfo.SysACL.Entries {
-		if e.Qualifier == uid || e.Qualifier == gid {
-			perm = e.Permissions
+		var userInGroup bool
+		for _, g := range u.Groups {
+			if e.Qualifier == g {
+				userInGroup = true
+			}
+		}
+		if e.Qualifier == uid || userInGroup {
+			mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions, eosFileInfo.IsDir))
 		}
 	}
 
-	return grants.GetGrantPermissionSet(perm, eosFileInfo.IsDir)
+	return &perm
+}
+
+func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermissions) {
+	l.AddGrant = l.AddGrant || r.AddGrant
+	l.CreateContainer = l.CreateContainer || r.CreateContainer
+	l.Delete = l.Delete || r.Delete
+	l.GetPath = l.GetPath || r.GetPath
+	l.GetQuota = l.GetQuota || r.GetQuota
+	l.InitiateFileDownload = l.InitiateFileDownload || r.InitiateFileDownload
+	l.InitiateFileUpload = l.InitiateFileUpload || r.InitiateFileUpload
+	l.ListContainer = l.ListContainer || r.ListContainer
+	l.ListFileVersions = l.ListFileVersions || r.ListFileVersions
+	l.ListGrants = l.ListGrants || r.ListGrants
+	l.ListRecycle = l.ListRecycle || r.ListRecycle
+	l.Move = l.Move || r.Move
+	l.PurgeRecycle = l.PurgeRecycle || r.PurgeRecycle
+	l.RemoveGrant = l.RemoveGrant || r.RemoveGrant
+	l.RestoreFileVersion = l.RestoreFileVersion || r.RestoreFileVersion
+	l.RestoreRecycleItem = l.RestoreRecycleItem || r.RestoreRecycleItem
+	l.Stat = l.Stat || r.Stat
+	l.UpdateGrant = l.UpdateGrant || r.UpdateGrant
 }
 
 func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo, virtualView bool) (*provider.ResourceInfo, error) {

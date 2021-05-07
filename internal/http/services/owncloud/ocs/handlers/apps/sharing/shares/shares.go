@@ -749,28 +749,40 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
+
 	filters := []*collaboration.ListSharesRequest_Filter{}
 	linkFilters := []*link.ListPublicSharesRequest_Filter{}
-	var err error
+	var e error
 
 	// shared with others
 	p := r.URL.Query().Get("path")
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		filters, linkFilters, err = h.addFilters(w, r, h.homeNamespace)
-		if err != nil {
+		filters, linkFilters, e = h.addFilters(w, r, h.homeNamespace)
+		if e != nil {
 			// result has been written as part of addFilters
 			return
 		}
 	}
 
-	userShares, status, err := h.listUserShares(r, filters)
-	h.logProblems(status, err, "could not listUserShares")
-
-	publicShares, status, err := h.listPublicShares(r, linkFilters)
-	h.logProblems(status, err, "could not listPublicShares")
-
-	shares = append(shares, append(userShares, publicShares...)...)
+	shareTypes := strings.Split(r.URL.Query().Get("share_types"), ",")
+	for _, s := range shareTypes {
+		shareType, err := strconv.Atoi(strings.TrimSpace(s))
+		if err != nil && s != "" {
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid share type", err)
+			return
+		}
+		if s == "" || shareType == int(conversions.ShareTypeUser) || shareType == int(conversions.ShareTypeGroup) {
+			userShares, status, err := h.listUserShares(r, filters)
+			h.logProblems(status, err, "could not listUserShares")
+			shares = append(shares, userShares...)
+		}
+		if s == "" || shareType == int(conversions.ShareTypePublicLink) {
+			publicShares, status, err := h.listPublicShares(r, linkFilters)
+			h.logProblems(status, err, "could not listPublicShares")
+			shares = append(shares, publicShares...)
+		}
+	}
 
 	response.WriteOCSSuccess(w, r, shares)
 }
