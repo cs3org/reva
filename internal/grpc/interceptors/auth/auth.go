@@ -20,7 +20,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
