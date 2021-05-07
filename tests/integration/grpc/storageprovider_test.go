@@ -29,6 +29,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
@@ -90,7 +91,9 @@ var _ = Describe("storage providers", func() {
 		// Add auth token
 		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
-		t, err := tokenManager.MintToken(ctx, user)
+		scope, err := scope.GetOwnerScope()
+		Expect(err).ToNot(HaveOccurred())
+		t, err := tokenManager.MintToken(ctx, user, scope)
 		Expect(err).ToNot(HaveOccurred())
 		ctx = token.ContextSetToken(ctx, t)
 		ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)

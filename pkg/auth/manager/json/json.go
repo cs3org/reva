@@ -23,10 +23,12 @@ import (
 	"encoding/json"
 	"io/ioutil"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -101,7 +103,12 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	return manager, nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, username string, secret string) (*user.User, error) {
+func (m *manager) Authenticate(ctx context.Context, username string, secret string) (*user.User, map[string]*authpb.Scope, error) {
+	scope, err := scope.GetOwnerScope()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	if c, ok := m.credentials[username]; ok {
 		if c.Secret == secret {
 			return &user.User{
@@ -113,8 +120,8 @@ func (m *manager) Authenticate(ctx context.Context, username string, secret stri
 				Groups:       c.Groups,
 				Opaque:       c.Opaque,
 				// TODO add arbitrary keys as opaque data
-			}, nil
+			}, scope, nil
 		}
 	}
-	return nil, errtypes.InvalidCredentials(username)
+	return nil, nil, errtypes.InvalidCredentials(username)
 }

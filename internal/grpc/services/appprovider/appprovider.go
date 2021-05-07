@@ -275,3 +275,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 		AppProviderUrl: appProviderURL,
 	}, nil
 }
+
+func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
+	return nil, errtypes.NotSupported("Unimplemented")
+}

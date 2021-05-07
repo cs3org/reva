@@ -16,29 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package demo
+package scope
 
-import (
-	"context"
-	"testing"
-)
+import authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 
-var ctx = context.Background()
-
-func TestUserManager(t *testing.T) {
-	// get manager
-	manager, _ := New(nil)
-
-	// Authenticate - positive test
-	_, _, err := manager.Authenticate(ctx, "einstein", "relativity")
-	if err != nil {
-		t.Fatalf("error while authenticate with correct credentials")
-	}
-
-	// Authenticate - negative test
-	_, _, err = manager.Authenticate(ctx, "einstein", "NotARealPassword")
-	if err == nil {
-		t.Fatalf("no error (but we expected one) while authenticate with bad credentials")
-	}
-
+func userScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+	// Always return true. Registered users can access all paths.
+	// TODO(ishank011): Add checks for read/write permissions.
+	return true, nil
 }

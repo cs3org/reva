@@ -23,15 +23,17 @@ import (
 	"strings"
 	"time"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -69,10 +71,10 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}, nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user.User, error) {
+func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user.User, map[string]*authpb.Scope, error) {
 	gwConn, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var auth *link.PublicShareAuthentication
@@ -93,7 +95,7 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 			Spec: &link.PublicShareAuthentication_Signature{
 				Signature: &link.ShareSignature{
 					Signature: sig,
-					SignatureExpiration: &typesv1beta1.Timestamp{
+					SignatureExpiration: &types.Timestamp{
 						Seconds: uint64(exp.UnixNano() / 1000000000),
 						Nanos:   uint32(exp.UnixNano() % 1000000000),
 					},
@@ -109,23 +111,49 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 	})
 	switch {
 	case err != nil:
-		return nil, err
+		return nil, nil, err
 	case publicShareResponse.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
-		return nil, errtypes.NotFound(publicShareResponse.Status.Message)
+		return nil, nil, errtypes.NotFound(publicShareResponse.Status.Message)
 	case publicShareResponse.Status.Code == rpcv1beta1.Code_CODE_PERMISSION_DENIED:
-		return nil, errtypes.InvalidCredentials(publicShareResponse.Status.Message)
+		return nil, nil, errtypes.InvalidCredentials(publicShareResponse.Status.Message)
 	case publicShareResponse.Status.Code != rpcv1beta1.Code_CODE_OK:
-		return nil, errtypes.InternalError(publicShareResponse.Status.Message)
+		return nil, nil, errtypes.InternalError(publicShareResponse.Status.Message)
 	}
 
 	getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{
 		UserId: publicShareResponse.GetShare().GetCreator(),
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return getUserResponse.GetUser(), nil
+	scope, err := m.getScope(ctx, publicShareResponse.GetShare())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return getUserResponse.GetUser(), scope, nil
+}
+
+func (m *manager) getScope(ctx context.Context, share *link.PublicShare) (map[string]*authpb.Scope, error) {
+	role := authpb.Role_ROLE_VIEWER
+	if share.Permissions.Permissions.InitiateFileUpload {
+		role = authpb.Role_ROLE_EDITOR
+	}
+
+	val, err := utils.MarshalProtoV1ToJSON(share)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]*authpb.Scope{
+		"publicshare": &authpb.Scope{
+			Resource: &types.OpaqueEntry{
+				Decoder: "json",
+				Value:   val,
+			},
+			Role: role,
+		},
+	}, nil
 }
 
 // ErrPasswordNotProvided is returned when the public share is password protected, but there was no password on the request

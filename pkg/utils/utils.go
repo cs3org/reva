@@ -110,6 +110,7 @@ func ResolvePath(path string) (string, error) {
 
 // RandString is a helper to create tokens.
 func RandString(n int) string {
+	rand.Seed(time.Now().UTC().UnixNano())
 	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	b := make([]rune, n)
 	for i := range b {
