@@ -20,7 +20,6 @@ package storageregistry
 
 import (
 	"context"
-	"fmt"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -97,7 +96,7 @@ func getRegistry(c *config) (storage.Registry, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
 func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.ListStorageProvidersRequest) (*registrypb.ListStorageProvidersResponse, error) {

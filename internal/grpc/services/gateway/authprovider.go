@@ -43,7 +43,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	// find auth provider
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
-		err = errors.New("gateway: error finding auth provider for type: " + req.Type)
+		err = errtypes.NotFound("gateway: error finding auth provider for type: " + req.Type)
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider client"),
 		}, nil
@@ -77,7 +77,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	// validate valid userId
 	if res.User == nil {
-		err := errors.New("gateway: user after Authenticate is nil")
+		err := errtypes.NotFound("gateway: user after Authenticate is nil")
 		log.Err(err).Msg("user is nil")
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "user is nil"),
@@ -86,7 +86,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	uid := res.User.Id
 	if uid == nil {
-		err := errors.New("gateway: uid after Authenticate is nil")
+		err := errtypes.NotFound("gateway: uid after Authenticate is nil")
 		log.Err(err).Msg("user id is nil")
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "user id is nil"),
@@ -191,5 +191,5 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.P
 		return nil, errtypes.NotFound("gateway: auth provider not found for type:" + authType)
 	}
 
-	return nil, errors.New("gateway: error finding an auth provider for type: " + authType)
+	return nil, errtypes.InternalError("gateway: error finding an auth provider for type: " + authType)
 }

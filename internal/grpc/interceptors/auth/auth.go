@@ -20,10 +20,10 @@ package auth
 
 import (
 	"context"
-	"fmt"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
@@ -67,7 +67,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, errors.New("auth: token manager does not exist: " + conf.TokenManager)
+		return nil, errtypes.NotFound("auth: token manager does not exist: " + conf.TokenManager)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
@@ -140,12 +140,12 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, fmt.Errorf("auth: token manager not found: %s", conf.TokenManager)
+		return nil, errtypes.NotFound("auth: token manager not found: " + conf.TokenManager)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
 	if err != nil {
-		return nil, errors.New("auth: token manager not found: " + conf.TokenManager)
+		return nil, errtypes.NotFound("auth: token manager not found: " + conf.TokenManager)
 	}
 
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {

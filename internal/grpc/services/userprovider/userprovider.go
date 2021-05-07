@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"
@@ -62,7 +63,7 @@ func getDriver(c *config) (user.Manager, error) {
 		return f(c.Drivers[c.Driver])
 	}
 
-	return nil, fmt.Errorf("driver %s not found for user manager", c.Driver)
+	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
 }
 
 // New returns a new UserProviderServiceServer.

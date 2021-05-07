@@ -24,13 +24,14 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
 	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
-		return nil, errors.New("gateway: can't create a public share of the share folder itself")
+		return nil, errtypes.AlreadyExists("gateway: can't create a public share of the share folder itself")
 	}
 
 	log := appctx.GetLogger(ctx)

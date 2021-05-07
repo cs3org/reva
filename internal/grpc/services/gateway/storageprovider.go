@@ -244,7 +244,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		}
 
 		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+			err := errtypes.BadRequest(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
 			log.Err(err).Msg("gateway: error stating share name")
 			return &gateway.InitiateFileDownloadResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error initiating download"),
@@ -456,7 +456,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 
 		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+			err := errtypes.BadRequest(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
 			log.Err(err).Msg("gateway: error stating share name")
 			return &gateway.InitiateFileUploadResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error initiating upload"),
@@ -1387,7 +1387,7 @@ func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provide
 	case "webdav":
 		return nil, "webdav", nil
 	default:
-		err := errors.New("gateway: no reference handler for scheme: " + uri.Scheme)
+		err := errtypes.BadRequest("gateway: no reference handler for scheme: " + uri.Scheme)
 		return nil, "", err
 	}
 }
@@ -1429,12 +1429,12 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 		case rpc.Code_CODE_UNIMPLEMENTED:
 			return nil, errtypes.NotSupported(req.Ref.String())
 		default:
-			return nil, errors.New("gateway: error stating target reference")
+			return nil, errtypes.InternalError("gateway: error stating target reference")
 		}
 	}
 
 	if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-		err := errors.New("gateway: error the target of a reference cannot be another reference")
+		err := errtypes.BadRequest("gateway: error the target of a reference cannot be another reference")
 		return nil, err
 	}
 
@@ -1903,7 +1903,7 @@ func (s *svc) getSharedFolder(ctx context.Context) string {
 
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return &provider.CreateSymlinkResponse{
-		Status: status.NewUnimplemented(ctx, errors.New("CreateSymlink not implemented"), "CreateSymlink not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateSymlink not implemented"), "CreateSymlink not implemented"),
 	}, nil
 }
 
@@ -1940,7 +1940,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 }
 
 func (s *svc) ListRecycleStream(_ *gateway.ListRecycleStreamRequest, _ gateway.GatewayAPI_ListRecycleStreamServer) error {
-	return errors.New("Unimplemented")
+	return errtypes.NotSupported("ListRecycleStream unimplemented")
 }
 
 // TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
@@ -2083,7 +2083,7 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	}
 
 	if res.Providers == nil {
-		return nil, errors.New("gateway: provider is nil")
+		return nil, errtypes.NotFound("gateway: provider is nil")
 	}
 
 	return res.Providers, nil

@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/demo"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -109,7 +110,7 @@ func getProvider(c *config) (app.Provider, error) {
 	case "demo":
 		return demo.New(c.Demo)
 	default:
-		return nil, fmt.Errorf("driver not found: %s", c.Driver)
+		return nil, errtypes.NotFound("driver not found: " + c.Driver)
 	}
 }
 
@@ -131,7 +132,7 @@ func (s *service) getWopiAppEndpoints(ctx context.Context) (map[string]interface
 	}
 	defer appsRes.Body.Close()
 	if appsRes.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Request to WOPI server returned %d", appsRes.StatusCode)
+		return nil, errtypes.InternalError(fmt.Sprintf("Request to WOPI server returned %d", appsRes.StatusCode))
 	}
 	appsBody, err := ioutil.ReadAll(appsRes.Body)
 	if err != nil {
@@ -263,7 +264,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 		}
 		defer bridgeRes.Body.Close()
 		if bridgeRes.StatusCode != http.StatusFound {
-			return nil, fmt.Errorf("Request to WOPI bridge returned %d", bridgeRes.StatusCode)
+			return nil, errtypes.InternalError(fmt.Sprintf("Request to WOPI bridge returned %d", bridgeRes.StatusCode))
 		}
 		appProviderURL = bridgeRes.Header.Get("Location")
 	}
