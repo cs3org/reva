@@ -160,7 +160,8 @@ type CapabilitiesFilesSharingPublicExpireDate struct {
 
 // CapabilitiesFilesSharingUser TODO document
 type CapabilitiesFilesSharingUser struct {
-	SendMail ocsBool `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
+	SendMail       ocsBool `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
+	ProfilePicture ocsBool `json:"profile_picture" xml:"profile_picture" mapstructure:"profile_picture"`
 }
 
 // CapabilitiesFilesSharingUserEnumeration TODO document
