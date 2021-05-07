@@ -83,7 +83,7 @@ func New(m map[string]interface{}) (cache.Warmup, error) {
 }
 
 func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
-	query := "select coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source WHERE (orphan = 0 or orphan IS NULL)"
+	query := "select coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source FROM oc_share WHERE (orphan = 0 or orphan IS NULL)"
 	rows, err := m.db.Query(query)
 	if err != nil {
 		return nil, err
