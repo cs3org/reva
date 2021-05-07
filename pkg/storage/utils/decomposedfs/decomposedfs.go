@@ -487,44 +487,93 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// /nodes/root/personal/foo and /nodes/root/shares/foo might be two very different spaces, a /nodes/root/foo is not expressive enough
 	// we would not need /nodes/root if access always happened via spaceid+relative path
 
+	spaceType := "*"
+	spaceId := "*"
+
+	for i := range filter {
+		switch filter[i].Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			spaceType = filter[i].GetSpaceType()
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			//spaceId = filter[i].GetId().OpaqueId // TODO requests needs to contain the driveid ... currently it is the storage id
+		}
+	}
+
 	// /var/lib/ocis/storage/users/spaces/personal/nodeid
 	// /var/lib/ocis/storage/users/spaces/shared/nodeid
-	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces/*/*"))
+	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, spaceId))
 	if err != nil {
 		return nil, err
 	}
 
 	var spaces []*provider.StorageSpace
+
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		appctx.GetLogger(ctx).Debug().Msg("expected user in context")
+		return spaces, nil
+	}
+
 	for i := range matches {
 		// always read link in case storage space id != node id
 		if target, err := os.Readlink(matches[i]); err != nil {
-			// TODO log error
+			appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[i]).Msg("could not read link, skipping")
 			continue
 		} else {
 			n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
 			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Str("id", filepath.Base(target)).Msg("could not read node, skipping")
 				continue
 			}
 			owner, err := n.Owner()
 			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not read owner, skipping")
 				continue
 			}
 
-			// TODO continue if not owner or share grantee, depending on filter?
+			// filter out spaces user cannot access (currently based on stat permission)
+			p, err := n.ReadUserPermissions(ctx, u)
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not read permissions, skipping")
+				continue
+			}
+			if !p.Stat {
+				continue
+			}
+
+			// TODO apply filter
+
+			// build return value
 
 			space := &provider.StorageSpace{
 				Id: &provider.StorageSpaceId{OpaqueId: n.ID}, // FIXME Id should just be a string
-				Owner: &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
-					Id: owner,
-				},
 				Root: &provider.ResourceId{
 					StorageId: "1284d238-aa92-42ce-bdc4-0b0000009157", // FIXME storage provider id needs to be returned so the gateway can route
 					OpaqueId:  n.ID,
 				},
-				//Name: // TODO read from extended attribute
+				Name:      n.Name,
 				SpaceType: filepath.Base(filepath.Dir(matches[i])),
 				// Mtime is set either as node.tmtime or as fi.mtime below
 			}
+
+			if space.SpaceType == "share" {
+				// return folder name?
+				space.Name = n.Name
+			} else {
+				space.Name = "root" // do not expose the id as name, this is the root of a space
+				// TODO read from extended attribute for project / group spaces
+			}
+
+			// fill in user object if the current user is the owner
+			if owner.Idp == u.Id.Idp && owner.OpaqueId == u.Id.OpaqueId {
+				space.Owner = u
+			} else {
+				space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
+					Id: owner,
+				}
+			}
+
+			// we set the space mtime to the root item mtime
 			// override the stat mtime with a tmtime if it is present
 			if tmt, err := n.GetTMTime(); err == nil {
 				un := tmt.UnixNano()
