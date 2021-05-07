@@ -50,6 +50,8 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/share/cache"
+	"github.com/cs3org/reva/pkg/share/cache/registry"
 	"github.com/pkg/errors"
 )
 
@@ -72,6 +74,13 @@ type userIdentifiers struct {
 	Mail        string
 }
 
+func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
+	if f, ok := registry.NewFuncs[c.CacheWarmupDriver]; ok {
+		return f(c.CacheWarmupDrivers[c.CacheWarmupDriver])
+	}
+	return nil, fmt.Errorf("driver not found: %s", c.CacheWarmupDriver)
+}
+
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
@@ -87,7 +96,25 @@ func (h *Handler) Init(c *config.Config) error {
 
 	h.resourceInfoCache = gcache.New(c.ResourceInfoCacheSize).LFU().Build()
 
+	if h.resourceInfoCacheTTL > 0 {
+		cwm, err := getCacheWarmupManager(c)
+		if err == nil {
+			go h.startCacheWarmup(cwm)
+		}
+	}
+
 	return nil
+}
+
+func (h *Handler) startCacheWarmup(c cache.Warmup) {
+	infos, err := c.GetResourceInfos()
+	if err != nil {
+		return
+	}
+	for _, r := range infos {
+		key := wrapResourceID(r.Id)
+		_ = h.resourceInfoCache.SetWithExpire(key, r, time.Second*h.resourceInfoCacheTTL)
+	}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
