@@ -1624,8 +1624,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 
 ### [Moving resource loses associated shares](https://github.com/owncloud/ocis/issues/1251)
 
--   [apiSharePublicLink2/multilinkSharing.feature:187](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/multilinkSharing.feature#L187)
-
 #### [No way to set default folder for received shares](https://github.com/owncloud/ocis/issues/1327)
 -   [apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature#L22)
 -   [apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature:23](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature#L23)

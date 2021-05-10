@@ -1589,6 +1589,27 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 	if err = os.Rename(oldIP, newIP); err != nil {
 		return errors.Wrap(err, "ocfs: error moving "+oldIP+" to "+newIP)
 	}
+
+	log := appctx.GetLogger(ctx)
+	conn := fs.pool.Get()
+	defer conn.Close()
+	// Ideally if we encounter an error here we should rollback the Move/Rename.
+	// But since the owncloud storage driver is not being actively used by anyone other
+	// than the acceptance tests we should be fine by ignoring the errors.
+	_ = filepath.Walk(newIP, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			// TODO(c0rby): rollback the move in case of an error
+			log.Error().Str("path", path).Err(err).Msg("error caching id")
+			return nil
+		}
+		id := readOrCreateID(context.Background(), path, nil)
+		_, err = conn.Do("SET", id, path)
+		if err != nil {
+			// TODO(c0rby): rollback the move in case of an error
+			log.Error().Str("path", path).Err(err).Msg("error caching id")
+		}
+		return nil
+	})
 	if err := fs.propagate(ctx, newIP); err != nil {
 		return err
 	}
