@@ -94,14 +94,6 @@ type Options struct {
 	// Defaults to os.TempDir()
 	CacheDirectory string
 
-	// Set to true to use the local disk as a buffer for chunk
-	// reads from EOS. Default is false, i.e. pure streaming
-	ReadUsesLocalTemp bool
-
-	// Set to true to use the local disk as a buffer for chunk
-	// writes to EOS. Default is false, i.e. pure streaming
-	WriteUsesLocalTemp bool
-
 	// Keytab is the location of the EOS keytab file.
 	Keytab string
 
