@@ -33,11 +33,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
-	//"github.com/rs/zerolog/log"
-)
-
-const (
-	versionPrefix = ".sys.v#."
 )
 
 // Options to configure the Client.
@@ -169,7 +164,6 @@ func New(opt *Options) *EosHTTPClient {
 
 	c.cl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
-		//return nil
 	}
 
 	if c.cl == nil {
@@ -185,9 +179,17 @@ func rspdesc(rsp *http.Response) string {
 	desc := "'" + fmt.Sprintf("%d", rsp.StatusCode) + "'" + ": '" + rsp.Status + "'"
 
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(rsp.Body)
+	r := "<none>"
+	n, e := buf.ReadFrom(rsp.Body)
 
-	desc += " - '" + buf.String() + "'"
+	if e != nil {
+		r = "Error reading body: '" + e.Error() + "'"
+	} else {
+		if n > 0 {
+			r = buf.String()
+		}
+	}
+	desc += " - '" + r + "'"
 
 	return desc
 }
@@ -296,8 +298,8 @@ func (c *EosHTTPClient) GETFile(ctx context.Context, remoteuser, uid, gid, urlpa
 		// Let's support redirections... and if we retry we have to retry at the same FST, avoid going back to the MGM
 		if resp != nil && (resp.StatusCode == 307 || resp.StatusCode == 302) {
 
-			//io.Copy(ioutil.Discard, resp.Body)
-			//resp.Body.Close()
+			// io.Copy(ioutil.Discard, resp.Body)
+			// resp.Body.Close()
 
 			loc, err := resp.Location()
 			if err != nil {
@@ -488,6 +490,6 @@ func (c *EosHTTPClient) Head(ctx context.Context, remoteuser, uid, gid, urlpath 
 			return errtypes.NotFound(fmt.Sprintf("url: %s", finalurl))
 		}
 	}
-	return nil
+	// return nil
 
 }

@@ -1214,11 +1214,11 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 		}
 
 		wfd, err := os.Open(fd.Name())
-		defer wfd.Close()
-		defer os.RemoveAll(fd.Name())
 		if err != nil {
 			return err
 		}
+		defer wfd.Close()
+		defer os.RemoveAll(fd.Name())
 
 		return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, wfd)
 	}
