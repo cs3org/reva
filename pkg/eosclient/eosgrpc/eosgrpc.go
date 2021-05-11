@@ -68,6 +68,14 @@ type Options struct {
 	// Requires extra metadata operations if set to true
 	VersionInvariant bool
 
+	// Set to true to use the local disk as a buffer for chunk
+	// reads from EOS. Default is false, i.e. pure streaming
+	ReadUsesLocalTemp bool
+
+	// Set to true to use the local disk as a buffer for chunk
+	// writes to EOS. Default is false, i.e. pure streaming
+	WriteUsesLocalTemp bool
+
 	// Location of the xrdcopy binary.
 	// Default is /opt/eos/xrootd/bin/xrdcopy.
 	XrdcopyBinary string
@@ -82,14 +90,6 @@ type Options struct {
 	// Location on the local fs where to store reads.
 	// Defaults to os.TempDir()
 	CacheDirectory string
-
-	// Set to true to use the local disk as a buffer for chunk
-	// reads from EOS. Default is false, i.e. pure streaming
-	ReadUsesLocalTemp bool
-
-	// Set to true to use the local disk as a buffer for chunk
-	// writes to EOS. Default is false, i.e. pure streaming
-	WriteUsesLocalTemp bool
 
 	// Keytab is the location of the EOS keytab file.
 	Keytab string
