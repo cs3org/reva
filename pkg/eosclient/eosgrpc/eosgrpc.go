@@ -134,7 +134,7 @@ type Client struct {
 }
 
 // GetHTTPCl creates an http client for immediate usage, using the already instantiated resources
-func (c *Client) GetHTTPCl() *ehttp.EosHTTPClient {
+func (c *Client) GetHTTPCl() *ehttp.Client {
 	return ehttp.New(&c.opt.httpopts)
 }
 

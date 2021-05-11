@@ -132,18 +132,18 @@ func (opt *Options) Init() error {
 	return nil
 }
 
-// EosHTTPClient performs HTTP-based tasks (e.g. upload, download)
+// Client performs HTTP-based tasks (e.g. upload, download)
 // against a EOS management node (MGM)
 // using the EOS XrdHTTP interface.
 // In this module we wrap eos-related behaviour, e.g. headers or r/w retries
-type EosHTTPClient struct {
+type Client struct {
 	opt Options
 
 	cl *http.Client
 }
 
 // New creates a new client with the given options.
-func New(opt *Options) *EosHTTPClient {
+func New(opt *Options) *Client {
 	log := logger.New().With().Int("pid", os.Getpid()).Logger()
 	log.Debug().Str("func", "New").Str("Creating new eoshttp client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
 
@@ -152,7 +152,7 @@ func New(opt *Options) *EosHTTPClient {
 		return nil
 	}
 
-	c := new(EosHTTPClient)
+	c := new(Client)
 	c.opt = *opt
 
 	// Let's be successful if the ping was ok. This is an initialization phase
@@ -195,7 +195,7 @@ func rspdesc(rsp *http.Response) string {
 
 // If the error is not nil, take that
 // If there is an error coming from EOS, erturn a descriptive error
-func (c *EosHTTPClient) getRespError(rsp *http.Response, err error) error {
+func (c *Client) getRespError(rsp *http.Response, err error) error {
 	if err != nil {
 		return err
 	}
@@ -218,7 +218,7 @@ func (c *EosHTTPClient) getRespError(rsp *http.Response, err error) error {
 }
 
 // From the basepath and the file path... build an url
-func (c *EosHTTPClient) buildFullURL(urlpath, uid, gid string) (string, error) {
+func (c *Client) buildFullURL(urlpath, uid, gid string) (string, error) {
 	s := c.opt.BaseURL
 	if len(urlpath) > 0 && urlpath[0] != '/' {
 		s += "/"
@@ -259,7 +259,7 @@ func (c *EosHTTPClient) buildFullURL(urlpath, uid, gid string) (string, error) {
 }
 
 // GETFile does an entire GET to download a full file. Returns a stream to read the content from
-func (c *EosHTTPClient) GETFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.WriteCloser) (io.ReadCloser, error) {
+func (c *Client) GETFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.WriteCloser) (io.ReadCloser, error) {
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "GETFile").Str("remoteuser", remoteuser).Str("uid,gid", uid+","+gid).Str("path", urlpath).Msg("")
@@ -354,7 +354,7 @@ func (c *EosHTTPClient) GETFile(ctx context.Context, remoteuser, uid, gid, urlpa
 }
 
 // PUTFile does an entire PUT to upload a full file, taking the data from a stream
-func (c *EosHTTPClient) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.ReadCloser) error {
+func (c *Client) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.ReadCloser) error {
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", uid+","+gid).Str("path", urlpath).Msg("")
@@ -442,7 +442,7 @@ func (c *EosHTTPClient) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpa
 }
 
 // Head performs a HEAD req. Useful to check the server
-func (c *EosHTTPClient) Head(ctx context.Context, remoteuser, uid, gid, urlpath string) error {
+func (c *Client) Head(ctx context.Context, remoteuser, uid, gid, urlpath string) error {
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Head").Str("remoteuser", remoteuser).Str("uid,gid", uid+","+gid).Str("path", urlpath).Msg("")
