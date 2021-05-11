@@ -35,7 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
 
-	//erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
+	// erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
 	ehttp "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_http"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
@@ -726,7 +726,7 @@ func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eo
 		log.Info().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", info)).Msg("")
 
 		// EOS does not have yet this command... work in progress, this is a draft piece of code
-		//return errtypes.NotSupported("eosgrpc: SetQuota not implemented")
+		// return errtypes.NotSupported("eosgrpc: SetQuota not implemented")
 
 		// Initialize the common fields of the NSReq
 		rq, err := c.initNSRequest(ctx, rootUID, rootGID)

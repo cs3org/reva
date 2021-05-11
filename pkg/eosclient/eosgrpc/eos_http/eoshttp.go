@@ -184,11 +184,10 @@ func rspdesc(rsp *http.Response) string {
 
 	if e != nil {
 		r = "Error reading body: '" + e.Error() + "'"
-	} else {
-		if n > 0 {
-			r = buf.String()
-		}
+	} else if n > 0 {
+		r = buf.String()
 	}
+
 	desc += " - '" + r + "'"
 
 	return desc
@@ -395,8 +394,8 @@ func (c *EosHTTPClient) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpa
 		// Let's support redirections... and if we retry we have to retry at the same FST, avoid going back to the MGM
 		if resp != nil && resp.StatusCode == 307 {
 
-			//io.Copy(ioutil.Discard, resp.Body)
-			//resp.Body.Close()
+			// io.Copy(ioutil.Discard, resp.Body)
+			// resp.Body.Close()
 
 			loc, err := resp.Location()
 			if err != nil {
