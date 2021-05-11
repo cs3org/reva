@@ -1190,7 +1190,7 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 	}
 
 	return bodystream, nil
-	//return os.Open(localTarget)
+	// return os.Open(localTarget)
 }
 
 // Write writes a file to the mgm
@@ -1226,8 +1226,8 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 
 	return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, stream)
 
-	//return c.GetHttpCl().PUTFile(ctx, remoteuser, uid, gid, urlpathng, stream)
-	//return c.WriteFile(ctx, uid, gid, path, fd.Name())
+	// return c.GetHttpCl().PUTFile(ctx, remoteuser, uid, gid, urlpathng, stream)
+	// return c.WriteFile(ctx, uid, gid, path, fd.Name())
 }
 
 // WriteFile writes an existing file to the mgm. Old xrdcp utility
