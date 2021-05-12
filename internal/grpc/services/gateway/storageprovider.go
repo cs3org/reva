@@ -1532,6 +1532,10 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 	return lcr, nil
 }
 
+func isStorageSpaceReference(ref *provider.Reference) bool {
+	return strings.HasPrefix(ref.GetId().GetOpaqueId(), "/")
+}
+
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
@@ -1547,7 +1551,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 
 	for i, p := range providers {
 		wg.Add(1)
-		go s.listContainerOnProvider(ctx, req, &infoFromProviders[i], p, &errors[i], &wg)
+		go s.listContainerOnProvider(ctx, req, &infoFromProviders[i], p, &errors[i], &wg, !isStorageSpaceReference(req.Ref))
 	}
 	wg.Wait()
 
@@ -1590,7 +1594,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	}, nil
 }
 
-func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListContainerRequest, res *[]*provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
+func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListContainerRequest, res *[]*provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup, prefixMountPoint bool) {
 	defer wg.Done()
 	c, err := s.getStorageProviderClient(ctx, p)
 	if err != nil {
@@ -1613,6 +1617,12 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 	if err != nil {
 		*e = errors.Wrap(err, "gateway: error calling ListContainer")
 		return
+	}
+
+	if prefixMountPoint {
+		for i := range r.Infos {
+			r.Infos[i].Path = path.Join(p.ProviderPath, r.Infos[i].Path)
+		}
 	}
 	*res = r.Infos
 }

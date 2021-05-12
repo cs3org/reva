@@ -162,7 +162,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		Spec: &storageProvider.Reference_Id{
 			Id: &storageProvider.ResourceId{
 				StorageId: space.Root.StorageId,
-				OpaqueId:  filepath.Join("/", spaceID, path), // FIXME this is a hack to pass storage space id and a relative path to the storage provider
+				OpaqueId:  filepath.Join("/", space.Root.OpaqueId, path), // FIXME this is a hack to pass storage space id and a relative path to the storage provider
 			},
 		},
 	}
