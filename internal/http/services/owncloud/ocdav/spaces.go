@@ -50,10 +50,10 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		var spaceId string
-		spaceId, r.URL.Path = router.ShiftPath(r.URL.Path)
+		var spaceID string
+		spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-		if spaceId == "" {
+		if spaceID == "" {
 			// listing is disabled, no auth will change that
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -62,15 +62,15 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		// Checks on the space Id
 
 		if r.Method == "PROPFIND" {
-			s.handleSpacesPropfind(w, r, spaceId)
+			s.handleSpacesPropfind(w, r, spaceID)
 			return
 		}
 
-		http.Error(w, "501 Not implemented", http.StatusNotImplemented)
+		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 	})
 }
 
-func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceId string) {
+func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "propfind")
 	defer span.End()
@@ -81,7 +81,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		depth = "1"
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Str("path", path).Str("spaceid", spaceId).Logger()
+	sublog := appctx.GetLogger(ctx).With().Str("path", path).Str("spaceid", spaceID).Logger()
 
 	// see https://tools.ietf.org/html/rfc4918#section-9.1
 	if depth != "0" && depth != "1" && depth != "infinity" {
@@ -128,7 +128,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 				Type: storageProvider.ListStorageSpacesRequest_Filter_TYPE_ID,
 				Term: &storageProvider.ListStorageSpacesRequest_Filter_Id{
 					Id: &storageProvider.StorageSpaceId{
-						OpaqueId: spaceId,
+						OpaqueId: spaceID,
 					},
 				},
 			},
@@ -162,7 +162,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		Spec: &storageProvider.Reference_Id{
 			Id: &storageProvider.ResourceId{
 				StorageId: space.Root.StorageId,
-				OpaqueId:  filepath.Join("/", spaceId, path), // FIXME this is a hack to pass storage space id and a relative path to the storage provider
+				OpaqueId:  filepath.Join("/", spaceID, path), // FIXME this is a hack to pass storage space id and a relative path to the storage provider
 			},
 		},
 	}
@@ -248,7 +248,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		}
 	}
 
-	propRes, err := s.formatPropfind(ctx, &pf, infos, spaceId)
+	propRes, err := s.formatPropfind(ctx, &pf, infos, spaceID)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

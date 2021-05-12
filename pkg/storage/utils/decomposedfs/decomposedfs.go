@@ -468,6 +468,8 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 	return reader, nil
 }
 
+// ListStorageSpaces returns a list of StorageSpaces.
+// The list can be filtered by space type or space id.
 func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	// TODO check filters
 
@@ -488,7 +490,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// we would not need /nodes/root if access always happened via spaceid+relative path
 
 	spaceType := "*"
-	spaceId := "*"
+	spaceID := "*"
 
 	for i := range filter {
 		switch filter[i].Type {
@@ -501,7 +503,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	// /var/lib/ocis/storage/users/spaces/personal/nodeid
 	// /var/lib/ocis/storage/users/spaces/shared/nodeid
-	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, spaceId))
+	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, spaceID))
 	if err != nil {
 		return nil, err
 	}

@@ -429,7 +429,8 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 }
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	if spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters); err != nil {
+	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters)
+	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -442,12 +443,11 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		return &provider.ListStorageSpacesResponse{
 			Status: st,
 		}, nil
-	} else {
-		return &provider.ListStorageSpacesResponse{
-			Status:        status.NewOK(ctx),
-			StorageSpaces: spaces,
-		}, nil
 	}
+	return &provider.ListStorageSpacesResponse{
+		Status:        status.NewOK(ctx),
+		StorageSpaces: spaces,
+	}, nil
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
