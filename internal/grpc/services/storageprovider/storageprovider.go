@@ -274,26 +274,25 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 		}, nil
 	}
 
+	log.Info().Str("data-server", u.String()).Interface("ref", req.Ref).Msg("file download")
+	protocol := &provider.FileDownloadProtocol{Expose: s.conf.ExposeDataServer}
+
 	if isStorageSpaceReference(newRef) {
+		protocol.Protocol = "spaces"
 		u.Path = path.Join(u.Path, "spaces", newRef.GetId().OpaqueId)
 	} else {
 		// Currently, we only support the simple protocol for GET requests
 		// Once we have multiple protocols, this would be moved to the fs layer
+		protocol.Protocol = "simple"
 		u.Path = path.Join(u.Path, "simple", newRef.GetPath())
 	}
 
-	log.Info().Str("data-server", u.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
-	res := &provider.InitiateFileDownloadResponse{
-		Protocols: []*provider.FileDownloadProtocol{
-			{
-				Protocol:         "simple",
-				DownloadEndpoint: u.String(),
-				Expose:           s.conf.ExposeDataServer,
-			},
-		},
-		Status: status.NewOK(ctx),
-	}
-	return res, nil
+	protocol.DownloadEndpoint = u.String()
+
+	return &provider.InitiateFileDownloadResponse{
+		Protocols: []*provider.FileDownloadProtocol{protocol},
+		Status:    status.NewOK(ctx),
+	}, nil
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
