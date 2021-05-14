@@ -24,6 +24,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"path"
 	"strconv"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -46,8 +47,14 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 		fn = files[0]
 	}
 
-	ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fn}}
+	space := r.URL.Query().Get("space")
 
+	var ref *provider.Reference
+	if space == "" {
+		ref = &provider.Reference{Spec: &provider.Reference_Path{Path: fn}}
+	} else {
+		ref = &provider.Reference{Spec: &provider.Reference_Id{Id: &provider.ResourceId{OpaqueId: path.Join("/", space, fn)}}}
+	}
 	// TODO check preconditions like If-Range, If-Match ...
 
 	var md *provider.ResourceInfo
