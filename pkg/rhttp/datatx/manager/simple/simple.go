@@ -68,7 +68,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 
 		switch r.Method {
 		case "GET", "HEAD":
-			download.GetOrHeadFile(w, r, fs)
+			download.GetOrHeadFile(w, r, fs, "")
 		case "PUT":
 			fn := r.URL.Path
 			defer r.Body.Close()

@@ -373,7 +373,7 @@ func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID st
 
 	var ep, token string
 	for _, p := range dRes.Protocols {
-		if p.Protocol == "simple" {
+		if p.Protocol == "spaces" {
 			ep, token = p.DownloadEndpoint, p.Token
 		}
 	}

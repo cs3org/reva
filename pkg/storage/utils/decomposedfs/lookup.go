@@ -38,6 +38,20 @@ type Lookup struct {
 	Options *options.Options
 }
 
+func getStorageSpaceReference(ref *provider.ResourceId) (string, string, bool) {
+	if strings.HasPrefix(ref.OpaqueId, "/") {
+		// opaqueID looks like "/a-storage-space-id/optional/relative/path"
+		parts := strings.SplitN(ref.OpaqueId, "/", 3)
+		switch len(parts) {
+		case 2:
+			return parts[1], "", true
+		case 3:
+			return parts[1], parts[2], true
+		}
+	}
+	return "", "", false
+}
+
 // NodeFromResource takes in a request path or request id and converts it to a Node
 func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error) {
 	if ref.GetPath() != "" {
@@ -45,6 +59,23 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 	}
 
 	if ref.GetId() != nil {
+		// check if a storage space reference is used
+		if spaceID, relPath, ok := getStorageSpaceReference(ref.GetId()); ok {
+			// currently, the decomposed fs uses the root node id as the space id
+			n, err := lu.NodeFromID(ctx, &provider.ResourceId{OpaqueId: spaceID})
+			if err != nil {
+				return nil, err
+			}
+			// now walk the relative path
+			n, err = lu.WalkPath(ctx, n, relPath, func(ctx context.Context, n *node.Node) error {
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+			return n, nil
+		}
+
 		return lu.NodeFromID(ctx, ref.GetId())
 	}
 

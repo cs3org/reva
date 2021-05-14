@@ -266,21 +266,22 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	// For example, https://data-server.example.org/home/docs/myfile.txt
 	// or ownclouds://data-server.example.org/home/docs/myfile.txt
 	log := appctx.GetLogger(ctx)
+	
 	u := *s.dataServerURL
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
-	if err != nil {
-		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
-		}, nil
-	}
-
 	log.Info().Str("data-server", u.String()).Interface("ref", req.Ref).Msg("file download")
+	
 	protocol := &provider.FileDownloadProtocol{Expose: s.conf.ExposeDataServer}
 
-	if isStorageSpaceReference(newRef) {
+	if isStorageSpaceReference(req.Ref) {
 		protocol.Protocol = "spaces"
-		u.Path = path.Join(u.Path, "spaces", newRef.GetId().OpaqueId)
+		u.Path = path.Join(u.Path, "spaces", req.Ref.GetId().OpaqueId)
 	} else {
+		ctx, newRef, err := s.unwrap(ctx, req.Ref)
+		if err != nil {
+			return &provider.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			}, nil
+		}
 		// Currently, we only support the simple protocol for GET requests
 		// Once we have multiple protocols, this would be moved to the fs layer
 		protocol.Protocol = "simple"
