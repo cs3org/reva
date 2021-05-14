@@ -1551,7 +1551,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 
 	for i, p := range providers {
 		wg.Add(1)
-		go s.listContainerOnProvider(ctx, req, &infoFromProviders[i], p, &errors[i], &wg, !isStorageSpaceReference(req.Ref))
+		go s.listContainerOnProvider(ctx, req, &infoFromProviders[i], p, &errors[i], &wg)
 	}
 	wg.Wait()
 
@@ -1594,7 +1594,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	}, nil
 }
 
-func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListContainerRequest, res *[]*provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup, prefixMountPoint bool) {
+func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListContainerRequest, res *[]*provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
 	defer wg.Done()
 	c, err := s.getStorageProviderClient(ctx, p)
 	if err != nil {
@@ -1602,24 +1602,26 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 		return
 	}
 
-	resPath := path.Clean(req.Ref.GetPath())
-	newPath := req.Ref.GetPath()
-	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-		newPath = p.ProviderPath
-	}
-	r, err := c.ListContainer(ctx, &provider.ListContainerRequest{
-		Ref: &provider.Reference{
+	if !isStorageSpaceReference(req.Ref) {
+		resPath := path.Clean(req.Ref.GetPath())
+		newPath := req.Ref.GetPath()
+		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
+			newPath = p.ProviderPath
+		}
+		req.Ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
 				Path: newPath,
 			},
-		},
-	})
+		}
+	}
+
+	r, err := c.ListContainer(ctx, req)
 	if err != nil {
 		*e = errors.Wrap(err, "gateway: error calling ListContainer")
 		return
 	}
 
-	if prefixMountPoint {
+	if !isStorageSpaceReference(req.Ref) {
 		for i := range r.Infos {
 			r.Infos[i].Path = path.Join(p.ProviderPath, r.Infos[i].Path)
 		}
@@ -1629,6 +1631,11 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if isStorageSpaceReference(req.Ref) {
+		return s.listContainer(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.ListContainerResponse{

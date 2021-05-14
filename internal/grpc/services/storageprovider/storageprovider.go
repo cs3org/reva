@@ -1237,6 +1237,14 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
 	return nil
 }
 
+// Id based references have two properties:
+// 1. StorageID
+// 2. OpaqueID
+// e.g. StorageID:a-storage-provider-id OpaqueID:a-file-id-d
+// We are representing space ids by putting the space id in the OpaqueID:
+// e.g. StorageID:a-storage-provider-id OpaqueID:/a-storage-space-id/optional/relative/path
+// In the URL it looks like this: /a-storage-provider-id!a-storage-space-id/optional/relative/path
+// See https://github.com/cs3org/cs3apis/pull/125 for an extension to the CS3 ReferenceID to model this properly
 func isStorageSpaceReference(ref *provider.Reference) bool {
 	return strings.HasPrefix(ref.GetId().GetOpaqueId(), "/")
 }

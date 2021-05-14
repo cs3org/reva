@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"net/http"
+	"path"
 	"path/filepath"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -75,13 +76,12 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 	ctx, span := trace.StartSpan(ctx, "propfind")
 	defer span.End()
 
-	path := r.URL.Path
 	depth := r.Header.Get("Depth")
 	if depth == "" {
 		depth = "1"
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Str("path", path).Str("spaceid", spaceID).Logger()
+	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
 
 	// see https://tools.ietf.org/html/rfc4918#section-9.1
 	if depth != "0" && depth != "1" && depth != "infinity" {
@@ -162,7 +162,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		Spec: &storageProvider.Reference_Id{
 			Id: &storageProvider.ResourceId{
 				StorageId: space.Root.StorageId,
-				OpaqueId:  filepath.Join("/", space.Root.OpaqueId, path), // FIXME this is a hack to pass storage space id and a relative path to the storage provider
+				OpaqueId:  filepath.Join("/", space.Root.OpaqueId, r.URL.Path), // FIXME this is a hack to pass storage space id and a relative path to the storage provider
 			},
 		},
 	}
@@ -183,9 +183,9 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		return
 	}
 
-	info := res.Info
-	infos := []*storageProvider.ResourceInfo{info}
-	if info.Type == storageProvider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
+	parentInfo := res.Info
+	resourceInfos := []*storageProvider.ResourceInfo{parentInfo}
+	if parentInfo.Type == storageProvider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
 		req := &storageProvider.ListContainerRequest{
 			Ref:                   ref,
 			ArbitraryMetadataKeys: metadataKeys,
@@ -201,16 +201,16 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 			HandleErrorStatus(&sublog, w, res.Status)
 			return
 		}
-		infos = append(infos, res.Infos...)
+		resourceInfos = append(resourceInfos, res.Infos...)
 	} else if depth == "infinity" {
 		// FIXME: doesn't work cross-storage as the results will have the wrong paths!
 		// use a stack to explore sub-containers breadth-first
-		stack := []string{info.Path}
+		stack := []string{parentInfo.Path}
 		for len(stack) > 0 {
 			// retrieve path on top of stack
-			path := stack[len(stack)-1]
+			currentPath := stack[len(stack)-1]
 			ref = &storageProvider.Reference{
-				Spec: &storageProvider.Reference_Path{Path: path},
+				Spec: &storageProvider.Reference_Path{Path: currentPath},
 			}
 			req := &storageProvider.ListContainerRequest{
 				Ref:                   ref,
@@ -218,7 +218,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 			}
 			res, err := gatewayClient.ListContainer(ctx, req)
 			if err != nil {
-				sublog.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
+				sublog.Error().Err(err).Str("path", currentPath).Msg("error sending list container grpc request")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -227,7 +227,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 				return
 			}
 
-			infos = append(infos, res.Infos...)
+			resourceInfos = append(resourceInfos, res.Infos...)
 
 			if depth != "infinity" {
 				break
@@ -248,7 +248,12 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		}
 	}
 
-	propRes, err := s.formatPropfind(ctx, &pf, infos, spaceID)
+	// prefix space id to paths
+	for i := range resourceInfos {
+		resourceInfos[i].Path = path.Join("/", spaceID, resourceInfos[i].Path)
+	}
+
+	propRes, err := s.formatPropfind(ctx, &pf, resourceInfos, "") // no namespace because this is relative to the storage space
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -259,9 +264,9 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 
 	var disableTus bool
 	// let clients know this collection supports tus.io POST requests to start uploads
-	if info.Type == storageProvider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		if info.Opaque != nil {
-			_, disableTus = info.Opaque.Map["disable_tus"]
+	if parentInfo.Type == storageProvider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		if parentInfo.Opaque != nil {
+			_, disableTus = parentInfo.Opaque.Map["disable_tus"]
 		}
 		if !disableTus {
 			w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")

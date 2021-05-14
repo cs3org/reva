@@ -298,7 +298,7 @@ func replaceAllStringSubmatchFunc(re *regexp.Regexp, str string, repl func([]str
 	return result + str[lastIndex:]
 }
 
-var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@])`)
+var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@!$])`)
 
 // encodePath encodes the path of a url.
 //
