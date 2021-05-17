@@ -201,7 +201,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		return nil, errors.Wrap(err, "ocfs: error resolving upload path")
 	}
 	usr := user.ContextMustGetUser(ctx)
-	storageId, err := fs.getUserStorage(ctx)
+	storageID, err := fs.getUserStorage(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +216,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 
 		"LogLevel": log.GetLevel().String(),
 
-		"StorageId": strconv.Itoa(storageId),
+		"StorageId": strconv.Itoa(storageID),
 	}
 	// Create binary file in the upload folder with no content
 	log.Debug().Interface("info", info).Msg("ocfs: built storage info")

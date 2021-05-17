@@ -61,9 +61,9 @@ var _ = Describe("Filecache", func() {
 		os.Remove(testDbFile.Name())
 	})
 
-	Describe("GetNumericStorageId", func() {
+	Describe("GetNumericStorageID", func() {
 		It("returns the proper storage id", func() {
-			nid, err := cache.GetNumericStorageId("home::admin")
+			nid, err := cache.GetNumericStorageID("home::admin")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(nid).To(Equal(1))
 		})
@@ -75,7 +75,7 @@ var _ = Describe("Filecache", func() {
 			file, err := cache.Get(1, path)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(file).ToNot(BeNil())
-			Expect(file.Id).To(Equal(10))
+			Expect(file.ID).To(Equal(10))
 			Expect(file.Storage).To(Equal(1))
 			Expect(file.Path).To(Equal(path))
 			Expect(file.Parent).To(Equal(9))
@@ -268,7 +268,7 @@ var _ = Describe("Filecache", func() {
 				data["etag"] = "12345"
 				id, err := cache.InsertOrUpdate(1, data)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(id).To(Equal(recordBefore.Id))
+				Expect(id).To(Equal(recordBefore.ID))
 
 				recordAfter, err := cache.Get(1, data["path"].(string))
 				Expect(err).ToNot(HaveOccurred())
@@ -443,7 +443,7 @@ var _ = Describe("Filecache", func() {
 
 			newEntry, err := cache.Get(1, "files_versions/Photos/Portugal.jpg.v1619528083")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(newEntry.Id).ToNot(Equal(existingEntry.Id))
+			Expect(newEntry.ID).ToNot(Equal(existingEntry.ID))
 			Expect(newEntry.MimeType).To(Equal(existingEntry.MimeType))
 		})
 	})

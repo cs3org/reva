@@ -558,12 +558,12 @@ func (fs *ocfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provid
 	}
 }
 
-func (fc *ocfs) getUserStorage(ctx context.Context) (int, error) {
+func (fs *ocfs) getUserStorage(ctx context.Context) (int, error) {
 	user, ok := user.ContextGetUser(ctx)
 	if !ok {
 		return -1, fmt.Errorf("Could not get user for context")
 	}
-	return fc.filecache.GetNumericStorageId("home::" + user.Username)
+	return fs.filecache.GetNumericStorageID("home::" + user.Username)
 }
 
 func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip string, sp string, mdKeys []string) (*provider.ResourceInfo, error) {
@@ -589,7 +589,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip st
 	}
 
 	ri := &provider.ResourceInfo{
-		Id:       &provider.ResourceId{OpaqueId: strconv.Itoa(cacheEntry.Id)},
+		Id:       &provider.ResourceId{OpaqueId: strconv.Itoa(cacheEntry.ID)},
 		Path:     sp,
 		Type:     getResourceType(fi.IsDir()),
 		Etag:     cacheEntry.Etag,
@@ -742,11 +742,11 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 		return ownerPermissions, nil
 	}
 
-	storageId, err := fs.getUserStorage(ctx)
+	storageID, err := fs.getUserStorage(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return fs.filecache.Permissions(storageId, fs.toDatabasePath(ctx, ip))
+	return fs.filecache.Permissions(storageID, fs.toDatabasePath(ctx, ip))
 }
 
 func isNoData(err error) bool {
@@ -887,7 +887,7 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 		filepath.Join(fs.c.DataDirectory, layout, "shadow_files"),
 	}
 
-	storageId, err := fs.getUserStorage(ctx)
+	storageID, err := fs.getUserStorage(ctx)
 	if err != nil {
 		return err
 	}
@@ -905,7 +905,7 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 			"etag":     calcEtag(ctx, fi),
 			"mimetype": "httpd/unix-directory",
 		}
-		_, err = fs.filecache.InsertOrUpdate(storageId, data)
+		_, err = fs.filecache.InsertOrUpdate(storageID, data)
 		if err != nil {
 			return err
 		}
@@ -958,11 +958,11 @@ func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
 		"mtime":         mtime,
 		"storage_mtime": mtime,
 	}
-	storageId, err := fs.getUserStorage(ctx)
+	storageID, err := fs.getUserStorage(ctx)
 	if err != nil {
 		return err
 	}
-	_, err = fs.filecache.InsertOrUpdate(storageId, data)
+	_, err = fs.filecache.InsertOrUpdate(storageID, data)
 	if err != nil {
 		if err != nil {
 			return err
@@ -1891,11 +1891,11 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 		"mtime":         mtime,
 		"storage_mtime": mtime,
 	}
-	storageId, err := fs.getUserStorage(ctx)
+	storageID, err := fs.getUserStorage(ctx)
 	if err != nil {
 		return err
 	}
-	_, err = fs.filecache.InsertOrUpdate(storageId, data)
+	_, err = fs.filecache.InsertOrUpdate(storageID, data)
 	if err != nil {
 		return err
 	}
@@ -2110,7 +2110,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 		return err
 	}
 
-	storageId, err := fs.getUserStorage(ctx)
+	storageID, err := fs.getUserStorage(ctx)
 	if err != nil {
 		return err
 	}
@@ -2137,7 +2137,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 			return err
 		}
 		etag := calcEtag(ctx, fi)
-		if err := fs.filecache.SetEtag(storageId, fs.toDatabasePath(ctx, root), etag); err != nil {
+		if err := fs.filecache.SetEtag(storageID, fs.toDatabasePath(ctx, root), etag); err != nil {
 			appctx.GetLogger(ctx).Error().
 				Err(err).
 				Str("leafPath", leafPath).
