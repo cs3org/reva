@@ -20,7 +20,6 @@ package shares
 
 import (
 	"net/http"
-	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -83,32 +82,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		},
 	}
 
-	createShareResponse, err := c.CreateShare(ctx, createShareReq)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)
-		return
-	}
-	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
-		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return
-		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create share request failed", err)
-		return
-	}
-	s, err := conversions.CS3Share2ShareData(ctx, createShareResponse.Share)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-		return
-	}
-	err = h.addFileInfo(ctx, s, statInfo)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
-		return
-	}
-	h.mapUserIds(ctx, c, s)
-
-	response.WriteOCSSuccess(w, r, s)
+	h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
 }
 
 func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareID string) {
@@ -157,13 +131,13 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 	ocsDataPayload := make([]*conversions.ShareData, 0)
 	if h.gatewayAddr != "" {
 		// get a connection to the users share provider
-		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}
 
 		// do list shares request. filtered
-		lsUserSharesResponse, err := c.ListShares(ctx, &lsUserSharesRequest)
+		lsUserSharesResponse, err := client.ListShares(ctx, &lsUserSharesRequest)
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}
@@ -179,35 +153,17 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 				continue
 			}
 
-			var info *provider.ResourceInfo
-			key := wrapResourceID(s.ResourceId)
-			if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
-				log.Debug().Msgf("cache hit for resource %+v", s.ResourceId)
-				info = infoIf.(*provider.ResourceInfo)
-			} else {
-				// prepare the stat request
-				statReq := &provider.StatRequest{
-					Ref: &provider.Reference{
-						Spec: &provider.Reference_Id{Id: s.ResourceId},
-					},
-				}
-
-				statResponse, err := c.Stat(ctx, statReq)
-				if err != nil || statResponse.Status.Code != rpc.Code_CODE_OK {
-					log.Debug().Interface("share", s).Interface("response", statResponse).Interface("shareData", data).Err(err).Msg("could not stat share, skipping")
-					continue
-				}
-				info = statResponse.Info
-				if h.resourceInfoCacheTTL > 0 {
-					_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
-				}
+			info, status, err := h.getResourceInfoByID(ctx, client, s.ResourceId)
+			if err != nil || status.Code != rpc.Code_CODE_OK {
+				log.Debug().Interface("share", s).Interface("status", status).Interface("shareData", data).Err(err).Msg("could not stat share, skipping")
+				continue
 			}
 
 			if err := h.addFileInfo(ctx, data, info); err != nil {
 				log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
 				continue
 			}
-			h.mapUserIds(ctx, c, data)
+			h.mapUserIds(ctx, client, data)
 
 			log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", data).Msg("mapped")
 			ocsDataPayload = append(ocsDataPayload, data)

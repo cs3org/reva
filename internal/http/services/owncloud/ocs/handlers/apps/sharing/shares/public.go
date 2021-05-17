@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -143,7 +142,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 	ocsDataPayload := make([]*conversions.ShareData, 0)
 	// TODO(refs) why is this guard needed? Are we moving towards a gateway only for service discovery? without a gateway this is dead code.
 	if h.gatewayAddr != "" {
-		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}
@@ -152,7 +151,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 			Filters: filters,
 		}
 
-		res, err := c.ListPublicShares(ctx, &req)
+		res, err := client.ListPublicShares(ctx, &req)
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}
@@ -160,30 +159,11 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 			return ocsDataPayload, res.Status, nil
 		}
 
-		var info *provider.ResourceInfo
 		for _, share := range res.GetShare() {
-			key := wrapResourceID(share.ResourceId)
-			if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
-				log.Debug().Msgf("cache hit for resource %+v", share.ResourceId)
-				info = infoIf.(*provider.ResourceInfo)
-			} else {
-				statRequest := &provider.StatRequest{
-					Ref: &provider.Reference{
-						Spec: &provider.Reference_Id{
-							Id: share.ResourceId,
-						},
-					},
-				}
-
-				statResponse, err := c.Stat(ctx, statRequest)
-				if err != nil || res.Status.Code != rpc.Code_CODE_OK {
-					log.Debug().Interface("share", share).Interface("response", statResponse).Err(err).Msg("could not stat share, skipping")
-					continue
-				}
-				info = statResponse.Info
-				if h.resourceInfoCacheTTL > 0 {
-					_ = h.resourceInfoCache.SetWithExpire(key, info, time.Second*h.resourceInfoCacheTTL)
-				}
+			info, status, err := h.getResourceInfoByID(ctx, client, share.ResourceId)
+			if err != nil || status.Code != rpc.Code_CODE_OK {
+				log.Debug().Interface("share", share).Interface("status", status).Err(err).Msg("could not stat share, skipping")
+				continue
 			}
 
 			sData := conversions.PublicShare2ShareData(share, r, h.publicURL)
@@ -194,7 +174,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 				log.Debug().Interface("share", share).Interface("info", info).Err(err).Msg("could not add file info, skipping")
 				continue
 			}
-			h.mapUserIds(ctx, c, sData)
+			h.mapUserIds(ctx, client, sData)
 
 			log.Debug().Interface("share", share).Interface("info", info).Interface("shareData", share).Msg("mapped")
 
