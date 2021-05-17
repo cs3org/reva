@@ -39,7 +39,8 @@ func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request, ns string) {
 		w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
 		w.Header().Set("Tus-Resumable", "1.0.0") // TODO(jfd): only for dirs?
 		w.Header().Set("Tus-Version", "1.0.0")
-		w.Header().Set("Tus-Extension", "creation,creation-with-upload")
+		w.Header().Set("Tus-Extension", "creation,creation-with-upload,checksum")
+		w.Header().Set("Tus-Checksum-Algorithm", "md5,sha1,crc32")
 	}
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusNoContent)
 }
