@@ -16,14 +16,34 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM golang:1.16 as builder
+FROM golang:alpine as builder
+
+RUN apk --no-cache add \
+  ca-certificates \
+  bash \
+  git \
+  gcc \
+  libc-dev \
+  make
+
+ENV PATH /go/bin:/usr/local/go/bin:$PATH
+ENV GOPATH /go
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
 RUN make build-revad-docker && \
     cp /go/src/github/cs3org/reva/cmd/revad/revad /go/bin/revad
 
-FROM gitlab-registry.cern.ch/dss/eos:c8_4.8.15
+RUN mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
+
+FROM gitlab-registry.cern.ch/dss/eos/slim:4.8.43
+
 RUN mkdir -p /usr/local/bin
-COPY --from=builder /go/bin/revad /go/bin/
-RUN chmod +x /go/bin/revad
+
+COPY --from=builder /go/bin/revad /usr/bin/revad
+COPY --from=builder /etc/revad /etc/revad
+
+RUN chmod +x /usr/bin/revad
+
+ENTRYPOINT [ "/usr/bin/revad" ]
+CMD [ "-c", "/etc/revad/revad.toml", "-p", "/var/run/revad.pid" ]
