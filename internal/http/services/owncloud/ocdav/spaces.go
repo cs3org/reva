@@ -76,6 +76,8 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 			s.handleSpacesPropfind(w, r, spaceID)
 		case http.MethodGet:
 			s.handleSpacesGet(w, r, spaceID)
+		case "MKCOL":
+			s.handleSpacesMkCol(w, r, spaceID)
 		default:
 			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		}
@@ -302,6 +304,75 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
 		sublog.Err(err).Msg("error writing response")
+	}
+}
+
+func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "mkcol")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()
+
+	buf := make([]byte, 1)
+	_, err := r.Body.Read(buf)
+	if err != io.EOF {
+		sublog.Error().Err(err).Msg("error reading request body")
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		return
+	}
+
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
+
+	gatewayClient, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	statReq := &provider.StatRequest{Ref: ref}
+	statRes, err := gatewayClient.Stat(ctx, statReq)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc stat request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if statRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+		if statRes.Status.Code == rpc.Code_CODE_OK {
+			w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
+		} else {
+			HandleErrorStatus(&sublog, w, statRes.Status)
+		}
+		return
+	}
+
+	req := &provider.CreateContainerRequest{Ref: ref}
+	res, err := gatewayClient.CreateContainer(ctx, req)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending create container grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	switch res.Status.Code {
+	case rpc.Code_CODE_OK:
+		w.WriteHeader(http.StatusCreated)
+	case rpc.Code_CODE_NOT_FOUND:
+		sublog.Debug().Str("path", r.URL.Path).Interface("status", statRes.Status).Msg("conflict")
+		w.WriteHeader(http.StatusConflict)
+	default:
+		HandleErrorStatus(&sublog, w, res.Status)
 	}
 }
 

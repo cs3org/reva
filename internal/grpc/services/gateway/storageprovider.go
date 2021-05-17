@@ -667,6 +667,11 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if isStorageSpaceReference(req.Ref) {
+		return s.createContainer(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.CreateContainerResponse{
