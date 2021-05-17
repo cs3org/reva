@@ -27,6 +27,15 @@ update_interval = "15m"
 {{< /highlight >}}
 {{% /dir %}}
 
+## Services
+{{% dir name="critical_types" type="[]string" default="[]" %}}
+The service types that are considered as critical/essential.
+{{< highlight toml >}}
+[http.services.mentix.services]
+critical_types = ["REVAD]
+{{< /highlight >}}
+{{% /dir %}}
+
 ## Connectors
 Mentix is decoupled from the actual sources of the mesh data by using so-called _connectors_. A connector is used to gather the data from a certain source, which are then converted into Mentix' own internal format.
 
@@ -63,6 +72,9 @@ Mentix exposes its data via an HTTP endpoint using the `webapi` exporter. Data c
           - files:
              - '/usr/share/prom/sciencemesh_services.json'
   ```
+  
+- **metrics**
+The [Metrics](metrics) exporter exposes various site-specific metrics through Prometheus.
 
 ## Site Accounts service
 Mentix uses the Reva site accounts service to query information about site accounts. The following settings must be configured properly:
