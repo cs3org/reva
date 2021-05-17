@@ -238,14 +238,18 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 }
 
 // CreateDir creates the specified directory
-func (fs *Decomposedfs) CreateDir(ctx context.Context, fn string) (err error) {
+func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference, name string) (err error) {
+
 	var n *node.Node
-	if n, err = fs.lu.NodeFromPath(ctx, fn); err != nil {
+	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+		return
+	}
+	if n, err = n.Child(ctx, name); err != nil {
 		return
 	}
 
 	if n.Exists {
-		return errtypes.AlreadyExists(fn)
+		return errtypes.AlreadyExists(name)
 	}
 	pn, err := n.Parent()
 	if err != nil {

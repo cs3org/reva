@@ -954,7 +954,7 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 	return nil
 }
 
-func (fs *eosfs) CreateDir(ctx context.Context, p string) error {
+func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference, name string) error {
 	log := appctx.GetLogger(ctx)
 	u, err := getUser(ctx)
 	if err != nil {
@@ -965,6 +965,12 @@ func (fs *eosfs) CreateDir(ctx context.Context, p string) error {
 	if err != nil {
 		return err
 	}
+
+	dir, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return nil
+	}
+	p := path.Join(dir, name)
 
 	log.Info().Msgf("eos: createdir: path=%s", p)
 

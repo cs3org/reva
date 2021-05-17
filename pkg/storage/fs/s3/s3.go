@@ -287,8 +287,15 @@ func (fs *s3FS) CreateHome(ctx context.Context) error {
 	return errtypes.NotSupported("s3fs: not supported")
 }
 
-func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {
+func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference, name string) error {
 	log := appctx.GetLogger(ctx)
+
+	dir, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil
+	}
+	fn := path.Join(dir, name)
+
 	fn = fs.addRoot(fn) + "/" // append / to indicate folder // TODO only if fn does not end in /
 
 	input := &s3.PutObjectInput{

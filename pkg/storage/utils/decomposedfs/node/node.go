@@ -853,6 +853,7 @@ func (n *Node) hasUserShares(ctx context.Context) bool {
 	return false
 }
 
+// TODO make public in a comparison package
 func isSameUserID(i *userpb.UserId, j *userpb.UserId) bool {
 	switch {
 	case i == nil, j == nil:

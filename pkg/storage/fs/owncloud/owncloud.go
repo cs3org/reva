@@ -1151,7 +1151,14 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
+func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference, name string) (err error) {
+
+	dir, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil
+	}
+	sp := filepath.Join(dir, name)
+
 	ip := fs.toInternalPath(ctx, sp)
 
 	// check permissions of parent dir

@@ -266,10 +266,10 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	// For example, https://data-server.example.org/home/docs/myfile.txt
 	// or ownclouds://data-server.example.org/home/docs/myfile.txt
 	log := appctx.GetLogger(ctx)
-	
+
 	u := *s.dataServerURL
 	log.Info().Str("data-server", u.String()).Interface("ref", req.Ref).Msg("file download")
-	
+
 	protocol := &provider.FileDownloadProtocol{Expose: s.conf.ExposeDataServer}
 
 	if isStorageSpaceReference(req.Ref) {
@@ -471,14 +471,47 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
-	if err != nil {
+	var err error
+	var parentRef *provider.Reference
+	var name string
+	switch {
+	case isStorageSpaceReference(req.Ref):
+		parts := strings.SplitN(req.Ref.GetId().OpaqueId, "/", 3)
+		if len(parts) != 3 {
+			return &provider.CreateContainerResponse{
+				Status: status.NewInvalidArg(ctx, "invalid reference, name required"),
+			}, nil
+		}
+		req.Ref.GetId().OpaqueId = path.Join("/", parts[1], path.Dir(parts[2]))
+		name = path.Base(parts[2])
+	case req.Ref.GetPath() != "":
+		parentRef = &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: path.Dir(req.Ref.GetPath()),
+			},
+		}
+		name = path.Base(req.Ref.GetPath())
+	default:
 		return &provider.CreateContainerResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewInvalidArg(ctx, "invalid reference, name required"),
+		}, nil
+	}
+	var st *rpc.Status
+	if err != nil {
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when unwrapping")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error unwrapping: "+req.String())
+		}
+		return &provider.CreateContainerResponse{
+			Status: st,
 		}, nil
 	}
 
-	if err := s.storage.CreateDir(ctx, newRef.GetPath()); err != nil {
+	if err := s.storage.CreateDir(ctx, parentRef, name); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -579,15 +612,23 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	)
 
 	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	var st *rpc.Status
 	if err != nil {
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when unwrapping")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error unwrapping: "+req.String())
+		}
 		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: st,
 		}, nil
 	}
 
 	md, err := s.storage.GetMD(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
-		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when stating")
@@ -1152,13 +1193,13 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (context.
 
 			res, err := s.storage.ListStorageSpaces(ctx, filter)
 			if err != nil {
-				return nil, nil, err
+				return ctx, nil, err
 			}
 
 			space := res[0]
 			spaceRoot, err := s.storage.GetPathByID(ctx, space.Root)
 			if err != nil {
-				return nil, nil, err
+				return ctx, nil, err
 			}
 
 			ctx = context.WithValue(ctx, spaceRootKey, spaceRoot)
@@ -1176,7 +1217,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (context.
 
 			info, err := s.storage.GetMD(ctx, r, nil)
 			if err != nil {
-				return nil, nil, err
+				return ctx, nil, err
 			}
 			idRef := &provider.Reference{
 				Spec: &provider.Reference_Id{

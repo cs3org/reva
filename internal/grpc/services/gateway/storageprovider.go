@@ -1219,18 +1219,20 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 		return
 	}
 
-	resPath := path.Clean(req.Ref.GetPath())
-	newPath := req.Ref.GetPath()
-	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-		newPath = p.ProviderPath
-	}
-	r, err := c.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
+	if !isStorageSpaceReference(req.Ref) {
+		resPath := path.Clean(req.Ref.GetPath())
+		newPath := req.Ref.GetPath()
+		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
+			newPath = p.ProviderPath
+		}
+		req.Ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
 				Path: newPath,
 			},
-		},
-	})
+		}
+	}
+
+	r, err := c.Stat(ctx, req)
 	if err != nil {
 		*e = errors.Wrap(err, "gateway: error calling ListContainer")
 		return
@@ -1242,6 +1244,11 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+
+	if isStorageSpaceReference(req.Ref) {
+		return s.stat(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.StatResponse{
