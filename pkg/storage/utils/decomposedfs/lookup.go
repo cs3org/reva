@@ -66,12 +66,14 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 			if err != nil {
 				return nil, err
 			}
-			// now walk the relative path
-			n, err = lu.WalkPath(ctx, n, relPath, func(ctx context.Context, n *node.Node) error {
-				return nil
-			})
-			if err != nil {
-				return nil, err
+			if relPath != "" {
+				// now walk the relative path
+				n, err = lu.WalkPath(ctx, n, relPath, func(ctx context.Context, n *node.Node) error {
+					return nil
+				})
+				if err != nil {
+					return nil, err
+				}
 			}
 			return n, nil
 		}

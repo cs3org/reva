@@ -483,6 +483,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 			}, nil
 		}
 		req.Ref.GetId().OpaqueId = path.Join("/", parts[1], path.Dir(parts[2]))
+		parentRef = req.Ref
 		name = path.Base(parts[2])
 	case req.Ref.GetPath() != "":
 		parentRef = &provider.Reference{
@@ -510,7 +511,6 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 			Status: st,
 		}, nil
 	}
-
 	if err := s.storage.CreateDir(ctx, parentRef, name); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
