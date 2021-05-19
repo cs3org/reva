@@ -338,7 +338,7 @@ func (c *Cache) Move(storage interface{}, sourcePath, targetPath string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	stmt, err := tx.Prepare("UPDATE oc_filecache SET parent=?, path=?, name=?, path_hash=? WHERE storage = ? and fileid=?")
 	if err != nil {
 		return err
@@ -361,15 +361,18 @@ func (c *Cache) Move(storage interface{}, sourcePath, targetPath string) error {
 			id   int
 			path string
 		)
-		childRows.Scan(&id, &path)
+		err = childRows.Scan(&id, &path)
+		if err != nil {
+			return err
+		}
+
 		children[id] = path
 	}
 	for id, path := range children {
-		path = strings.Replace(path, sourcePath, targetPath, -1)
+		path = strings.ReplaceAll(path, sourcePath, targetPath)
 		phashBytes = md5.Sum([]byte(path))
 		_, err = stmt.Exec(source.ID, path, filepath.Base(path), hex.EncodeToString(phashBytes[:]), storageID, id)
 		if err != nil {
-			tx.Rollback()
 			return err
 		}
 	}

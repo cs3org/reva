@@ -68,16 +68,12 @@ const (
 	// "user.oc."
 	ocPrefix string = "user.oc."
 
-	// idAttribute is the name of the filesystem extended attribute that is used to store the uuid in
-	idAttribute string = ocPrefix + "id"
-
 	// SharePrefix is the prefix for sharing related extended attributes
 	sharePrefix       string = ocPrefix + "grant." // grants are similar to acls, but they are not propagated down the tree when being changed
 	trashOriginPrefix string = ocPrefix + "o"
 	mdPrefix          string = ocPrefix + "md."   // arbitrary metadata
 	favPrefix         string = ocPrefix + "fav."  // favorite flag, per user
 	etagPrefix        string = ocPrefix + "etag." // allow overriding a calculated etag with one from the extended attributes
-	checksumPrefix    string = ocPrefix + "cs."   // TODO add checksum support
 	checksumsKey      string = "http://owncloud.org/ns/checksums"
 )
 
@@ -747,15 +743,6 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 		return nil, err
 	}
 	return fs.filecache.Permissions(storageID, fs.toDatabasePath(ctx, ip))
-}
-
-func isNoData(err error) bool {
-	if xerr, ok := err.(*xattr.Error); ok {
-		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.ENODATA
-		}
-	}
-	return false
 }
 
 // The os not exists error is buried inside the xattr error,

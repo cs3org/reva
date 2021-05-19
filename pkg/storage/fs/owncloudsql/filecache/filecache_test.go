@@ -47,8 +47,10 @@ var _ = Describe("Filecache", func() {
 		dbData, err := ioutil.ReadFile("test.db")
 		Expect(err).ToNot(HaveOccurred())
 
-		testDbFile.Write(dbData)
-		testDbFile.Close()
+		_, err = testDbFile.Write(dbData)
+		Expect(err).ToNot(HaveOccurred())
+		err = testDbFile.Close()
+		Expect(err).ToNot(HaveOccurred())
 
 		sqldb, err = sql.Open("sqlite3", testDbFile.Name())
 		Expect(err).ToNot(HaveOccurred())
@@ -328,6 +330,7 @@ var _ = Describe("Filecache", func() {
 			Expect(entry.Etag).To(Equal("13cf411aefccd7183d3b117ccd0ac5f8"))
 
 			err = cache.SetEtag(1, "files/Photos/Portugal.jpg", "foo")
+			Expect(err).ToNot(HaveOccurred())
 
 			entry, err = cache.Get(1, "files/Photos/Portugal.jpg")
 			Expect(err).ToNot(HaveOccurred())
@@ -438,6 +441,7 @@ var _ = Describe("Filecache", func() {
 			}
 
 			existingEntry, err := cache.Get(1, "files/Photos/Portugal.jpg")
+			Expect(err).ToNot(HaveOccurred())
 			_, err = cache.Copy(1, "files/Photos/Portugal.jpg", "files_versions/Photos/Portugal.jpg.v1619528083")
 			Expect(err).ToNot(HaveOccurred())
 
