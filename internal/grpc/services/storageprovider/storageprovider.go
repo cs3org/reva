@@ -486,12 +486,18 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		parentRef = req.Ref
 		name = path.Base(parts[2])
 	case req.Ref.GetPath() != "":
+		ctx, ref, err := s.unwrap(ctx, req.Ref)
+		if err != nil {
+			return &provider.CreateContainerResponse{
+				Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			}, nil
+		}
 		parentRef = &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: path.Dir(req.Ref.GetPath()),
+				Path: path.Dir(ref.GetPath()),
 			},
 		}
-		name = path.Base(req.Ref.GetPath())
+		name = path.Base(ref.GetPath())
 	default:
 		return &provider.CreateContainerResponse{
 			Status: status.NewInvalidArg(ctx, "invalid reference, name required"),
