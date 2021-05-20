@@ -51,13 +51,13 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 		if relativePath != "" && relativePath != "/" {
 			// accessing the file
 			// PROPFIND has an implicit call
-			if r.Method != "PROPFIND" && !s.adjustResourcePathInURL(w, r) {
+			if r.Method != MethodPropfind && !s.adjustResourcePathInURL(w, r) {
 				return
 			}
 
 			r.URL.Path = path.Base(r.URL.Path)
 			switch r.Method {
-			case "PROPFIND":
+			case MethodPropfind:
 				s.handlePropfindOnToken(w, r, h.namespace, false)
 			case http.MethodGet:
 				s.handleGet(w, r, h.namespace)
@@ -73,7 +73,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 		} else {
 			// accessing the virtual parent folder
 			switch r.Method {
-			case "PROPFIND":
+			case MethodPropfind:
 				s.handlePropfindOnToken(w, r, h.namespace, true)
 			case http.MethodOptions:
 				s.handleOptions(w, r, h.namespace)

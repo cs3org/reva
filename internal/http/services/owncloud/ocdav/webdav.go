@@ -23,6 +23,20 @@ import (
 	"path"
 )
 
+// Common Webdav methods.
+//
+// Unless otherwise noted, these are defined in RFC 4918 section 9.
+const (
+	MethodPropfind  = "PROPFIND"
+	MethodLock      = "LOCK"
+	MethodUnlock    = "UNLOCK"
+	MethodProppatch = "PROPPATCH"
+	MethodMkcol     = "MKCOL"
+	MethodMove      = "MOVE"
+	MethodCopy      = "COPY"
+	MethodReport    = "REPORT"
+)
+
 // WebDavHandler implements a dav endpoint
 type WebDavHandler struct {
 	namespace         string
@@ -40,21 +54,21 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
 		switch r.Method {
-		case "PROPFIND":
+		case MethodPropfind:
 			s.handlePropfind(w, r, ns)
-		case "LOCK":
+		case MethodLock:
 			s.handleLock(w, r, ns)
-		case "UNLOCK":
+		case MethodUnlock:
 			s.handleUnlock(w, r, ns)
-		case "PROPPATCH":
+		case MethodProppatch:
 			s.handleProppatch(w, r, ns)
-		case "MKCOL":
+		case MethodMkcol:
 			s.handleMkcol(w, r, ns)
-		case "MOVE":
+		case MethodMove:
 			s.handleMove(w, r, ns)
-		case "COPY":
+		case MethodCopy:
 			s.handleCopy(w, r, ns)
-		case "REPORT":
+		case MethodReport:
 			s.handleReport(w, r, ns)
 		case http.MethodGet:
 			s.handleGet(w, r, ns)

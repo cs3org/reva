@@ -107,11 +107,11 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		//	return
 		//}
 
-		if key == "" && r.Method == "PROPFIND" {
+		if key == "" && r.Method == MethodPropfind {
 			h.listTrashbin(w, r, s, u)
 			return
 		}
-		if key != "" && r.Method == "MOVE" {
+		if key != "" && r.Method == MethodMove {
 			// find path in url relative to trash base
 			trashBase := ctx.Value(ctxKeyBaseURI).(string)
 			baseURI := path.Join(path.Dir(trashBase), "files", username)
@@ -133,7 +133,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		if r.Method == "DELETE" {
+		if r.Method == http.MethodDelete {
 			h.delete(w, r, s, u, key)
 			return
 		}

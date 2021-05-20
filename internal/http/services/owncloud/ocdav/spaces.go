@@ -71,11 +71,11 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		}
 
 		switch r.Method {
-		case "PROPFIND":
+		case MethodPropfind:
 			s.handleSpacesPropfind(w, r, spaceID)
-		case "MKCOL":
+		case MethodMkcol:
 			s.handleSpacesMkCol(w, r, spaceID)
-		case "MOVE":
+		case MethodMove:
 			s.handleSpacesMove(w, r, spaceID)
 		case http.MethodGet:
 			s.handleSpacesGet(w, r, spaceID)
