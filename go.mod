@@ -52,7 +52,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sys v0.0.0-20210423082822-04245dca01da
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
-	google.golang.org/grpc v1.37.1
+	google.golang.org/grpc v1.38.0
 	google.golang.org/protobuf v1.26.0
 	gotest.tools v2.2.0+incompatible
 )
