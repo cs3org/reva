@@ -43,8 +43,6 @@ func transferCreateCommand() *command {
 	grantee := cmd.String("grantee", "", "the grantee, receiver of the transfer")
 	granteeType := cmd.String("granteeType", "user", "the grantee type, one of: user, group")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
-	// fixed for data transfer
-	rol := editorPermission
 
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
@@ -101,13 +99,9 @@ func transferCreateCommand() *command {
 			return err
 		}
 
-		_, pint, err := getOCMSharePerm(rol)
+		resourcePermissions, pint, err := getOCMSharePerm(editorPermission)
 		if err != nil {
 			return err
-		}
-
-		resourcePermissions := &provider.ResourcePermissions{
-			InitiateFileDownload: true,
 		}
 
 		gt := provider.GranteeType_GRANTEE_TYPE_USER
@@ -143,9 +137,7 @@ func transferCreateCommand() *command {
 						},
 					},
 				},
-				Permissions: &ocm.SharePermissions{
-					Permissions: resourcePermissions,
-				},
+				Permissions: resourcePermissions,
 			},
 			RecipientMeshProvider: providerInfoResp.ProviderInfo,
 		}
