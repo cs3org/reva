@@ -261,11 +261,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 
 			// Since the public share is obtained from the scope, the current token
 			// has access to it.
-			statReq := &provider.StatRequest{
-				Ref: &provider.Reference{
-					Spec: &provider.Reference_Id{Id: share.ResourceId},
-				},
-			}
+			statReq := &provider.StatRequest{Ref: share.ResourceId}
 
 			statResponse, err := client.Stat(ctx, statReq)
 			if err != nil || statResponse.Status.Code != rpc.Code_CODE_OK {
@@ -280,7 +276,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		}
 	}
 
-	return nil, err
+	return nil, errtypes.PermissionDenied("access token has invalid scope")
 }
 
 func extractRef(req interface{}) (*provider.Reference, bool) {

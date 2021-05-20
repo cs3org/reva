@@ -116,9 +116,9 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 		}, nil
 	}
 
-	resource := &provider.ResourceId{
+	resource := &provider.Reference{
 		StorageId: parts[0],
-		OpaqueId:  parts[1],
+		NodeId:    parts[1],
 	}
 
 	var resourcePermissions *provider.ResourcePermissions

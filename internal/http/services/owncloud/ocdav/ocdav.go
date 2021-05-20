@@ -206,8 +206,8 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 	return templates.WithUser(u, ns)
 }
 
-func wrapResourceID(r *provider.ResourceId) string {
-	return wrap(r.StorageId, r.OpaqueId)
+func wrapResourceID(r *provider.Reference) string {
+	return wrap(r.StorageId, r.NodeId)
 }
 
 // The fileID must be encoded
@@ -218,7 +218,7 @@ func wrap(sid string, oid string) string {
 	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
 }
 
-func unwrap(rid string) *provider.ResourceId {
+func unwrap(rid string) *provider.Reference {
 	decodedID, err := base64.URLEncoding.DecodeString(rid)
 	if err != nil {
 		return nil
@@ -233,9 +233,9 @@ func unwrap(rid string) *provider.ResourceId {
 		return nil
 	}
 
-	return &provider.ResourceId{
+	return &provider.Reference{
 		StorageId: parts[0],
-		OpaqueId:  parts[1],
+		NodeId:    parts[1],
 	}
 }
 

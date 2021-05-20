@@ -115,12 +115,12 @@ func (fs *s3FS) addRoot(p string) string {
 }
 
 func (fs *s3FS) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-	if ref.GetPath() != "" {
+	if ref.Path != "" {
 		return fs.addRoot(ref.GetPath()), nil
 	}
 
-	if ref.GetId() != nil {
-		fn := path.Join("/", strings.TrimPrefix(ref.GetId().OpaqueId, "fileid-"))
+	if ref.NodeId != "" {
+		fn := path.Join("/", strings.TrimPrefix(ref.NodeId, "fileid-"))
 		fn = fs.addRoot(fn)
 		return fn, nil
 	}
@@ -172,7 +172,9 @@ func (fs *s3FS) normalizeObject(ctx context.Context, o *s3.Object, fn string) *p
 	fn = fs.removeRoot(path.Join("/", fn))
 	isDir := strings.HasSuffix(*o.Key, "/")
 	md := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fn, "/")},
+		Id: &provider.Reference{
+			NodeId: "fileid-" + strings.TrimPrefix(fn, "/"),
+		},
 		Path:          fn,
 		Type:          getResourceType(isDir),
 		Etag:          *o.ETag,
@@ -201,7 +203,7 @@ func (fs *s3FS) normalizeHead(ctx context.Context, o *s3.HeadObjectOutput, fn st
 	fn = fs.removeRoot(path.Join("/", fn))
 	isDir := strings.HasSuffix(fn, "/")
 	md := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fn, "/")},
+		Id:            &provider.Reference{NodeId: "fileid-" + strings.TrimPrefix(fn, "/")},
 		Path:          fn,
 		Type:          getResourceType(isDir),
 		Etag:          *o.ETag,
@@ -221,7 +223,7 @@ func (fs *s3FS) normalizeHead(ctx context.Context, o *s3.HeadObjectOutput, fn st
 func (fs *s3FS) normalizeCommonPrefix(ctx context.Context, p *s3.CommonPrefix) *provider.ResourceInfo {
 	fn := fs.removeRoot(path.Join("/", *p.Prefix))
 	md := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fn, "/")},
+		Id:            &provider.Reference{NodeId: "fileid-" + strings.TrimPrefix(fn, "/")},
 		Path:          fn,
 		Type:          getResourceType(true),
 		Etag:          "TODO(labkode)",
@@ -242,8 +244,8 @@ func (fs *s3FS) normalizeCommonPrefix(ctx context.Context, p *s3.CommonPrefix) *
 // GetPathByID returns the path pointed by the file id
 // In this implementation the file id is that path of the file without the first slash
 // thus the file id always points to the filename
-func (fs *s3FS) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	return path.Join("/", strings.TrimPrefix(id.OpaqueId, "fileid-")), nil
+func (fs *s3FS) GetPathByID(ctx context.Context, id *provider.Reference) (string, error) {
+	return path.Join("/", strings.TrimPrefix(id.NodeId, "fileid-")), nil
 }
 
 func (fs *s3FS) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -656,6 +658,6 @@ func (fs *s3FS) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 	return nil, errtypes.NotSupported("list recycle")
 }
 
-func (fs *s3FS) RestoreRecycleItem(ctx context.Context, restoreKey, restorePath string) error {
+func (fs *s3FS) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
 	return errtypes.NotSupported("restore recycle")
 }

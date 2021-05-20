@@ -165,7 +165,7 @@ func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppReques
 	}
 
 	q := httpReq.URL.Query()
-	q.Add("fileid", req.ResourceInfo.GetId().OpaqueId)
+	q.Add("fileid", req.ResourceInfo.GetId().NodeId)
 	q.Add("endpoint", req.ResourceInfo.GetId().StorageId)
 	q.Add("viewmode", req.ViewMode.String())
 	// TODO the folder URL should be resolved as e.g. `'https://cernbox.cern.ch/index.php/apps/files/?dir=' + filepath.Dir(req.Ref.GetPath())`

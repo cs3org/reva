@@ -56,9 +56,9 @@ func publicShareListCommand() *command {
 			if len(tokens) != 2 {
 				return fmt.Errorf("resource id invalid")
 			}
-			id := &provider.ResourceId{
+			id := &provider.Reference{
 				StorageId: tokens[0],
-				OpaqueId:  tokens[1],
+				NodeId:    tokens[1],
 			}
 			shareRequest.Filters = []*link.ListPublicSharesRequest_Filter{
 				&link.ListPublicSharesRequest_Filter{

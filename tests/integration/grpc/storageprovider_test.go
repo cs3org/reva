@@ -63,25 +63,15 @@ var _ = Describe("storage providers", func() {
 			},
 		}
 
-		homeRef = &storagep.Reference{
-			Spec: &storagep.Reference_Path{Path: "/"},
-		}
-		filePath = "/file"
-		fileRef  = &storagep.Reference{
-			Spec: &storagep.Reference_Path{Path: filePath},
-		}
+		homeRef           = &storagep.Reference{Path: "/"}
+		filePath          = "/file"
+		fileRef           = &storagep.Reference{Path: filePath}
 		versionedFilePath = "/versionedFile"
-		versionedFileRef  = &storagep.Reference{
-			Spec: &storagep.Reference_Path{Path: versionedFilePath},
-		}
-		subdirPath = "/subdir"
-		subdirRef  = &storagep.Reference{
-			Spec: &storagep.Reference_Path{Path: subdirPath},
-		}
-		sharesPath = "/Shares"
-		sharesRef  = &storagep.Reference{
-			Spec: &storagep.Reference_Path{Path: sharesPath},
-		}
+		versionedFileRef  = &storagep.Reference{Path: versionedFilePath}
+		subdirPath        = "/subdir"
+		subdirRef         = &storagep.Reference{Path: subdirPath}
+		sharesPath        = "/Shares"
+		sharesRef         = &storagep.Reference{Path: sharesPath}
 	)
 
 	JustBeforeEach(func() {
@@ -133,9 +123,7 @@ var _ = Describe("storage providers", func() {
 
 	assertCreateContainer := func() {
 		It("creates a new directory", func() {
-			newRef := &storagep.Reference{
-				Spec: &storagep.Reference_Path{Path: "/newdir"},
-			}
+			newRef := &storagep.Reference{Path: "/newdir"}
 
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: newRef})
 			Expect(err).ToNot(HaveOccurred())
@@ -219,9 +207,7 @@ var _ = Describe("storage providers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-			targetRef := &storagep.Reference{
-				Spec: &storagep.Reference_Path{Path: "/new_subdir"},
-			}
+			targetRef := &storagep.Reference{Path: "/new_subdir"}
 			res, err := serviceClient.Move(ctx, &storagep.MoveRequest{Source: subdirRef, Destination: targetRef})
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
@@ -342,7 +328,7 @@ var _ = Describe("storage providers", func() {
 
 			Expect(len(listRes.RecycleItems)).To(Equal(1))
 			item := listRes.RecycleItems[0]
-			Expect(item.Path).To(Equal(subdirPath))
+			Expect(item.Ref.Path).To(Equal(subdirPath))
 
 			By("restoring a recycle item")
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
@@ -364,9 +350,7 @@ var _ = Describe("storage providers", func() {
 		})
 
 		It("restores resources to a different location", func() {
-			restoreRef := &storagep.Reference{
-				Spec: &storagep.Reference_Path{Path: "/subdirRestored"},
-			}
+			restoreRef := &storagep.Reference{Path: "/subdirRestored"}
 			By("deleting an item")
 			res, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
@@ -379,7 +363,7 @@ var _ = Describe("storage providers", func() {
 
 			Expect(len(listRes.RecycleItems)).To(Equal(1))
 			item := listRes.RecycleItems[0]
-			Expect(item.Path).To(Equal(subdirPath))
+			Expect(item.Ref.Path).To(Equal(subdirPath))
 
 			By("restoring the item to a different location")
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: restoreRef})
@@ -388,9 +372,9 @@ var _ = Describe("storage providers", func() {
 
 			restoreRes, err := serviceClient.RestoreRecycleItem(ctx,
 				&storagep.RestoreRecycleItemRequest{
-					Ref:         subdirRef,
-					Key:         item.Key,
-					RestorePath: "/subdirRestored",
+					Ref:        subdirRef,
+					Key:        item.Key,
+					RestoreRef: &storagep.Reference{Path: "/subdirRestored"},
 				},
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -432,7 +416,10 @@ var _ = Describe("storage providers", func() {
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 			Expect(len(listRes.Infos)).To(Equal(0))
 
-			res, err := serviceClient.CreateReference(ctx, &storagep.CreateReferenceRequest{Path: "/Shares/reference", TargetUri: "scheme://target"})
+			res, err := serviceClient.CreateReference(ctx, &storagep.CreateReferenceRequest{
+				Ref:       &storagep.Reference{Path: "/Shares/reference"},
+				TargetUri: "scheme://target",
+			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 

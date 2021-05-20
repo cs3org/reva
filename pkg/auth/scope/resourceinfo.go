@@ -68,9 +68,9 @@ func resourceinfoScope(scope *authpb.Scope, resource interface{}) (bool, error) 
 }
 
 func checkResourceInfo(inf *provider.ResourceInfo, ref *provider.Reference) bool {
-	// ref: <id:<storage_id:$storageID opaque_id:$opaqueID > >
-	if ref.GetId() != nil {
-		return inf.Id.StorageId == ref.GetId().StorageId && inf.Id.OpaqueId == ref.GetId().OpaqueId
+	// ref: <id:<storage_id:$storageID node_id:$nodeID path:$path> >
+	if ref.StorageId != "" || ref.NodeId != "" { // path can be empty or a relative path
+		return inf.Id.StorageId == ref.StorageId && inf.Id.NodeId == ref.NodeId && inf.Id.Path == ref.Path
 	}
 	// ref: <path:$path >
 	if strings.HasPrefix(ref.GetPath(), inf.Path) {

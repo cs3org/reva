@@ -92,11 +92,7 @@ func uploadCommand() *command {
 		}
 
 		req := &provider.InitiateFileUploadRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: target,
-				},
-			},
+			Ref: &provider.Reference{Path: target},
 			Opaque: &typespb.Opaque{
 				Map: map[string]*typespb.OpaqueEntry{
 					"Upload-Length": {
@@ -212,11 +208,7 @@ func uploadCommand() *command {
 		}
 
 		req2 := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: target,
-				},
-			},
+			Ref: &provider.Reference{Path: target},
 		}
 		res2, err := gwc.Stat(ctx, req2)
 		if err != nil {
@@ -229,7 +221,7 @@ func uploadCommand() *command {
 
 		info := res2.Info
 
-		fmt.Printf("File uploaded: %s:%s %d %s\n", info.Id.StorageId, info.Id.OpaqueId, info.Size, info.Path)
+		fmt.Printf("File uploaded: %s:%s %d %s\n", info.Id.StorageId, info.Id.NodeId, info.Size, info.Path)
 
 		return nil
 	}

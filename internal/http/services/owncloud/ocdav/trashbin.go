@@ -179,13 +179,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 	// ask gateway for recycle items
 	// TODO(labkode): add Reference to ListRecycleRequest
-	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: getHomeRes.Path,
-			},
-		},
-	})
+	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: getHomeRes.Ref})
 
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
@@ -285,8 +279,8 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 			Prop:   []*propertyXML{},
 		})
 		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", filepath.Base(item.Path)))
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Path, "/")))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", filepath.Base(item.Ref.Path)))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
 		if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -322,10 +316,10 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 					}
 				case "trashbin-original-filename":
 					// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", filepath.Base(item.Path)))
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", filepath.Base(item.Ref.Path)))
 				case "trashbin-original-location":
 					// TODO (jfd) double check and clarify the cs3 spec what the Key is about and if Path is only the folder that contains the file or if it includes the filename
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Path, "/")))
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
 				case "trashbin-delete-datetime":
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
 				case "trashbin-delete-timestamp":
@@ -399,13 +393,9 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		// this means we can only undelete on the same storage, not to a different folder
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
 		// TODO currently limited to the home storage
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: getHomeRes.Path,
-			},
-		},
-		Key:         key,
-		RestorePath: dst,
+		Ref:        getHomeRes.Ref,
+		Key:        key,
+		RestoreRef: &provider.Reference{Path: dst},
 	}
 
 	res, err := client.RestoreRecycleItem(ctx, req)
@@ -447,13 +437,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		HandleErrorStatus(&sublog, w, getHomeRes.Status)
 		return
 	}
-	sRes, err := client.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: getHomeRes.Path,
-			},
-		},
-	})
+	sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: getHomeRes.Ref})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling Stat")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -469,12 +453,8 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 
 	req := &gateway.PurgeRecycleRequest{
 		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: &provider.ResourceId{
-					OpaqueId:  key,
-					StorageId: sRes.Info.Id.StorageId,
-				},
-			},
+			NodeId:    key,
+			StorageId: sRes.Info.Id.StorageId,
 		},
 	}
 

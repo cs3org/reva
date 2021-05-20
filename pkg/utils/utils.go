@@ -153,8 +153,8 @@ func GroupEqual(u, v *grouppb.GroupId) bool {
 }
 
 // ResourceEqual returns whether two resources have the same field values.
-func ResourceEqual(u, v *provider.ResourceId) bool {
-	return u != nil && v != nil && u.StorageId == v.StorageId && u.OpaqueId == v.OpaqueId
+func ResourceEqual(u, v *provider.Reference) bool {
+	return u != nil && v != nil && u.StorageId == v.StorageId && u.NodeId == v.NodeId && u.Path == v.Path
 }
 
 // GranteeEqual returns whether two grantees have the same field values.

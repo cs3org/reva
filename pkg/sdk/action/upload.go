@@ -131,11 +131,7 @@ func (action *UploadAction) upload(data io.Reader, dataInfo os.FileInfo, target 
 func (action *UploadAction) initiateUpload(target string, size int64) (*gateway.InitiateFileUploadResponse, error) {
 	// Initiating an upload request gets us the upload endpoint for the specified target
 	req := &provider.InitiateFileUploadRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: target,
-			},
-		},
+		Ref: &provider.Reference{Path: target},
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
 				"Upload-Length": {

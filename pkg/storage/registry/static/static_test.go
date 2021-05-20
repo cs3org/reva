@@ -125,11 +125,7 @@ var _ = Describe("Static", func() {
 	})
 
 	Describe("FindProviders for home reference", func() {
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: "/home/abcd",
-			},
-		}
+		ref := &provider.Reference{Path: "/home/abcd"}
 
 		It("finds all providers for user alice for a home ref", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref)
@@ -153,11 +149,7 @@ var _ = Describe("Static", func() {
 	})
 
 	Describe("FindProviders for eos reference", func() {
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: "/eos/user/b/bob/xyz",
-			},
-		}
+		ref := &provider.Reference{Path: "/eos/user/b/bob/xyz"}
 
 		It("finds all providers for user alice for an eos ref", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref)
@@ -181,11 +173,7 @@ var _ = Describe("Static", func() {
 	})
 
 	Describe("FindProviders for project reference", func() {
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: "/eos/project/pqr",
-			},
-		}
+		ref := &provider.Reference{Path: "/eos/project/pqr"}
 
 		It("finds all providers for user alice for a project ref", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref)
@@ -209,16 +197,8 @@ var _ = Describe("Static", func() {
 	})
 
 	Describe("FindProviders for virtual references", func() {
-		ref1 := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: "/eos",
-			},
-		}
-		ref2 := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: "/",
-			},
-		}
+		ref1 := &provider.Reference{Path: "/eos"}
+		ref2 := &provider.Reference{Path: "/"}
 
 		It("finds all providers for user alice for a virtual eos ref", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref1)
@@ -247,11 +227,7 @@ var _ = Describe("Static", func() {
 
 	Describe("FindProviders for reference containing ID", func() {
 		ref := &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: &provider.ResourceId{
-					StorageId: "123e4567-e89b-12d3-a456-426655440000",
-				},
-			},
+			StorageId: "123e4567-e89b-12d3-a456-426655440000",
 		}
 
 		It("finds all providers for user alice for ref containing ID", func() {

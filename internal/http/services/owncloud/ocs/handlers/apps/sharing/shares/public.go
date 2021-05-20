@@ -377,13 +377,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		return
 	}
 
-	statReq := provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: before.Share.ResourceId,
-			},
-		},
-	}
+	statReq := provider.StatRequest{Ref: before.Share.ResourceId}
 
 	statRes, err := gwC.Stat(r.Context(), &statReq)
 	if err != nil {

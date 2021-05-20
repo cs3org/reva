@@ -44,9 +44,7 @@ func (s *svc) handleDelete(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: fn},
-	}
+	ref := &provider.Reference{Path: fn}
 	req := &provider.DeleteRequest{Ref: ref}
 	res, err := client.Delete(ctx, req)
 	if err != nil {

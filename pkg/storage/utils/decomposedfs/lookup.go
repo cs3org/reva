@@ -40,12 +40,12 @@ type Lookup struct {
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
 func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error) {
-	if ref.GetPath() != "" {
+	if ref.Path != "" {
 		return lu.NodeFromPath(ctx, ref.GetPath())
 	}
 
-	if ref.GetId() != nil {
-		return lu.NodeFromID(ctx, ref.GetId())
+	if ref.StorageId != "" || ref.NodeId != "" {
+		return lu.NodeFromID(ctx, ref)
 	}
 
 	// reference is invalid
@@ -77,11 +77,11 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string) (*node.Node, erro
 }
 
 // NodeFromID returns the internal path for the id
-func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
-	if id == nil || id.OpaqueId == "" {
+func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.Reference) (n *node.Node, err error) {
+	if id == nil || id.NodeId == "" {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
 	}
-	return node.ReadNode(ctx, lu, id.OpaqueId)
+	return node.ReadNode(ctx, lu, id.NodeId)
 }
 
 // Path returns the path for node

@@ -52,7 +52,7 @@ type Blobstore interface {
 // PathLookup defines the interface for the lookup component
 type PathLookup interface {
 	NodeFromPath(ctx context.Context, fn string) (*node.Node, error)
-	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error)
+	NodeFromID(ctx context.Context, id *provider.Reference) (n *node.Node, err error)
 	RootNode(ctx context.Context) (node *node.Node, err error)
 	HomeOrRootNode(ctx context.Context) (node *node.Node, err error)
 

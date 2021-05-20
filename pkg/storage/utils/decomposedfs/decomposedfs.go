@@ -63,7 +63,7 @@ type Tree interface {
 	// CreateReference(ctx context.Context, node *node.Node, targetURI *url.URL) error
 	Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error)
 	Delete(ctx context.Context, node *node.Node) (err error)
-	RestoreRecycleItemFunc(ctx context.Context, key, restorePath string) (*node.Node, func() error, error)
+	RestoreRecycleItemFunc(ctx context.Context, key, restorePath string) (*node.Node, func() error, error) // FIXME REFERENCE use ref instead of path
 	PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error)
 
 	WriteBlob(key string, reader io.Reader) error
@@ -225,7 +225,7 @@ func (fs *Decomposedfs) GetHome(ctx context.Context) (string, error) {
 }
 
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
-func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.Reference) (string, error) {
 	node, err := fs.lu.NodeFromID(ctx, id)
 	if err != nil {
 		return "", err

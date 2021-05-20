@@ -195,7 +195,7 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 	return "", errors.New("json: ocm endpoint not specified for mesh provider")
 }
 
-func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
+func (m *mgr) Share(ctx context.Context, md *provider.Reference, g *ocm.ShareGrant, name string,
 	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string, st ocm.Share_ShareType) (*ocm.Share, error) {
 
 	id := genID()
@@ -308,7 +308,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		requestBody := url.Values{
 			"shareWith":    {g.Grantee.GetUserId().OpaqueId},
 			"name":         {name},
-			"providerId":   {fmt.Sprintf("%s:%s", md.StorageId, md.OpaqueId)},
+			"providerId":   {fmt.Sprintf("%s:%s", md.StorageId, md.NodeId)},
 			"owner":        {userID.OpaqueId},
 			"protocol":     {string(protocol)},
 			"meshProvider": {userID.Idp},
@@ -563,7 +563,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*ocm.ListOCMSharesReques
 				// TODO(labkode): add the rest of filters.
 				for _, f := range filters {
 					if f.Type == ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID {
-						if share.ResourceId.StorageId == f.GetResourceId().StorageId && share.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
+						if utils.ResourceEqual(share.ResourceId, f.GetResourceId()) {
 							ss = append(ss, &share)
 						}
 					}

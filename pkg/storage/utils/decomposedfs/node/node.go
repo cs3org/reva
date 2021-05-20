@@ -444,7 +444,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	}
 
-	id := &provider.ResourceId{OpaqueId: n.ID}
+	id := &provider.Reference{NodeId: n.ID}
 
 	fn, err = n.lu.Path(ctx, n)
 	if err != nil {

@@ -156,9 +156,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		return
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: fn},
-	}
+	ref := &provider.Reference{Path: fn}
 	sReq := &provider.StatRequest{Ref: ref}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
@@ -315,13 +313,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		sReq = &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: chunk.Path,
-				},
-			},
-		}
+		sReq = &provider.StatRequest{Ref: &provider.Reference{Path: chunk.Path}}
 	}
 
 	// stat again to check the new file's metadata

@@ -56,11 +56,7 @@ var _ = Describe("File uploads", func() {
 	)
 
 	BeforeEach(func() {
-		ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: "/foo",
-			},
-		}
+		ref = &provider.Reference{Path: "/foo"}
 		user = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "idp",

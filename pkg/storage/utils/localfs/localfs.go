@@ -135,17 +135,15 @@ func (fs *localfs) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (fs *localfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-	if ref.GetPath() != "" {
-		return ref.GetPath(), nil
+func (fs *localfs) resolve(ctx context.Context, ref *provider.Reference) (p string, err error) {
+	if ref.StorageId != "" || ref.NodeId != "" {
+		if p, err = fs.GetPathByID(ctx, ref); err != nil {
+			return "", err
+		}
+		return path.Join(p, ref.Path), nil
 	}
 
-	if ref.GetId() != nil {
-		return fs.GetPathByID(ctx, ref.GetId())
-	}
-
-	// reference is invalid
-	return "", fmt.Errorf("local: invalid reference %+v", ref)
+	return ref.Path, nil
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
@@ -343,7 +341,7 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdK
 
 	// A fileid is constructed like `fileid-url_encoded_path`. See GetPathByID for the inverse conversion
 	md := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: "fileid-" + url.QueryEscape(path.Join(layout, fp))},
+		Id:            &provider.Reference{NodeId: "fileid-" + url.QueryEscape(path.Join(layout, fp))},
 		Path:          fp,
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          calcEtag(ctx, fi),
@@ -415,7 +413,7 @@ func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string, mdK
 
 // GetPathByID returns the path pointed by the file id
 // In this implementation the file id is in the form `fileid-url_encoded_path`
-func (fs *localfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.Reference) (string, error) {
 	var layout string
 	if !fs.conf.DisableHome {
 		var err error
@@ -424,7 +422,7 @@ func (fs *localfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 			return "", err
 		}
 	}
-	return url.QueryUnescape(strings.TrimPrefix(id.OpaqueId, "fileid-"+layout))
+	return url.QueryUnescape(strings.TrimPrefix(ref.NodeId, "fileid-"+layout))
 }
 
 func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -1166,7 +1164,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	return &provider.RecycleItem{
 		Type: getResourceType(md.IsDir()),
 		Key:  md.Name(),
-		Path: filePath,
+		Ref:  &provider.Reference{Path: filePath},
 		Size: uint64(md.Size()),
 		DeletionTime: &types.Timestamp{
 			Seconds: uint64(ttime),
@@ -1192,7 +1190,7 @@ func (fs *localfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, er
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey, restorePath string) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string, restoreRef *provider.Reference) error {
 
 	suffix := path.Ext(restoreKey)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
@@ -1206,8 +1204,8 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey, restorePa
 
 	var localRestorePath string
 	switch {
-	case restorePath != "":
-		localRestorePath = fs.wrap(ctx, restorePath)
+	case restoreRef != nil && restoreRef.Path != "":
+		localRestorePath = fs.wrap(ctx, restoreRef.Path)
 	case fs.isShareFolder(ctx, filePath):
 		localRestorePath = fs.wrapReferences(ctx, filePath)
 	default:

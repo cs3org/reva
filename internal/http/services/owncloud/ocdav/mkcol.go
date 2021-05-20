@@ -54,9 +54,7 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	// check fn exists
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: fn},
-	}
+	ref := &provider.Reference{Path: fn}
 	statReq := &provider.StatRequest{Ref: ref}
 	statRes, err := client.Stat(ctx, statReq)
 	if err != nil {

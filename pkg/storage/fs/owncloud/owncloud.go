@@ -661,7 +661,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip st
 	}
 
 	ri := &provider.ResourceInfo{
-		Id:       &provider.ResourceId{OpaqueId: id},
+		Id:       &provider.Reference{NodeId: id},
 		Path:     sp,
 		Type:     getResourceType(fi.IsDir()),
 		Etag:     etag,
@@ -738,19 +738,19 @@ func readOrCreateID(ctx context.Context, ip string, conn redis.Conn) string {
 	return uid.String()
 }
 
-func (fs *ocfs) getPath(ctx context.Context, id *provider.ResourceId) (string, error) {
+func (fs *ocfs) getPath(ctx context.Context, id *provider.Reference) (string, error) {
 	log := appctx.GetLogger(ctx)
 	c := fs.pool.Get()
 	defer c.Close()
 	fs.scanFiles(ctx, c)
-	ip, err := redis.String(c.Do("GET", id.OpaqueId))
+	ip, err := redis.String(c.Do("GET", id.NodeId))
 	if err != nil {
-		return "", errtypes.NotFound(id.OpaqueId)
+		return "", errtypes.NotFound(id.NodeId)
 	}
 
 	idFromXattr, err := xattr.Get(ip, idAttribute)
 	if err != nil {
-		return "", errtypes.NotFound(id.OpaqueId)
+		return "", errtypes.NotFound(id.NodeId)
 	}
 
 	uid, err := uuid.FromBytes(idFromXattr)
@@ -758,18 +758,18 @@ func (fs *ocfs) getPath(ctx context.Context, id *provider.ResourceId) (string, e
 		log.Error().Err(err).Msg("error parsing uuid")
 	}
 
-	if uid.String() != id.OpaqueId {
-		if _, err := c.Do("DEL", id.OpaqueId); err != nil {
+	if uid.String() != id.NodeId {
+		if _, err := c.Do("DEL", id.NodeId); err != nil {
 			return "", err
 		}
-		return "", errtypes.NotFound(id.OpaqueId)
+		return "", errtypes.NotFound(id.NodeId)
 	}
 
 	return ip, nil
 }
 
 // GetPathByID returns the storage relative path for the file id, without the internal namespace
-func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.Reference) (string, error) {
 	ip, err := fs.getPath(ctx, id)
 	if err != nil {
 		return "", err
@@ -792,20 +792,20 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (strin
 
 // resolve takes in a request path or request id and converts it to an internal path.
 func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-	if ref.GetPath() != "" {
-		return fs.toInternalPath(ctx, ref.GetPath()), nil
-	}
 
-	if ref.GetId() != nil {
-		ip, err := fs.getPath(ctx, ref.GetId())
+	// if storage id is set look up that
+	if ref.StorageId != "" || ref.NodeId != "" {
+		ip, err := fs.getPath(ctx, ref)
 		if err != nil {
 			return "", err
 		}
+		filepath.Join("/", ip, ref.Path)
 		return ip, nil
 	}
 
-	// reference is invalid
-	return "", fmt.Errorf("invalid reference %+v", ref)
+	// use a path
+	return fs.toInternalPath(ctx, ref.Path), nil
+
 }
 
 func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -2137,7 +2137,9 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 		Type: getResourceType(md.IsDir()),
 		Key:  md.Name(),
 		// TODO do we need to prefix the path? it should be relative to this storage root, right?
-		Path: originalPath,
+		Ref: &provider.Reference{
+			Path: originalPath,
+		},
 		Size: uint64(md.Size()),
 		DeletionTime: &types.Timestamp{
 			Seconds: uint64(ttime),
@@ -2173,7 +2175,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 	return items, nil
 }
 
-func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, restorePath string) error {
+func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
@@ -2188,17 +2190,20 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, restorePath string)
 		return nil
 	}
 
-	if restorePath == "" {
+	if restoreRef == nil {
+		restoreRef = &provider.Reference{}
+	}
+	if restoreRef.Path == "" {
 		v, err := xattr.Get(src, trashOriginPrefix)
 		if err != nil {
 			log.Error().Err(err).Str("key", key).Str("path", src).Msg("could not read origin")
 		}
-		restorePath = filepath.Join("/", filepath.Clean(string(v)), strings.TrimSuffix(filepath.Base(src), suffix))
+		restoreRef.Path = filepath.Join("/", filepath.Clean(string(v)), strings.TrimSuffix(filepath.Base(src), suffix))
 	}
-	tgt := fs.toInternalPath(ctx, restorePath)
+	tgt := fs.toInternalPath(ctx, restoreRef.Path)
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
-		log.Error().Err(err).Str("key", key).Str("restorePath", restorePath).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
+		log.Error().Err(err).Str("key", key).Str("restorePath", restoreRef.Path).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
 		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 	// unset trash origin location in metadata

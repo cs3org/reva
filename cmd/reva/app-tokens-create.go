@@ -213,13 +213,7 @@ func getPathScope(ctx context.Context, client gateway.GatewayAPIClient, path, pe
 		return nil, err
 	}
 
-	statResponse, err := client.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path,
-			},
-		},
-	})
+	statResponse, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: path}})
 
 	if err != nil {
 		return nil, err

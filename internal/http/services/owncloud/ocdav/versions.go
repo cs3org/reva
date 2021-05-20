@@ -42,11 +42,11 @@ func (h *VersionsHandler) init(c *Config) error {
 // Handler handles requests
 // versions can be listed with a PROPFIND to /remote.php/dav/meta/<fileid>/v
 // a version is identified by a timestamp, eg. /remote.php/dav/meta/<fileid>/v/1561410426
-func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler {
+func (h *VersionsHandler) Handler(s *svc, rid *provider.Reference) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		if rid == (*provider.ResourceId)(nil) {
+		if rid == nil {
 			http.Error(w, "404 Not Found", http.StatusNotFound)
 			return
 		}
@@ -78,7 +78,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 	})
 }
 
-func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
+func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.Reference) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "listVersions")
 	defer span.End()
@@ -99,10 +99,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Id{Id: rid},
-	}
-	req := &provider.StatRequest{Ref: ref}
+	req := &provider.StatRequest{Ref: rid}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc stat request")
@@ -117,7 +114,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	info := res.Info
 
 	lvReq := &provider.ListFileVersionsRequest{
-		Ref: ref,
+		Ref: rid,
 	}
 	lvRes, err := client.ListFileVersions(ctx, lvReq)
 	if err != nil {
@@ -142,9 +139,9 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 			// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
 			// Opaque
 			Type: provider.ResourceType_RESOURCE_TYPE_FILE,
-			Id: &provider.ResourceId{
+			Id: &provider.Reference{
 				StorageId: "versions", // this is a virtual storage
-				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
+				NodeId:    info.Id.NodeId + "@" + versions[i].GetKey(),
 			},
 			// Checksum
 			Etag: versions[i].Etag,
@@ -178,7 +175,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 }
 
-func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
+func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.Reference, key string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "restore")
 	defer span.End()
@@ -193,9 +190,7 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 	}
 
 	req := &provider.RestoreFileVersionRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{Id: rid},
-		},
+		Ref: rid,
 		Key: key,
 	}
 

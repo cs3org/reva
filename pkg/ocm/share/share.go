@@ -30,7 +30,7 @@ import (
 // Manager is the interface that manipulates the OCM shares.
 type Manager interface {
 	// Create a new share in fn with the given acl.
-	Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
+	Share(ctx context.Context, md *provider.Reference, g *ocm.ShareGrant, name string,
 		pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string, st ocm.Share_ShareType) (*ocm.Share, error)
 
 	// GetShare gets the information for a share by the given ref.

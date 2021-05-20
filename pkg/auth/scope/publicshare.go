@@ -71,11 +71,12 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 }
 
 func checkStorageRef(s *link.PublicShare, r *provider.Reference) bool {
-	// ref: <id:<storage_id:$storageID opaque_id:$opaqueID > >
-	if r.GetId() != nil {
-		return s.ResourceId.StorageId == r.GetId().StorageId && s.ResourceId.OpaqueId == r.GetId().OpaqueId
+	// r: <id:<storage_id:$storageID node_id:$nodeID path:$path > >
+	if (r.StorageId != "" || r.NodeId != "") && r.Path == "" { // path must be empty
+		return s.ResourceId.StorageId == r.StorageId && s.ResourceId.NodeId == r.NodeId
 	}
-	// ref: <path:"/public/$token" >
+
+	// r: <path:"/public/$token" >
 	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) {
 		return true
 	}

@@ -187,7 +187,7 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 		Id: &collaboration.ShareId{
 			OpaqueId: s.ID,
 		},
-		ResourceId:  &provider.ResourceId{OpaqueId: s.ItemSource, StorageId: s.Prefix},
+		ResourceId:  &provider.Reference{StorageId: s.Prefix, NodeId: s.ItemSource},
 		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions)},
 		Grantee:     ExtractGrantee(s.ShareType, s.ShareWith),
 		Owner:       ExtractUserID(s.UIDOwner),
@@ -234,7 +234,7 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 		Id: &link.PublicShareId{
 			OpaqueId: s.ID,
 		},
-		ResourceId:        &provider.ResourceId{OpaqueId: s.ItemSource, StorageId: s.Prefix},
+		ResourceId:        &provider.Reference{StorageId: s.Prefix, NodeId: s.ItemSource},
 		Permissions:       &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions)},
 		Owner:             ExtractUserID(s.UIDOwner),
 		Creator:           ExtractUserID(s.UIDInitiator),
