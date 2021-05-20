@@ -21,9 +21,9 @@ package ocmshareprovider
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -66,7 +66,7 @@ func getShareManager(c *config) (share.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
