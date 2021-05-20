@@ -150,7 +150,7 @@ func (s *service) getWopiAppEndpoints(ctx context.Context) (map[string]interface
 	return appsURLMap, nil
 }
 
-func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
+func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
 
 	log := appctx.GetLogger(ctx)
 
@@ -189,7 +189,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	openRes, err := s.client.Do(httpReq)
 
 	if err != nil {
-		res := &providerpb.OpenFileInAppProviderResponse{
+		res := &providerpb.OpenInAppResponse{
 			Status: status.NewInternal(ctx, err, "appprovider: error performing open request to WOPI"),
 		}
 		return res, nil
@@ -197,7 +197,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	defer openRes.Body.Close()
 
 	if openRes.StatusCode != http.StatusOK {
-		res := &providerpb.OpenFileInAppProviderResponse{
+		res := &providerpb.OpenInAppResponse{
 			Status: status.NewInvalid(ctx, fmt.Sprintf("appprovider: error performing open request to WOPI, status code: %d", openRes.StatusCode)),
 		}
 		return res, nil
@@ -210,37 +210,45 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	}
 	openResBody := buf.String()
 
-	// TODO call this e.g. once a day or a week, and cache the content in a shared map protected by a multi-reader Lock
-	appsURLMap, err := s.getWopiAppEndpoints(ctx)
-	if err != nil {
-		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "appprovider: getWopiAppEndpoints failed"),
-		}
-		return res, nil
-	}
-	viewOptions := appsURLMap[path.Ext(req.ResourceInfo.GetPath())]
-	viewOptionsMap, ok := viewOptions.(map[string]interface{})
-	if !ok {
-		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInvalid(ctx, "Incorrect parsing of the App URLs map from the WOPI server"),
-		}
-		return res, nil
-	}
-
 	var viewmode string
-	if req.ViewMode == providerpb.OpenFileInAppProviderRequest_VIEW_MODE_READ_WRITE {
+	if req.ViewMode == providerpb.OpenInAppRequest_VIEW_MODE_READ_WRITE {
 		viewmode = "edit"
 	} else {
 		viewmode = "view"
 	}
 
-	appProviderURL := fmt.Sprintf("%v", viewOptionsMap[viewmode])
-	if strings.Contains(appProviderURL, "?") {
-		appProviderURL += "&"
+	var appProviderURL string
+	if req.App == "" {
+		// Default behavior: work out the application URL to be used for this file
+		// TODO call this e.g. once a day or a week, and cache the content in a shared map protected by a multi-reader Lock
+		appsURLMap, err := s.getWopiAppEndpoints(ctx)
+		if err != nil {
+			res := &providerpb.OpenInAppResponse{
+				Status: status.NewInternal(ctx, err, "appprovider: getWopiAppEndpoints failed"),
+			}
+			return res, nil
+		}
+		viewOptions := appsURLMap[path.Ext(req.ResourceInfo.GetPath())]
+		viewOptionsMap, ok := viewOptions.(map[string]interface{})
+		if !ok {
+			res := &providerpb.OpenInAppResponse{
+				Status: status.NewInvalid(ctx, "Incorrect parsing of the App URLs map from the WOPI server"),
+			}
+			return res, nil
+		}
+
+		appProviderURL = fmt.Sprintf("%v", viewOptionsMap[viewmode])
+		if strings.Contains(appProviderURL, "?") {
+			appProviderURL += "&"
+		} else {
+			appProviderURL += "?"
+		}
+		appProviderURL = fmt.Sprintf("%sWOPISrc=%s", appProviderURL, openResBody)
 	} else {
-		appProviderURL += "?"
+		// User specified the application to use, generate the URL out of that
+		// TODO map the given req.App to the URL via config. For now assume it's a URL!
+		appProviderURL = fmt.Sprintf("%sWOPISrc=%s", req.App, openResBody)
 	}
-	appProviderURL = fmt.Sprintf("%sWOPISrc=%s", appProviderURL, openResBody)
 
 	// In case of applications served by the WOPI bridge, resolve the URL and go to the app
 	// Note that URL matching is performed via string matching, not via IP resolution: may need to fix this
@@ -270,12 +278,12 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	}
 
 	log.Info().Msg(fmt.Sprintf("Returning app provider URL %s", appProviderURL))
-	return &providerpb.OpenFileInAppProviderResponse{
-		Status:         status.NewOK(ctx),
-		AppProviderUrl: appProviderURL,
+	return &providerpb.OpenInAppResponse{
+		Status: status.NewOK(ctx),
+		AppUrl: appProviderURL,
 	}, nil
 }
 
-func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-	return nil, errtypes.NotSupported("Unimplemented")
+func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
+	return nil, errtypes.NotSupported("Deprecated")
 }

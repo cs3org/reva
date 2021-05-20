@@ -93,6 +93,6 @@ Run according to instructions in the readme ("Run the WOPI server locally", http
 ## 7. Local changes
 To try the connection you could for example go to a new reva terminal window and type 
 `./cmd/reva/reva -insecure login basic` - use einstein and relativity as log in ccredentials
-`./cmd/reva/reva -insecure open-file-in-app-provider /home/example.txt read` - this should print out the app provider url in your terminal. 
+`./cmd/reva/reva -insecure open-in-app /home/example.txt read` - this should print out the app provider url in your terminal.
 
 ## 8. Enjoy your new Reva and wopiserver set up!

@@ -42,21 +42,21 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
+func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		if st.Code == rpc.Code_CODE_NOT_FOUND {
-			return &providerpb.OpenFileInAppProviderResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
+			return &providerpb.OpenInAppResponse{
+				Status: status.NewNotFound(ctx, "gateway: resource not found:"+req.Ref.String()),
 			}, nil
 		}
-		return &providerpb.OpenFileInAppProviderResponse{
+		return &providerpb.OpenInAppResponse{
 			Status: st,
 		}, nil
 	}
 
 	if s.isSharedFolder(ctx, p) {
-		return &providerpb.OpenFileInAppProviderResponse{
+		return &providerpb.OpenInAppResponse{
 			Status: status.NewInvalid(ctx, "gateway: can't open shares folder"),
 		}, nil
 	}
@@ -74,13 +74,13 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileIn
 		},
 	})
 	if err != nil {
-		return &providerpb.OpenFileInAppProviderResponse{
+		return &providerpb.OpenInAppResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
 		}, nil
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		return &providerpb.OpenFileInAppProviderResponse{
+		return &providerpb.OpenInAppResponse{
 			Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
 		}, nil
 	}
@@ -91,36 +91,41 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileIn
 	if fileInfo.Type == storageprovider.ResourceType_RESOURCE_TYPE_REFERENCE {
 		uri, err := url.Parse(fileInfo.Target)
 		if err != nil {
-			return &providerpb.OpenFileInAppProviderResponse{
+			return &providerpb.OpenInAppResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error parsing target uri: "+fileInfo.Target),
 			}, nil
 		}
 		if uri.Scheme == "webdav" {
 			insecure, skipVerify := getGRPCConfig(req.Opaque)
-			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, insecure, skipVerify, resChild)
+			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, req.App, insecure, skipVerify, resChild)
 		}
 
 		res, err := s.Stat(ctx, &storageprovider.StatRequest{
 			Ref: req.Ref,
 		})
 		if err != nil {
-			return &providerpb.OpenFileInAppProviderResponse{
+			return &providerpb.OpenInAppResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
 			}, nil
 		}
 		if res.Status.Code != rpc.Code_CODE_OK {
 			err := status.NewErrorFromCode(res.Status.GetCode(), "gateway")
-			return &providerpb.OpenFileInAppProviderResponse{
+			return &providerpb.OpenInAppResponse{
 				Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
 			}, nil
 		}
 		fileInfo = res.Info
 	}
-	return s.openLocalResources(ctx, fileInfo, req.ViewMode)
+	return s.openLocalResources(ctx, fileInfo, req.ViewMode, req.App)
 }
 
-func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenFileInAppProviderRequest_ViewMode,
-	insecure, skipVerify bool, nameQueries ...string) (*providerpb.OpenFileInAppProviderResponse, error) {
+func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
+	// TODO to be removed in a future PR
+	return nil, errtypes.NotSupported("Deprecated")
+}
+
+func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenInAppRequest_ViewMode, app string,
+	insecure, skipVerify bool, nameQueries ...string) (*providerpb.OpenInAppResponse, error) {
 	log := appctx.GetLogger(ctx)
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
@@ -136,9 +141,10 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 			Path: ep.filePath,
 		},
 	}
-	appProviderReq := &gateway.OpenFileInAppProviderRequest{
+	appProviderReq := &gateway.OpenInAppRequest{
 		Ref:      ref,
 		ViewMode: vm,
+		App:      app,
 	}
 
 	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
@@ -153,12 +159,12 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 			gatewayEP = s.Endpoint.Path
 		}
 	}
-	log.Debug().Msgf("Forwarding OpenFileInAppProvider request to: %s", gatewayEP)
+	log.Debug().Msgf("Forwarding OpenInApp request to: %s", gatewayEP)
 
 	conn, err := getConn(gatewayEP, insecure, skipVerify)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error connecting to remote reva")
-		return &providerpb.OpenFileInAppProviderResponse{
+		return &providerpb.OpenInAppResponse{
 			Status: status.NewInternal(ctx, err, "error error connecting to remote reva"),
 		}, nil
 	}
@@ -167,20 +173,20 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 	remoteCtx := token.ContextSetToken(context.Background(), ep.token)
 	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, token.TokenHeader, ep.token)
 
-	res, err := gatewayClient.OpenFileInAppProvider(remoteCtx, appProviderReq)
+	res, err := gatewayClient.OpenInApp(remoteCtx, appProviderReq)
 	if err != nil {
 		log.Err(err).Msg("error reaching remote reva")
-		return nil, errors.Wrap(err, "gateway: error calling OpenFileInAppProvider")
+		return nil, errors.Wrap(err, "gateway: error calling OpenInApp")
 	}
 	return res, nil
 }
 
 func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo,
-	vm gateway.OpenFileInAppProviderRequest_ViewMode) (*providerpb.OpenFileInAppProviderResponse, error) {
+	vm gateway.OpenInAppRequest_ViewMode, app string) (*providerpb.OpenInAppResponse, error) {
 
 	accessToken, ok := token.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
-		return &providerpb.OpenFileInAppProviderResponse{
+		return &providerpb.OpenInAppResponse{
 			Status: status.NewUnauthenticated(ctx, errtypes.InvalidCredentials("Access token is invalid or empty"), ""),
 		}, nil
 	}
@@ -194,7 +200,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		} else {
 			st = status.NewInternal(ctx, err, "error searching for app provider")
 		}
-		return &providerpb.OpenFileInAppProviderResponse{
+		return &providerpb.OpenInAppResponse{
 			Status: st,
 		}, nil
 	}
@@ -202,20 +208,21 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 	appProviderClient, err := pool.GetAppProviderClient(provider.Address)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppProviderClient")
-		return &providerpb.OpenFileInAppProviderResponse{
+		return &providerpb.OpenInAppResponse{
 			Status: status.NewInternal(ctx, err, "error getting appprovider client"),
 		}, nil
 	}
 
-	appProviderReq := &providerpb.OpenFileInAppProviderRequest{
+	appProviderReq := &providerpb.OpenInAppRequest{
 		ResourceInfo: ri,
-		ViewMode:     providerpb.OpenFileInAppProviderRequest_ViewMode(vm),
+		ViewMode:     providerpb.OpenInAppRequest_ViewMode(vm),
+		App:          app,
 		AccessToken:  accessToken,
 	}
 
-	res, err := appProviderClient.OpenFileInAppProvider(ctx, appProviderReq)
+	res, err := appProviderClient.OpenInApp(ctx, appProviderReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling OpenFileInAppProvider")
+		return nil, errors.Wrap(err, "gateway: error calling OpenInApp")
 	}
 
 	return res, nil

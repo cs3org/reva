@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="iopsecret" type="string" default="" %}}
-The iopsecret used to connect to the wopiserver. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L59)
+The iopsecret used to connect to the wopiserver. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L60)
 {{< highlight toml >}}
 [grpc.services.appprovider]
 iopsecret = ""
@@ -17,7 +17,7 @@ iopsecret = ""
 {{% /dir %}}
 
 {{% dir name="wopiurl" type="string" default="" %}}
-The wopiserver's URL. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L60)
+The wopiserver's URL. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L61)
 {{< highlight toml >}}
 [grpc.services.appprovider]
 wopiurl = ""
@@ -25,7 +25,7 @@ wopiurl = ""
 {{% /dir %}}
 
 {{% dir name="wopibridgeurl" type="string" default="" %}}
-The wopibridge's URL. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L61)
+The wopibridge's URL. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L62)
 {{< highlight toml >}}
 [grpc.services.appprovider]
 wopibridgeurl = ""
