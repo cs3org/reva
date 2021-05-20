@@ -24,13 +24,14 @@ import (
 	apppb "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 // Manager is the interface that manages application authentication mechanisms.
 type Manager interface {
 	// GenerateAppPassword creates a password with specified scope to be used by
 	// third-party applications.
-	GenerateAppPassword(ctx context.Context, scope map[string]*authpb.Scope, label string) (*apppb.AppPassword, error)
+	GenerateAppPassword(ctx context.Context, scope map[string]*authpb.Scope, label string, expiration *typespb.Timestamp) (*apppb.AppPassword, error)
 	// ListAppPasswords lists the application passwords created by a user.
 	ListAppPasswords(ctx context.Context) ([]*apppb.AppPassword, error)
 	// InvalidateAppPassword invalidates a generated password.

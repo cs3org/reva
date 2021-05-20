@@ -103,7 +103,7 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) GenerateAppPassword(ctx context.Context, req *appauthpb.GenerateAppPasswordRequest) (*appauthpb.GenerateAppPasswordResponse, error) {
-	pwd, err := s.am.GenerateAppPassword(ctx, req.TokenScope, req.Label)
+	pwd, err := s.am.GenerateAppPassword(ctx, req.TokenScope, req.Label, req.Expiration)
 	if err != nil {
 		return &appauthpb.GenerateAppPasswordResponse{
 			Status: status.NewInternal(ctx, err, "error generating app password"),
