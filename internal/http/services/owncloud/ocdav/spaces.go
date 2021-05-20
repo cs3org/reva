@@ -317,10 +317,7 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID 
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()
 
-	buf := make([]byte, 1)
-	_, err := r.Body.Read(buf)
-	if err != io.EOF {
-		sublog.Error().Err(err).Msg("error reading request body")
+	if r.Body != http.NoBody {
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
