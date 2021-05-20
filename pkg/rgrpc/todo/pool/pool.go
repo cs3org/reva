@@ -23,6 +23,7 @@ import (
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
+	applicationauth "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
 	authprovider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	authregistry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -59,6 +60,7 @@ func newProvider() provider {
 var (
 	storageProviders       = newProvider()
 	authProviders          = newProvider()
+	appAuthProviders       = newProvider()
 	authRegistries         = newProvider()
 	userShareProviders     = newProvider()
 	ocmShareProviders      = newProvider()
@@ -203,6 +205,25 @@ func GetAuthProviderServiceClient(endpoint string) (authprovider.ProviderAPIClie
 
 	v := authprovider.NewProviderAPIClient(conn)
 	authProviders.conn[endpoint] = v
+	return v, nil
+}
+
+// GetAppAuthProviderServiceClient returns a new AppAuthProviderServiceClient.
+func GetAppAuthProviderServiceClient(endpoint string) (applicationauth.ApplicationsAPIClient, error) {
+	appAuthProviders.m.Lock()
+	defer appAuthProviders.m.Unlock()
+
+	if c, ok := appAuthProviders.conn[endpoint]; ok {
+		return c.(applicationauth.ApplicationsAPIClient), nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	v := applicationauth.NewApplicationsAPIClient(conn)
+	appAuthProviders.conn[endpoint] = v
 	return v, nil
 }
 

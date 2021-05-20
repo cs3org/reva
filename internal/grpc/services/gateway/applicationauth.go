@@ -22,30 +22,75 @@ import (
 	"context"
 
 	appauthpb "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/pkg/errors"
 )
 
 func (s *svc) GenerateAppPassword(ctx context.Context, req *appauthpb.GenerateAppPasswordRequest) (*appauthpb.GenerateAppPasswordResponse, error) {
-	return &appauthpb.GenerateAppPasswordResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("GenerateAppPassword not implemented"), "GenerateAppPassword not implemented"),
-	}, nil
+	c, err := pool.GetAppAuthProviderServiceClient(s.c.ApplicationAuthEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")
+		return &appauthpb.GenerateAppPasswordResponse{
+			Status: status.NewInternal(ctx, err, "error getting app auth provider client"),
+		}, nil
+	}
+
+	res, err := c.GenerateAppPassword(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GenerateAppPassword")
+	}
+
+	return res, nil
 }
 
 func (s *svc) ListAppPasswords(ctx context.Context, req *appauthpb.ListAppPasswordsRequest) (*appauthpb.ListAppPasswordsResponse, error) {
-	return &appauthpb.ListAppPasswordsResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("GenerateAppPassword not implemented"), "GenerateAppPassword not implemented"),
-	}, nil
+	c, err := pool.GetAppAuthProviderServiceClient(s.c.ApplicationAuthEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")
+		return &appauthpb.ListAppPasswordsResponse{
+			Status: status.NewInternal(ctx, err, "error getting app auth provider client"),
+		}, nil
+	}
+
+	res, err := c.ListAppPasswords(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling ListAppPasswords")
+	}
+
+	return res, nil
 }
 
 func (s *svc) InvalidateAppPassword(ctx context.Context, req *appauthpb.InvalidateAppPasswordRequest) (*appauthpb.InvalidateAppPasswordResponse, error) {
-	return &appauthpb.InvalidateAppPasswordResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("GenerateAppPassword not implemented"), "GenerateAppPassword not implemented"),
-	}, nil
+	c, err := pool.GetAppAuthProviderServiceClient(s.c.ApplicationAuthEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")
+		return &appauthpb.InvalidateAppPasswordResponse{
+			Status: status.NewInternal(ctx, err, "error getting app auth provider client"),
+		}, nil
+	}
+
+	res, err := c.InvalidateAppPassword(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling InvalidateAppPassword")
+	}
+
+	return res, nil
 }
 
 func (s *svc) GetAppPassword(ctx context.Context, req *appauthpb.GetAppPasswordRequest) (*appauthpb.GetAppPasswordResponse, error) {
-	return &appauthpb.GetAppPasswordResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("GetAppPassword not implemented"), "GetAppPassword not implemented"),
-	}, nil
+	c, err := pool.GetAppAuthProviderServiceClient(s.c.ApplicationAuthEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")
+		return &appauthpb.GetAppPasswordResponse{
+			Status: status.NewInternal(ctx, err, "error getting app auth provider client"),
+		}, nil
+	}
+
+	res, err := c.GetAppPassword(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetAppPassword")
+	}
+
+	return res, nil
 }

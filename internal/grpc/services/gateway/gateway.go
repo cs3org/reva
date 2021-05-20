@@ -43,6 +43,7 @@ func init() {
 
 type config struct {
 	AuthRegistryEndpoint          string `mapstructure:"authregistrysvc"`
+	ApplicationAuthEndpoint       string `mapstructure:"applicationauthsvc"`
 	StorageRegistryEndpoint       string `mapstructure:"storageregistrysvc"`
 	AppRegistryEndpoint           string `mapstructure:"appregistrysvc"`
 	PreferencesEndpoint           string `mapstructure:"preferencessvc"`
@@ -84,6 +85,7 @@ func (c *config) init() {
 	// if services address are not specified we used the shared conf
 	// for the gatewaysvc to have dev setups very quickly.
 	c.AuthRegistryEndpoint = sharedconf.GetGatewaySVC(c.AuthRegistryEndpoint)
+	c.ApplicationAuthEndpoint = sharedconf.GetGatewaySVC(c.ApplicationAuthEndpoint)
 	c.StorageRegistryEndpoint = sharedconf.GetGatewaySVC(c.StorageRegistryEndpoint)
 	c.AppRegistryEndpoint = sharedconf.GetGatewaySVC(c.AppRegistryEndpoint)
 	c.PreferencesEndpoint = sharedconf.GetGatewaySVC(c.PreferencesEndpoint)
