@@ -23,6 +23,7 @@ import (
 
 	apppb "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
 // Manager is the interface that manages application authentication mechanisms.
@@ -35,5 +36,5 @@ type Manager interface {
 	// InvalidateAppPassword invalidates a generated password.
 	InvalidateAppPassword(ctx context.Context, secret string) error
 	// GetAppPassword retrieves the password information by the combination of username and password.
-	GetAppPassword(ctx context.Context, username, secret string) (*apppb.AppPassword, error)
+	GetAppPassword(ctx context.Context, user *userpb.UserId, secret string) (*apppb.AppPassword, error)
 }

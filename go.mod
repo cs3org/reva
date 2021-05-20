@@ -58,7 +58,7 @@ require (
 go 1.16
 
 replace (
-	github.com/cs3org/go-cs3apis => github.com/ishank011/go-cs3apis v0.0.0-20210520084902-7e87a89fc39a
+	github.com/cs3org/go-cs3apis => github.com/ishank011/go-cs3apis v0.0.0-20210520102832-b0ad848b4a1d
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 	google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
