@@ -583,9 +583,14 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	}
 	ctx, targetRef, err := s.unwrap(ctx, req.Destination)
 	if err != nil {
-		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping destination path"),
-		}, nil
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			targetRef = req.Destination
+		default:
+			return &provider.MoveResponse{
+				Status: status.NewInternal(ctx, err, "error unwrapping destination path"),
+			}, nil
+		}
 	}
 
 	if err := s.storage.Move(ctx, sourceRef, targetRef); err != nil {
