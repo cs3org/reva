@@ -124,6 +124,17 @@ func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 	}
 }
 
+// NewAlreadyExists returns a Status with CODE_ALREADY_EXISTS and logs the msg.
+func NewAlreadyExists(ctx context.Context, err error, msg string) *rpc.Status {
+	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
+	log.Warn().Err(err).Msg(msg)
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_ALREADY_EXISTS,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 // NewInvalidArg returns a Status with CODE_INVALID_ARGUMENT.
 func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{Code: rpc.Code_CODE_INVALID_ARGUMENT,
@@ -144,6 +155,8 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		return NewUnauthenticated(ctx, err, "gateway: "+msg+": "+err.Error())
 	case errtypes.PermissionDenied:
 		return NewPermissionDenied(ctx, e, "gateway: "+msg+": "+err.Error())
+	case errtypes.AlreadyExists:
+		return NewAlreadyExists(ctx, err, "gateway: "+msg+":"+err.Error())
 	case errtypes.IsNotSupported:
 		return NewUnimplemented(ctx, err, "gateway: "+msg+":"+err.Error())
 	case errtypes.BadRequest:
