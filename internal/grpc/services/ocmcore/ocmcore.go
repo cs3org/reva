@@ -172,7 +172,15 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 		},
 	}
 
-	share, err := s.sm.Share(ctx, resource, grant, req.Name, nil, "", req.Owner, token, ocm.Share_SHARE_TYPE_REGULAR)
+	var shareType ocm.Share_ShareType
+	switch req.Protocol.Name {
+	case "datatx":
+		shareType = ocm.Share_SHARE_TYPE_TRANSFER
+	default:
+		shareType = ocm.Share_SHARE_TYPE_REGULAR
+	}
+
+	share, err := s.sm.Share(ctx, resource, grant, req.Name, nil, "", req.Owner, token, shareType)
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating ocm core share"),
