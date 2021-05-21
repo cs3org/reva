@@ -25,6 +25,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
+//go:generate mockery -name Manager
+
 // Manager is the interface that manipulates shares.
 type Manager interface {
 	// Create a new share in fn with the given acl.

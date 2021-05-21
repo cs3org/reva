@@ -26,22 +26,33 @@ import (
 	gstatus "google.golang.org/grpc/status"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/share"
+	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 func init() {
-	rgrpc.Register("publicstorageprovider", New)
+	rgrpc.Register("publicstorageprovider", NewDefault)
 }
 
 type config struct {
 	MountPath   string `mapstructure:"mount_path"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
+
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 type service struct {
-	conf      *config
 	mountPath string
+	sm        share.Manager
 	gateway   gateway.GatewayAPIClient
 }
 
@@ -57,8 +68,36 @@ func (s *service) Register(ss *grpc.Server) {
 	provider.RegisterProviderAPIServer(ss, s)
 }
 
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-	s := &service{}
+func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		err = errors.Wrap(err, "error decoding conf")
+		return nil, err
+	}
+
+	smFactory, found := registry.NewFuncs[c.Driver]
+	if !found {
+		return nil, errtypes.NotFound("driver not found: " + c.Driver)
+	}
+	sm, err := smFactory(c.Drivers[c.Driver])
+	if err != nil {
+		return nil, err
+	}
+
+	gateway, err := pool.GetGatewayServiceClient(c.GatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return New(c.MountPath, gateway, sm)
+}
+
+func New(mountpath string, gateway gateway.GatewayAPIClient, sm share.Manager) (rgrpc.Service, error) {
+	s := &service{
+		mountPath: mountpath,
+		gateway:   gateway,
+		sm:        sm,
+	}
 	return s, nil
 }
 
@@ -125,7 +164,22 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	shares, err := s.sm.ListReceivedShares(ctx)
+	if err != nil {
+		return &provider.ListContainerResponse{
+			Status: status.NewInternal(ctx, err, "sharemanager: error listing received shares"),
+		}, nil
+	}
+
+	res := &provider.ListContainerResponse{}
+	for _, rs := range shares {
+		if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
+			continue
+		}
+		res.Infos = append(res.Infos, &provider.ResourceInfo{})
+	}
+
+	return res, nil
 }
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
