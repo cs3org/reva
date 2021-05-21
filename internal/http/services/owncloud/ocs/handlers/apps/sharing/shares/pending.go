@@ -105,5 +105,5 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 		data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
 	}
 
-	response.WriteOCSSuccess(w, r, data)
+	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 }
