@@ -1581,7 +1581,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 			}, nil
 		}
 		for _, inf := range infoFromProviders[i] {
-			if parent := path.Dir(inf.Path); resPath != "" && resPath != parent {
+			if parent := path.Dir(inf.Path); resPath != "." && resPath != parent {
 				parts := strings.Split(strings.TrimPrefix(inf.Path, resPath), "/")
 				p := path.Join(resPath, parts[1])
 				indirects[p] = append(indirects[p], inf)
