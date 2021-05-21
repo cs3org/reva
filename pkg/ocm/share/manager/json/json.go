@@ -269,20 +269,41 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	}
 
 	if isOwnersMeshProvider {
-
-		// Call the remote provider's CreateOCMCoreShare method
-		protocol, err := json.Marshal(
-			map[string]interface{}{
-				"name": "webdav",
-				"options": map[string]string{
-					"permissions": pm,
-					"token":       tokenpkg.ContextMustGetToken(ctx),
+		token, ok := tokenpkg.ContextGetToken(ctx)
+		if !ok {
+			return nil, errors.New("Could not get token from context")
+		}
+		var protocol []byte
+		if st == ocm.Share_SHARE_TYPE_TRANSFER { // data transfer
+			protocol, err = json.Marshal(
+				map[string]interface{}{
+					"name": "datatx",
+					"options": map[string]string{
+						"permissions": pm,
+						"token":       token,
+						"protocol":    "datatx",
+					},
 				},
-			},
-		)
-		if err != nil {
-			err = errors.Wrap(err, "error marshalling protocol data")
-			return nil, err
+			)
+			if err != nil {
+				err = errors.Wrap(err, "error marshalling protocol data")
+				return nil, err
+			}
+
+		} else { // 'regular' share
+			protocol, err = json.Marshal(
+				map[string]interface{}{
+					"name": "webdav",
+					"options": map[string]string{
+						"permissions": pm,
+						"token":       tokenpkg.ContextMustGetToken(ctx),
+					},
+				},
+			)
+			if err != nil {
+				err = errors.Wrap(err, "error marshalling protocol data")
+				return nil, err
+			}
 		}
 
 		requestBody := url.Values{
