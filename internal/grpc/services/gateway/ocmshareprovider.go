@@ -260,7 +260,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 				panic("gateway: error updating a received share: the share is nil")
 			}
 
-			createRefStatus, err := s.createWebdavReference(ctx, share.Share)
+			createRefStatus, err := s.createOCMReference(ctx, share.Share)
 			return &ocm.UpdateReceivedOCMShareResponse{
 				Status: createRefStatus,
 			}, err
@@ -291,7 +291,7 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 	return res, nil
 }
 
-func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc.Status, error) {
+func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.Status, error) {
 
 	log := appctx.GetLogger(ctx)
 

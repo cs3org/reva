@@ -155,11 +155,6 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	desiredProtocol, ok := options["protocol"].(string)
-	if !ok {
-		desiredProtocol = ""
-	}
-
 	ownerID := &userpb.UserId{
 		OpaqueId: owner,
 		Idp:      meshProvider,
@@ -180,10 +175,6 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 					"token": {
 						Decoder: "plain",
 						Value:   []byte(token),
-					},
-					"protocol": {
-						Decoder: "plain",
-						Value:   []byte(desiredProtocol),
 					},
 				},
 			},

@@ -274,14 +274,13 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			return nil, errors.New("Could not get token from context")
 		}
 		var protocol []byte
-		if st == ocm.Share_SHARE_TYPE_TRANSFER { // data transfer
+		if st == ocm.Share_SHARE_TYPE_TRANSFER {
 			protocol, err = json.Marshal(
 				map[string]interface{}{
 					"name": "datatx",
 					"options": map[string]string{
 						"permissions": pm,
 						"token":       token,
-						"protocol":    "datatx",
 					},
 				},
 			)
@@ -290,7 +289,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 				return nil, err
 			}
 
-		} else { // 'regular' share
+		} else {
 			protocol, err = json.Marshal(
 				map[string]interface{}{
 					"name": "webdav",
