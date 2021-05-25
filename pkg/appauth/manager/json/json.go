@@ -23,10 +23,13 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"sync"
+	"time"
 
 	apppb "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appauth"
 	"github.com/cs3org/reva/pkg/appauth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -46,38 +49,35 @@ type config struct {
 }
 
 type jsonManager struct {
+	sync.Mutex
 	config *config
-	model  *jsonModel
-}
-
-type jsonModel struct {
-	file  string
-	State map[string]*apppb.AppPassword `json:"state"`
+	// map[userid][password]AppPassword
+	passwords map[string]map[string]*apppb.AppPassword
 }
 
 // New returns a new mgr.
 func New(m map[string]interface{}) (appauth.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
-		err = errors.Wrap(err, "error creating a new manager")
-		return nil, err
+		return nil, errors.Wrap(err, "error creating a new manager")
 	}
 
 	c.init()
 
 	// load or create file
-	model, err := loadOrCreate(c.File)
+	manager, err := loadOrCreate(c.File)
 	if err != nil {
-		err = errors.Wrap(err, "error loading the file containing the shares")
-		return nil, err
+		return nil, errors.Wrap(err, "error loading the file containing the application passwords")
 	}
 
-	return &jsonManager{config: c, model: model}, nil
+	manager.config = c
+
+	return manager, nil
 }
 
 func (c *config) init() {
 	if c.File == "" {
-		c.File = "/etc/revad/appauth.json"
+		c.File = "/var/tmp/reva/appauth.json"
 	}
 }
 
@@ -89,7 +89,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func loadOrCreate(file string) (*jsonModel, error) {
+func loadOrCreate(file string) (*jsonManager, error) {
 	stat, err := os.Stat(file)
 	if os.IsNotExist(err) || stat.Size() == 0 {
 		if err = ioutil.WriteFile(file, []byte("{}"), 0644); err != nil {
@@ -108,78 +108,121 @@ func loadOrCreate(file string) (*jsonModel, error) {
 		return nil, errors.Wrapf(err, "error reading the file %s", file)
 	}
 
-	m := &jsonModel{file: file}
-	if err = json.Unmarshal(data, &m.State); err != nil {
+	m := &jsonManager{}
+	if err = json.Unmarshal(data, &m.passwords); err != nil {
 		return nil, errors.Wrapf(err, "error parsing the file %s", file)
 	}
 
-	if m.State == nil {
-		m.State = make(map[string]*apppb.AppPassword)
+	if m.passwords == nil {
+		m.passwords = make(map[string]map[string]*apppb.AppPassword)
 	}
 
 	return m, nil
 }
 
-func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[string]*authpb.Scope, label string) (*apppb.AppPassword, error) {
+func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[string]*authpb.Scope, label string, expiration *typespb.Timestamp) (*apppb.AppPassword, error) {
 	token, err := password.Generate(mgr.config.TokenStrength, 10, 10, false, false)
 	if err != nil {
-		return nil, errtypes.InternalError("error creating new token")
+		return nil, errors.Wrap(err, "error creating new token")
 	}
-	user := user.ContextMustGetUser(ctx)
+	userID := user.ContextMustGetUser(ctx).GetId()
+	ctime := now()
 
 	appPass := &apppb.AppPassword{
 		Password:   token,
 		TokenScope: scope,
 		Label:      label,
-		User:       user.GetId(),
+		Expiration: expiration,
+		Ctime:      ctime,
+		Utime:      ctime,
+		User:       userID,
 	}
-	mgr.model.State[token] = appPass
+	mgr.Lock()
+	defer mgr.Unlock()
 
-	err = mgr.model.save()
+	// check if user has some previous password
+	if _, ok := mgr.passwords[userID.String()]; !ok {
+		mgr.passwords[userID.String()] = make(map[string]*apppb.AppPassword)
+	}
+
+	mgr.passwords[userID.String()][token] = appPass
+
+	err = mgr.save()
 	if err != nil {
-		return nil, errtypes.InternalError("error saving new token")
+		return nil, errors.Wrap(err, "error saving new token")
 	}
 
 	return appPass, nil
 }
 
 func (mgr *jsonManager) ListAppPasswords(ctx context.Context) ([]*apppb.AppPassword, error) {
-	userId := user.ContextMustGetUser(ctx).GetId()
-	var userPasswords []*apppb.AppPassword
-
-	for _, appPassword := range mgr.model.State {
-		if appPassword.User == userId {
-			userPasswords = append(userPasswords, appPassword)
-		}
+	userID := user.ContextMustGetUser(ctx).GetId()
+	mgr.Lock()
+	defer mgr.Unlock()
+	appPasswords := []*apppb.AppPassword{}
+	for _, pw := range mgr.passwords[userID.String()] {
+		appPasswords = append(appPasswords, pw)
 	}
-
-	return userPasswords, nil
+	return appPasswords, nil
 }
 
 func (mgr *jsonManager) InvalidateAppPassword(ctx context.Context, password string) error {
-	if _, ok := mgr.model.State[password]; !ok {
-		return errtypes.BadRequest("password does not exist")
+	userID := user.ContextMustGetUser(ctx).GetId()
+	mgr.Lock()
+	defer mgr.Unlock()
+
+	// see if user has a list of passwords
+	appPasswords, ok := mgr.passwords[userID.String()]
+	if !ok || len(appPasswords) == 0 {
+		return errtypes.BadRequest("password not found")
 	}
-	delete(mgr.model.State, password)
-	return mgr.model.save()
+
+	if _, ok := appPasswords[password]; !ok {
+		return errtypes.BadRequest("password not found")
+	}
+	delete(appPasswords, password)
+
+	// if user has 0 passwords, delete user key from state map
+	if len(mgr.passwords[userID.String()]) == 0 {
+		delete(mgr.passwords, userID.String())
+	}
+
+	return mgr.save()
 }
 
-func (mgr *jsonManager) GetAppPassword(ctx context.Context, user *userpb.UserId, password string) (*apppb.AppPassword, error) {
-	appPassword, ok := mgr.model.State[password]
+func (mgr *jsonManager) GetAppPassword(ctx context.Context, userID *userpb.UserId, password string) (*apppb.AppPassword, error) {
+	mgr.Lock()
+	defer mgr.Unlock()
+
+	appPassword, ok := mgr.passwords[userID.String()]
 	if !ok {
-		return nil, errtypes.BadRequest("password does not exist")
+		return nil, errtypes.BadRequest("password not found")
 	}
-	return appPassword, nil
+
+	pw, ok := appPassword[password]
+	if !ok {
+		return nil, errtypes.BadRequest("password not found")
+	}
+
+	pw.Utime = now()
+	if err := mgr.save(); err != nil {
+		return nil, errors.Wrap(err, "error saving file")
+	}
+	return pw, nil
 }
 
-func (m *jsonModel) save() error {
-	data, err := json.Marshal(m.State)
+func now() *typespb.Timestamp {
+	return &typespb.Timestamp{Seconds: uint64(time.Now().Unix())}
+}
+
+func (mgr *jsonManager) save() error {
+	data, err := json.Marshal(mgr.passwords)
 	if err != nil {
 		return errors.Wrap(err, "error encoding json file")
 	}
 
-	if err = ioutil.WriteFile(m.file, data, 0644); err != nil {
-		return errors.Wrapf(err, "error writing to file %s", m.file)
+	if err = ioutil.WriteFile(mgr.config.File, data, 0644); err != nil {
+		return errors.Wrapf(err, "error writing to file %s", mgr.config.File)
 	}
 
 	return nil
