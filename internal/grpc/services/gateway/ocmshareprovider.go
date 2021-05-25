@@ -260,7 +260,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 				panic("gateway: error updating a received share: the share is nil")
 			}
 
-			createRefStatus, err := s.createWebdavReference(ctx, share.Share)
+			createRefStatus, err := s.createOCMReference(ctx, share.Share)
 			return &ocm.UpdateReceivedOCMShareResponse{
 				Status: createRefStatus,
 			}, err
@@ -291,7 +291,7 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 	return res, nil
 }
 
-func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc.Status, error) {
+func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.Status, error) {
 
 	log := appctx.GetLogger(ctx)
 
@@ -314,17 +314,39 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 		return status.NewInternal(ctx, err, "error updating received share"), nil
 	}
 
-	// reference path is the home path + some name on the corresponding
-	// mesh provider (/home/MyShares/x)
-	// It is the responsibility of the gateway to resolve these references and merge the response back
-	// from the main request.
-	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(share.Name))
-	log.Info().Msg("mount path will be:" + refPath)
+	var refPath, targetURI string
+	if share.ShareType == ocm.Share_SHARE_TYPE_TRANSFER {
+		createTransferDir, err := s.CreateContainer(ctx, &provider.CreateContainerRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: path.Join(homeRes.Path, s.c.DataTransfersFolder),
+				},
+			},
+		})
+		if err != nil {
+			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
+		}
+		if createTransferDir.Status.Code != rpc.Code_CODE_OK && createTransferDir.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
+			err := status.NewErrorFromCode(createTransferDir.Status.GetCode(), "gateway")
+			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
+		}
 
-	createRefReq := &provider.CreateReferenceRequest{
-		Path: refPath,
+		refPath = path.Join(homeRes.Path, s.c.DataTransfersFolder, path.Base(share.Name))
+		targetURI = fmt.Sprintf("datatx://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
+	} else {
+		// reference path is the home path + some name on the corresponding
+		// mesh provider (/home/MyShares/x)
+		// It is the responsibility of the gateway to resolve these references and merge the response back
+		// from the main request.
+		refPath = path.Join(homeRes.Path, s.c.ShareFolder, path.Base(share.Name))
 		// webdav is the scheme, token@host the opaque part and the share name the query of the URL.
-		TargetUri: fmt.Sprintf("webdav://%s@%s?name=%s", token, share.Creator.Idp, share.Name),
+		targetURI = fmt.Sprintf("webdav://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
+	}
+
+	log.Info().Msg("mount path will be:" + refPath)
+	createRefReq := &provider.CreateReferenceRequest{
+		Path:      refPath,
+		TargetUri: targetURI,
 	}
 
 	c, err := s.findByPath(ctx, refPath)

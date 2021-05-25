@@ -63,10 +63,11 @@ type config struct {
 	TransferExpires               int64  `mapstructure:"transfer_expires"`
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
-	ShareFolder   string                            `mapstructure:"share_folder"`
-	HomeMapping   string                            `mapstructure:"home_mapping"`
-	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
-	EtagCacheTTL  int                               `mapstructure:"etag_cache_ttl"`
+	ShareFolder         string                            `mapstructure:"share_folder"`
+	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
+	HomeMapping         string                            `mapstructure:"home_mapping"`
+	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
+	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
 }
 
 // sets defaults
@@ -76,6 +77,10 @@ func (c *config) init() {
 	}
 
 	c.ShareFolder = strings.Trim(c.ShareFolder, "/")
+
+	if c.DataTransfersFolder == "" {
+		c.DataTransfersFolder = "Data-Transfers"
+	}
 
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"

@@ -144,7 +144,24 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}, nil
 	}
 
-	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions, nil, "", ocm.Share_SHARE_TYPE_REGULAR)
+	// discover share type
+	sharetype := ocm.Share_SHARE_TYPE_REGULAR
+	protocol, ok := req.Opaque.Map["protocol"]
+	if ok {
+		switch protocol.Decoder {
+		case "plain":
+			if string(protocol.Value) == "datatx" {
+				sharetype = ocm.Share_SHARE_TYPE_TRANSFER
+			}
+		default:
+			err := errors.New("protocol decoder not recognized")
+			return &ocm.CreateOCMShareResponse{
+				Status: status.NewInternal(ctx, err, "error creating share"),
+			}, nil
+		}
+	}
+
+	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions, nil, "", sharetype)
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating share"),
