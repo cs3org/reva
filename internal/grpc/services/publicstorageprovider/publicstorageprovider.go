@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -139,7 +140,7 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 		return nil, "", nil, nil, err
 	}
 
-	originalPath, ls, st, err := s.resolveToken(ctx, tkn)
+	originalPath, ls, _, st, err := s.resolveToken(ctx, tkn)
 	switch {
 	case err != nil:
 		return nil, "", nil, nil, err
@@ -452,7 +453,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		return nil, err
 	}
 
-	originalPath, ls, st, err := s.resolveToken(ctx, tkn)
+	originalPath, ls, ri, st, err := s.resolveToken(ctx, tkn)
 	switch {
 	case err != nil:
 		return nil, err
@@ -466,12 +467,16 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
+	p := originalPath
+	if ri.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		p = path.Join("/", p, relativePath)
+	}
 	var statResponse *provider.StatResponse
 	// the call has to be made to the gateway instead of the storage.
 	statResponse, err = s.gateway.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: path.Join("/", originalPath, relativePath),
+				Path: p,
 			},
 		},
 	})
@@ -518,7 +523,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		return nil, err
 	}
 
-	pathFromToken, ls, st, err := s.resolveToken(ctx, tkn)
+	pathFromToken, ls, _, st, err := s.resolveToken(ctx, tkn)
 	switch {
 	case err != nil:
 		return nil, err
@@ -583,12 +588,12 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token string, relativePath string, err error) {
 	if ref.GetId() != nil {
-		return "", "", errors.New("need path based ref: got " + ref.String())
+		return "", "", errtypes.BadRequest("need path based ref: got " + ref.String())
 	}
 
 	if ref.GetPath() == "" {
 		// abort, no valid id nor path
-		return "", "", errors.New("invalid ref: " + ref.String())
+		return "", "", errtypes.BadRequest("invalid ref: " + ref.String())
 	}
 
 	// i.e path: /public/{token}/path/to/subfolders
@@ -668,10 +673,10 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 }
 
 // resolveToken returns the path and share for the publicly shared resource.
-func (s *service) resolveToken(ctx context.Context, token string) (string, *link.PublicShare, *rpc.Status, error) {
+func (s *service) resolveToken(ctx context.Context, token string) (string, *link.PublicShare, *provider.ResourceInfo, *rpc.Status, error) {
 	driver, err := pool.GetGatewayServiceClient(s.conf.GatewayAddr)
 	if err != nil {
-		return "", nil, nil, err
+		return "", nil, nil, nil, err
 	}
 
 	publicShareResponse, err := driver.GetPublicShare(
@@ -687,9 +692,9 @@ func (s *service) resolveToken(ctx context.Context, token string) (string, *link
 	)
 	switch {
 	case err != nil:
-		return "", nil, nil, err
+		return "", nil, nil, nil, err
 	case publicShareResponse.Status.Code != rpc.Code_CODE_OK:
-		return "", nil, publicShareResponse.Status, nil
+		return "", nil, nil, publicShareResponse.Status, nil
 	}
 
 	pathRes, err := s.gateway.GetPath(ctx, &provider.GetPathRequest{
@@ -697,9 +702,23 @@ func (s *service) resolveToken(ctx context.Context, token string) (string, *link
 	})
 	switch {
 	case err != nil:
-		return "", nil, nil, err
+		return "", nil, nil, nil, err
 	case pathRes.Status.Code != rpc.Code_CODE_OK:
-		return "", nil, pathRes.Status, nil
+		return "", nil, nil, pathRes.Status, nil
 	}
-	return pathRes.Path, publicShareResponse.GetShare(), nil, nil
+
+	sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Id{
+				Id: publicShareResponse.GetShare().GetResourceId(),
+			},
+		},
+	})
+	switch {
+	case err != nil:
+		return "", nil, nil, nil, err
+	case sRes.Status.Code != rpc.Code_CODE_OK:
+		return "", nil, nil, sRes.Status, nil
+	}
+	return pathRes.Path, publicShareResponse.GetShare(), sRes.Info, nil, nil
 }

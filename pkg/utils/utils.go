@@ -32,6 +32,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/registry"
+	"github.com/cs3org/reva/pkg/registry/memory"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -40,6 +42,9 @@ var (
 	matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
 	matchAllCap   = regexp.MustCompile("([a-z0-9])([A-Z])")
 	matchEmail    = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+	// GlobalRegistry configures a service registry globally accessible. It defaults to a memory registry. The usage of
+	// globals is not encouraged, and this is a workaround until the PR is out of a draft state.
+	GlobalRegistry registry.Registry = memory.New(map[string]interface{}{})
 )
 
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
@@ -105,6 +110,7 @@ func ResolvePath(path string) (string, error) {
 
 // RandString is a helper to create tokens.
 func RandString(n int) string {
+	rand.Seed(time.Now().UTC().UnixNano())
 	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	b := make([]rune, n)
 	for i := range b {

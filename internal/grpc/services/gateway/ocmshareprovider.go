@@ -268,7 +268,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 	}
 
 	// TODO(labkode): implementing updating display name
-	err = errors.New("gateway: update of display name is not yet implemented")
+	err = errtypes.NotSupported("gateway: update of display name is not yet implemented")
 	return &ocm.UpdateReceivedOCMShareResponse{
 		Status: status.NewUnimplemented(ctx, err, "error updating received share"),
 	}, nil
@@ -304,7 +304,7 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 	case "plain":
 		token = string(tokenOpaque.Value)
 	default:
-		err := errors.New("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
+		err := errtypes.NotSupported("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
 		return status.NewInternal(ctx, err, "invalid opaque entry decoder"), nil
 	}
 

@@ -25,15 +25,19 @@ import (
 
 // Config holds the config options that need to be passed down to all ocs handlers
 type Config struct {
-	Prefix                  string                `mapstructure:"prefix"`
-	Config                  data.ConfigData       `mapstructure:"config"`
-	Capabilities            data.CapabilitiesData `mapstructure:"capabilities"`
-	GatewaySvc              string                `mapstructure:"gatewaysvc"`
-	DefaultUploadProtocol   string                `mapstructure:"default_upload_protocol"`
-	UserAgentChunkingMap    map[string]string     `mapstructure:"user_agent_chunking_map"`
-	SharePrefix             string                `mapstructure:"share_prefix"`
-	HomeNamespace           string                `mapstructure:"home_namespace"`
-	AdditionalInfoAttribute string                `mapstructure:"additional_info_attribute"`
+	Prefix                  string                            `mapstructure:"prefix"`
+	Config                  data.ConfigData                   `mapstructure:"config"`
+	Capabilities            data.CapabilitiesData             `mapstructure:"capabilities"`
+	GatewaySvc              string                            `mapstructure:"gatewaysvc"`
+	DefaultUploadProtocol   string                            `mapstructure:"default_upload_protocol"`
+	UserAgentChunkingMap    map[string]string                 `mapstructure:"user_agent_chunking_map"`
+	SharePrefix             string                            `mapstructure:"share_prefix"`
+	HomeNamespace           string                            `mapstructure:"home_namespace"`
+	AdditionalInfoAttribute string                            `mapstructure:"additional_info_attribute"`
+	CacheWarmupDriver       string                            `mapstructure:"cache_warmup_driver"`
+	CacheWarmupDrivers      map[string]map[string]interface{} `mapstructure:"cache_warmup_drivers"`
+	ResourceInfoCacheSize   int                               `mapstructure:"resource_info_cache_size"`
+	ResourceInfoCacheTTL    int                               `mapstructure:"resource_info_cache_ttl"`
 }
 
 // Init sets sane defaults
@@ -56,6 +60,10 @@ func (c *Config) Init() {
 
 	if c.AdditionalInfoAttribute == "" {
 		c.AdditionalInfoAttribute = "{{.Mail}}"
+	}
+
+	if c.ResourceInfoCacheSize == 0 {
+		c.ResourceInfoCacheSize = 1000000
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)

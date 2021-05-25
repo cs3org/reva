@@ -181,7 +181,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 	accessToken, ok := token.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
 		return &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewUnauthenticated(ctx, errors.New("Access token is invalid or empty"), ""),
+			Status: status.NewUnauthenticated(ctx, errtypes.InvalidCredentials("Access token is invalid or empty"), ""),
 		}, nil
 	}
 
@@ -246,7 +246,7 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 		return nil, errtypes.NotFound("gateway: app provider not found for resource: " + ri.String())
 	}
 
-	return nil, errors.New("gateway: error finding a storage provider")
+	return nil, errtypes.InternalError("gateway: error finding a storage provider")
 }
 
 func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {

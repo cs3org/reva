@@ -66,12 +66,12 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.Manager, error) {
 	if manager == "" {
-		return nil, errors.New("authsvc: driver not configured for auth manager")
+		return nil, errtypes.InternalError("authsvc: driver not configured for auth manager")
 	}
 	if f, ok := registry.NewFuncs[manager]; ok {
 		return f(m[manager])
 	}
-	return nil, fmt.Errorf("authsvc: driver %s not found for auth manager", manager)
+	return nil, errtypes.NotFound(fmt.Sprintf("authsvc: driver %s not found for auth manager", manager))
 }
 
 // New returns a new AuthProviderServiceServer.
@@ -108,13 +108,14 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 	username := req.ClientId
 	password := req.ClientSecret
 
-	u, err := s.authmgr.Authenticate(ctx, username, password)
+	u, scope, err := s.authmgr.Authenticate(ctx, username, password)
 	switch v := err.(type) {
 	case nil:
 		log.Info().Msgf("user %s authenticated", u.String())
 		return &provider.AuthenticateResponse{
-			Status: status.NewOK(ctx),
-			User:   u,
+			Status:     status.NewOK(ctx),
+			User:       u,
+			TokenScope: scope,
 		}, nil
 	case errtypes.InvalidCredentials:
 		return &provider.AuthenticateResponse{

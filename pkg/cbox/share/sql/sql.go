@@ -323,7 +323,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.Received
 		params = append(params, v)
 	}
 
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, id, stime, permissions, share_type, accepted FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner != ? AND uid_initiator != ?) AND id not in (SELECT distinct(id) FROM oc_share_acl WHERE rejected_by=?)"
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, ts.id, stime, permissions, share_type, accepted, coalesce(tr.rejected_by, '') as rejected_by FROM oc_share ts LEFT JOIN oc_share_acl tr ON (ts.id = tr.id AND tr.rejected_by = ?) WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner != ? AND uid_initiator != ?) "
 	if len(user.Groups) > 0 {
 		query += "AND (share_with=? OR share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + "))"
 	} else {
@@ -339,7 +339,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.Received
 	var s conversions.DBShare
 	shares := []*collaboration.ReceivedShare{}
 	for rows.Next() {
-		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
+		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.RejectedBy); err != nil {
 			continue
 		}
 		shares = append(shares, conversions.ConvertToCS3ReceivedShare(s))
@@ -355,19 +355,19 @@ func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*
 	user := user.ContextMustGetUser(ctx)
 	uid := conversions.FormatUserID(user.Id)
 
-	params := []interface{}{id.OpaqueId, uid, uid}
+	params := []interface{}{uid, id.OpaqueId, uid}
 	for _, v := range user.Groups {
 		params = append(params, v)
 	}
 
 	s := conversions.DBShare{ID: id.OpaqueId}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, stime, permissions, share_type, accepted FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND id=? AND id not in (SELECT distinct(id) FROM oc_share_acl WHERE rejected_by=?)"
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, stime, permissions, share_type, accepted, coalesce(tr.rejected_by, '') as rejected_by FROM oc_share ts LEFT JOIN oc_share_acl tr ON (ts.id = tr.id AND tr.rejected_by = ?) WHERE (orphan = 0 or orphan IS NULL) AND ts.id=? "
 	if len(user.Groups) > 0 {
 		query += "AND (share_with=? OR share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + "))"
 	} else {
 		query += "AND (share_with=?)"
 	}
-	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
+	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.RejectedBy); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(id.OpaqueId)
 		}
@@ -381,20 +381,20 @@ func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey)
 	uid := conversions.FormatUserID(user.Id)
 
 	shareType, shareWith := conversions.FormatGrantee(key.Grantee)
-	params := []interface{}{conversions.FormatUserID(key.Owner), key.ResourceId.StorageId, key.ResourceId.OpaqueId, shareType, shareWith, shareWith, uid}
+	params := []interface{}{uid, conversions.FormatUserID(key.Owner), key.ResourceId.StorageId, key.ResourceId.OpaqueId, shareType, shareWith, shareWith}
 	for _, v := range user.Groups {
 		params = append(params, v)
 	}
 
 	s := conversions.DBShare{}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, id, stime, permissions, share_type, accepted FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND uid_owner=? AND fileid_prefix=? AND item_source=? AND share_type=? AND share_with=? AND id not in (SELECT distinct(id) FROM oc_share_acl WHERE rejected_by=?)"
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, ts.id, stime, permissions, share_type, accepted, coalesce(tr.rejected_by, '') as rejected_by FROM oc_share ts LEFT JOIN oc_share_acl tr ON (ts.id = tr.id AND tr.rejected_by = ?) WHERE (orphan = 0 or orphan IS NULL) AND uid_owner=? AND fileid_prefix=? AND item_source=? AND share_type=? AND share_with=? "
 	if len(user.Groups) > 0 {
 		query += "AND (share_with=? OR share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + "))"
 	} else {
 		query += "AND (share_with=?)"
 	}
 
-	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
+	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.RejectedBy); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(key.String())
 		}
@@ -431,14 +431,14 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareR
 		return nil, err
 	}
 
-	var query string
-	params := []interface{}{rs.Share.Id.OpaqueId}
+	var query, queryAccept string
+	params := []interface{}{rs.Share.Id.OpaqueId, conversions.FormatUserID(user.Id)}
 	switch f.GetState() {
 	case collaboration.ShareState_SHARE_STATE_REJECTED:
 		query = "insert into oc_share_acl(id, rejected_by) values(?, ?)"
-		params = append(params, conversions.FormatUserID(user.Id))
 	case collaboration.ShareState_SHARE_STATE_ACCEPTED:
-		query = "update oc_share set accepted=1 where id=?"
+		query = "delete from oc_share_acl where id=? AND rejected_by=?"
+		queryAccept = "update oc_share set accepted=1 where id=?"
 	}
 
 	stmt, err := m.db.Prepare(query)
@@ -448,6 +448,17 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareR
 	_, err = stmt.Exec(params...)
 	if err != nil {
 		return nil, err
+	}
+
+	if queryAccept != "" {
+		stmt, err = m.db.Prepare(queryAccept)
+		if err != nil {
+			return nil, err
+		}
+		_, err = stmt.Exec(rs.Share.Id.OpaqueId)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	rs.State = f.GetState()

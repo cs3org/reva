@@ -3,6 +3,13 @@
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
+#[[registry.services.storagehome]]
+#name = 'storage-home'
+#
+#[[registry.services.storagehome.nodes]]
+#id = '130e0018-9e86-11eb-8634-336624ad2203'
+#address = '0.0.0.0:9154'
+
 # - authenticates grpc storage provider requests using the internal jwt token
 # - authenticates http upload and download requests requests using basic auth
 # - serves the home storage provider on grpc port 12000

@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -43,7 +44,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	// find auth provider
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
-		err = errors.New("gateway: error finding auth provider for type: " + req.Type)
+		err = errtypes.NotFound("gateway: error finding auth provider for type: " + req.Type)
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider client"),
 		}, nil
@@ -77,25 +78,22 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	// validate valid userId
 	if res.User == nil {
-		err := errors.New("gateway: user after Authenticate is nil")
+		err := errtypes.NotFound("gateway: user after Authenticate is nil")
 		log.Err(err).Msg("user is nil")
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "user is nil"),
 		}, nil
 	}
 
-	uid := res.User.Id
-	if uid == nil {
-		err := errors.New("gateway: uid after Authenticate is nil")
+	if res.User.Id == nil {
+		err := errtypes.NotFound("gateway: uid after Authenticate is nil")
 		log.Err(err).Msg("user id is nil")
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "user id is nil"),
 		}, nil
 	}
 
-	user := res.User
-
-	token, err := s.tokenmgr.MintToken(ctx, user)
+	token, err := s.tokenmgr.MintToken(ctx, res.User, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -104,7 +102,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
-	if s.c.DisableHomeCreationOnLogin {
+	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok || scope.Role != authpb.Role_ROLE_OWNER {
 		gwRes := &gateway.AuthenticateResponse{
 			Status: status.NewOK(ctx),
 			User:   res.User,
@@ -116,7 +114,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	// we need to pass the token to authenticate the CreateHome request.
 	// TODO(labkode): appending to existing context will not pass the token.
 	ctx = tokenpkg.ContextSetToken(ctx, token)
-	ctx = userpkg.ContextSetUser(ctx, user)
+	ctx = userpkg.ContextSetUser(ctx, res.User)
 	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
@@ -145,7 +143,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 }
 
 func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.WhoAmIResponse, error) {
-	u, err := s.tokenmgr.DismantleToken(ctx, req.Token)
+	u, _, err := s.tokenmgr.DismantleToken(ctx, req.Token)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting user from token")
 		return &gateway.WhoAmIResponse{
@@ -191,5 +189,5 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.P
 		return nil, errtypes.NotFound("gateway: auth provider not found for type:" + authType)
 	}
 
-	return nil, errors.New("gateway: error finding an auth provider for type: " + authType)
+	return nil, errtypes.InternalError("gateway: error finding an auth provider for type: " + authType)
 }

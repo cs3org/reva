@@ -92,6 +92,9 @@ def cephService():
 
 # Pipeline definitions
 def main(ctx):
+  # In order to run specific parts only, specify the parts as
+  # ocisIntegrationTests(6, [1, 4])     - this will only run 1st and 4th parts
+  # implemented for: ocisIntegrationTests, owncloudIntegrationTests and s3ngIntegrationTests
   return [
     buildAndPublishDocker(),
     buildOnly(),
@@ -636,9 +639,13 @@ def localIntegrationTestsOcis():
     ],
   }
 
-def ocisIntegrationTests(parallelRuns):
+def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
   pipelines = []
+  debugPartsEnabled = (len(skipExceptParts) != 0)
   for runPart in range(1, parallelRuns + 1):
+    if debugPartsEnabled and runPart not in skipExceptParts:
+      continue
+
     pipelines.append(
       {
         "kind": "pipeline",
@@ -705,9 +712,13 @@ def ocisIntegrationTests(parallelRuns):
 
   return pipelines
 
-def owncloudIntegrationTests(parallelRuns):
+def owncloudIntegrationTests(parallelRuns, skipExceptParts = []):
   pipelines = []
+  debugPartsEnabled = (len(skipExceptParts) != 0)
   for runPart in range(1, parallelRuns + 1):
+    if debugPartsEnabled and runPart not in skipExceptParts:
+      continue
+
     pipelines.append(
       {
         "kind": "pipeline",
@@ -774,9 +785,13 @@ def owncloudIntegrationTests(parallelRuns):
 
   return pipelines
 
-def s3ngIntegrationTests(parallelRuns):
+def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
   pipelines = []
+  debugPartsEnabled = (len(skipExceptParts) != 0)
   for runPart in range(1, parallelRuns + 1):
+    if debugPartsEnabled and runPart not in skipExceptParts:
+      continue
+
     pipelines.append(
       {
         "kind": "pipeline",

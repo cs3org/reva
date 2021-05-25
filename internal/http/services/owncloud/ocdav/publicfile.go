@@ -231,9 +231,6 @@ func (s *svc) getPublicFileInfos(onContainer, onlyRoot bool, i *provider.Resourc
 		}
 	}
 
-	// link share only appears on root collection
-	delete(i.Opaque.Map, "link-share")
-
 	// add the file info
 	infos = append(infos, i)
 

@@ -20,12 +20,12 @@ package usershareprovider
 
 import (
 	"context"
-	"fmt"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/share"
@@ -60,7 +60,7 @@ func getShareManager(c *config) (share.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
 // TODO(labkode): add ctx to Close.
@@ -172,7 +172,7 @@ func (s *service) ListShares(ctx context.Context, req *collaboration.ListSharesR
 }
 
 func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
-	_, err := s.sm.UpdateShare(ctx, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
+	share, err := s.sm.UpdateShare(ctx, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating share"),
@@ -181,6 +181,7 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 
 	res := &collaboration.UpdateShareResponse{
 		Status: status.NewOK(ctx),
+		Share:  share,
 	}
 	return res, nil
 }
@@ -219,7 +220,7 @@ func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetRe
 }
 
 func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
-	_, err := s.sm.UpdateReceivedShare(ctx, req.Ref, req.Field) // TODO(labkode): check what to update
+	share, err := s.sm.UpdateReceivedShare(ctx, req.Ref, req.Field) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateReceivedShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating received share"),
@@ -228,6 +229,7 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 
 	res := &collaboration.UpdateReceivedShareResponse{
 		Status: status.NewOK(ctx),
+		Share:  share,
 	}
 	return res, nil
 }

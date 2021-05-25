@@ -209,9 +209,9 @@ _ocdav: return checksum in upload response for chunked upload_
 -   [apiMain/checksums.feature:67](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L67) Scenario: Uploading a chunked file with checksum should return the checksum in the download header
 -   [apiMain/checksums.feature:138](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L138) Scenario: Upload new dav chunked file where checksum matches
 -   [apiMain/checksums.feature:147](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L147) Scenario: Upload new dav chunked file where checksum does not match
--   [apiMain/checksums.feature:258](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L258) Scenario: Uploading an old method chunked file with checksum should fail using new DAV path
--   [apiMain/checksums.feature:314](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L314) Scenario: Upload overwriting a file with new chunking and correct checksum
--   [apiMain/checksums.feature:326](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L326) Scenario: Upload overwriting a file with new chunking and invalid checksum
+-   [apiMain/checksums.feature:257](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L257) Scenario: Uploading an old method chunked file with checksum should fail using new DAV path
+-   [apiMain/checksums.feature:313](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L313) Scenario: Upload overwriting a file with new chunking and correct checksum
+-   [apiMain/checksums.feature:325](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L325) Scenario: Upload overwriting a file with new chunking and invalid checksum
 
 
 #### [Webdav LOCK operations](https://github.com/owncloud/ocis/issues/1284)
@@ -574,8 +574,8 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 
 -   [apiMain/checksums.feature:217](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L217) Scenario Outline: Upload a file where checksum does not match
 -   [apiMain/checksums.feature:218](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L218) Scenario Outline: Upload a file where checksum does not match
+-   [apiMain/checksums.feature:309](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L309) Scenario Outline: Uploading a file with invalid SHA1 checksum overwriting an existing file
 -   [apiMain/checksums.feature:310](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L310) Scenario Outline: Uploading a file with invalid SHA1 checksum overwriting an existing file
--   [apiMain/checksums.feature:311](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L311) Scenario Outline: Uploading a file with invalid SHA1 checksum overwriting an existing file
 
 #### [Searching sharee with displayname](https://github.com/owncloud/ocis/issues/547)
 -   [apiSharees/sharees.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L32)
@@ -660,8 +660,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 #### [Response is empty when accepting a share](https://github.com/owncloud/product/issues/207)
 
 -   [apiShareManagementToShares/acceptShares.feature:82](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L82)
--   [apiShareManagementToShares/acceptShares.feature:173](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L173)
--   [apiShareManagementToShares/acceptShares.feature:186](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L186)
 -   [apiShareManagementToShares/acceptShares.feature:207](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L207)
 -   [apiShareManagementToShares/acceptShares.feature:260](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L260)
 -   [apiShareManagementToShares/acceptSharesToSharesFolder.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptSharesToSharesFolder.feature#L31)
@@ -687,8 +685,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:157](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L157)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:290](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L290)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L291)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:308](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L308)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:309](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L309)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L46)
 -   [apiShareManagementToShares/mergeShare.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L32)
 -   [apiShareManagementToShares/mergeShare.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L42)
@@ -732,10 +728,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:536](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L536)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:554](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L554)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:572](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L572)
-
-#### [Response is empty when accepting a share](https://github.com/owncloud/product/issues/207)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:347](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L347)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:348](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L348)
 
 #### [File deletion using dav gives unique string in filename in the trashbin](https://github.com/owncloud/product/issues/178)
 
@@ -1027,14 +1019,6 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 
 #### [Resharing does not work with ocis storage](https://github.com/owncloud/product/issues/265)
 
--   [apiShareReshareToShares1/reShare.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L61)
--   [apiShareReshareToShares1/reShare.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L62)
--   [apiShareReshareToShares1/reShare.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L78)
--   [apiShareReshareToShares1/reShare.feature:79](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L79)
--   [apiShareReshareToShares1/reShare.feature:95](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L95)
--   [apiShareReshareToShares1/reShare.feature:96](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L96)
--   [apiShareReshareToShares1/reShare.feature:112](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L112)
--   [apiShareReshareToShares1/reShare.feature:113](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L113)
 -   [apiShareReshareToShares1/reShare.feature:169](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L169)
 -   [apiShareReshareToShares1/reShare.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L170)
 -   [apiShareReshareToShares1/reShare.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L171)
@@ -1145,8 +1129,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 
 -   [apiShareReshareToShares2/reShareDisabled.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareDisabled.feature#L27)
 -   [apiShareReshareToShares2/reShareDisabled.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareDisabled.feature#L28)
--   [apiShareReshareToShares2/reShareDisabled.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareDisabled.feature#L42)
--   [apiShareReshareToShares2/reShareDisabled.feature:43](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareDisabled.feature#L43)
 
 #### [share permissions are not enforced](https://github.com/owncloud/product/issues/270)
 
@@ -1624,8 +1606,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 
 ### [Moving resource loses associated shares](https://github.com/owncloud/ocis/issues/1251)
 
--   [apiSharePublicLink2/multilinkSharing.feature:187](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/multilinkSharing.feature#L187)
-
 #### [No way to set default folder for received shares](https://github.com/owncloud/ocis/issues/1327)
 -   [apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature#L22)
 -   [apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature:23](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature#L23)
@@ -1705,6 +1685,15 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
     Scenario Outline: Retrieving folder quota when quota is set
 -   [apiWebdavProperties1/getQuota.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L27)
 -   [apiWebdavProperties1/getQuota.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L28)
+
+-   [apiMain/quota.feature:105](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:105)
+-   [apiMain/quota.feature:112](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:112)
+-   [apiMain/quota.feature:119](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:119)
+-   [apiMain/quota.feature:134](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:134)
+-   [apiMain/quota.feature:148](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:148)
+-   [apiMain/quota.feature:164](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:164)
+-   [apiMain/quota.feature:178](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:178)
+-   [apiMain/quota.feature:184](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature:184)
 
 #### [user-sync endpoint does not exist](https://github.com/owncloud/ocis/issues/1241)
 -   [apiMain/userSync.feature:18](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/userSync.feature#L18)
@@ -1951,45 +1940,46 @@ Scenario Outline: Do a PROPFIND to a non-existing URL
 -   [apiCapabilities/capabilities.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L93)
 -   [apiCapabilities/capabilities.feature:107](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L107)
 -   [apiCapabilities/capabilities.feature:116](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L116)
--   [apiCapabilities/capabilities.feature:125](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L125)
--   [apiCapabilities/capabilities.feature:132](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L132)
--   [apiCapabilities/capabilities.feature:138](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L138)
--   [apiCapabilities/capabilities.feature:144](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L144)
--   [apiCapabilities/capabilities.feature:151](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L151)
--   [apiCapabilities/capabilities.feature:157](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L157)
--   [apiCapabilities/capabilities.feature:166](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L166)
--   [apiCapabilities/capabilities.feature:176](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L176)
--   [apiCapabilities/capabilities.feature:187](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L187)
--   [apiCapabilities/capabilities.feature:198](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L198)
--   [apiCapabilities/capabilities.feature:208](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L208)
--   [apiCapabilities/capabilities.feature:219](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L219)
--   [apiCapabilities/capabilities.feature:231](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L231)
--   [apiCapabilities/capabilities.feature:238](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L238)
--   [apiCapabilities/capabilities.feature:245](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L245)
--   [apiCapabilities/capabilities.feature:252](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L252)
--   [apiCapabilities/capabilities.feature:275](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L275)
--   [apiCapabilities/capabilities.feature:292](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L292)
--   [apiCapabilities/capabilities.feature:313](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L313)
--   [apiCapabilities/capabilities.feature:335](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L335)
--   [apiCapabilities/capabilities.feature:357](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L357)
--   [apiCapabilities/capabilities.feature:379](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L379)
--   [apiCapabilities/capabilities.feature:404](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L404)
--   [apiCapabilities/capabilities.feature:429](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L429)
--   [apiCapabilities/capabilities.feature:454](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L454)
--   [apiCapabilities/capabilities.feature:476](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L476)
--   [apiCapabilities/capabilities.feature:498](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L498)
--   [apiCapabilities/capabilities.feature:521](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L521)
--   [apiCapabilities/capabilities.feature:546](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L546)
--   [apiCapabilities/capabilities.feature:568](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L568)
--   [apiCapabilities/capabilities.feature:590](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L590)
--   [apiCapabilities/capabilities.feature:613](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L613)
--   [apiCapabilities/capabilities.feature:637](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L637)
--   [apiCapabilities/capabilities.feature:658](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L658)
--   [apiCapabilities/capabilities.feature:680](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L680)
--   [apiCapabilities/capabilities.feature:703](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L703)
--   [apiCapabilities/capabilities.feature:729](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L729)
--   [apiCapabilities/capabilities.feature:758](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L758)
--   [apiCapabilities/capabilities.feature:787](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L787)
+-   [apiCapabilities/capabilities.feature:126](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L126)
+-   [apiCapabilities/capabilities.feature:133](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L133)
+-   [apiCapabilities/capabilities.feature:140](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L140)
+-   [apiCapabilities/capabilities.feature:146](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L146)
+-   [apiCapabilities/capabilities.feature:152](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L152)
+-   [apiCapabilities/capabilities.feature:159](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L159)
+-   [apiCapabilities/capabilities.feature:165](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L165)
+-   [apiCapabilities/capabilities.feature:174](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L174)
+-   [apiCapabilities/capabilities.feature:184](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L184)
+-   [apiCapabilities/capabilities.feature:195](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L195)
+-   [apiCapabilities/capabilities.feature:206](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L206)
+-   [apiCapabilities/capabilities.feature:216](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L216)
+-   [apiCapabilities/capabilities.feature:227](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L227)
+-   [apiCapabilities/capabilities.feature:239](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L239)
+-   [apiCapabilities/capabilities.feature:246](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L246)
+-   [apiCapabilities/capabilities.feature:253](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L253)
+-   [apiCapabilities/capabilities.feature:260](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L260)
+-   [apiCapabilities/capabilities.feature:283](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L283)
+-   [apiCapabilities/capabilities.feature:300](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L300)
+-   [apiCapabilities/capabilities.feature:321](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L321)
+-   [apiCapabilities/capabilities.feature:343](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L343)
+-   [apiCapabilities/capabilities.feature:365](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L365)
+-   [apiCapabilities/capabilities.feature:387](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L387)
+-   [apiCapabilities/capabilities.feature:412](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L412)
+-   [apiCapabilities/capabilities.feature:437](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L437)
+-   [apiCapabilities/capabilities.feature:462](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L462)
+-   [apiCapabilities/capabilities.feature:484](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L484)
+-   [apiCapabilities/capabilities.feature:506](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L506)
+-   [apiCapabilities/capabilities.feature:529](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L529)
+-   [apiCapabilities/capabilities.feature:554](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L554)
+-   [apiCapabilities/capabilities.feature:576](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L576)
+-   [apiCapabilities/capabilities.feature:598](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L598)
+-   [apiCapabilities/capabilities.feature:621](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L621)
+-   [apiCapabilities/capabilities.feature:645](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L645)
+-   [apiCapabilities/capabilities.feature:666](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L666)
+-   [apiCapabilities/capabilities.feature:688](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L688)
+-   [apiCapabilities/capabilities.feature:711](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L711)
+-   [apiCapabilities/capabilities.feature:737](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L737)
+-   [apiCapabilities/capabilities.feature:766](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L766)
+-   [apiCapabilities/capabilities.feature:795](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L795)
 -   [apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature:25](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature#L25)
 -   [apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature#L26)
 -   [apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature:44](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature#L44)
@@ -2000,16 +1990,12 @@ Scenario Outline: Do a PROPFIND to a non-existing URL
 -   [apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature:79](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature#L79)
 -   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L26)
 -   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L27)
--   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L46)
--   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:47](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L47)
 -   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:67](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L67)
 -   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:68](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L68)
 -   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:87](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L87)
 -   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:88](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L88)
 -   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:108](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L108)
 -   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:109](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L109)
--   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:128](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L128)
--   [apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature:129](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWhenShareWithOnlyMembershipGroups.feature#L129)
 
 -   [apiMain/caldav.feature:8](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/caldav.feature#L8)
 -   [apiMain/caldav.feature:15](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/caldav.feature#L15)
@@ -2225,12 +2211,3 @@ _ocdav: return checksum in upload response for chunked upload_
 -   [apiWebdavUploadTUS/uploadToShare.feature:248](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadToShare.feature#L248)
 -   [apiWebdavUploadTUS/uploadToShare.feature:288](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadToShare.feature#L288)
 -   [apiWebdavUploadTUS/uploadToShare.feature:289](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadToShare.feature#L289)
-
-
-#### [Share inaccessible if folder with same name was deleted and recreated](https://github.com/owncloud/ocis/issues/1787)
--   [apiShareReshareToShares1/reShare.feature:269](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L269)
--   [apiShareReshareToShares1/reShare.feature:270](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L270)
--   [apiShareReshareToShares1/reShare.feature:287](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L287)
--   [apiShareReshareToShares1/reShare.feature:288](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L288)
--   [apiShareReshareToShares1/reShare.feature:305](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L288)
--   [apiShareReshareToShares1/reShare.feature:306](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L288)

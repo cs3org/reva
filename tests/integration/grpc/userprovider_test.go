@@ -23,12 +23,12 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"google.golang.org/grpc/metadata"
-
+	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/token"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	ruser "github.com/cs3org/reva/pkg/user"
+	"google.golang.org/grpc/metadata"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -58,7 +58,9 @@ var _ = Describe("user providers", func() {
 		}
 		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
-		t, err := tokenManager.MintToken(ctx, user)
+		scope, err := scope.GetOwnerScope()
+		Expect(err).ToNot(HaveOccurred())
+		t, err := tokenManager.MintToken(ctx, user, scope)
 		Expect(err).ToNot(HaveOccurred())
 		ctx = token.ContextSetToken(ctx, t)
 		ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)

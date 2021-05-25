@@ -19,6 +19,7 @@
 package runtime
 
 import (
+	"github.com/cs3org/reva/pkg/registry"
 	"github.com/rs/zerolog"
 )
 
@@ -27,10 +28,11 @@ type Option func(o *Options)
 
 // Options defines the available options for this package.
 type Options struct {
-	Logger *zerolog.Logger
+	Logger   *zerolog.Logger
+	Registry registry.Registry
 }
 
-// newOptions intializes the available default options.
+// newOptions initializes the available default options.
 func newOptions(opts ...Option) Options {
 	opt := Options{}
 
@@ -45,5 +47,12 @@ func newOptions(opts ...Option) Options {
 func WithLogger(logger *zerolog.Logger) Option {
 	return func(o *Options) {
 		o.Logger = logger
+	}
+}
+
+// WithRegistry provides a function to set the registry.
+func WithRegistry(r registry.Registry) Option {
+	return func(o *Options) {
+		o.Registry = r
 	}
 }

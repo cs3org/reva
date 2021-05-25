@@ -27,6 +27,7 @@ import (
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -64,7 +65,7 @@ func getShareManager(c *config) (share.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	return nil, errtypes.NotFound(fmt.Sprintf("driver not found: %s", c.Driver))
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -109,7 +110,7 @@ func (s *service) UnprotectedEndpoints() []string {
 func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
 	parts := strings.Split(req.ProviderId, ":")
 	if len(parts) < 2 {
-		err := errors.New("resource ID does not follow the layout storageid:opaqueid " + req.ProviderId)
+		err := errtypes.BadRequest("resource ID does not follow the layout storageid:opaqueid " + req.ProviderId)
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "error decoding resource ID"),
 		}, nil
@@ -124,7 +125,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	permOpaque, ok := req.Protocol.Opaque.Map["permissions"]
 	if !ok {
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, errors.New("resource permissions not set"), ""),
+			Status: status.NewInternal(ctx, errtypes.BadRequest("resource permissions not set"), ""),
 		}, nil
 	}
 	switch permOpaque.Decoder {
@@ -136,7 +137,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 			}, nil
 		}
 	default:
-		err := errors.New("opaque entry decoder not recognized")
+		err := errtypes.NotSupported("opaque entry decoder not recognized")
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil
@@ -146,14 +147,14 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	tokenOpaque, ok := req.Protocol.Opaque.Map["token"]
 	if !ok {
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, errors.New("token not set"), ""),
+			Status: status.NewInternal(ctx, errtypes.PermissionDenied("token not set"), ""),
 		}, nil
 	}
 	switch tokenOpaque.Decoder {
 	case "plain":
 		token = string(tokenOpaque.Value)
 	default:
-		err := errors.New("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
+		err := errtypes.NotSupported("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil

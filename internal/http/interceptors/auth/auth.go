@@ -23,13 +23,13 @@ import (
 	"net/http"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
 	tokenregistry "github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -234,16 +234,20 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			}
 
 			// validate token
-			claims, err := tokenManager.DismantleToken(r.Context(), tkn)
+			u, tokenScope, err := tokenManager.DismantleToken(r.Context(), tkn)
 			if err != nil {
 				log.Error().Err(err).Msg("error dismantling token")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-
-			u := &userpb.User{}
-			if err := mapstructure.Decode(claims, u); err != nil {
-				log.Error().Err(err).Msg("error decoding user claims")
+			// ensure access to the resource is allowed
+			ok, err := scope.VerifyScope(tokenScope, r.URL.Path)
+			if err != nil {
+				log.Error().Err(err).Msg("error verifying scope of access token")
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+			if !ok {
+				log.Error().Err(err).Msg("access to resource not allowed")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
