@@ -1,6 +1,7 @@
 module github.com/cs3org/reva
 
 require (
+	bou.ke/monkey v1.0.2
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
 	contrib.go.opencensus.io/exporter/prometheus v0.3.0
 	github.com/BurntSushi/toml v0.3.1
@@ -17,6 +18,7 @@ require (
 	github.com/cs3org/go-cs3apis v0.0.0-20210507060801-f176760d55f4
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
+	github.com/gdexlab/go-render v1.0.1
 	github.com/go-ldap/ldap/v3 v3.3.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
