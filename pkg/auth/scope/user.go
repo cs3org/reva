@@ -18,10 +18,37 @@
 
 package scope
 
-import authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+import (
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/utils"
+)
 
 func userScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 	// Always return true. Registered users can access all paths.
 	// TODO(ishank011): Add checks for read/write permissions.
 	return true, nil
+}
+
+// GetOwnerScope returns the default owner scope with access to all resources.
+func GetOwnerScope() (map[string]*authpb.Scope, error) {
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: "/",
+		},
+	}
+	val, err := utils.MarshalProtoV1ToJSON(ref)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]*authpb.Scope{
+		"user": &authpb.Scope{
+			Resource: &types.OpaqueEntry{
+				Decoder: "json",
+				Value:   val,
+			},
+			Role: authpb.Role_ROLE_OWNER,
+		},
+	}, nil
 }

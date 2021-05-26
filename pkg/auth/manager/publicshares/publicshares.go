@@ -31,9 +31,9 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -127,33 +127,17 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		return nil, nil, err
 	}
 
-	scope, err := m.getScope(ctx, publicShareResponse.GetShare())
+	share := publicShareResponse.GetShare()
+	role := authpb.Role_ROLE_VIEWER
+	if share.Permissions.Permissions.InitiateFileUpload {
+		role = authpb.Role_ROLE_EDITOR
+	}
+	scope, err := scope.GetPublicShareScope(share, role)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return getUserResponse.GetUser(), scope, nil
-}
-
-func (m *manager) getScope(ctx context.Context, share *link.PublicShare) (map[string]*authpb.Scope, error) {
-	role := authpb.Role_ROLE_VIEWER
-	if share.Permissions.Permissions.InitiateFileUpload {
-		role = authpb.Role_ROLE_EDITOR
-	}
-
-	val, err := utils.MarshalProtoV1ToJSON(share)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]*authpb.Scope{
-		"publicshare": &authpb.Scope{
-			Resource: &types.OpaqueEntry{
-				Decoder: "json",
-				Value:   val,
-			},
-			Role: role,
-		},
-	}, nil
 }
 
 // ErrPasswordNotProvided is returned when the public share is password protected, but there was no password on the request
