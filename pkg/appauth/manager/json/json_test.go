@@ -558,7 +558,7 @@ func TestGetAppPassword(t *testing.T) {
 				Label:      "label",
 				User:       userTest.GetId(),
 				Expiration: &typespb.Timestamp{
-					Seconds: 16220400870,
+					Seconds: uint64(time.Now().Unix()) + 3600,
 				},
 				Ctime: now,
 				Utime: now,
