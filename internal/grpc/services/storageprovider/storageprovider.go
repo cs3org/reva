@@ -301,9 +301,14 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	log := appctx.GetLogger(ctx)
 	ctx, newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
-		}, nil
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			newRef = req.Ref
+		default:
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			}, nil
+		}
 	}
 	if newRef.GetPath() == "/" {
 		return &provider.InitiateFileUploadResponse{
