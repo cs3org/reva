@@ -174,11 +174,11 @@ func (mgr *jsonManager) InvalidateAppPassword(ctx context.Context, password stri
 	// see if user has a list of passwords
 	appPasswords, ok := mgr.passwords[userID.String()]
 	if !ok || len(appPasswords) == 0 {
-		return errtypes.BadRequest("password not found")
+		return errtypes.NotFound("password not found")
 	}
 
 	if _, ok := appPasswords[password]; !ok {
-		return errtypes.BadRequest("password not found")
+		return errtypes.NotFound("password not found")
 	}
 	delete(mgr.passwords[userID.String()], password)
 
@@ -196,16 +196,16 @@ func (mgr *jsonManager) GetAppPassword(ctx context.Context, userID *userpb.UserI
 
 	appPassword, ok := mgr.passwords[userID.String()]
 	if !ok {
-		return nil, errtypes.BadRequest("password not found")
+		return nil, errtypes.NotFound("password not found")
 	}
 
 	pw, ok := appPassword[password]
 	if !ok {
-		return nil, errtypes.BadRequest("password not found")
+		return nil, errtypes.NotFound("password not found")
 	}
 
 	if pw.Expiration != nil && pw.Expiration.Seconds != 0 && uint64(time.Now().Unix()) > pw.Expiration.Seconds {
-		return nil, errtypes.BadRequest("password not found")
+		return nil, errtypes.NotFound("password not found")
 	}
 
 	pw.Utime = now()
