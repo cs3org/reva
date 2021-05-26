@@ -282,7 +282,23 @@ func TestListAppPasswords(t *testing.T) {
 			},
 		}}
 
+	dummyDataUserExpired := map[string]map[string]*apppb.AppPassword{
+		user0Test.GetId().String(): {
+			token: {
+				Password:   token,
+				TokenScope: nil,
+				Label:      "label",
+				User:       user0Test.GetId(),
+				Expiration: &typespb.Timestamp{
+					Seconds: 100,
+				},
+				Ctime: now,
+				Utime: now,
+			},
+		}}
+
 	dummyDataUser0JSON, _ := json.Marshal(dummyDataUser0)
+	dummyDataUserExpiredJSON, _ := json.Marshal(dummyDataUserExpired)
 
 	dummyDataUser1 := map[string]map[string]*apppb.AppPassword{
 		user1Test.GetId().String(): {
@@ -319,6 +335,13 @@ func TestListAppPasswords(t *testing.T) {
 			stateJSON:   string(dummyDataUser0JSON),
 			expectedState: []*apppb.AppPassword{
 				dummyDataUser0[user0Test.GetId().String()][token],
+			},
+		},
+		{
+			description: "ListAppPasswords with not empty state with expired password (only one user)",
+			stateJSON:   string(dummyDataUserExpiredJSON),
+			expectedState: []*apppb.AppPassword{
+				dummyDataUserExpired[user0Test.GetId().String()][token],
 			},
 		},
 		{
@@ -512,7 +535,39 @@ func TestGetAppPassword(t *testing.T) {
 			},
 		}}
 
+	dummyDataUserExpired := map[string]map[string]*apppb.AppPassword{
+		userTest.GetId().String(): {
+			token: {
+				Password:   token,
+				TokenScope: nil,
+				Label:      "label",
+				User:       userTest.GetId(),
+				Expiration: &typespb.Timestamp{
+					Seconds: 100,
+				},
+				Ctime: now,
+				Utime: now,
+			},
+		}}
+
+	dummyDataUserFutureExpiration := map[string]map[string]*apppb.AppPassword{
+		userTest.GetId().String(): {
+			token: {
+				Password:   token,
+				TokenScope: nil,
+				Label:      "label",
+				User:       userTest.GetId(),
+				Expiration: &typespb.Timestamp{
+					Seconds: 16220400870,
+				},
+				Ctime: now,
+				Utime: now,
+			},
+		}}
+
 	dummyDataUser1TokenJSON, _ := json.Marshal(dummyDataUser1Token)
+	dummyDataUserExpiredJSON, _ := json.Marshal(dummyDataUserExpired)
+	dummyDataUserFutureExpirationJSON, _ := json.Marshal(dummyDataUserFutureExpiration)
 
 	dummyDataDifferentUserToken := map[string]map[string]*apppb.AppPassword{
 		"OTHER_USER_ID": {
@@ -540,6 +595,18 @@ func TestGetAppPassword(t *testing.T) {
 			stateJSON:     string(dummyDataUser1TokenJSON),
 			password:      "TOKEN_NOT_EXISTS",
 			expectedState: nil,
+		},
+		{
+			description:   "GetAppPassword with expired token",
+			stateJSON:     string(dummyDataUserExpiredJSON),
+			password:      "TOKEN_NOT_EXISTS",
+			expectedState: nil,
+		},
+		{
+			description:   "GetAppPassword with token with expiration set in the future",
+			stateJSON:     string(dummyDataUserFutureExpirationJSON),
+			password:      "1234",
+			expectedState: dummyDataUserFutureExpiration[userTest.GetId().String()][token],
 		},
 		{
 			description:   "GetAppPassword with token that exists but different user",

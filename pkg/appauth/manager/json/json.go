@@ -180,7 +180,7 @@ func (mgr *jsonManager) InvalidateAppPassword(ctx context.Context, password stri
 	if _, ok := appPasswords[password]; !ok {
 		return errtypes.BadRequest("password not found")
 	}
-	delete(appPasswords, password)
+	delete(mgr.passwords[userID.String()], password)
 
 	// if user has 0 passwords, delete user key from state map
 	if len(mgr.passwords[userID.String()]) == 0 {
@@ -201,6 +201,10 @@ func (mgr *jsonManager) GetAppPassword(ctx context.Context, userID *userpb.UserI
 
 	pw, ok := appPassword[password]
 	if !ok {
+		return nil, errtypes.BadRequest("password not found")
+	}
+
+	if pw.Expiration != nil && pw.Expiration.Seconds != 0 && uint64(time.Now().Unix()) > pw.Expiration.Seconds {
 		return nil, errtypes.BadRequest("password not found")
 	}
 
