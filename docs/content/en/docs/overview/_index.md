@@ -55,8 +55,7 @@ How many times have you been using an app that you lost when you switched cloud 
 * **What is it not good for?**: Reva is not a replacement for a EFFSS or Cloud Platform, it is just a middleware component that enables inter-operability
 and runs alongside your infrastructure.
 
-* **What is it *not yet* good for?**: Reva is still very young to be used in production. We are working hard to reach a stable version soon with decent integrations to storage
-and applications. We don't want to re-invent the wheel so we have in mind that Reva will provide integrations with [rclone](https://rclone.org/) for multiple-storage support and with other protocols out there like [WOPI](https://wopi.readthedocs.io/en/latest/)
+* **What is it *not yet* good for?**: Reva is already used every day at CERN to power CERNBox's backend, but we have in mind that Reva will provide integrations with [rclone](https://rclone.org/) for multiple-storage support and with other protocols out there like [WOPI](https://wopi.readthedocs.io/en/latest/)
 , [Learning Tools Interoperability](https://www.imsglobal.org/activity/learning-tools-interoperability) and
 [OpenCloudMesh](https://cs3org.github.io/OCM-API/docs.html) to enable seamless collaboration.
 
