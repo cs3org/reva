@@ -572,7 +572,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// only log errors. They may happen but we can continue trying to at least list the shares
 			lcRes, err := client.ListContainer(ctx, &provider.ListContainerRequest{
 				Ref: &provider.Reference{
-					Spec: &provider.Reference_Path{Path: path.Join(h.homeNamespace, h.sharePrefix)},
+					Path: path.Join(h.homeNamespace, h.sharePrefix),
 				},
 			})
 			if err != nil || lcRes.Status.Code != rpc.Code_CODE_OK {
