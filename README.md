@@ -61,6 +61,7 @@ You can also read the [build from sources guide](https://reva.link/docs/getting-
 
    - add `TESTS` env. variable to test only a subset of tests e.g `-e TESTS="basic http copymove props"`
    - change `LITMUS_URL` for other tests e.g. `-e LITMUS_URL=http://localhost:20080/remote.php/dav/files/einstein` or to a public-share link
+   - if on MacOS you see `FAIL (connection refused by '127.0.0.1' port 20080: Connection refused)`, it may be necessary to replace 'localhost' with your host IP address (e.g. `ipconfig getifaddr en0` or `sudo ifconfig | grep 192`)
 
 ### ownCloud legacy integration tests
 1. start an LDAP server
