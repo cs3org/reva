@@ -26,6 +26,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -354,10 +355,10 @@ func (c *Client) GETFile(ctx context.Context, remoteuser, uid, gid, urlpath stri
 }
 
 // PUTFile does an entire PUT to upload a full file, taking the data from a stream
-func (c *Client) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.ReadCloser) error {
+func (c *Client) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.ReadCloser, length int64) error {
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", uid+","+gid).Str("path", urlpath).Msg("")
+	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", uid+","+gid).Str("path", urlpath).Int64("length", length).Msg("")
 
 	// Now send the req and see what happens
 	finalurl, err := c.buildFullURL(urlpath, uid, gid)
@@ -391,7 +392,7 @@ func (c *Client) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpath stri
 		log.Debug().Str("func", "PUTFile").Msg("sending req")
 		resp, err := c.cl.Do(req)
 
-		// Let's support redirections... and if we retry we have to retry at the same FST, avoid going back to the MGM
+		// Let's support redirections... and if we retry we retry at the same FST
 		if resp != nil && resp.StatusCode == 307 {
 
 			// io.Copy(ioutil.Discard, resp.Body)
@@ -407,6 +408,11 @@ func (c *Client) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpath stri
 				Transport: httpTransport}
 
 			req, err = http.NewRequestWithContext(ctx, "PUT", loc.String(), stream)
+			if length >= 0 {
+				log.Debug().Str("func", "PUTFile").Int64("Content-Length", length).Msg("setting header")
+				req.Header.Set("Content-Length", strconv.FormatInt(length, 10))
+
+			}
 			if err != nil {
 				log.Error().Str("func", "PUTFile").Str("url", loc.String()).Str("err", err.Error()).Msg("can't create redirected request")
 				return err

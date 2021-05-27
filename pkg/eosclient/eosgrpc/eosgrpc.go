@@ -74,6 +74,8 @@ type Options struct {
 
 	// Set to true to use the local disk as a buffer for chunk
 	// writes to EOS. Default is false, i.e. pure streaming
+	// Beware: in pure streaming mode the FST must support
+	// the HTTP chunked encoding
 	WriteUsesLocalTemp bool
 
 	// Location of the xrdcopy binary.
@@ -1198,8 +1200,10 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.ReadCloser) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Write").Str("uid,gid", uid+","+gid).Str("path", path).Msg("")
+	var length int64
+	length = -1
 
-	if c.opt.ReadUsesLocalTemp {
+	if c.opt.WriteUsesLocalTemp {
 		fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
 		if err != nil {
 			return err
@@ -1209,7 +1213,7 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 
 		log.Info().Str("func", "Write").Str("uid,gid", uid+","+gid).Str("path", path).Str("tempfile", fd.Name()).Msg("")
 		// copy stream to local temp file
-		_, err = io.Copy(fd, stream)
+		length, err = io.Copy(fd, stream)
 		if err != nil {
 			return err
 		}
@@ -1221,10 +1225,10 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 		defer wfd.Close()
 		defer os.RemoveAll(fd.Name())
 
-		return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, wfd)
+		return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, wfd, length)
 	}
 
-	return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, stream)
+	return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, stream, length)
 
 	// return c.GetHttpCl().PUTFile(ctx, remoteuser, uid, gid, urlpathng, stream)
 	// return c.WriteFile(ctx, uid, gid, path, fd.Name())

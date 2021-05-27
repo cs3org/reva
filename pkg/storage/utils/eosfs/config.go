@@ -130,5 +130,7 @@ type Config struct {
 	// Normally the eosgrpc plugin streams data on the fly.
 	// Setting this to true will make reva use the temp cachedirectory
 	// as intermediate step for write operations
+	// Beware: in pure streaming mode the FST must support
+	// the HTTP chunked encoding
 	WriteUsesLocalTemp bool `mapstructure:"write_uses_local_temp"`
 }
