@@ -20,6 +20,8 @@ package main
 
 import (
 	"context"
+	"encoding/gob"
+	"fmt"
 	"io"
 	"reflect"
 	"strings"
@@ -46,7 +48,7 @@ type AppTokenCreateOpts struct {
 
 var appTokensCreateOpts *AppTokenCreateOpts = &AppTokenCreateOpts{}
 
-const layoutTime = "2006-01-02T15:04"
+const layoutTime = "2006-01-02"
 
 func appTokensCreateCommand() *command {
 	cmd := newCommand("token-create")
@@ -54,7 +56,7 @@ func appTokensCreateCommand() *command {
 	cmd.Usage = func() string { return "Usage: token-create" }
 
 	cmd.StringVar(&appTokensCreateOpts.Label, "label", "", "set a label")
-	cmd.StringVar(&appTokensCreateOpts.Expiration, "expiration", "", "set expiration time (format <yyyy-mm-dd hh:mm>)")
+	cmd.StringVar(&appTokensCreateOpts.Expiration, "expiration", "", "set expiration time (format <yyyy-mm-dd>)")
 	// TODO(gmgigi96): add support for multiple paths and shares for the same token
 	cmd.StringVar(&appTokensCreateOpts.Path, "path", "", "create a token on a file (format path:[r|w])")
 	cmd.StringVar(&appTokensCreateOpts.Share, "share", "", "create a token for a share (format shareid:[r|w])")
@@ -91,11 +93,27 @@ func appTokensCreateCommand() *command {
 			}
 		}
 
-		client.GenerateAppPassword(ctx, &authapp.GenerateAppPasswordRequest{
+		generateAppPasswordResponse, err := client.GenerateAppPassword(ctx, &authapp.GenerateAppPasswordRequest{
 			Expiration: expiration,
 			Label:      appTokensCreateOpts.Label,
 			TokenScope: scope,
 		})
+
+		if err != nil {
+			return err
+		}
+		if generateAppPasswordResponse.Status.Code != rpc.Code_CODE_OK {
+			return formatError(generateAppPasswordResponse.Status)
+		}
+
+		if len(w) == 0 {
+			fmt.Println(generateAppPasswordResponse.String())
+		} else {
+			enc := gob.NewEncoder(w[0])
+			if err := enc.Encode(generateAppPasswordResponse.AppPassword); err != nil {
+				return err
+			}
+		}
 
 		return nil
 	}
