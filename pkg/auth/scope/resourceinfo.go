@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -31,9 +30,9 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
-	var share link.PublicShare
-	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
+func resourceinfoScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+	var r provider.ResourceInfo
+	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &r)
 	if err != nil {
 		return false, err
 	}
@@ -41,28 +40,26 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 	switch v := resource.(type) {
 	// Viewer role
 	case *registry.GetStorageProvidersRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.StatRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.ListContainerRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.InitiateFileDownloadRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkResourceInfo(&r, v.GetRef()), nil
 
 		// Editor role
 		// TODO(ishank011): Add role checks,
 		// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.DeleteRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.MoveRequest:
-		return checkStorageRef(&share, v.GetSource()) && checkStorageRef(&share, v.GetDestination()), nil
+		return checkResourceInfo(&r, v.GetSource()) && checkResourceInfo(&r, v.GetDestination()), nil
 	case *provider.InitiateFileUploadRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkResourceInfo(&r, v.GetRef()), nil
 
-	case *link.GetPublicShareRequest:
-		return checkPublicShareRef(&share, v.GetRef()), nil
 	case string:
 		return checkPath(v), nil
 	}
@@ -70,32 +67,39 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
 }
 
-func checkStorageRef(s *link.PublicShare, r *provider.Reference) bool {
+func checkResourceInfo(inf *provider.ResourceInfo, ref *provider.Reference) bool {
 	// ref: <id:<storage_id:$storageID opaque_id:$opaqueID > >
-	if r.GetId() != nil {
-		return s.ResourceId.StorageId == r.GetId().StorageId && s.ResourceId.OpaqueId == r.GetId().OpaqueId
+	if ref.GetId() != nil {
+		return inf.Id.StorageId == ref.GetId().StorageId && inf.Id.OpaqueId == ref.GetId().OpaqueId
 	}
-	// ref: <path:"/public/$token" >
-	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) {
+	// ref: <path:$path >
+	if strings.HasPrefix(ref.GetPath(), inf.Path) {
 		return true
 	}
 	return false
 }
 
-func checkPublicShareRef(s *link.PublicShare, ref *link.PublicShareReference) bool {
-	// ref: <token:$token >
-	return ref.GetToken() == s.Token
+func checkPath(path string) bool {
+	paths := []string{
+		"/dataprovider",
+		"/data",
+	}
+	for _, p := range paths {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return false
 }
 
-// GetPublicShareScope returns the scope to allow access to a public share and
-// the shared resource.
-func GetPublicShareScope(share *link.PublicShare, role authpb.Role) (map[string]*authpb.Scope, error) {
-	val, err := utils.MarshalProtoV1ToJSON(share)
+// GetResourceInfoScope returns the scope to allow access to a resource info object.
+func GetResourceInfoScope(r *provider.ResourceInfo, role authpb.Role) (map[string]*authpb.Scope, error) {
+	val, err := utils.MarshalProtoV1ToJSON(r)
 	if err != nil {
 		return nil, err
 	}
 	return map[string]*authpb.Scope{
-		"publicshare:" + share.Id.OpaqueId: &authpb.Scope{
+		"resourceinfo:" + r.Id.String(): &authpb.Scope{
 			Resource: &types.OpaqueEntry{
 				Decoder: "json",
 				Value:   val,

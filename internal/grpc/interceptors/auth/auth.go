@@ -242,7 +242,14 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 			// for OCM shares, guest accounts, etc.
 			log.Info().Msgf("resolving path reference to ID to check token scope %+v", ref.GetPath())
 			var share link.PublicShare
-			err = utils.UnmarshalJSONToProtoV1(tokenScope["publicshare"].Resource.Value, &share)
+			var publicShareScope []byte
+			for k := range tokenScope {
+				if strings.HasPrefix(k, "publicshare") {
+					publicShareScope = tokenScope[k].Resource.Value
+					break
+				}
+			}
+			err = utils.UnmarshalJSONToProtoV1(publicShareScope, &share)
 			if err != nil {
 				return nil, err
 			}

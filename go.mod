@@ -1,6 +1,7 @@
 module github.com/cs3org/reva
 
 require (
+	bou.ke/monkey v1.0.2
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
 	contrib.go.opencensus.io/exporter/prometheus v0.3.0
 	github.com/BurntSushi/toml v0.3.1
@@ -14,9 +15,10 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20210507060801-f176760d55f4
+	github.com/cs3org/go-cs3apis v0.0.0-20210527092012-82617367e09d
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
+	github.com/gdexlab/go-render v1.0.1
 	github.com/go-ldap/ldap/v3 v3.3.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
@@ -41,6 +43,7 @@ require (
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.22.0
 	github.com/sciencemesh/meshdirectory-web v1.0.4
+	github.com/sethvargo/go-password v0.2.0
 	github.com/stretchr/testify v1.7.0
 	github.com/studio-b12/gowebdav v0.0.0-20200303150724-9380631c29a1
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
