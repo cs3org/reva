@@ -22,6 +22,7 @@ import (
 	"encoding/gob"
 	"io"
 	"os"
+	"reflect"
 	"time"
 
 	applicationsv1beta1 "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
@@ -52,7 +53,8 @@ func appTokensListCommand() *command {
 	longHeader := table.Row{"Password", "Scope", "Label", "Expiration", "Creation Time", "Last Used Time"}
 
 	cmd.ResetFlags = func() {
-		appTokenListOpts.All, appTokenListOpts.Long = false, false
+		s := reflect.ValueOf(appTokenListOpts).Elem()
+		s.Set(reflect.Zero(s.Type()))
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -109,21 +111,24 @@ func appTokensListCommand() *command {
 
 // Filter the list of app password, based on the option selected by the user
 func filter(listPw []*applicationsv1beta1.AppPassword, opts *AppTokenListOpts) (filtered []*applicationsv1beta1.AppPassword) {
-	var f Filter
+	var filters Filters
 
-	f = &FilterByNone{}
+	//TODO: add label filter
 	if opts.OnlyExpired {
-		f = &FilterByExpired{other: &f}
+		filters = append(filters, &FilterByExpired{})
+	} else {
+		filters = append(filters, &FilterByNotExpired{})
 	}
 	if opts.ApplicationFilter != "" {
-		f = &FilterByApplicationName{other: &f}
+		filters = append(filters, &FilterByApplicationName{name: opts.ApplicationFilter})
 	}
 	if opts.All {
-		f = &FilterByNone{}
+		// discard all the filters
+		filters = []Filter{&FilterByNone{}}
 	}
 
 	for _, pw := range listPw {
-		if f.In(pw) {
+		if filters.In(pw) {
 			filtered = append(filtered, pw)
 		}
 	}
@@ -135,18 +140,17 @@ type Filter interface {
 }
 
 type FilterByApplicationName struct {
-	name  string
-	other *Filter
+	name string
 }
 type FilterByNone struct{}
-type FilterByExpired struct {
-	other *Filter
-}
+type FilterByExpired struct{}
+type FilterByNotExpired struct{}
+type Filters []Filter
 
 func (f *FilterByApplicationName) In(pw *applicationsv1beta1.AppPassword) bool {
 	for app := range pw.TokenScope {
 		if app == f.name {
-			return (*f.other).In(pw)
+			return true
 		}
 	}
 	return false
@@ -157,5 +161,18 @@ func (f *FilterByNone) In(pw *applicationsv1beta1.AppPassword) bool {
 }
 
 func (f *FilterByExpired) In(pw *applicationsv1beta1.AppPassword) bool {
-	return (*f.other).In(pw) && pw.Expiration != nil && pw.Expiration.Seconds >= uint64(time.Now().Unix())
+	return pw.Expiration != nil && pw.Expiration.Seconds <= uint64(time.Now().Unix())
+}
+
+func (f *FilterByNotExpired) In(pw *applicationsv1beta1.AppPassword) bool {
+	return !(&FilterByExpired{}).In(pw)
+}
+
+func (f Filters) In(pw *applicationsv1beta1.AppPassword) bool {
+	for _, filter := range f {
+		if !filter.In(pw) {
+			return false
+		}
+	}
+	return true
 }
