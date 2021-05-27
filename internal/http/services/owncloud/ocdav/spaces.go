@@ -76,16 +76,24 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		switch r.Method {
 		case MethodPropfind:
 			s.handleSpacesPropfind(w, r, spaceID)
+		case MethodProppatch:
+			s.handleSpacesProppatch(w, r, spaceID)
+		case MethodLock:
+			s.handleLock(w, r, spaceID)
+		case MethodUnlock:
+			s.handleUnlock(w, r, spaceID)
 		case MethodMkcol:
 			s.handleSpacesMkCol(w, r, spaceID)
 		case MethodMove:
 			s.handleSpacesMove(w, r, spaceID)
-		case MethodProppatch:
-			s.handleSpacesProppatch(w, r, spaceID)
 		case MethodCopy:
 			s.handleSpacesCopy(w, r, spaceID)
+		case MethodReport:
+			s.handleReport(w, r, spaceID)
 		case http.MethodGet:
 			s.handleSpacesGet(w, r, spaceID)
+		case http.MethodOptions:
+			s.handleOptions(w, r, spaceID)
 		case http.MethodDelete:
 			s.handleSpacesDelete(w, r, spaceID)
 		default:
