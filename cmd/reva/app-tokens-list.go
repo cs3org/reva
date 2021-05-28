@@ -20,7 +20,6 @@ package main
 
 import (
 	"encoding/gob"
-	"fmt"
 	"io"
 	"os"
 	"reflect"
@@ -30,11 +29,8 @@ import (
 	applications "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
 	authpv "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/utils"
+	scope "github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/jedib0t/go-pretty/table"
 )
 
@@ -132,38 +128,14 @@ func formatTime(t *types.Timestamp) string {
 
 func prettyFormatScope(scopeMap map[string]*authpv.Scope) (string, error) {
 	var scopeFormatted strings.Builder
-	for scopeType, scope := range scopeMap {
-		scopeStr, err := formatScope(scopeType, scope)
+	for scType, sc := range scopeMap {
+		scopeStr, err := scope.FormatScope(scType, sc)
 		if err != nil {
 			return "", err
 		}
 		scopeFormatted.WriteString(scopeStr)
 	}
 	return scopeFormatted.String(), nil
-}
-
-func formatScope(scopeType string, scope *authpv.Scope) (string, error) {
-	// TODO(gmgigi96): check decoder type
-	switch {
-	case strings.HasPrefix(scopeType, "user"):
-		// user scope
-		var ref provider.Reference
-		err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &ref)
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("%s %s", ref.String(), scope.Role.String()), nil
-	case strings.HasPrefix(scopeType, "publicshare"):
-		// public share
-		var pShare link.PublicShare
-		err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &pShare)
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("share:\"%s\" %s", pShare.Id.OpaqueId, scope.Role.String()), nil
-	default:
-		return "", errtypes.NotSupported("scope not yet supported")
-	}
 }
 
 // Filter the list of app password, based on the option selected by the user

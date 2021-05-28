@@ -19,9 +19,14 @@
 package scope
 
 import (
+	"fmt"
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 // Verifier is the function signature which every scope verifier should implement.
@@ -50,4 +55,28 @@ func VerifyScope(scopeMap map[string]*authpb.Scope, resource interface{}) (bool,
 		}
 	}
 	return false, nil
+}
+
+func FormatScope(scopeType string, scope *authpb.Scope) (string, error) {
+	// TODO(gmgigi96): check decoder type
+	switch {
+	case strings.HasPrefix(scopeType, "user"):
+		// user scope
+		var ref provider.Reference
+		err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &ref)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%s %s", ref.String(), scope.Role.String()), nil
+	case strings.HasPrefix(scopeType, "publicshare"):
+		// public share
+		var pShare link.PublicShare
+		err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &pShare)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("share:\"%s\" %s", pShare.Id.OpaqueId, scope.Role.String()), nil
+	default:
+		return "", errtypes.NotSupported("scope not yet supported")
+	}
 }
