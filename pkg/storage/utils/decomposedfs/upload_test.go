@@ -61,6 +61,7 @@ var _ = Describe("File uploads", func() {
 			Id: &userpb.UserId{
 				Idp:      "idp",
 				OpaqueId: "userid",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username: "username",
 		}

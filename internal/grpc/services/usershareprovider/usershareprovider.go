@@ -112,7 +112,7 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 	u := user.ContextMustGetUser(ctx)
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && req.Grant.Grantee.GetUserId().Idp == "" {
 		// use logged in user Idp as default.
-		g := &userpb.UserId{OpaqueId: req.Grant.Grantee.GetUserId().OpaqueId, Idp: u.Id.Idp}
+		g := &userpb.UserId{OpaqueId: req.Grant.Grantee.GetUserId().OpaqueId, Idp: u.Id.Idp, Type: userpb.UserType_USER_TYPE_PRIMARY}
 		req.Grant.Grantee.Id = &provider.Grantee_UserId{UserId: g}
 	}
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)

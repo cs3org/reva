@@ -47,6 +47,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 // Define keys and values used in the node metadata
@@ -123,11 +124,17 @@ func (n *Node) WriteMetadata(owner *userpb.UserId) (err error) {
 		if err = xattr.Set(nodePath, xattrs.OwnerIDPAttr, []byte("")); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set empty owner idp attribute")
 		}
+		if err = xattr.Set(nodePath, xattrs.OwnerTypeAttr, []byte("")); err != nil {
+			return errors.Wrap(err, "Decomposedfs: could not set empty owner type attribute")
+		}
 	} else {
 		if err = xattr.Set(nodePath, xattrs.OwnerIDAttr, []byte(owner.OpaqueId)); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set owner id attribute")
 		}
 		if err = xattr.Set(nodePath, xattrs.OwnerIDPAttr, []byte(owner.Idp)); err != nil {
+			return errors.Wrap(err, "Decomposedfs: could not set owner idp attribute")
+		}
+		if err = xattr.Set(nodePath, xattrs.OwnerTypeAttr, []byte(utils.UserTypeToString(owner.Type))); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set owner idp attribute")
 		}
 	}
@@ -274,7 +281,7 @@ func (n *Node) Owner() (o *userpb.UserId, err error) {
 	nodePath := n.InternalPath()
 	// lookup parent id in extended attributes
 	var attrBytes []byte
-	// lookup name in extended attributes
+	// lookup ID in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDAttr); err == nil {
 		if n.owner == nil {
 			n.owner = &userpb.UserId{}
@@ -283,12 +290,21 @@ func (n *Node) Owner() (o *userpb.UserId, err error) {
 	} else {
 		return
 	}
-	// lookup name in extended attributes
+	// lookup IDP in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDPAttr); err == nil {
 		if n.owner == nil {
 			n.owner = &userpb.UserId{}
 		}
 		n.owner.Idp = string(attrBytes)
+	} else {
+		return
+	}
+	// lookup type in extended attributes
+	if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerTypeAttr); err == nil {
+		if n.owner == nil {
+			n.owner = &userpb.UserId{}
+		}
+		n.owner.Type = utils.UserTypeMap(string(attrBytes))
 	} else {
 		return
 	}
@@ -410,7 +426,7 @@ func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 	nodePath := n.lu.InternalPath(n.ID)
 	// the favorite flag is specific to the user, so we need to incorporate the userid
-	fa := fmt.Sprintf("%s%s@%s", xattrs.FavPrefix, uid.GetOpaqueId(), uid.GetIdp())
+	fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
 	return xattr.Set(nodePath, fa, []byte(val))
 }
 
@@ -516,7 +532,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		if u, ok := user.ContextGetUser(ctx); ok {
 			// the favorite flag is specific to the user, so we need to incorporate the userid
 			if uid := u.GetId(); uid != nil {
-				fa := fmt.Sprintf("%s%s@%s", xattrs.FavPrefix, uid.GetOpaqueId(), uid.GetIdp())
+				fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
 				if val, err := xattr.Get(nodePath, fa); err == nil {
 					sublog.Debug().
 						Str("favorite", fa).
