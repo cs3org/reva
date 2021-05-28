@@ -140,8 +140,9 @@ func prettyFormatScope(scopeMap map[string]*authpv.Scope) (string, error) {
 			return "", err
 		}
 		scopeFormatted.WriteString(scopeStr)
+		scopeFormatted.WriteString(", ")
 	}
-	return scopeFormatted.String(), nil
+	return scopeFormatted.String()[:scopeFormatted.Len()-2], nil
 }
 
 // Filter the list of app password, based on the option selected by the user

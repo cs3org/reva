@@ -40,9 +40,20 @@ import (
 type appTokenCreateOpts struct {
 	Expiration string
 	Label      string
-	Path       string
-	Share      string
+	Path       stringSlice
+	Share      stringSlice
 	Unlimited  bool
+}
+
+type stringSlice []string
+
+func (ss *stringSlice) Set(value string) error {
+	*ss = append(*ss, value)
+	return nil
+}
+
+func (ss *stringSlice) String() string {
+	return strings.Join([]string(*ss), ",")
 }
 
 var createOpts *appTokenCreateOpts = &appTokenCreateOpts{}
@@ -57,8 +68,8 @@ func appTokensCreateCommand() *command {
 	cmd.StringVar(&createOpts.Label, "label", "", "set a label")
 	cmd.StringVar(&createOpts.Expiration, "expiration", "", "set expiration time (format <yyyy-mm-dd>)")
 	// TODO(gmgigi96): add support for multiple paths and shares for the same token
-	cmd.StringVar(&createOpts.Path, "path", "", "create a token on a file (format path:[r|w])")
-	cmd.StringVar(&createOpts.Share, "share", "", "create a token for a share (format shareid:[r|w])")
+	cmd.Var(&createOpts.Path, "path", "create a token for a file (format path:[r|w]). It is possible specify multiple times this flag")
+	cmd.Var(&createOpts.Share, "share", "create a token for a share (format shareid:[r|w]). It is possible specify multiple times this flags")
 	cmd.BoolVar(&createOpts.Unlimited, "all", false, "create a token with an unlimited scope")
 
 	cmd.ResetFlags = func() {
@@ -131,24 +142,49 @@ func appTokensCreateCommand() *command {
 }
 
 func getScope(ctx context.Context, client gateway.GatewayAPIClient, opts *appTokenCreateOpts) (map[string]*authpb.Scope, error) {
+	var scopeList []map[string]*authpb.Scope
 	switch {
-	case opts.Share != "":
-		// TODO(gmgigi96): verify format
-		// share = xxxx:[r|w]
-		shareIDPerm := strings.Split(opts.Share, ":")
-		shareID, perm := shareIDPerm[0], shareIDPerm[1]
-		return getPublicShareScope(ctx, client, shareID, perm)
-	case opts.Path != "":
-		// TODO(gmgigi96): verify format
-		// path = /home/a/b:[r|w]
-		pathPerm := strings.Split(opts.Path, ":")
-		path, perm := pathPerm[0], pathPerm[1]
-		return getPathScope(ctx, client, path, perm)
 	case opts.Unlimited:
 		return scope.GetOwnerScope()
+	case len(opts.Share) != 0:
+		// TODO(gmgigi96): verify format
+		for _, entry := range opts.Share {
+			// share = xxxx:[r|w]
+			shareIDPerm := strings.Split(entry, ":")
+			shareID, perm := shareIDPerm[0], shareIDPerm[1]
+			scope, err := getPublicShareScope(ctx, client, shareID, perm)
+			if err != nil {
+				return nil, err
+			}
+			scopeList = append(scopeList, scope)
+		}
+		fallthrough
+	case len(opts.Path) != 0:
+		// TODO(gmgigi96): verify format
+		for _, entry := range opts.Path {
+			// path = /home/a/b:[r|w]
+			pathPerm := strings.Split(entry, ":")
+			path, perm := pathPerm[0], pathPerm[1]
+			scope, err := getPathScope(ctx, client, path, perm)
+			if err != nil {
+				return nil, err
+			}
+			scopeList = append(scopeList, scope)
+		}
+		fallthrough
+	default:
+		return mergeListScopeIntoMap(scopeList), nil
 	}
+}
 
-	return nil, nil
+func mergeListScopeIntoMap(scopeList []map[string]*authpb.Scope) map[string]*authpb.Scope {
+	merged := make(map[string]*authpb.Scope)
+	for _, scope := range scopeList {
+		for k, v := range scope {
+			merged[k] = v
+		}
+	}
+	return merged
 }
 
 func getPublicShareScope(ctx context.Context, client gateway.GatewayAPIClient, shareID, perm string) (map[string]*authpb.Scope, error) {
@@ -214,7 +250,7 @@ func parsePermission(perm string) (authpb.Role, error) {
 }
 
 func checkOpts(opts *appTokenCreateOpts) error {
-	if opts.Share == "" && opts.Path == "" && !opts.Unlimited {
+	if len(opts.Share) == 0 && len(opts.Path) == 0 && !opts.Unlimited {
 		return errtypes.BadRequest("specify a token scope")
 	}
 	return nil
