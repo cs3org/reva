@@ -701,11 +701,16 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// if we are in a jail and the current share has been accepted use the stat from the share jail
 			// Needed because received shares can be jailed in a folder in the users home
 
-			// if we have share jail infos use them to build the path
-			if sji := findMatch(shareJailInfos, rs.Share.ResourceId); sji != nil {
-				// override path with info from share jail
-				data.FileTarget = path.Join(h.sharePrefix, path.Base(sji.Path))
-				data.Path = path.Join(h.sharePrefix, path.Base(sji.Path))
+			if h.sharePrefix != "/" {
+				// if we have share jail infos use them to build the path
+				if sji := findMatch(shareJailInfos, rs.Share.ResourceId); sji != nil {
+					// override path with info from share jail
+					data.FileTarget = path.Join(h.sharePrefix, path.Base(sji.Path))
+					data.Path = path.Join(h.sharePrefix, path.Base(sji.Path))
+				} else {
+					data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
+					data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+				}
 			} else {
 				data.FileTarget = info.Path
 				data.Path = info.Path
@@ -860,8 +865,13 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		// TODO Storage: int
 		s.ItemSource = wrapResourceID(info.Id)
 		s.FileSource = s.ItemSource
-		s.FileTarget = path.Join("/", info.Path)
-		s.Path = path.Join("/", info.Path)
+		if h.sharePrefix != "/" {
+			s.FileTarget = path.Join("/", path.Base(info.Path))
+			s.Path = path.Join("/", path.Base(info.Path))
+		} else {
+			s.FileTarget = path.Join("/", info.Path)
+			s.Path = path.Join("/", info.Path)
+		}
 		// TODO FileParent:
 		// item type
 		s.ItemType = conversions.ResourceType(info.GetType()).String()
