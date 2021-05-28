@@ -39,11 +39,14 @@ const (
 
 // Common HTTP headers.
 const (
-	HeaderContentType   = "Content-Type"
-	HeaderETag          = "ETag"
-	HeaderLastModified  = "Last-Modified"
-	HeaderContentLength = "Content-Length"
-	HeaderAcceptRanges  = "Accept-Ranges"
+	HeaderAcceptRanges        = "Accept-Ranges"
+	HeaderContentDisposistion = "Content-Disposition"
+	HeaderContentLength       = "Content-Length"
+	HeaderContentRange        = "Content-Range"
+	HeaderContentType         = "Content-Type"
+	HeaderETag                = "ETag"
+	HeaderLastModified        = "Last-Modified"
+	HeaderRange               = "Range"
 )
 
 // Custom ownCloud HTTP headers.
@@ -87,7 +90,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case MethodReport:
 			s.handleReport(w, r, ns)
 		case http.MethodGet:
-			s.handleGet(w, r, ns)
+			s.handlePathGet(w, r, ns)
 		case http.MethodPut:
 			s.handlePut(w, r, ns)
 		case http.MethodPost:
