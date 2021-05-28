@@ -26,7 +26,7 @@ Feature: sharing
       | item_source       | A_STRING             |
       | share_type        | user                 |
       | file_source       | A_STRING             |
-      | file_target       | /oc/Carol/Carol-folder        |
+      | file_target       | /Carol-folder        |
       | permissions       | all                  |
       | stime             | A_NUMBER             |
       | storage           | A_STRING             |

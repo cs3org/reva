@@ -30,7 +30,7 @@ Feature: sharing
     When user "Alice" gets all the shares inside the folder "PARENT/parent.txt" using the sharing API
     Then the OCS status code should be "<ocs_status_code>"
     And the HTTP status code should be "200"
-    And file "/oc/Alice/PARENT/parent.txt" should be included in the response
+    And file "parent.txt" should be included in the response
     Examples:
       | ocs_api_version | ocs_status_code |
       | 1               | 100             |
