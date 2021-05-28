@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package sharestorageprovider_test
+package sharesstorageprovider_test
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestSharestorageprovider(t *testing.T) {
+func TestSharesstorageprovider(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Sharestorageprovider Suite")
+	RunSpecs(t, "Sharesstorageprovider Suite")
 }

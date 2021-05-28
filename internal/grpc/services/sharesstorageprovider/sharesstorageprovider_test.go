@@ -1,0 +1,313 @@
+// Copyright 2018-2021 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package sharesstorageprovider_test
+
+import (
+	"context"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	provider "github.com/cs3org/reva/internal/grpc/services/sharesstorageprovider"
+	mocks "github.com/cs3org/reva/internal/grpc/services/sharesstorageprovider/mocks"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
+	_ "github.com/cs3org/reva/pkg/share/manager/loader"
+	sharemocks "github.com/cs3org/reva/pkg/share/mocks"
+	"github.com/cs3org/reva/pkg/user"
+	"google.golang.org/grpc"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
+)
+
+var _ = Describe("Sharesstorageprovider", func() {
+	var (
+		config = map[string]interface{}{
+			"mount_path":   "/shares",
+			"gateway_addr": "127.0.0.1:1234",
+			"driver":       "json",
+			"drivers": map[string]map[string]interface{}{
+				"json": map[string]interface{}{},
+			},
+		}
+		ctx = user.ContextSetUser(context.Background(), &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "alice",
+			},
+			Username: "alice",
+		})
+
+		rootStatReq = &sprovider.StatRequest{
+			Ref: &sprovider.Reference{
+				Spec: &sprovider.Reference_Path{Path: "/shares/alice"},
+			},
+		}
+		rootListContainerReq = &sprovider.ListContainerRequest{
+			Ref: &sprovider.Reference{
+				Spec: &sprovider.Reference_Path{Path: "/shares/alice"},
+			},
+		}
+
+		s  sprovider.ProviderAPIServer
+		sm *sharemocks.Manager
+		gw *mocks.GatewayClient
+	)
+
+	BeforeEach(func() {
+		sm = &sharemocks.Manager{}
+		gw = &mocks.GatewayClient{}
+
+		gw.On("ListContainer", mock.Anything, &sprovider.ListContainerRequest{
+			Ref: &sprovider.Reference{
+				Spec: &sprovider.Reference_Path{Path: "/share1-shareddir"},
+			},
+		}).Return(
+			&sprovider.ListContainerResponse{
+				Status: status.NewOK(context.Background()),
+				Infos: []*sprovider.ResourceInfo{
+					&sprovider.ResourceInfo{
+						Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+						Path: "/share1-shareddir/share1-subdir",
+						Id: &sprovider.ResourceId{
+							StorageId: "share1-storageid",
+							OpaqueId:  "subdir",
+						},
+						Size: 1,
+					},
+				},
+			}, nil)
+
+		gw.On("ListContainer", mock.Anything, &sprovider.ListContainerRequest{
+			Ref: &sprovider.Reference{
+				Spec: &sprovider.Reference_Path{Path: "/share1-shareddir/share1-subdir"},
+			},
+		}).Return(
+			&sprovider.ListContainerResponse{
+				Status: status.NewOK(context.Background()),
+				Infos: []*sprovider.ResourceInfo{
+					&sprovider.ResourceInfo{
+						Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+						Path: "/share1-shareddir/share1-subdir/share1-subdir-file",
+						Id: &sprovider.ResourceId{
+							StorageId: "share1-storageid",
+							OpaqueId:  "file",
+						},
+						Size: 1,
+					},
+				},
+			}, nil)
+
+		gw.On("Stat", mock.Anything, mock.AnythingOfType("*providerv1beta1.StatRequest")).Return(
+			func(_ context.Context, req *sprovider.StatRequest, _ ...grpc.CallOption) *sprovider.StatResponse {
+				if req.Ref.GetPath() == "/share1-shareddir/share1-subdir" {
+					return &sprovider.StatResponse{
+						Status: status.NewOK(context.Background()),
+						Info: &sprovider.ResourceInfo{
+							Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+							Path: "/share1-shareddir/share1-subdir",
+							Id: &sprovider.ResourceId{
+								StorageId: "share1-storageid",
+								OpaqueId:  "subdir",
+							},
+							Size: 10,
+						},
+					}
+				} else if req.Ref.GetPath() == "/share1-shareddir/share1-subdir/share1-subdir-file" {
+					return &sprovider.StatResponse{
+						Status: status.NewOK(context.Background()),
+						Info: &sprovider.ResourceInfo{
+							Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
+							Path: "/share1-shareddir/share1-subdir/share1-subdir-file",
+							Id: &sprovider.ResourceId{
+								StorageId: "share1-storageid",
+								OpaqueId:  "file",
+							},
+							Size: 20,
+						},
+					}
+				} else {
+					return &sprovider.StatResponse{
+						Status: status.NewOK(context.Background()),
+						Info: &sprovider.ResourceInfo{
+							Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+							Path: "/share1-shareddir",
+							Id: &sprovider.ResourceId{
+								StorageId: "share1-storageid",
+								OpaqueId:  "shareddir",
+							},
+							Size: 1234,
+						},
+					}
+				}
+			},
+			nil)
+
+	})
+
+	JustBeforeEach(func() {
+		p, err := provider.New("/shares", gw, sm)
+		Expect(err).ToNot(HaveOccurred())
+		s = p.(sprovider.ProviderAPIServer)
+		Expect(s).ToNot(BeNil())
+	})
+
+	Describe("NewDefault", func() {
+		It("returns a new service instance", func() {
+			s, err := provider.NewDefault(config, nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(s).ToNot(BeNil())
+		})
+	})
+
+	Describe("ListContainer", func() {
+		It("only considers accepted shares", func() {
+			sm.On("ListReceivedShares", mock.Anything).Return([]*collaboration.ReceivedShare{
+				&collaboration.ReceivedShare{
+					State: collaboration.ShareState_SHARE_STATE_INVALID,
+				},
+				&collaboration.ReceivedShare{
+					State: collaboration.ShareState_SHARE_STATE_PENDING,
+				},
+				&collaboration.ReceivedShare{
+					State: collaboration.ShareState_SHARE_STATE_REJECTED,
+				},
+			}, nil)
+			res, err := s.ListContainer(ctx, rootListContainerReq)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res).ToNot(BeNil())
+			Expect(len(res.Infos)).To(Equal(0))
+		})
+	})
+
+	Context("with an accepted share", func() {
+		BeforeEach(func() {
+			sm.On("ListReceivedShares", mock.Anything).Return([]*collaboration.ReceivedShare{
+				&collaboration.ReceivedShare{
+					State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+					Share: &collaboration.Share{
+						ResourceId: &sprovider.ResourceId{
+							StorageId: "share1-storageid",
+							OpaqueId:  "shareddir",
+						},
+					},
+				},
+			}, nil)
+		})
+
+		Describe("Stat", func() {
+			It("stats the root shares folder", func() {
+				res, err := s.Stat(ctx, rootStatReq)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				Expect(res.Info.Path).To(Equal("/shares/alice"))
+				Expect(res.Info.Size).To(Equal(uint64(1234)))
+			})
+
+			It("stats a shares folder", func() {
+				statReq := &sprovider.StatRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/alice/share1-shareddir"},
+					},
+				}
+				res, err := s.Stat(ctx, statReq)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				Expect(res.Info.Path).To(Equal("/shares/alice/share1-shareddir"))
+				Expect(res.Info.Size).To(Equal(uint64(1234)))
+			})
+
+			It("stats a subfolder in a share", func() {
+				statReq := &sprovider.StatRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/alice/share1-shareddir/share1-subdir"},
+					},
+				}
+				res, err := s.Stat(ctx, statReq)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				Expect(res.Info.Path).To(Equal("/shares/alice/share1-shareddir/share1-subdir"))
+				Expect(res.Info.Size).To(Equal(uint64(10)))
+			})
+
+			It("stats a shared file", func() {
+				statReq := &sprovider.StatRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/alice/share1-shareddir/share1-subdir/share1-subdir-file"},
+					},
+				}
+				res, err := s.Stat(ctx, statReq)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_FILE))
+				Expect(res.Info.Path).To(Equal("/shares/alice/share1-shareddir/share1-subdir/share1-subdir-file"))
+				Expect(res.Info.Size).To(Equal(uint64(20)))
+			})
+		})
+
+		Describe("ListContainer", func() {
+			It("lists shares", func() {
+				res, err := s.ListContainer(ctx, rootListContainerReq)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				Expect(len(res.Infos)).To(Equal(1))
+
+				entry := res.Infos[0]
+				Expect(entry.Path).To(Equal("/shares/alice/share1-shareddir"))
+			})
+
+			It("traverses into specific shares", func() {
+				req := &sprovider.ListContainerRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/alice/share1-shareddir"},
+					},
+				}
+				res, err := s.ListContainer(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				Expect(len(res.Infos)).To(Equal(1))
+
+				entry := res.Infos[0]
+				Expect(entry.Path).To(Equal("/shares/alice/share1-shareddir/share1-subdir"))
+			})
+
+			It("traverses into subfolders of specific shares", func() {
+				req := &sprovider.ListContainerRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/alice/share1-shareddir/share1-subdir"},
+					},
+				}
+				res, err := s.ListContainer(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				Expect(len(res.Infos)).To(Equal(1))
+
+				entry := res.Infos[0]
+				Expect(entry.Path).To(Equal("/shares/alice/share1-shareddir/share1-subdir/share1-subdir-file"))
+			})
+		})
+	})
+})
