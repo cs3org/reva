@@ -60,6 +60,8 @@ const (
 	HeaderTusResumable = "Tus-Resumable"
 	HeaderTusVersion   = "Tus-Version"
 	HeaderTusExtension = "Tus-Extension"
+	HeaderDestination  = "Destination"
+	HeaderOverwrite    = "Overwrite"
 )
 
 // WebDavHandler implements a dav endpoint
@@ -90,7 +92,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case MethodMkcol:
 			s.handlePathMkcol(w, r, ns)
 		case MethodMove:
-			s.handleMove(w, r, ns)
+			s.handlePathMove(w, r, ns)
 		case MethodCopy:
 			s.handleCopy(w, r, ns)
 		case MethodReport:
