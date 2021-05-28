@@ -21,7 +21,6 @@ package main
 import (
 	"context"
 	"encoding/gob"
-	"fmt"
 	"io"
 	"reflect"
 	"strings"
@@ -69,6 +68,11 @@ func appTokensCreateCommand() *command {
 
 	cmd.Action = func(w ...io.Writer) error {
 
+		err := checkOpts(appTokensCreateOpts)
+		if err != nil {
+			return err
+		}
+
 		client, err := getClient()
 		if err != nil {
 			return err
@@ -106,11 +110,16 @@ func appTokensCreateCommand() *command {
 			return formatError(generateAppPasswordResponse.Status)
 		}
 
+		pw := generateAppPasswordResponse.AppPassword
+
 		if len(w) == 0 {
-			fmt.Println(generateAppPasswordResponse.String())
+			err = printTableAppPasswords([]*authapp.AppPassword{pw}, true)
+			if err != nil {
+				return err
+			}
 		} else {
 			enc := gob.NewEncoder(w[0])
-			if err := enc.Encode(generateAppPasswordResponse.AppPassword); err != nil {
+			if err := enc.Encode(pw); err != nil {
 				return err
 			}
 		}
@@ -202,4 +211,11 @@ func parsePermission(perm string) (authpb.Role, error) {
 	default:
 		return authpb.Role_ROLE_INVALID, errtypes.BadRequest("not recognised permission")
 	}
+}
+
+func checkOpts(opts *AppTokenCreateOpts) error {
+	if opts.Share == "" && opts.Path == "" && !opts.Unlimited {
+		return errtypes.BadRequest("specify a token scope")
+	}
+	return nil
 }
