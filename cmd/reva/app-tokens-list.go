@@ -55,9 +55,6 @@ func appTokensListCommand() *command {
 	cmd.StringVar(&appTokenListOpts.ApplicationFilter, "sope", "", "filter by scope")
 	cmd.StringVar(&appTokenListOpts.Label, "label", "", "filter by label name")
 
-	shortHeader := table.Row{"Token", "Label", "Scope", "Expiration"}
-	longHeader := table.Row{"Token", "Scope", "Label", "Expiration", "Creation Time", "Last Used Time"}
-
 	cmd.ResetFlags = func() {
 		s := reflect.ValueOf(appTokenListOpts).Elem()
 		s.Set(reflect.Zero(s.Type()))
@@ -84,30 +81,10 @@ func appTokensListCommand() *command {
 		listPw := filter(listResponse.AppPasswords, appTokenListOpts)
 
 		if len(w) == 0 {
-
-			t := table.NewWriter()
-			t.SetOutputMirror(os.Stdout)
-
-			if appTokenListOpts.Long {
-				t.AppendHeader(longHeader)
-			} else {
-				t.AppendHeader(shortHeader)
+			err = printTableAppPasswords(listPw, appTokenListOpts.Long)
+			if err != nil {
+				return err
 			}
-
-			for _, pw := range listPw {
-				scopeFormatted, err := prettyFormatScope(pw.TokenScope)
-				if err != nil {
-					return err
-				}
-				if appTokenListOpts.Long {
-					t.AppendRow(table.Row{pw.Password, scopeFormatted, pw.Label, formatTime(pw.Expiration), formatTime(pw.Ctime), formatTime(pw.Utime)})
-				} else {
-					t.AppendRow(table.Row{pw.Password, pw.Label, scopeFormatted, formatTime(pw.Expiration)})
-				}
-			}
-
-			t.Render()
-
 		} else {
 			enc := gob.NewEncoder(w[0])
 			if err := enc.Encode(listPw); err != nil {
@@ -117,6 +94,35 @@ func appTokensListCommand() *command {
 		return nil
 	}
 	return cmd
+}
+
+func printTableAppPasswords(listPw []*applications.AppPassword, long bool) error {
+	shortHeader := table.Row{"Token", "Label", "Scope", "Expiration"}
+	longHeader := table.Row{"Token", "Scope", "Label", "Expiration", "Creation Time", "Last Used Time"}
+
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+
+	if long {
+		t.AppendHeader(longHeader)
+	} else {
+		t.AppendHeader(shortHeader)
+	}
+
+	for _, pw := range listPw {
+		scopeFormatted, err := prettyFormatScope(pw.TokenScope)
+		if err != nil {
+			return err
+		}
+		if long {
+			t.AppendRow(table.Row{pw.Password, scopeFormatted, pw.Label, formatTime(pw.Expiration), formatTime(pw.Ctime), formatTime(pw.Utime)})
+		} else {
+			t.AppendRow(table.Row{pw.Password, pw.Label, scopeFormatted, formatTime(pw.Expiration)})
+		}
+	}
+
+	t.Render()
+	return nil
 }
 
 func formatTime(t *types.Timestamp) string {
