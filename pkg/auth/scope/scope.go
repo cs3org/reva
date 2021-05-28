@@ -77,6 +77,13 @@ func FormatScope(scopeType string, scope *authpb.Scope) (string, error) {
 			return "", err
 		}
 		return fmt.Sprintf("share:\"%s\" %s", pShare.Id.OpaqueId, scope.Role.String()), nil
+	case strings.HasPrefix(scopeType, "resourceinfo"):
+		var resInfo provider.ResourceInfo
+		err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &resInfo)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("path:\"%s\" %s", resInfo.Path, scope.Role.String()), nil
 	default:
 		return "", errtypes.NotSupported("scope not yet supported")
 	}
