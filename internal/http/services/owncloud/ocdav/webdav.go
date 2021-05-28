@@ -37,6 +37,22 @@ const (
 	MethodReport    = "REPORT"
 )
 
+// Common HTTP headers.
+const (
+	HeaderContentType   = "Content-Type"
+	HeaderETag          = "ETag"
+	HeaderLastModified  = "Last-Modified"
+	HeaderContentLength = "Content-Length"
+	HeaderAcceptRanges  = "Accept-Ranges"
+)
+
+// Custom ownCloud HTTP headers.
+const (
+	HeaderOCFileID   = "OC-FileId"
+	HeaderOCETag     = "OC-ETag"
+	HeaderOCChecksum = "OC-Checksum"
+)
+
 // WebDavHandler implements a dav endpoint
 type WebDavHandler struct {
 	namespace         string
@@ -79,7 +95,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case http.MethodOptions:
 			s.handleOptions(w, r, ns)
 		case http.MethodHead:
-			s.handleHead(w, r, ns)
+			s.handlePathHead(w, r, ns)
 		case http.MethodDelete:
 			s.handleDelete(w, r, ns)
 		default:

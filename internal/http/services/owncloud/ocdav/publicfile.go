@@ -64,7 +64,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 			case http.MethodOptions:
 				s.handleOptions(w, r, h.namespace)
 			case http.MethodHead:
-				s.handleHead(w, r, h.namespace)
+				s.handlePathHead(w, r, h.namespace)
 			case http.MethodPut:
 				s.handlePut(w, r, h.namespace)
 			default:
@@ -78,7 +78,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 			case http.MethodOptions:
 				s.handleOptions(w, r, h.namespace)
 			case http.MethodHead:
-				s.handleHead(w, r, h.namespace)
+				s.handlePathHead(w, r, h.namespace)
 			default:
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
