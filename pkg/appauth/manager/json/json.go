@@ -79,6 +79,9 @@ func (c *config) init() {
 	if c.File == "" {
 		c.File = "/var/tmp/reva/appauth.json"
 	}
+	if c.TokenStrength == 0 {
+		c.TokenStrength = 16
+	}
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -121,7 +124,7 @@ func loadOrCreate(file string) (*jsonManager, error) {
 }
 
 func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[string]*authpb.Scope, label string, expiration *typespb.Timestamp) (*apppb.AppPassword, error) {
-	token, err := password.Generate(mgr.config.TokenStrength, 10, 10, false, false)
+	token, err := password.Generate(mgr.config.TokenStrength, mgr.config.TokenStrength/2, 0, false, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating new token")
 	}
