@@ -57,6 +57,7 @@ func VerifyScope(scopeMap map[string]*authpb.Scope, resource interface{}) (bool,
 	return false, nil
 }
 
+// FormatScope create a pretty print of the scope
 func FormatScope(scopeType string, scope *authpb.Scope) (string, error) {
 	// TODO(gmgigi96): check decoder type
 	switch {

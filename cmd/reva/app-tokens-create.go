@@ -37,7 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
-type AppTokenCreateOpts struct {
+type appTokenCreateOpts struct {
 	Expiration string
 	Label      string
 	Path       string
@@ -45,7 +45,7 @@ type AppTokenCreateOpts struct {
 	Unlimited  bool
 }
 
-var appTokensCreateOpts *AppTokenCreateOpts = &AppTokenCreateOpts{}
+var createOpts *appTokenCreateOpts = &appTokenCreateOpts{}
 
 const layoutTime = "2006-01-02"
 
@@ -54,21 +54,21 @@ func appTokensCreateCommand() *command {
 	cmd.Description = func() string { return "create a new application tokens" }
 	cmd.Usage = func() string { return "Usage: token-create" }
 
-	cmd.StringVar(&appTokensCreateOpts.Label, "label", "", "set a label")
-	cmd.StringVar(&appTokensCreateOpts.Expiration, "expiration", "", "set expiration time (format <yyyy-mm-dd>)")
+	cmd.StringVar(&createOpts.Label, "label", "", "set a label")
+	cmd.StringVar(&createOpts.Expiration, "expiration", "", "set expiration time (format <yyyy-mm-dd>)")
 	// TODO(gmgigi96): add support for multiple paths and shares for the same token
-	cmd.StringVar(&appTokensCreateOpts.Path, "path", "", "create a token on a file (format path:[r|w])")
-	cmd.StringVar(&appTokensCreateOpts.Share, "share", "", "create a token for a share (format shareid:[r|w])")
-	cmd.BoolVar(&appTokensCreateOpts.Unlimited, "all", false, "create a token with an unlimited scope")
+	cmd.StringVar(&createOpts.Path, "path", "", "create a token on a file (format path:[r|w])")
+	cmd.StringVar(&createOpts.Share, "share", "", "create a token for a share (format shareid:[r|w])")
+	cmd.BoolVar(&createOpts.Unlimited, "all", false, "create a token with an unlimited scope")
 
 	cmd.ResetFlags = func() {
-		s := reflect.ValueOf(appTokensCreateOpts).Elem()
+		s := reflect.ValueOf(createOpts).Elem()
 		s.Set(reflect.Zero(s.Type()))
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
 
-		err := checkOpts(appTokensCreateOpts)
+		err := checkOpts(createOpts)
 		if err != nil {
 			return err
 		}
@@ -80,15 +80,15 @@ func appTokensCreateCommand() *command {
 
 		ctx := getAuthContext()
 
-		scope, err := getScope(ctx, client, appTokensCreateOpts)
+		scope, err := getScope(ctx, client, createOpts)
 		if err != nil {
 			return err
 		}
 
 		// parse eventually expiration time
 		var expiration *types.Timestamp
-		if appTokensCreateOpts.Expiration != "" {
-			exp, err := time.Parse(layoutTime, appTokensCreateOpts.Expiration)
+		if createOpts.Expiration != "" {
+			exp, err := time.Parse(layoutTime, createOpts.Expiration)
 			if err != nil {
 				return err
 			}
@@ -99,7 +99,7 @@ func appTokensCreateCommand() *command {
 
 		generateAppPasswordResponse, err := client.GenerateAppPassword(ctx, &authapp.GenerateAppPasswordRequest{
 			Expiration: expiration,
-			Label:      appTokensCreateOpts.Label,
+			Label:      createOpts.Label,
 			TokenScope: scope,
 		})
 
@@ -130,7 +130,7 @@ func appTokensCreateCommand() *command {
 	return cmd
 }
 
-func getScope(ctx context.Context, client gateway.GatewayAPIClient, opts *AppTokenCreateOpts) (map[string]*authpb.Scope, error) {
+func getScope(ctx context.Context, client gateway.GatewayAPIClient, opts *appTokenCreateOpts) (map[string]*authpb.Scope, error) {
 	switch {
 	case opts.Share != "":
 		// TODO(gmgigi96): verify format
@@ -213,7 +213,7 @@ func parsePermission(perm string) (authpb.Role, error) {
 	}
 }
 
-func checkOpts(opts *AppTokenCreateOpts) error {
+func checkOpts(opts *appTokenCreateOpts) error {
 	if opts.Share == "" && opts.Path == "" && !opts.Unlimited {
 		return errtypes.BadRequest("specify a token scope")
 	}
