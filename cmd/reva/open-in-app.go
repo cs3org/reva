@@ -29,18 +29,20 @@ import (
 	"github.com/pkg/errors"
 )
 
-func openFileInAppProviderCommand() *command {
-	cmd := newCommand("open-file-in-app-provider")
-	cmd.Description = func() string { return "open a file in an external app provider" }
+func openInAppCommand() *command {
+	cmd := newCommand("open-in-app")
+	cmd.Description = func() string { return "open a reference in an external app provider" }
 	cmd.Usage = func() string {
-		return "Usage: open-file-in-app-provider [-flags] [-viewmode view|read|write] <path>"
+		return "Usage: open-in-app [-flags] [-viewmode view|read|write] [-app appname] <path>"
 	}
 	viewMode := cmd.String("viewmode", "view", "the view permissions, defaults to view")
+	app := cmd.String("app", "", "the application if the default is to be overridden for the file's mimetype")
 	insecureFlag := cmd.Bool("insecure", false, "disables grpc transport security")
 	skipVerifyFlag := cmd.Bool("skip-verify", false, "whether to skip verifying remote reva's certificate chain and host name")
 
 	cmd.ResetFlags = func() {
 		*viewMode = "view"
+		*app = ""
 		*insecureFlag = false
 		*skipVerifyFlag = false
 	}
@@ -52,7 +54,7 @@ func openFileInAppProviderCommand() *command {
 		}
 		path := cmd.Args()[0]
 
-		vm := getViewModeDeprecated(*viewMode)
+		vm := getViewMode(*viewMode)
 
 		client, err := getClient()
 		if err != nil {
@@ -73,9 +75,9 @@ func openFileInAppProviderCommand() *command {
 			opaqueObj.Map["skip-verify"] = &typespb.OpaqueEntry{}
 		}
 
-		openRequest := &gateway.OpenFileInAppProviderRequest{Ref: ref, ViewMode: vm, Opaque: opaqueObj}
+		openRequest := &gateway.OpenInAppRequest{Ref: ref, ViewMode: vm, App: *app, Opaque: opaqueObj}
 
-		openRes, err := client.OpenFileInAppProvider(ctx, openRequest)
+		openRes, err := client.OpenInApp(ctx, openRequest)
 		if err != nil {
 			return err
 		}
@@ -84,22 +86,22 @@ func openFileInAppProviderCommand() *command {
 			return formatError(openRes.Status)
 		}
 
-		fmt.Println("App provider url: " + openRes.AppProviderUrl)
+		fmt.Println("App URL: " + openRes.AppUrl)
 
 		return nil
 	}
 	return cmd
 }
 
-func getViewModeDeprecated(viewMode string) gateway.OpenFileInAppProviderRequest_ViewMode {
+func getViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 	switch viewMode {
 	case "view":
-		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_VIEW_ONLY
+		return gateway.OpenInAppRequest_VIEW_MODE_VIEW_ONLY
 	case "read":
-		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_READ_ONLY
+		return gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
 	case "write":
-		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_READ_WRITE
+		return gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
 	default:
-		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_INVALID
+		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
 }
