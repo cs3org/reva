@@ -20,13 +20,21 @@ package main
 
 import (
 	"encoding/gob"
+	"fmt"
 	"io"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
-	applicationsv1beta1 "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
+	applications "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
+	authpv "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 )
 
@@ -35,6 +43,7 @@ type AppTokenListOpts struct {
 	All               bool
 	OnlyExpired       bool
 	ApplicationFilter string
+	Label             string
 }
 
 var appTokenListOpts *AppTokenListOpts = &AppTokenListOpts{}
@@ -44,13 +53,14 @@ func appTokensListCommand() *command {
 	cmd.Description = func() string { return "list all the application tokens" }
 	cmd.Usage = func() string { return "Usage: token-list [-flags]" }
 
-	cmd.BoolVar(&appTokenListOpts.Long, "l", false, "long listing")
-	cmd.BoolVar(&appTokenListOpts.All, "a", false, "print all tokens, also the expired")
-	cmd.BoolVar(&appTokenListOpts.OnlyExpired, "e", false, "print only expired token")
-	cmd.StringVar(&appTokenListOpts.ApplicationFilter, "n", "", "filter by application name")
+	cmd.BoolVar(&appTokenListOpts.Long, "long", false, "long listing")
+	cmd.BoolVar(&appTokenListOpts.All, "all", false, "print all tokens, also the expired")
+	cmd.BoolVar(&appTokenListOpts.OnlyExpired, "expired", false, "print only expired token")
+	cmd.StringVar(&appTokenListOpts.ApplicationFilter, "sope", "", "filter by scope")
+	cmd.StringVar(&appTokenListOpts.Label, "label", "", "filter by label name")
 
-	shortHeader := table.Row{"Password", "Label", "Scope", "Expiration"}
-	longHeader := table.Row{"Password", "Scope", "Label", "Expiration", "Creation Time", "Last Used Time"}
+	shortHeader := table.Row{"Token", "Label", "Scope", "Expiration"}
+	longHeader := table.Row{"Token", "Scope", "Label", "Expiration", "Creation Time", "Last Used Time"}
 
 	cmd.ResetFlags = func() {
 		s := reflect.ValueOf(appTokenListOpts).Elem()
@@ -65,7 +75,7 @@ func appTokensListCommand() *command {
 		}
 
 		ctx := getAuthContext()
-		listResponse, err := client.ListAppPasswords(ctx, &applicationsv1beta1.ListAppPasswordsRequest{})
+		listResponse, err := client.ListAppPasswords(ctx, &applications.ListAppPasswordsRequest{})
 
 		if err != nil {
 			return err
@@ -89,10 +99,14 @@ func appTokensListCommand() *command {
 			}
 
 			for _, pw := range listPw {
+				scopeFormatted, err := prettyFormatScope(pw.TokenScope)
+				if err != nil {
+					return err
+				}
 				if appTokenListOpts.Long {
-					t.AppendRow(table.Row{pw.Password, pw.TokenScope, pw.Label, pw.Expiration, pw.Ctime, pw.Utime})
+					t.AppendRow(table.Row{pw.Password, scopeFormatted, pw.Label, formatTime(pw.Expiration), formatTime(pw.Ctime), formatTime(pw.Utime)})
 				} else {
-					t.AppendRow(table.Row{pw.Password, pw.Label, pw.TokenScope, pw.Expiration})
+					t.AppendRow(table.Row{pw.Password, pw.Label, scopeFormatted, formatTime(pw.Expiration)})
 				}
 			}
 
@@ -109,11 +123,53 @@ func appTokensListCommand() *command {
 	return cmd
 }
 
+func formatTime(t *types.Timestamp) string {
+	if t == nil {
+		return ""
+	}
+	return time.Unix(int64(t.Seconds), 0).String()
+}
+
+func prettyFormatScope(scopeMap map[string]*authpv.Scope) (string, error) {
+	var scopeFormatted strings.Builder
+	for scopeType, scope := range scopeMap {
+		scopeStr, err := formatScope(scopeType, scope)
+		if err != nil {
+			return "", err
+		}
+		scopeFormatted.WriteString(scopeStr)
+	}
+	return scopeFormatted.String(), nil
+}
+
+func formatScope(scopeType string, scope *authpv.Scope) (string, error) {
+	// TODO(gmgigi96): check decoder type
+	switch {
+	case strings.HasPrefix(scopeType, "user"):
+		// user scope
+		var ref provider.Reference
+		err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &ref)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%s %s", ref.String(), scope.Role.String()), nil
+	case strings.HasPrefix(scopeType, "publicshare"):
+		// public share
+		var pShare link.PublicShare
+		err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &pShare)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("share:\"%s\" %s", pShare.Id.OpaqueId, scope.Role.String()), nil
+	default:
+		return "", errtypes.NotSupported("scope not yet supported")
+	}
+}
+
 // Filter the list of app password, based on the option selected by the user
-func filter(listPw []*applicationsv1beta1.AppPassword, opts *AppTokenListOpts) (filtered []*applicationsv1beta1.AppPassword) {
+func filter(listPw []*applications.AppPassword, opts *AppTokenListOpts) (filtered []*applications.AppPassword) {
 	var filters Filters
 
-	//TODO: add label filter
 	if opts.OnlyExpired {
 		filters = append(filters, &FilterByExpired{})
 	} else {
@@ -121,6 +177,9 @@ func filter(listPw []*applicationsv1beta1.AppPassword, opts *AppTokenListOpts) (
 	}
 	if opts.ApplicationFilter != "" {
 		filters = append(filters, &FilterByApplicationName{name: opts.ApplicationFilter})
+	}
+	if opts.Label != "" {
+		filters = append(filters, &FilterByLabel{label: opts.Label})
 	}
 	if opts.All {
 		// discard all the filters
@@ -136,7 +195,7 @@ func filter(listPw []*applicationsv1beta1.AppPassword, opts *AppTokenListOpts) (
 }
 
 type Filter interface {
-	In(*applicationsv1beta1.AppPassword) bool
+	In(*applications.AppPassword) bool
 }
 
 type FilterByApplicationName struct {
@@ -145,9 +204,12 @@ type FilterByApplicationName struct {
 type FilterByNone struct{}
 type FilterByExpired struct{}
 type FilterByNotExpired struct{}
+type FilterByLabel struct {
+	label string
+}
 type Filters []Filter
 
-func (f *FilterByApplicationName) In(pw *applicationsv1beta1.AppPassword) bool {
+func (f *FilterByApplicationName) In(pw *applications.AppPassword) bool {
 	for app := range pw.TokenScope {
 		if app == f.name {
 			return true
@@ -156,19 +218,23 @@ func (f *FilterByApplicationName) In(pw *applicationsv1beta1.AppPassword) bool {
 	return false
 }
 
-func (f *FilterByNone) In(pw *applicationsv1beta1.AppPassword) bool {
+func (f *FilterByNone) In(pw *applications.AppPassword) bool {
 	return true
 }
 
-func (f *FilterByExpired) In(pw *applicationsv1beta1.AppPassword) bool {
+func (f *FilterByExpired) In(pw *applications.AppPassword) bool {
 	return pw.Expiration != nil && pw.Expiration.Seconds <= uint64(time.Now().Unix())
 }
 
-func (f *FilterByNotExpired) In(pw *applicationsv1beta1.AppPassword) bool {
+func (f *FilterByNotExpired) In(pw *applications.AppPassword) bool {
 	return !(&FilterByExpired{}).In(pw)
 }
 
-func (f Filters) In(pw *applicationsv1beta1.AppPassword) bool {
+func (f *FilterByLabel) In(pw *applications.AppPassword) bool {
+	return f.label != "" && pw.Label == f.label
+}
+
+func (f Filters) In(pw *applications.AppPassword) bool {
 	for _, filter := range f {
 		if !filter.In(pw) {
 			return false
