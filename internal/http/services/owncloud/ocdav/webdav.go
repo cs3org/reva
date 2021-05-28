@@ -39,21 +39,27 @@ const (
 
 // Common HTTP headers.
 const (
-	HeaderAcceptRanges        = "Accept-Ranges"
-	HeaderContentDisposistion = "Content-Disposition"
-	HeaderContentLength       = "Content-Length"
-	HeaderContentRange        = "Content-Range"
-	HeaderContentType         = "Content-Type"
-	HeaderETag                = "ETag"
-	HeaderLastModified        = "Last-Modified"
-	HeaderRange               = "Range"
+	HeaderAcceptRanges               = "Accept-Ranges"
+	HeaderAccessControlExposeHeaders = "Access-Control-Expose-Headers"
+	HeaderContentDisposistion        = "Content-Disposition"
+	HeaderContentLength              = "Content-Length"
+	HeaderContentRange               = "Content-Range"
+	HeaderContentType                = "Content-Type"
+	HeaderETag                       = "ETag"
+	HeaderLastModified               = "Last-Modified"
+	HeaderRange                      = "Range"
 )
 
-// Custom ownCloud HTTP headers.
+// Non standard HTTP headers.
 const (
-	HeaderOCFileID   = "OC-FileId"
-	HeaderOCETag     = "OC-ETag"
-	HeaderOCChecksum = "OC-Checksum"
+	HeaderOCFileID     = "OC-FileId"
+	HeaderOCETag       = "OC-ETag"
+	HeaderOCChecksum   = "OC-Checksum"
+	HeaderDepth        = "Depth"
+	HeaderDav          = "DAV"
+	HeaderTusResumable = "Tus-Resumable"
+	HeaderTusVersion   = "Tus-Version"
+	HeaderTusExtension = "Tus-Extension"
 )
 
 // WebDavHandler implements a dav endpoint
