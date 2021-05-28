@@ -16,18 +16,20 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package sharestorageprovider
+package sharesstorageprovider
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 
 	"google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -38,8 +40,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+//go:generate mockery -name GatewayClient
+type GatewayClient interface {
+	Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error)
+	ListContainer(ctx context.Context, in *provider.ListContainerRequest, opts ...grpc.CallOption) (*provider.ListContainerResponse, error)
+}
+
 func init() {
-	rgrpc.Register("publicstorageprovider", NewDefault)
+	rgrpc.Register("sharesstorageprovider", NewDefault)
 }
 
 type config struct {
@@ -53,7 +61,7 @@ type config struct {
 type service struct {
 	mountPath string
 	sm        share.Manager
-	gateway   gateway.GatewayAPIClient
+	gateway   GatewayClient
 }
 
 func (s *service) Close() error {
@@ -92,7 +100,7 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error)
 	return New(c.MountPath, gateway, sm)
 }
 
-func New(mountpath string, gateway gateway.GatewayAPIClient, sm share.Manager) (rgrpc.Service, error) {
+func New(mountpath string, gateway GatewayClient, sm share.Manager) (rgrpc.Service, error) {
 	s := &service{
 		mountPath: mountpath,
 		gateway:   gateway,
@@ -157,17 +165,94 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	reqUser, reqShare, reqPath := resolvePath(req.Ref.GetPath())
+	appctx.GetLogger(ctx).Debug().
+		Interface("reqPath", reqPath).
+		Interface("reqShare", reqShare).
+		Interface("reqUser", reqUser).
+		Msg("sharesstorageprovider.Stat: Got Stat request")
+
+	shares, err := s.sm.ListReceivedShares(ctx)
+	if err != nil {
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "sharestorageprovider: error listing received shares"),
+		}, nil
+	}
+
+	res := &provider.StatResponse{
+		Info: &provider.ResourceInfo{
+			Path: filepath.Join(s.mountPath, reqUser),
+			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		},
+	}
+	for _, rs := range shares {
+		if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
+			continue
+		}
+
+		gwres, err := s.gateway.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Id{
+					Id: rs.Share.ResourceId,
+				},
+			},
+		})
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "sharestorageprovider: error getting stat from gateway"),
+			}, nil
+		}
+
+		if reqShare != "" && filepath.Base(gwres.Info.Path) == reqShare {
+			if reqPath != "" {
+				gwres, err = s.gateway.Stat(ctx, &provider.StatRequest{
+					Ref: &provider.Reference{
+						Spec: &provider.Reference_Path{
+							Path: filepath.Join(gwres.Info.Path, reqPath),
+						},
+					},
+				})
+				if err != nil {
+					return &provider.StatResponse{
+						Status: status.NewInternal(ctx, err, "sharestorageprovider: error getting stat from gateway"),
+					}, nil
+				}
+			}
+
+			relPath := strings.SplitAfterN(gwres.Info.Path, reqShare, 2)[1]
+			gwres.Info.Path = filepath.Join(s.mountPath, reqUser, reqShare, relPath)
+			return gwres, nil
+		} else if reqShare == "" {
+			res.Info.Size += gwres.Info.Size
+		}
+	}
+
+	res.Status = status.NewOK(ctx)
+	return res, nil
 }
 func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {
 	return gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	reqUser, reqShare, reqPath := resolvePath(req.Ref.GetPath())
+	appctx.GetLogger(ctx).Debug().
+		Interface("reqPath", reqPath).
+		Interface("reqShare", reqShare).
+		Interface("reqUser", reqUser).
+		Msg("sharesstorageprovider.ListContainer: Got ListContainer request")
+
+	// contextUser, ok := ctxuser.ContextGetUser(ctx)
+	// if !ok {
+	// 	return &provider.ListContainerResponse{
+	// 		Status: status.NewInternal(ctx, nil, "error retrieving current user"),
+	// 	}, nil
+	// }
+
 	shares, err := s.sm.ListReceivedShares(ctx)
 	if err != nil {
 		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "sharemanager: error listing received shares"),
+			Status: status.NewInternal(ctx, err, "sharestorageprovider: error listing received shares"),
 		}, nil
 	}
 
@@ -176,8 +261,42 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
 			continue
 		}
-		res.Infos = append(res.Infos, &provider.ResourceInfo{})
+
+		gwres, err := s.gateway.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Id{
+					Id: rs.Share.ResourceId,
+				},
+			},
+		})
+		if err != nil {
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "sharestorageprovider: error getting stats from gateway"),
+			}, nil
+		}
+
+		if reqShare != "" && filepath.Base(gwres.Info.Path) == reqShare {
+			gwListRes, err := s.gateway.ListContainer(ctx, &provider.ListContainerRequest{
+				Ref: &provider.Reference{
+					Spec: &provider.Reference_Path{Path: filepath.Join(filepath.Dir(gwres.Info.Path), reqShare, reqPath)},
+				},
+			})
+			if err != nil {
+				return &provider.ListContainerResponse{
+					Status: status.NewInternal(ctx, err, "sharestorageprovider: error getting listing from gateway"),
+				}, nil
+			}
+			for _, info := range gwListRes.Infos {
+				relPath := strings.SplitAfterN(info.Path, reqShare, 2)[1]
+				info.Path = filepath.Join(s.mountPath, reqUser, reqShare, relPath)
+			}
+			return gwListRes, nil
+		} else if reqShare == "" {
+			gwres.Info.Path = filepath.Join(s.mountPath, reqUser, filepath.Base(gwres.Info.Path))
+			res.Infos = append(res.Infos, gwres.Info)
+		}
 	}
+	res.Status = status.NewOK(ctx)
 
 	return res, nil
 }
@@ -231,4 +350,20 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
+func resolvePath(path string) (string, string, string) {
+	// /shares/<username>/foo/bar
+	parts := strings.SplitN(strings.TrimLeft(path, "/"), "/", 4)
+	var reqUser, reqShare, reqPath string
+	if len(parts) >= 4 {
+		reqPath = parts[3]
+	}
+	if len(parts) >= 3 {
+		reqShare = parts[2]
+	}
+	if len(parts) >= 2 {
+		reqUser = parts[1]
+	}
+	return reqUser, reqShare, reqPath
 }
