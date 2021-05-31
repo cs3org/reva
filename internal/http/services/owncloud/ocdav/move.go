@@ -38,9 +38,8 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	defer span.End()
 
 	src := path.Join(ns, r.URL.Path)
-	dstHeader := r.Header.Get(HeaderDestination)
 
-	dst, err := extractDestination(dstHeader, r.Context().Value(ctxKeyBaseURI).(string))
+	dst, err := extractDestination(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -70,9 +69,7 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 	ctx, span := trace.StartSpan(ctx, "spaces_move")
 	defer span.End()
 
-	dstHeader := r.Header.Get(HeaderDestination)
-
-	dst, err := extractDestination(dstHeader, r.Context().Value(ctxKeyBaseURI).(string))
+	dst, err := extractDestination(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return

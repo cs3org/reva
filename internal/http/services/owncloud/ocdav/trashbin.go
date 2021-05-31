@@ -119,8 +119,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			r = r.WithContext(ctx)
 
 			// TODO make request.php optional in destination header
-			dstHeader := r.Header.Get("Destination")
-			dst, err := extractDestination(dstHeader, baseURI)
+			dst, err := extractDestination(r)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return

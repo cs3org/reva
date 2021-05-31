@@ -1174,7 +1174,15 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
 			}, nil
 		}
-		return c.Stat(ctx, req)
+		rsp, err := c.Stat(ctx, req)
+		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
+			return rsp, err
+		}
+		if !isStorageSpaceReference(req.Ref) {
+			rsp.Info.Path = path.Join(providers[0].ProviderPath, rsp.Info.Path)
+		}
+
+		return rsp, nil
 	}
 
 	infoFromProviders := make([]*provider.ResourceInfo, len(providers))
