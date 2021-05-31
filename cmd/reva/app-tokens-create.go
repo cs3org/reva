@@ -20,9 +20,7 @@ package main
 
 import (
 	"context"
-	"encoding/gob"
 	"io"
-	"reflect"
 	"strings"
 	"time"
 
@@ -56,28 +54,33 @@ func (ss *stringSlice) String() string {
 	return strings.Join([]string(*ss), ",")
 }
 
-var createOpts *appTokenCreateOpts = &appTokenCreateOpts{}
-
 const layoutTime = "2006-01-02"
 
 func appTokensCreateCommand() *command {
-	cmd := newCommand("token-create")
+	cmd := newCommand("app-tokens-create")
 	cmd.Description = func() string { return "create a new application tokens" }
 	cmd.Usage = func() string { return "Usage: token-create" }
 
-	cmd.StringVar(&createOpts.Label, "label", "", "set a label")
-	cmd.StringVar(&createOpts.Expiration, "expiration", "", "set expiration time (format <yyyy-mm-dd>)")
-	// TODO(gmgigi96): add support for multiple paths and shares for the same token
-	cmd.Var(&createOpts.Path, "path", "create a token for a file (format path:[r|w]). It is possible specify multiple times this flag")
-	cmd.Var(&createOpts.Share, "share", "create a token for a share (format shareid:[r|w]). It is possible specify multiple times this flags")
-	cmd.BoolVar(&createOpts.Unlimited, "all", false, "create a token with an unlimited scope")
+	var path, share stringSlice
+	label := cmd.String("label", "", "set a label")
+	expiration := cmd.String("expiration", "", "set expiration time (format <yyyy-mm-dd>)")
+	cmd.Var(&path, "path", "create a token for a file (format path:[r|w]). It is possible specify this flag multiple times")
+	cmd.Var(&share, "share", "create a token for a share (format shareid:[r|w]). It is possible specify this flag multiple times")
+	unlimited := cmd.Bool("all", false, "create a token with an unlimited scope")
 
 	cmd.ResetFlags = func() {
-		s := reflect.ValueOf(createOpts).Elem()
-		s.Set(reflect.Zero(s.Type()))
+		path, share, label, expiration, unlimited = nil, nil, nil, nil, nil
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
+
+		createOpts := &appTokenCreateOpts{
+			Expiration: *expiration,
+			Label:      *label,
+			Path:       path,
+			Share:      share,
+			Unlimited:  *unlimited,
+		}
 
 		err := checkOpts(createOpts)
 		if err != nil {
@@ -121,18 +124,9 @@ func appTokensCreateCommand() *command {
 			return formatError(generateAppPasswordResponse.Status)
 		}
 
-		pw := generateAppPasswordResponse.AppPassword
-
-		if len(w) == 0 {
-			err = printTableAppPasswords([]*authapp.AppPassword{pw}, true)
-			if err != nil {
-				return err
-			}
-		} else {
-			enc := gob.NewEncoder(w[0])
-			if err := enc.Encode(pw); err != nil {
-				return err
-			}
+		err = printTableAppPasswords([]*authapp.AppPassword{generateAppPasswordResponse.AppPassword})
+		if err != nil {
+			return err
 		}
 
 		return nil

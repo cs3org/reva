@@ -19,6 +19,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 
 	applicationsv1beta1 "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
@@ -27,7 +28,7 @@ import (
 )
 
 func appTokensRemoveCommand() *command {
-	cmd := newCommand("token-remove")
+	cmd := newCommand("app-tokens-remove")
 	cmd.Description = func() string { return "remove an application token" }
 	cmd.Usage = func() string { return "Usage: token-remove <token>" }
 
@@ -56,6 +57,7 @@ func appTokensRemoveCommand() *command {
 			return formatError(response.Status)
 		}
 
+		fmt.Println("OK")
 		return nil
 	}
 
