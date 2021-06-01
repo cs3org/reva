@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
+	statuspkg "github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
@@ -267,7 +268,8 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 						continue
 					}
 					shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-					if err != nil {
+					if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
+						log.Warn().Err(err).Msg("error listing received shares")
 						continue
 					}
 					for _, share := range shares.Shares {
@@ -280,7 +282,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		}
 	}
 
-	return nil, err
+	return nil, errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
 }
 
 func checkResourcePath(ctx context.Context, ref *provider.Reference, r *provider.ResourceId, gatewayAddr string) (bool, error) {
@@ -296,8 +298,11 @@ func checkResourcePath(ctx context.Context, ref *provider.Reference, r *provider
 	}
 
 	statResponse, err := client.Stat(ctx, statReq)
-	if err != nil || statResponse.Status.Code != rpc.Code_CODE_OK {
+	if err != nil {
 		return false, err
+	}
+	if statResponse.Status.Code != rpc.Code_CODE_OK {
+		return false, statuspkg.NewErrorFromCode(statResponse.Status.Code, "auth interceptor")
 	}
 
 	if strings.HasPrefix(ref.GetPath(), statResponse.Info.Path) {

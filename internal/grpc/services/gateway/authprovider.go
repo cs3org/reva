@@ -27,6 +27,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -98,15 +99,12 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
-	scope, err := s.expandScopes(ctx, res.TokenScope)
-	if err != nil {
-		err = errors.Wrap(err, "authsvc: error expanding token scope")
-		return &gateway.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error expanding access token scope"),
-		}, nil
-	}
-
-	token, err := s.tokenmgr.MintToken(ctx, res.User, scope)
+	// We need to expand the scopes of lightweight accounts, user shares and
+	// public shares, for which we need to retrieve the receieved shares and stat
+	// the resources referenced by these. Since the current scope can do that,
+	// mint a temporary token based on that and expand the scope. Then set the
+	// token obtained from the updated scope in the context.
+	token, err := s.tokenmgr.MintToken(ctx, res.User, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -115,7 +113,27 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
-	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok || scope.Role != authpb.Role_ROLE_OWNER {
+	ctx = tokenpkg.ContextSetToken(ctx, token)
+	ctx = userpkg.ContextSetUser(ctx, res.User)
+	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token)
+	scope, err := s.expandScopes(ctx, res.TokenScope)
+	if err != nil {
+		err = errors.Wrap(err, "authsvc: error expanding token scope")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error expanding access token scope"),
+		}, nil
+	}
+
+	token, err = s.tokenmgr.MintToken(ctx, res.User, scope)
+	if err != nil {
+		err = errors.Wrap(err, "authsvc: error in MintToken")
+		res := &gateway.AuthenticateResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error creating access token"),
+		}
+		return res, nil
+	}
+
+	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok || scope.Role != authpb.Role_ROLE_OWNER || res.User.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		gwRes := &gateway.AuthenticateResponse{
 			Status: status.NewOK(ctx),
 			User:   res.User,
@@ -206,7 +224,9 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.P
 }
 
 func (s *svc) expandScopes(ctx context.Context, scopeMap map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
+	log := appctx.GetLogger(ctx)
 	newMap := make(map[string]*authpb.Scope)
+
 	for k, v := range scopeMap {
 		newMap[k] = v
 		switch {
@@ -214,37 +234,44 @@ func (s *svc) expandScopes(ctx context.Context, scopeMap map[string]*authpb.Scop
 			var share link.PublicShare
 			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, &share)
 			if err != nil {
-				return nil, err
+				log.Warn().Err(err).Msgf("error unmarshalling public share %+v", v.Resource.Value)
+				continue
 			}
 			newMap, err = s.statAndAddResource(ctx, share.ResourceId, v.Role, newMap)
 			if err != nil {
-				return nil, err
+				log.Warn().Err(err).Msgf("error expanding publicshare scope %+v", share.ResourceId)
+				continue
 			}
 
 		case strings.HasPrefix(k, "share"):
 			var share collaboration.Share
 			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, &share)
 			if err != nil {
-				return nil, err
+				log.Warn().Err(err).Msgf("error unmarshalling share %+v", v.Resource.Value)
+				continue
 			}
 			newMap, err = s.statAndAddResource(ctx, share.ResourceId, v.Role, newMap)
 			if err != nil {
-				return nil, err
+				log.Warn().Err(err).Msgf("error expanding share scope %+v", share.ResourceId)
+				continue
 			}
 
 		case strings.HasPrefix(k, "lightweight"):
 			shares, err := s.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-			if err != nil {
-				return nil, err
+			if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
+				log.Warn().Err(err).Msg("error listing received shares")
+				continue
 			}
 			for _, share := range shares.Shares {
 				newMap, err = scope.AddShareScope(share.Share, v.Role, newMap)
 				if err != nil {
-					return nil, err
+					log.Warn().Err(err).Msgf("error expanding received share scope %+v", share.Share.ResourceId)
+					continue
 				}
 				newMap, err = s.statAndAddResource(ctx, share.Share.ResourceId, v.Role, newMap)
 				if err != nil {
-					return nil, err
+					log.Warn().Err(err).Msgf("error expanding received share scope %+v", share.Share.ResourceId)
+					continue
 				}
 			}
 		}
@@ -259,8 +286,12 @@ func (s *svc) statAndAddResource(ctx context.Context, r *storageprovider.Resourc
 		},
 	}
 	statResponse, err := s.Stat(ctx, statReq)
-	if err != nil || statResponse.Status.Code != rpc.Code_CODE_OK {
-		return nil, err
+	if err != nil {
+		return scopeMap, err
 	}
+	if statResponse.Status.Code != rpc.Code_CODE_OK {
+		return scopeMap, status.NewErrorFromCode(statResponse.Status.Code, "authprovider")
+	}
+
 	return scope.AddResourceInfoScope(statResponse.Info, role, scopeMap)
 }
