@@ -137,9 +137,12 @@ func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[st
 		return nil, errors.New("rest: error in type assertion")
 	}
 
-	if userData["type"].(string) == "Application" || strings.HasPrefix(userData["upn"].(string), "guest") {
-		return nil, errors.New("rest: guest and application accounts not supported")
+	t, _ := userData["type"].(string)
+	userType := getUserType(t, userData["upn"].(string))
+	if userType == userpb.UserType_USER_TYPE_APPLICATION || userType == userpb.UserType_USER_TYPE_FEDERATED {
+		return nil, errors.New("rest: federated and application accounts not supported")
 	}
+
 	return userData, nil
 }
 
@@ -258,7 +261,7 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 
 	for _, usr := range userData {
 		usrInfo, ok := usr.(map[string]interface{})
-		if !ok || usrInfo["type"].(string) == "Application" || strings.HasPrefix(usrInfo["upn"].(string), "guest") {
+		if !ok {
 			continue
 		}
 
@@ -267,10 +270,17 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 		name, _ := usrInfo["displayName"].(string)
 		uidNumber, _ := usrInfo["uid"].(float64)
 		gidNumber, _ := usrInfo["gid"].(float64)
+		t, _ := usrInfo["type"].(string)
+
+		userType := getUserType(t, upn)
+		if userType == userpb.UserType_USER_TYPE_APPLICATION || userType == userpb.UserType_USER_TYPE_FEDERATED {
+			continue
+		}
 
 		uid := &userpb.UserId{
 			OpaqueId: upn,
 			Idp:      m.conf.IDProvider,
+			Type:     userType,
 		}
 		users[uid.OpaqueId] = &userpb.User{
 			Id:          uid,
@@ -373,4 +383,29 @@ func extractUID(u *userpb.User) (string, error) {
 		return "", errors.New("rest: could not retrieve UID from user")
 	}
 	return strconv.FormatInt(u.UidNumber, 10), nil
+}
+
+func getUserType(userType, upn string) userpb.UserType {
+	var t userpb.UserType
+	switch userType {
+	case "Application":
+		t = userpb.UserType_USER_TYPE_APPLICATION
+	case "Service":
+		t = userpb.UserType_USER_TYPE_SERVICE
+	case "Secondary":
+		t = userpb.UserType_USER_TYPE_SECONDARY
+	case "Person":
+		switch {
+		case strings.HasPrefix(upn, "guest"):
+			t = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+		case strings.Contains(upn, "@"):
+			t = userpb.UserType_USER_TYPE_FEDERATED
+		default:
+			t = userpb.UserType_USER_TYPE_PRIMARY
+		}
+	default:
+		t = userpb.UserType_USER_TYPE_INVALID
+	}
+	return t
+
 }

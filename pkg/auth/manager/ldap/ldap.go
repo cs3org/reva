@@ -174,6 +174,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	userID := &user.UserId{
 		Idp:      am.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
+		Type:     user.UserType_USER_TYPE_PRIMARY,
 	}
 	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
 	if err != nil {

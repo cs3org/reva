@@ -141,6 +141,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	userID := &user.UserId{
 		OpaqueId: claims[am.c.IDClaim].(string), // a stable non reassignable id
 		Idp:      claims["issuer"].(string),     // in the scope of this issuer
+		Type:     user.UserType_USER_TYPE_PRIMARY,
 	}
 	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
 	if err != nil {
