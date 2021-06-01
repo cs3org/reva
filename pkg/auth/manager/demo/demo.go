@@ -51,7 +51,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 }
 
 func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
-	scope, err := scope.GetOwnerScope()
+	scope, err := scope.AddOwnerScope(nil)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -106,6 +106,8 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			return handler(ctx, req)
 		}
 
+		log.Info().Msgf("GRPC unary interceptor %s, %+v", info.FullMethod, req)
+
 		span.AddAttributes(trace.BoolAttribute("auth_enabled", true))
 
 		tkn, ok := token.ContextGetToken(ctx)

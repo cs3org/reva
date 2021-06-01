@@ -51,7 +51,7 @@ func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (
 		uid.Idp = clientID[at+1:]
 	}
 
-	scope, err := scope.GetOwnerScope()
+	scope, err := scope.AddOwnerScope(nil)
 	if err != nil {
 		return nil, nil, err
 	}

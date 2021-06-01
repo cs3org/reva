@@ -217,7 +217,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		GidNumber:   gidNumber,
 	}
 
-	scope, err := scope.GetOwnerScope()
+	scope, err := scope.AddOwnerScope(nil)
 	if err != nil {
 		return nil, nil, err
 	}
