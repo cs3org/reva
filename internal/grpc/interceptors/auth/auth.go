@@ -107,8 +107,6 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			return handler(ctx, req)
 		}
 
-		log.Info().Msgf("GRPC unary interceptor %s, %+v", info.FullMethod, req)
-
 		span.AddAttributes(trace.BoolAttribute("auth_enabled", true))
 
 		tkn, ok := token.ContextGetToken(ctx)
@@ -241,8 +239,6 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		if ref.GetPath() != "" {
 
 			// Try to extract the resource ID from the scope resource.
-			// Currently, we only check for public shares, but this will be extended
-			// for OCM shares, guest accounts, etc.
 			log.Info().Msgf("resolving path reference to ID to check token scope %+v", ref.GetPath())
 			for k := range tokenScope {
 				switch {
@@ -293,7 +289,7 @@ func checkResourcePath(ctx context.Context, ref *provider.Reference, r *provider
 		return false, err
 	}
 
-	// Since the public share is obtained from the scope, the current token
+	// Since the resource ID is obtained from the scope, the current token
 	// has access to it.
 	statReq := &provider.StatRequest{
 		Ref: &provider.Reference{ResourceId: r},
