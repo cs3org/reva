@@ -40,6 +40,7 @@ const (
 // Common HTTP headers.
 const (
 	HeaderAcceptRanges               = "Accept-Ranges"
+	HeaderAccessControlAllowHeaders  = "Access-Control-Allow-Headers"
 	HeaderAccessControlExposeHeaders = "Access-Control-Expose-Headers"
 	HeaderContentDisposistion        = "Content-Disposition"
 	HeaderContentLength              = "Content-Length"
@@ -47,21 +48,27 @@ const (
 	HeaderContentType                = "Content-Type"
 	HeaderETag                       = "ETag"
 	HeaderLastModified               = "Last-Modified"
+	HeaderLocation                   = "Location"
 	HeaderRange                      = "Range"
+	HeaderIfMatch                    = "If-Match"
 )
 
 // Non standard HTTP headers.
 const (
-	HeaderOCFileID     = "OC-FileId"
-	HeaderOCETag       = "OC-ETag"
-	HeaderOCChecksum   = "OC-Checksum"
-	HeaderDepth        = "Depth"
-	HeaderDav          = "DAV"
-	HeaderTusResumable = "Tus-Resumable"
-	HeaderTusVersion   = "Tus-Version"
-	HeaderTusExtension = "Tus-Extension"
-	HeaderDestination  = "Destination"
-	HeaderOverwrite    = "Overwrite"
+	HeaderOCFileID       = "OC-FileId"
+	HeaderOCETag         = "OC-ETag"
+	HeaderOCChecksum     = "OC-Checksum"
+	HeaderDepth          = "Depth"
+	HeaderDav            = "DAV"
+	HeaderTusResumable   = "Tus-Resumable"
+	HeaderTusVersion     = "Tus-Version"
+	HeaderTusExtension   = "Tus-Extension"
+	HeaderDestination    = "Destination"
+	HeaderOverwrite      = "Overwrite"
+	HeaderUploadLength   = "Upload-Length"
+	HeaderUploadMetadata = "Upload-Metadata"
+	HeaderUploadOffset   = "Upload-Offset"
+	HeaderOCMtime        = "X-OC-Mtime"
 )
 
 // WebDavHandler implements a dav endpoint
@@ -102,7 +109,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case http.MethodPut:
 			s.handlePut(w, r, ns)
 		case http.MethodPost:
-			s.handleTusPost(w, r, ns)
+			s.handlePathTusPost(w, r, ns)
 		case http.MethodOptions:
 			s.handleOptions(w, r, ns)
 		case http.MethodHead:
