@@ -104,7 +104,7 @@ func checkSharePath(path string) bool {
 	return false
 }
 
-// AddPShareScope adds the scope to allow access to a user/group share and
+// AddShareScope adds the scope to allow access to a user/group share and
 // the shared resource.
 func AddShareScope(share *collaboration.Share, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
 	val, err := utils.MarshalProtoV1ToJSON(share)

@@ -18,100 +18,36 @@
 
 package scope
 
-// import (
-// 	"fmt"
-// 	"strings"
-//
-// 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-// 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-// 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-// 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-// 	"github.com/cs3org/reva/pkg/errtypes"
-// 	"github.com/cs3org/reva/pkg/utils"
-// )
-//
-// func lightweightAccountScope(scope *authpb.Scope, resource interface{}) (bool, error) {
-// 	var r provider.ResourceInfo
-// 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &r)
-// 	if err != nil {
-// 		return false, err
-// 	}
-//
-// 	switch v := resource.(type) {
-// 	// Viewer role
-// 	case *registry.GetStorageProvidersRequest:
-// 		return checkResourceInfo(&r, v.GetRef()), nil
-// 	case *provider.StatRequest:
-// 		return checkResourceInfo(&r, v.GetRef()), nil
-// 	case *provider.ListContainerRequest:
-// 		return checkResourceInfo(&r, v.GetRef()), nil
-// 	case *provider.InitiateFileDownloadRequest:
-// 		return checkResourceInfo(&r, v.GetRef()), nil
-//
-// 		// Editor role
-// 		// TODO(ishank011): Add role checks,
-// 		// need to return appropriate status codes in the ocs/ocdav layers.
-// 	case *provider.CreateContainerRequest:
-// 		return checkResourceInfo(&r, v.GetRef()), nil
-// 	case *provider.DeleteRequest:
-// 		return checkResourceInfo(&r, v.GetRef()), nil
-// 	case *provider.MoveRequest:
-// 		return checkResourceInfo(&r, v.GetSource()) && checkResourceInfo(&r, v.GetDestination()), nil
-// 	case *provider.InitiateFileUploadRequest:
-// 		return checkResourceInfo(&r, v.GetRef()), nil
-//
-// 	case string:
-// 		return checkPath(v), nil
-// 	}
-//
-// 	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
-// }
-//
-// func checkResourceInfo(inf *provider.ResourceInfo, ref *provider.Reference) bool {
-// 	// ref: <id:<storage_id:$storageID opaque_id:$opaqueID > >
-// 	if ref.GetId() != nil {
-// 		return inf.Id.StorageId == ref.GetId().StorageId && inf.Id.OpaqueId == ref.GetId().OpaqueId
-// 	}
-// 	// ref: <path:$path >
-// 	if strings.HasPrefix(ref.GetPath(), inf.Path) {
-// 		return true
-// 	}
-// 	return false
-// }
-//
-// func checkPath(path string) bool {
-// 	paths := []string{
-// 		"/dataprovider",
-// 		"/data",
-// 	}
-// 	for _, p := range paths {
-// 		if strings.HasPrefix(path, p) {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
-//
-// // AddLightweightAccountScope adds the scope to allow access to lightweight user.
-// func AddLightweightAccountScope(scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-//   ref := &provider.Reference{
-// 		Spec: &provider.Reference_Path{
-// 			Path: "/",
-// 		},
-// 	}
-// 	val, err := utils.MarshalProtoV1ToJSON(ref)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	if scopes == nil {
-// 		scopes = make(map[string]*authpb.Scope)
-// 	}
-// 	scopes["resourceinfo:"+r.Id.String()] = &authpb.Scope{
-// 		Resource: &types.OpaqueEntry{
-// 			Decoder: "json",
-// 			Value:   val,
-// 		},
-// 		Role: role,
-// 	}
-// 	return scopes, nil
-// }
+import (
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/utils"
+)
+
+func lightweightAccountScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+	// Lightweight accounts have access to resources shared with them.
+	// These cannot be resolved from here, but need to be added to the scope from
+	// where the call to mint tokens is made.
+	return false, nil
+}
+
+// AddLightweightAccountScope adds the scope to allow access to lightweight user.
+func AddLightweightAccountScope(role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
+	ref := &provider.Reference{Path: "/"}
+	val, err := utils.MarshalProtoV1ToJSON(ref)
+	if err != nil {
+		return nil, err
+	}
+	if scopes == nil {
+		scopes = make(map[string]*authpb.Scope)
+	}
+	scopes["lightweight"] = &authpb.Scope{
+		Resource: &types.OpaqueEntry{
+			Decoder: "json",
+			Value:   val,
+		},
+		Role: role,
+	}
+	return scopes, nil
+}

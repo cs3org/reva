@@ -24,6 +24,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -243,46 +244,72 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 			// Currently, we only check for public shares, but this will be extended
 			// for OCM shares, guest accounts, etc.
 			log.Info().Msgf("resolving path reference to ID to check token scope %+v", ref.GetPath())
-			var share link.PublicShare
-			var publicShareScope []byte
 			for k := range tokenScope {
-				if strings.HasPrefix(k, "publicshare") {
-					publicShareScope = tokenScope[k].Resource.Value
-					break
+				switch {
+				case strings.HasPrefix(k, "publicshare"):
+					var share link.PublicShare
+					err = utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
+					if err != nil {
+						continue
+					}
+					if ok, err := checkResourcePath(ctx, ref, share.ResourceId, gatewayAddr); err == nil && ok {
+						return u, nil
+					}
+
+				case strings.HasPrefix(k, "share"):
+					var share collaboration.Share
+					err = utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
+					if err != nil {
+						continue
+					}
+					if ok, err := checkResourcePath(ctx, ref, share.ResourceId, gatewayAddr); err == nil && ok {
+						return u, nil
+					}
+				case strings.HasPrefix(k, "lightweight"):
+					client, err := pool.GetGatewayServiceClient(gatewayAddr)
+					if err != nil {
+						continue
+					}
+					shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+					if err != nil {
+						continue
+					}
+					for _, share := range shares.Shares {
+						if ok, err := checkResourcePath(ctx, ref, share.Share.ResourceId, gatewayAddr); err == nil && ok {
+							return u, nil
+						}
+					}
 				}
-			}
-			err = utils.UnmarshalJSONToProtoV1(publicShareScope, &share)
-			if err != nil {
-				return nil, err
-			}
-
-			client, err := pool.GetGatewayServiceClient(gatewayAddr)
-			if err != nil {
-				return nil, err
-			}
-
-			// Since the public share is obtained from the scope, the current token
-			// has access to it.
-			statReq := &provider.StatRequest{
-				Ref: &provider.Reference{
-					ResourceId: share.ResourceId,
-				},
-			}
-
-			statResponse, err := client.Stat(ctx, statReq)
-			if err != nil || statResponse.Status.Code != rpc.Code_CODE_OK {
-				return nil, err
-			}
-
-			if strings.HasPrefix(ref.GetPath(), statResponse.Info.Path) {
-				// The path corresponds to the resource to which the token has access.
-				// We allow access to it.
-				return u, nil
 			}
 		}
 	}
 
-	return nil, errtypes.PermissionDenied("access token has invalid scope")
+	return nil, err
+}
+
+func checkResourcePath(ctx context.Context, ref *provider.Reference, r *provider.ResourceId, gatewayAddr string) (bool, error) {
+	client, err := pool.GetGatewayServiceClient(gatewayAddr)
+	if err != nil {
+		return false, err
+	}
+
+	// Since the public share is obtained from the scope, the current token
+	// has access to it.
+	statReq := &provider.StatRequest{
+		Ref: &provider.Reference{ResourceId: r},
+	}
+
+	statResponse, err := client.Stat(ctx, statReq)
+	if err != nil || statResponse.Status.Code != rpc.Code_CODE_OK {
+		return false, err
+	}
+
+	if strings.HasPrefix(ref.GetPath(), statResponse.Info.Path) {
+		// The path corresponds to the resource to which the token has access.
+		// We allow access to it.
+		return true, nil
+	}
+	return false, nil
 }
 
 func extractRef(req interface{}) (*provider.Reference, bool) {

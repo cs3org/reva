@@ -21,19 +21,24 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
 	userpkg "github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
@@ -93,7 +98,15 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
-	token, err := s.tokenmgr.MintToken(ctx, res.User, res.TokenScope)
+	scope, err := s.expandScopes(ctx, res.TokenScope)
+	if err != nil {
+		err = errors.Wrap(err, "authsvc: error expanding token scope")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error expanding access token scope"),
+		}, nil
+	}
+
+	token, err := s.tokenmgr.MintToken(ctx, res.User, scope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -190,4 +203,64 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.P
 	}
 
 	return nil, errtypes.InternalError("gateway: error finding an auth provider for type: " + authType)
+}
+
+func (s *svc) expandScopes(ctx context.Context, scopeMap map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
+	newMap := make(map[string]*authpb.Scope)
+	for k, v := range scopeMap {
+		newMap[k] = v
+		switch {
+		case strings.HasPrefix(k, "publicshare"):
+			var share link.PublicShare
+			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, &share)
+			if err != nil {
+				return nil, err
+			}
+			newMap, err = s.statAndAddResource(ctx, share.ResourceId, v.Role, newMap)
+			if err != nil {
+				return nil, err
+			}
+
+		case strings.HasPrefix(k, "share"):
+			var share collaboration.Share
+			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, &share)
+			if err != nil {
+				return nil, err
+			}
+			newMap, err = s.statAndAddResource(ctx, share.ResourceId, v.Role, newMap)
+			if err != nil {
+				return nil, err
+			}
+
+		case strings.HasPrefix(k, "lightweight"):
+			shares, err := s.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+			if err != nil {
+				return nil, err
+			}
+			for _, share := range shares.Shares {
+				newMap, err = scope.AddShareScope(share.Share, v.Role, newMap)
+				if err != nil {
+					return nil, err
+				}
+				newMap, err = s.statAndAddResource(ctx, share.Share.ResourceId, v.Role, newMap)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return newMap, nil
+}
+
+func (s *svc) statAndAddResource(ctx context.Context, r *storageprovider.ResourceId, role authpb.Role, scopeMap map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
+	statReq := &storageprovider.StatRequest{
+		Ref: &storageprovider.Reference{
+			Spec: &storageprovider.Reference_Id{Id: r},
+		},
+	}
+	statResponse, err := s.Stat(ctx, statReq)
+	if err != nil || statResponse.Status.Code != rpc.Code_CODE_OK {
+		return nil, err
+	}
+	return scope.AddResourceInfoScope(statResponse.Info, role, scopeMap)
 }

@@ -32,6 +32,7 @@ var supportedScopes = map[string]Verifier{
 	"publicshare":  publicshareScope,
 	"resourceinfo": resourceinfoScope,
 	"share":        shareScope,
+	"lightweight":  lightweightAccountScope,
 }
 
 // VerifyScope is the function to be called when dismantling tokens to check if
