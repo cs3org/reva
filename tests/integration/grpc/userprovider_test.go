@@ -59,7 +59,7 @@ var _ = Describe("user providers", func() {
 		}
 		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
-		scope, err := scope.GetOwnerScope()
+		scope, err := scope.AddOwnerScope(nil)
 		Expect(err).ToNot(HaveOccurred())
 		t, err := tokenManager.MintToken(ctx, user, scope)
 		Expect(err).ToNot(HaveOccurred())
