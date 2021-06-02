@@ -55,20 +55,22 @@ const (
 
 // Non standard HTTP headers.
 const (
-	HeaderOCFileID       = "OC-FileId"
-	HeaderOCETag         = "OC-ETag"
-	HeaderOCChecksum     = "OC-Checksum"
-	HeaderDepth          = "Depth"
-	HeaderDav            = "DAV"
-	HeaderTusResumable   = "Tus-Resumable"
-	HeaderTusVersion     = "Tus-Version"
-	HeaderTusExtension   = "Tus-Extension"
-	HeaderDestination    = "Destination"
-	HeaderOverwrite      = "Overwrite"
-	HeaderUploadLength   = "Upload-Length"
-	HeaderUploadMetadata = "Upload-Metadata"
-	HeaderUploadOffset   = "Upload-Offset"
-	HeaderOCMtime        = "X-OC-Mtime"
+	HeaderOCFileID             = "OC-FileId"
+	HeaderOCETag               = "OC-ETag"
+	HeaderOCChecksum           = "OC-Checksum"
+	HeaderDepth                = "Depth"
+	HeaderDav                  = "DAV"
+	HeaderTusResumable         = "Tus-Resumable"
+	HeaderTusVersion           = "Tus-Version"
+	HeaderTusExtension         = "Tus-Extension"
+	HeaderDestination          = "Destination"
+	HeaderOverwrite            = "Overwrite"
+	HeaderUploadChecksum       = "Upload-Checksum"
+	HeaderUploadLength         = "Upload-Length"
+	HeaderUploadMetadata       = "Upload-Metadata"
+	HeaderUploadOffset         = "Upload-Offset"
+	HeaderOCMtime              = "X-OC-Mtime"
+	HeaderExpectedEntityLength = "X-Expected-Entity-Length"
 )
 
 // WebDavHandler implements a dav endpoint
@@ -107,7 +109,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case http.MethodGet:
 			s.handlePathGet(w, r, ns)
 		case http.MethodPut:
-			s.handlePut(w, r, ns)
+			s.handlePathPut(w, r, ns)
 		case http.MethodPost:
 			s.handlePathTusPost(w, r, ns)
 		case http.MethodOptions:

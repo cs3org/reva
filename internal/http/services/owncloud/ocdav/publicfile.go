@@ -66,7 +66,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 			case http.MethodHead:
 				s.handlePathHead(w, r, h.namespace)
 			case http.MethodPut:
-				s.handlePut(w, r, h.namespace)
+				s.handlePathPut(w, r, h.namespace)
 			default:
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
