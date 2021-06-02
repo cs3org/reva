@@ -1452,6 +1452,17 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo, v
 		}
 	}
 
+	var xs provider.ResourceChecksum
+	if eosFileInfo.XS != nil {
+		xs.Sum = eosFileInfo.XS.XSSum
+		switch eosFileInfo.XS.XSType {
+		case "adler":
+			xs.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32
+		default:
+			xs.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID
+		}
+	}
+
 	info := &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
 		Path:          path,
@@ -1460,6 +1471,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo, v
 		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
 		Size:          size,
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
+		Checksum:      &xs,
 		Mtime: &types.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,
 			Nanos:   eosFileInfo.MTimeNanos,

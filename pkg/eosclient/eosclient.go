@@ -82,6 +82,7 @@ type FileInfo struct {
 	File       string            `json:"eos_file"`
 	ETag       string            `json:"etag"`
 	Instance   string            `json:"instance"`
+	XS         *Checksum         `json:"xs"`
 	SysACL     *acl.ACLs         `json:"sys_acl"`
 	Attrs      map[string]string `json:"attrs"`
 }
@@ -93,6 +94,12 @@ type DeletedEntry struct {
 	Size          uint64
 	DeletionMTime uint64
 	IsDir         bool
+}
+
+// Checksum represents a cheksum entry for a file returned by EOS.
+type Checksum struct {
+	XSSum  string
+	XSType string
 }
 
 // QuotaInfo reports the available bytes and inodes for a particular user.

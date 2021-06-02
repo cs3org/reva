@@ -907,8 +907,14 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error
 	}
 
 	isDir := false
+	var xs *eosclient.Checksum
 	if _, ok := kv["files"]; ok {
 		isDir = true
+	} else {
+		xs = &eosclient.Checksum{
+			XSSum:  kv["xs"],
+			XSType: kv["xstype"],
+		}
 	}
 
 	sysACL, err := acl.Parse(kv["sys.acl"], acl.ShortTextForm)
@@ -932,6 +938,7 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error
 		SysACL:     sysACL,
 		TreeCount:  treeCount,
 		Attrs:      kv,
+		XS:         xs,
 	}
 
 	return fi, nil
