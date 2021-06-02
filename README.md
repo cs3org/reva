@@ -39,6 +39,8 @@ You can also read the [build from sources guide](https://reva.link/docs/getting-
 ### unit tests / GRPC tests
 `make test`
 
+If you see `TestGetManagerWithInvalidUser/Nil_in_user` fail, [try removing](https://github.com/cs3org/reva/issues/1736) `/etc/revad/users.json` on your system.
+
 ### litmus tests
 1. start the needed services
    ```
