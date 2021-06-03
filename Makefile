@@ -7,6 +7,7 @@ GIT_BRANCH=`git rev-parse --symbolic-full-name --abbrev-ref HEAD`
 GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
+MINIMUM_GO_VERSION=1.16.2
 BUILD_FLAGS="-X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
 CI_BUILD_FLAGS="-w -extldflags "-static" -X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
 LITMUS_URL_OLD="http://localhost:20080/remote.php/webdav"
@@ -29,7 +30,7 @@ off:
 imports: off
 	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
 
-build: imports
+build: imports testGoVersion
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
@@ -70,6 +71,9 @@ lint:
 
 contrib:
 	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
+
+testGoVersion:
+	echo -e "$(MINIMUM_GO_VERSION)\n$(shell echo $(GO_VERSION) | cut -c3-)" | sort -Vc &> /dev/null || echo -e "\n\033[33;5m[WARNING]\033[0m You are using a not supported go version. Please use $(MINIMUM_GO_VERSION) or above.\n"
 
 # for manual building only
 deps:
