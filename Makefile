@@ -98,9 +98,9 @@ ci: build-ci test  lint-ci
 
 # to be run in Docker build
 build-revad-docker: off
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
+	env CGO_ENABLED=0 go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 build-reva-docker: off
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
+	env CGO_ENABLED=0 go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 clean:
 	rm -rf dist
 
