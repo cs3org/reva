@@ -279,6 +279,25 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 					}
 				}
 			}
+		} else { // ref has ID present
+			client, err := pool.GetGatewayServiceClient(gatewayAddr)
+			if err != nil {
+				return nil, err
+			}
+			for k := range tokenScope {
+				if strings.HasPrefix(k, "lightweight") {
+					shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+					if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
+						log.Warn().Err(err).Msg("error listing received shares")
+						continue
+					}
+					for _, share := range shares.Shares {
+						if utils.ResourceEqual(share.Share.ResourceId, ref.GetId()) {
+							return u, nil
+						}
+					}
+				}
+			}
 		}
 	}
 
