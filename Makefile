@@ -73,7 +73,7 @@ contrib:
 	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
 
 test-go-version:
-	echo -e "$(MINIMUM_GO_VERSION)\n$(shell echo $(GO_VERSION) | cut -c3-)" | sort -Vc &> /dev/null || echo -e "\n\033[33;5m[WARNING]\033[0m You are using a not supported go version. Please use $(MINIMUM_GO_VERSION) or above.\n"
+	@echo -e "$(MINIMUM_GO_VERSION)\n$(shell echo $(GO_VERSION) | sed 's/go//')" | sort -Vc &> /dev/null || echo -e "\n\033[33;5m[WARNING]\033[0m You are using a not supported go version. Please use $(MINIMUM_GO_VERSION) or above.\n"
 
 # for manual building only
 deps:
