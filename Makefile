@@ -30,7 +30,7 @@ off:
 imports: off
 	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
 
-build: imports testGoVersion
+build: imports test-go-version
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
@@ -72,7 +72,7 @@ lint:
 contrib:
 	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
 
-testGoVersion:
+test-go-version:
 	echo -e "$(MINIMUM_GO_VERSION)\n$(shell echo $(GO_VERSION) | cut -c3-)" | sort -Vc &> /dev/null || echo -e "\n\033[33;5m[WARNING]\033[0m You are using a not supported go version. Please use $(MINIMUM_GO_VERSION) or above.\n"
 
 # for manual building only
