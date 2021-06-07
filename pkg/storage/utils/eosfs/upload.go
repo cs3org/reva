@@ -34,7 +34,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
-	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	auth, err := fs.getUserUIDAndGID(ctx, u)
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	}
 
 	fn := fs.wrap(ctx, p)
-	return fs.c.Write(ctx, uid, gid, fn, r)
+	return fs.c.Write(ctx, auth, fn, r)
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
