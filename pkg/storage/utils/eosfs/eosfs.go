@@ -29,7 +29,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/bluele/gcache"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -40,7 +39,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
-	"github.com/cs3org/reva/pkg/eosclient/eosgrpc"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -135,7 +133,7 @@ type eosfs struct {
 	conf           *Config
 	chunkHandler   *chunking.ChunkHandler
 	singleUserAuth eosclient.Authorization
-	userIDCache    sync.Map
+	userIDCache    gcache.Cache
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance
@@ -151,40 +149,54 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 	}
 
 	var eosClient eosclient.EOSClient
-	if c.UseGRPC {
-		eosClientOpts := &eosgrpc.Options{
-			XrdcopyBinary:       c.XrdcopyBinary,
-			URL:                 c.MasterURL,
-			GrpcURI:             c.GrpcURI,
-			CacheDirectory:      c.CacheDirectory,
-			UseKeytab:           c.UseKeytab,
-			Keytab:              c.Keytab,
-			Authkey:             c.GRPCAuthkey,
-			SecProtocol:         c.SecProtocol,
-			VersionInvariant:    c.VersionInvariant,
-			ReadUsesLocalTemp:   c.ReadUsesLocalTemp,
-			WriteUsesLocalTemp:  c.WriteUsesLocalTemp,
-			MaxIdleConns:        c.MaxIdleConns,
-			MaxConnsPerHost:     c.MaxConnsPerHost,
-			MaxIdleConnsPerHost: c.MaxIdleConnsPerHost,
-			IdleConnTimeout:     c.IdleConnTimeout,
-		}
-		eosClient = eosgrpc.New(eosClientOpts)
-	} else {
-		eosClientOpts := &eosbinary.Options{
-			XrdcopyBinary:       c.XrdcopyBinary,
-			URL:                 c.MasterURL,
-			EosBinary:           c.EosBinary,
-			CacheDirectory:      c.CacheDirectory,
-			ForceSingleUserMode: c.ForceSingleUserMode,
-			SingleUsername:      c.SingleUsername,
-			UseKeytab:           c.UseKeytab,
-			Keytab:              c.Keytab,
-			SecProtocol:         c.SecProtocol,
-			VersionInvariant:    c.VersionInvariant,
-		}
-		eosClient = eosbinary.New(eosClientOpts)
+	// if c.UseGRPC {
+	// 	eosClientOpts := &eosgrpc.Options{
+	// 		XrdcopyBinary:       c.XrdcopyBinary,
+	// 		URL:                 c.MasterURL,
+	// 		GrpcURI:             c.GrpcURI,
+	// 		CacheDirectory:      c.CacheDirectory,
+	// 		UseKeytab:           c.UseKeytab,
+	// 		Keytab:              c.Keytab,
+	// 		Authkey:             c.GRPCAuthkey,
+	// 		SecProtocol:         c.SecProtocol,
+	// 		VersionInvariant:    c.VersionInvariant,
+	// 		ReadUsesLocalTemp:   c.ReadUsesLocalTemp,
+	// 		WriteUsesLocalTemp:  c.WriteUsesLocalTemp,
+	// 		MaxIdleConns:        c.MaxIdleConns,
+	// 		MaxConnsPerHost:     c.MaxConnsPerHost,
+	// 		MaxIdleConnsPerHost: c.MaxIdleConnsPerHost,
+	// 		IdleConnTimeout:     c.IdleConnTimeout,
+	// 	}
+	// 	eosClient = eosgrpc.New(eosClientOpts)
+	// } else {
+	// 	eosClientOpts := &eosbinary.Options{
+	// 		XrdcopyBinary:       c.XrdcopyBinary,
+	// 		URL:                 c.MasterURL,
+	// 		EosBinary:           c.EosBinary,
+	// 		CacheDirectory:      c.CacheDirectory,
+	// 		ForceSingleUserMode: c.ForceSingleUserMode,
+	// 		SingleUsername:      c.SingleUsername,
+	// 		UseKeytab:           c.UseKeytab,
+	// 		Keytab:              c.Keytab,
+	// 		SecProtocol:         c.SecProtocol,
+	// 		VersionInvariant:    c.VersionInvariant,
+	// 	}
+	// 	eosClient = eosbinary.New(eosClientOpts)
+	// }
+
+	eosClientOpts := &eosbinary.Options{
+		XrdcopyBinary:       c.XrdcopyBinary,
+		URL:                 c.MasterURL,
+		EosBinary:           c.EosBinary,
+		CacheDirectory:      c.CacheDirectory,
+		ForceSingleUserMode: c.ForceSingleUserMode,
+		SingleUsername:      c.SingleUsername,
+		UseKeytab:           c.UseKeytab,
+		Keytab:              c.Keytab,
+		SecProtocol:         c.SecProtocol,
+		VersionInvariant:    c.VersionInvariant,
 	}
+	eosClient = eosbinary.New(eosClientOpts)
 
 	eosfs := &eosfs{
 		c:            eosClient,
@@ -202,12 +214,12 @@ func (fs *eosfs) userIDcacheWarmup() {
 	if !fs.conf.EnableHome {
 		ctx := context.Background()
 		paths := []string{fs.wrap(ctx, "/")}
-		uid, gid, _ := fs.getRootUIDAndGID(ctx)
+		auth, _ := fs.getRootUIDAndGID(ctx)
 
 		for i := 0; i < fs.conf.UserIDCacheWarmupDepth; i++ {
 			var newPaths []string
 			for _, fn := range paths {
-				if eosFileInfos, err := fs.c.List(ctx, uid, gid, fn); err == nil {
+				if eosFileInfos, err := fs.c.List(ctx, auth, fn); err == nil {
 					for _, f := range eosFileInfos {
 						_, _ = fs.getUserIDGateway(ctx, strconv.FormatUint(f.UID, 10))
 						newPaths = append(newPaths, f.File)
@@ -412,7 +424,7 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
-	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	auth, err := fs.getUserUIDAndGID(ctx, u)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
 	}
@@ -439,7 +451,7 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 
 		// TODO(labkode): SetArbitraryMetadata does not has semantic for recursivity.
 		// We set it to false
-		err := fs.c.SetAttr(ctx, uid, gid, attr, false, p)
+		err := fs.c.SetAttr(ctx, auth, attr, false, p)
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error setting xattr in eos driver")
 		}
@@ -454,7 +466,7 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
-	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	auth, err := fs.getUserUIDAndGID(ctx, u)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
 	}
@@ -478,7 +490,7 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 			Key:  k,
 		}
 
-		err := fs.c.UnsetAttr(ctx, uid, gid, attr, p)
+		err := fs.c.UnsetAttr(ctx, auth, attr, p)
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error unsetting xattr in eos driver")
 		}
@@ -879,9 +891,9 @@ func (fs *eosfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
-	uid, _, err := fs.getUserUIDAndGID(ctx, u)
+	auth, err := fs.getUserUIDAndGID(ctx, u)
 	if err != nil {
-		return 0, 0, errors.Wrap(err, "eosfs: no uid in ctx")
+		return 0, 0, errors.Wrap(err, "eosfs: error getting uid and gid for user")
 	}
 
 	rootAuth, err := fs.getRootUIDAndGID(ctx)
@@ -889,7 +901,7 @@ func (fs *eosfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 		return 0, 0, err
 	}
 
-	qi, err := fs.c.GetQuota(ctx, uid, rootAuth, fs.conf.QuotaNode)
+	qi, err := fs.c.GetQuota(ctx, auth.Role.UID, rootAuth, fs.conf.QuotaNode)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, err
@@ -985,8 +997,8 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	// set quota for user
 	quotaInfo := &eosclient.SetQuotaInfo{
 		Username:  u.Username,
-		UID:       uid,
-		GID:       gid,
+		UID:       auth.Role.UID,
+		GID:       auth.Role.GID,
 		MaxBytes:  fs.conf.DefaultQuotaBytes,
 		MaxFiles:  fs.conf.DefaultQuotaFiles,
 		QuotaNode: fs.conf.QuotaNode,
@@ -1634,10 +1646,10 @@ func getResourceType(isDir bool) provider.ResourceType {
 
 func (fs *eosfs) extractUIDAndGID(u *userpb.User) (eosclient.Authorization, error) {
 	if u.UidNumber == 0 {
-		return "", "", errors.New("eosfs: uid missing for user")
+		return eosclient.Authorization{}, errors.New("eosfs: uid missing for user")
 	}
 	if u.GidNumber == 0 {
-		return "", "", errors.New("eosfs: gid missing for user")
+		return eosclient.Authorization{}, errors.New("eosfs: gid missing for user")
 	}
 	return eosclient.Authorization{Role: eosclient.Role{strconv.FormatInt(u.UidNumber, 10), strconv.FormatInt(u.GidNumber, 10)}}, nil
 }
@@ -1700,6 +1712,9 @@ func (fs *eosfs) getUserUIDAndGID(ctx context.Context, u *userpb.User) (eosclien
 		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
 		return fs.singleUserAuth, err
 	}
+	// if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+	//
+	// }
 	return fs.extractUIDAndGID(u)
 }
 
@@ -1712,7 +1727,7 @@ func (fs *eosfs) getRootUIDAndGID(ctx context.Context) (eosclient.Authorization,
 		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
 		return fs.singleUserAuth, err
 	}
-	return eosclient.Authorization{Role: eosclient.Role{"0", "0"}}, nil
+	return eosclient.Authorization{Role: eosclient.Role{UID: "0", GID: "0"}}, nil
 }
 
 type eosSysMetadata struct {
