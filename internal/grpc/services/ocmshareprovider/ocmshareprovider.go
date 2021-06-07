@@ -20,19 +20,13 @@ package ocmshareprovider
 
 import (
 	"context"
-	"path"
-	"strings"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/datatx"
-	datatxreg "github.com/cs3org/reva/pkg/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/token"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -43,16 +37,13 @@ func init() {
 }
 
 type config struct {
-	Driver        string                            `mapstructure:"driver"`
-	Drivers       map[string]map[string]interface{} `mapstructure:"drivers"`
-	DatatxDriver  string                            `mapstructure:"datatxdriver"`
-	DatatxDrivers map[string]map[string]interface{} `mapstructure:"datatxdrivers"`
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 type service struct {
 	conf *config
 	sm   share.Manager
-	dtxm datatx.Manager
 }
 
 func (c *config) init() {
@@ -70,13 +61,6 @@ func getShareManager(c *config) (share.Manager, error) {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
-}
-
-func getDatatxManager(c *config) (datatx.Manager, error) {
-	if f, ok := datatxreg.NewFuncs[c.DatatxDriver]; ok {
-		return f(c.DatatxDrivers[c.DatatxDriver])
-	}
-	return nil, errtypes.NotFound("datatx driver not found: " + c.DatatxDriver)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -102,15 +86,9 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	dtxm, err := getDatatxManager(c)
-	if err != nil {
-		return nil, err
-	}
-
 	service := &service{
 		conf: c,
 		sm:   sm,
-		dtxm: dtxm,
 	}
 
 	return service, nil
@@ -269,62 +247,11 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 }
 
 func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	_, err := s.sm.UpdateReceivedShare(ctx, req.Ref, req.Field) // TODO(labkode): check what to update
 	if err != nil {
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating received share"),
 		}, nil
-	}
-
-	// initiate transfer in case this is a transfer type share
-	receivedShare, err := s.sm.GetReceivedShare(ctx, req.Ref)
-	if err != nil {
-		return &ocm.UpdateReceivedOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error updating received share"),
-		}, nil
-	}
-	if receivedShare.GetShare().ShareType == ocm.Share_SHARE_TYPE_TRANSFER {
-		srcRemote := receivedShare.GetShare().GetOwner().GetIdp()
-		// remove the home path for webdav transfer calls
-		// TODO do we actually know for sure the home path of the src reva instance ??
-		srcPath := strings.TrimPrefix(receivedShare.GetShare().GetName(), "/home")
-		var srcToken string
-		srcTokenOpaque, ok := receivedShare.GetShare().Grantee.Opaque.Map["token"]
-		if !ok {
-			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: status.NewNotFound(ctx, "token not found"),
-			}, nil
-		}
-		switch srcTokenOpaque.Decoder {
-		case "plain":
-			srcToken = string(srcTokenOpaque.Value)
-		default:
-			err := errtypes.NotSupported("opaque entry decoder not recognized: " + srcTokenOpaque.Decoder)
-			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: status.NewInternal(ctx, err, "error updating received share"),
-			}, nil
-		}
-
-		destRemote := receivedShare.GetShare().GetGrantee().GetUserId().GetIdp()
-		// TODO how to get the data transfers folder?
-		destPath := path.Join("/Data-Transfers", path.Base(receivedShare.GetShare().Name))
-		destToken, ok := token.ContextGetToken(ctx)
-		if !ok || destToken == "" {
-			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: status.NewInternal(ctx, err, "error updating received share"),
-			}, nil
-		}
-
-		datatxInfoStatus, err := s.dtxm.CreateTransfer(receivedShare.GetShare().GetId().OpaqueId, srcRemote, srcPath, srcToken, destRemote, destPath, destToken)
-		if err != nil {
-			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: status.NewInternal(ctx, err, "error updating received share"),
-			}, nil
-		}
-		log.Info().Msg("datatx transfer created: " + datatxInfoStatus.String())
-
 	}
 
 	res := &ocm.UpdateReceivedOCMShareResponse{

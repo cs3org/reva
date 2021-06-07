@@ -27,6 +27,8 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	"github.com/cs3org/reva/pkg/datatx"
+	datatxreg "github.com/cs3org/reva/pkg/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -42,27 +44,29 @@ func init() {
 }
 
 type config struct {
-	AuthRegistryEndpoint          string `mapstructure:"authregistrysvc"`
-	ApplicationAuthEndpoint       string `mapstructure:"applicationauthsvc"`
-	StorageRegistryEndpoint       string `mapstructure:"storageregistrysvc"`
-	AppRegistryEndpoint           string `mapstructure:"appregistrysvc"`
-	PreferencesEndpoint           string `mapstructure:"preferencessvc"`
-	UserShareProviderEndpoint     string `mapstructure:"usershareprovidersvc"`
-	PublicShareProviderEndpoint   string `mapstructure:"publicshareprovidersvc"`
-	OCMShareProviderEndpoint      string `mapstructure:"ocmshareprovidersvc"`
-	OCMInviteManagerEndpoint      string `mapstructure:"ocminvitemanagersvc"`
-	OCMProviderAuthorizerEndpoint string `mapstructure:"ocmproviderauthorizersvc"`
-	OCMCoreEndpoint               string `mapstructure:"ocmcoresvc"`
-	UserProviderEndpoint          string `mapstructure:"userprovidersvc"`
-	GroupProviderEndpoint         string `mapstructure:"groupprovidersvc"`
-	DataTxEndpoint                string `mapstructure:"datatx"`
-	DataGatewayEndpoint           string `mapstructure:"datagateway"`
-	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
-	DisableHomeCreationOnLogin    bool   `mapstructure:"disable_home_creation_on_login"`
-	TransferSharedSecret          string `mapstructure:"transfer_shared_secret"`
-	TransferExpires               int64  `mapstructure:"transfer_expires"`
-	TokenManager                  string `mapstructure:"token_manager"`
+	AuthRegistryEndpoint          string                            `mapstructure:"authregistrysvc"`
+	ApplicationAuthEndpoint       string                            `mapstructure:"applicationauthsvc"`
+	StorageRegistryEndpoint       string                            `mapstructure:"storageregistrysvc"`
+	AppRegistryEndpoint           string                            `mapstructure:"appregistrysvc"`
+	PreferencesEndpoint           string                            `mapstructure:"preferencessvc"`
+	UserShareProviderEndpoint     string                            `mapstructure:"usershareprovidersvc"`
+	PublicShareProviderEndpoint   string                            `mapstructure:"publicshareprovidersvc"`
+	OCMShareProviderEndpoint      string                            `mapstructure:"ocmshareprovidersvc"`
+	OCMInviteManagerEndpoint      string                            `mapstructure:"ocminvitemanagersvc"`
+	OCMProviderAuthorizerEndpoint string                            `mapstructure:"ocmproviderauthorizersvc"`
+	OCMCoreEndpoint               string                            `mapstructure:"ocmcoresvc"`
+	UserProviderEndpoint          string                            `mapstructure:"userprovidersvc"`
+	GroupProviderEndpoint         string                            `mapstructure:"groupprovidersvc"`
+	DataTxEndpoint                string                            `mapstructure:"datatx"`
+	DataGatewayEndpoint           string                            `mapstructure:"datagateway"`
+	CommitShareToStorageGrant     bool                              `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef       bool                              `mapstructure:"commit_share_to_storage_ref"`
+	DisableHomeCreationOnLogin    bool                              `mapstructure:"disable_home_creation_on_login"`
+	TransferSharedSecret          string                            `mapstructure:"transfer_shared_secret"`
+	TransferExpires               int64                             `mapstructure:"transfer_expires"`
+	TokenManager                  string                            `mapstructure:"token_manager"`
+	DatatxManager                 string                            `mapstructure:"datatx_manager"`
+	DatatxManagers                map[string]map[string]interface{} `mapstructure:"datatx_managers"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
 	ShareFolder         string                            `mapstructure:"share_folder"`
 	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
@@ -81,6 +85,10 @@ func (c *config) init() {
 
 	if c.DataTransfersFolder == "" {
 		c.DataTransfersFolder = "Data-Transfers"
+	}
+
+	if c.DatatxManager == "" {
+		c.DatatxManager = "rclone"
 	}
 
 	if c.TokenManager == "" {
@@ -120,6 +128,7 @@ type svc struct {
 	dataGatewayURL url.URL
 	tokenmgr       token.Manager
 	etagCache      *ttlcache.Cache `mapstructure:"etag_cache"`
+	dtxm           datatx.Manager
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -144,6 +153,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	datatxManager, err := getDatatxManager(c.DatatxManager, c.DatatxManagers)
+	if err != nil {
+		return nil, err
+	}
+
 	etagCache := ttlcache.NewCache()
 	_ = etagCache.SetTTL(time.Duration(c.EtagCacheTTL) * time.Second)
 	etagCache.SkipTTLExtensionOnHit(true)
@@ -153,6 +167,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		dataGatewayURL: *u,
 		tokenmgr:       tokenManager,
 		etagCache:      etagCache,
+		dtxm:           datatxManager,
 	}
 
 	return s, nil
@@ -182,6 +197,14 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 func getTokenManager(manager string, m map[string]map[string]interface{}) (token.Manager, error) {
 	if f, ok := registry.NewFuncs[manager]; ok {
+		return f(m[manager])
+	}
+
+	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for token manager", manager))
+}
+
+func getDatatxManager(manager string, m map[string]map[string]interface{}) (datatx.Manager, error) {
+	if f, ok := datatxreg.NewFuncs[manager]; ok {
 		return f(m[manager])
 	}
 

@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -30,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
 )
 
@@ -219,6 +221,70 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 		}, nil
 	}
 
+	getShareReq := &ocm.GetReceivedOCMShareRequest{Ref: req.Ref}
+	getShareRes, err := s.GetReceivedOCMShare(ctx, getShareReq)
+	if err != nil {
+		log.Err(err).Msg("gateway: error calling GetReceivedShare")
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: &rpc.Status{
+				Code: rpc.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+
+	if getShareRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Msg("gateway: error calling GetReceivedShare")
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: &rpc.Status{
+				Code: rpc.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+
+	share := getShareRes.Share
+	if share == nil {
+		panic("gateway: error updating a received share: the share is nil")
+	}
+
+	if share.GetShare().ShareType == ocm.Share_SHARE_TYPE_TRANSFER {
+		srcRemote := share.GetShare().GetOwner().GetIdp()
+		// TODO do we actually know for sure the home path of the src reva instance?
+		srcPath := strings.TrimPrefix(share.GetShare().GetName(), "/home")
+		var srcToken string
+		srcTokenOpaque, ok := share.GetShare().Grantee.Opaque.Map["token"]
+		if !ok {
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: status.NewNotFound(ctx, "token not found"),
+			}, nil
+		}
+		switch srcTokenOpaque.Decoder {
+		case "plain":
+			srcToken = string(srcTokenOpaque.Value)
+		default:
+			err := errtypes.NotSupported("opaque entry decoder not recognized: " + srcTokenOpaque.Decoder)
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: status.NewInternal(ctx, err, "error updating received share"),
+			}, nil
+		}
+		destRemote := share.GetShare().GetGrantee().GetUserId().GetIdp()
+		destPath := path.Join(s.c.DataTransfersFolder, path.Base(share.GetShare().Name))
+		destToken, ok := token.ContextGetToken(ctx)
+		if !ok || destToken == "" {
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: status.NewInternal(ctx, err, "error updating received share"),
+			}, nil
+		}
+
+		datatxInfoStatus, err := s.dtxm.CreateTransfer(share.GetShare().GetId().OpaqueId, srcRemote, srcPath, srcToken, destRemote, destPath, destToken)
+		if err != nil {
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: status.NewInternal(ctx, err, "error updating received share"),
+			}, nil
+		}
+		log.Info().Msg("datatx transfer created: " + datatxInfoStatus.String())
+		return res, nil
+	}
+
 	// if we don't need to create/delete references then we return early.
 	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
 		return res, nil
@@ -234,31 +300,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 	// TODO(labkode): if update field is displayName we need to do a rename on the storage to align
 	// share display name and storage filename.
 	if req.Field.GetState() != ocm.ShareState_SHARE_STATE_INVALID {
-		if req.Field.GetState() == ocm.ShareState_SHARE_STATE_ACCEPTED {
-			getShareReq := &ocm.GetReceivedOCMShareRequest{Ref: req.Ref}
-			getShareRes, err := s.GetReceivedOCMShare(ctx, getShareReq)
-			if err != nil {
-				log.Err(err).Msg("gateway: error calling GetReceivedShare")
-				return &ocm.UpdateReceivedOCMShareResponse{
-					Status: &rpc.Status{
-						Code: rpc.Code_CODE_INTERNAL,
-					},
-				}, nil
-			}
-
-			if getShareRes.Status.Code != rpc.Code_CODE_OK {
-				log.Error().Msg("gateway: error calling GetReceivedShare")
-				return &ocm.UpdateReceivedOCMShareResponse{
-					Status: &rpc.Status{
-						Code: rpc.Code_CODE_INTERNAL,
-					},
-				}, nil
-			}
-
-			share := getShareRes.Share
-			if share == nil {
-				panic("gateway: error updating a received share: the share is nil")
-			}
+		if req.Field.GetState() == ocm.ShareState_SHARE_STATE_ACCEPTED || req.Field.GetState() == ocm.ShareState_SHARE_STATE_PENDING {
 
 			createRefStatus, err := s.createOCMReference(ctx, share.Share)
 			return &ocm.UpdateReceivedOCMShareResponse{
@@ -348,6 +390,7 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 		Path:      refPath,
 		TargetUri: targetURI,
 	}
+	fmt.Printf("createReferenceReq: %v \n", createRefReq)
 
 	c, err := s.findByPath(ctx, refPath)
 	if err != nil {
@@ -369,6 +412,8 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 		err := status.NewErrorFromCode(createRefRes.Status.GetCode(), "gateway")
 		return status.NewInternal(ctx, err, "error updating received share"), nil
 	}
+
+	fmt.Printf("reference: %v \n", createRefRes)
 
 	return status.NewOK(ctx), nil
 }
