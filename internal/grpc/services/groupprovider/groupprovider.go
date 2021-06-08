@@ -21,6 +21,7 @@ package groupprovider
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -137,6 +138,11 @@ func (s *service) FindGroups(ctx context.Context, req *grouppb.FindGroupsRequest
 			Status: status.NewInternal(ctx, err, "error finding groups"),
 		}, nil
 	}
+
+	// sort group by groupname
+	sort.Slice(groups, func(i, j int) bool {
+		return groups[i].GroupName <= groups[j].GroupName
+	})
 
 	return &grouppb.FindGroupsResponse{
 		Status: status.NewOK(ctx),

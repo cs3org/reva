@@ -21,6 +21,7 @@ package userprovider
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -144,6 +145,11 @@ func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (
 		}
 		return res, nil
 	}
+
+	// sort users by username
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].Username <= users[j].Username
+	})
 
 	res := &userpb.FindUsersResponse{
 		Status: status.NewOK(ctx),
