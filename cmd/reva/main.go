@@ -84,6 +84,9 @@ var (
 		transferCreateCommand(),
 		transferGetStatusCommand(),
 		transferCancelCommand(),
+		appTokensListCommand(),
+		appTokensRemoveCommand(),
+		appTokensCreateCommand(),
 		helpCommand(),
 	}
 )

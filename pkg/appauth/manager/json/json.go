@@ -37,6 +37,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/sethvargo/go-password/password"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func init() {
@@ -44,8 +45,9 @@ func init() {
 }
 
 type config struct {
-	File          string `mapstructure:"file"`
-	TokenStrength int    `mapstructure:"token_strength"`
+	File             string `mapstructure:"file"`
+	TokenStrength    int    `mapstructure:"token_strength"`
+	PasswordHashCost int    `mapstructure:"password_hash_cost"`
 }
 
 type jsonManager struct {
@@ -78,6 +80,12 @@ func New(m map[string]interface{}) (appauth.Manager, error) {
 func (c *config) init() {
 	if c.File == "" {
 		c.File = "/var/tmp/reva/appauth.json"
+	}
+	if c.TokenStrength == 0 {
+		c.TokenStrength = 16
+	}
+	if c.PasswordHashCost == 0 {
+		c.PasswordHashCost = 11
 	}
 }
 
@@ -121,15 +129,20 @@ func loadOrCreate(file string) (*jsonManager, error) {
 }
 
 func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[string]*authpb.Scope, label string, expiration *typespb.Timestamp) (*apppb.AppPassword, error) {
-	token, err := password.Generate(mgr.config.TokenStrength, 10, 10, false, false)
+	token, err := password.Generate(mgr.config.TokenStrength, mgr.config.TokenStrength/2, 0, false, false)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating new token")
+	}
+	tokenHashed, err := bcrypt.GenerateFromPassword([]byte(token), mgr.config.PasswordHashCost)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating new token")
 	}
 	userID := user.ContextMustGetUser(ctx).GetId()
 	ctime := now()
 
+	password := string(tokenHashed)
 	appPass := &apppb.AppPassword{
-		Password:   token,
+		Password:   password,
 		TokenScope: scope,
 		Label:      label,
 		Expiration: expiration,
@@ -145,14 +158,16 @@ func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[strin
 		mgr.passwords[userID.String()] = make(map[string]*apppb.AppPassword)
 	}
 
-	mgr.passwords[userID.String()][token] = appPass
+	mgr.passwords[userID.String()][password] = appPass
 
 	err = mgr.save()
 	if err != nil {
 		return nil, errors.Wrap(err, "error saving new token")
 	}
 
-	return appPass, nil
+	clonedAppPass := *appPass
+	clonedAppPass.Password = token
+	return &clonedAppPass, nil
 }
 
 func (mgr *jsonManager) ListAppPasswords(ctx context.Context) ([]*apppb.AppPassword, error) {
@@ -199,20 +214,26 @@ func (mgr *jsonManager) GetAppPassword(ctx context.Context, userID *userpb.UserI
 		return nil, errtypes.NotFound("password not found")
 	}
 
-	pw, ok := appPassword[password]
-	if !ok {
-		return nil, errtypes.NotFound("password not found")
+	for hash, pw := range appPassword {
+		err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+		if err == nil {
+			// password found
+			if pw.Expiration != nil && pw.Expiration.Seconds != 0 && uint64(time.Now().Unix()) > pw.Expiration.Seconds {
+				// password expired
+				return nil, errtypes.NotFound("password not found")
+			}
+			// password not expired
+			// update last used time
+			pw.Utime = now()
+			if err := mgr.save(); err != nil {
+				return nil, errors.Wrap(err, "error saving file")
+			}
+
+			return pw, nil
+		}
 	}
 
-	if pw.Expiration != nil && pw.Expiration.Seconds != 0 && uint64(time.Now().Unix()) > pw.Expiration.Seconds {
-		return nil, errtypes.NotFound("password not found")
-	}
-
-	pw.Utime = now()
-	if err := mgr.save(); err != nil {
-		return nil, errors.Wrap(err, "error saving file")
-	}
-	return pw, nil
+	return nil, errtypes.NotFound("password not found")
 }
 
 func now() *typespb.Timestamp {
