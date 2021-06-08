@@ -30,8 +30,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 
+	"github.com/bluele/gcache"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
 	"github.com/cs3org/reva/pkg/eosclient/eosgrpc"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -119,6 +120,14 @@ func (c *Config) init() {
 		c.UserLayout = "{{.Username}}" // TODO set better layout
 	}
 
+	if c.UserIDCacheSize == 0 {
+		c.UserIDCacheSize = 1000000
+	}
+
+	if c.UserIDCacheWarmupDepth == 0 {
+		c.UserIDCacheWarmupDepth = 2
+	}
+
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
@@ -128,7 +137,7 @@ type eosfs struct {
 	chunkHandler  *chunking.ChunkHandler
 	singleUserUID string
 	singleUserGID string
-	userIDCache   sync.Map
+	userIDCache   gcache.Cache
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance
@@ -179,10 +188,40 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 		c:            eosClient,
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
-		userIDCache:  sync.Map{},
+		userIDCache:  gcache.New(c.UserIDCacheSize).LFU().Build(),
 	}
 
+	go eosfs.userIDcacheWarmup()
+
 	return eosfs, nil
+}
+
+func (fs *eosfs) userIDcacheWarmup() {
+	if !fs.conf.EnableHome {
+		log := logger.New().With().Int("pid", os.Getpid()).Logger()
+		log.Debug().Msg("Starting userIDcacheWarmup")
+
+		count := 0
+		ctx := context.Background()
+		paths := []string{fs.wrap(ctx, "/")}
+		uid, gid, _ := fs.getRootUIDAndGID(ctx)
+
+		for i := 0; i < fs.conf.UserIDCacheWarmupDepth; i++ {
+			var newPaths []string
+			for _, fn := range paths {
+				if eosFileInfos, err := fs.c.List(ctx, uid, gid, fn); err != nil {
+					for _, f := range eosFileInfos {
+						if _, err := fs.getUserIDGateway(ctx, strconv.FormatUint(f.UID, 10)); err != nil {
+							count++
+						}
+						newPaths = append(newPaths, f.File)
+					}
+				}
+			}
+			paths = newPaths
+		}
+		log.Debug().Msgf("userIDcacheWarmup complete, added %d users", count)
+	}
 }
 
 func (fs *eosfs) Shutdown(ctx context.Context) error {
@@ -1542,7 +1581,7 @@ func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (string, s
 }
 
 func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.UserId, error) {
-	if userIDInterface, ok := fs.userIDCache.Load(uid); ok {
+	if userIDInterface, err := fs.userIDCache.Get(uid); err != nil {
 		return userIDInterface.(*userpb.UserId), nil
 	}
 	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
@@ -1560,7 +1599,7 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 		return nil, errors.Wrap(err, "eos: grpc get user failed")
 	}
 
-	fs.userIDCache.Store(uid, getUserResp.User.Id)
+	_ = fs.userIDCache.Set(uid, getUserResp.User.Id)
 	return getUserResp.User.Id, nil
 }
 

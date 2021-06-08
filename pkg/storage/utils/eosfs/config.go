@@ -111,4 +111,12 @@ type Config struct {
 	// URI of the EOS MGM grpc server
 	// Default is empty
 	GrpcURI string `mapstructure:"master_grpc_uri"`
+
+	// Size of the cache used to store user ID and UID resolution.
+	// Default value is 1000000.
+	UserIDCacheSize int `mapstructure:"user_id_cache_size"`
+
+	// The depth to which list resources to warm up the user ID cache.
+	// Default value is 2.
+	UserIDCacheWarmupDepth int `mapstructure:"user_id_cache_warmup_depth"`
 }
