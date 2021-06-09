@@ -434,7 +434,7 @@ func (c *Client) getACLForPath(ctx context.Context, uid, gid, path string) (*acl
 	}
 
 	if resp.GetError() != nil {
-		log.Info().Str("func", "GetACLForPath").Str("uid", uid).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+		log.Error().Str("func", "GetACLForPath").Str("uid", uid).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 	}
 
 	aclret, err := acl.Parse(resp.Acl.Rule, acl.ShortTextForm)
@@ -531,7 +531,7 @@ func (c *Client) SetAttr(ctx context.Context, uid, gid string, attr *eosclient.A
 	}
 
 	if resp.GetError() != nil {
-		log.Info().Str("func", "setAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative result")
+		log.Error().Str("func", "setAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative result")
 	}
 
 	return err
@@ -572,7 +572,7 @@ func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient
 	}
 
 	if resp.GetError() != nil {
-		log.Info().Str("func", "UnsetAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+		log.Error().Str("func", "UnsetAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 	}
 	return err
 
@@ -670,7 +670,7 @@ func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path 
 	}
 
 	if resp.GetError() != nil {
-		log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Int64("eoserrcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+		log.Error().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Int64("eoserrcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 	} else {
 		log.Debug().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 	}
@@ -756,7 +756,7 @@ func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eo
 		}
 
 		if resp.GetError() != nil {
-			log.Info().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", resp)).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+			log.Error().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", resp)).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 		} else {
 			log.Debug().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 		}
@@ -1267,7 +1267,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, uid, gid string) ([]*eo
 	}
 
 	if resp.GetError() != nil {
-		log.Info().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+		log.Error().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 	} else {
 		log.Debug().Str("func", "ListDeletedEntries").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 	}
@@ -1328,7 +1328,7 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, uid, gid, key string) 
 	}
 
 	if resp.GetError() != nil {
-		log.Info().Str("func", "RestoreDeletedEntries").Str("key", key).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+		log.Error().Str("func", "RestoreDeletedEntries").Str("key", key).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 	} else {
 		log.Info().Str("func", "RestoreDeletedEntries").Str("key", key).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 	}
