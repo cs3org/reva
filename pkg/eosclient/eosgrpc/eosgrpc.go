@@ -194,15 +194,7 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 		return err
 	}
 
-	if rsp == nil {
-		return nil
-	}
-
-	if rsp.Error == nil {
-		return nil
-	}
-
-	if rsp.Error.Code == 0 {
+	if rsp == nil || rsp.Error == nil || rsp.Error.Code == 0 {
 		return nil
 	}
 
