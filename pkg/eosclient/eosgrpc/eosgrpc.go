@@ -121,7 +121,7 @@ func (opt *Options) init() {
 	}
 
 	if opt.httpopts.Init() != nil {
-		os.Exit(255)
+		panic("Cant't init the EOS http client options")
 	}
 	opt.httpopts.BaseURL = opt.URL
 
