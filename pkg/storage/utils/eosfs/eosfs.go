@@ -1566,10 +1566,16 @@ func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (string, s
 
 func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.UserId, error) {
 	log := appctx.GetLogger(ctx)
+	// Handle the case of root
+	if uid == "0" {
+		return nil, errtypes.BadRequest("eosfs: cannot return root user")
+	}
+
 	if userIDInterface, err := fs.userIDCache.Get(uid); err == nil {
 		log.Debug().Msg("eosfs: found cached uid " + uid)
 		return userIDInterface.(*userpb.UserId), nil
 	}
+
 	log.Debug().Msg("eosfs: retrieving user from gateway for uid " + uid)
 	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
 	if err != nil {
