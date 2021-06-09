@@ -151,7 +151,7 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 
 	log.Debug().Str("Going to ping ", "'"+opt.GrpcURI+"' ").Msg("")
 	ecl := erpc.NewEosClient(conn)
-	// If we can't ping... just print ugly warnings. In the case EOS is down, grpc will take care of
+	// If we can't ping... just print warnings. In the case EOS is down, grpc will take care of
 	// connecting later
 	prq := new(erpc.PingRequest)
 	prq.Authkey = opt.Authkey
