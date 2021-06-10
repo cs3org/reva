@@ -21,7 +21,7 @@ package demo
 import (
 	"context"
 	"errors"
-	"fmt"
+	"strconv"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -70,7 +70,7 @@ func extractClaim(u *userpb.User, claim string) (string, error) {
 		return u.Username, nil
 	case "uid":
 		if u.UidNumber != 0 {
-			return fmt.Sprintf("%v", u.UidNumber), nil
+			return strconv.FormatInt(u.UidNumber, 10), nil
 		}
 	}
 	return "", errors.New("demo: invalid field")

@@ -130,12 +130,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, fmt.Errorf("no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
 	}
 
-	var uid, gid int64
+	var uid, gid float64
 	if am.c.UIDClaim != "" {
-		uid, _ = claims[am.c.UIDClaim].(int64)
+		uid, _ = claims[am.c.UIDClaim].(float64)
 	}
 	if am.c.GIDClaim != "" {
-		gid, _ = claims[am.c.GIDClaim].(int64)
+		gid, _ = claims[am.c.GIDClaim].(float64)
 	}
 
 	userID := &user.UserId{
@@ -167,8 +167,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Mail:         claims["email"].(string),
 		MailVerified: claims["email_verified"].(bool),
 		DisplayName:  claims["name"].(string),
-		UidNumber:    uid,
-		GidNumber:    gid,
+		UidNumber:    int64(uid),
+		GidNumber:    int64(gid),
 	}
 
 	scope, err := scope.GetOwnerScope()

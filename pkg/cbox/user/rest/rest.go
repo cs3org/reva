@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -168,8 +169,8 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 	upn, _ := userData["upn"].(string)
 	mail, _ := userData["primaryAccountEmail"].(string)
 	name, _ := userData["displayName"].(string)
-	uidNumber, _ := userData["uid"].(int64)
-	gidNumber, _ := userData["gid"].(int64)
+	uidNumber, _ := userData["uid"].(float64)
+	gidNumber, _ := userData["gid"].(float64)
 
 	userID := &userpb.UserId{
 		OpaqueId: upn,
@@ -180,8 +181,8 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 		Username:    upn,
 		Mail:        mail,
 		DisplayName: name,
-		UidNumber:   uidNumber,
-		GidNumber:   gidNumber,
+		UidNumber:   int64(uidNumber),
+		GidNumber:   int64(gidNumber),
 	}
 
 	if err := m.cacheUserDetails(u); err != nil {
@@ -264,8 +265,8 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 		upn, _ := usrInfo["upn"].(string)
 		mail, _ := usrInfo["primaryAccountEmail"].(string)
 		name, _ := usrInfo["displayName"].(string)
-		uidNumber, _ := usrInfo["uid"].(int64)
-		gidNumber, _ := usrInfo["gid"].(int64)
+		uidNumber, _ := usrInfo["uid"].(float64)
+		gidNumber, _ := usrInfo["gid"].(float64)
 
 		uid := &userpb.UserId{
 			OpaqueId: upn,
@@ -276,8 +277,8 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 			Username:    upn,
 			Mail:        mail,
 			DisplayName: name,
-			UidNumber:   uidNumber,
-			GidNumber:   gidNumber,
+			UidNumber:   int64(uidNumber),
+			GidNumber:   int64(gidNumber),
 		}
 	}
 
@@ -371,5 +372,5 @@ func extractUID(u *userpb.User) (string, error) {
 	if u.UidNumber == 0 {
 		return "", errors.New("rest: could not retrieve UID from user")
 	}
-	return fmt.Sprintf("%v", u.UidNumber), nil
+	return strconv.FormatInt(u.UidNumber, 10), nil
 }

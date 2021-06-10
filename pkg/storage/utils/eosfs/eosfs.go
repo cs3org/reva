@@ -1540,7 +1540,7 @@ func (fs *eosfs) extractUIDAndGID(u *userpb.User) (string, string, error) {
 	if u.GidNumber == 0 {
 		return "", "", errors.New("eos: gid missing for user")
 	}
-	return fmt.Sprintf("%v", u.UidNumber), fmt.Sprintf("%v", u.GidNumber), nil
+	return strconv.FormatInt(u.UidNumber, 10), strconv.FormatInt(u.GidNumber, 10), nil
 }
 
 func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (string, string, error) {

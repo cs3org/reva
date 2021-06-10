@@ -186,11 +186,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber), 10, 64)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	uidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber), 10, 64)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	u := &user.User{
 		Id: userID,

@@ -21,8 +21,8 @@ package json
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
+	"strconv"
 	"strings"
 
 	"github.com/cs3org/reva/pkg/user"
@@ -113,7 +113,7 @@ func extractClaim(u *userpb.User, claim string) (string, error) {
 		return u.Username, nil
 	case "uid":
 		if u.UidNumber != 0 {
-			return fmt.Sprintf("%v", u.UidNumber), nil
+			return strconv.FormatInt(u.UidNumber, 10), nil
 		}
 	}
 	return "", errors.New("json: invalid field")
