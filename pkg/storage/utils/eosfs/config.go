@@ -116,7 +116,9 @@ type Config struct {
 	// Default value is 1000000.
 	UserIDCacheSize int `mapstructure:"user_id_cache_size"`
 
-	// The depth to which list resources to warm up the user ID cache.
+	// The depth, starting from root, that we'll parse directories to lookup the
+	// owner and warm up the cache. For example, for a layout of {{substr 0 1 .Username}}/{{.Username}}
+	// and a depth of 2, we'll lookup each user's home directory.
 	// Default value is 2.
 	UserIDCacheWarmupDepth int `mapstructure:"user_id_cache_warmup_depth"`
 }
