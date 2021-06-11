@@ -125,9 +125,11 @@ func (opt *Options) Init() error {
 			TLSClientConfig: &tls.Config{
 				Certificates: []tls.Certificate{cert},
 			},
-			MaxIdleConns:       10,
-			IdleConnTimeout:    30 * time.Second,
-			DisableCompression: true,
+			MaxIdleConns:        10,
+			MaxConnsPerHost:     8,
+			MaxIdleConnsPerHost: 8,
+			IdleConnTimeout:     30 * time.Second,
+			DisableCompression:  true,
 		}
 	}
 	return nil
