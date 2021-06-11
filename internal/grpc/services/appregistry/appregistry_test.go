@@ -120,7 +120,7 @@ func Test_ListAppProviders(t *testing.T) {
 			}
 
 			ss := &svc{
-				registry: rr,
+				reg: rr,
 			}
 			got, err := ss.ListAppProviders(context.Background(), nil)
 
@@ -237,7 +237,7 @@ func Test_GetAppProviders(t *testing.T) {
 	}
 
 	ss := &svc{
-		registry: rr,
+		reg: rr,
 	}
 
 	for _, tt := range tests {
@@ -274,12 +274,12 @@ func TestNew(t *testing.T) {
 		{
 			name:    "not existing driver",
 			m:       map[string]interface{}{"Driver": "doesnotexist"},
-			wantErr: "error: not found: driver not found: doesnotexist",
+			wantErr: "error: not found: appregistrysvc: driver not found: doesnotexist",
 		},
 		{
 			name:    "empty",
 			m:       map[string]interface{}{},
-			wantErr: "error: not found: driver not found: ",
+			wantErr: "error: not found: appregistrysvc: driver not found: ",
 		},
 		{
 			name:    "extra not existing field in setting",

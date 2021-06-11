@@ -24,13 +24,18 @@ import (
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
+	"github.com/cs3org/reva/pkg/app/registry/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 )
 
-type registry struct {
-	rules map[string]string
+func init() {
+	registry.Register("static", New)
+}
+
+type config struct {
+	Rules map[string]string `mapstructure:"rules"`
 }
 
 func (c *config) init() {
@@ -41,7 +46,28 @@ func (c *config) init() {
 	}
 }
 
-func (b *registry) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+type reg struct {
+	rules map[string]string
+}
+
+func New(m map[string]interface{}) (app.Registry, error) {
+	c, err := parseConfig(m)
+	if err != nil {
+		return nil, err
+	}
+	c.init()
+	return &reg{rules: c.Rules}, nil
+}
+
+func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
 	var providers = make([]*registrypb.ProviderInfo, 0, len(b.rules))
 	for _, address := range b.rules {
 		providers = append(providers, &registrypb.ProviderInfo{
@@ -51,7 +77,7 @@ func (b *registry) ListProviders(ctx context.Context) ([]*registrypb.ProviderInf
 	return providers, nil
 }
 
-func (b *registry) FindProvider(ctx context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
+func (b *reg) FindProvider(ctx context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
 	// find the longest match
 	var match string
 
@@ -69,25 +95,4 @@ func (b *registry) FindProvider(ctx context.Context, mimeType string) (*registry
 		Address: b.rules[match],
 	}
 	return p, nil
-}
-
-type config struct {
-	Rules map[string]string
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
-func New(m map[string]interface{}) (app.Registry, error) {
-	c, err := parseConfig(m)
-	if err != nil {
-		return nil, err
-	}
-	c.init()
-	return &registry{rules: c.Rules}, nil
 }

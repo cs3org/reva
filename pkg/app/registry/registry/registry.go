@@ -18,16 +18,16 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/auth"
+import "github.com/cs3org/reva/pkg/app"
 
-// NewFunc is the function that auth registry implementations
-// should register at init time.
-type NewFunc func(map[string]interface{}) (auth.Registry, error)
+// NewFunc is the function that app provider implementations
+// should register to at init time.
+type NewFunc func(map[string]interface{}) (app.Registry, error)
 
-// NewFuncs is a map containing all the registered auth registries.
+// NewFuncs is a map containing all the registered app registry backends.
 var NewFuncs = map[string]NewFunc{}
 
-// Register registers a new auth registry new function.
+// Register registers a new app registry new function.
 // Not safe for concurrent use. Safe for use from package init.
 func Register(name string, f NewFunc) {
 	NewFuncs[name] = f

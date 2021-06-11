@@ -25,7 +25,7 @@ import (
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
-	"github.com/cs3org/reva/pkg/app/registry/static"
+	"github.com/cs3org/reva/pkg/app/registry/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -37,7 +37,7 @@ func init() {
 }
 
 type svc struct {
-	registry app.Registry
+	reg app.Registry
 }
 
 func (s *svc) Close() error {
@@ -53,8 +53,14 @@ func (s *svc) Register(ss *grpc.Server) {
 }
 
 type config struct {
-	Driver string                 `mapstructure:"driver"`
-	Static map[string]interface{} `mapstructure:"static"`
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+}
+
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "static"
+	}
 }
 
 // New creates a new StorageRegistryService
@@ -65,13 +71,13 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	registry, err := getRegistry(c)
+	reg, err := getRegistry(c)
 	if err != nil {
 		return nil, err
 	}
 
 	svc := &svc{
-		registry: registry,
+		reg: reg,
 	}
 
 	return svc, nil
@@ -86,16 +92,14 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 func getRegistry(c *config) (app.Registry, error) {
-	switch c.Driver {
-	case "static":
-		return static.New(c.Static)
-	default:
-		return nil, errtypes.NotFound("driver not found: " + c.Driver)
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
 	}
+	return nil, errtypes.NotFound("appregistrysvc: driver not found: " + c.Driver)
 }
 
 func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvidersRequest) (*registrypb.GetAppProvidersResponse, error) {
-	p, err := s.registry.FindProvider(ctx, req.ResourceInfo.MimeType)
+	p, err := s.reg.FindProvider(ctx, req.ResourceInfo.MimeType)
 	if err != nil {
 		return &registrypb.GetAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error looking for the app provider"),
@@ -116,7 +120,7 @@ func (s *svc) AddAppProvider(ctx context.Context, req *registrypb.AddAppProvider
 }
 
 func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvidersRequest) (*registrypb.ListAppProvidersResponse, error) {
-	providers, err := s.registry.ListProviders(ctx)
+	providers, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error listing the app providers"),
