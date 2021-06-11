@@ -102,8 +102,6 @@ type Options struct {
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
-
-	httpopts ehttp.Options
 }
 
 func (opt *Options) init() {
@@ -120,11 +118,6 @@ func (opt *Options) init() {
 		opt.CacheDirectory = os.TempDir()
 	}
 
-	if opt.httpopts.Init() != nil {
-		panic("Cant't init the EOS http client options")
-	}
-	opt.httpopts.BaseURL = opt.URL
-
 }
 
 // Client performs actions against a EOS management node (MGM)
@@ -136,7 +129,14 @@ type Client struct {
 
 // GetHTTPCl creates an http client for immediate usage, using the already instantiated resources
 func (c *Client) GetHTTPCl() *ehttp.Client {
-	return ehttp.New(&c.opt.httpopts)
+	var htopts ehttp.Options
+
+	if htopts.Init() != nil {
+		panic("Cant't init the EOS http client options")
+	}
+	htopts.BaseURL = c.opt.URL
+
+	return ehttp.New(&htopts)
 }
 
 // Create and connect a grpc eos Client
