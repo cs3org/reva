@@ -22,9 +22,13 @@ import (
 	"context"
 
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	driver "github.com/cs3org/reva/pkg/datatx"
+	"github.com/cs3org/reva/pkg/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/storage"
+	fsreg "github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -35,17 +39,43 @@ func init() {
 }
 
 type config struct {
+	Driver    string                            `mapstructure:"driver"`
+	Drivers   map[string]map[string]interface{} `mapstructure:"drivers"`
+	FSDriver  string                            `mapstructure:"fsdriver"`
+	FSDrivers map[string]map[string]interface{} `mapstructure:"fsdrivers"`
 }
 
 type service struct {
-	conf *config
+	conf    *config
+	datatx  driver.Manager
+	storage storage.FS
 }
 
 func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "rclone"
+	}
+	if c.FSDriver == "" {
+		c.FSDriver = "localhome"
+	}
 }
 
 func (s *service) Register(ss *grpc.Server) {
 	datatx.RegisterTxAPIServer(ss, s)
+}
+
+func getDatatxManager(c *config) (driver.Manager, error) {
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
+	}
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
+}
+
+func getFS(c *config) (storage.FS, error) {
+	if f, ok := fsreg.NewFuncs[c.FSDriver]; ok {
+		return f(c.Drivers[c.FSDriver])
+	}
+	return nil, errtypes.NotFound("driver not found: " + c.FSDriver)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -66,8 +96,20 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 	c.init()
 
+	datatx, err := getDatatxManager(c)
+	if err != nil {
+		return nil, err
+	}
+
+	fs, err := getFS(c)
+	if err != nil {
+		return nil, err
+	}
+
 	service := &service{
-		conf: c,
+		conf:    c,
+		datatx:  datatx,
+		storage: fs,
 	}
 
 	return service, nil
@@ -87,13 +129,23 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 	}, nil
 }
 
-func (s *service) GetTransferStatus(ctx context.Context, in *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
+func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
+	txStatus, err := s.datatx.GetTransferStatus(req.TxId.OpaqueId)
+	if err != nil {
+		return &datatx.GetTransferStatusResponse{
+			Status: status.NewInternal(ctx, err, "error requesting transfer status"),
+		}, nil
+	}
 	return &datatx.GetTransferStatusResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("GetTransferStatus not implemented"), "GetTransferStatus not implemented"),
+		Status: status.NewOK(ctx),
+		TxInfo: &datatx.TxInfo{
+			Id:     req.TxId,
+			Status: txStatus,
+		},
 	}, nil
 }
 
-func (s *service) CancelTransfer(ctx context.Context, in *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
+func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
 	return &datatx.CancelTransferResponse{
 		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CancelTransfer not implemented"), "CancelTransfer not implemented"),
 	}, nil

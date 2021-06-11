@@ -211,8 +211,10 @@ func (driver *rclone) CreateTransfer(transferID string, srcRemote string, srcPat
 		return datatx.TxInfo_STATUS_INVALID, errors.Wrap(err, "error marshalling rclone req data")
 	}
 
-	// TODO test if path is folder or file (stat src?)
-	pathIsFolder := true
+	pathIsFolder, err := driver.srcPathIsFolder()
+	if err != nil {
+		return datatx.TxInfo_STATUS_INVALID, errors.Wrap(err, "error stating src path")
+	}
 	transferFileMethod := "/operations/copyfile"
 	if pathIsFolder {
 		// TODO sync/copy will overwrite existing data; use a configurable check for this?
@@ -293,7 +295,7 @@ func (driver *rclone) CreateTransfer(transferID string, srcRemote string, srcPat
 		defer driver.pDriver.Unlock()
 
 		for {
-			transfer, err := driver.pDriver.model.GetTransfer(transferID)
+			transfer, err := driver.pDriver.model.getTransfer(transferID)
 			if err != nil {
 				fmt.Printf("error: %v\n", err)
 				// TODO log ?
@@ -469,8 +471,7 @@ func (driver *rclone) CreateTransfer(transferID string, srcRemote string, srcPat
 
 // GetTransferStatus returns the status of the transfer with the specified job id
 func (driver *rclone) GetTransferStatus(transferID string) (datatx.TxInfo_Status, error) {
-	// does transfer exist?
-	transfer, err := driver.pDriver.model.GetTransfer(transferID)
+	transfer, err := driver.pDriver.model.getTransfer(transferID)
 	if err != nil {
 		return datatx.TxInfo_STATUS_INVALID, err
 	}
@@ -478,7 +479,7 @@ func (driver *rclone) GetTransferStatus(transferID string) (datatx.TxInfo_Status
 }
 
 // GetTransfer returns the transfer with the specified transfer ID
-func (m *transferModel) GetTransfer(transferID string) (*transfer, error) {
+func (m *transferModel) getTransfer(transferID string) (*transfer, error) {
 	transfer, ok := m.Transfers[transferID]
 	if !ok {
 		return nil, errors.New("json: invalid transfer ID")
@@ -488,7 +489,7 @@ func (m *transferModel) GetTransfer(transferID string) (*transfer, error) {
 
 // CancelTransfer cancels the transfer with the specified transfer id
 func (driver *rclone) CancelTransfer(transferID string) (datatx.TxInfo_Status, error) {
-	transfer, err := driver.pDriver.model.GetTransfer(transferID)
+	transfer, err := driver.pDriver.model.getTransfer(transferID)
 	if err != nil {
 		return datatx.TxInfo_STATUS_INVALID, err
 	}
@@ -569,6 +570,11 @@ func (driver *rclone) CancelTransfer(transferID string) (datatx.TxInfo_Status, e
 	if resData.Error != "" {
 		return datatx.TxInfo_STATUS_TRANSFER_CANCEL_FAILED, errors.New(resData.Error)
 	}
-	// an empty response means cancelation went successfully
+
 	return datatx.TxInfo_STATUS_TRANSFER_CANCELLED, nil
+}
+
+func (driver *rclone) srcPathIsFolder() (bool, error) {
+	// TODO rclone stat src to determine resource type
+	return true, nil
 }
