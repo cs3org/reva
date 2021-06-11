@@ -101,8 +101,9 @@ func (opt *Options) Init() error {
 	}
 	if opt.ClientCADirs != "" {
 		os.Setenv("SSL_CERT_DIR", opt.ClientCADirs)
+	} else {
+		os.Setenv("SSL_CERT_DIR", "/etc/grid-security/certificates")
 	}
-	os.Setenv("SSL_CERT_DIR", "/etc/grid-security/certificates")
 
 	cert, err := tls.LoadX509KeyPair(opt.ClientCertFile, opt.ClientKeyFile)
 	if err != nil {
