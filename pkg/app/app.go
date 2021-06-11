@@ -21,20 +21,15 @@ package app
 import (
 	"context"
 
+	registry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 // Registry is the interface that application registries implement
 // for discovering application providers
 type Registry interface {
-	FindProvider(ctx context.Context, mimeType string) (*ProviderInfo, error)
-	ListProviders(ctx context.Context) ([]*ProviderInfo, error)
-}
-
-// ProviderInfo contains the information
-// about a Application Provider
-type ProviderInfo struct {
-	Location string
+	FindProvider(ctx context.Context, mimeType string) (*registry.ProviderInfo, error)
+	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
 }
 
 // Provider is the interface that application providers implement

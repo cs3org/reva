@@ -37,13 +37,13 @@ func Test_parseConfig(t *testing.T) {
 			name: "all configurations set",
 			m: map[string]interface{}{
 				"Driver":    "demo",
-				"Demo":      map[string]interface{}{"a": "b", "c": "d"},
+				"Drivers":   map[string]map[string]interface{}{"demo": map[string]interface{}{"a": "b", "c": "d"}},
 				"IopSecret": "very-secret",
 				"WopiURL":   "https://my.wopi:9871",
 			},
 			want: &config{
 				Driver:    "demo",
-				Demo:      map[string]interface{}{"a": "b", "c": "d"},
+				Drivers:   map[string]map[string]interface{}{"demo": map[string]interface{}{"a": "b", "c": "d"}},
 				IopSecret: "very-secret",
 				WopiURL:   "https://my.wopi:9871",
 			},
@@ -64,8 +64,8 @@ func Test_parseConfig(t *testing.T) {
 			name: "undefined settings type",
 			m:    map[string]interface{}{"Not-Defined": 123},
 			want: &config{
-				Driver:    "",
-				Demo:      map[string]interface{}(nil),
+				Driver:    "demo",
+				Drivers:   map[string]map[string]interface{}(nil),
 				IopSecret: "",
 				WopiURL:   "",
 			},

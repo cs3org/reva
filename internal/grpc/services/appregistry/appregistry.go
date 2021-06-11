@@ -102,24 +102,25 @@ func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvide
 		}, nil
 	}
 
-	provider := format(p)
 	res := &registrypb.GetAppProvidersResponse{
 		Status:    status.NewOK(ctx),
-		Providers: []*registrypb.ProviderInfo{provider},
+		Providers: []*registrypb.ProviderInfo{p},
 	}
 	return res, nil
 }
 
+func (s *svc) AddAppProvider(ctx context.Context, req *registrypb.AddAppProviderRequest) (*registrypb.AddAppProviderResponse, error) {
+	return &registrypb.AddAppProviderResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("AddAppProvider not implemented"), "AddAppProvider not implemented"),
+	}, nil
+}
+
 func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvidersRequest) (*registrypb.ListAppProvidersResponse, error) {
-	pvds, err := s.registry.ListProviders(ctx)
+	providers, err := s.registry.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error listing the app providers"),
 		}, nil
-	}
-	providers := make([]*registrypb.ProviderInfo, 0, len(pvds))
-	for _, pvd := range pvds {
-		providers = append(providers, format(pvd))
 	}
 
 	res := &registrypb.ListAppProvidersResponse{
@@ -129,8 +130,14 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvi
 	return res, nil
 }
 
-func format(p *app.ProviderInfo) *registrypb.ProviderInfo {
-	return &registrypb.ProviderInfo{
-		Address: p.Location,
-	}
+func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registrypb.GetDefaultAppProviderForMimeTypeRequest) (*registrypb.GetDefaultAppProviderForMimeTypeResponse, error) {
+	return &registrypb.GetDefaultAppProviderForMimeTypeResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("GetDefaultAppProviderForMimeType not implemented"), "GetDefaultAppProviderForMimeType not implemented"),
+	}, nil
+}
+
+func (s *svc) SetDefaultAppProviderForMimeType(ctx context.Context, req *registrypb.SetDefaultAppProviderForMimeTypeRequest) (*registrypb.SetDefaultAppProviderForMimeTypeResponse, error) {
+	return &registrypb.SetDefaultAppProviderForMimeTypeResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("SetDefaultAppProviderForMimeType not implemented"), "SetDefaultAppProviderForMimeType not implemented"),
+	}, nil
 }

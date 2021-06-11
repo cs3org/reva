@@ -22,6 +22,7 @@ import (
 	"context"
 	"strings"
 
+	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -40,18 +41,18 @@ func (c *config) init() {
 	}
 }
 
-func (b *registry) ListProviders(ctx context.Context) ([]*app.ProviderInfo, error) {
-	var providers = make([]*app.ProviderInfo, 0, len(b.rules))
+func (b *registry) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+	var providers = make([]*registrypb.ProviderInfo, 0, len(b.rules))
 	for _, address := range b.rules {
-		providers = append(providers, &app.ProviderInfo{
-			Location: address,
+		providers = append(providers, &registrypb.ProviderInfo{
+			Address: address,
 		})
 	}
 	return providers, nil
 }
 
-func (b *registry) FindProvider(ctx context.Context, mimeType string) (*app.ProviderInfo, error) {
-	// find longest match
+func (b *registry) FindProvider(ctx context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
+	// find the longest match
 	var match string
 
 	for prefix := range b.rules {
@@ -64,8 +65,8 @@ func (b *registry) FindProvider(ctx context.Context, mimeType string) (*app.Prov
 		return nil, errtypes.NotFound("application provider not found for mime type " + mimeType)
 	}
 
-	p := &app.ProviderInfo{
-		Location: b.rules[match],
+	p := &registrypb.ProviderInfo{
+		Address: b.rules[match],
 	}
 	return p, nil
 }
@@ -82,8 +83,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New returns an implementation to of the storage.FS interface that talk to
-// a local filesystem.
 func New(m map[string]interface{}) (app.Registry, error) {
 	c, err := parseConfig(m)
 	if err != nil {

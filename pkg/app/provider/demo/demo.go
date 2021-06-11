@@ -25,8 +25,13 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/mitchellh/mapstructure"
 )
+
+func init() {
+	registry.Register("demo", New)
+}
 
 type provider struct {
 	iframeUIProvider string
@@ -49,8 +54,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New returns an implementation to of the storage.FS interface that talk to
-// a local filesystem.
+// New returns an implementation to of the app.Provider interface that
+// connects to an application in the backend.
 func New(m map[string]interface{}) (app.Provider, error) {
 	c, err := parseConfig(m)
 	if err != nil {

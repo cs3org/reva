@@ -38,7 +38,24 @@ func (s *svc) GetAppProviders(ctx context.Context, req *registry.GetAppProviders
 
 	res, err := c.GetAppProviders(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling ListShares")
+		return nil, errors.Wrap(err, "gateway: error calling GetAppProviders")
+	}
+
+	return res, nil
+}
+
+func (s *svc) AddAppProvider(ctx context.Context, req *registry.AddAppProviderRequest) (*registry.AddAppProviderResponse, error) {
+	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
+		return &registry.AddAppProviderResponse{
+			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+		}, nil
+	}
+
+	res, err := c.AddAppProvider(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling AddAppProvider")
 	}
 
 	return res, nil
@@ -55,7 +72,41 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registry.ListAppProvide
 
 	res, err := c.ListAppProviders(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling ListShares")
+		return nil, errors.Wrap(err, "gateway: error calling ListAppProviders")
+	}
+
+	return res, nil
+}
+
+func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registry.GetDefaultAppProviderForMimeTypeRequest) (*registry.GetDefaultAppProviderForMimeTypeResponse, error) {
+	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
+		return &registry.GetDefaultAppProviderForMimeTypeResponse{
+			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+		}, nil
+	}
+
+	res, err := c.GetDefaultAppProviderForMimeType(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetDefaultAppProviderForMimeType")
+	}
+
+	return res, nil
+}
+
+func (s *svc) SetDefaultAppProviderForMimeType(ctx context.Context, req *registry.SetDefaultAppProviderForMimeTypeRequest) (*registry.SetDefaultAppProviderForMimeTypeResponse, error) {
+	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
+		return &registry.SetDefaultAppProviderForMimeTypeResponse{
+			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+		}, nil
+	}
+
+	res, err := c.SetDefaultAppProviderForMimeType(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling SetDefaultAppProviderForMimeType")
 	}
 
 	return res, nil

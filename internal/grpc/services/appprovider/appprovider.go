@@ -33,7 +33,7 @@ import (
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
-	"github.com/cs3org/reva/pkg/app/provider/demo"
+	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -55,11 +55,26 @@ type service struct {
 }
 
 type config struct {
-	Driver    string                 `mapstructure:"driver"`
-	Demo      map[string]interface{} `mapstructure:"demo"`
-	IopSecret string                 `mapstructure:"iopsecret" docs:";The iopsecret used to connect to the wopiserver."`
-	WopiURL   string                 `mapstructure:"wopiurl" docs:";The wopiserver's URL."`
-	WopiBrURL string                 `mapstructure:"wopibridgeurl" docs:";The wopibridge's URL."`
+	Driver    string                            `mapstructure:"driver"`
+	Drivers   map[string]map[string]interface{} `mapstructure:"drivers"`
+	IopSecret string                            `mapstructure:"iopsecret" docs:";The iopsecret used to connect to the wopiserver."`
+	WopiURL   string                            `mapstructure:"wopiurl" docs:";The wopiserver's URL."`
+	WopiBrURL string                            `mapstructure:"wopibridgeurl" docs:";The wopibridge's URL."`
+}
+
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "demo"
+	}
+}
+
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		return nil, err
+	}
+	c.init()
+	return c, nil
 }
 
 // New creates a new AppProviderService
@@ -85,14 +100,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	return service, nil
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
 func (s *service) Close() error {
 	return nil
 }
@@ -106,12 +113,10 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func getProvider(c *config) (app.Provider, error) {
-	switch c.Driver {
-	case "demo":
-		return demo.New(c.Demo)
-	default:
-		return nil, errtypes.NotFound("driver not found: " + c.Driver)
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
 	}
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
 func (s *service) getWopiAppEndpoints(ctx context.Context) (map[string]interface{}, error) {
