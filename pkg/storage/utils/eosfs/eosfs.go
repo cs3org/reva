@@ -226,6 +226,12 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 		err := errors.Wrap(errtypes.UserRequired(""), "eos: error getting user from ctx")
 		return nil, err
 	}
+	if u.UidNumber == 0 {
+		return nil, errors.New("eos: invalid user id")
+	}
+	if u.GidNumber == 0 {
+		return nil, errors.New("eos: invalid group id")
+	}
 	return u, nil
 }
 
@@ -1528,23 +1534,13 @@ func getResourceType(isDir bool) provider.ResourceType {
 }
 
 func (fs *eosfs) extractUIDAndGID(u *userpb.User) (string, string, error) {
-	var uid, gid string
-	if u.Opaque != nil && u.Opaque.Map != nil {
-		if uidObj, ok := u.Opaque.Map["uid"]; ok {
-			if uidObj.Decoder == "plain" {
-				uid = string(uidObj.Value)
-			}
-		}
-		if gidObj, ok := u.Opaque.Map["gid"]; ok {
-			if gidObj.Decoder == "plain" {
-				gid = string(gidObj.Value)
-			}
-		}
+	if u.UidNumber == 0 {
+		return "", "", errors.New("eos: uid missing for user")
 	}
-	if uid == "" || gid == "" {
-		return "", "", errors.New("eos: uid or gid missing for user")
+	if u.GidNumber == 0 {
+		return "", "", errors.New("eos: gid missing for user")
 	}
-	return uid, gid, nil
+	return strconv.FormatInt(u.UidNumber, 10), strconv.FormatInt(u.GidNumber, 10), nil
 }
 
 func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (string, string, error) {
