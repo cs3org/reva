@@ -152,12 +152,13 @@ func (c *Client) GetHTTPCl() *ehttp.Client {
 func (c *Client) GetHTTPCl() *ehttp.Client {
 	var htopts ehttp.Options
 
-	if htopts.Init() != nil {
+	t, err := htopts.Init()
+	if err != nil {
 		panic("Cant't init the EOS http client options")
 	}
 	htopts.BaseURL = c.opt.URL
 
-	return ehttp.New(&htopts)
+	return ehttp.New(&htopts, t)
 }
 
 // Create and connect a grpc eos Client
