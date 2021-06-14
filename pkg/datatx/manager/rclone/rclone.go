@@ -498,11 +498,11 @@ func (driver *rclone) CancelTransfer(transferID string) (datatx.TxInfo_Status, e
 		return datatx.TxInfo_STATUS_INVALID, errors.Wrap(err, "transfer already in end state")
 	}
 
-	// rcloneCancelTransferReqJSON the rclone job/stop method json request
-	type rcloneCancelTransferReqJSON struct {
+	// rcloneStop the rclone job/stop method json request
+	type rcloneStopRequest struct {
 		JobID int64 `json:"jobid"`
 	}
-	rcloneCancelTransferReq := &rcloneCancelTransferReqJSON{
+	rcloneCancelTransferReq := &rcloneStopRequest{
 		JobID: transfer.JobID,
 	}
 

@@ -146,7 +146,17 @@ func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransfer
 }
 
 func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
+	txStatus, err := s.datatx.CancelTransfer(req.TxId.OpaqueId)
+	if err != nil {
+		return &datatx.CancelTransferResponse{
+			Status: status.NewInternal(ctx, err, "error cancelling transfer"),
+		}, nil
+	}
 	return &datatx.CancelTransferResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CancelTransfer not implemented"), "CancelTransfer not implemented"),
+		Status: status.NewOK(ctx),
+		TxInfo: &datatx.TxInfo{
+			Id:     req.TxId,
+			Status: txStatus,
+		},
 	}, nil
 }
