@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -102,6 +103,18 @@ type Options struct {
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
+
+	// HTTP connections to EOS: max number of idle conns
+	MaxIdleConns int
+
+	// HTTP connections to EOS: max number of conns per host
+	MaxConnsPerHost int
+
+	// HTTP connections to EOS: max number of idle conns per host
+	MaxIdleConnsPerHost int
+
+	// HTTP connections to EOS: idle conections TTL
+	IdleConnTimeout int
 }
 
 func (opt *Options) init() {
@@ -123,20 +136,22 @@ func (opt *Options) init() {
 // Client performs actions against a EOS management node (MGM)
 // using the EOS GRPC interface.
 type Client struct {
-	opt *Options
-	cl  erpc.EosClient
+	opt           *Options
+	httptransport *http.Transport
+	cl            erpc.EosClient
 }
 
 // GetHTTPCl creates an http client for immediate usage, using the already instantiated resources
 func (c *Client) GetHTTPCl() *ehttp.Client {
 	var htopts ehttp.Options
 
-	if htopts.Init() != nil {
+	t, err := htopts.Init()
+	if err != nil {
 		panic("Cant't init the EOS http client options")
 	}
 	htopts.BaseURL = c.opt.URL
 
-	return ehttp.New(&htopts)
+	return ehttp.New(&htopts, t)
 }
 
 // Create and connect a grpc eos Client
@@ -176,6 +191,15 @@ func New(opt *Options) *Client {
 	opt.init()
 	c := new(Client)
 	c.opt = opt
+
+	var htopts ehttp.Options
+
+	t, err := htopts.Init()
+	if err != nil {
+		panic("Cant't init the EOS http client options")
+	}
+	c.httptransport = t
+	htopts.BaseURL = c.opt.URL
 
 	tctx := appctx.WithLogger(context.Background(), &tlog)
 	ccl, err := newgrpc(tctx, opt)
@@ -1176,7 +1200,7 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 		}
 	}
 
-	bodystream, err := c.GetHTTPCl().GETFile(ctx, "", uid, gid, path, localfile)
+	bodystream, err := c.GetHTTPCl().GETFile(ctx, c.httptransport, "", uid, gid, path, localfile)
 	if err != nil {
 		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", uid+","+gid).Str("err", err.Error()).Msg("")
 		return nil, errtypes.InternalError(fmt.Sprintf("can't GET local cache file '%s'", localTarget))
@@ -1216,10 +1240,10 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 		defer wfd.Close()
 		defer os.RemoveAll(fd.Name())
 
-		return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, wfd, length)
+		return c.GetHTTPCl().PUTFile(ctx, c.httptransport, "", uid, gid, path, wfd, length)
 	}
 
-	return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, stream, length)
+	return c.GetHTTPCl().PUTFile(ctx, c.httptransport, "", uid, gid, path, stream, length)
 
 	// return c.GetHttpCl().PUTFile(ctx, remoteuser, uid, gid, urlpathng, stream)
 	// return c.WriteFile(ctx, uid, gid, path, fd.Name())

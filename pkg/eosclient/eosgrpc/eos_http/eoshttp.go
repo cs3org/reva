@@ -28,7 +28,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -53,6 +52,18 @@ type Options struct {
 	// Timeout in seconds for performing an operation. Includes every redirection, retry, etc
 	OpTimeout int
 
+	// Max idle conns per Transport
+	MaxIdleConns int
+
+	// Max conns per transport per destination host
+	MaxConnsPerHost int
+
+	// Max idle conns per transport per destination host
+	MaxIdleConnsPerHost int
+
+	// TTL for an idle conn per transport
+	IdleConnTimeout int
+
 	// If the URL is https, then we need to configure this client
 	// with the usual TLS stuff
 	// Defaults are /etc/grid-security/hostcert.pem and /etc/grid-security/hostkey.pem
@@ -66,14 +77,8 @@ type Options struct {
 	ClientCAFiles string
 }
 
-// We want just one instance of these options in the whole app, as we don't want to
-// instantiate more than once the http client internals. For example to have
-// http keepalive, pools, etc...
-var httpTransport *http.Transport
-var httpTransportMtx sync.Mutex
-
 // Init fills the basic fields
-func (opt *Options) Init() error {
+func (opt *Options) Init() (*http.Transport, error) {
 
 	if opt.BaseURL == "" {
 		opt.BaseURL = "https://eos-example.org"
@@ -87,6 +92,18 @@ func (opt *Options) Init() error {
 	}
 	if opt.OpTimeout == 0 {
 		opt.OpTimeout = 360
+	}
+	if opt.MaxIdleConns == 0 {
+		opt.MaxIdleConns = 100
+	}
+	if opt.MaxConnsPerHost == 0 {
+		opt.MaxConnsPerHost = 64
+	}
+	if opt.MaxIdleConnsPerHost == 0 {
+		opt.MaxIdleConnsPerHost = 8
+	}
+	if opt.IdleConnTimeout == 0 {
+		opt.IdleConnTimeout = 30
 	}
 
 	if opt.ClientCertFile == "" {
@@ -107,33 +124,25 @@ func (opt *Options) Init() error {
 
 	cert, err := tls.LoadX509KeyPair(opt.ClientCertFile, opt.ClientKeyFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	httpTransportMtx.Lock()
-	// Lock so only one goroutine at a time can access the var
-	// Note that we assume that the variable will stay constant,
-	// hence we don't need to lock it when used
-	defer httpTransportMtx.Unlock()
-
-	if httpTransport == nil {
-
-		// TODO: the error reporting of http.transport is insufficient
-		// must check manually at least the existence of the certfiles
-		// The point is that also the error reporting of the context that calls this function
-		// is weak
-		httpTransport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				Certificates: []tls.Certificate{cert},
-			},
-			MaxIdleConns:        10,
-			MaxConnsPerHost:     8,
-			MaxIdleConnsPerHost: 8,
-			IdleConnTimeout:     30 * time.Second,
-			DisableCompression:  true,
-		}
+	// TODO: the error reporting of http.transport is insufficient
+	// we may want to check manually at least the existence of the certfiles
+	// The point is that also the error reporting of the context that calls this function
+	// is weak
+	t := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		},
+		MaxIdleConns:        opt.MaxIdleConns,
+		MaxConnsPerHost:     opt.MaxConnsPerHost,
+		MaxIdleConnsPerHost: opt.MaxIdleConnsPerHost,
+		IdleConnTimeout:     time.Duration(opt.IdleConnTimeout) * time.Second,
+		DisableCompression:  true,
 	}
-	return nil
+
+	return t, nil
 }
 
 // Client performs HTTP-based tasks (e.g. upload, download)
@@ -147,7 +156,7 @@ type Client struct {
 }
 
 // New creates a new client with the given options.
-func New(opt *Options) *Client {
+func New(opt *Options, t *http.Transport) *Client {
 	log := logger.New().With().Int("pid", os.Getpid()).Logger()
 	log.Debug().Str("func", "New").Str("Creating new eoshttp client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
 
@@ -164,7 +173,7 @@ func New(opt *Options) *Client {
 	log.Debug().Str("func", "newhttp").Str("Connecting to ", "'"+opt.BaseURL+"'").Msg("")
 
 	c.cl = &http.Client{
-		Transport: httpTransport}
+		Transport: t}
 
 	c.cl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -263,7 +272,7 @@ func (c *Client) buildFullURL(urlpath, uid, gid string) (string, error) {
 }
 
 // GETFile does an entire GET to download a full file. Returns a stream to read the content from
-func (c *Client) GETFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.WriteCloser) (io.ReadCloser, error) {
+func (c *Client) GETFile(ctx context.Context, httptransport *http.Transport, remoteuser, uid, gid, urlpath string, stream io.WriteCloser) (io.ReadCloser, error) {
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "GETFile").Str("remoteuser", remoteuser).Str("uid,gid", uid+","+gid).Str("path", urlpath).Msg("")
@@ -311,7 +320,7 @@ func (c *Client) GETFile(ctx context.Context, remoteuser, uid, gid, urlpath stri
 			}
 
 			c.cl = &http.Client{
-				Transport: httpTransport}
+				Transport: httptransport}
 
 			req, err = http.NewRequestWithContext(ctx, "GET", loc.String(), nil)
 			if err != nil {
@@ -358,7 +367,7 @@ func (c *Client) GETFile(ctx context.Context, remoteuser, uid, gid, urlpath stri
 }
 
 // PUTFile does an entire PUT to upload a full file, taking the data from a stream
-func (c *Client) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpath string, stream io.ReadCloser, length int64) error {
+func (c *Client) PUTFile(ctx context.Context, httptransport *http.Transport, remoteuser, uid, gid, urlpath string, stream io.ReadCloser, length int64) error {
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", uid+","+gid).Str("path", urlpath).Int64("length", length).Msg("")
@@ -408,7 +417,7 @@ func (c *Client) PUTFile(ctx context.Context, remoteuser, uid, gid, urlpath stri
 			}
 
 			c.cl = &http.Client{
-				Transport: httpTransport}
+				Transport: httptransport}
 
 			req, err = http.NewRequestWithContext(ctx, "PUT", loc.String(), stream)
 			if err != nil {
