@@ -139,9 +139,9 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 			// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
 			// Opaque
 			Type: provider.ResourceType_RESOURCE_TYPE_FILE,
-			Id: &provider.Reference{
-				StorageId: "versions", // this is a virtual storage
-				NodeId:    info.Id.NodeId + "@" + versions[i].GetKey(),
+			Id: &provider.ResourceId{
+				StorageId: "versions",
+				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
 			},
 			// Checksum
 			Etag: versions[i].Etag,

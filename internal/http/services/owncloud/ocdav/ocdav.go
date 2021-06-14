@@ -207,7 +207,7 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 }
 
 func wrapResourceID(r *provider.Reference) string {
-	return wrap(r.StorageId, r.NodeId)
+	return wrap(r.ResourceId.StorageId, r.ResourceId.OpaqueId)
 }
 
 // The fileID must be encoded
@@ -234,8 +234,10 @@ func unwrap(rid string) *provider.Reference {
 	}
 
 	return &provider.Reference{
-		StorageId: parts[0],
-		NodeId:    parts[1],
+		ResourceId: &provider.ResourceId{
+			StorageId: parts[0],
+			OpaqueId:  parts[1],
+		},
 	}
 }
 

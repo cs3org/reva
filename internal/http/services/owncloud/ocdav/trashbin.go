@@ -179,7 +179,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 	// ask gateway for recycle items
 	// TODO(labkode): add Reference to ListRecycleRequest
-	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: getHomeRes.Ref})
+	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
 
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
@@ -393,7 +393,9 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		// this means we can only undelete on the same storage, not to a different folder
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
 		// TODO currently limited to the home storage
-		Ref:        getHomeRes.Ref,
+		Ref: &provider.Reference{
+			Path: getHomeRes.Path,
+		},
 		Key:        key,
 		RestoreRef: &provider.Reference{Path: dst},
 	}
@@ -437,7 +439,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		HandleErrorStatus(&sublog, w, getHomeRes.Status)
 		return
 	}
-	sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: getHomeRes.Ref})
+	sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling Stat")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -453,8 +455,10 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 
 	req := &gateway.PurgeRecycleRequest{
 		Ref: &provider.Reference{
-			NodeId:    key,
-			StorageId: sRes.Info.Id.StorageId,
+			ResourceId: &provider.ResourceId{
+				StorageId: sRes.Info.Id.StorageId,
+				OpaqueId:  key,
+			},
 		},
 	}
 

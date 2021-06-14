@@ -51,7 +51,9 @@ func recycleRestoreCommand() *command {
 		}
 
 		req := &provider.RestoreRecycleItemRequest{
-			Ref: getHomeRes.Ref,
+			Ref: &provider.Reference{
+				Path: getHomeRes.Path,
+			},
 			Key: key,
 		}
 

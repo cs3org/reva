@@ -112,7 +112,7 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 		return
 	}
 	for _, r := range infos {
-		key := wrapResourceID(r.Id)
+		key := wrapResourceID(&provider.Reference{ResourceId: r.Id})
 		_ = h.resourceInfoCache.SetWithExpire(key, r, time.Second*h.resourceInfoCacheTTL)
 	}
 }
@@ -331,7 +331,7 @@ type PublicShareContextName string
 
 func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	var share *conversions.ShareData
-	var resourceID *provider.Reference
+	var reference *provider.Reference
 	ctx := r.Context()
 	logger := appctx.GetLogger(r.Context())
 	logger.Debug().Str("shareID", shareID).Msg("get share by id")
@@ -371,7 +371,9 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 
 	if err == nil && psRes.GetShare() != nil {
 		share = conversions.PublicShare2ShareData(psRes.Share, r, h.publicURL)
-		resourceID = psRes.Share.ResourceId
+		reference = &provider.Reference{
+			ResourceId: psRes.Share.ResourceId,
+		}
 	}
 
 	if share == nil {
@@ -404,7 +406,9 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 		*/
 
 		if err == nil && uRes.GetShare() != nil {
-			resourceID = uRes.Share.ResourceId
+			reference = &provider.Reference{
+				ResourceId: uRes.Share.ResourceId,
+			}
 			share, err = conversions.CS3Share2ShareData(ctx, uRes.Share)
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
@@ -419,7 +423,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 		return
 	}
 
-	info, status, err := h.getResourceInfoByID(ctx, client, resourceID)
+	info, status, err := h.getResourceInfoByID(ctx, client, reference)
 	if err != nil {
 		log.Error().Err(err).Msg("error mapping share data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
@@ -506,7 +510,9 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	statReq := provider.StatRequest{Ref: uRes.Share.ResourceId}
+	statReq := provider.StatRequest{Ref: &provider.Reference{
+		ResourceId: uRes.Share.ResourceId,
+	}}
 
 	statRes, err := client.Stat(r.Context(), &statReq)
 	if err != nil {
@@ -616,7 +622,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		var info *provider.ResourceInfo
 		if pinfo != nil {
 			// check if the shared resource matches the path resource
-			if !utils.ResourceEqual(rs.Share.ResourceId, pinfo.Id) {
+			if !utils.ResourceEqual(&provider.Reference{ResourceId: rs.Share.ResourceId}, &provider.Reference{ResourceId: pinfo.Id}) {
 				// try next share
 				continue
 			}
@@ -624,7 +630,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			info = pinfo
 		} else {
 			var status *rpc.Status
-			info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+			info, status, err = h.getResourceInfoByID(ctx, client, &provider.Reference{ResourceId: rs.Share.ResourceId})
 			if err != nil || status.Code != rpc.Code_CODE_OK {
 				h.logProblems(status, err, "could not stat, skipping")
 				continue
@@ -763,7 +769,7 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 }
 
 func wrapResourceID(r *provider.Reference) string {
-	return wrap(r.StorageId, r.NodeId)
+	return wrap(r.ResourceId.StorageId, r.ResourceId.OpaqueId)
 }
 
 // The fileID must be encoded
@@ -785,9 +791,9 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		}
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
-		s.StorageID = info.Id.StorageId + "!" + info.Id.NodeId
+		s.StorageID = info.Id.StorageId + "!" + info.Id.OpaqueId
 		// TODO Storage: int
-		s.ItemSource = wrapResourceID(info.Id)
+		s.ItemSource = wrapResourceID(&provider.Reference{ResourceId: info.Id})
 		s.FileSource = s.ItemSource
 		s.FileTarget = path.Join("/", path.Base(info.Path))
 		s.Path = path.Join("/", path.Base(info.Path)) // TODO hm this might have to be relative to the users home ... depends on the webdav_namespace config

@@ -126,7 +126,7 @@ func (h *Handler) handleUsers(w http.ResponseWriter, r *http.Request, u *userpb.
 		return
 	}
 
-	getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: getHomeRes.Ref})
+	getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling GetQuota")
 		w.WriteHeader(http.StatusInternalServerError)

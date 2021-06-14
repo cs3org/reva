@@ -221,7 +221,7 @@ func uploadCommand() *command {
 
 		info := res2.Info
 
-		fmt.Printf("File uploaded: %s:%s %d %s\n", info.Id.StorageId, info.Id.NodeId, info.Size, info.Path)
+		fmt.Printf("File uploaded: %s:%s %d %s\n", info.Id.StorageId, info.Id.OpaqueId, info.Size, info.Path)
 
 		return nil
 	}

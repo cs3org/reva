@@ -44,7 +44,11 @@ func recyclePurgeCommand() *command {
 			return err
 		}
 
-		req := &gateway.PurgeRecycleRequest{Ref: getHomeRes.Ref}
+		req := &gateway.PurgeRecycleRequest{
+			Ref: &provider.Reference{
+				Path: getHomeRes.Path,
+			},
+		}
 
 		res, err := client.PurgeRecycle(ctx, req)
 		if err != nil {

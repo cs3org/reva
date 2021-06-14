@@ -243,7 +243,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.Reference, g *ocm.ShareGra
 	// check if share already exists.
 	key := &ocm.ShareKey{
 		Owner:      userID,
-		ResourceId: md,
+		ResourceId: md.ResourceId,
 		Grantee:    g.Grantee,
 	}
 	_, err := m.getByKey(ctx, key)
@@ -258,7 +258,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.Reference, g *ocm.ShareGra
 			OpaqueId: id,
 		},
 		Name:        name,
-		ResourceId:  md,
+		ResourceId:  md.ResourceId,
 		Permissions: g.Permissions,
 		Grantee:     g.Grantee,
 		Owner:       userID,
@@ -308,7 +308,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.Reference, g *ocm.ShareGra
 		requestBody := url.Values{
 			"shareWith":    {g.Grantee.GetUserId().OpaqueId},
 			"name":         {name},
-			"providerId":   {fmt.Sprintf("%s:%s", md.StorageId, md.NodeId)},
+			"providerId":   {fmt.Sprintf("%s:%s", md.ResourceId.StorageId, md.ResourceId.OpaqueId)},
 			"owner":        {userID.OpaqueId},
 			"protocol":     {string(protocol)},
 			"meshProvider": {userID.Idp},
@@ -416,7 +416,7 @@ func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, erro
 			continue
 		}
 		if (utils.UserEqual(key.Owner, share.Owner) || utils.UserEqual(key.Owner, share.Creator)) &&
-			utils.ResourceEqual(key.ResourceId, share.ResourceId) && utils.GranteeEqual(key.Grantee, share.Grantee) {
+			utils.ResourceEqual(&provider.Reference{ResourceId: key.ResourceId}, &provider.Reference{ResourceId: share.ResourceId}) && utils.GranteeEqual(key.Grantee, share.Grantee) {
 			return &share, nil
 		}
 	}
@@ -492,7 +492,7 @@ func sharesEqual(ref *ocm.ShareReference, s *ocm.Share) bool {
 		}
 	} else if ref.GetKey() != nil {
 		if (utils.UserEqual(ref.GetKey().Owner, s.Owner) || utils.UserEqual(ref.GetKey().Owner, s.Creator)) &&
-			utils.ResourceEqual(ref.GetKey().ResourceId, s.ResourceId) && utils.GranteeEqual(ref.GetKey().Grantee, s.Grantee) {
+			utils.ResourceEqual(&provider.Reference{ResourceId: ref.GetKey().ResourceId}, &provider.Reference{ResourceId: s.ResourceId}) && utils.GranteeEqual(ref.GetKey().Grantee, s.Grantee) {
 			return true
 		}
 	}
@@ -563,7 +563,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*ocm.ListOCMSharesReques
 				// TODO(labkode): add the rest of filters.
 				for _, f := range filters {
 					if f.Type == ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID {
-						if utils.ResourceEqual(share.ResourceId, f.GetResourceId()) {
+						if utils.ResourceEqual(&provider.Reference{ResourceId: share.ResourceId}, &provider.Reference{ResourceId: f.GetResourceId()}) {
 							ss = append(ss, &share)
 						}
 					}

@@ -227,7 +227,9 @@ var _ = Describe("Static", func() {
 
 	Describe("FindProviders for reference containing ID", func() {
 		ref := &provider.Reference{
-			StorageId: "123e4567-e89b-12d3-a456-426655440000",
+			ResourceId: &provider.ResourceId{
+				StorageId: "123e4567-e89b-12d3-a456-426655440000",
+			},
 		}
 
 		It("finds all providers for user alice for ref containing ID", func() {

@@ -56,9 +56,9 @@ func ocmShareListCommand() *command {
 			if len(tokens) != 2 {
 				return fmt.Errorf("resource id invalid")
 			}
-			id := &provider.Reference{
+			id := &provider.ResourceId{
 				StorageId: tokens[0],
-				NodeId:    tokens[1],
+				OpaqueId:  tokens[1],
 			}
 			shareRequest.Filters = []*ocm.ListOCMSharesRequest_Filter{
 				&ocm.ListOCMSharesRequest_Filter{

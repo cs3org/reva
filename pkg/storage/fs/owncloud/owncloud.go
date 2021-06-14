@@ -661,7 +661,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip st
 	}
 
 	ri := &provider.ResourceInfo{
-		Id:       &provider.Reference{NodeId: id},
+		Id:       &provider.ResourceId{OpaqueId: id},
 		Path:     sp,
 		Type:     getResourceType(fi.IsDir()),
 		Etag:     etag,
@@ -743,14 +743,14 @@ func (fs *ocfs) getPath(ctx context.Context, id *provider.Reference) (string, er
 	c := fs.pool.Get()
 	defer c.Close()
 	fs.scanFiles(ctx, c)
-	ip, err := redis.String(c.Do("GET", id.NodeId))
+	ip, err := redis.String(c.Do("GET", id.ResourceId.OpaqueId))
 	if err != nil {
-		return "", errtypes.NotFound(id.NodeId)
+		return "", errtypes.NotFound(id.ResourceId.OpaqueId)
 	}
 
 	idFromXattr, err := xattr.Get(ip, idAttribute)
 	if err != nil {
-		return "", errtypes.NotFound(id.NodeId)
+		return "", errtypes.NotFound(id.ResourceId.OpaqueId)
 	}
 
 	uid, err := uuid.FromBytes(idFromXattr)
@@ -758,11 +758,11 @@ func (fs *ocfs) getPath(ctx context.Context, id *provider.Reference) (string, er
 		log.Error().Err(err).Msg("error parsing uuid")
 	}
 
-	if uid.String() != id.NodeId {
-		if _, err := c.Do("DEL", id.NodeId); err != nil {
+	if uid.String() != id.ResourceId.OpaqueId {
+		if _, err := c.Do("DEL", id.ResourceId.OpaqueId); err != nil {
 			return "", err
 		}
-		return "", errtypes.NotFound(id.NodeId)
+		return "", errtypes.NotFound(id.ResourceId.OpaqueId)
 	}
 
 	return ip, nil
@@ -794,7 +794,7 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.Reference) (string
 func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
 
 	// if storage id is set look up that
-	if ref.StorageId != "" || ref.NodeId != "" {
+	if ref.ResourceId.StorageId != "" || ref.ResourceId.OpaqueId != "" {
 		ip, err := fs.getPath(ctx, ref)
 		if err != nil {
 			return "", err

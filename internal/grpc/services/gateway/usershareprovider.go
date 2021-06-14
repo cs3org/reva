@@ -320,12 +320,14 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 	}, nil
 }
 
-func (s *svc) createReference(ctx context.Context, resourceID *provider.Reference) *rpc.Status {
-
+func (s *svc) createReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
+	ref := &provider.Reference{
+		ResourceId: resourceID,
+	}
 	log := appctx.GetLogger(ctx)
 
 	// get the metadata about the share
-	c, err := s.find(ctx, resourceID)
+	c, err := s.find(ctx, ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
@@ -334,7 +336,7 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Referenc
 	}
 
 	statReq := &provider.StatRequest{
-		Ref: resourceID,
+		Ref: ref,
 	}
 
 	statRes, err := c.Stat(ctx, statReq)
@@ -364,13 +366,13 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Referenc
 	// It is the responsibility of the gateway to resolve these references and merge the response back
 	// from the main request.
 	// TODO(labkode): the name of the share should be the filename it points to by default.
-	refPath := path.Join(homeRes.Ref.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
+	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
 	log.Info().Msg("mount path will be:" + refPath)
 
 	createRefReq := &provider.CreateReferenceRequest{
 		Ref: &provider.Reference{Path: refPath},
 		// cs3 is the Scheme and %s/%s is the Opaque parts of a net.URL.
-		TargetUri: fmt.Sprintf("cs3:%s/%s", resourceID.GetStorageId(), resourceID.GetNodeId()),
+		TargetUri: fmt.Sprintf("cs3:%s/%s", resourceID.GetStorageId(), resourceID.GetOpaqueId()),
 	}
 
 	c, err = s.findByPath(ctx, refPath)
@@ -397,17 +399,20 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Referenc
 	return status.NewOK(ctx)
 }
 
-func (s *svc) addGrant(ctx context.Context, id *provider.Reference, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+	ref := &provider.Reference{
+		ResourceId: id,
+	}
 
 	grantReq := &provider.AddGrantRequest{
-		Ref: id,
+		Ref: ref,
 		Grant: &provider.Grant{
 			Grantee:     g,
 			Permissions: p,
 		},
 	}
 
-	c, err := s.find(ctx, id)
+	c, err := s.find(ctx, ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
@@ -427,17 +432,19 @@ func (s *svc) addGrant(ctx context.Context, id *provider.Reference, g *provider.
 	return status.NewOK(ctx), nil
 }
 
-func (s *svc) updateGrant(ctx context.Context, id *provider.Reference, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
-
+func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+	ref := &provider.Reference{
+		ResourceId: id,
+	}
 	grantReq := &provider.UpdateGrantRequest{
-		Ref: id,
+		Ref: ref,
 		Grant: &provider.Grant{
 			Grantee:     g,
 			Permissions: p,
 		},
 	}
 
-	c, err := s.find(ctx, id)
+	c, err := s.find(ctx, ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
@@ -457,17 +464,20 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.Reference, g *provid
 	return status.NewOK(ctx), nil
 }
 
-func (s *svc) removeGrant(ctx context.Context, id *provider.Reference, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+	ref := &provider.Reference{
+		ResourceId: id,
+	}
 
 	grantReq := &provider.RemoveGrantRequest{
-		Ref: id,
+		Ref: ref,
 		Grant: &provider.Grant{
 			Grantee:     g,
 			Permissions: p,
 		},
 	}
 
-	c, err := s.find(ctx, id)
+	c, err := s.find(ctx, ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil

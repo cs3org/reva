@@ -33,7 +33,7 @@ type provider struct {
 }
 
 func (p *provider) GetIFrame(ctx context.Context, resID *providerpb.Reference, token string) (string, error) {
-	msg := fmt.Sprintf("<iframe src=%s/open/%s?access-token=%s />", p.iframeUIProvider, resID.StorageId+":"+resID.NodeId, token)
+	msg := fmt.Sprintf("<iframe src=%s/open/%s?access-token=%s />", p.iframeUIProvider, resID.ResourceId.StorageId+":"+resID.ResourceId.OpaqueId, token)
 	return msg, nil
 }
 

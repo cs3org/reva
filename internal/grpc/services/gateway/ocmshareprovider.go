@@ -54,7 +54,8 @@ func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest
 
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
-		addGrantStatus, err := s.addGrant(ctx, req.ResourceId, req.Grant.Grantee, req.Grant.Permissions.Permissions)
+		rid := &provider.Reference{ResourceId: req.ResourceId}
+		addGrantStatus, err := s.addGrant(ctx, rid, req.Grant.Grantee, req.Grant.Permissions.Permissions)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error adding OCM grant to storage")
 		}
@@ -109,7 +110,8 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest
 
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
-		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
+		rid := &provider.Reference{ResourceId: share.ResourceId}
+		removeGrantStatus, err := s.removeGrant(ctx, rid, share.Grantee, share.Permissions.Permissions)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error removing OCM grant from storage")
 		}
@@ -318,7 +320,7 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	if share.ShareType == ocm.Share_SHARE_TYPE_TRANSFER {
 		createTransferDir, err := s.CreateContainer(ctx, &provider.CreateContainerRequest{
 			Ref: &provider.Reference{
-				Path: path.Join(homeRes.Ref.Path, s.c.DataTransfersFolder),
+				Path: path.Join(homeRes.Path, s.c.DataTransfersFolder),
 			},
 		})
 		if err != nil {
@@ -329,14 +331,14 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
 		}
 
-		refPath = path.Join(homeRes.Ref.Path, s.c.DataTransfersFolder, path.Base(share.Name))
+		refPath = path.Join(homeRes.Path, s.c.DataTransfersFolder, path.Base(share.Name))
 		targetURI = fmt.Sprintf("datatx://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
 	} else {
 		// reference path is the home path + some name on the corresponding
 		// mesh provider (/home/MyShares/x)
 		// It is the responsibility of the gateway to resolve these references and merge the response back
 		// from the main request.
-		refPath = path.Join(homeRes.Ref.Path, s.c.ShareFolder, path.Base(share.Name))
+		refPath = path.Join(homeRes.Path, s.c.ShareFolder, path.Base(share.Name))
 		// webdav is the scheme, token@host the opaque part and the share name the query of the URL.
 		targetURI = fmt.Sprintf("webdav://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
 	}

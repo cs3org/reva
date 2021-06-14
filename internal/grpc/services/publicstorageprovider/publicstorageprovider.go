@@ -573,7 +573,7 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token string, relativePath string, err error) {
-	if ref.StorageId != "" || ref.NodeId != "" {
+	if ref.ResourceId.StorageId != "" || ref.ResourceId.OpaqueId != "" {
 		return "", "", errtypes.BadRequest("need absolute path ref: got " + ref.String())
 	}
 
@@ -694,7 +694,9 @@ func (s *service) resolveToken(ctx context.Context, token string) (string, *link
 	}
 
 	sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
-		Ref: publicShareResponse.GetShare().GetResourceId(),
+		Ref: &provider.Reference{
+			ResourceId: publicShareResponse.GetShare().GetResourceId(),
+		},
 	})
 	switch {
 	case err != nil:
