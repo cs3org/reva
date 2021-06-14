@@ -38,6 +38,8 @@ const (
 	RoleUnknown string = "unknown"
 	// RoleLegacy provides backwards compatibility
 	RoleLegacy string = "legacy"
+	// RoleDenied grants no permission at all on a resource
+	RoleDenied string = "denied"
 	// RoleViewer grants non-editor role on a resource
 	RoleViewer string = "viewer"
 	// RoleEditor grants editor permission on a resource, including folders
@@ -119,6 +121,8 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 // RoleFromName creates a role from the name
 func RoleFromName(name string) *Role {
 	switch name {
+	case RoleDenied:
+		return NewDeniedRole()
 	case RoleViewer:
 		return NewViewerRole()
 	case RoleEditor:
@@ -139,6 +143,15 @@ func NewUnknownRole() *Role {
 		Name:                   RoleUnknown,
 		cS3ResourcePermissions: &provider.ResourcePermissions{},
 		ocsPermissions:         PermissionInvalid,
+	}
+}
+
+// NewDeniedRole creates a fully denied role
+func NewDeniedRole() *Role {
+	return &Role{
+		Name:                   RoleDenied,
+		cS3ResourcePermissions: &provider.ResourcePermissions{},
+		ocsPermissions:         PermissionNone,
 	}
 }
 
@@ -294,6 +307,9 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 	if p == PermissionCreate {
 		return NewUploaderRole()
 	}
+	if p == PermissionNone {
+		return NewDeniedRole()
+	}
 	// legacy
 	return NewLegacyRoleFromOCSPermissions(p)
 }
@@ -399,6 +415,10 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 	}
 	if r.ocsPermissions == PermissionCreate {
 		r.Name = RoleUploader
+		return r
+	}
+	if r.ocsPermissions == PermissionNone {
+		r.Name = RoleDenied
 		return r
 	}
 	r.Name = RoleLegacy

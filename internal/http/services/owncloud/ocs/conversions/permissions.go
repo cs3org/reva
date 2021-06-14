@@ -26,7 +26,7 @@ import (
 type Permissions uint
 
 const (
-	// PermissionInvalid grants no permissions on a resource
+	// PermissionInvalid represents an invalid permission
 	PermissionInvalid Permissions = 0
 	// PermissionRead grants read permissions on a resource
 	PermissionRead Permissions = 1 << (iota - 1)
@@ -40,19 +40,21 @@ const (
 	PermissionShare
 	// PermissionAll grants all permissions on a resource
 	PermissionAll Permissions = (1 << (iota - 1)) - 1
+	// PermissionNone grants no permissions on a resource
+	PermissionNone = PermissionAll + 1
 )
 
 var (
 	// ErrPermissionNotInRange defines a permission specific error.
-	ErrPermissionNotInRange = fmt.Errorf("The provided permission is not between %d and %d", PermissionInvalid, PermissionAll)
+	ErrPermissionNotInRange = fmt.Errorf("The provided permission is not between %d and %d", PermissionRead, PermissionNone)
 )
 
 // NewPermissions creates a new Permissions instance.
 // The value must be in the valid range.
 func NewPermissions(val int) (Permissions, error) {
 	if val == int(PermissionInvalid) {
-		return PermissionInvalid, fmt.Errorf("permissions %d out of range %d - %d", val, PermissionRead, PermissionAll)
-	} else if val < int(PermissionInvalid) || int(PermissionAll) < val {
+		return PermissionInvalid, fmt.Errorf("permissions %d out of range %d - %d", val, PermissionRead, PermissionNone)
+	} else if val < int(PermissionInvalid) || int(PermissionNone) < val {
 		return PermissionInvalid, ErrPermissionNotInRange
 	}
 	return Permissions(val), nil

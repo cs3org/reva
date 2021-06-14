@@ -23,7 +23,7 @@ import (
 )
 
 func TestNewPermissions(t *testing.T) {
-	for val := int(PermissionRead); val <= int(PermissionAll); val++ {
+	for val := int(PermissionRead); val <= int(PermissionNone); val++ {
 		_, err := NewPermissions(val)
 		if err != nil {
 			t.Errorf("value %d should be a valid permissions", val)
@@ -35,7 +35,7 @@ func TestNewPermissionsWithInvalidValueShouldFail(t *testing.T) {
 	vals := []int{
 		int(PermissionInvalid),
 		-1,
-		int(PermissionAll) + 1,
+		int(PermissionNone) + 1,
 	}
 	for _, v := range vals {
 		_, err := NewPermissions(v)
@@ -149,6 +149,7 @@ func TestPermissions2Role(t *testing.T) {
 		PermissionWrite:                   RoleLegacy,
 		PermissionShare:                   RoleLegacy,
 		PermissionWrite | PermissionShare: RoleLegacy,
+		PermissionNone:                    RoleDenied,
 	}
 
 	for permissions, role := range table {
