@@ -64,7 +64,7 @@ type mimeTypeIndex struct {
 
 type reg struct {
 	providers map[string]*registrypb.ProviderInfo
-	mimetypes map[string]mimeTypeIndex // map the mime type to the addresses of the corresponding providers
+	mimetypes map[string]*mimeTypeIndex // map the mime type to the addresses of the corresponding providers
 }
 
 // New returns an implementation of the app.Registry interface.
@@ -77,17 +77,17 @@ func New(m map[string]interface{}) (app.Registry, error) {
 
 	newReg := reg{
 		providers: c.Providers,
-		mimetypes: make(map[string]mimeTypeIndex),
+		mimetypes: make(map[string]*mimeTypeIndex),
 	}
 
 	for addr, p := range c.Providers {
 		if p != nil {
 			for _, m := range p.MimeTypes {
-				idx, ok := newReg.mimetypes[m]
+				_, ok := newReg.mimetypes[m]
 				if ok {
-					idx.apps = append(idx.apps, addr)
+					newReg.mimetypes[m].apps = append(newReg.mimetypes[m].apps, addr)
 				} else {
-					newReg.mimetypes[m] = mimeTypeIndex{apps: []string{addr}}
+					newReg.mimetypes[m] = &mimeTypeIndex{apps: []string{addr}}
 				}
 			}
 		}
@@ -120,11 +120,11 @@ func (b *reg) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error
 	b.providers[p.Address] = p
 
 	for _, m := range p.MimeTypes {
-		idx, ok := b.mimetypes[m]
+		_, ok := b.mimetypes[m]
 		if ok {
-			idx.apps = append(idx.apps, p.Address)
+			b.mimetypes[m].apps = append(b.mimetypes[m].apps, p.Address)
 		} else {
-			b.mimetypes[m] = mimeTypeIndex{apps: []string{p.Address}}
+			b.mimetypes[m] = &mimeTypeIndex{apps: []string{p.Address}}
 		}
 	}
 	return nil
@@ -139,30 +139,30 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 }
 
 func (b *reg) SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registrypb.ProviderInfo) error {
-	idx, ok := b.mimetypes[mimeType]
+	_, ok := b.mimetypes[mimeType]
 	if ok {
-		idx.defaultApp = p.Address
+		b.mimetypes[mimeType].defaultApp = p.Address
 		// Add to list of apps if not present
 		var present bool
-		for _, pr := range idx.apps {
+		for _, pr := range b.mimetypes[mimeType].apps {
 			if pr == p.Address {
 				present = true
 				break
 			}
 		}
 		if !present {
-			idx.apps = append(idx.apps, p.Address)
+			b.mimetypes[mimeType].apps = append(b.mimetypes[mimeType].apps, p.Address)
 		}
 	} else {
-		b.mimetypes[mimeType] = mimeTypeIndex{apps: []string{p.Address}, defaultApp: p.Address}
+		b.mimetypes[mimeType] = &mimeTypeIndex{apps: []string{p.Address}, defaultApp: p.Address}
 	}
 	return nil
 }
 
 func (b *reg) GetDefaultProviderForMimeType(ctx context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
-	idx, ok := b.mimetypes[mimeType]
+	_, ok := b.mimetypes[mimeType]
 	if ok {
-		p, ok := b.providers[idx.defaultApp]
+		p, ok := b.providers[b.mimetypes[mimeType].defaultApp]
 		if ok {
 			return p, nil
 		}
