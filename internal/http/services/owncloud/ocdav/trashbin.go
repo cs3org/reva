@@ -481,6 +481,24 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
+
+	dstStatRes, err = client.Stat(ctx, dstStatReq)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending grpc stat request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, dstStatRes.Status)
+		return
+	}
+
+	info := dstStatRes.Info
+	w.Header().Set("Content-Type", info.MimeType)
+	w.Header().Set("ETag", info.Etag)
+	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
+	w.Header().Set("OC-ETag", info.Etag)
+
 	w.WriteHeader(successCode)
 }
 
