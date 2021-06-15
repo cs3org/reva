@@ -31,12 +31,14 @@ type code int
 
 const (
 
-	// SabredavMethodBadRequest maps to HTTP 400
-	SabredavMethodBadRequest code = iota
+	// SabredavBadRequest maps to HTTP 400
+	SabredavBadRequest code = iota
 	// SabredavMethodNotAllowed maps to HTTP 405
 	SabredavMethodNotAllowed
-	// SabredavMethodNotAuthenticated maps to HTTP 401
-	SabredavMethodNotAuthenticated
+	// SabredavNotAuthenticated maps to HTTP 401
+	SabredavNotAuthenticated
+	// SabredavPreconditionFailed maps to HTTP 412
+	SabredavPreconditionFailed
 )
 
 var (
@@ -44,12 +46,14 @@ var (
 		"Sabre\\DAV\\Exception\\BadRequest",
 		"Sabre\\DAV\\Exception\\MethodNotAllowed",
 		"Sabre\\DAV\\Exception\\NotAuthenticated",
+		"Sabre\\DAV\\Exception\\PreconditionFailed",
 	}
 )
 
 type exception struct {
 	code    code
 	message string
+	header  string
 }
 
 // Marshal just calls the xml marshaller for a given exception.
@@ -59,6 +63,7 @@ func Marshal(e exception) ([]byte, error) {
 		Xmlnss:    "http://sabredav.org/ns",
 		Exception: codesEnum[e.code],
 		Message:   e.message,
+		Header:    e.header,
 	})
 }
 
@@ -70,6 +75,7 @@ type errorXML struct {
 	Exception string   `xml:"s:exception"`
 	Message   string   `xml:"s:message"`
 	InnerXML  []byte   `xml:",innerxml"`
+	Header    string   `xml:"s:header"`
 }
 
 var errInvalidPropfind = errors.New("webdav: invalid propfind")

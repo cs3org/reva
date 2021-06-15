@@ -80,7 +80,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			log.Debug().Str("username", username).Interface("user", u).Msg("trying to read another users trash")
 			// listing other users trash is forbidden, no auth will change that
 			b, err := Marshal(exception{
-				code: SabredavMethodNotAuthenticated,
+				code: SabredavNotAuthenticated,
 			})
 			if err != nil {
 				log.Error().Msgf("error marshaling xml response: %s", b)
@@ -370,6 +370,18 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
 
+	overwrite := r.Header.Get("Overwrite")
+
+	overwrite = strings.ToUpper(overwrite)
+	if overwrite == "" {
+		overwrite = "T"
+	}
+
+	if overwrite != "T" && overwrite != "F" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	client, err := s.getClient()
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
@@ -386,6 +398,64 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
 		HandleErrorStatus(&sublog, w, getHomeRes.Status)
 		return
+	}
+
+	dstRef := &provider.Reference{
+		Path: filepath.Join(getHomeRes.Path, dst),
+	}
+
+	dstStatReq := &provider.StatRequest{
+		Ref: dstRef,
+	}
+
+	dstStatRes, err := client.Stat(ctx, dstStatReq)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending grpc stat request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+		HandleErrorStatus(&sublog, w, dstStatRes.Status)
+		return
+	}
+
+	successCode := http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
+		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+
+		if overwrite != "T" {
+			sublog.Warn().Str("overwrite", overwrite).Msg("dst already exists")
+			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+			b, err := Marshal(exception{
+				code:    SabredavPreconditionFailed,
+				message: "The destination node already exists, and the overwrite header is set to false",
+				header:  "Overwrite",
+			})
+			if err != nil {
+				sublog.Error().Msgf("error marshaling xml response: %s", b)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			_, err = w.Write(b)
+			if err != nil {
+				sublog.Err(err).Msg("error writing response")
+			}
+			return
+		}
+		// delete existing tree
+		delReq := &provider.DeleteRequest{Ref: dstRef}
+		delRes, err := client.Delete(ctx, delReq)
+		if err != nil {
+			sublog.Error().Err(err).Msg("error sending grpc delete request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+			HandleErrorStatus(&sublog, w, delRes.Status)
+			return
+		}
 	}
 
 	req := &provider.RestoreRecycleItemRequest{
@@ -411,7 +481,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(successCode)
 }
 
 // delete has only a key
