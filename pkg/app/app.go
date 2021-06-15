@@ -28,8 +28,11 @@ import (
 // Registry is the interface that application registries implement
 // for discovering application providers
 type Registry interface {
-	FindProvider(ctx context.Context, mimeType string) (*registry.ProviderInfo, error)
+	FindProviders(ctx context.Context, mimeType string) ([]*registry.ProviderInfo, error)
 	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
+	AddProvider(ctx context.Context, p *registry.ProviderInfo) error
+	GetDefaultProviderForMimeType(ctx context.Context, mimeType string) (*registry.ProviderInfo, error)
+	SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registry.ProviderInfo) error
 }
 
 // Provider is the interface that application providers implement

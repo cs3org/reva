@@ -88,6 +88,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err
 	}
+	c.init()
 	return c, nil
 }
 
@@ -99,7 +100,7 @@ func getRegistry(c *config) (app.Registry, error) {
 }
 
 func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvidersRequest) (*registrypb.GetAppProvidersResponse, error) {
-	p, err := s.reg.FindProvider(ctx, req.ResourceInfo.MimeType)
+	p, err := s.reg.FindProviders(ctx, req.ResourceInfo.MimeType)
 	if err != nil {
 		return &registrypb.GetAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error looking for the app provider"),
@@ -108,7 +109,7 @@ func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvide
 
 	res := &registrypb.GetAppProvidersResponse{
 		Status:    status.NewOK(ctx),
-		Providers: []*registrypb.ProviderInfo{p},
+		Providers: p,
 	}
 	return res, nil
 }
