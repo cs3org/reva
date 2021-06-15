@@ -24,11 +24,17 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/google/go-cmp/cmp"
 )
 
 // GetACLPerm generates a string representation of CS3APIs' ResourcePermissions
 // TODO(labkode): fine grained permission controls.
 func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
+	// resource permission is denied
+	if cmp.Equal(provider.ResourcePermissions{}, *set) {
+		return "!r!w!x!m!u!d!c", nil
+	}
+
 	var b strings.Builder
 
 	if set.Stat || set.InitiateFileDownload {
@@ -61,7 +67,7 @@ func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 // EOS acls are a mix of ACLs and POSIX permissions. More details can be found in
 // https://github.com/cern-eos/eos/blob/master/doc/configuration/permission.rst
 func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermissions {
-	var rp provider.ResourcePermissions
+	var rp provider.ResourcePermissions // default to 0 == all denied
 
 	if strings.Contains(perm, "r") && !strings.Contains(perm, "!r") {
 		rp.GetPath = true
