@@ -839,7 +839,7 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
 	// if a key was sent as opacque id purge only that item
-	if req.GetRef() != nil && req.GetRef().GetResourceId().OpaqueId != "" {
+	if req.GetRef() != nil && req.GetRef().GetResourceId() != nil {
 		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetResourceId().OpaqueId); err != nil {
 			var st *rpc.Status
 			switch err.(type) {
