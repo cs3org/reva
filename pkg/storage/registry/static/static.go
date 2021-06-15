@@ -143,8 +143,8 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	var match *registrypb.ProviderInfo
 	var shardedMatches []*registrypb.ProviderInfo
 
-	// If the reference has a storage id set, use it to route
-	if ref.ResourceId.StorageId != "" {
+	// If the reference has a resource id set, use it to route
+	if ref.ResourceId != nil {
 		for prefix, rule := range b.c.Rules {
 			addr := getProviderAddr(ctx, rule)
 			r, err := regexp.Compile("^" + prefix + "$")
@@ -159,12 +159,6 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 				}}, nil
 			}
 		}
-	}
-
-	// TODO if the storage id is not set but node id is set we could poll all storage providers to check if the node is known there
-	// for now, say the reference is invalid
-	if ref.ResourceId.OpaqueId != "" {
-		return nil, errtypes.BadRequest("invalid reference " + ref.String())
 	}
 
 	// Try to find by path  as most storage operations will be done using the path.

@@ -225,7 +225,7 @@ func (fs *Decomposedfs) GetHome(ctx context.Context) (string, error) {
 }
 
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
-func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.Reference) (string, error) {
+func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	node, err := fs.lu.NodeFromID(ctx, id)
 	if err != nil {
 		return "", err

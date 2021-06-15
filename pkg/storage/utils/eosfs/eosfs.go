@@ -326,9 +326,8 @@ func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (str
 
 // resolve takes in a request path or request id and returns the unwrappedNominal path.
 func (fs *eosfs) resolve(ctx context.Context, u *userpb.User, ref *provider.Reference) (string, error) {
-
-	if ref.StorageId != "" || ref.NodeId != "" {
-		p, err := fs.getPath(ctx, u, ref)
+	if ref.ResourceId != nil {
+		p, err := fs.getPath(ctx, u, ref.ResourceId)
 		if err != nil {
 			return "", err
 		}
@@ -340,13 +339,13 @@ func (fs *eosfs) resolve(ctx context.Context, u *userpb.User, ref *provider.Refe
 	}
 
 	// reference is invalid
-	return "", fmt.Errorf("invalid reference %+v. id and path are missing", ref)
+	return "", fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
 }
 
-func (fs *eosfs) getPath(ctx context.Context, u *userpb.User, id *provider.Reference) (string, error) {
-	fid, err := strconv.ParseUint(id.NodeId, 10, 64)
+func (fs *eosfs) getPath(ctx context.Context, u *userpb.User, id *provider.ResourceId) (string, error) {
+	fid, err := strconv.ParseUint(id.OpaqueId, 10, 64)
 	if err != nil {
-		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.NodeId)
+		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
 	}
 
 	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
@@ -376,7 +375,7 @@ func (fs *eosfs) isShareFolderChild(ctx context.Context, p string) bool {
 	return len(vals) > 1 && vals[1] != ""
 }
 
-func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.Reference) (string, error) {
+func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return "", errors.Wrap(err, "eos: no user in ctx")
@@ -384,7 +383,7 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.Reference) (strin
 
 	// parts[0] = 868317, parts[1] = photos, ...
 	// FIXME REFERENCE ... umm ... 868317/photos? @ishank011 might be a leftover
-	parts := strings.Split(id.NodeId, "/")
+	parts := strings.Split(id.OpaqueId, "/")
 	fileID, err := strconv.ParseUint(parts[0], 10, 64)
 	if err != nil {
 		return "", errors.Wrap(err, "eos: error parsing fileid string")
@@ -1494,7 +1493,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 	}
 
 	info := &provider.ResourceInfo{
-		Id:            &provider.Reference{NodeId: fmt.Sprintf("%d", eosFileInfo.Inode)},
+		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
 		Path:          path,
 		Owner:         owner,
 		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),

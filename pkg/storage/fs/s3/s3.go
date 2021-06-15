@@ -244,8 +244,8 @@ func (fs *s3FS) normalizeCommonPrefix(ctx context.Context, p *s3.CommonPrefix) *
 // GetPathByID returns the path pointed by the file id
 // In this implementation the file id is that path of the file without the first slash
 // thus the file id always points to the filename
-func (fs *s3FS) GetPathByID(ctx context.Context, id *provider.Reference) (string, error) {
-	return path.Join("/", strings.TrimPrefix(id.ResourceId.OpaqueId, "fileid-")), nil
+func (fs *s3FS) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+	return path.Join("/", strings.TrimPrefix(id.OpaqueId, "fileid-")), nil
 }
 
 func (fs *s3FS) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {

@@ -42,7 +42,7 @@ func (h *VersionsHandler) init(c *Config) error {
 // Handler handles requests
 // versions can be listed with a PROPFIND to /remote.php/dav/meta/<fileid>/v
 // a version is identified by a timestamp, eg. /remote.php/dav/meta/<fileid>/v/1561410426
-func (h *VersionsHandler) Handler(s *svc, rid *provider.Reference) http.Handler {
+func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -78,7 +78,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.Reference) http.Handler 
 	})
 }
 
-func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.Reference) {
+func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "listVersions")
 	defer span.End()
@@ -99,8 +99,8 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	req := &provider.StatRequest{Ref: rid}
-	res, err := client.Stat(ctx, req)
+	ref := &provider.Reference{ResourceId: rid}
+	res, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -113,10 +113,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 	info := res.Info
 
-	lvReq := &provider.ListFileVersionsRequest{
-		Ref: rid,
-	}
-	lvRes, err := client.ListFileVersions(ctx, lvReq)
+	lvRes, err := client.ListFileVersions(ctx, &provider.ListFileVersionsRequest{Ref: ref})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending list container grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -175,7 +172,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 }
 
-func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.Reference, key string) {
+func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "restore")
 	defer span.End()
@@ -190,7 +187,7 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 	}
 
 	req := &provider.RestoreFileVersionRequest{
-		Ref: rid,
+		Ref: &provider.Reference{ResourceId: rid},
 		Key: key,
 	}
 

@@ -69,7 +69,8 @@ func resourceinfoScope(scope *authpb.Scope, resource interface{}) (bool, error) 
 
 func checkResourceInfo(inf *provider.ResourceInfo, ref *provider.Reference) bool {
 	// ref: <id:<storage_id:$storageID node_id:$nodeID path:$path> >
-	if ref.ResourceId.StorageId != "" || ref.ResourceId.OpaqueId != "" { // path can be empty or a relative path
+	if ref.ResourceId != nil { // path can be empty or a relative path
+		// TODO what about the path?
 		return inf.Id.StorageId == ref.ResourceId.StorageId && inf.Id.OpaqueId == ref.ResourceId.OpaqueId
 	}
 	// ref: <path:$path >

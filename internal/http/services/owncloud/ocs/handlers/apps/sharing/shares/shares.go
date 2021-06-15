@@ -112,7 +112,7 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 		return
 	}
 	for _, r := range infos {
-		key := wrapResourceID(&provider.Reference{ResourceId: r.Id})
+		key := wrapResourceID(r.Id)
 		_ = h.resourceInfoCache.SetWithExpire(key, r, time.Second*h.resourceInfoCacheTTL)
 	}
 }
@@ -331,7 +331,7 @@ type PublicShareContextName string
 
 func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	var share *conversions.ShareData
-	var reference *provider.Reference
+	var resourceID *provider.ResourceId
 	ctx := r.Context()
 	logger := appctx.GetLogger(r.Context())
 	logger.Debug().Str("shareID", shareID).Msg("get share by id")
@@ -371,9 +371,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 
 	if err == nil && psRes.GetShare() != nil {
 		share = conversions.PublicShare2ShareData(psRes.Share, r, h.publicURL)
-		reference = &provider.Reference{
-			ResourceId: psRes.Share.ResourceId,
-		}
+		resourceID = psRes.Share.ResourceId
 	}
 
 	if share == nil {
@@ -406,9 +404,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 		*/
 
 		if err == nil && uRes.GetShare() != nil {
-			reference = &provider.Reference{
-				ResourceId: uRes.Share.ResourceId,
-			}
+			resourceID = uRes.Share.ResourceId
 			share, err = conversions.CS3Share2ShareData(ctx, uRes.Share)
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
@@ -423,7 +419,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 		return
 	}
 
-	info, status, err := h.getResourceInfoByID(ctx, client, reference)
+	info, status, err := h.getResourceInfoByID(ctx, client, resourceID)
 	if err != nil {
 		log.Error().Err(err).Msg("error mapping share data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
@@ -630,7 +626,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			info = pinfo
 		} else {
 			var status *rpc.Status
-			info, status, err = h.getResourceInfoByID(ctx, client, &provider.Reference{ResourceId: rs.Share.ResourceId})
+			info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
 			if err != nil || status.Code != rpc.Code_CODE_OK {
 				h.logProblems(status, err, "could not stat, skipping")
 				continue
@@ -768,8 +764,8 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 	return collaborationFilters, linkFilters, nil
 }
 
-func wrapResourceID(r *provider.Reference) string {
-	return wrap(r.ResourceId.StorageId, r.ResourceId.OpaqueId)
+func wrapResourceID(r *provider.ResourceId) string {
+	return wrap(r.StorageId, r.OpaqueId)
 }
 
 // The fileID must be encoded
@@ -793,7 +789,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		s.StorageID = info.Id.StorageId + "!" + info.Id.OpaqueId
 		// TODO Storage: int
-		s.ItemSource = wrapResourceID(&provider.Reference{ResourceId: info.Id})
+		s.ItemSource = wrapResourceID(info.Id)
 		s.FileSource = s.ItemSource
 		s.FileTarget = path.Join("/", path.Base(info.Path))
 		s.Path = path.Join("/", path.Base(info.Path)) // TODO hm this might have to be relative to the users home ... depends on the webdav_namespace config
@@ -943,8 +939,8 @@ func (h *Handler) getResourceInfoByPath(ctx context.Context, client gateway.Gate
 	})
 }
 
-func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, wrapResourceID(id), id)
+func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
+	return h.getResourceInfo(ctx, client, wrapResourceID(id), &provider.Reference{ResourceId: id})
 }
 
 // getResourceInfo retrieves the resource info to a target.

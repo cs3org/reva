@@ -136,14 +136,19 @@ func (fs *localfs) Shutdown(ctx context.Context) error {
 }
 
 func (fs *localfs) resolve(ctx context.Context, ref *provider.Reference) (p string, err error) {
-	if ref.StorageId != "" || ref.NodeId != "" {
-		if p, err = fs.GetPathByID(ctx, ref); err != nil {
+	if ref.ResourceId != nil {
+		if p, err = fs.GetPathByID(ctx, ref.ResourceId); err != nil {
 			return "", err
 		}
 		return path.Join(p, ref.Path), nil
 	}
 
-	return ref.Path, nil
+	if ref.Path != "" {
+		return ref.Path, nil
+	}
+
+	// reference is invalid
+	return "", fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
@@ -341,7 +346,7 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdK
 
 	// A fileid is constructed like `fileid-url_encoded_path`. See GetPathByID for the inverse conversion
 	md := &provider.ResourceInfo{
-		Id:            &provider.Reference{NodeId: "fileid-" + url.QueryEscape(path.Join(layout, fp))},
+		Id:            &provider.ResourceId{OpaqueId: "fileid-" + url.QueryEscape(path.Join(layout, fp))},
 		Path:          fp,
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          calcEtag(ctx, fi),
@@ -413,7 +418,7 @@ func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string, mdK
 
 // GetPathByID returns the path pointed by the file id
 // In this implementation the file id is in the form `fileid-url_encoded_path`
-func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.Reference) (string, error) {
+func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.ResourceId) (string, error) {
 	var layout string
 	if !fs.conf.DisableHome {
 		var err error
@@ -422,7 +427,7 @@ func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.Reference) (st
 			return "", err
 		}
 	}
-	return url.QueryUnescape(strings.TrimPrefix(ref.NodeId, "fileid-"+layout))
+	return url.QueryUnescape(strings.TrimPrefix(ref.OpaqueId, "fileid-"+layout))
 }
 
 func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {

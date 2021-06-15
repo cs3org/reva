@@ -738,19 +738,19 @@ func readOrCreateID(ctx context.Context, ip string, conn redis.Conn) string {
 	return uid.String()
 }
 
-func (fs *ocfs) getPath(ctx context.Context, id *provider.Reference) (string, error) {
+func (fs *ocfs) getPath(ctx context.Context, id *provider.ResourceId) (string, error) {
 	log := appctx.GetLogger(ctx)
 	c := fs.pool.Get()
 	defer c.Close()
 	fs.scanFiles(ctx, c)
-	ip, err := redis.String(c.Do("GET", id.ResourceId.OpaqueId))
+	ip, err := redis.String(c.Do("GET", id.OpaqueId))
 	if err != nil {
-		return "", errtypes.NotFound(id.ResourceId.OpaqueId)
+		return "", errtypes.NotFound(id.OpaqueId)
 	}
 
 	idFromXattr, err := xattr.Get(ip, idAttribute)
 	if err != nil {
-		return "", errtypes.NotFound(id.ResourceId.OpaqueId)
+		return "", errtypes.NotFound(id.OpaqueId)
 	}
 
 	uid, err := uuid.FromBytes(idFromXattr)
@@ -758,18 +758,18 @@ func (fs *ocfs) getPath(ctx context.Context, id *provider.Reference) (string, er
 		log.Error().Err(err).Msg("error parsing uuid")
 	}
 
-	if uid.String() != id.ResourceId.OpaqueId {
-		if _, err := c.Do("DEL", id.ResourceId.OpaqueId); err != nil {
+	if uid.String() != id.OpaqueId {
+		if _, err := c.Do("DEL", id.OpaqueId); err != nil {
 			return "", err
 		}
-		return "", errtypes.NotFound(id.ResourceId.OpaqueId)
+		return "", errtypes.NotFound(id.OpaqueId)
 	}
 
 	return ip, nil
 }
 
 // GetPathByID returns the storage relative path for the file id, without the internal namespace
-func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.Reference) (string, error) {
+func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	ip, err := fs.getPath(ctx, id)
 	if err != nil {
 		return "", err
@@ -794,8 +794,8 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.Reference) (string
 func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
 
 	// if storage id is set look up that
-	if ref.ResourceId.StorageId != "" || ref.ResourceId.OpaqueId != "" {
-		ip, err := fs.getPath(ctx, ref)
+	if ref.ResourceId != nil {
+		ip, err := fs.getPath(ctx, ref.ResourceId)
 		if err != nil {
 			return "", err
 		}

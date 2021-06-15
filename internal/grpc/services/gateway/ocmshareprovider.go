@@ -54,8 +54,7 @@ func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest
 
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
-		rid := &provider.Reference{ResourceId: req.ResourceId}
-		addGrantStatus, err := s.addGrant(ctx, rid, req.Grant.Grantee, req.Grant.Permissions.Permissions)
+		addGrantStatus, err := s.addGrant(ctx, req.ResourceId, req.Grant.Grantee, req.Grant.Permissions.Permissions)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error adding OCM grant to storage")
 		}
@@ -110,8 +109,7 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest
 
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
-		rid := &provider.Reference{ResourceId: share.ResourceId}
-		removeGrantStatus, err := s.removeGrant(ctx, rid, share.Grantee, share.Permissions.Permissions)
+		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error removing OCM grant from storage")
 		}

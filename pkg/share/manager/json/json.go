@@ -245,7 +245,7 @@ func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*colla
 	defer m.Unlock()
 	for _, s := range m.model.Shares {
 		if (utils.UserEqual(key.Owner, s.Owner) || utils.UserEqual(key.Owner, s.Creator)) &&
-			utils.ResourceEqual(key.ResourceId, s.ResourceId) && utils.GranteeEqual(key.Grantee, s.Grantee) {
+			utils.ResourceIDEqual(key.ResourceId, s.ResourceId) && utils.GranteeEqual(key.Grantee, s.Grantee) {
 			return s, nil
 		}
 	}
@@ -323,7 +323,7 @@ func sharesEqual(ref *collaboration.ShareReference, s *collaboration.Share) bool
 		}
 	} else if ref.GetKey() != nil {
 		if (utils.UserEqual(ref.GetKey().Owner, s.Owner) || utils.UserEqual(ref.GetKey().Owner, s.Creator)) &&
-			utils.ResourceEqual(ref.GetKey().ResourceId, s.ResourceId) && utils.GranteeEqual(ref.GetKey().Grantee, s.Grantee) {
+			utils.ResourceIDEqual(ref.GetKey().ResourceId, s.ResourceId) && utils.GranteeEqual(ref.GetKey().Grantee, s.Grantee) {
 			return true
 		}
 	}
@@ -369,7 +369,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.ListShare
 				// TODO(labkode): add the rest of filters.
 				for _, f := range filters {
 					if f.Type == collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID {
-						if utils.ResourceEqual(s.ResourceId, f.GetResourceId()) {
+						if utils.ResourceIDEqual(s.ResourceId, f.GetResourceId()) {
 							ss = append(ss, s)
 						}
 					}

@@ -122,9 +122,16 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 			id = f.GetId()
 		}
 	}
-	c, err := s.find(ctx, &provider.Reference{
-		StorageId: id.OpaqueId, // FIXME REFERENCE the StorageSpaceId is a storageid + a nodeid
-	})
+	parts := strings.SplitN(id.OpaqueId, "!", 2)
+	if len(parts) != 2 {
+		return &provider.ListStorageSpacesResponse{
+			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
+		}, nil
+	}
+	c, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
+		StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + a opaqueid
+		OpaqueId:  parts[1],
+	}})
 	if err != nil {
 		return &provider.ListStorageSpacesResponse{
 			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
@@ -144,7 +151,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	c, err := s.find(ctx, req.StorageSpace.Root)
+	c, err := s.find(ctx, &provider.Reference{ResourceId: req.StorageSpace.Root})
 	if err != nil {
 		return &provider.UpdateStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, "error finding ID", err),
@@ -164,9 +171,16 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	c, err := s.find(ctx, &provider.Reference{
-		StorageId: req.Id.OpaqueId, // FIXME REFERENCE the StorageSpaceId is a storageid + a nodeid
-	})
+	parts := strings.SplitN(req.Id.OpaqueId, "!", 2)
+	if len(parts) != 2 {
+		return &provider.DeleteStorageSpaceResponse{
+			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
+		}, nil
+	}
+	c, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
+		StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + a opaqueid
+		OpaqueId:  parts[1],
+	}})
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
@@ -185,7 +199,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	home := s.getHome(ctx)
-	homeRes := &provider.GetHomeResponse{Ref: &provider.Reference{Path: home}, Status: status.NewOK(ctx)}
+	homeRes := &provider.GetHomeResponse{Path: home, Status: status.NewOK(ctx)}
 	return homeRes, nil
 }
 
@@ -283,7 +297,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
 			req.Ref.Path = ri.Path
-			log.Debug().Str("storage", ri.Id.StorageId).Str("node", ri.Id.NodeId).Str("path", req.Ref.Path).Msg("download")
+			log.Debug().Str("path", ri.Path).Msg("download")
 			return s.initiateFileDownload(ctx, req)
 		}
 
@@ -345,7 +359,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 		// append child to target
 		req.Ref.Path = path.Join(ri.Path, shareChild)
-		log.Debug().Str("storage", ri.Id.StorageId).Str("node", ri.Id.NodeId).Str("path", req.Ref.Path).Msg("download")
+		log.Debug().Str("path", req.Ref.Path).Msg("download")
 		return s.initiateFileDownload(ctx, req)
 	}
 
@@ -482,7 +496,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
 			req.Ref.Path = ri.Path
-			log.Debug().Str("storage", req.Ref.StorageId).Str("node", req.Ref.NodeId).Str("path", req.Ref.Path).Msg("upload")
+			log.Debug().Str("path", ri.Path).Msg("upload")
 			return s.initiateFileUpload(ctx, req)
 		}
 
@@ -607,7 +621,7 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
-	statReq := &provider.StatRequest{Ref: req.ResourceId}
+	statReq := &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.ResourceId}}
 	statRes, err := s.stat(ctx, statReq)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error stating ref:"+statReq.Ref.String())
@@ -1108,9 +1122,9 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	return &provider.StatResponse{
 		Status: status.NewOK(ctx),
 		Info: &provider.ResourceInfo{
-			Id: &provider.Reference{
+			Id: &provider.ResourceId{
 				StorageId: "/",
-				NodeId:    uuid.New().String(),
+				OpaqueId:  uuid.New().String(),
 			},
 			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 			Path: resPath,
@@ -1307,8 +1321,10 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 
 	req := &provider.StatRequest{
 		Ref: &provider.Reference{
-			StorageId: parts[0],
-			NodeId:    parts[1],
+			ResourceId: &provider.ResourceId{
+				StorageId: parts[0],
+				OpaqueId:  parts[1],
+			},
 		},
 	}
 	res, err := s.stat(ctx, req)
@@ -1460,9 +1476,9 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 
 	for k, v := range indirects {
 		inf := &provider.ResourceInfo{
-			Id: &provider.Reference{
+			Id: &provider.ResourceId{
 				StorageId: "/",
-				NodeId:    uuid.New().String(),
+				OpaqueId:  uuid.New().String(),
 			},
 			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 			Etag: etag.GenerateEtagFromResources(nil, v),
@@ -1679,7 +1695,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
 
 	// check if it is an id based or combined reference first
-	if ref.StorageId != "" && ref.NodeId != "" {
+	if ref.ResourceId != nil {
 		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
 		res, err := s.stat(ctx, req)
 		if (res != nil && res.Status.Code != rpc.Code_CODE_OK) || err != nil {
@@ -1689,7 +1705,7 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 		return res.Info.Path, res.Status
 	}
 
-	if ref.StorageId == "" && ref.NodeId == "" && ref.Path != "" {
+	if ref.Path != "" {
 		return ref.Path, &rpc.Status{Code: rpc.Code_CODE_OK}
 	}
 	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}

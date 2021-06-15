@@ -40,16 +40,16 @@ type Lookup struct {
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
 func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error) {
+	if ref.ResourceId != nil {
+		return lu.NodeFromID(ctx, ref.ResourceId)
+	}
+
 	if ref.Path != "" {
 		return lu.NodeFromPath(ctx, ref.GetPath())
 	}
 
-	if ref.StorageId != "" || ref.NodeId != "" {
-		return lu.NodeFromID(ctx, ref)
-	}
-
 	// reference is invalid
-	return nil, fmt.Errorf("invalid reference %+v", ref)
+	return nil, fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
 }
 
 // NodeFromPath converts a filename into a Node
@@ -77,11 +77,11 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string) (*node.Node, erro
 }
 
 // NodeFromID returns the internal path for the id
-func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.Reference) (n *node.Node, err error) {
-	if id == nil || id.NodeId == "" {
+func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
+	if id == nil || id.OpaqueId == "" {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
 	}
-	return node.ReadNode(ctx, lu, id.NodeId)
+	return node.ReadNode(ctx, lu, id.OpaqueId)
 }
 
 // Path returns the path for node

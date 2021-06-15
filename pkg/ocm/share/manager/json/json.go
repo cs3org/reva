@@ -195,7 +195,7 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 	return "", errors.New("json: ocm endpoint not specified for mesh provider")
 }
 
-func (m *mgr) Share(ctx context.Context, md *provider.Reference, g *ocm.ShareGrant, name string,
+func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
 	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string, st ocm.Share_ShareType) (*ocm.Share, error) {
 
 	id := genID()
@@ -243,7 +243,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.Reference, g *ocm.ShareGra
 	// check if share already exists.
 	key := &ocm.ShareKey{
 		Owner:      userID,
-		ResourceId: md.ResourceId,
+		ResourceId: md,
 		Grantee:    g.Grantee,
 	}
 	_, err := m.getByKey(ctx, key)
@@ -258,7 +258,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.Reference, g *ocm.ShareGra
 			OpaqueId: id,
 		},
 		Name:        name,
-		ResourceId:  md.ResourceId,
+		ResourceId:  md,
 		Permissions: g.Permissions,
 		Grantee:     g.Grantee,
 		Owner:       userID,
@@ -308,7 +308,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.Reference, g *ocm.ShareGra
 		requestBody := url.Values{
 			"shareWith":    {g.Grantee.GetUserId().OpaqueId},
 			"name":         {name},
-			"providerId":   {fmt.Sprintf("%s:%s", md.ResourceId.StorageId, md.ResourceId.OpaqueId)},
+			"providerId":   {fmt.Sprintf("%s:%s", md.StorageId, md.OpaqueId)},
 			"owner":        {userID.OpaqueId},
 			"protocol":     {string(protocol)},
 			"meshProvider": {userID.Idp},

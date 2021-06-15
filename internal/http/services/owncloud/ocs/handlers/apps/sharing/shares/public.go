@@ -160,7 +160,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 		}
 
 		for _, share := range res.GetShare() {
-			info, status, err := h.getResourceInfoByID(ctx, client, &provider.Reference{ResourceId: share.ResourceId})
+			info, status, err := h.getResourceInfoByID(ctx, client, share.ResourceId)
 			if err != nil || status.Code != rpc.Code_CODE_OK {
 				log.Debug().Interface("share", share).Interface("status", status).Err(err).Msg("could not stat share, skipping")
 				continue

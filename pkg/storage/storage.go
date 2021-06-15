@@ -46,7 +46,7 @@ type FS interface {
 	RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error
 	PurgeRecycleItem(ctx context.Context, key string) error
 	EmptyRecycle(ctx context.Context) error
-	GetPathByID(ctx context.Context, id *provider.Reference) (string, error)
+	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error

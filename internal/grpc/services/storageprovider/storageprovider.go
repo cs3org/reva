@@ -400,7 +400,7 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 
 	res := &provider.GetHomeResponse{
 		Status: status.NewOK(ctx),
-		Ref:    &provider.Reference{Path: home},
+		Path:   home,
 	}
 
 	return res, nil
@@ -839,8 +839,8 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
 	// if a key was sent as opacque id purge only that item
-	if req.GetRef() != nil && req.GetRef().NodeId != "" {
-		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().NodeId); err != nil {
+	if req.GetRef() != nil && req.GetRef().GetResourceId().OpaqueId != "" {
+		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetResourceId().OpaqueId); err != nil {
 			var st *rpc.Status
 			switch err.(type) {
 			case errtypes.IsNotFound:
@@ -1095,7 +1095,7 @@ func getFS(c *config) (storage.FS, error) {
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {
-	if ref.StorageId != "" {
+	if ref.GetResourceId() != nil {
 		return ref, nil
 	}
 

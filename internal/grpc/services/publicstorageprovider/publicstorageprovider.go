@@ -573,7 +573,7 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token string, relativePath string, err error) {
-	if ref.ResourceId.StorageId != "" || ref.ResourceId.OpaqueId != "" {
+	if ref.ResourceId != nil {
 		return "", "", errtypes.BadRequest("need absolute path ref: got " + ref.String())
 	}
 
