@@ -27,6 +27,7 @@ import (
 
 // EOSClient is the interface which enables access to EOS instances through various interfaces.
 type EOSClient interface {
+	SetACLs(ctx context.Context, uid, gid, path string, acls []*acl.Entry) error
 	AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error
 	RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error
 	UpdateACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error
