@@ -155,19 +155,19 @@ func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res Response, err 
 	version := APIVersion(r.Context())
 	m := statusCodeMapper(version)
 	statusCode := m(res.OCS.Meta)
-	w.WriteHeader(statusCode)
 	if version == "v2.php" && statusCode == http.StatusOK {
 		res.OCS.Meta.StatusCode = statusCode
 	}
 
 	var encoder func(Response) ([]byte, error)
 	if r.URL.Query().Get("format") == "json" {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		encoder = encodeJSON
 	} else {
-		w.Header().Set("Content-Type", "application/xml")
+		w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 		encoder = encodeXML
 	}
+	w.WriteHeader(statusCode)
 	encoded, err := encoder(res)
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error encoding ocs response")

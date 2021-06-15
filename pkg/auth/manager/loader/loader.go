@@ -20,6 +20,7 @@ package loader
 
 import (
 	// Load core authentication managers.
+	_ "github.com/cs3org/reva/pkg/auth/manager/appauth"
 	_ "github.com/cs3org/reva/pkg/auth/manager/demo"
 	_ "github.com/cs3org/reva/pkg/auth/manager/impersonator"
 	_ "github.com/cs3org/reva/pkg/auth/manager/json"

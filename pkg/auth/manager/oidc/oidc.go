@@ -29,7 +29,6 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/auth/scope"
@@ -131,26 +130,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, fmt.Errorf("no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
 	}
 
-	opaqueObj := &types.Opaque{
-		Map: map[string]*types.OpaqueEntry{},
-	}
+	var uid, gid float64
 	if am.c.UIDClaim != "" {
-		uid, ok := claims[am.c.UIDClaim]
-		if ok {
-			opaqueObj.Map["uid"] = &types.OpaqueEntry{
-				Decoder: "plain",
-				Value:   []byte(fmt.Sprintf("%0.f", uid)),
-			}
-		}
+		uid, _ = claims[am.c.UIDClaim].(float64)
 	}
 	if am.c.GIDClaim != "" {
-		gid, ok := claims[am.c.GIDClaim]
-		if ok {
-			opaqueObj.Map["gid"] = &types.OpaqueEntry{
-				Decoder: "plain",
-				Value:   []byte(fmt.Sprintf("%0.f", gid)),
-			}
-		}
+		gid, _ = claims[am.c.GIDClaim].(float64)
 	}
 
 	userID := &user.UserId{
@@ -182,7 +167,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Mail:         claims["email"].(string),
 		MailVerified: claims["email_verified"].(bool),
 		DisplayName:  claims["name"].(string),
-		Opaque:       opaqueObj,
+		UidNumber:    int64(uid),
+		GidNumber:    int64(gid),
 	}
 
 	scope, err := scope.GetOwnerScope()

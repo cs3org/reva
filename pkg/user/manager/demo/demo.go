@@ -21,10 +21,10 @@ package demo
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
@@ -69,12 +69,8 @@ func extractClaim(u *userpb.User, claim string) (string, error) {
 	case "username":
 		return u.Username, nil
 	case "uid":
-		if u.Opaque != nil && u.Opaque.Map != nil {
-			if uidObj, ok := u.Opaque.Map["uid"]; ok {
-				if uidObj.Decoder == "plain" {
-					return string(uidObj.Value), nil
-				}
-			}
+		if u.UidNumber != 0 {
+			return strconv.FormatInt(u.UidNumber, 10), nil
 		}
 	}
 	return "", errors.New("demo: invalid field")
@@ -114,18 +110,8 @@ func getUsers() map[string]*userpb.User {
 			Groups:      []string{"sailing-lovers", "violin-haters", "physics-lovers"},
 			Mail:        "einstein@example.org",
 			DisplayName: "Albert Einstein",
-			Opaque: &types.Opaque{
-				Map: map[string]*types.OpaqueEntry{
-					"uid": &types.OpaqueEntry{
-						Decoder: "plain",
-						Value:   []byte("123"),
-					},
-					"gid": &types.OpaqueEntry{
-						Decoder: "plain",
-						Value:   []byte("987"),
-					},
-				},
-			},
+			UidNumber:   123,
+			GidNumber:   987,
 		},
 		"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c": &userpb.User{
 			Id: &userpb.UserId{
@@ -136,18 +122,8 @@ func getUsers() map[string]*userpb.User {
 			Groups:      []string{"radium-lovers", "polonium-lovers", "physics-lovers"},
 			Mail:        "marie@example.org",
 			DisplayName: "Marie Curie",
-			Opaque: &types.Opaque{
-				Map: map[string]*types.OpaqueEntry{
-					"uid": &types.OpaqueEntry{
-						Decoder: "plain",
-						Value:   []byte("456"),
-					},
-					"gid": &types.OpaqueEntry{
-						Decoder: "plain",
-						Value:   []byte("987"),
-					},
-				},
-			},
+			UidNumber:   456,
+			GidNumber:   987,
 		},
 		"932b4540-8d16-481e-8ef4-588e4b6b151c": &userpb.User{
 			Id: &userpb.UserId{

@@ -26,6 +26,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
 )
@@ -63,7 +64,7 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 	case *link.GetPublicShareRequest:
 		return checkPublicShareRef(&share, v.GetRef()), nil
 	case string:
-		return checkPath(&share, v), nil
+		return checkPath(v), nil
 	}
 
 	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
@@ -86,15 +87,20 @@ func checkPublicShareRef(s *link.PublicShare, ref *link.PublicShareReference) bo
 	return ref.GetToken() == s.Token
 }
 
-func checkPath(s *link.PublicShare, path string) bool {
-	paths := []string{
-		"/dataprovider",
-		"/data",
+// GetPublicShareScope returns the scope to allow access to a public share and
+// the shared resource.
+func GetPublicShareScope(share *link.PublicShare, role authpb.Role) (map[string]*authpb.Scope, error) {
+	val, err := utils.MarshalProtoV1ToJSON(share)
+	if err != nil {
+		return nil, err
 	}
-	for _, p := range paths {
-		if strings.HasPrefix(path, p) {
-			return true
-		}
-	}
-	return false
+	return map[string]*authpb.Scope{
+		"publicshare:" + share.Id.OpaqueId: &authpb.Scope{
+			Resource: &types.OpaqueEntry{
+				Decoder: "json",
+				Value:   val,
+			},
+			Role: role,
+		},
+	}, nil
 }

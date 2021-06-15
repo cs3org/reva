@@ -1,26 +1,28 @@
 module github.com/cs3org/reva
 
 require (
+	bou.ke/monkey v1.0.2
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
 	contrib.go.opencensus.io/exporter/prometheus v0.3.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/ReneKroon/ttlcache/v2 v2.5.0
-	github.com/aws/aws-sdk-go v1.38.40
+	github.com/ReneKroon/ttlcache/v2 v2.7.0
+	github.com/aws/aws-sdk-go v1.38.54
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.5
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20210507060801-f176760d55f4
+	github.com/cs3org/go-cs3apis v0.0.0-20210527092509-2b828e94ed4c
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
+	github.com/gdexlab/go-render v1.0.1
 	github.com/go-ldap/ldap/v3 v3.3.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
-	github.com/gomodule/redigo v1.8.4
+	github.com/gomodule/redigo v1.8.5
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/google/uuid v1.2.0
@@ -29,18 +31,19 @@ require (
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
-	github.com/minio/minio-go/v7 v7.0.10
+	github.com/minio/minio-go/v7 v7.0.11
 	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.1
-	github.com/onsi/ginkgo v1.16.2
-	github.com/onsi/gomega v1.12.0
-	github.com/ory/fosite v0.40.1
+	github.com/onsi/ginkgo v1.16.4
+	github.com/onsi/gomega v1.13.0
+	github.com/ory/fosite v0.40.2
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.3
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/rs/cors v1.7.0
-	github.com/rs/zerolog v1.22.0
+	github.com/rs/zerolog v1.23.0
 	github.com/sciencemesh/meshdirectory-web v1.0.4
+	github.com/sethvargo/go-password v0.2.0
 	github.com/stretchr/testify v1.7.0
 	github.com/studio-b12/gowebdav v0.0.0-20200303150724-9380631c29a1
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2

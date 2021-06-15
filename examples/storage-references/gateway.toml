@@ -18,7 +18,9 @@ home_provider = "/home"
 [grpc.services.authregistry.drivers.static.rules]
 basic = "localhost:19000"
 publicshares = "localhost:16000"
+appauth = "localhost:15000"
 
+[grpc.services.applicationauth]
 [grpc.services.userprovider]
 [grpc.services.usershareprovider]
 [grpc.services.groupprovider]

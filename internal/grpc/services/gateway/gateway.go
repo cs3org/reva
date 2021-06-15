@@ -43,6 +43,7 @@ func init() {
 
 type config struct {
 	AuthRegistryEndpoint          string `mapstructure:"authregistrysvc"`
+	ApplicationAuthEndpoint       string `mapstructure:"applicationauthsvc"`
 	StorageRegistryEndpoint       string `mapstructure:"storageregistrysvc"`
 	AppRegistryEndpoint           string `mapstructure:"appregistrysvc"`
 	PreferencesEndpoint           string `mapstructure:"preferencessvc"`
@@ -63,10 +64,11 @@ type config struct {
 	TransferExpires               int64  `mapstructure:"transfer_expires"`
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
-	ShareFolder   string                            `mapstructure:"share_folder"`
-	HomeMapping   string                            `mapstructure:"home_mapping"`
-	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
-	EtagCacheTTL  int                               `mapstructure:"etag_cache_ttl"`
+	ShareFolder         string                            `mapstructure:"share_folder"`
+	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
+	HomeMapping         string                            `mapstructure:"home_mapping"`
+	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
+	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
 }
 
 // sets defaults
@@ -77,6 +79,10 @@ func (c *config) init() {
 
 	c.ShareFolder = strings.Trim(c.ShareFolder, "/")
 
+	if c.DataTransfersFolder == "" {
+		c.DataTransfersFolder = "Data-Transfers"
+	}
+
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"
 	}
@@ -84,6 +90,7 @@ func (c *config) init() {
 	// if services address are not specified we used the shared conf
 	// for the gatewaysvc to have dev setups very quickly.
 	c.AuthRegistryEndpoint = sharedconf.GetGatewaySVC(c.AuthRegistryEndpoint)
+	c.ApplicationAuthEndpoint = sharedconf.GetGatewaySVC(c.ApplicationAuthEndpoint)
 	c.StorageRegistryEndpoint = sharedconf.GetGatewaySVC(c.StorageRegistryEndpoint)
 	c.AppRegistryEndpoint = sharedconf.GetGatewaySVC(c.AppRegistryEndpoint)
 	c.PreferencesEndpoint = sharedconf.GetGatewaySVC(c.PreferencesEndpoint)

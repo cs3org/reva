@@ -79,10 +79,14 @@ var (
 		shareUpdateCommand(),
 		shareListReceivedCommand(),
 		shareUpdateReceivedCommand(),
+		openInAppCommand(),
 		openFileInAppProviderCommand(),
 		transferCreateCommand(),
 		transferGetStatusCommand(),
 		transferCancelCommand(),
+		appTokensListCommand(),
+		appTokensRemoveCommand(),
+		appTokensCreateCommand(),
 		helpCommand(),
 	}
 )

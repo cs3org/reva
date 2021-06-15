@@ -52,7 +52,7 @@ func openFileInAppProviderCommand() *command {
 		}
 		path := cmd.Args()[0]
 
-		vm := getViewMode(*viewMode)
+		vm := getViewModeDeprecated(*viewMode)
 
 		client, err := getClient()
 		if err != nil {
@@ -91,7 +91,7 @@ func openFileInAppProviderCommand() *command {
 	return cmd
 }
 
-func getViewMode(viewMode string) gateway.OpenFileInAppProviderRequest_ViewMode {
+func getViewModeDeprecated(viewMode string) gateway.OpenFileInAppProviderRequest_ViewMode {
 	switch viewMode {
 	case "view":
 		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_VIEW_ONLY

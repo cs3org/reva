@@ -9,14 +9,7 @@
 		"mail": "einstein@example.org",
 		"display_name": "Albert Einstein",
 		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"],
-		"opaque": {
-			"map": {
-				"uid": {
-					"decoder": "plain",
-					"value": "MTIz"
-				}
-			}
-		}
+		"uid_number": 123
 	},
 	{
 		"id": {

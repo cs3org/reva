@@ -26,12 +26,11 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 
+	"github.com/bluele/gcache"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -119,6 +118,14 @@ func (c *Config) init() {
 		c.UserLayout = "{{.Username}}" // TODO set better layout
 	}
 
+	if c.UserIDCacheSize == 0 {
+		c.UserIDCacheSize = 1000000
+	}
+
+	if c.UserIDCacheWarmupDepth == 0 {
+		c.UserIDCacheWarmupDepth = 2
+	}
+
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
@@ -128,7 +135,7 @@ type eosfs struct {
 	chunkHandler  *chunking.ChunkHandler
 	singleUserUID string
 	singleUserGID string
-	userIDCache   sync.Map
+	userIDCache   gcache.Cache
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance
@@ -179,10 +186,33 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 		c:            eosClient,
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
-		userIDCache:  sync.Map{},
+		userIDCache:  gcache.New(c.UserIDCacheSize).LFU().Build(),
 	}
 
+	go eosfs.userIDcacheWarmup()
+
 	return eosfs, nil
+}
+
+func (fs *eosfs) userIDcacheWarmup() {
+	if !fs.conf.EnableHome {
+		ctx := context.Background()
+		paths := []string{fs.wrap(ctx, "/")}
+		uid, gid, _ := fs.getRootUIDAndGID(ctx)
+
+		for i := 0; i < fs.conf.UserIDCacheWarmupDepth; i++ {
+			var newPaths []string
+			for _, fn := range paths {
+				if eosFileInfos, err := fs.c.List(ctx, uid, gid, fn); err == nil {
+					for _, f := range eosFileInfos {
+						_, _ = fs.getUserIDGateway(ctx, strconv.FormatUint(f.UID, 10))
+						newPaths = append(newPaths, f.File)
+					}
+				}
+			}
+			paths = newPaths
+		}
+	}
 }
 
 func (fs *eosfs) Shutdown(ctx context.Context) error {
@@ -195,6 +225,12 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "eos: error getting user from ctx")
 		return nil, err
+	}
+	if u.UidNumber == 0 {
+		return nil, errors.New("eos: invalid user id")
+	}
+	if u.GidNumber == 0 {
+		return nil, errors.New("eos: invalid group id")
 	}
 	return u, nil
 }
@@ -579,7 +615,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, err
 	}
 
-	return fs.convertToResourceInfo(ctx, eosFileInfo, false)
+	return fs.convertToResourceInfo(ctx, eosFileInfo)
 }
 
 func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
@@ -602,7 +638,7 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string
 	// TODO(labkode): diff between root (dir) and children (ref)
 
 	if fs.isShareFolderRoot(ctx, p) {
-		return fs.convertToResourceInfo(ctx, eosFileInfo, false)
+		return fs.convertToResourceInfo(ctx, eosFileInfo)
 	}
 	return fs.convertToFileReference(ctx, eosFileInfo)
 }
@@ -644,10 +680,6 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 	}
 
 	fn := fs.wrap(ctx, p)
-	virtualView := false
-	if !fs.conf.EnableHome && filepath.Dir(fn) == filepath.Clean(fs.conf.Namespace) {
-		virtualView = true
-	}
 
 	eosFileInfos, err := fs.c.List(ctx, uid, gid, fn)
 	if err != nil {
@@ -665,7 +697,7 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 		}
 
 		// Remove the hidden folders in the topmost directory
-		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo, virtualView); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
+		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
 			finfos = append(finfos, finfo)
 		}
 	}
@@ -719,7 +751,7 @@ func (fs *eosfs) listHome(ctx context.Context, home string) ([]*provider.Resourc
 				}
 			}
 
-			if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo, false); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
+			if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
 				finfos = append(finfos, finfo)
 			}
 		}
@@ -1324,7 +1356,7 @@ func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eoscl
 }
 
 func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.FileVersion, error) {
-	md, err := fs.convertToResourceInfo(ctx, eosFileInfo, false)
+	md, err := fs.convertToResourceInfo(ctx, eosFileInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -1337,12 +1369,12 @@ func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.F
 	return revision, nil
 }
 
-func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo, virtualView bool) (*provider.ResourceInfo, error) {
-	return fs.convert(ctx, eosFileInfo, virtualView)
+func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
+	return fs.convert(ctx, eosFileInfo)
 }
 
 func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
-	info, err := fs.convert(ctx, eosFileInfo, false)
+	info, err := fs.convert(ctx, eosFileInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -1432,7 +1464,7 @@ func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermi
 	l.UpdateGrant = l.UpdateGrant || r.UpdateGrant
 }
 
-func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo, virtualView bool) (*provider.ResourceInfo, error) {
+func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
 	path, err := fs.unwrap(ctx, eosFileInfo.File)
 	if err != nil {
 		return nil, err
@@ -1443,12 +1475,20 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo, v
 		size = eosFileInfo.TreeSize
 	}
 
-	owner := &userpb.UserId{}
-	if !virtualView {
-		owner, err = fs.getUserIDGateway(ctx, strconv.FormatUint(eosFileInfo.UID, 10))
-		if err != nil {
-			sublog := appctx.GetLogger(ctx).With().Logger()
-			sublog.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
+	owner, err := fs.getUserIDGateway(ctx, strconv.FormatUint(eosFileInfo.UID, 10))
+	if err != nil {
+		sublog := appctx.GetLogger(ctx).With().Logger()
+		sublog.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
+	}
+
+	var xs provider.ResourceChecksum
+	if eosFileInfo.XS != nil {
+		xs.Sum = eosFileInfo.XS.XSSum
+		switch eosFileInfo.XS.XSType {
+		case "adler":
+			xs.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32
+		default:
+			xs.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID
 		}
 	}
 
@@ -1460,6 +1500,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo, v
 		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
 		Size:          size,
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
+		Checksum:      &xs,
 		Mtime: &types.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,
 			Nanos:   eosFileInfo.MTimeNanos,
@@ -1493,23 +1534,13 @@ func getResourceType(isDir bool) provider.ResourceType {
 }
 
 func (fs *eosfs) extractUIDAndGID(u *userpb.User) (string, string, error) {
-	var uid, gid string
-	if u.Opaque != nil && u.Opaque.Map != nil {
-		if uidObj, ok := u.Opaque.Map["uid"]; ok {
-			if uidObj.Decoder == "plain" {
-				uid = string(uidObj.Value)
-			}
-		}
-		if gidObj, ok := u.Opaque.Map["gid"]; ok {
-			if gidObj.Decoder == "plain" {
-				gid = string(gidObj.Value)
-			}
-		}
+	if u.UidNumber == 0 {
+		return "", "", errors.New("eos: uid missing for user")
 	}
-	if uid == "" || gid == "" {
-		return "", "", errors.New("eos: uid or gid missing for user")
+	if u.GidNumber == 0 {
+		return "", "", errors.New("eos: gid missing for user")
 	}
-	return uid, gid, nil
+	return strconv.FormatInt(u.UidNumber, 10), strconv.FormatInt(u.GidNumber, 10), nil
 }
 
 func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (string, string, error) {
@@ -1530,9 +1561,18 @@ func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (string, s
 }
 
 func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.UserId, error) {
-	if userIDInterface, ok := fs.userIDCache.Load(uid); ok {
+	log := appctx.GetLogger(ctx)
+	// Handle the case of root
+	if uid == "0" {
+		return nil, errtypes.BadRequest("eosfs: cannot return root user")
+	}
+
+	if userIDInterface, err := fs.userIDCache.Get(uid); err == nil {
+		log.Debug().Msg("eosfs: found cached uid " + uid)
 		return userIDInterface.(*userpb.UserId), nil
 	}
+
+	log.Debug().Msg("eosfs: retrieving user from gateway for uid " + uid)
 	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error getting gateway grpc client")
@@ -1548,7 +1588,7 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 		return nil, errors.Wrap(err, "eos: grpc get user failed")
 	}
 
-	fs.userIDCache.Store(uid, getUserResp.User.Id)
+	_ = fs.userIDCache.Set(uid, getUserResp.User.Id)
 	return getUserResp.User.Id, nil
 }
 

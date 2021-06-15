@@ -1,0 +1,8 @@
+[grpc]
+address = "0.0.0.0:15000"
+
+[grpc.services.authprovider]
+auth_manager = "appauth"
+
+[grpc.services.authprovider.auth_managers.appauth]
+gateway_addr = "localhost:19000"

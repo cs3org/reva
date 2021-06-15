@@ -48,16 +48,17 @@ import (
 
 // Config holds the configuration details for the local fs.
 type Config struct {
-	Root          string `mapstructure:"root"`
-	DisableHome   bool   `mapstructure:"disable_home"`
-	UserLayout    string `mapstructure:"user_layout"`
-	ShareFolder   string `mapstructure:"share_folder"`
-	Uploads       string `mapstructure:"uploads"`
-	DataDirectory string `mapstructure:"data_directory"`
-	RecycleBin    string `mapstructure:"recycle_bin"`
-	Versions      string `mapstructure:"versions"`
-	Shadow        string `mapstructure:"shadow"`
-	References    string `mapstructure:"references"`
+	Root                string `mapstructure:"root"`
+	DisableHome         bool   `mapstructure:"disable_home"`
+	UserLayout          string `mapstructure:"user_layout"`
+	ShareFolder         string `mapstructure:"share_folder"`
+	DataTransfersFolder string `mapstructure:"data_transfers_folder"`
+	Uploads             string `mapstructure:"uploads"`
+	DataDirectory       string `mapstructure:"data_directory"`
+	RecycleBin          string `mapstructure:"recycle_bin"`
+	Versions            string `mapstructure:"versions"`
+	Shadow              string `mapstructure:"shadow"`
+	References          string `mapstructure:"references"`
 }
 
 func (c *Config) init() {
@@ -71,6 +72,10 @@ func (c *Config) init() {
 
 	if c.ShareFolder == "" {
 		c.ShareFolder = "/MyShares"
+	}
+
+	if c.DataTransfersFolder == "" {
+		c.DataTransfersFolder = "/Data-Transfers"
 	}
 
 	// ensure share folder always starts with slash
@@ -242,6 +247,10 @@ func (fs *localfs) getNsMatch(internal string, nss []string) string {
 
 func (fs *localfs) isShareFolder(ctx context.Context, p string) bool {
 	return strings.HasPrefix(p, fs.conf.ShareFolder)
+}
+
+func (fs *localfs) isDataTransfersFolder(ctx context.Context, p string) bool {
+	return strings.HasPrefix(p, fs.conf.DataTransfersFolder)
 }
 
 func (fs *localfs) isShareFolderRoot(ctx context.Context, p string) bool {
@@ -518,11 +527,15 @@ func (fs *localfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *
 }
 
 func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
-	if !fs.isShareFolder(ctx, path) {
-		return errtypes.PermissionDenied("localfs: cannot create references outside the share folder")
+	var fn string
+	switch {
+	case fs.isShareFolder(ctx, path):
+		fn = fs.wrapReferences(ctx, path)
+	case fs.isDataTransfersFolder(ctx, path):
+		fn = fs.wrap(ctx, path)
+	default:
+		return errtypes.PermissionDenied("localfs: cannot create references outside the share folder and data transfers folder")
 	}
-
-	fn := fs.wrapReferences(ctx, path)
 
 	err := os.MkdirAll(fn, 0700)
 	if err != nil {
