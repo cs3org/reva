@@ -500,27 +500,51 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 
 	fn := fs.wrap(ctx, p)
 
-	eosACL, err := fs.getEosACL(ctx, g)
-	if err != nil {
-		return err
-	}
-
 	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
 	if err != nil {
 		return err
 	}
 
-	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
+	gs, err := fs.ListGrants(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, eosACL)
+	// update list of grants
+	gs = grants.AddGrant(gs, g)
+
+	acls, err := fs.getEosACLs(ctx, gs)
 	if err != nil {
-		return errors.Wrap(err, "eosfs: error adding acl")
+		return err
 	}
 
+        // rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+
+	if err = fs.c.SetACLs(ctx, uid, gid, fn, acls); err != nil {
+		return errors.Wrap(err, "eosfs: error setting acls")
+	}
+
+	// err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, eosACL)
+	// if err != nil {
+	// 	return errors.Wrap(err, "eosfs: error adding acl")
+	// }
+
 	return nil
+}
+
+func (fs *eosfs) getEosACLs(ctx context.Context, gs []*provider.Grant) ([]*acl.Entry, error) {
+	acls := []*acl.Entry{}
+	for _, g := range gs {
+		a, err := fs.getEosACL(ctx, g)
+		if err != nil {
+			return nil, err
+		}
+		acls = append(acls, a)
+	}
+	return acls, nil
 }
 
 func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, error) {
