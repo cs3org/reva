@@ -115,9 +115,17 @@ func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvide
 }
 
 func (s *svc) AddAppProvider(ctx context.Context, req *registrypb.AddAppProviderRequest) (*registrypb.AddAppProviderResponse, error) {
-	return &registrypb.AddAppProviderResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("AddAppProvider not implemented"), "AddAppProvider not implemented"),
-	}, nil
+	err := s.reg.AddProvider(ctx, req.Provider)
+	if err != nil {
+		return &registrypb.AddAppProviderResponse{
+			Status: status.NewInternal(ctx, err, "error adding the app provider"),
+		}, nil
+	}
+
+	res := &registrypb.AddAppProviderResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
 }
 
 func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvidersRequest) (*registrypb.ListAppProvidersResponse, error) {
@@ -136,13 +144,30 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvi
 }
 
 func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registrypb.GetDefaultAppProviderForMimeTypeRequest) (*registrypb.GetDefaultAppProviderForMimeTypeResponse, error) {
-	return &registrypb.GetDefaultAppProviderForMimeTypeResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("GetDefaultAppProviderForMimeType not implemented"), "GetDefaultAppProviderForMimeType not implemented"),
-	}, nil
+	provider, err := s.reg.GetDefaultProviderForMimeType(ctx, req.MimeType)
+	if err != nil {
+		return &registrypb.GetDefaultAppProviderForMimeTypeResponse{
+			Status: status.NewInternal(ctx, err, "error getting the default app provider for the mimetype"),
+		}, nil
+	}
+
+	res := &registrypb.GetDefaultAppProviderForMimeTypeResponse{
+		Status:   status.NewOK(ctx),
+		Provider: provider,
+	}
+	return res, nil
 }
 
 func (s *svc) SetDefaultAppProviderForMimeType(ctx context.Context, req *registrypb.SetDefaultAppProviderForMimeTypeRequest) (*registrypb.SetDefaultAppProviderForMimeTypeResponse, error) {
-	return &registrypb.SetDefaultAppProviderForMimeTypeResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("SetDefaultAppProviderForMimeType not implemented"), "SetDefaultAppProviderForMimeType not implemented"),
-	}, nil
+	err := s.reg.SetDefaultProviderForMimeType(ctx, req.MimeType, req.Provider)
+	if err != nil {
+		return &registrypb.SetDefaultAppProviderForMimeTypeResponse{
+			Status: status.NewInternal(ctx, err, "error setting the default app provider for the mimetype"),
+		}, nil
+	}
+
+	res := &registrypb.SetDefaultAppProviderForMimeTypeResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
 }
