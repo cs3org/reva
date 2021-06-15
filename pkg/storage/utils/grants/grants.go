@@ -132,3 +132,23 @@ func GetGranteeType(aclType string) provider.GranteeType {
 		return provider.GranteeType_GRANTEE_TYPE_INVALID
 	}
 }
+
+func AddGrant(grants []*provider.Grant, newGrant *provider.Grant) []*provider.Grant {
+	if cmp.Equal(*newGrant, provider.ResourcePermissions{}) {
+		// a denial is appended to the list
+		grants = append(grants, newGrant)
+	} else {
+		// add the grant in head
+		grants = append([]*provider.Grant{newGrant}, grants...)
+	}
+	return grants
+}
+
+func RemoveGrant(grants []*provider.Grant, grantee *provider.Grantee) []*provider.Grant {
+	for i, grant := range grants {
+		if cmp.Equal(*grant.Grantee, *grantee) {
+			return append(grants[:i], grants[i+1:]...)
+		}
+	}
+	return grants
+}
