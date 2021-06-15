@@ -21,6 +21,7 @@ package app
 import (
 	"context"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
@@ -36,7 +37,7 @@ type Registry interface {
 }
 
 // Provider is the interface that application providers implement
-// for providing the iframe location to a iframe UI Provider
+// for providing the URL of the app which will serve the requested resource.
 type Provider interface {
-	GetIFrame(ctx context.Context, resID *provider.Reference, token string) (string, error)
+	GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, app, token string) (string, error)
 }

@@ -24,7 +24,8 @@ import (
 
 	"github.com/cs3org/reva/pkg/app"
 
-	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/mitchellh/mapstructure"
 )
@@ -33,12 +34,12 @@ func init() {
 	registry.Register("demo", New)
 }
 
-type provider struct {
+type demoProvider struct {
 	iframeUIProvider string
 }
 
-func (p *provider) GetIFrame(ctx context.Context, resID *providerpb.Reference, token string) (string, error) {
-	msg := fmt.Sprintf("<iframe src=%s/open/%s?access-token=%s />", p.iframeUIProvider, resID.ResourceId.StorageId+":"+resID.ResourceId.OpaqueId, token)
+func (p *demoProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, app, token string) (string, error) {
+	msg := fmt.Sprintf("<iframe src=%s/open/%s?view-mode=%s&access-token=%s />", p.iframeUIProvider, resource.Id.StorageId+":"+resource.Id.OpaqueId, viewMode.String(), token)
 	return msg, nil
 }
 
@@ -61,5 +62,5 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &provider{iframeUIProvider: c.IFrameUIProvider}, nil
+	return &demoProvider{iframeUIProvider: c.IFrameUIProvider}, nil
 }

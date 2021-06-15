@@ -21,5 +21,6 @@ package loader
 import (
 	// Load core application providers.
 	_ "github.com/cs3org/reva/pkg/app/provider/demo"
+	_ "github.com/cs3org/reva/pkg/app/provider/wopi"
 	// Add your own here
 )
