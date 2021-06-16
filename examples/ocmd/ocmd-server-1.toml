@@ -77,21 +77,18 @@ providers = "providers.demo.json"
 driver = "memory"
 
 [grpc.services.appprovider]
-driver = "demo"
-iopsecret = "testsecret"
-wopiurl = "http://0.0.0.0:8880/"
-wopibridgeurl = "http://localhost:8000/wopib"
+driver = "wopi"
+
+[grpc.services.appprovider.drivers.wopi]
+iop_secret = "hello"
+wopi_url = "http://0.0.0.0:8880/"
+wopi_bridge_url = "http://localhost:8000/wopib"
 
 [grpc.services.appregistry]
 driver = "static"
 
-[grpc.services.appregistry.static.rules]
-"text/plain" = "localhost:19000"
-"text/markdown" = "localhost:19000"
-"application/compressed-markdown" = "localhost:19000"
-"application/vnd.oasis.opendocument.text" = "localhost:19000"
-"application/vnd.oasis.opendocument.spreadsheet" = "localhost:19000"
-"application/vnd.oasis.opendocument.presentation" = "localhost:19000"
+[grpc.services.appregistry.drivers.static.providers]
+"localhost:19000" = {"address" = "localhost:19000", "name" = "WOPIServer", mimetypes = ["text/plain", "text/markdown", "application/compressed-markdown", "application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation"]}
 
 [grpc.services.storageprovider]
 driver = "localhome"
