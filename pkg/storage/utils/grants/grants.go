@@ -133,22 +133,38 @@ func GetGranteeType(aclType string) provider.GranteeType {
 	}
 }
 
-func AddGrant(grants []*provider.Grant, newGrant *provider.Grant) []*provider.Grant {
-	if cmp.Equal(*newGrant, provider.ResourcePermissions{}) {
-		// a denial is appended to the list
-		grants = append(grants, newGrant)
-	} else {
-		// add the grant in head
-		grants = append([]*provider.Grant{newGrant}, grants...)
-	}
-	return grants
+func PermissionsEqual(p1, p2 *provider.ResourcePermissions) bool {
+	return p1 != nil && p2 != nil && cmp.Equal(*p1, *p2)
 }
 
-func RemoveGrant(grants []*provider.Grant, grantee *provider.Grantee) []*provider.Grant {
-	for i, grant := range grants {
-		if cmp.Equal(*grant.Grantee, *grantee) {
-			return append(grants[:i], grants[i+1:]...)
+func GranteeEqual(g1, g2 *provider.Grantee) bool {
+	return g1 != nil && g2 != nil && cmp.Equal(*g1, *g2)
+}
+
+func AddGrant(grants *[]*provider.Grant, newGrant *provider.Grant) {
+	if PermissionsEqual(newGrant.Permissions, &provider.ResourcePermissions{}) {
+		// a denial is appended to the list
+		RemoveGrant(grants, newGrant.Grantee)
+		*grants = append(*grants, newGrant)
+	} else {
+		// check if the grant is already in the list
+		for _, g := range *grants {
+			if GranteeEqual(g.Grantee, newGrant.Grantee) {
+				// update the permissions
+				g.Permissions = newGrant.Permissions
+				return
+			}
+		}
+		// add the grant in head
+		*grants = append([]*provider.Grant{newGrant}, *grants...)
+	}
+}
+
+func RemoveGrant(grants *[]*provider.Grant, grantee *provider.Grantee) {
+	for i, grant := range *grants {
+		if GranteeEqual(grant.Grantee, grantee) {
+			*grants = append((*grants)[:i], (*grants)[i+1:]...)
+			return
 		}
 	}
-	return grants
 }
