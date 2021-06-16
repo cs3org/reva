@@ -27,6 +27,8 @@ import (
 	codes "google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -36,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
+	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -44,6 +47,7 @@ import (
 type GatewayClient interface {
 	Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error)
 	ListContainer(ctx context.Context, in *provider.ListContainerRequest, opts ...grpc.CallOption) (*provider.ListContainerResponse, error)
+	InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileDownloadResponse, error)
 }
 
 func init() {
@@ -117,9 +121,116 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+func (s *service) statShare(ctx context.Context, share string) (*provider.StatResponse, error) {
+	_, ok := ctxuser.ContextGetUser(ctx)
+	if !ok {
+		return &provider.StatResponse{
+			Status: status.NewNotFound(ctx, "sharestorageprovider: shares requested for empty user"),
+		}, nil
+	}
+
+	shares, err := s.sm.ListReceivedShares(ctx)
+	if err != nil {
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "sharestorageprovider: error listing received shares"),
+		}, err
+	}
+
+	for _, rs := range shares {
+		if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
+			continue
+		}
+
+		statRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Id{
+					Id: rs.Share.ResourceId,
+				},
+			},
+		})
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating share"),
+			}, err
+		}
+
+		if share != "" && filepath.Base(statRes.Info.Path) == share {
+			return statRes, nil
+		}
+	}
+
+	return &provider.StatResponse{
+		Status: status.NewNotFound(ctx, "sharestorageprovider: requested share was not found for user"),
+	}, nil
 }
+
+func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
+	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	appctx.GetLogger(ctx).Debug().
+		Interface("reqPath", reqPath).
+		Interface("reqShare", reqShare).
+		Msg("sharesstorageprovider.Stat: Got InitiateFileDownload request")
+
+	if reqShare != "" {
+		statRes, err := s.statShare(ctx, reqShare)
+		if err != nil {
+			if statRes != nil {
+				return &provider.InitiateFileDownloadResponse{
+					Status: statRes.Status,
+				}, err
+			} else {
+				return &provider.InitiateFileDownloadResponse{
+					Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+				}, nil
+			}
+		}
+		gwres, err := s.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: filepath.Join(statRes.Info.Path, reqPath),
+				},
+			},
+		})
+		if err != nil {
+			return &provider.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileDownload"),
+			}, nil
+		}
+
+		if gwres.Status.Code != rpc.Code_CODE_OK {
+			return &provider.InitiateFileDownloadResponse{
+				Status: gwres.Status,
+			}, nil
+		}
+
+		protocols := []*provider.FileDownloadProtocol{}
+		for p := range gwres.Protocols {
+			if !strings.HasSuffix(gwres.Protocols[p].DownloadEndpoint, "/") {
+				gwres.Protocols[p].DownloadEndpoint += "/"
+			}
+			gwres.Protocols[p].DownloadEndpoint += gwres.Protocols[p].Token
+
+			protocols = append(protocols, &provider.FileDownloadProtocol{
+				Opaque:           gwres.Protocols[p].Opaque,
+				Protocol:         gwres.Protocols[p].Protocol,
+				DownloadEndpoint: gwres.Protocols[p].DownloadEndpoint,
+				Expose:           true, // the gateway already has encoded the upload endpoint
+			})
+		}
+
+		return &provider.InitiateFileDownloadResponse{
+			Status:    gwres.Status,
+			Protocols: protocols,
+		}, nil
+	} else {
+		// Is this supported?
+	}
+
+	return &provider.InitiateFileDownloadResponse{
+		Status: status.NewNotFound(ctx, "sharestorageprovider: file not found"),
+	}, nil
+}
+
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
@@ -165,12 +276,18 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	reqUser, reqShare, reqPath := resolvePath(req.Ref.GetPath())
+	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
 	appctx.GetLogger(ctx).Debug().
 		Interface("reqPath", reqPath).
 		Interface("reqShare", reqShare).
-		Interface("reqUser", reqUser).
 		Msg("sharesstorageprovider.Stat: Got Stat request")
+
+	_, ok := ctxuser.ContextGetUser(ctx)
+	if !ok {
+		return &provider.StatResponse{
+			Status: status.NewNotFound(ctx, "sharestorageprovider: shares requested for empty user"),
+		}, nil
+	}
 
 	shares, err := s.sm.ListReceivedShares(ctx)
 	if err != nil {
@@ -181,7 +298,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 	res := &provider.StatResponse{
 		Info: &provider.ResourceInfo{
-			Path: filepath.Join(s.mountPath, reqUser),
+			Path: filepath.Join(s.mountPath),
 			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 		},
 	}
@@ -220,7 +337,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			}
 
 			relPath := strings.SplitAfterN(gwres.Info.Path, reqShare, 2)[1]
-			gwres.Info.Path = filepath.Join(s.mountPath, reqUser, reqShare, relPath)
+			gwres.Info.Path = filepath.Join(s.mountPath, reqShare, relPath)
 			return gwres, nil
 		} else if reqShare == "" {
 			res.Info.Size += gwres.Info.Size
@@ -235,11 +352,10 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	reqUser, reqShare, reqPath := resolvePath(req.Ref.GetPath())
+	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
 	appctx.GetLogger(ctx).Debug().
 		Interface("reqPath", reqPath).
 		Interface("reqShare", reqShare).
-		Interface("reqUser", reqUser).
 		Msg("sharesstorageprovider.ListContainer: Got ListContainer request")
 
 	// contextUser, ok := ctxuser.ContextGetUser(ctx)
@@ -288,11 +404,11 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			}
 			for _, info := range gwListRes.Infos {
 				relPath := strings.SplitAfterN(info.Path, reqShare, 2)[1]
-				info.Path = filepath.Join(s.mountPath, reqUser, reqShare, relPath)
+				info.Path = filepath.Join(s.mountPath, reqShare, relPath)
 			}
 			return gwListRes, nil
 		} else if reqShare == "" {
-			gwres.Info.Path = filepath.Join(s.mountPath, reqUser, filepath.Base(gwres.Info.Path))
+			gwres.Info.Path = filepath.Join(s.mountPath, filepath.Base(gwres.Info.Path))
 			res.Infos = append(res.Infos, gwres.Info)
 		}
 	}
@@ -352,18 +468,15 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func resolvePath(path string) (string, string, string) {
-	// /shares/<username>/foo/bar
-	parts := strings.SplitN(strings.TrimLeft(path, "/"), "/", 4)
-	var reqUser, reqShare, reqPath string
-	if len(parts) >= 4 {
-		reqPath = parts[3]
-	}
-	if len(parts) >= 3 {
-		reqShare = parts[2]
-	}
+func (s *service) resolvePath(path string) (string, string) {
+	// /<mountpath>/share/path/to/something
+	parts := strings.SplitN(strings.TrimLeft(strings.TrimPrefix(path, s.mountPath), "/"), "/", 2)
+	var reqShare, reqPath string
 	if len(parts) >= 2 {
-		reqUser = parts[1]
+		reqPath = parts[1]
 	}
-	return reqUser, reqShare, reqPath
+	if len(parts) >= 1 {
+		reqShare = parts[0]
+	}
+	return reqShare, reqPath
 }
