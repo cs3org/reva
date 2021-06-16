@@ -365,5 +365,36 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Protocols[0].DownloadEndpoint).To(Equal("https://localhost:9200/data/thetoken"))
 			})
 		})
+
+		Describe("CreateContainer", func() {
+			BeforeEach(func() {
+				gw.On("CreateContainer", mock.Anything, mock.Anything).Return(&sprovider.CreateContainerResponse{
+					Status: status.NewOK(ctx),
+				}, nil)
+			})
+
+			It("refuses to create a top-level container which doesn't belong to a share", func() {
+				req := &sprovider.CreateContainerRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/invalid-top-level-subdir"},
+					},
+				}
+				res, err := s.CreateContainer(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+			})
+
+			It("creates a directory", func() {
+				req := &sprovider.CreateContainerRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-newsubdir"},
+					},
+				}
+				res, err := s.CreateContainer(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+			})
+		})
 	})
 })
