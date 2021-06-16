@@ -16,7 +16,7 @@ import (
 const (
 	uid     string = "0"
 	gid     string = "0"
-	rootDir string = "" // TODO
+	rootDir string = "/eos/homecanary/opstest/testacl"
 )
 
 func createTempDirectory(ctx context.Context, t *testing.T, eos *eosfs, rootDir string) (string, func()) {
