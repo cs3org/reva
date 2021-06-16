@@ -20,11 +20,15 @@ package sharesstorageprovider_test
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	provider "github.com/cs3org/reva/internal/grpc/services/sharesstorageprovider"
 	mocks "github.com/cs3org/reva/internal/grpc/services/sharesstorageprovider/mocks"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -45,7 +49,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			"gateway_addr": "127.0.0.1:1234",
 			"driver":       "json",
 			"drivers": map[string]map[string]interface{}{
-				"json": map[string]interface{}{},
+				"json": {},
 			},
 		}
 		ctx = user.ContextSetUser(context.Background(), &userpb.User{
@@ -57,12 +61,12 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		rootStatReq = &sprovider.StatRequest{
 			Ref: &sprovider.Reference{
-				Spec: &sprovider.Reference_Path{Path: "/shares/alice"},
+				Spec: &sprovider.Reference_Path{Path: "/shares"},
 			},
 		}
 		rootListContainerReq = &sprovider.ListContainerRequest{
 			Ref: &sprovider.Reference{
-				Spec: &sprovider.Reference_Path{Path: "/shares/alice"},
+				Spec: &sprovider.Reference_Path{Path: "/shares"},
 			},
 		}
 
@@ -171,6 +175,15 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 	Describe("NewDefault", func() {
 		It("returns a new service instance", func() {
+			tmpfile, err := ioutil.TempFile("", "eos-unit-test-shares-*.json")
+			Expect(err).ToNot(HaveOccurred())
+			defer os.Remove(tmpfile.Name())
+
+			config["drivers"] = map[string]map[string]interface{}{
+				"json": {
+					"file": tmpfile.Name(),
+				},
+			}
 			s, err := provider.NewDefault(config, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s).ToNot(BeNil())
@@ -218,49 +231,49 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(res.Info.Path).To(Equal("/shares/alice"))
+				Expect(res.Info.Path).To(Equal("/shares"))
 				Expect(res.Info.Size).To(Equal(uint64(1234)))
 			})
 
 			It("stats a shares folder", func() {
 				statReq := &sprovider.StatRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/alice/share1-shareddir"},
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir"},
 					},
 				}
 				res, err := s.Stat(ctx, statReq)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(res.Info.Path).To(Equal("/shares/alice/share1-shareddir"))
+				Expect(res.Info.Path).To(Equal("/shares/share1-shareddir"))
 				Expect(res.Info.Size).To(Equal(uint64(1234)))
 			})
 
 			It("stats a subfolder in a share", func() {
 				statReq := &sprovider.StatRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/alice/share1-shareddir/share1-subdir"},
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-subdir"},
 					},
 				}
 				res, err := s.Stat(ctx, statReq)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(res.Info.Path).To(Equal("/shares/alice/share1-shareddir/share1-subdir"))
+				Expect(res.Info.Path).To(Equal("/shares/share1-shareddir/share1-subdir"))
 				Expect(res.Info.Size).To(Equal(uint64(10)))
 			})
 
 			It("stats a shared file", func() {
 				statReq := &sprovider.StatRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/alice/share1-shareddir/share1-subdir/share1-subdir-file"},
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-subdir/share1-subdir-file"},
 					},
 				}
 				res, err := s.Stat(ctx, statReq)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_FILE))
-				Expect(res.Info.Path).To(Equal("/shares/alice/share1-shareddir/share1-subdir/share1-subdir-file"))
+				Expect(res.Info.Path).To(Equal("/shares/share1-shareddir/share1-subdir/share1-subdir-file"))
 				Expect(res.Info.Size).To(Equal(uint64(20)))
 			})
 		})
@@ -274,13 +287,13 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(len(res.Infos)).To(Equal(1))
 
 				entry := res.Infos[0]
-				Expect(entry.Path).To(Equal("/shares/alice/share1-shareddir"))
+				Expect(entry.Path).To(Equal("/shares/share1-shareddir"))
 			})
 
 			It("traverses into specific shares", func() {
 				req := &sprovider.ListContainerRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/alice/share1-shareddir"},
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir"},
 					},
 				}
 				res, err := s.ListContainer(ctx, req)
@@ -290,13 +303,13 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(len(res.Infos)).To(Equal(1))
 
 				entry := res.Infos[0]
-				Expect(entry.Path).To(Equal("/shares/alice/share1-shareddir/share1-subdir"))
+				Expect(entry.Path).To(Equal("/shares/share1-shareddir/share1-subdir"))
 			})
 
 			It("traverses into subfolders of specific shares", func() {
 				req := &sprovider.ListContainerRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/alice/share1-shareddir/share1-subdir"},
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-subdir"},
 					},
 				}
 				res, err := s.ListContainer(ctx, req)
@@ -306,7 +319,50 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(len(res.Infos)).To(Equal(1))
 
 				entry := res.Infos[0]
-				Expect(entry.Path).To(Equal("/shares/alice/share1-shareddir/share1-subdir/share1-subdir-file"))
+				Expect(entry.Path).To(Equal("/shares/share1-shareddir/share1-subdir/share1-subdir-file"))
+			})
+		})
+
+		Describe("InitiateFileDownload", func() {
+			It("returns not found when not found", func() {
+				gw.On("InitiateFileDownload", mock.Anything, mock.Anything).Return(&gateway.InitiateFileDownloadResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found"),
+				}, nil)
+
+				req := &sprovider.InitiateFileDownloadRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/does-not-exist"},
+					},
+				}
+				res, err := s.InitiateFileDownload(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_NOT_FOUND))
+			})
+
+			It("initiates the download of an existing file", func() {
+				gw.On("InitiateFileDownload", mock.Anything, mock.Anything).Return(&gateway.InitiateFileDownloadResponse{
+					Status: status.NewOK(ctx),
+					Protocols: []*gateway.FileDownloadProtocol{
+						&gateway.FileDownloadProtocol{
+							Opaque:           &types.Opaque{},
+							Protocol:         "simple",
+							DownloadEndpoint: "https://localhost:9200/data",
+							Token:            "thetoken",
+						},
+					},
+				}, nil)
+				req := &sprovider.InitiateFileDownloadRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-subdir/share1-subdir-file"},
+					},
+				}
+				res, err := s.InitiateFileDownload(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				Expect(res.Protocols[0].Protocol).To(Equal("simple"))
+				Expect(res.Protocols[0].DownloadEndpoint).To(Equal("https://localhost:9200/data/thetoken"))
 			})
 		})
 	})
