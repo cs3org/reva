@@ -47,6 +47,7 @@ require (
 	github.com/sethvargo/go-password v0.2.0
 	github.com/stretchr/testify v1.7.0
 	github.com/studio-b12/gowebdav v0.0.0-20200303150724-9380631c29a1
+	github.com/thanhpk/randstr v1.0.4
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
 	go.opencensus.io v0.23.0
 	golang.org/x/crypto v0.0.0-20201203163018-be400aefbc4c
