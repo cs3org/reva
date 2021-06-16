@@ -511,7 +511,7 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 	}
 
 	// update list of grants
-	gs = grants.AddGrant(gs, g)
+	grants.AddGrant(&gs, g)
 
 	acls, err := fs.getEosACLs(ctx, gs)
 	if err != nil {
