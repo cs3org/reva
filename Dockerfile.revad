@@ -36,7 +36,10 @@ RUN make build-revad-docker && \
 
 RUN mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
 
-FROM scratch
+FROM golang:alpine
+
+RUN apk --no-cache add \
+  mailcap
 
 EXPOSE 9999 10000
 
