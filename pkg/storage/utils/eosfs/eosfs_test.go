@@ -9,6 +9,7 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/eosclient"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/gdexlab/go-render/render"
 	"github.com/thanhpk/randstr"
 )
@@ -16,7 +17,7 @@ import (
 const (
 	uid     string = "0"
 	gid     string = "0"
-	rootDir string = "/eos/homecanary/opstest/testacl"
+	rootDir string = "/eos/homecanary/opstest/testacl/grants"
 )
 
 func createTempDirectory(ctx context.Context, t *testing.T, eos *eosfs, rootDir string) (string, func()) {
@@ -52,8 +53,9 @@ func createTempFile(ctx context.Context, t *testing.T, eos *eosfs, dir string) (
 func TestAddGrant(t *testing.T) {
 
 	fs, err := NewEOSFS(&Config{
-		MasterURL: "root://eoshomecanary.cern.ch",
-		UseGRPC:   false,
+		MasterURL:           "root://eoshomecanary.cern.ch",
+		UseGRPC:             false,
+		ForceSingleUserMode: true,
 	})
 
 	if err != nil {
@@ -224,7 +226,10 @@ func TestAddGrant(t *testing.T) {
 	for _, test := range testCases {
 
 		t.Run(test.description, func(t *testing.T) {
-			ctx := context.TODO()
+			ctx := user.ContextSetUser(context.TODO(), &userv1beta1.User{
+				UidNumber: 138406,
+				GidNumber: 2763,
+			})
 
 			// test grants for a folder
 			dir, cleanupDir := createTempDirectory(ctx, t, eos, rootDir)
@@ -242,7 +247,10 @@ func TestAddGrant(t *testing.T) {
 				},
 			}
 			// set new grant
-			eos.AddGrant(ctx, dirRef, test.grant)
+			err = eos.AddGrant(ctx, dirRef, test.grant)
+			if err != nil {
+				t.Fatal("error adding grant:", err)
+			}
 
 			// check that the new grants list corresponds to expected result
 			grants, err := eos.ListGrants(ctx, dirRef)
@@ -251,7 +259,7 @@ func TestAddGrant(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(grants, test.expected) {
-				t.Fatalf("grants do not correspond: got=%v expected=%v", render.AsCode(grants), render.AsCode(test.expected))
+				t.Fatalf("grants do not correspond in folder %s: got=%v expected=%v", dir, render.AsCode(grants), render.AsCode(test.expected))
 			}
 
 			// test grants for a file
@@ -270,7 +278,10 @@ func TestAddGrant(t *testing.T) {
 				},
 			}
 			// set new grant
-			eos.AddGrant(ctx, fileRef, test.grant)
+			err = eos.AddGrant(ctx, fileRef, test.grant)
+			if err != nil {
+				t.Fatal("error adding grant:", err)
+			}
 
 			// check that the new grants list corresponds to expected result
 			grants, err = eos.ListGrants(ctx, fileRef)
@@ -279,7 +290,7 @@ func TestAddGrant(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(grants, test.expected) {
-				t.Fatalf("grants do not correspond: got=%v expected=%v", render.AsCode(grants), render.AsCode(test.expected))
+				t.Fatalf("grants do not correspond in file %s: got=%v expected=%v", file, render.AsCode(grants), render.AsCode(test.expected))
 			}
 		})
 
