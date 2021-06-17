@@ -364,13 +364,6 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		Interface("reqShare", reqShare).
 		Msg("sharesstorageprovider.ListContainer: Got ListContainer request")
 
-	// contextUser, ok := ctxuser.ContextGetUser(ctx)
-	// if !ok {
-	// 	return &provider.ListContainerResponse{
-	// 		Status: status.NewInternal(ctx, nil, "error retrieving current user"),
-	// 	}, nil
-	// }
-
 	shares, err := s.sm.ListReceivedShares(ctx)
 	if err != nil {
 		return &provider.ListContainerResponse{
