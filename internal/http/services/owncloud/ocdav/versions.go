@@ -62,11 +62,11 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 			s.handleOptions(w, r, "versions")
 			return
 		}
-		if key == "" && r.Method == "PROPFIND" {
+		if key == "" && r.Method == MethodPropfind {
 			h.doListVersions(w, r, s, rid)
 			return
 		}
-		if key != "" && r.Method == "COPY" {
+		if key != "" && r.Method == MethodCopy {
 			// TODO(jfd) it seems we cannot directly GET version content with cs3 ...
 			// TODO(jfd) cs3api has no delete file version call
 			// TODO(jfd) restore version to given Destination, but cs3api has no destination
@@ -98,8 +98,8 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
 	ref := &provider.Reference{ResourceId: rid}
+
 	res, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc stat request")

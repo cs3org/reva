@@ -33,6 +33,7 @@ type provider struct {
 }
 
 func (p *provider) GetIFrame(ctx context.Context, resID *providerpb.Reference, token string) (string, error) {
+	// TODO @labkode @ishank011 should we use <storageid>!<nodeid>:<path> here? Or verify resource id is set and path is empty? or change signature to use a ResourceID directly?
 	msg := fmt.Sprintf("<iframe src=%s/open/%s?access-token=%s />", p.iframeUIProvider, resID.ResourceId.StorageId+":"+resID.ResourceId.OpaqueId, token)
 	return msg, nil
 }

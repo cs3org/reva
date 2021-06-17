@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"context"
 	"net/http"
 	"path"
 	"strings"
@@ -26,19 +27,19 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/rs/zerolog"
 	"go.opencensus.io/trace"
 )
 
-func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "move")
 	defer span.End()
 
 	src := path.Join(ns, r.URL.Path)
-	dstHeader := r.Header.Get("Destination")
-	overwrite := r.Header.Get("Overwrite")
 
-	dst, err := extractDestination(dstHeader, r.Context().Value(ctxKeyBaseURI).(string))
+	dst, err := extractDestination(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -46,7 +47,67 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	dst = path.Join(ns, dst)
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
-	sublog.Debug().Str("overwrite", overwrite).Msg("move")
+	srcRef := &provider.Reference{Path: src}
+	dstRef := &provider.Reference{Path: dst}
+
+	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
+		intermediateDir := path.Dir(dst)
+		ref := &provider.Reference{Path: intermediateDir}
+		return ref, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
+	}
+	s.handleMove(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, sublog)
+}
+
+func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
+	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "spaces_move")
+	defer span.End()
+
+	dst, err := extractDestination(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", srcSpaceID).Str("path", r.URL.Path).Logger()
+	// retrieve a specific storage space
+	srcRef, status, err := s.lookUpStorageSpaceReference(ctx, srcSpaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	dstSpaceID, dstRelPath := router.ShiftPath(dst)
+
+	// retrieve a specific storage space
+	dstRef, status, err := s.lookUpStorageSpaceReference(ctx, dstSpaceID, dstRelPath)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
+		intermediateDir := path.Dir(dstRelPath)
+		return s.lookUpStorageSpaceReference(ctx, dstSpaceID, intermediateDir)
+	}
+	s.handleMove(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, sublog)
+}
+
+func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, intermediateDirRef func() (*provider.Reference, *rpc.Status, error), log zerolog.Logger) {
+	overwrite := r.Header.Get(HeaderOverwrite)
+	log.Debug().Str("overwrite", overwrite).Msg("move")
 
 	overwrite = strings.ToUpper(overwrite)
 	if overwrite == "" {
@@ -60,118 +121,122 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 
 	client, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	// check src exists
-	srcStatReq := &provider.StatRequest{
-		Ref: &provider.Reference{Path: src},
-	}
+	srcStatReq := &provider.StatRequest{Ref: srcRef}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending grpc stat request")
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, srcStatRes.Status)
+		HandleErrorStatus(&log, w, srcStatRes.Status)
 		return
 	}
 
-	// check dst exists
-	dstStatRef := &provider.Reference{Path: dst}
-	dstStatReq := &provider.StatRequest{Ref: dstStatRef}
+	dstStatReq := &provider.StatRequest{Ref: dstRef}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&sublog, w, srcStatRes.Status)
+		HandleErrorStatus(&log, w, srcStatRes.Status)
 		return
 	}
 
 	successCode := http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 
 		if overwrite == "F" {
-			sublog.Warn().Str("overwrite", overwrite).Msg("dst already exists")
+			log.Warn().Str("overwrite", overwrite).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 			return
 		}
 
 		// delete existing tree
-		delReq := &provider.DeleteRequest{Ref: dstStatRef}
+		delReq := &provider.DeleteRequest{Ref: dstRef}
 		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
-			sublog.Error().Err(err).Msg("error sending grpc delete request")
+			log.Error().Err(err).Msg("error sending grpc delete request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-			HandleErrorStatus(&sublog, w, delRes.Status)
+			HandleErrorStatus(&log, w, delRes.Status)
 			return
 		}
 	} else {
 		// check if an intermediate path / the parent exists
-		intermediateDir := path.Dir(dst)
-		ref2 := &provider.Reference{Path: intermediateDir}
-		intStatReq := &provider.StatRequest{Ref: ref2}
+		dstRef, status, err := intermediateDirRef()
+		if err != nil {
+			log.Error().Err(err).Msg("error sending a grpc request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if status.Code != rpc.Code_CODE_OK {
+			HandleErrorStatus(&log, w, status)
+			return
+		}
+		intStatReq := &provider.StatRequest{Ref: dstRef}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
-			sublog.Error().Err(err).Msg("error sending grpc stat request")
+			log.Error().Err(err).Msg("error sending grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		if intStatRes.Status.Code != rpc.Code_CODE_OK {
 			if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
-				sublog.Debug().Str("parent", intermediateDir).Interface("status", intStatRes.Status).Msg("conflict")
+				log.Debug().Interface("parent", intermediateDirRef).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
 			} else {
-				HandleErrorStatus(&sublog, w, intStatRes.Status)
+				HandleErrorStatus(&log, w, intStatRes.Status)
 			}
 			return
 		}
 		// TODO what if intermediate is a file?
 	}
 
-	sourceRef := &provider.Reference{Path: src}
-	dstRef := &provider.Reference{Path: dst}
-	mReq := &provider.MoveRequest{Source: sourceRef, Destination: dstRef}
+	mReq := &provider.MoveRequest{Source: srcRef, Destination: dstRef}
 	mRes, err := client.Move(ctx, mReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending move grpc request")
+		log.Error().Err(err).Msg("error sending move grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if mRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, mRes.Status)
+		HandleErrorStatus(&log, w, mRes.Status)
 		return
 	}
 
 	dstStatRes, err = client.Stat(ctx, dstStatReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending grpc stat request")
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, dstStatRes.Status)
+		HandleErrorStatus(&log, w, dstStatRes.Status)
 		return
 	}
 
 	info := dstStatRes.Info
-	w.Header().Set("Content-Type", info.MimeType)
-	w.Header().Set("ETag", info.Etag)
-	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
-	w.Header().Set("OC-ETag", info.Etag)
+	w.Header().Set(HeaderContentType, info.MimeType)
+	w.Header().Set(HeaderETag, info.Etag)
+	w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
+	w.Header().Set(HeaderOCETag, info.Etag)
 	w.WriteHeader(successCode)
 }

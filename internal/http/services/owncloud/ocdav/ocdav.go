@@ -263,20 +263,22 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func extractDestination(dstHeader, baseURI string) (string, error) {
+func extractDestination(r *http.Request) (string, error) {
+	dstHeader := r.Header.Get(HeaderDestination)
 	if dstHeader == "" {
-		return "", errors.New("destination header is empty")
+		return "", errors.Wrap(errInvalidValue, "destination header is empty")
 	}
 	dstURL, err := url.ParseRequestURI(dstHeader)
 	if err != nil {
 		return "", err
 	}
 
+	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
 	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 	// Strip the base URI from the destination. The destination might contain redirection prefixes which need to be handled
 	urlSplit := strings.Split(dstURL.Path, baseURI)
 	if len(urlSplit) != 2 {
-		return "", errors.New("destination path does not contain base URI")
+		return "", errors.Wrap(errInvalidValue, "destination path does not contain base URI")
 	}
 
 	return urlSplit[1], nil
@@ -298,7 +300,7 @@ func replaceAllStringSubmatchFunc(re *regexp.Regexp, str string, repl func([]str
 	return result + str[lastIndex:]
 }
 
-var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@])`)
+var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@!$])`)
 
 // encodePath encodes the path of a url.
 //

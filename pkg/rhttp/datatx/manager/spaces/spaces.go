@@ -16,10 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package simple
+package spaces
 
 import (
 	"net/http"
+	"path"
+	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -27,13 +29,14 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/rhttp/datatx/utils/download"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
 func init() {
-	registry.Register("simple", New)
+	registry.Register("spaces", New)
 }
 
 type config struct{}
@@ -64,17 +67,36 @@ func New(m map[string]interface{}) (datatx.DataTX, error) {
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		sublog := appctx.GetLogger(ctx).With().Str("datatx", "simple").Logger()
+
+		var spaceID string
+		spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
+
+		sublog := appctx.GetLogger(ctx).With().Str("datatx", "spaces").Str("space", spaceID).Logger()
 
 		switch r.Method {
 		case "GET", "HEAD":
-			download.GetOrHeadFile(w, r, fs, "")
+			download.GetOrHeadFile(w, r, fs, spaceID)
 		case "PUT":
-			fn := r.URL.Path
+			// make a clean relative path
+			fn := path.Clean(strings.TrimLeft(r.URL.Path, "/"))
 			defer r.Body.Close()
 
-			ref := &provider.Reference{Path: fn}
+			// TODO refactor: pass Reference to Upload & GetOrHeadFile
+			// build a storage space reference
+			parts := strings.SplitN(spaceID, "!", 2)
+			if len(parts) != 2 {
+				sublog.Error().Msg("space id must be separated by !")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 
+			ref := &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: parts[0],
+					OpaqueId:  parts[1],
+				},
+				Path: fn,
+			}
 			err := fs.Upload(ctx, ref, r.Body)
 			switch v := err.(type) {
 			case nil:

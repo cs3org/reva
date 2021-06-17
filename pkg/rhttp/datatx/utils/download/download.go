@@ -24,17 +24,20 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
 // GetOrHeadFile returns the requested file content
-func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
+func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceID string) {
 	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("svc", "datatx").Str("handler", "download").Logger()
 
@@ -46,8 +49,25 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 		fn = files[0]
 	}
 
-	ref := &provider.Reference{Path: fn}
-
+	var ref *provider.Reference
+	if spaceID == "" {
+		// ensure the absolute path starts with '/'
+		ref = &provider.Reference{Path: path.Join("/", fn)}
+	} else {
+		// build a storage space reference
+		parts := strings.SplitN(spaceID, "!", 2)
+		if len(parts) == 2 {
+			ref = &provider.Reference{
+				ResourceId: &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]},
+				// ensure the relative path starts with '.'
+				Path: utils.MakeRelativePath(fn),
+			}
+		} else {
+			sublog.Error().Str("space_id", spaceID).Str("path", fn).Msg("invalid reference")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
 	// TODO check preconditions like If-Range, If-Match ...
 
 	var md *provider.ResourceInfo

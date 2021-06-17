@@ -107,11 +107,11 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		//	return
 		//}
 
-		if key == "" && r.Method == "PROPFIND" {
+		if key == "" && r.Method == MethodPropfind {
 			h.listTrashbin(w, r, s, u)
 			return
 		}
-		if key != "" && r.Method == "MOVE" {
+		if key != "" && r.Method == MethodMove {
 			// find path in url relative to trash base
 			trashBase := ctx.Value(ctxKeyBaseURI).(string)
 			baseURI := path.Join(path.Dir(trashBase), "files", username)
@@ -119,8 +119,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			r = r.WithContext(ctx)
 
 			// TODO make request.php optional in destination header
-			dstHeader := r.Header.Get("Destination")
-			dst, err := extractDestination(dstHeader, baseURI)
+			dst, err := extractDestination(r)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
@@ -133,7 +132,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		if r.Method == "DELETE" {
+		if r.Method == http.MethodDelete {
 			h.delete(w, r, s, u, key)
 			return
 		}
@@ -393,9 +392,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		// this means we can only undelete on the same storage, not to a different folder
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
 		// TODO currently limited to the home storage
-		Ref: &provider.Reference{
-			Path: getHomeRes.Path,
-		},
+		Ref:        &provider.Reference{Path: getHomeRes.Path},
 		Key:        key,
 		RestoreRef: &provider.Reference{Path: dst},
 	}
@@ -454,12 +451,10 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	// storage drives  PurgeRecycleItem key call
 
 	req := &gateway.PurgeRecycleRequest{
-		Ref: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: sRes.Info.Id.StorageId,
-				OpaqueId:  key,
-			},
-		},
+		Ref: &provider.Reference{ResourceId: &provider.ResourceId{
+			StorageId: sRes.Info.Id.StorageId,
+			OpaqueId:  key,
+		}},
 	}
 
 	res, err := client.PurgeRecycle(ctx, req)

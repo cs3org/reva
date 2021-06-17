@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/rs/zerolog"
 	"go.opencensus.io/trace"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -38,7 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "get")
 	defer span.End()
@@ -47,75 +49,77 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Str("svc", "ocdav").Str("handler", "get").Logger()
 
+	ref := &provider.Reference{Path: fn}
+
+	s.handleGet(ctx, w, r, ref, "simple", sublog)
+}
+
+func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, dlProtocol string, log zerolog.Logger) {
 	client, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	sReq := &provider.StatRequest{
-		Ref: &provider.Reference{Path: fn},
-	}
+	sReq := &provider.StatRequest{Ref: ref}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending grpc stat request")
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, sRes.Status)
+		HandleErrorStatus(&log, w, sRes.Status)
 		return
 	}
 
 	info := sRes.Info
 	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		sublog.Warn().Msg("resource is a folder and cannot be downloaded")
+		log.Warn().Msg("resource is a folder and cannot be downloaded")
 		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
 
-	dReq := &provider.InitiateFileDownloadRequest{
-		Ref: &provider.Reference{Path: fn},
-	}
+	dReq := &provider.InitiateFileDownloadRequest{Ref: ref}
 
 	dRes, err := client.InitiateFileDownload(ctx, dReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error initiating file download")
+		log.Error().Err(err).Msg("error initiating file download")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if dRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, dRes.Status)
+		HandleErrorStatus(&log, w, dRes.Status)
 		return
 	}
 
 	var ep, token string
 	for _, p := range dRes.Protocols {
-		if p.Protocol == "simple" {
+		if p.Protocol == dlProtocol {
 			ep, token = p.DownloadEndpoint, p.Token
 		}
 	}
 
-	httpReq, err := rhttp.NewRequest(ctx, "GET", ep, nil)
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, ep, nil)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error creating http request")
+		log.Error().Err(err).Msg("error creating http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-	if r.Header.Get("Range") != "" {
-		httpReq.Header.Set("Range", r.Header.Get("Range"))
+	if r.Header.Get(HeaderRange) != "" {
+		httpReq.Header.Set(HeaderRange, r.Header.Get(HeaderRange))
 	}
 
 	httpClient := s.client
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error performing http request")
+		log.Error().Err(err).Msg("error performing http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -126,38 +130,60 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	w.Header().Set("Content-Type", info.MimeType)
-	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+
+	w.Header().Set(HeaderContentType, info.MimeType)
+	w.Header().Set(HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
 		path.Base(info.Path)+"; filename=\""+path.Base(info.Path)+"\"")
-	w.Header().Set("ETag", info.Etag)
-	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
-	w.Header().Set("OC-ETag", info.Etag)
+	w.Header().Set(HeaderETag, info.Etag)
+	w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
+	w.Header().Set(HeaderOCETag, info.Etag)
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
-	w.Header().Set("Last-Modified", lastModifiedString)
+	w.Header().Set(HeaderLastModified, lastModifiedString)
 
 	if httpRes.StatusCode == http.StatusPartialContent {
-		w.Header().Set("Content-Range", httpRes.Header.Get("Content-Range"))
-		w.Header().Set("Content-Length", httpRes.Header.Get("Content-Length"))
+		w.Header().Set(HeaderContentRange, httpRes.Header.Get(HeaderContentRange))
+		w.Header().Set(HeaderContentLength, httpRes.Header.Get(HeaderContentLength))
 		w.WriteHeader(http.StatusPartialContent)
 	} else {
-		w.Header().Set("Content-Length", strconv.FormatUint(info.Size, 10))
+		w.Header().Set(HeaderContentLength, strconv.FormatUint(info.Size, 10))
 	}
 	if info.Checksum != nil {
-		w.Header().Set("OC-Checksum", fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
+		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
 	}
 	var c int64
 	if c, err = io.Copy(w, httpRes.Body); err != nil {
-		sublog.Error().Err(err).Msg("error finishing copying data to response")
+		log.Error().Err(err).Msg("error finishing copying data to response")
 	}
-	if httpRes.Header.Get("Content-Length") != "" {
-		i, err := strconv.ParseInt(httpRes.Header.Get("Content-Length"), 10, 64)
+	if httpRes.Header.Get(HeaderContentLength) != "" {
+		i, err := strconv.ParseInt(httpRes.Header.Get(HeaderContentLength), 10, 64)
 		if err != nil {
-			sublog.Error().Err(err).Str("content-length", httpRes.Header.Get("Content-Length")).Msg("invalid content length in datagateway response")
+			log.Error().Err(err).Str("content-length", httpRes.Header.Get(HeaderContentLength)).Msg("invalid content length in datagateway response")
 		}
 		if i != c {
-			sublog.Error().Int64("content-length", i).Int64("transferred-bytes", c).Msg("content length vs transferred bytes mismatch")
+			log.Error().Int64("content-length", i).Int64("transferred-bytes", c).Msg("content length vs transferred bytes mismatch")
 		}
 	}
 	// TODO we need to send the If-Match etag in the GET to the datagateway to prevent race conditions between stating and reading the file
+}
+
+func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "spaces_get")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "get").Logger()
+
+	// retrieve a specific storage space
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
+	s.handleGet(ctx, w, r, ref, "spaces", sublog)
 }

@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"path"
@@ -31,10 +32,11 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/rs/zerolog"
 	"go.opencensus.io/trace"
 )
 
-func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePathHead(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "head")
 	defer span.End()
@@ -43,41 +45,67 @@ func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
+	ref := &provider.Reference{Path: fn}
+	s.handleHead(ctx, w, r, ref, sublog)
+}
+
+func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, logger zerolog.Logger) {
 	client, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
+		logger.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	ref := &provider.Reference{Path: fn}
 	req := &provider.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending grpc stat request")
+		logger.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(&logger, w, res.Status)
 		return
 	}
 
 	info := res.Info
-	w.Header().Set("Content-Type", info.MimeType)
-	w.Header().Set("ETag", info.Etag)
-	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
-	w.Header().Set("OC-ETag", info.Etag)
+	w.Header().Set(HeaderContentType, info.MimeType)
+	w.Header().Set(HeaderETag, info.Etag)
+	w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
+	w.Header().Set(HeaderOCETag, info.Etag)
 	if info.Checksum != nil {
-		w.Header().Set("OC-Checksum", fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
+		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
 	}
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
-	w.Header().Set("Last-Modified", lastModifiedString)
-	w.Header().Set("Content-Length", strconv.FormatUint(info.Size, 10))
+	w.Header().Set(HeaderLastModified, lastModifiedString)
+	w.Header().Set(HeaderContentLength, strconv.FormatUint(info.Size, 10))
 	if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		w.Header().Set("Accept-Ranges", "bytes")
+		w.Header().Set(HeaderAcceptRanges, "bytes")
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *svc) handleSpacesHead(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "spaces_head")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+
+	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handleHead(ctx, w, r, spaceRef, sublog)
 }

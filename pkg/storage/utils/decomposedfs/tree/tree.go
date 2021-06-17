@@ -114,7 +114,71 @@ func (t *Tree) Setup(owner string) error {
 	if err != nil {
 		return err
 	}
+
+	// create spaces folder and iterate over existing nodes to populate it
+	spacesPath := filepath.Join(t.root, "spaces")
+	fi, err := os.Stat(spacesPath)
+	if os.IsNotExist(err) {
+		// create personal spaces dir
+		if err := os.MkdirAll(filepath.Join(spacesPath, "personal"), 0700); err != nil {
+			return err
+		}
+		// create share spaces dir
+		if err := os.MkdirAll(filepath.Join(spacesPath, "share"), 0700); err != nil {
+			return err
+		}
+
+		f, err := os.Open(filepath.Join(t.root, "nodes"))
+		if err != nil {
+			return err
+		}
+		nodes, err := f.Readdir(0)
+		if err != nil {
+			return err
+		}
+
+		for i := range nodes {
+			nodePath := filepath.Join(t.root, "nodes", nodes[i].Name())
+
+			// is it a user root? -> create personal space
+			if isRootNode(nodePath) {
+				// create personal space
+				// we can reuse the node id as the space id
+				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/personal", nodes[i].Name()))
+				if err != nil {
+					fmt.Printf("could not create symlink for personal space %s, %s\n", nodes[i].Name(), err)
+				}
+			}
+
+			// is it a shared node? -> create shared space
+			if isSharedNode(nodePath) {
+				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/share", nodes[i].Name()))
+				if err != nil {
+					fmt.Printf("could not create symlink for shared space %s, %s\n", nodes[i].Name(), err)
+				}
+			}
+		}
+	} else if !fi.IsDir() {
+		// check if it is a directory
+		return fmt.Errorf("%s is not a directory", spacesPath)
+	}
+
 	return nil
+}
+
+func isRootNode(nodePath string) bool {
+	attrBytes, err := xattr.Get(nodePath, xattrs.ParentidAttr)
+	return err == nil && string(attrBytes) == "root"
+}
+func isSharedNode(nodePath string) bool {
+	if attrs, err := xattr.List(nodePath); err == nil {
+		for i := range attrs {
+			if strings.HasPrefix(attrs[i], xattrs.GrantPrefix) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // GetMD returns the metadata of a node in the tree

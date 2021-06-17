@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"context"
 	"net/http"
 	"path"
 	"strconv"
@@ -31,39 +32,18 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 	"go.opencensus.io/trace"
 )
 
-func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "tus-post")
 	defer span.End()
 
-	w.Header().Add("Access-Control-Allow-Headers", "Tus-Resumable, Upload-Length, Upload-Metadata, If-Match")
-	w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Location")
-
-	w.Header().Set("Tus-Resumable", "1.0.0")
-
-	// Test if the version sent by the client is supported
-	// GET methods are not checked since a browser may visit this URL and does
-	// not include this header. This request is not part of the specification.
-	if r.Header.Get("Tus-Resumable") != "1.0.0" {
-		w.WriteHeader(http.StatusPreconditionFailed)
-		return
-	}
-	if r.Header.Get("Upload-Length") == "" {
-		w.WriteHeader(http.StatusPreconditionFailed)
-		return
-	}
-	// r.Header.Get("OC-Checksum")
-	// TODO must be SHA1, ADLER32 or MD5 ... in capital letters????
-	// curl -X PUT https://demo.owncloud.com/remote.php/webdav/testcs.bin -u demo:demo -d '123' -v -H 'OC-Checksum: SHA1:40bd001563085fc35165329ea1ff5c5ecbdbbeef'
-
-	// TODO check Expect: 100-continue
-
 	// read filename from metadata
-	meta := tusd.ParseMetadataHeader(r.Header.Get("Upload-Metadata"))
+	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
 	if meta["filename"] == "" {
 		w.WriteHeader(http.StatusPreconditionFailed)
 		return
@@ -75,42 +55,95 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 	// check tus headers?
 
-	// check if destination exists or is a file
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
+	ref := &provider.Reference{Path: fn}
+	s.handleTusPost(ctx, w, r, meta, ref, sublog)
+}
+
+func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "spaces-tus-post")
+	defer span.End()
+
+	// read filename from metadata
+	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
+	if meta["filename"] == "" {
+		w.WriteHeader(http.StatusPreconditionFailed)
 		return
 	}
 
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+
+	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, path.Join(r.URL.Path, meta["filename"]))
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handleTusPost(ctx, w, r, meta, spaceRef, sublog)
+}
+
+func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.Request, meta map[string]string, ref *provider.Reference, log zerolog.Logger) {
+	w.Header().Add(HeaderAccessControlAllowHeaders, strings.Join([]string{HeaderTusResumable, HeaderUploadLength, HeaderUploadMetadata, HeaderIfMatch}, ", "))
+	w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderLocation}, ", "))
+
+	w.Header().Set(HeaderTusResumable, "1.0.0")
+
+	// Test if the version sent by the client is supported
+	// GET methods are not checked since a browser may visit this URL and does
+	// not include this header. This request is not part of the specification.
+	if r.Header.Get(HeaderTusResumable) != "1.0.0" {
+		w.WriteHeader(http.StatusPreconditionFailed)
+		return
+	}
+	if r.Header.Get(HeaderUploadLength) == "" {
+		w.WriteHeader(http.StatusPreconditionFailed)
+		return
+	}
+	// r.Header.Get("OC-Checksum")
+	// TODO must be SHA1, ADLER32 or MD5 ... in capital letters????
+	// curl -X PUT https://demo.owncloud.com/remote.php/webdav/testcs.bin -u demo:demo -d '123' -v -H 'OC-Checksum: SHA1:40bd001563085fc35165329ea1ff5c5ecbdbbeef'
+
+	// TODO check Expect: 100-continue
+	// check if destination exists or is a file
+	client, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	sReq := &provider.StatRequest{
-		Ref: &provider.Reference{Path: fn},
+		Ref: ref,
 	}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending grpc stat request")
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&sublog, w, sRes.Status)
+		HandleErrorStatus(&log, w, sRes.Status)
 		return
 	}
 
 	info := sRes.Info
 	if info != nil && info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-		sublog.Warn().Msg("resource is not a file")
+		log.Warn().Msg("resource is not a file")
 		w.WriteHeader(http.StatusConflict)
 		return
 	}
 
 	if info != nil {
-		clientETag := r.Header.Get("If-Match")
+		clientETag := r.Header.Get(HeaderIfMatch)
 		serverETag := info.Etag
 		if clientETag != "" {
 			if clientETag != serverETag {
-				sublog.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
+				log.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
 				w.WriteHeader(http.StatusPreconditionFailed)
 				return
 			}
@@ -118,15 +151,15 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	opaqueMap := map[string]*typespb.OpaqueEntry{
-		"Upload-Length": {
+		HeaderUploadLength: {
 			Decoder: "plain",
-			Value:   []byte(r.Header.Get("Upload-Length")),
+			Value:   []byte(r.Header.Get(HeaderUploadLength)),
 		},
 	}
 
 	mtime := meta["mtime"]
 	if mtime != "" {
-		opaqueMap["X-OC-Mtime"] = &typespb.OpaqueEntry{
+		opaqueMap[HeaderOCMtime] = &typespb.OpaqueEntry{
 			Decoder: "plain",
 			Value:   []byte(mtime),
 		}
@@ -134,7 +167,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 
 	// initiateUpload
 	uReq := &provider.InitiateFileUploadRequest{
-		Ref: &provider.Reference{Path: fn},
+		Ref: ref,
 		Opaque: &typespb.Opaque{
 			Map: opaqueMap,
 		},
@@ -142,13 +175,13 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error initiating file upload")
+		log.Error().Err(err).Msg("error initiating file upload")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, uRes.Status)
+		HandleErrorStatus(&log, w, uRes.Status)
 		return
 	}
 
@@ -168,15 +201,15 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		ep += token
 	}
 
-	w.Header().Set("Location", ep)
+	w.Header().Set(HeaderLocation, ep)
 
 	// for creation-with-upload extension forward bytes to dataprovider
 	// TODO check this really streams
-	if r.Header.Get("Content-Type") == "application/offset+octet-stream" {
+	if r.Header.Get(HeaderContentType) == "application/offset+octet-stream" {
 
-		length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
+		length, err := strconv.ParseInt(r.Header.Get(HeaderContentLength), 10, 64)
 		if err != nil {
-			sublog.Debug().Err(err).Msg("wrong request")
+			log.Debug().Err(err).Msg("wrong request")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -184,73 +217,73 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		var httpRes *http.Response
 
 		if length != 0 {
-			httpReq, err := rhttp.NewRequest(ctx, "PATCH", ep, r.Body)
+			httpReq, err := rhttp.NewRequest(ctx, http.MethodPatch, ep, r.Body)
 			if err != nil {
-				sublog.Debug().Err(err).Msg("wrong request")
+				log.Debug().Err(err).Msg("wrong request")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
-			httpReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
-			httpReq.Header.Set("Content-Length", r.Header.Get("Content-Length"))
-			if r.Header.Get("Upload-Offset") != "" {
-				httpReq.Header.Set("Upload-Offset", r.Header.Get("Upload-Offset"))
+			httpReq.Header.Set(HeaderContentType, r.Header.Get(HeaderContentType))
+			httpReq.Header.Set(HeaderContentLength, r.Header.Get(HeaderContentLength))
+			if r.Header.Get(HeaderUploadOffset) != "" {
+				httpReq.Header.Set(HeaderUploadOffset, r.Header.Get(HeaderUploadOffset))
 			} else {
-				httpReq.Header.Set("Upload-Offset", "0")
+				httpReq.Header.Set(HeaderUploadOffset, "0")
 			}
-			httpReq.Header.Set("Tus-Resumable", r.Header.Get("Tus-Resumable"))
+			httpReq.Header.Set(HeaderTusResumable, r.Header.Get(HeaderTusResumable))
 
 			httpRes, err = s.client.Do(httpReq)
 			if err != nil {
-				sublog.Error().Err(err).Msg("error doing GET request to data service")
+				log.Error().Err(err).Msg("error doing GET request to data service")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			defer httpRes.Body.Close()
 
-			w.Header().Set("Upload-Offset", httpRes.Header.Get("Upload-Offset"))
-			w.Header().Set("Tus-Resumable", httpRes.Header.Get("Tus-Resumable"))
+			w.Header().Set(HeaderUploadOffset, httpRes.Header.Get(HeaderUploadOffset))
+			w.Header().Set(HeaderTusResumable, httpRes.Header.Get(HeaderTusResumable))
 			if httpRes.StatusCode != http.StatusNoContent {
 				w.WriteHeader(httpRes.StatusCode)
 				return
 			}
 		} else {
-			sublog.Debug().Msg("Skipping sending a Patch request as body is empty")
+			log.Debug().Msg("Skipping sending a Patch request as body is empty")
 		}
 
 		// check if upload was fully completed
-		if length == 0 || httpRes.Header.Get("Upload-Offset") == r.Header.Get("Upload-Length") {
+		if length == 0 || httpRes.Header.Get(HeaderUploadOffset) == r.Header.Get(HeaderUploadOffset) {
 			// get uploaded file metadata
 			sRes, err := client.Stat(ctx, sReq)
 			if err != nil {
-				sublog.Error().Err(err).Msg("error sending grpc stat request")
+				log.Error().Err(err).Msg("error sending grpc stat request")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
 			if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-				HandleErrorStatus(&sublog, w, sRes.Status)
+				HandleErrorStatus(&log, w, sRes.Status)
 				return
 			}
 
 			info := sRes.Info
 			if info == nil {
-				sublog.Error().Msg("No info found for uploaded file")
+				log.Error().Msg("No info found for uploaded file")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			if httpRes != nil && httpRes.Header != nil && httpRes.Header.Get("X-OC-Mtime") != "" {
+			if httpRes != nil && httpRes.Header != nil && httpRes.Header.Get(HeaderOCMtime) != "" {
 				// set the "accepted" value if returned in the upload response headers
-				w.Header().Set("X-OC-Mtime", httpRes.Header.Get("X-OC-Mtime"))
+				w.Header().Set(HeaderOCMtime, httpRes.Header.Get(HeaderOCMtime))
 			}
 
-			w.Header().Set("Content-Type", info.MimeType)
-			w.Header().Set("OC-FileId", wrapResourceID(info.Id))
-			w.Header().Set("OC-ETag", info.Etag)
-			w.Header().Set("ETag", info.Etag)
+			w.Header().Set(HeaderContentType, info.MimeType)
+			w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
+			w.Header().Set(HeaderOCETag, info.Etag)
+			w.Header().Set(HeaderETag, info.Etag)
 			t := utils.TSToTime(info.Mtime).UTC()
 			lastModifiedString := t.Format(time.RFC1123Z)
-			w.Header().Set("Last-Modified", lastModifiedString)
+			w.Header().Set(HeaderLastModified, lastModifiedString)
 		}
 	}
 

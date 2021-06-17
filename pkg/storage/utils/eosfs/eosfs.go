@@ -1003,7 +1003,7 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 	return nil
 }
 
-func (fs *eosfs) CreateDir(ctx context.Context, p string) error {
+func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference, name string) error {
 	log := appctx.GetLogger(ctx)
 	u, err := getUser(ctx)
 	if err != nil {
@@ -1014,6 +1014,12 @@ func (fs *eosfs) CreateDir(ctx context.Context, p string) error {
 	if err != nil {
 		return err
 	}
+
+	dir, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return nil
+	}
+	p := path.Join(dir, name)
 
 	log.Info().Msgf("eos: createdir: path=%s", p)
 
@@ -1350,6 +1356,10 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef 
 	}
 
 	return fs.c.RestoreDeletedEntry(ctx, uid, gid, key)
+}
+
+func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	return nil, errtypes.NotSupported("list storage spaces")
 }
 
 func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) (*provider.RecycleItem, error) {

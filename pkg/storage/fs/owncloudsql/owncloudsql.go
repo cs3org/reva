@@ -665,8 +665,11 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 			}
 			p = filepath.Join(u.Username, p)
 		}
+		return p, nil
+	}
 
-		return fs.toInternalPath(ctx, p), nil
+	if ref.GetPath() != "" {
+		return fs.toInternalPath(ctx, ref.GetPath()), nil
 	}
 
 	if ref.GetPath() != "" {
@@ -910,7 +913,7 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
+func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference, sp string) (err error) {
 	ip := fs.toInternalPath(ctx, sp)
 
 	// check permissions of parent dir
@@ -2158,6 +2161,11 @@ func (fs *ocfs) HashFile(path string) (string, string, string, error) {
 
 		return string(sha1h.Sum(nil)), string(md5h.Sum(nil)), string(adler32h.Sum(nil)), nil
 	}
+}
+
+func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	// TODO(corby): Implement
+	return nil, nil
 }
 
 func readChecksumIntoResourceChecksum(ctx context.Context, checksums, algo string, ri *provider.ResourceInfo) {

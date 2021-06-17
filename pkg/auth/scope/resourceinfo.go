@@ -68,10 +68,18 @@ func resourceinfoScope(scope *authpb.Scope, resource interface{}) (bool, error) 
 }
 
 func checkResourceInfo(inf *provider.ResourceInfo, ref *provider.Reference) bool {
-	// ref: <id:<storage_id:$storageID node_id:$nodeID path:$path> >
+	// TODO @ishank011 con you explain how this is used?
+	// ref: <resource_id:<storage_id:$storageID opaque_id:$opaqueID path:$path> >
 	if ref.ResourceId != nil { // path can be empty or a relative path
-		// TODO what about the path?
-		return inf.Id.StorageId == ref.ResourceId.StorageId && inf.Id.OpaqueId == ref.ResourceId.OpaqueId
+		if inf.Id.StorageId == ref.ResourceId.StorageId && inf.Id.OpaqueId == ref.ResourceId.OpaqueId {
+			if ref.Path == "" {
+				// id only reference
+				return true
+			}
+			// check path has same prefix below
+		} else {
+			return false
+		}
 	}
 	// ref: <path:$path >
 	if strings.HasPrefix(ref.GetPath(), inf.Path) {

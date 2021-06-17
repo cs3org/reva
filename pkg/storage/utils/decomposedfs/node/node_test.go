@@ -170,20 +170,20 @@ var _ = Describe("Node", func() {
 
 		Describe("the Etag field", func() {
 			It("is set", func() {
-				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 			})
 
 			It("changes when the tmtime is set", func() {
-				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				before := ri.Etag
 
 				Expect(n.SetTMTime(time.Now().UTC())).To(Succeed())
 
-				ri, err = n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				ri, err = n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				Expect(ri.Etag).ToNot(Equal(before))

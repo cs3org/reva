@@ -145,18 +145,25 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 
 	// If the reference has a resource id set, use it to route
 	if ref.ResourceId != nil {
-		for prefix, rule := range b.c.Rules {
-			addr := getProviderAddr(ctx, rule)
-			r, err := regexp.Compile("^" + prefix + "$")
-			if err != nil {
-				continue
+		if ref.ResourceId.StorageId != "" {
+			for prefix, rule := range b.c.Rules {
+				addr := getProviderAddr(ctx, rule)
+				r, err := regexp.Compile("^" + prefix + "$")
+				if err != nil {
+					continue
+				}
+				// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
+				if m := r.FindString(ref.ResourceId.StorageId); m != "" {
+					return []*registrypb.ProviderInfo{{
+						ProviderId: ref.ResourceId.StorageId,
+						Address:    addr,
+					}}, nil
+				}
 			}
-			// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-			if m := r.FindString(ref.ResourceId.StorageId); m != "" {
-				return []*registrypb.ProviderInfo{{
-					ProviderId: ref.ResourceId.StorageId,
-					Address:    addr,
-				}}, nil
+			// TODO if the storage id is not set but node id is set we could poll all storage providers to check if the node is known there
+			// for now, say the reference is invalid
+			if ref.ResourceId.OpaqueId != "" {
+				return nil, errtypes.BadRequest("invalid reference " + ref.String())
 			}
 		}
 	}

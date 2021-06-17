@@ -506,9 +506,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	statReq := provider.StatRequest{Ref: &provider.Reference{
-		ResourceId: uRes.Share.ResourceId,
-	}}
+	statReq := provider.StatRequest{Ref: &provider.Reference{ResourceId: uRes.Share.ResourceId}}
 
 	statRes, err := client.Stat(r.Context(), &statReq)
 	if err != nil {

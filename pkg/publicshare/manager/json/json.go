@@ -379,7 +379,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		} else {
 			for i := range filters {
 				if filters[i].Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
-					if utils.ResourceEqual(&provider.Reference{ResourceId: local.ResourceId}, &provider.Reference{ResourceId: filters[i].GetResourceId()}) {
+					if utils.ResourceIDEqual(local.ResourceId, filters[i].GetResourceId()) {
 						if notExpired(&local.PublicShare) {
 							shares = append(shares, &local.PublicShare)
 						} else if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {

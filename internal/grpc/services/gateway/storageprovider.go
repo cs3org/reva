@@ -115,37 +115,118 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 
 func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	log := appctx.GetLogger(ctx)
-	// TODO: needs to be fixed
 	var id *provider.StorageSpaceId
 	for _, f := range req.Filters {
 		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
 			id = f.GetId()
 		}
 	}
-	parts := strings.SplitN(id.OpaqueId, "!", 2)
-	if len(parts) != 2 {
-		return &provider.ListStorageSpacesResponse{
-			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
-		}, nil
-	}
-	c, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
-		StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + a opaqueid
-		OpaqueId:  parts[1],
-	}})
+
+	var providers []*registry.ProviderInfo
+	var err error
+	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
-		return &provider.ListStorageSpacesResponse{
-			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
-		}, nil
+		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
 
-	res, err := c.ListStorageSpaces(ctx, req)
-	if err != nil {
-		log.Err(err).Msg("gateway: error listing storage space on storage provider")
-		return &provider.ListStorageSpacesResponse{
-			Status: status.NewInternal(ctx, err, "error calling ListStorageSpaces"),
-		}, nil
+	if id != nil {
+		// query that specific story provider
+		parts := strings.SplitN(id.OpaqueId, "!", 2)
+		if len(parts) != 2 {
+			return &provider.ListStorageSpacesResponse{
+				Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
+			}, nil
+		}
+		res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
+			Ref: &provider.Reference{ResourceId: &provider.ResourceId{
+				StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + an opaqueid
+				OpaqueId:  parts[1],
+			}},
+		})
+		if err != nil {
+			return &provider.ListStorageSpacesResponse{
+				Status: status.NewStatusFromErrType(ctx, "ListStorageSpaces filters: req "+req.String(), err),
+			}, nil
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return &provider.ListStorageSpacesResponse{
+				Status: res.Status,
+			}, nil
+		}
+		providers = res.Providers
+	} else {
+		// get list of all storage providers
+		res, err := c.ListStorageProviders(ctx, &registry.ListStorageProvidersRequest{})
+
+		if err != nil {
+			return &provider.ListStorageSpacesResponse{
+				Status: status.NewStatusFromErrType(ctx, "error listing providers", err),
+			}, nil
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return &provider.ListStorageSpacesResponse{
+				Status: res.Status,
+			}, nil
+		}
+
+		providers = []*registry.ProviderInfo{}
+		// FIXME filter only providers that have an id set ... currently none have?
+		// bug? only ProviderPath is set
+		for i := range res.Providers {
+			// use only providers whose path does not start with a /?
+			if strings.HasPrefix(res.Providers[i].ProviderPath, "/") {
+				continue
+			}
+			providers = append(providers, res.Providers[i])
+		}
 	}
-	return res, nil
+
+	spacesFromProviders := make([][]*provider.StorageSpace, len(providers))
+	errors := make([]error, len(providers))
+	var wg sync.WaitGroup
+
+	for i, p := range providers {
+		wg.Add(1)
+		go s.listStorageSpacesOnProvider(ctx, req, &spacesFromProviders[i], p, &errors[i], &wg)
+	}
+	wg.Wait()
+
+	uniqueSpaces := map[string]*provider.StorageSpace{}
+	for i := range providers {
+		if errors[i] != nil {
+			log.Debug().Err(errors[i]).Msg("skipping provider")
+			continue
+		}
+		for j := range spacesFromProviders[i] {
+			uniqueSpaces[spacesFromProviders[i][j].Id.OpaqueId] = spacesFromProviders[i][j]
+		}
+	}
+	spaces := []*provider.StorageSpace{}
+	for spaceID := range uniqueSpaces {
+		spaces = append(spaces, uniqueSpaces[spaceID])
+	}
+
+	return &provider.ListStorageSpacesResponse{
+		Status:        status.NewOK(ctx),
+		StorageSpaces: spaces,
+	}, nil
+}
+
+func (s *svc) listStorageSpacesOnProvider(ctx context.Context, req *provider.ListStorageSpacesRequest, res *[]*provider.StorageSpace, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
+	defer wg.Done()
+	c, err := s.getStorageProviderClient(ctx, p)
+	if err != nil {
+		*e = errors.Wrap(err, "error connecting to storage provider="+p.Address)
+		return
+	}
+
+	r, err := c.ListStorageSpaces(ctx, req)
+	if err != nil {
+		*e = errors.Wrap(err, "gateway: error calling ListStorageSpaces")
+		return
+	}
+
+	*res = r.StorageSpaces
 }
 
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
@@ -210,6 +291,11 @@ func (s *svc) getHome(_ context.Context) string {
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.initiateFileDownload(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileDownloadResponse{
@@ -420,6 +506,9 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
 	log := appctx.GetLogger(ctx)
+	if utils.IsRelativeReference(req.Ref) {
+		return s.initiateFileUpload(ctx, req)
+	}
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileUploadResponse{
@@ -642,6 +731,11 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.createContainer(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.CreateContainerResponse{
@@ -1086,14 +1180,19 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	}
 
 	resPath := req.Ref.GetPath()
-	if len(providers) == 1 && (resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
+	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
 		c, err := s.getStorageProviderClient(ctx, providers[0])
 		if err != nil {
 			return &provider.StatResponse{
 				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
 			}, nil
 		}
-		return c.Stat(ctx, req)
+		rsp, err := c.Stat(ctx, req)
+		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
+			return rsp, err
+		}
+
+		return rsp, nil
 	}
 
 	infoFromProviders := make([]*provider.ResourceInfo, len(providers))
@@ -1141,12 +1240,16 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 		return
 	}
 
-	resPath := path.Clean(req.Ref.GetPath())
-	newPath := req.Ref.GetPath()
-	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-		newPath = p.ProviderPath
+	if utils.IsAbsoluteReference(req.Ref) {
+		resPath := path.Clean(req.Ref.GetPath())
+		newPath := req.Ref.GetPath()
+		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
+			newPath = p.ProviderPath
+		}
+		req.Ref = &provider.Reference{Path: newPath}
 	}
-	r, err := c.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: newPath}})
+
+	r, err := c.Stat(ctx, req)
 	if err != nil {
 		*e = errors.Wrap(err, "gateway: error calling ListContainer")
 		return
@@ -1158,6 +1261,11 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.stat(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.StatResponse{
@@ -1457,6 +1565,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 
 	infos := []*provider.ResourceInfo{}
 	indirects := make(map[string][]*provider.ResourceInfo)
+	trimPrefix := utils.IsAbsoluteReference(req.Ref)
 	for i := range providers {
 		if errors[i] != nil {
 			return &provider.ListContainerResponse{
@@ -1464,7 +1573,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 			}, nil
 		}
 		for _, inf := range infoFromProviders[i] {
-			if parent := path.Dir(inf.Path); resPath != "" && resPath != parent {
+			if parent := path.Dir(inf.Path); trimPrefix && resPath != "." && resPath != parent {
 				parts := strings.Split(strings.TrimPrefix(inf.Path, resPath), "/")
 				p := path.Join(resPath, parts[1])
 				indirects[p] = append(indirects[p], inf)
@@ -1502,12 +1611,16 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 		return
 	}
 
-	resPath := path.Clean(req.Ref.GetPath())
-	newPath := req.Ref.GetPath()
-	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-		newPath = p.ProviderPath
+	if utils.IsAbsoluteReference(req.Ref) {
+		resPath := path.Clean(req.Ref.GetPath())
+		newPath := req.Ref.GetPath()
+		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
+			newPath = p.ProviderPath
+		}
+		req.Ref = &provider.Reference{Path: newPath}
 	}
-	r, err := c.ListContainer(ctx, &provider.ListContainerRequest{Ref: &provider.Reference{Path: newPath}})
+
+	r, err := c.ListContainer(ctx, req)
 	if err != nil {
 		*e = errors.Wrap(err, "gateway: error calling ListContainer")
 		return
@@ -1517,6 +1630,11 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.listContainer(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.ListContainerResponse{
@@ -1705,7 +1823,7 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 		return res.Info.Path, res.Status
 	}
 
-	if ref.Path != "" {
+	if ref.ResourceId == nil && strings.HasPrefix(ref.Path, "/") {
 		return ref.Path, &rpc.Status{Code: rpc.Code_CODE_OK}
 	}
 	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
