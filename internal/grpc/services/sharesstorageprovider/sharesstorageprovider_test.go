@@ -380,6 +380,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.CreateContainer(ctx, req)
+				gw.AssertNotCalled(GinkgoT(), "CreateContainer", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
@@ -392,8 +393,43 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.CreateContainer(ctx, req)
+				gw.AssertCalled(GinkgoT(), "CreateContainer", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
+			})
+		})
+
+		Describe("Delete", func() {
+			BeforeEach(func() {
+				gw.On("Delete", mock.Anything, mock.Anything).Return(&sprovider.DeleteResponse{
+					Status: status.NewOK(ctx),
+				}, nil)
+			})
+
+			It("refuses to delete a share", func() {
+				req := &sprovider.DeleteRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir"},
+					},
+				}
+				res, err := s.Delete(ctx, req)
+				gw.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+			})
+
+			It("delete a file", func() {
+				req := &sprovider.DeleteRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-subdir/share1-subdir-file"},
+					},
+				}
+				res, err := s.Delete(ctx, req)
+				gw.AssertCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			})
 		})
 	})

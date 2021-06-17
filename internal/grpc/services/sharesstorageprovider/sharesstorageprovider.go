@@ -46,6 +46,7 @@ import (
 //go:generate mockery -name GatewayClient
 type GatewayClient interface {
 	Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error)
+	Delete(ctx context.Context, in *provider.DeleteRequest, opts ...grpc.CallOption) (*provider.DeleteResponse, error)
 	CreateContainer(ctx context.Context, in *provider.CreateContainerRequest, opts ...grpc.CallOption) (*provider.CreateContainerResponse, error)
 	ListContainer(ctx context.Context, in *provider.ListContainerRequest, opts ...grpc.CallOption) (*provider.ListContainerResponse, error)
 	InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileDownloadResponse, error)
@@ -127,7 +128,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	appctx.GetLogger(ctx).Debug().
 		Interface("reqPath", reqPath).
 		Interface("reqShare", reqShare).
-		Msg("sharesstorageprovider.Stat: Got InitiateFileDownload request")
+		Msg("sharesstorageprovider: Got InitiateFileDownload request")
 
 	if reqShare != "" {
 		statRes, err := s.statShare(ctx, reqShare)
@@ -226,7 +227,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	appctx.GetLogger(ctx).Debug().
 		Interface("reqPath", reqPath).
 		Interface("reqShare", reqShare).
-		Msg("sharesstorageprovider.Stat: Got InitiateFileDownload request")
+		Msg("sharesstorageprovider: Got CreateContainer request")
 
 	if reqShare == "" || reqPath == "" {
 		return &provider.CreateContainerResponse{
@@ -271,7 +272,52 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	appctx.GetLogger(ctx).Debug().
+		Interface("reqPath", reqPath).
+		Interface("reqShare", reqShare).
+		Msg("sharesstorageprovider: Got Delete request")
+
+	if reqShare == "" || reqPath == "" {
+		return &provider.DeleteResponse{
+			Status: status.NewInvalid(ctx, "sharestorageprovider: can not delete top-level container"),
+		}, nil
+	}
+
+	statRes, err := s.statShare(ctx, reqShare)
+	if err != nil {
+		if statRes != nil {
+			return &provider.DeleteResponse{
+				Status: statRes.Status,
+			}, err
+		} else {
+			return &provider.DeleteResponse{
+				Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+			}, nil
+		}
+	}
+
+	gwres, err := s.gateway.Delete(ctx, &provider.DeleteRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: filepath.Join(statRes.Info.Path, reqPath),
+			},
+		},
+	})
+
+	if err != nil {
+		return &provider.DeleteResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileDownload"),
+		}, nil
+	}
+
+	if gwres.Status.Code != rpc.Code_CODE_OK {
+		return &provider.DeleteResponse{
+			Status: gwres.Status,
+		}, nil
+	}
+
+	return gwres, nil
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
@@ -283,7 +329,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	appctx.GetLogger(ctx).Debug().
 		Interface("reqPath", reqPath).
 		Interface("reqShare", reqShare).
-		Msg("sharesstorageprovider.Stat: Got Stat request")
+		Msg("sharesstorageprovider: Got Stat request")
 
 	_, ok := ctxuser.ContextGetUser(ctx)
 	if !ok {
@@ -362,7 +408,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	appctx.GetLogger(ctx).Debug().
 		Interface("reqPath", reqPath).
 		Interface("reqShare", reqShare).
-		Msg("sharesstorageprovider.ListContainer: Got ListContainer request")
+		Msg("sharesstorageprovider: Got ListContainer request")
 
 	shares, err := s.sm.ListReceivedShares(ctx)
 	if err != nil {
