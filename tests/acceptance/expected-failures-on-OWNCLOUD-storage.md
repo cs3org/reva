@@ -7,14 +7,13 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiTrashbin/trashbinDelete.feature:106](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L106)
 -   [apiTrashbin/trashbinDelete.feature:122](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L122)
 
-### [A deleted folder with & in it does not appear in the trashbin](https://github.com/owncloud/ocis/issues/1547)
+#### [A deleted folder with & in it does not appear in the trashbin](https://github.com/owncloud/ocis/issues/1547)
 -   [apiTrashbin/trashbinDelete.feature:166](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L166)
 -   [apiTrashbin/trashbinDelete.feature:167](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L167)
 -   [apiTrashbin/trashbinDelete.feature:198](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L198)
 -   [apiTrashbin/trashbinDelete.feature:199](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L199)
 
-
-### [Review and fix the tests that have sharing step to work with ocis](https://github.com/owncloud/core/issues/38006)
+#### [Review and fix the tests that have sharing step to work with ocis](https://github.com/owncloud/core/issues/38006)
 
 The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 
@@ -131,7 +130,7 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiWebdavUploadTUS/uploadFile.feature:149](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L141)
 -   [apiWebdavUploadTUS/uploadFile.feature:150](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L142)
 
-### [500 Internal Server Error on Post request for TUS upload](https://github.com/owncloud/ocis/issues/1047)
+#### [500 Internal Server Error on Post request for TUS upload](https://github.com/owncloud/ocis/issues/1047)
 
 The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 
@@ -178,7 +177,7 @@ Scenario Outline: try to create a folder that already exists
 -   [apiWebdavProperties1/createFolder.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L99)
 -   [apiWebdavProperties1/createFolder.feature:100](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L100)
 
-### [Different webdav properties from core](https://github.com/owncloud/ocis/issues/1302)
+#### [Different webdav properties from core](https://github.com/owncloud/ocis/issues/1302)
 Scenario Outline: Propfind the content type of a file using webdav api `Property "d:getcontenttype" found with value "text/plain; charset=utf-8", expected "#^text/plain$#" or "#^text/plain$#"`
 -   [apiWebdavProperties2/getFileProperties.feature:327](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L327)
 -   [apiWebdavProperties2/getFileProperties.feature:328](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L328)
@@ -1513,7 +1512,7 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiShareOperationsToShares/getWebDAVSharePermissions.feature:297](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares/getWebDAVSharePermissions.feature#L297)
 -   [apiShareOperationsToShares/getWebDAVSharePermissions.feature:297](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares/getWebDAVSharePermissions.feature#L297)
 
-### [Moving resource loses associated shares](https://github.com/owncloud/ocis/issues/1251)
+#### [Moving resource loses associated shares](https://github.com/owncloud/ocis/issues/1251)
 
 #### [No way to set default folder for received shares](https://github.com/owncloud/ocis/issues/1327)
 -   [apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature#L22)
@@ -1578,6 +1577,7 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 #### [deleting a share with wrong authentication returns OCS status 996 / HTTP 500](https://github.com/owncloud/ocis/issues/1229)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:213](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#211)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:214](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#212)
+
 
 ### User Management
 User and group management features
