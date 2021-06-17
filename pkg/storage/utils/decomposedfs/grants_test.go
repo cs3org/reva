@@ -41,11 +41,7 @@ var _ = Describe("Grants", func() {
 	)
 
 	BeforeEach(func() {
-		ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: "/dir1",
-			},
-		}
+		ref = &provider.Reference{Path: "/dir1"}
 
 		grant = &provider.Grant{
 			Grantee: &provider.Grantee{

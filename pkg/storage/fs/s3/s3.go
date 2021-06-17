@@ -115,12 +115,12 @@ func (fs *s3FS) addRoot(p string) string {
 }
 
 func (fs *s3FS) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-	if ref.GetPath() != "" {
+	if ref.Path != "" {
 		return fs.addRoot(ref.GetPath()), nil
 	}
 
-	if ref.GetId() != nil {
-		fn := path.Join("/", strings.TrimPrefix(ref.GetId().OpaqueId, "fileid-"))
+	if ref.ResourceId != nil {
+		fn := path.Join("/", strings.TrimPrefix(ref.ResourceId.OpaqueId, "fileid-"))
 		fn = fs.addRoot(fn)
 		return fn, nil
 	}
@@ -172,7 +172,9 @@ func (fs *s3FS) normalizeObject(ctx context.Context, o *s3.Object, fn string) *p
 	fn = fs.removeRoot(path.Join("/", fn))
 	isDir := strings.HasSuffix(*o.Key, "/")
 	md := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fn, "/")},
+		Id: &provider.ResourceId{
+			OpaqueId: "fileid-" + strings.TrimPrefix(fn, "/"),
+		},
 		Path:          fn,
 		Type:          getResourceType(isDir),
 		Etag:          *o.ETag,
@@ -656,6 +658,6 @@ func (fs *s3FS) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 	return nil, errtypes.NotSupported("list recycle")
 }
 
-func (fs *s3FS) RestoreRecycleItem(ctx context.Context, restoreKey, restorePath string) error {
+func (fs *s3FS) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
 	return errtypes.NotSupported("restore recycle")
 }

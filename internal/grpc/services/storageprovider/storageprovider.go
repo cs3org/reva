@@ -816,7 +816,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 
 func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
-	if err := s.storage.RestoreRecycleItem(ctx, req.Key, req.RestorePath); err != nil {
+	if err := s.storage.RestoreRecycleItem(ctx, req.Key, req.RestoreRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -838,9 +838,9 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 }
 
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
-	// if a key was sent as opacque id purge only that item
-	if req.GetRef().GetId() != nil && req.GetRef().GetId().GetOpaqueId() != "" {
-		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetId().GetOpaqueId()); err != nil {
+	// if a key was sent as opaque id purge only that item
+	if req.GetRef().GetResourceId() != nil && req.GetRef().GetResourceId().OpaqueId != "" {
+		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetResourceId().OpaqueId); err != nil {
 			var st *rpc.Status
 			switch err.(type) {
 			case errtypes.IsNotFound:
@@ -1028,13 +1028,7 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 		}, nil
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{
-			Path: req.Path,
-		},
-	}
-
-	newRef, err := s.unwrap(ctx, ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateReferenceResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -1101,17 +1095,8 @@ func getFS(c *config) (storage.FS, error) {
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {
-	if ref.GetId() != nil {
-		idRef := &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: &provider.ResourceId{
-					StorageId: "", // we are unwrapping on purpose, bottom layers only need OpaqueId.
-					OpaqueId:  ref.GetId().OpaqueId,
-				},
-			},
-		}
-
-		return idRef, nil
+	if ref.GetResourceId() != nil {
+		return ref, nil
 	}
 
 	if ref.GetPath() == "" {
@@ -1125,11 +1110,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, err
 	}
 
-	pathRef := &provider.Reference{
-		Spec: &provider.Reference_Path{
-			Path: fsfn,
-		},
-	}
+	pathRef := &provider.Reference{Path: fsfn}
 
 	return pathRef, nil
 }

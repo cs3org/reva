@@ -55,9 +55,7 @@ func downloadCommand() *command {
 			return err
 		}
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: remote},
-		}
+		ref := &provider.Reference{Path: remote}
 		req1 := &provider.StatRequest{Ref: ref}
 		ctx := getAuthContext()
 		res1, err := client.Stat(ctx, req1)
@@ -71,11 +69,7 @@ func downloadCommand() *command {
 		info := res1.Info
 
 		req2 := &provider.InitiateFileDownloadRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: remote,
-				},
-			},
+			Ref: &provider.Reference{Path: remote},
 		}
 		res, err := client.InitiateFileDownload(ctx, req2)
 		if err != nil {

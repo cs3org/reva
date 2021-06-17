@@ -263,7 +263,9 @@ func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 	if fs.c.EnableHome {
 		u := user.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
-		ip = filepath.Join(fs.c.DataDirectory, layout, "files", sp)
+		// The inner filepath.Join prevents the path from breaking out of
+		// <fs.c.DataDirectory>/<layout>/files/
+		ip = filepath.Join(fs.c.DataDirectory, layout, "files", filepath.Join("/", sp))
 	} else {
 		// trim all /
 		sp = strings.Trim(sp, "/")
@@ -290,7 +292,7 @@ func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 			ip = filepath.Join(fs.c.DataDirectory, layout, "files")
 		} else {
 			// parts = "<username>", "foo/bar.txt"
-			ip = filepath.Join(fs.c.DataDirectory, layout, "files", segments[1])
+			ip = filepath.Join(fs.c.DataDirectory, layout, "files", filepath.Join(segments[1]))
 		}
 
 	}
@@ -362,7 +364,7 @@ func (fs *ocfs) getVersionsPath(ctx context.Context, ip string) string {
 		return filepath.Join(fs.c.DataDirectory, layout, "files_versions")
 	case 4:
 		// parts = "", "<username>", "foo/bar.txt"
-		return filepath.Join(fs.c.DataDirectory, layout, "files_versions", parts[3])
+		return filepath.Join(fs.c.DataDirectory, layout, "files_versions", filepath.Join("/", parts[3]))
 	default:
 		return "" // TODO Must not happen?
 	}
@@ -792,20 +794,19 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (strin
 
 // resolve takes in a request path or request id and converts it to an internal path.
 func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-	if ref.GetPath() != "" {
-		return fs.toInternalPath(ctx, ref.GetPath()), nil
-	}
 
-	if ref.GetId() != nil {
-		ip, err := fs.getPath(ctx, ref.GetId())
+	// if storage id is set look up that
+	if ref.ResourceId != nil {
+		ip, err := fs.getPath(ctx, ref.ResourceId)
 		if err != nil {
 			return "", err
 		}
-		return ip, nil
+		return filepath.Join("/", ip, filepath.Join("/", ref.Path)), nil
 	}
 
-	// reference is invalid
-	return "", fmt.Errorf("invalid reference %+v", ref)
+	// use a path
+	return fs.toInternalPath(ctx, ref.Path), nil
+
 }
 
 func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -2137,7 +2138,9 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 		Type: getResourceType(md.IsDir()),
 		Key:  md.Name(),
 		// TODO do we need to prefix the path? it should be relative to this storage root, right?
-		Path: originalPath,
+		Ref: &provider.Reference{
+			Path: originalPath,
+		},
 		Size: uint64(md.Size()),
 		DeletionTime: &types.Timestamp{
 			Seconds: uint64(ttime),
@@ -2173,7 +2176,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 	return items, nil
 }
 
-func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, restorePath string) error {
+func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
@@ -2188,17 +2191,20 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, restorePath string)
 		return nil
 	}
 
-	if restorePath == "" {
+	if restoreRef == nil {
+		restoreRef = &provider.Reference{}
+	}
+	if restoreRef.Path == "" {
 		v, err := xattr.Get(src, trashOriginPrefix)
 		if err != nil {
 			log.Error().Err(err).Str("key", key).Str("path", src).Msg("could not read origin")
 		}
-		restorePath = filepath.Join("/", filepath.Clean(string(v)), strings.TrimSuffix(filepath.Base(src), suffix))
+		restoreRef.Path = filepath.Join("/", filepath.Clean(string(v)), strings.TrimSuffix(filepath.Base(src), suffix))
 	}
-	tgt := fs.toInternalPath(ctx, restorePath)
+	tgt := fs.toInternalPath(ctx, restoreRef.Path)
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
-		log.Error().Err(err).Str("key", key).Str("restorePath", restorePath).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
+		log.Error().Err(err).Str("key", key).Str("restorePath", restoreRef.Path).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
 		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 	// unset trash origin location in metadata

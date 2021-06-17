@@ -33,11 +33,7 @@ func userScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 
 // GetOwnerScope returns the default owner scope with access to all resources.
 func GetOwnerScope() (map[string]*authpb.Scope, error) {
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{
-			Path: "/",
-		},
-	}
+	ref := &provider.Reference{Path: "/"}
 	val, err := utils.MarshalProtoV1ToJSON(ref)
 	if err != nil {
 		return nil, err

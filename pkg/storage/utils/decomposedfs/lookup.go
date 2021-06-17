@@ -40,16 +40,16 @@ type Lookup struct {
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
 func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error) {
-	if ref.GetPath() != "" {
+	if ref.ResourceId != nil {
+		return lu.NodeFromID(ctx, ref.ResourceId)
+	}
+
+	if ref.Path != "" {
 		return lu.NodeFromPath(ctx, ref.GetPath())
 	}
 
-	if ref.GetId() != nil {
-		return lu.NodeFromID(ctx, ref.GetId())
-	}
-
 	// reference is invalid
-	return nil, fmt.Errorf("invalid reference %+v", ref)
+	return nil, fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
 }
 
 // NodeFromPath converts a filename into a Node

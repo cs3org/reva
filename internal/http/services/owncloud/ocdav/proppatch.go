@@ -63,9 +63,7 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 
 	// check if resource exists
 	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref: &provider.Reference{Path: fn},
 	}
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
@@ -80,15 +78,11 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 	}
 
 	rreq := &provider.UnsetArbitraryMetadataRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref:                   &provider.Reference{Path: fn},
 		ArbitraryMetadataKeys: []string{""},
 	}
 	sreq := &provider.SetArbitraryMetadataRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref: &provider.Reference{Path: fn},
 		ArbitraryMetadata: &provider.ArbitraryMetadata{
 			Metadata: map[string]string{},
 		},

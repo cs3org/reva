@@ -78,11 +78,7 @@ func transferCreateCommand() *command {
 
 		// verify resource stats
 		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: fn,
-				},
-			},
+			Ref: &provider.Reference{Path: fn},
 		}
 		statRes, err := client.Stat(ctx, statReq)
 		if err != nil {

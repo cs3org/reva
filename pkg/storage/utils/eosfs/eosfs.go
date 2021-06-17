@@ -330,21 +330,20 @@ func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (str
 
 // resolve takes in a request path or request id and returns the unwrappedNominal path.
 func (fs *eosfs) resolve(ctx context.Context, u *userpb.User, ref *provider.Reference) (string, error) {
-	if ref.GetPath() != "" {
-		return ref.GetPath(), nil
-	}
-
-	if ref.GetId() != nil {
-		p, err := fs.getPath(ctx, u, ref.GetId())
+	if ref.ResourceId != nil {
+		p, err := fs.getPath(ctx, u, ref.ResourceId)
 		if err != nil {
 			return "", err
 		}
-
+		p = path.Join(p, ref.Path)
 		return p, nil
+	}
+	if ref.Path != "" {
+		return ref.Path, nil
 	}
 
 	// reference is invalid
-	return "", fmt.Errorf("invalid reference %+v. id and path are missing", ref)
+	return "", fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
 }
 
 func (fs *eosfs) getPath(ctx context.Context, u *userpb.User, id *provider.ResourceId) (string, error) {
@@ -387,6 +386,7 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 	}
 
 	// parts[0] = 868317, parts[1] = photos, ...
+	// FIXME REFERENCE ... umm ... 868317/photos? @ishank011 might be a leftover
 	parts := strings.Split(id.OpaqueId, "/")
 	fileID, err := strconv.ParseUint(parts[0], 10, 64)
 	if err != nil {
@@ -1338,7 +1338,7 @@ func (fs *eosfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, erro
 	return recycleEntries, nil
 }
 
-func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key, restorePath string) error {
+func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -1358,7 +1358,7 @@ func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eoscl
 		return nil, err
 	}
 	recycleItem := &provider.RecycleItem{
-		Path:         path,
+		Ref:          &provider.Reference{Path: path},
 		Key:          eosDeletedItem.RestoreKey,
 		Size:         eosDeletedItem.Size,
 		DeletionTime: &types.Timestamp{Seconds: eosDeletedItem.DeletionMTime},
@@ -1676,7 +1676,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 	No RestoreRecycleItem(ctx context.Context, key string) error
 	No PurgeRecycleItem(ctx context.Context, key string) error
 	No EmptyRecycle(ctx context.Context) error
-	? GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	? GetPathByID(ctx context.Context, id *provider.Reference) (string, error)
 	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
@@ -1707,7 +1707,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 	No RestoreRecycleItem(ctx context.Context, key string) error
 	No PurgeRecycleItem(ctx context.Context, key string) error
 	No EmptyRecycle(ctx context.Context) error
-	?  GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	?  GetPathByID(ctx context.Context, id *provider.Reference) (string, error)
 	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
@@ -1738,7 +1738,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 	No RestoreRecycleItem(ctx context.Context, key string) error
 	No PurgeRecycleItem(ctx context.Context, key string) error
 	No EmptyRecycle(ctx context.Context) error
-	?  GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	?  GetPathByID(ctx context.Context, id *provider.Reference) (string, error)
 	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error

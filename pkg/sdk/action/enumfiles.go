@@ -34,9 +34,7 @@ type EnumFilesAction struct {
 
 // ListAll retrieves all files and directories contained in the provided path.
 func (action *EnumFilesAction) ListAll(path string, includeSubdirectories bool) ([]*storage.ResourceInfo, error) {
-	ref := &storage.Reference{
-		Spec: &storage.Reference_Path{Path: path},
-	}
+	ref := &storage.Reference{Path: path}
 	req := &storage.ListContainerRequest{Ref: ref}
 	res, err := action.session.Client().ListContainer(action.session.Context(), req)
 	if err := net.CheckRPCInvocation("listing container", res, err); err != nil {

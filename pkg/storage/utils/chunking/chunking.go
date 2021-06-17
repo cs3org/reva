@@ -96,7 +96,7 @@ func (c *ChunkHandler) createChunkTempFile() (string, *os.File, error) {
 }
 
 func (c *ChunkHandler) getChunkFolderName(i *ChunkBLOBInfo) (string, error) {
-	path := "/" + c.ChunkFolder + filepath.Clean("/"+i.uploadID())
+	path := filepath.Join("/", c.ChunkFolder, filepath.Join("/", i.uploadID()))
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return "", err
 	}
@@ -132,7 +132,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (bool, string, er
 	}
 	// c.logger.Info().Log("chunkfolder", chunksFolderName)
 
-	chunkTarget := chunksFolderName + "/" + fmt.Sprintf("%d", chunkInfo.CurrentChunk)
+	chunkTarget := filepath.Join(chunksFolderName, strconv.Itoa(chunkInfo.CurrentChunk))
 	if err = os.Rename(chunkTempFilename, chunkTarget); err != nil {
 		return false, "", err
 	}
@@ -171,7 +171,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (bool, string, er
 
 	// walk all chunks and append to assembled file
 	for i := range chunks {
-		target := chunksFolderName + "/" + fmt.Sprintf("%d", i)
+		target := filepath.Join(chunksFolderName, strconv.Itoa(i))
 
 		chunk, err := os.Open(target)
 		if err != nil {

@@ -50,9 +50,7 @@ func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: fn},
-	}
+	ref := &provider.Reference{Path: fn}
 	req := &provider.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {

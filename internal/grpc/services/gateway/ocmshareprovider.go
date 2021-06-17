@@ -318,9 +318,7 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	if share.ShareType == ocm.Share_SHARE_TYPE_TRANSFER {
 		createTransferDir, err := s.CreateContainer(ctx, &provider.CreateContainerRequest{
 			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: path.Join(homeRes.Path, s.c.DataTransfersFolder),
-				},
+				Path: path.Join(homeRes.Path, s.c.DataTransfersFolder),
 			},
 		})
 		if err != nil {
@@ -345,7 +343,7 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 
 	log.Info().Msg("mount path will be:" + refPath)
 	createRefReq := &provider.CreateReferenceRequest{
-		Path:      refPath,
+		Ref:       &provider.Reference{Path: refPath},
 		TargetUri: targetURI,
 	}
 

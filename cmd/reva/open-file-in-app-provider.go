@@ -59,9 +59,7 @@ func openFileInAppProviderCommand() *command {
 			return err
 		}
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: path},
-		}
+		ref := &provider.Reference{Path: path}
 
 		opaqueObj := &typespb.Opaque{
 			Map: map[string]*typespb.OpaqueEntry{},
