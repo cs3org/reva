@@ -121,4 +121,28 @@ type Config struct {
 	// and a depth of 2, we'll lookup each user's home directory.
 	// Default value is 2.
 	UserIDCacheWarmupDepth int `mapstructure:"user_id_cache_warmup_depth"`
+
+	// Normally the eosgrpc plugin streams data on the fly.
+	// Setting this to true will make reva use the temp cachedirectory
+	// as intermediate step for read operations
+	ReadUsesLocalTemp bool `mapstructure:"read_uses_local_temp"`
+
+	// Normally the eosgrpc plugin streams data on the fly.
+	// Setting this to true will make reva use the temp cachedirectory
+	// as intermediate step for write operations
+	// Beware: in pure streaming mode the FST must support
+	// the HTTP chunked encoding
+	WriteUsesLocalTemp bool `mapstructure:"write_uses_local_temp"`
+
+	// HTTP connections to EOS: max number of idle conns
+	MaxIdleConns int `mapstructure:"max_idle_conns"`
+
+	// HTTP connections to EOS: max number of conns per host
+	MaxConnsPerHost int `mapstructure:"max_conns_per_host"`
+
+	// HTTP connections to EOS: max number of idle conns per host
+	MaxIdleConnsPerHost int `mapstructure:"max_idle_conns_per_host"`
+
+	// HTTP connections to EOS: idle conections TTL
+	IdleConnTimeout int `mapstructure:"idle_conn_timeout"`
 }
