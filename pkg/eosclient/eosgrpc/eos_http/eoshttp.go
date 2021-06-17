@@ -27,7 +27,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -240,7 +239,10 @@ func (c *Client) buildFullURL(urlpath, uid, gid string) (string, error) {
 		return "", err
 	}
 
-	u.Path = path.Join(u.Path, urlpath)
+	u, err = u.Parse(urlpath)
+	if err != nil {
+		return "", err
+	}
 
 	// I feel safer putting here a check, to prohibit malicious users to
 	// inject a false uid/gid into the url
