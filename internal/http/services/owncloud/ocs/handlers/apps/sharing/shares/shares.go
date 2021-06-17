@@ -618,7 +618,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		var info *provider.ResourceInfo
 		if pinfo != nil {
 			// check if the shared resource matches the path resource
-			if !utils.ResourceEqual(&provider.Reference{ResourceId: rs.Share.ResourceId}, &provider.Reference{ResourceId: pinfo.Id}) {
+			if !utils.ResourceIDEqual(rs.Share.ResourceId, pinfo.Id) {
 				// try next share
 				continue
 			}

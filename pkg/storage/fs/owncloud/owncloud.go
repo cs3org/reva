@@ -801,8 +801,7 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 		if err != nil {
 			return "", err
 		}
-		filepath.Join("/", ip, filepath.Join("/", ref.Path))
-		return ip, nil
+		return filepath.Join("/", ip, filepath.Join("/", ref.Path)), nil
 	}
 
 	// use a path

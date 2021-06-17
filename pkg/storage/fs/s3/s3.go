@@ -119,7 +119,7 @@ func (fs *s3FS) resolve(ctx context.Context, ref *provider.Reference) (string, e
 		return fs.addRoot(ref.GetPath()), nil
 	}
 
-	if ref.ResourceId.OpaqueId != "" {
+	if ref.ResourceId != nil {
 		fn := path.Join("/", strings.TrimPrefix(ref.ResourceId.OpaqueId, "fileid-"))
 		fn = fs.addRoot(fn)
 		return fn, nil
