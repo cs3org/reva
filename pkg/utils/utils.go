@@ -227,16 +227,3 @@ func MakeRelativePath(p string) string {
 	}
 	return "." + p
 }
-
-// IsSameUserID compares to UserIds for equallity.
-// TODO move to a comparison package
-func IsSameUserID(i *userpb.UserId, j *userpb.UserId) bool {
-	switch {
-	case i == nil, j == nil:
-		return false
-	case i.OpaqueId == j.OpaqueId && i.Idp == j.Idp:
-		return true
-	default:
-		return false
-	}
-}
