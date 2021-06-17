@@ -263,7 +263,9 @@ func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 	if fs.c.EnableHome {
 		u := user.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
-		ip = filepath.Join(fs.c.DataDirectory, layout, "files", sp)
+		// The inner filepath.Join prevents the path from breaking out of
+		// <fs.c.DataDirectory>/<layout>/files/
+		ip = filepath.Join(fs.c.DataDirectory, layout, "files", filepath.Join("/", sp))
 	} else {
 		// trim all /
 		sp = strings.Trim(sp, "/")
@@ -290,7 +292,7 @@ func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 			ip = filepath.Join(fs.c.DataDirectory, layout, "files")
 		} else {
 			// parts = "<username>", "foo/bar.txt"
-			ip = filepath.Join(fs.c.DataDirectory, layout, "files", segments[1])
+			ip = filepath.Join(fs.c.DataDirectory, layout, "files", filepath.Join(segments[1]))
 		}
 
 	}
@@ -362,7 +364,7 @@ func (fs *ocfs) getVersionsPath(ctx context.Context, ip string) string {
 		return filepath.Join(fs.c.DataDirectory, layout, "files_versions")
 	case 4:
 		// parts = "", "<username>", "foo/bar.txt"
-		return filepath.Join(fs.c.DataDirectory, layout, "files_versions", parts[3])
+		return filepath.Join(fs.c.DataDirectory, layout, "files_versions", filepath.Join("/", parts[3]))
 	default:
 		return "" // TODO Must not happen?
 	}
@@ -799,7 +801,7 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 		if err != nil {
 			return "", err
 		}
-		filepath.Join("/", ip, ref.Path)
+		filepath.Join("/", ip, filepath.Join("/", ref.Path))
 		return ip, nil
 	}
 

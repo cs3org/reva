@@ -140,11 +140,11 @@ func (fs *localfs) resolve(ctx context.Context, ref *provider.Reference) (p stri
 		if p, err = fs.GetPathByID(ctx, ref.ResourceId); err != nil {
 			return "", err
 		}
-		return path.Join(p, ref.Path), nil
+		return path.Join(p, path.Join("/", ref.Path)), nil
 	}
 
 	if ref.Path != "" {
-		return ref.Path, nil
+		return path.Join("/", ref.Path), nil
 	}
 
 	// reference is invalid
@@ -161,6 +161,9 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 }
 
 func (fs *localfs) wrap(ctx context.Context, p string) string {
+	// This is to prevent path traversal.
+	// With this p can't break out of its parent folder
+	p = path.Join("/", p)
 	var internal string
 	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)
@@ -203,6 +206,7 @@ func (fs *localfs) wrapRecycleBin(ctx context.Context, p string) string {
 }
 
 func (fs *localfs) wrapVersions(ctx context.Context, p string) string {
+	p = path.Join("/", p)
 	var internal string
 	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)

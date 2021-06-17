@@ -200,7 +200,7 @@ func isNotDir(err error) bool {
 
 // Child returns the child node with the given name
 func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
-	link, err := os.Readlink(filepath.Join(n.InternalPath(), name))
+	link, err := os.Readlink(filepath.Join(n.InternalPath(), filepath.Join("/", name)))
 	if err != nil {
 		if os.IsNotExist(err) || isNotDir(err) {
 			c := &Node{

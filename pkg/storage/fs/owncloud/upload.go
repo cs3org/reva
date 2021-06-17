@@ -263,7 +263,7 @@ func (fs *ocfs) getUploadPath(ctx context.Context, uploadID string) (string, err
 
 // GetUpload returns the Upload for the given upload id
 func (fs *ocfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
-	infoPath := filepath.Join(fs.c.UploadInfoDir, id+".info")
+	infoPath := filepath.Join(fs.c.UploadInfoDir, filepath.Join("/", id+".info"))
 
 	info := tusd.FileInfo{}
 	data, err := ioutil.ReadFile(infoPath)
