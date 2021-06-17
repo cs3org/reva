@@ -48,6 +48,36 @@ func (_m *GatewayClient) CreateContainer(ctx context.Context, in *providerv1beta
 	return r0, r1
 }
 
+// Delete provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayClient) Delete(ctx context.Context, in *providerv1beta1.DeleteRequest, opts ...grpc.CallOption) (*providerv1beta1.DeleteResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *providerv1beta1.DeleteResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.DeleteRequest, ...grpc.CallOption) *providerv1beta1.DeleteResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*providerv1beta1.DeleteResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.DeleteRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // InitiateFileDownload provides a mock function with given fields: ctx, req, opts
 func (_m *GatewayClient) InitiateFileDownload(ctx context.Context, req *providerv1beta1.InitiateFileDownloadRequest, opts ...grpc.CallOption) (*gatewayv1beta1.InitiateFileDownloadResponse, error) {
 	_va := make([]interface{}, len(opts))
