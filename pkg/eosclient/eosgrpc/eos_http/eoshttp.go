@@ -25,7 +25,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -232,11 +234,13 @@ func (c *Client) getRespError(rsp *http.Response, err error) error {
 
 // From the basepath and the file path... build an url
 func (c *Client) buildFullURL(urlpath, uid, gid string) (string, error) {
-	s := c.opt.BaseURL
-	if len(urlpath) > 0 && urlpath[0] != '/' {
-		s += "/"
+
+	u, err := url.Parse(c.opt.BaseURL)
+	if err != nil {
+		return "", err
 	}
-	s += urlpath
+
+	u.Path = path.Join(u.Path, urlpath)
 
 	// I feel safer putting here a check, to prohibit malicious users to
 	// inject a false uid/gid into the url
@@ -250,25 +254,16 @@ func (c *Client) buildFullURL(urlpath, uid, gid string) (string, error) {
 		return "", errtypes.PermissionDenied("Illegal malicious url " + urlpath)
 	}
 
-	eosuidgid := ""
+	v := u.Query()
+
 	if len(uid) > 0 {
-		eosuidgid += "eos.ruid=" + uid
+		v.Set("eos.ruid", uid)
 	}
 	if len(gid) > 0 {
-		if len(eosuidgid) > 0 {
-			eosuidgid += "&"
-		}
-		eosuidgid += "eos.rgid=" + gid
+		v.Set("eos.rgid", gid)
 	}
 
-	if strings.Contains(urlpath, "?") {
-		s += "&"
-	} else {
-		s += "?"
-	}
-	s += eosuidgid
-
-	return s, nil
+	return u.String(), nil
 }
 
 // GETFile does an entire GET to download a full file. Returns a stream to read the content from
@@ -308,7 +303,7 @@ func (c *Client) GETFile(ctx context.Context, httptransport *http.Transport, rem
 		resp, err := c.cl.Do(req)
 
 		// Let's support redirections... and if we retry we have to retry at the same FST, avoid going back to the MGM
-		if resp != nil && (resp.StatusCode == 307 || resp.StatusCode == 302) {
+		if resp != nil && (resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusTemporaryRedirect) {
 
 			// io.Copy(ioutil.Discard, resp.Body)
 			// resp.Body.Close()

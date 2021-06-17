@@ -137,21 +137,15 @@ func (opt *Options) init() {
 // using the EOS GRPC interface.
 type Client struct {
 	opt           *Options
+	htopts        ehttp.Options
 	httptransport *http.Transport
 	cl            erpc.EosClient
 }
 
 // GetHTTPCl creates an http client for immediate usage, using the already instantiated resources
 func (c *Client) GetHTTPCl() *ehttp.Client {
-	var htopts ehttp.Options
 
-	t, err := htopts.Init()
-	if err != nil {
-		panic("Cant't init the EOS http client options")
-	}
-	htopts.BaseURL = c.opt.URL
-
-	return ehttp.New(&htopts, t)
+	return ehttp.New(&c.htopts, c.httptransport)
 }
 
 // Create and connect a grpc eos Client
@@ -192,14 +186,12 @@ func New(opt *Options) *Client {
 	c := new(Client)
 	c.opt = opt
 
-	var htopts ehttp.Options
-
-	t, err := htopts.Init()
+	t, err := c.htopts.Init()
 	if err != nil {
 		panic("Cant't init the EOS http client options")
 	}
 	c.httptransport = t
-	htopts.BaseURL = c.opt.URL
+	c.htopts.BaseURL = c.opt.URL
 
 	tctx := appctx.WithLogger(context.Background(), &tlog)
 	ccl, err := newgrpc(tctx, opt)
