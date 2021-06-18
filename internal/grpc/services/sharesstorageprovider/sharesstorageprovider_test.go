@@ -488,5 +488,71 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			})
 		})
+
+		Describe("ListFileVersions", func() {
+			BeforeEach(func() {
+				gw.On("ListFileVersions", mock.Anything, mock.Anything).Return(
+					&sprovider.ListFileVersionsResponse{
+						Status: status.NewOK(ctx),
+						Versions: []*sprovider.FileVersion{
+							{
+								Size:  10,
+								Mtime: 1,
+								Etag:  "1",
+								Key:   "1",
+							},
+							{
+								Size:  20,
+								Mtime: 2,
+								Etag:  "2",
+								Key:   "2",
+							},
+						},
+					}, nil)
+			})
+
+			It("does not try to list versions of shares or the top-level dir", func() {
+				req := &sprovider.ListFileVersionsRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares"},
+					},
+				}
+				res, err := s.ListFileVersions(ctx, req)
+				gw.AssertNotCalled(GinkgoT(), "ListFileVersions", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+
+				req = &sprovider.ListFileVersionsRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/"},
+					},
+				}
+				res, err = s.ListFileVersions(ctx, req)
+				gw.AssertNotCalled(GinkgoT(), "ListFileVersions", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+			})
+
+			It("lists versions", func() {
+				req := &sprovider.ListFileVersionsRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-file"},
+					},
+				}
+				res, err := s.ListFileVersions(ctx, req)
+				gw.AssertCalled(GinkgoT(), "ListFileVersions", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				Expect(len(res.Versions)).To(Equal(2))
+				version := res.Versions[0]
+				Expect(version.Key).To(Equal("1"))
+				Expect(version.Etag).To(Equal("1"))
+				Expect(version.Mtime).To(Equal(uint64(1)))
+				Expect(version.Size).To(Equal(uint64(10)))
+			})
+		})
 	})
 })
