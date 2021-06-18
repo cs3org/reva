@@ -148,7 +148,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context) (total uint64, inUse uint6
 		return 0, 0, errtypes.PermissionDenied(n.ID)
 	}
 
-	ri, err := n.AsResourceInfo(ctx, rp, []string{"treesize", "quota"})
+	ri, err := n.AsResourceInfo(ctx, rp, []string{"treesize", "quota"}, true)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -262,14 +262,17 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 }
 
 // CreateDir creates the specified directory
-func (fs *Decomposedfs) CreateDir(ctx context.Context, fn string) (err error) {
+func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference, name string) (err error) {
 	var n *node.Node
-	if n, err = fs.lu.NodeFromPath(ctx, fn); err != nil {
+	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+		return
+	}
+	if n, err = n.Child(ctx, name); err != nil {
 		return
 	}
 
 	if n.Exists {
-		return errtypes.AlreadyExists(fn)
+		return errtypes.AlreadyExists(name)
 	}
 	pn, err := n.Parent()
 	if err != nil {
@@ -399,7 +402,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx, rp, mdKeys)
+	return node.AsResourceInfo(ctx, rp, mdKeys, utils.IsRelativeReference(ref))
 }
 
 // ListFolder returns a list of resources in the specified folder
@@ -432,7 +435,7 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		np := rp
 		// add this childs permissions
 		node.AddPermissions(np, n.PermissionSet(ctx))
-		if ri, err := children[i].AsResourceInfo(ctx, np, mdKeys); err == nil {
+		if ri, err := children[i].AsResourceInfo(ctx, np, mdKeys, utils.IsRelativeReference(ref)); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}

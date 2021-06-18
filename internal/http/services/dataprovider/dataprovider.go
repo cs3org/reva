@@ -103,6 +103,7 @@ func getDataTXs(c *config, fs storage.FS) (map[string]http.Handler, error) {
 	}
 	if len(c.DataTXs) == 0 {
 		c.DataTXs["simple"] = make(map[string]interface{})
+		c.DataTXs["spaces"] = make(map[string]interface{})
 		c.DataTXs["tus"] = make(map[string]interface{})
 	}
 

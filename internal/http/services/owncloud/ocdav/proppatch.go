@@ -104,6 +104,70 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
 }
 
+func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "spaces_proppatch")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
+
+	pp, status, err := readProppatch(r.Body)
+	if err != nil {
+		sublog.Debug().Err(err).Msg("error reading proppatch")
+		w.WriteHeader(status)
+		return
+	}
+
+	// retrieve a specific storage space
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
+
+	c, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	// check if resource exists
+	statReq := &provider.StatRequest{
+		Ref: ref,
+	}
+	statRes, err := c.Stat(ctx, statReq)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc stat request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, statRes.Status)
+		return
+	}
+
+	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, ref, pp, sublog)
+	if !ok {
+		// handleProppatch handles responses in error cases so we can just return
+		return
+	}
+
+	nRef := path.Join(spaceID, statRes.Info.Path)
+	nRef = path.Join(ctx.Value(ctxKeyBaseURI).(string), nRef)
+	if statRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		nRef += "/"
+	}
+
+	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
+}
+
 func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, patches []Proppatch, log zerolog.Logger) ([]xml.Name, []xml.Name, bool) {
 	c, err := s.getClient()
 	if err != nil {

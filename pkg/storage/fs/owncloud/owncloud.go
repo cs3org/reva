@@ -1152,8 +1152,13 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
-	ip := fs.toInternalPath(ctx, sp)
+func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference, name string) (err error) {
+
+	dir, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return err
+	}
+	ip := filepath.Join(dir, name)
 
 	// check permissions of parent dir
 	if perm, err := fs.readPermissions(ctx, filepath.Dir(ip)); err == nil {
@@ -1169,7 +1174,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
 
 	if err = os.Mkdir(ip, 0700); err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(sp)
+			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
 		return errors.Wrap(err, "ocfs: error creating dir "+ip)
