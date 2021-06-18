@@ -554,5 +554,28 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(version.Size).To(Equal(uint64(10)))
 			})
 		})
+
+		Describe("RestoreFileVersion", func() {
+			BeforeEach(func() {
+				gw.On("RestoreFileVersion", mock.Anything, mock.Anything).Return(
+					&sprovider.RestoreFileVersionResponse{
+						Status: status.NewOK(ctx),
+					}, nil)
+			})
+
+			It("restores a file version", func() {
+				req := &sprovider.RestoreFileVersionRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-file"},
+					},
+					Key: "1",
+				}
+				res, err := s.RestoreFileVersion(ctx, req)
+				gw.AssertCalled(GinkgoT(), "RestoreFileVersion", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+			})
+		})
 	})
 })
