@@ -202,7 +202,7 @@ func registerMimeTypes(mimes map[string]string) {
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
 		return &provider.SetArbitraryMetadataResponse{
@@ -232,7 +232,7 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
 		return &provider.UnsetArbitraryMetadataResponse{
@@ -268,7 +268,6 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	// For example, https://data-server.example.org/home/docs/myfile.txt
 	// or ownclouds://data-server.example.org/home/docs/myfile.txt
 	log := appctx.GetLogger(ctx)
-
 	u := *s.dataServerURL
 	log.Info().Str("data-server", u.String()).Interface("ref", req.Ref).Msg("file download")
 
@@ -278,7 +277,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 		protocol.Protocol = "spaces"
 		u.Path = path.Join(u.Path, "spaces", req.Ref.ResourceId.StorageId+"!"+req.Ref.ResourceId.OpaqueId, req.Ref.Path)
 	} else {
-		ctx, newRef, err := s.unwrap(ctx, req.Ref)
+		newRef, err := s.unwrap(ctx, req.Ref)
 		if err != nil {
 			return &provider.InitiateFileDownloadResponse{
 				Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -301,7 +300,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
 	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -509,7 +508,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		req.Ref.Path = path.Dir(req.Ref.Path)
 		name = path.Base(req.Ref.Path)
 	case utils.IsAbsoluteReference(req.Ref):
-		ctx, ref, err := s.unwrap(ctx, req.Ref)
+		ref, err := s.unwrap(ctx, req.Ref)
 		if err != nil {
 			return &provider.CreateContainerResponse{
 				Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -560,7 +559,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.DeleteResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -603,13 +602,13 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	ctx, sourceRef, err := s.unwrap(ctx, req.Source)
+	sourceRef, err := s.unwrap(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping source path"),
 		}, nil
 	}
-	ctx, targetRef, err := s.unwrap(ctx, req.Destination)
+	targetRef, err := s.unwrap(ctx, req.Destination)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -650,7 +649,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		trace.StringAttribute("ref", req.Ref.String()),
 	)
 
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	var st *rpc.Status
 	if err != nil {
 		switch err.(type) {
@@ -697,7 +696,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 	ctx := ss.Context()
 	log := appctx.GetLogger(ctx)
 
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		res := &provider.ListContainerStreamResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -756,7 +755,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -797,7 +796,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 }
 
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListFileVersionsResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -830,7 +829,7 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 }
 
 func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreFileVersionResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -862,7 +861,7 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 	ctx := ss.Context()
 	log := appctx.GetLogger(ctx)
 
-	ctx, ref, err := s.unwrap(ctx, req.Ref)
+	ref, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return err
 	}
@@ -903,7 +902,7 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 }
 
 func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	ctx, ref, err := s.unwrap(ctx, req.Ref)
+	ref, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return nil, err
 	}
@@ -934,7 +933,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 
 func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
-	ctx, ref, err := s.unwrap(ctx, req.Ref)
+	ref, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return nil, err
 	}
@@ -999,7 +998,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 }
 
 func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListGrantsResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -1067,7 +1066,7 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.AddGrantResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -1111,7 +1110,7 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 		}, nil
 	}
 
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.UpdateGrantResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -1147,7 +1146,7 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 		}, nil
 	}
 
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.RemoveGrantResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -1187,7 +1186,7 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 		}, nil
 	}
 
-	ctx, newRef, err := s.unwrap(ctx, req.Ref)
+	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateReferenceResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -1253,29 +1252,29 @@ func getFS(c *config) (storage.FS, error) {
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
-func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (context.Context, *provider.Reference, error) {
+func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {
 	// all references with an id can be passed on to the driver
 	// there are two cases:
 	// 1. absolute id references (resource_id is set, path is empty)
 	// 2. relative references (resource_id is set, path starts with a `.`)
 	if ref.ResourceId != nil {
-		return ctx, ref, nil
+		return ref, nil
 	}
 
 	// if the
 	if !strings.HasPrefix(ref.GetPath(), "/") {
 		// abort, absolute path references must start with a `/``
-		return ctx, nil, errtypes.BadRequest("ref is invalid: " + ref.String())
+		return nil, errtypes.BadRequest("ref is invalid: " + ref.String())
 	}
 
 	// TODO move mount path trimming to the gateway
 	fn := ref.GetPath()
 	fsfn, err := s.trimMountPrefix(fn)
 	if err != nil {
-		return ctx, nil, err
+		return nil, err
 	}
 
-	return ctx, &provider.Reference{Path: fsfn}, nil
+	return &provider.Reference{Path: fsfn}, nil
 }
 
 func (s *service) trimMountPrefix(fn string) (string, error) {
