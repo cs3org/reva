@@ -46,6 +46,7 @@ import (
 //go:generate mockery -name GatewayClient
 type GatewayClient interface {
 	Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error)
+	Move(ctx context.Context, in *provider.MoveRequest, opts ...grpc.CallOption) (*provider.MoveResponse, error)
 	Delete(ctx context.Context, in *provider.DeleteRequest, opts ...grpc.CallOption) (*provider.DeleteResponse, error)
 	CreateContainer(ctx context.Context, in *provider.CreateContainerRequest, opts ...grpc.CallOption) (*provider.CreateContainerResponse, error)
 	ListContainer(ctx context.Context, in *provider.ListContainerRequest, opts ...grpc.CallOption) (*provider.ListContainerResponse, error)
@@ -307,7 +308,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 
 	if err != nil {
 		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileDownload"),
+			Status: status.NewInternal(ctx, err, "gateway: error calling Delete"),
 		}, nil
 	}
 
@@ -321,7 +322,65 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	reqShare, reqPath := s.resolvePath(req.Source.GetPath())
+	destinationShare, destinationPath := s.resolvePath(req.Destination.GetPath())
+	appctx.GetLogger(ctx).Debug().
+		Interface("reqPath", reqPath).
+		Interface("reqShare", reqShare).
+		Interface("destinationPath", destinationPath).
+		Interface("destinationShare", destinationShare).
+		Msg("sharesstorageprovider: Got Move request")
+
+	if reqShare == "" || reqPath == "" || destinationPath == "" {
+		return &provider.MoveResponse{
+			Status: status.NewInvalid(ctx, "sharestorageprovider: can not move top-level share"),
+		}, nil
+	}
+	if reqShare != destinationShare {
+		return &provider.MoveResponse{
+			Status: status.NewInvalid(ctx, "sharestorageprovider: can not move between shares"),
+		}, nil
+	}
+
+	statRes, err := s.statShare(ctx, reqShare)
+	if err != nil {
+		if statRes != nil {
+			return &provider.MoveResponse{
+				Status: statRes.Status,
+			}, err
+		} else {
+			return &provider.MoveResponse{
+				Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+			}, nil
+		}
+	}
+
+	gwres, err := s.gateway.Move(ctx, &provider.MoveRequest{
+		Source: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: filepath.Join(statRes.Info.Path, reqPath),
+			},
+		},
+		Destination: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: filepath.Join(statRes.Info.Path, destinationPath),
+			},
+		},
+	})
+
+	if err != nil {
+		return &provider.MoveResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling Move"),
+		}, nil
+	}
+
+	if gwres.Status.Code != rpc.Code_CODE_OK {
+		return &provider.MoveResponse{
+			Status: gwres.Status,
+		}, nil
+	}
+
+	return gwres, nil
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
