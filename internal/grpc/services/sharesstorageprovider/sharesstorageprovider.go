@@ -50,6 +50,7 @@ type GatewayClient interface {
 	Delete(ctx context.Context, in *provider.DeleteRequest, opts ...grpc.CallOption) (*provider.DeleteResponse, error)
 	CreateContainer(ctx context.Context, in *provider.CreateContainerRequest, opts ...grpc.CallOption) (*provider.CreateContainerResponse, error)
 	ListContainer(ctx context.Context, in *provider.ListContainerRequest, opts ...grpc.CallOption) (*provider.ListContainerResponse, error)
+	ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest, opts ...grpc.CallOption) (*provider.ListFileVersionsResponse, error)
 	InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileDownloadResponse, error)
 }
 
@@ -521,7 +522,47 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	return res, nil
 }
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	appctx.GetLogger(ctx).Debug().
+		Interface("reqPath", reqPath).
+		Interface("reqShare", reqShare).
+		Msg("sharesstorageprovider: Got ListFileVersions request")
+
+	if reqShare == "" || reqPath == "" {
+		return &provider.ListFileVersionsResponse{
+			Status: status.NewInvalid(ctx, "sharestorageprovider: can not list versions of a non-file"),
+		}, nil
+	}
+
+	statRes, err := s.statShare(ctx, reqShare)
+	if err != nil {
+		if statRes != nil {
+			return &provider.ListFileVersionsResponse{
+				Status: statRes.Status,
+			}, err
+		} else {
+			return &provider.ListFileVersionsResponse{
+				Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+			}, nil
+		}
+	}
+
+	gwres, err := s.gateway.ListFileVersions(ctx, &provider.ListFileVersionsRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: filepath.Join(statRes.Info.Path, reqPath),
+			},
+		},
+	})
+
+	if err != nil {
+		return &provider.ListFileVersionsResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling ListFileVersions"),
+		}, nil
+	}
+
+	return gwres, nil
+
 }
 
 func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {

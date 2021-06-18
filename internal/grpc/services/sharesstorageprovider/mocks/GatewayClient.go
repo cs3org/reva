@@ -138,6 +138,36 @@ func (_m *GatewayClient) ListContainer(ctx context.Context, in *providerv1beta1.
 	return r0, r1
 }
 
+// ListFileVersions provides a mock function with given fields: ctx, req, opts
+func (_m *GatewayClient) ListFileVersions(ctx context.Context, req *providerv1beta1.ListFileVersionsRequest, opts ...grpc.CallOption) (*providerv1beta1.ListFileVersionsResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, req)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *providerv1beta1.ListFileVersionsResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.ListFileVersionsRequest, ...grpc.CallOption) *providerv1beta1.ListFileVersionsResponse); ok {
+		r0 = rf(ctx, req, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*providerv1beta1.ListFileVersionsResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.ListFileVersionsRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, req, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Move provides a mock function with given fields: ctx, in, opts
 func (_m *GatewayClient) Move(ctx context.Context, in *providerv1beta1.MoveRequest, opts ...grpc.CallOption) (*providerv1beta1.MoveResponse, error) {
 	_va := make([]interface{}, len(opts))
