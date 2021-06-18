@@ -23,14 +23,18 @@ package decomposedfs
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
@@ -42,6 +46,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -210,7 +215,29 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 			return
 		}
 	}
+
+	// add storage space
+	if err := fs.createStorageSpace("personal", h.ID); err != nil {
+		return err
+	}
+
 	return
+}
+
+func (fs *Decomposedfs) createStorageSpace(spaceType, nodeID string) error {
+
+	// create space type dir
+	if err := os.MkdirAll(filepath.Join(fs.o.Root, "spaces", spaceType), 0700); err != nil {
+		return err
+	}
+
+	// we can reuse the node id as the space id
+	err := os.Symlink("../../nodes/"+nodeID, filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
+	if err != nil {
+		fmt.Printf("could not create symlink for personal space %s, %s\n", nodeID, err)
+	}
+
+	return nil
 }
 
 // GetHome is called to look up the home path for a user
@@ -463,6 +490,162 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 		return nil, errors.Wrap(err, "Decomposedfs: error download blob '"+node.ID+"'")
 	}
 	return reader, nil
+}
+
+// ListStorageSpaces returns a list of StorageSpaces.
+// The list can be filtered by space type or space id.
+// Spaces are persisted with symlinks in /spaces/<type>/<spaceid> pointing to ../../nodes/<nodeid>, the root node of the space
+// The spaceid is a concatenation of storageid + "!" + nodeid
+func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	// TODO check filters
+
+	// TODO when a space symlink is broken delete the space for cleanup
+	// read permissions are deduced from the node?
+
+	// TODO for absolute references this actually requires us to move all user homes into a subfolder of /nodes/root,
+	// e.g. /nodes/root/<space type> otherwise storage space names might collide even though they are of different types
+	// /nodes/root/personal/foo and /nodes/root/shares/foo might be two very different spaces, a /nodes/root/foo is not expressive enough
+	// we would not need /nodes/root if access always happened via spaceid+relative path
+
+	spaceType := "*"
+	spaceID := "*"
+
+	for i := range filter {
+		switch filter[i].Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			spaceType = filter[i].GetSpaceType()
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			parts := strings.SplitN(filter[i].GetId().OpaqueId, "!", 2)
+			if len(parts) == 2 {
+				spaceID = parts[1]
+			}
+		}
+	}
+
+	// build the glob path, eg.
+	// /path/to/root/spaces/personal/nodeid
+	// /path/to/root/spaces/shared/nodeid
+	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, spaceID))
+	if err != nil {
+		return nil, err
+	}
+
+	var spaces []*provider.StorageSpace
+
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		appctx.GetLogger(ctx).Debug().Msg("expected user in context")
+		return spaces, nil
+	}
+
+	for i := range matches {
+		// always read link in case storage space id != node id
+		if target, err := os.Readlink(matches[i]); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[i]).Msg("could not read link, skipping")
+			continue
+		} else {
+			n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Str("id", filepath.Base(target)).Msg("could not read node, skipping")
+				continue
+			}
+			owner, err := n.Owner()
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not read owner, skipping")
+				continue
+			}
+
+			// TODO apply more filters
+
+			// build return value
+
+			space := &provider.StorageSpace{
+				// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
+				//Id: &provider.StorageSpaceId{OpaqueId: "1284d238-aa92-42ce-bdc4-0b0000009157!" + n.ID},
+				Root: &provider.ResourceId{
+					// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
+					//StorageId: "1284d238-aa92-42ce-bdc4-0b0000009157",
+					OpaqueId: n.ID,
+				},
+				Name:      n.Name,
+				SpaceType: filepath.Base(filepath.Dir(matches[i])),
+				// Mtime is set either as node.tmtime or as fi.mtime below
+			}
+
+			if space.SpaceType == "share" {
+				if utils.UserEqual(u.Id, owner) {
+					// do not list shares as spaces for the owner
+					continue
+				}
+				// return folder name?
+				space.Name = n.Name
+			} else {
+				space.Name = "root" // do not expose the id as name, this is the root of a space
+				// TODO read from extended attribute for project / group spaces
+			}
+
+			// filter out spaces user cannot access (currently based on stat permission)
+			p, err := n.ReadUserPermissions(ctx, u)
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not read permissions, skipping")
+				continue
+			}
+			if !p.Stat {
+				continue
+			}
+
+			// fill in user object if the current user is the owner
+			if utils.UserEqual(u.Id, owner) {
+				space.Owner = u
+			} else {
+				space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
+					Id: owner,
+				}
+			}
+
+			// we set the space mtime to the root item mtime
+			// override the stat mtime with a tmtime if it is present
+			if tmt, err := n.GetTMTime(); err == nil {
+				un := tmt.UnixNano()
+				space.Mtime = &types.Timestamp{
+					Seconds: uint64(un / 1000000000),
+					Nanos:   uint32(un % 1000000000),
+				}
+			} else if fi, err := os.Stat(matches[i]); err == nil {
+				// fall back to stat mtime
+				un := fi.ModTime().UnixNano()
+				space.Mtime = &types.Timestamp{
+					Seconds: uint64(un / 1000000000),
+					Nanos:   uint32(un % 1000000000),
+				}
+			}
+
+			// quota
+			v, err := xattr.Get(matches[i], xattrs.QuotaAttr)
+			if err == nil {
+				// make sure we have a proper signed int
+				// we use the same magic numbers to indicate:
+				// -1 = uncalculated
+				// -2 = unknown
+				// -3 = unlimited
+				if quota, err := strconv.ParseInt(string(v), 10, 64); err == nil {
+					if quota >= 0 {
+						space.Quota = &provider.Quota{
+							QuotaMaxBytes: uint64(quota),
+							QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
+						}
+					}
+				} else {
+					appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", matches[i]).Msg("could not read quota")
+				}
+			}
+
+			spaces = append(spaces, space)
+		}
+	}
+
+	return spaces, nil
+
 }
 
 func (fs *Decomposedfs) copyMD(s string, t string) (err error) {
