@@ -419,7 +419,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
 			})
 
-			It("delete a file", func() {
+			It("deletes a file", func() {
 				req := &sprovider.DeleteRequest{
 					Ref: &sprovider.Reference{
 						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-subdir/share1-subdir-file"},
@@ -427,6 +427,62 @@ var _ = Describe("Sharesstorageprovider", func() {
 				}
 				res, err := s.Delete(ctx, req)
 				gw.AssertCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+			})
+		})
+
+		Describe("Move", func() {
+			BeforeEach(func() {
+				gw.On("Move", mock.Anything, mock.Anything).Return(&sprovider.MoveResponse{
+					Status: status.NewOK(ctx),
+				}, nil)
+			})
+
+			It("refuses to move a share", func() {
+				req := &sprovider.MoveRequest{
+					Source: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir"},
+					},
+					Destination: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/newname"},
+					},
+				}
+				res, err := s.Move(ctx, req)
+				gw.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+			})
+
+			It("refuses to move a file between shares", func() {
+				req := &sprovider.MoveRequest{
+					Source: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-file"},
+					},
+					Destination: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share2-shareddir/share2-shareddir-file"},
+					},
+				}
+				res, err := s.Move(ctx, req)
+				gw.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+			})
+
+			It("moves a file", func() {
+				req := &sprovider.MoveRequest{
+					Source: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-file"},
+					},
+					Destination: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-filenew"},
+					},
+				}
+				res, err := s.Move(ctx, req)
+				gw.AssertCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
