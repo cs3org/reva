@@ -61,6 +61,34 @@ func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns strin
 	s.handleTusPost(ctx, w, r, meta, ref, sublog)
 }
 
+func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "spaces-tus-post")
+	defer span.End()
+
+	// read filename from metadata
+	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
+	if meta["filename"] == "" {
+		w.WriteHeader(http.StatusPreconditionFailed)
+		return
+	}
+
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+
+	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, path.Join(r.URL.Path, meta["filename"]))
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handleTusPost(ctx, w, r, meta, spaceRef, sublog)
+}
+
 func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.Request, meta map[string]string, ref *provider.Reference, log zerolog.Logger) {
 	w.Header().Add(HeaderAccessControlAllowHeaders, strings.Join([]string{HeaderTusResumable, HeaderUploadLength, HeaderUploadMetadata, HeaderIfMatch}, ", "))
 	w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderLocation}, ", "))

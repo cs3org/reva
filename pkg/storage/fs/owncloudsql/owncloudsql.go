@@ -575,8 +575,11 @@ func (fs *owncloudsqlfs) resolve(ctx context.Context, ref *provider.Reference) (
 			}
 			p = filepath.Join(owner, p)
 		}
+		return p, nil
+	}
 
-		return fs.toInternalPath(ctx, p), nil
+	if ref.GetPath() != "" {
+		return fs.toInternalPath(ctx, ref.GetPath()), nil
 	}
 
 	if ref.GetPath() != "" {
@@ -702,7 +705,7 @@ func (fs *owncloudsqlfs) GetHome(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-func (fs *owncloudsqlfs) CreateDir(ctx context.Context, sp string) (err error) {
+func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference, sp string) (err error) {
 	ip := fs.toInternalPath(ctx, sp)
 
 	// check permissions of parent dir

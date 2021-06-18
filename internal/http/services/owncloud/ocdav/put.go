@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
+	"go.opencensus.io/trace"
 )
 
 func sufferMacOSFinder(r *http.Request) bool {
@@ -105,6 +106,9 @@ func isContentRange(r *http.Request) bool {
 
 func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "put")
+	defer span.End()
+
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
@@ -274,6 +278,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 					message: "The computed checksum does not match the one received from the client.",
 				})
 				HandleWebdavError(&log, w, b, err)
+				return
 			}
 			log.Error().Err(err).Msg("PUT request to data server failed")
 			w.WriteHeader(httpRes.StatusCode)
@@ -326,6 +331,26 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	// overwrite
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx := r.Context()
+
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+
+	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handlePut(ctx, w, r, spaceRef, sublog)
 }
 
 func checkPreconditions(w http.ResponseWriter, r *http.Request, log zerolog.Logger) bool {

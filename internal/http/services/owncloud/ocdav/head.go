@@ -87,3 +87,25 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 	}
 	w.WriteHeader(http.StatusOK)
 }
+
+func (s *svc) handleSpacesHead(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "spaces_head")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+
+	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handleHead(ctx, w, r, spaceRef, sublog)
+}
