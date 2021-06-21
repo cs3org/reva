@@ -505,8 +505,8 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	var name string
 	switch {
 	case utils.IsRelativeReference(req.Ref):
-		req.Ref.Path = path.Dir(req.Ref.Path)
-		name = path.Base(req.Ref.Path)
+		req.Ref.Path, name = path.Split(req.Ref.Path)
+		parentRef = req.Ref
 	case utils.IsAbsoluteReference(req.Ref):
 		ref, err := s.unwrap(ctx, req.Ref)
 		if err != nil {
