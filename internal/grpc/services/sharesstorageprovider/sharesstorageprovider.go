@@ -149,9 +149,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 		}
 		gwres, err := s.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
 			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: filepath.Join(statRes.Info.Path, reqPath),
-				},
+				Path: filepath.Join(statRes.Info.Path, reqPath),
 			},
 		})
 		if err != nil {
@@ -216,9 +214,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}
 		gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
 			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: filepath.Join(statRes.Info.Path, reqPath),
-				},
+				Path: filepath.Join(statRes.Info.Path, reqPath),
 			},
 			Opaque: req.Opaque,
 		})
@@ -320,9 +316,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 
 	gwres, err := s.gateway.CreateContainer(ctx, &provider.CreateContainerRequest{
 		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: filepath.Join(statRes.Info.Path, reqPath),
-			},
+			Path: filepath.Join(statRes.Info.Path, reqPath),
 		},
 	})
 
@@ -369,9 +363,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 
 	gwres, err := s.gateway.Delete(ctx, &provider.DeleteRequest{
 		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: filepath.Join(statRes.Info.Path, reqPath),
-			},
+			Path: filepath.Join(statRes.Info.Path, reqPath),
 		},
 	})
 
@@ -426,14 +418,10 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 
 	gwres, err := s.gateway.Move(ctx, &provider.MoveRequest{
 		Source: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: filepath.Join(statRes.Info.Path, reqPath),
-			},
+			Path: filepath.Join(statRes.Info.Path, reqPath),
 		},
 		Destination: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: filepath.Join(statRes.Info.Path, destinationPath),
-			},
+			Path: filepath.Join(statRes.Info.Path, destinationPath),
 		},
 	})
 
@@ -486,9 +474,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 		gwres, err := s.gateway.Stat(ctx, &provider.StatRequest{
 			Ref: &provider.Reference{
-				Spec: &provider.Reference_Id{
-					Id: rs.Share.ResourceId,
-				},
+				ResourceId: rs.Share.ResourceId,
 			},
 		})
 		if err != nil {
@@ -501,9 +487,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			if reqPath != "" {
 				gwres, err = s.gateway.Stat(ctx, &provider.StatRequest{
 					Ref: &provider.Reference{
-						Spec: &provider.Reference_Path{
-							Path: filepath.Join(gwres.Info.Path, reqPath),
-						},
+						Path: filepath.Join(gwres.Info.Path, reqPath),
 					},
 				})
 				if err != nil {
@@ -553,9 +537,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 		gwres, err := s.gateway.Stat(ctx, &provider.StatRequest{
 			Ref: &provider.Reference{
-				Spec: &provider.Reference_Id{
-					Id: rs.Share.ResourceId,
-				},
+				ResourceId: rs.Share.ResourceId,
 			},
 		})
 		if err != nil {
@@ -567,7 +549,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		if reqShare != "" && filepath.Base(gwres.Info.Path) == reqShare {
 			gwListRes, err := s.gateway.ListContainer(ctx, &provider.ListContainerRequest{
 				Ref: &provider.Reference{
-					Spec: &provider.Reference_Path{Path: filepath.Join(filepath.Dir(gwres.Info.Path), reqShare, reqPath)},
+					Path: filepath.Join(filepath.Dir(gwres.Info.Path), reqShare, reqPath),
 				},
 			})
 			if err != nil {
@@ -617,9 +599,7 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 
 	gwres, err := s.gateway.ListFileVersions(ctx, &provider.ListFileVersionsRequest{
 		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: filepath.Join(statRes.Info.Path, reqPath),
-			},
+			Path: filepath.Join(statRes.Info.Path, reqPath),
 		},
 	})
 
@@ -661,9 +641,7 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 
 	gwres, err := s.gateway.RestoreFileVersion(ctx, &provider.RestoreFileVersionRequest{
 		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: filepath.Join(statRes.Info.Path, reqPath),
-			},
+			Path: filepath.Join(statRes.Info.Path, reqPath),
 		},
 	})
 
@@ -755,9 +733,7 @@ func (s *service) statShare(ctx context.Context, share string) (*provider.StatRe
 
 		statRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
 			Ref: &provider.Reference{
-				Spec: &provider.Reference_Id{
-					Id: rs.Share.ResourceId,
-				},
+				ResourceId: rs.Share.ResourceId,
 			},
 		})
 		if err != nil {
