@@ -258,31 +258,6 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 	return outBuf.String(), errBuf.String(), err
 }
 
-func (c *Client) SetACLs(ctx context.Context, uid, gid, path string, acls []*acl.Entry) error {
-	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
-	if err != nil {
-		return err
-	}
-
-	a := acl.ACLs{Entries: acls}
-	aclsSerialized := a.Serialize()
-
-	attr := &eosclient.Attribute{
-		Key: "acl",
-		Val: aclsSerialized,
-	}
-	if finfo.IsDir {
-		attr.Type = SystemAttr
-	} else {
-		attr.Type = UserAttr
-	}
-
-	if err = c.SetAttr(ctx, uid, gid, attr, true, path); err != nil {
-		return err
-	}
-	return nil
-}
-
 // AddACL adds an new acl to EOS with the given aclType.
 func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
 	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)

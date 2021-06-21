@@ -487,6 +487,31 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 	return nil
 }
 
+func setACLs(ctx context.Context, c eosclient.EOSClient, uid, gid, path string, acls []*acl.Entry) error {
+	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
+	if err != nil {
+		return err
+	}
+
+	a := acl.ACLs{Entries: acls}
+	aclsSerialized := a.Serialize()
+
+	attr := &eosclient.Attribute{
+		Key: "acl",
+		Val: aclsSerialized,
+	}
+	if finfo.IsDir {
+		attr.Type = SystemAttr
+	} else {
+		attr.Type = UserAttr
+	}
+
+	if err = c.SetAttr(ctx, uid, gid, attr, true, path); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
@@ -518,12 +543,9 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return err
 	}
 
-        // rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
-	// if err != nil {
-	// 	return err
-	// }
+	// rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
 
-	if err = fs.c.SetACLs(ctx, uid, gid, fn, acls); err != nil {
+	if err = setACLs(ctx, fs.c, uid, gid, fn, acls); err != nil {
 		return errors.Wrap(err, "eosfs: error setting acls")
 	}
 

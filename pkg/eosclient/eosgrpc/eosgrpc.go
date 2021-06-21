@@ -269,10 +269,6 @@ func (c *Client) initMDRequest(ctx context.Context, uid, gid string) (*erpc.MDRe
 	return mdrq, nil
 }
 
-func (c *Client) SetACLs(ctx context.Context, uid, gid, path string, acls []*acl.Entry) error {
-	return errtypes.NotSupported("not implemented")
-}
-
 // AddACL adds an new acl to EOS with the given aclType.
 func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
 
