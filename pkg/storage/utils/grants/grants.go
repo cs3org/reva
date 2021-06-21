@@ -133,14 +133,17 @@ func GetGranteeType(aclType string) provider.GranteeType {
 	}
 }
 
+// PermissionsEqual returns true if the permissions are equal
 func PermissionsEqual(p1, p2 *provider.ResourcePermissions) bool {
 	return p1 != nil && p2 != nil && cmp.Equal(*p1, *p2)
 }
 
+// GranteeEqual returns true if the grantee are equal
 func GranteeEqual(g1, g2 *provider.Grantee) bool {
 	return g1 != nil && g2 != nil && cmp.Equal(*g1, *g2)
 }
 
+// AddGrant adds the newGrant into the list of grants
 func AddGrant(grants *[]*provider.Grant, newGrant *provider.Grant) {
 	if PermissionsEqual(newGrant.Permissions, &provider.ResourcePermissions{}) {
 		// a denial is appended to the list
@@ -160,6 +163,7 @@ func AddGrant(grants *[]*provider.Grant, newGrant *provider.Grant) {
 	}
 }
 
+// RemoveGrant remove the grantee's grant from the grants list
 func RemoveGrant(grants *[]*provider.Grant, grantee *provider.Grantee) {
 	for i, grant := range *grants {
 		if GranteeEqual(grant.Grantee, grantee) {
