@@ -61,12 +61,12 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		rootStatReq = &sprovider.StatRequest{
 			Ref: &sprovider.Reference{
-				Spec: &sprovider.Reference_Path{Path: "/shares"},
+				Path: "/shares",
 			},
 		}
 		rootListContainerReq = &sprovider.ListContainerRequest{
 			Ref: &sprovider.Reference{
-				Spec: &sprovider.Reference_Path{Path: "/shares"},
+				Path: "/shares",
 			},
 		}
 
@@ -81,7 +81,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		gw.On("ListContainer", mock.Anything, &sprovider.ListContainerRequest{
 			Ref: &sprovider.Reference{
-				Spec: &sprovider.Reference_Path{Path: "/share1-shareddir"},
+				Path: "/share1-shareddir",
 			},
 		}).Return(
 			&sprovider.ListContainerResponse{
@@ -101,7 +101,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		gw.On("ListContainer", mock.Anything, &sprovider.ListContainerRequest{
 			Ref: &sprovider.Reference{
-				Spec: &sprovider.Reference_Path{Path: "/share1-shareddir/share1-subdir"},
+				Path: "/share1-shareddir/share1-subdir",
 			},
 		}).Return(
 			&sprovider.ListContainerResponse{
@@ -238,7 +238,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("stats a shares folder", func() {
 				statReq := &sprovider.StatRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir"},
+						Path: "/shares/share1-shareddir",
 					},
 				}
 				res, err := s.Stat(ctx, statReq)
@@ -252,7 +252,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("stats a subfolder in a share", func() {
 				statReq := &sprovider.StatRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-subdir"},
+						Path: "/shares/share1-shareddir/share1-subdir",
 					},
 				}
 				res, err := s.Stat(ctx, statReq)
@@ -266,7 +266,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("stats a shared file", func() {
 				statReq := &sprovider.StatRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-subdir/share1-subdir-file"},
+						Path: "/shares/share1-shareddir/share1-subdir/share1-subdir-file",
 					},
 				}
 				res, err := s.Stat(ctx, statReq)
@@ -293,7 +293,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("traverses into specific shares", func() {
 				req := &sprovider.ListContainerRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir"},
+						Path: "/shares/share1-shareddir",
 					},
 				}
 				res, err := s.ListContainer(ctx, req)
@@ -309,7 +309,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("traverses into subfolders of specific shares", func() {
 				req := &sprovider.ListContainerRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-subdir"},
+						Path: "/shares/share1-shareddir/share1-subdir",
 					},
 				}
 				res, err := s.ListContainer(ctx, req)
@@ -331,7 +331,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 				req := &sprovider.InitiateFileDownloadRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/does-not-exist"},
+						Path: "/shares/share1-shareddir/does-not-exist",
 					},
 				}
 				res, err := s.InitiateFileDownload(ctx, req)
@@ -354,7 +354,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				}, nil)
 				req := &sprovider.InitiateFileDownloadRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-subdir/share1-subdir-file"},
+						Path: "/shares/share1-shareddir/share1-subdir/share1-subdir-file",
 					},
 				}
 				res, err := s.InitiateFileDownload(ctx, req)
@@ -376,7 +376,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("refuses to create a top-level container which doesn't belong to a share", func() {
 				req := &sprovider.CreateContainerRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/invalid-top-level-subdir"},
+						Path: "/shares/invalid-top-level-subdir",
 					},
 				}
 				res, err := s.CreateContainer(ctx, req)
@@ -389,7 +389,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("creates a directory", func() {
 				req := &sprovider.CreateContainerRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-newsubdir"},
+						Path: "/shares/share1-shareddir/share1-newsubdir",
 					},
 				}
 				res, err := s.CreateContainer(ctx, req)
@@ -409,7 +409,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("refuses to delete a share", func() {
 				req := &sprovider.DeleteRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir"},
+						Path: "/shares/share1-shareddir",
 					},
 				}
 				res, err := s.Delete(ctx, req)
@@ -422,7 +422,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("deletes a file", func() {
 				req := &sprovider.DeleteRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-subdir/share1-subdir-file"},
+						Path: "/shares/share1-shareddir/share1-subdir/share1-subdir-file",
 					},
 				}
 				res, err := s.Delete(ctx, req)
@@ -443,10 +443,10 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("refuses to move a share", func() {
 				req := &sprovider.MoveRequest{
 					Source: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir"},
+						Path: "/shares/share1-shareddir",
 					},
 					Destination: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/newname"},
+						Path: "/shares/newname",
 					},
 				}
 				res, err := s.Move(ctx, req)
@@ -459,10 +459,10 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("refuses to move a file between shares", func() {
 				req := &sprovider.MoveRequest{
 					Source: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-file"},
+						Path: "/shares/share1-shareddir/share1-shareddir-file",
 					},
 					Destination: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share2-shareddir/share2-shareddir-file"},
+						Path: "/shares/share2-shareddir/share2-shareddir-file",
 					},
 				}
 				res, err := s.Move(ctx, req)
@@ -475,10 +475,10 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("moves a file", func() {
 				req := &sprovider.MoveRequest{
 					Source: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-file"},
+						Path: "/shares/share1-shareddir/share1-shareddir-file",
 					},
 					Destination: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-filenew"},
+						Path: "/shares/share1-shareddir/share1-shareddir-filenew",
 					},
 				}
 				res, err := s.Move(ctx, req)
@@ -514,7 +514,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("does not try to list versions of shares or the top-level dir", func() {
 				req := &sprovider.ListFileVersionsRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares"},
+						Path: "/shares",
 					},
 				}
 				res, err := s.ListFileVersions(ctx, req)
@@ -525,7 +525,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 				req = &sprovider.ListFileVersionsRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/"},
+						Path: "/shares/share1-shareddir/",
 					},
 				}
 				res, err = s.ListFileVersions(ctx, req)
@@ -538,7 +538,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("lists versions", func() {
 				req := &sprovider.ListFileVersionsRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-file"},
+						Path: "/shares/share1-shareddir/share1-shareddir-file",
 					},
 				}
 				res, err := s.ListFileVersions(ctx, req)
@@ -566,7 +566,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("restores a file version", func() {
 				req := &sprovider.RestoreFileVersionRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-file"},
+						Path: "/shares/share1-shareddir/share1-shareddir-file",
 					},
 					Key: "1",
 				}
@@ -597,7 +597,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("initiates a file upload", func() {
 				req := &sprovider.InitiateFileUploadRequest{
 					Ref: &sprovider.Reference{
-						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-file"},
+						Path: "/shares/share1-shareddir/share1-shareddir-file",
 					},
 				}
 				res, err := s.InitiateFileUpload(ctx, req)
