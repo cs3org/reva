@@ -53,6 +53,7 @@ type GatewayClient interface {
 	ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest, opts ...grpc.CallOption) (*provider.ListFileVersionsResponse, error)
 	RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest, opts ...grpc.CallOption) (*provider.RestoreFileVersionResponse, error)
 	InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileDownloadResponse, error)
+	InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileUploadResponse, error)
 }
 
 func init() {
@@ -194,7 +195,73 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	appctx.GetLogger(ctx).Debug().
+		Interface("reqPath", reqPath).
+		Interface("reqShare", reqShare).
+		Msg("sharesstorageprovider: Got InitiateFileUpload request")
+
+	if reqShare != "" {
+		statRes, err := s.statShare(ctx, reqShare)
+		if err != nil {
+			if statRes != nil {
+				return &provider.InitiateFileUploadResponse{
+					Status: statRes.Status,
+				}, err
+			} else {
+				return &provider.InitiateFileUploadResponse{
+					Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+				}, nil
+			}
+		}
+		gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: filepath.Join(statRes.Info.Path, reqPath),
+				},
+			},
+			Opaque: req.Opaque,
+		})
+		if err != nil {
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileDownload"),
+			}, nil
+		}
+
+		if gwres.Status.Code != rpc.Code_CODE_OK {
+			return &provider.InitiateFileUploadResponse{
+				Status: gwres.Status,
+			}, nil
+		}
+
+		protocols := []*provider.FileUploadProtocol{}
+		for p := range gwres.Protocols {
+			if !strings.HasSuffix(gwres.Protocols[p].UploadEndpoint, "/") {
+				gwres.Protocols[p].UploadEndpoint += "/"
+			}
+			gwres.Protocols[p].UploadEndpoint += gwres.Protocols[p].Token
+
+			protocols = append(protocols, &provider.FileUploadProtocol{
+				Opaque:             gwres.Protocols[p].Opaque,
+				Protocol:           gwres.Protocols[p].Protocol,
+				UploadEndpoint:     gwres.Protocols[p].UploadEndpoint,
+				AvailableChecksums: gwres.Protocols[p].AvailableChecksums,
+				Expose:             true, // the gateway already has encoded the upload endpoint
+			})
+		}
+
+		return &provider.InitiateFileUploadResponse{
+			Status:    gwres.Status,
+			Protocols: protocols,
+		}, nil
+	} else {
+		// Is this supported?
+	}
+
+	return &provider.InitiateFileUploadResponse{
+		Status: status.NewNotFound(ctx, "sharestorageprovider: file not found"),
+	}, nil
+
 }
 
 func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
