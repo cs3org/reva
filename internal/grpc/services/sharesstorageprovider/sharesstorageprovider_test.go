@@ -577,5 +577,38 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			})
 		})
+
+		Describe("InitiateFileUpload", func() {
+			BeforeEach(func() {
+				gw.On("InitiateFileUpload", mock.Anything, mock.Anything).Return(
+					&gateway.InitiateFileUploadResponse{
+						Status: status.NewOK(ctx),
+						Protocols: []*gateway.FileUploadProtocol{
+							{
+								Opaque:         &types.Opaque{},
+								Protocol:       "simple",
+								UploadEndpoint: "https://localhost:9200/data",
+								Token:          "thetoken",
+							},
+						},
+					}, nil)
+			})
+
+			It("initiates a file upload", func() {
+				req := &sprovider.InitiateFileUploadRequest{
+					Ref: &sprovider.Reference{
+						Spec: &sprovider.Reference_Path{Path: "/shares/share1-shareddir/share1-shareddir-file"},
+					},
+				}
+				res, err := s.InitiateFileUpload(ctx, req)
+				gw.AssertCalled(GinkgoT(), "InitiateFileUpload", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				Expect(len(res.Protocols)).To(Equal(1))
+				Expect(res.Protocols[0].Protocol).To(Equal("simple"))
+				Expect(res.Protocols[0].UploadEndpoint).To(Equal("https://localhost:9200/data/thetoken"))
+			})
+		})
 	})
 })
