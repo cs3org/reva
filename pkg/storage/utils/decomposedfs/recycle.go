@@ -103,7 +103,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context) (items []*provider.Recy
 		item := &provider.RecycleItem{
 			Type: getResourceType(md.IsDir()),
 			Size: uint64(md.Size()),
-			Key:  filepath.Base(trashRoot) + ":" + parts[0], // glue using :, a / is interpreted as a path and only the node id will reach the other methods
+			Key:  parts[0],
 		}
 		if deletionTime, err := time.Parse(time.RFC3339Nano, parts[1]); err == nil {
 			item.DeletionTime = &types.Timestamp{
