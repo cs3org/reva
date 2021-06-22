@@ -43,26 +43,37 @@ type Manager interface {
 }
 
 // CreateSignature calculates a signature for a public share.
-func CreateSignature(token, pw string, expiration time.Time) string {
+func CreateSignature(token, pw string, expiration time.Time) (string, error) {
 	h := sha256.New()
-	h.Write([]byte(pw))
+	_, err := h.Write([]byte(pw))
+	if err != nil {
+		return "", err
+	}
+
 	key := make([]byte, 0, 32)
 	key = h.Sum(key)
 
 	mac := hmac.New(sha512.New512_256, key)
-	mac.Write([]byte(token + "|" + expiration.Format(time.RFC3339)))
+	_, err = mac.Write([]byte(token + "|" + expiration.Format(time.RFC3339)))
+	if err != nil {
+		return "", err
+	}
 
 	sig := make([]byte, 0, 32)
 	sig = mac.Sum(sig)
 
-	return hex.EncodeToString(sig)
+	return hex.EncodeToString(sig), nil
 }
 
 // AddSignature augments a public share with a signature.
 // The signature has a validity of 30 minutes.
-func AddSignature(share *link.PublicShare, pw string) {
+func AddSignature(share *link.PublicShare, pw string) error {
 	expiration := time.Now().Add(time.Minute * 30)
-	sig := CreateSignature(share.Token, pw, expiration)
+	sig, err := CreateSignature(share.Token, pw, expiration)
+	if err != nil {
+		return err
+	}
+
 	share.Signature = &link.ShareSignature{
 		Signature: sig,
 		SignatureExpiration: &typesv1beta1.Timestamp{
@@ -70,4 +81,5 @@ func AddSignature(share *link.PublicShare, pw string) {
 			Nanos:   uint32(expiration.UnixNano() % 1000000000),
 		},
 	}
+	return nil
 }
