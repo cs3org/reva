@@ -18,7 +18,11 @@
 
 package utils
 
-import "testing"
+import (
+	"testing"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+)
 
 var skipTests = []struct {
 	name string
@@ -40,5 +44,131 @@ func TestSkip(t *testing.T) {
 				t.Errorf("expected %v, want %v", r, tt.out)
 			}
 		})
+	}
+}
+func TestIsRelativeReference(t *testing.T) {
+	tests := []struct {
+		ref      *provider.Reference
+		expected bool
+	}{
+		{
+			&provider.Reference{},
+			false,
+		},
+		{
+			&provider.Reference{
+				Path: ".",
+			},
+			false,
+		},
+		{
+			&provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: "storageId",
+					OpaqueId:  "opaqueId",
+				},
+				Path: "/folder",
+			},
+			false,
+		},
+		{
+			&provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: "storageId",
+					OpaqueId:  "opaqueId",
+				},
+				Path: "./folder",
+			},
+			true,
+		},
+		{
+			&provider.Reference{
+				ResourceId: &provider.ResourceId{},
+				Path:       "./folder",
+			},
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		result := IsRelativeReference(tt.ref)
+		if result != tt.expected {
+			t.Errorf("IsRelativeReference: ref %v expected %t got %t", tt.ref, tt.expected, result)
+		}
+	}
+}
+func TestIsAbsolutReference(t *testing.T) {
+	tests := []struct {
+		ref      *provider.Reference
+		expected bool
+	}{
+		{
+			&provider.Reference{},
+			false,
+		},
+		{
+			&provider.Reference{
+				Path: ".",
+			},
+			false,
+		},
+		{
+			&provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: "storageId",
+					OpaqueId:  "opaqueId",
+				},
+				Path: "/folder",
+			},
+			false,
+		},
+		{
+			&provider.Reference{
+				Path: "/folder",
+			},
+			true,
+		},
+		{
+			&provider.Reference{
+				ResourceId: &provider.ResourceId{},
+			},
+			true,
+		},
+		{
+			&provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: "storageId",
+					OpaqueId:  "opaqueId",
+				},
+			},
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		result := IsAbsoluteReference(tt.ref)
+		if result != tt.expected {
+			t.Errorf("IsAbsolutReference: ref %v expected %t got %t", tt.ref, tt.expected, result)
+		}
+	}
+}
+
+func TestMakeRelativePath(t *testing.T) {
+	tests := []struct {
+		path    string
+		relPath string
+	}{
+		{"", "."},
+		{"/", "."},
+		{"..", "."},
+		{"/folder", "./folder"},
+		{"/folder/../folder2", "./folder2"},
+		{"folder", "./folder"},
+	}
+	for _, tt := range tests {
+		rel := MakeRelativePath(tt.path)
+		if rel != tt.relPath {
+			t.Errorf("expected %s, got %s", tt.relPath, rel)
+		}
 	}
 }

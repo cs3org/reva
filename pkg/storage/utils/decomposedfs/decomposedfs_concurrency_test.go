@@ -108,17 +108,13 @@ var _ = Describe("Decomposed", func() {
 
 				// upload file with contents: "test"
 				go func(wg *sync.WaitGroup) {
-					_ = fs.Upload(ctx, &provider.Reference{
-						Spec: &provider.Reference_Path{Path: "uploaded.txt"},
-					}, f)
+					_ = fs.Upload(ctx, &provider.Reference{Path: "uploaded.txt"}, f)
 					wg.Done()
 				}(wg)
 
 				// upload file with contents: "another run"
 				go func(wg *sync.WaitGroup) {
-					_ = fs.Upload(ctx, &provider.Reference{
-						Spec: &provider.Reference_Path{Path: "uploaded.txt"},
-					}, f1)
+					_ = fs.Upload(ctx, &provider.Reference{Path: "uploaded.txt"}, f1)
 					wg.Done()
 				}(wg)
 
@@ -129,9 +125,7 @@ var _ = Describe("Decomposed", func() {
 				// same for 2 uploads.
 
 				wg.Wait()
-				revisions, err := fs.ListRevisions(ctx, &provider.Reference{
-					Spec: &provider.Reference_Path{Path: "uploaded.txt"},
-				})
+				revisions, err := fs.ListRevisions(ctx, &provider.Reference{Path: "uploaded.txt"})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(revisions)).To(Equal(1))
 
@@ -146,9 +140,7 @@ var _ = Describe("Decomposed", func() {
 					go func() {
 						err := fs.CreateDir(ctx, "fightforit")
 						if err != nil {
-							rinfo, err := fs.GetMD(ctx, &provider.Reference{
-								Spec: &provider.Reference_Path{Path: "fightforit"},
-							}, nil)
+							rinfo, err := fs.GetMD(ctx, &provider.Reference{Path: "fightforit"}, nil)
 							Expect(err).ToNot(HaveOccurred())
 							Expect(rinfo).ToNot(BeNil())
 						}

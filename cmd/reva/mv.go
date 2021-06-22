@@ -44,12 +44,8 @@ func moveCommand() *command {
 			return err
 		}
 
-		sourceRef := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: src},
-		}
-		targetRef := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: dst},
-		}
+		sourceRef := &provider.Reference{Path: src}
+		targetRef := &provider.Reference{Path: dst}
 		req := &provider.MoveRequest{Source: sourceRef, Destination: targetRef}
 		res, err := client.Move(ctx, req)
 		if err != nil {

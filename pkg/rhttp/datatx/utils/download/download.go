@@ -46,7 +46,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 		fn = files[0]
 	}
 
-	ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fn}}
+	ref := &provider.Reference{Path: fn}
 
 	// TODO check preconditions like If-Range, If-Match ...
 

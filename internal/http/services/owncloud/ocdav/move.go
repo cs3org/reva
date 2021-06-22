@@ -67,9 +67,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 
 	// check src exists
 	srcStatReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: src},
-		},
+		Ref: &provider.Reference{Path: src},
 	}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
@@ -83,9 +81,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	// check dst exists
-	dstStatRef := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: dst},
-	}
+	dstStatRef := &provider.Reference{Path: dst}
 	dstStatReq := &provider.StatRequest{Ref: dstStatRef}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
@@ -124,9 +120,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	} else {
 		// check if an intermediate path / the parent exists
 		intermediateDir := path.Dir(dst)
-		ref2 := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: intermediateDir},
-		}
+		ref2 := &provider.Reference{Path: intermediateDir}
 		intStatReq := &provider.StatRequest{Ref: ref2}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
@@ -147,12 +141,8 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 		// TODO what if intermediate is a file?
 	}
 
-	sourceRef := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: src},
-	}
-	dstRef := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: dst},
-	}
+	sourceRef := &provider.Reference{Path: src}
+	dstRef := &provider.Reference{Path: dst}
 	mReq := &provider.MoveRequest{Source: sourceRef, Destination: dstRef}
 	mRes, err := client.Move(ctx, mReq)
 	if err != nil {

@@ -81,9 +81,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	// check src exists
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: src},
-	}
+	ref := &provider.Reference{Path: src}
 	srcStatReq := &provider.StatRequest{Ref: ref}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
@@ -98,9 +96,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	// check dst exists
-	ref = &provider.Reference{
-		Spec: &provider.Reference_Path{Path: dst},
-	}
+	ref = &provider.Reference{Path: dst}
 	dstStatReq := &provider.StatRequest{Ref: ref}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
@@ -126,9 +122,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	} else {
 		// check if an intermediate path / the parent exists
 		intermediateDir := path.Dir(dst)
-		ref = &provider.Reference{
-			Spec: &provider.Reference_Path{Path: intermediateDir},
-		}
+		ref = &provider.Reference{Path: intermediateDir}
 		intStatReq := &provider.StatRequest{Ref: ref}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
@@ -164,9 +158,7 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 	if src.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// create dir
 		createReq := &provider.CreateContainerRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{Path: dst},
-			},
+			Ref: &provider.Reference{Path: dst},
 		}
 		createRes, err := client.CreateContainer(ctx, createReq)
 		if err != nil || createRes.Status.Code != rpc.Code_CODE_OK {
@@ -181,9 +173,7 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 
 		// descend for children
 		listReq := &provider.ListContainerRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{Path: src.Path},
-			},
+			Ref: &provider.Reference{Path: src.Path},
 		}
 		res, err := client.ListContainer(ctx, listReq)
 		if err != nil {
@@ -207,9 +197,7 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 		// 1. get download url
 
 		dReq := &provider.InitiateFileDownloadRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{Path: src.Path},
-			},
+			Ref: &provider.Reference{Path: src.Path},
 		}
 
 		dRes, err := client.InitiateFileDownload(ctx, dReq)
@@ -231,9 +219,7 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 		// 2. get upload url
 
 		uReq := &provider.InitiateFileUploadRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{Path: dst},
-			},
+			Ref: &provider.Reference{Path: dst},
 			Opaque: &typespb.Opaque{
 				Map: map[string]*typespb.OpaqueEntry{
 					"Upload-Length": {

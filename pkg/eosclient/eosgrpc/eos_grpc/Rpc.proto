@@ -14,8 +14,10 @@
 //                 You should have received a copy of the GNU General Public License
 //                 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 // NOTE: Compile for Go with:
 // protoc ./eos_grpc.proto --go_out=plugins=grpc:.
+
 
 syntax = "proto3";
 
@@ -25,17 +27,18 @@ option java_multiple_files = true;
 option java_package = "io.grpc.eos.rpc";
 option java_outer_classname = "EosProto";
 option objc_class_prefix = "EOS";
-option go_package = "eos_grpc";
+option go_package = ".;eos_grpc";
+
 
 service Eos {
   // Replies to a ping
-  rpc Ping (PingRequest) returns (PingReply) {}
+  rpc Ping (PingRequest) returns (PingReply) {}  
 
   // ---------------------------------------------------------------------
   // NAMESPACE
   // ---------------------------------------------------------------------
 
-  // Replies to MD requests with a stream
+  // Replies to MD requests with a stream 
   rpc MD (MDRequest) returns (stream MDResponse) {}
 
   // Replies to Find requests with a stream
@@ -45,7 +48,7 @@ service Eos {
   rpc NsStat (NsStatRequest) returns (NsStatResponse) {}
 
   // Replies to an insert
-  rpc ContainerInsert (ContainerInsertRequest) returns (InsertReply) {}
+  rpc ContainerInsert (ContainerInsertRequest) returns (InsertReply) {}  
   rpc FileInsert (FileInsertRequest) returns (InsertReply) {}
 
   // Replies to a NsRequest operation
@@ -56,7 +59,7 @@ service Eos {
   // ---------------------------------------------------------------------
 
   // Manila Driver
-  rpc ManilaServerRequest (ManilaRequest) returns (ManilaResponse) {}
+  rpc ManilaServerRequest (ManilaRequest) returns (ManilaResponse) {}  
 }
 
 message PingRequest {
@@ -135,26 +138,30 @@ message ContainerMdProto {
   string etag = 14;
 }
 
-enum TYPE { FILE = 0; CONTAINER = 1; LISTING = 2; STAT = 3;}
+enum TYPE { FILE = 0; CONTAINER = 1; LISTING = 2; STAT = 3;}  
 
-enum QUOTATYPE { USER = 0; GROUP = 2; PROJECT = 3; ALL = 4;}
+enum QUOTATYPE { USER = 0; GROUP = 2; PROJECT = 3;}
 
-message QuotaProto {
-  bytes path = 1;                 // quota node path
-  string name = 2;                // associated name for the given type
-  QUOTATYPE type = 3;             // user,group,project or all quota
-  uint64 usedbytes = 4;           // bytes used physical
-  uint64 usedlogicalbytes = 5;    // bytes used logical
-  uint64 usedfiles = 6;           // number of files used
-  uint64 maxbytes = 7;            // maximum number of bytes (volume quota)
-  uint64 maxlogicalbytes = 8;     // maximum number of logical bytes (logical volume quota)
-  uint64 maxfiles = 9;            // maximum number of files (inode quota)
+enum QUOTAOP { GET = 0; SET = 1; RM = 2; RMNODE = 3;}
+
+enum QUOTAENTRY { NONE = 0; VOLUME = 1; INODE = 2;}
+     
+message QuotaProto { 
+  bytes path = 1;                // quota node path
+  string name = 2;               // associated name for the given type
+  QUOTATYPE type = 3;            // user,group,project or all quota
+  uint64 usedbytes = 4;          // bytes used physical
+  uint64 usedlogicalbytes = 5;   // bytes used logical 
+  uint64 usedfiles = 6;          // number of files used
+  uint64 maxbytes = 7;           // maximum number of bytes (volume quota)
+  uint64 maxlogicalbytes = 8;    // maximum number of logical bytes (logical volume quota)
+  uint64 maxfiles = 9;           // maximum number of files (inode quota)
   float percentageusedbytes = 10; // percentage of volume quota used from 0 to 100
-  float percentageusedfiles = 11; // percentage of inode quota used from 0 to 100
-  string statusbytes = 12;        // status string for volume quota ok,warning,exceeded
-  string statusfiles = 13;        // status string for inode quota ok,warning,exceeded
+  float percentageusedfiles = 11; // percentag of inode quota used from 0 to 100
+  string statusbytes = 12;       // status string for volume quota ok,warning,exceeded
+  string statusfiles = 13;       // status string for inode quota ok,warning,exceeded
 }
-
+  
 message RoleId {
   uint64 uid = 1;
   uint64 gid = 2;
@@ -215,7 +222,7 @@ message MDResponse {
 message FindRequest {
   TYPE type = 1;
   MDId id = 2;
-  RoleId role = 3;
+  RoleId role = 3;	
   string authkey = 4;
   uint64 maxdepth = 5;
   MDSelection selection = 6;
@@ -253,11 +260,11 @@ message NSRequest {
     bool recursive = 2;
     int64 mode = 3;
   }
-
+  
   message RmdirRequest {
     MDId id = 1;
   }
-
+ 
   message TouchRequest {
     MDId id = 1;
   }
@@ -295,7 +302,7 @@ message NSRequest {
   }
 
   message RecycleRequest {
-    string key = 1;
+    string key = 1; 
     enum RECYCLE_CMD {
       RESTORE = 0;
       PURGE = 1;
@@ -328,7 +335,7 @@ message NSRequest {
 
   message ChownRequest {
     MDId id = 1;
-    RoleId owner = 2;
+    RoleId owner = 2;  
   }
 
   message ChmodRequest {
@@ -362,6 +369,10 @@ message NSRequest {
   message QuotaRequest {
     bytes path = 1;
     RoleId id = 2;
+    QUOTAOP op = 3; // get or set, rm or rmnode
+    uint64 maxfiles = 4; // maximum number of bytes (volume quota) for setting
+    uint64 maxbytes = 5; // maximum number of bytes (volume quota) for setting
+    QUOTAENTRY entry = 6; // select volume or inode entry for deletion
   }
 
   string authkey = 1;
@@ -391,7 +402,7 @@ message NSRequest {
 message NSResponse {
   message ErrorResponse {
     int64 code = 1;
-    string msg = 2;
+    string msg = 2;	
   }
 
   message VersionResponse {
@@ -400,14 +411,14 @@ message NSResponse {
       Time   mtime = 2;
     }
     int64 code = 1;
-    string msg = 2;
+    string msg = 2;	
     repeated VersionInfo versions = 3;
   }
 
   message RecycleResponse {
     int64 code = 1;
-    string msg = 2;
-
+    string msg = 2;	
+    
     message RecycleInfo {
       enum DELETIONTYPE { FILE = 0;  TREE = 1; }
       MDId   id = 1;
@@ -416,20 +427,20 @@ message NSResponse {
       uint64 size = 4;
       DELETIONTYPE type = 5;
       string key = 6;
-    }
-
+    }   
+    
     repeated RecycleInfo recycles = 3;
   }
 
   message AclResponse {
     int64 code = 1;
-    string msg = 2;
+    string msg = 2;	
     string rule = 3;
   }
 
   message QuotaResponse {
-    int64 code = 1;
-    string msg = 2;
+    int64 code = 1;   
+    string msg = 2;   	
     repeated QuotaProto quotanode = 3;
   }
 
@@ -511,7 +522,7 @@ message ManilaRequest {
 }
 
 message ManilaResponse {
-   string msg = 1; // for generic messages
+   string msg = 1; //for generic messages
    int32 code = 2; // < 1 is an error -- > 1 is OK
    int64 total_used = 3;
    int64 total_capacity = 4;
@@ -519,3 +530,5 @@ message ManilaResponse {
    string new_share_path = 6;
 
 }
+
+

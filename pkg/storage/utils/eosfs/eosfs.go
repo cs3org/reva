@@ -157,13 +157,17 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 			URL:                 c.MasterURL,
 			GrpcURI:             c.GrpcURI,
 			CacheDirectory:      c.CacheDirectory,
-			ForceSingleUserMode: c.ForceSingleUserMode,
-			SingleUsername:      c.SingleUsername,
 			UseKeytab:           c.UseKeytab,
 			Keytab:              c.Keytab,
 			Authkey:             c.GRPCAuthkey,
 			SecProtocol:         c.SecProtocol,
 			VersionInvariant:    c.VersionInvariant,
+			ReadUsesLocalTemp:   c.ReadUsesLocalTemp,
+			WriteUsesLocalTemp:  c.WriteUsesLocalTemp,
+			MaxIdleConns:        c.MaxIdleConns,
+			MaxConnsPerHost:     c.MaxConnsPerHost,
+			MaxIdleConnsPerHost: c.MaxIdleConnsPerHost,
+			IdleConnTimeout:     c.IdleConnTimeout,
 		}
 		eosClient = eosgrpc.New(eosClientOpts)
 	} else {
@@ -326,21 +330,20 @@ func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (str
 
 // resolve takes in a request path or request id and returns the unwrappedNominal path.
 func (fs *eosfs) resolve(ctx context.Context, u *userpb.User, ref *provider.Reference) (string, error) {
-	if ref.GetPath() != "" {
-		return ref.GetPath(), nil
-	}
-
-	if ref.GetId() != nil {
-		p, err := fs.getPath(ctx, u, ref.GetId())
+	if ref.ResourceId != nil {
+		p, err := fs.getPath(ctx, u, ref.ResourceId)
 		if err != nil {
 			return "", err
 		}
-
+		p = path.Join(p, ref.Path)
 		return p, nil
+	}
+	if ref.Path != "" {
+		return ref.Path, nil
 	}
 
 	// reference is invalid
-	return "", fmt.Errorf("invalid reference %+v. id and path are missing", ref)
+	return "", fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
 }
 
 func (fs *eosfs) getPath(ctx context.Context, u *userpb.User, id *provider.ResourceId) (string, error) {
@@ -383,6 +386,7 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 	}
 
 	// parts[0] = 868317, parts[1] = photos, ...
+	// FIXME REFERENCE ... umm ... 868317/photos? @ishank011 might be a leftover
 	parts := strings.Split(id.OpaqueId, "/")
 	fileID, err := strconv.ParseUint(parts[0], 10, 64)
 	if err != nil {
@@ -800,12 +804,17 @@ func (fs *eosfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 		return 0, 0, errors.Wrap(err, "eos: no user in ctx")
 	}
 
+	uid, _, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return 0, 0, errors.Wrap(err, "eos: no uid in ctx")
+	}
+
 	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	qi, err := fs.c.GetQuota(ctx, u.Username, rootUID, rootGID, fs.conf.QuotaNode)
+	qi, err := fs.c.GetQuota(ctx, uid, rootUID, rootGID, fs.conf.QuotaNode)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, err
@@ -874,11 +883,17 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	}
 
 	home := fs.wrap(ctx, "/")
-	uid, gid, err := fs.getRootUIDAndGID(ctx)
+	rootuid, rootgid, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return nil
 	}
-	_, err = fs.c.GetFileInfoByPath(ctx, uid, gid, home)
+
+	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return err
+	}
+
+	_, err = fs.c.GetFileInfoByPath(ctx, rootuid, rootgid, home)
 	if err == nil { // home already exists
 		return nil
 	}
@@ -896,12 +911,14 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	// set quota for user
 	quotaInfo := &eosclient.SetQuotaInfo{
 		Username:  u.Username,
+		UID:       uid,
+		GID:       gid,
 		MaxBytes:  fs.conf.DefaultQuotaBytes,
 		MaxFiles:  fs.conf.DefaultQuotaFiles,
 		QuotaNode: fs.conf.QuotaNode,
 	}
 
-	err = fs.c.SetQuota(ctx, uid, gid, quotaInfo)
+	err = fs.c.SetQuota(ctx, rootuid, rootgid, quotaInfo)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error setting quota")
 		return err
@@ -1321,7 +1338,7 @@ func (fs *eosfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, erro
 	return recycleEntries, nil
 }
 
-func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key, restorePath string) error {
+func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -1341,7 +1358,7 @@ func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eoscl
 		return nil, err
 	}
 	recycleItem := &provider.RecycleItem{
-		Path:         path,
+		Ref:          &provider.Reference{Path: path},
 		Key:          eosDeletedItem.RestoreKey,
 		Size:         eosDeletedItem.Size,
 		DeletionTime: &types.Timestamp{Seconds: eosDeletedItem.DeletionMTime},
@@ -1659,7 +1676,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 	No RestoreRecycleItem(ctx context.Context, key string) error
 	No PurgeRecycleItem(ctx context.Context, key string) error
 	No EmptyRecycle(ctx context.Context) error
-	? GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	? GetPathByID(ctx context.Context, id *provider.Reference) (string, error)
 	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
@@ -1690,7 +1707,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 	No RestoreRecycleItem(ctx context.Context, key string) error
 	No PurgeRecycleItem(ctx context.Context, key string) error
 	No EmptyRecycle(ctx context.Context) error
-	?  GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	?  GetPathByID(ctx context.Context, id *provider.Reference) (string, error)
 	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
@@ -1721,7 +1738,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 	No RestoreRecycleItem(ctx context.Context, key string) error
 	No PurgeRecycleItem(ctx context.Context, key string) error
 	No EmptyRecycle(ctx context.Context) error
-	?  GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	?  GetPathByID(ctx context.Context, id *provider.Reference) (string, error)
 	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error

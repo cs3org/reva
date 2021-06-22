@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"os/user"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -152,9 +153,14 @@ func GroupEqual(u, v *grouppb.GroupId) bool {
 	return u != nil && v != nil && u.Idp == v.Idp && u.OpaqueId == v.OpaqueId
 }
 
-// ResourceEqual returns whether two resources have the same field values.
-func ResourceEqual(u, v *provider.ResourceId) bool {
+// ResourceIDEqual returns whether two resources have the same field values.
+func ResourceIDEqual(u, v *provider.ResourceId) bool {
 	return u != nil && v != nil && u.StorageId == v.StorageId && u.OpaqueId == v.OpaqueId
+}
+
+// ResourceEqual returns whether two resources have the same field values.
+func ResourceEqual(u, v *provider.Reference) bool {
+	return u != nil && v != nil && u.Path == v.Path && ((u.ResourceId == nil && v.ResourceId == nil) || (ResourceIDEqual(u.ResourceId, v.ResourceId)))
 }
 
 // GranteeEqual returns whether two grantees have the same field values.
@@ -190,4 +196,34 @@ func UnmarshalJSONToProtoV1(b []byte, m proto.Message) error {
 		return err
 	}
 	return nil
+}
+
+// IsRelativeReference returns true if the given reference qualifies as relative
+// when the resource id is set and the path starts with a .
+//
+// TODO(corby): Currently if the path begins with a dot, the ResourceId is set but has empty storageId and OpaqueId
+// then the reference is still being viewed as relative. We need to check if we want that because in some
+// places we might not want to set both StorageId and OpaqueId so we can't do a hard check if they are set.
+func IsRelativeReference(ref *provider.Reference) bool {
+	return ref.ResourceId != nil && strings.HasPrefix(ref.Path, ".")
+}
+
+// IsAbsoluteReference returns true if the given reference qualifies as absolute
+// when either only the resource id is set or only the path is set and starts with /
+//
+// TODO(corby): Currently if the path is empty, the ResourceId is set but has empty storageId and OpaqueId
+// then the reference is still being viewed as absolute. We need to check if we want that because in some
+// places we might not want to set both StorageId and OpaqueId so we can't do a hard check if they are set.
+func IsAbsoluteReference(ref *provider.Reference) bool {
+	return (ref.ResourceId != nil && ref.Path == "") || (ref.ResourceId == nil) && strings.HasPrefix(ref.Path, "/")
+}
+
+// MakeRelativePath prefixes the path with a . to use it in a relative reference
+func MakeRelativePath(p string) string {
+	p = path.Join("/", p)
+
+	if p == "/" {
+		return "."
+	}
+	return "." + p
 }

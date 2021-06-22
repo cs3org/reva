@@ -263,7 +263,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 			// has access to it.
 			statReq := &provider.StatRequest{
 				Ref: &provider.Reference{
-					Spec: &provider.Reference_Id{Id: share.ResourceId},
+					ResourceId: share.ResourceId,
 				},
 			}
 
@@ -280,7 +280,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		}
 	}
 
-	return nil, err
+	return nil, errtypes.PermissionDenied("access token has invalid scope")
 }
 
 func extractRef(req interface{}) (*provider.Reference, bool) {

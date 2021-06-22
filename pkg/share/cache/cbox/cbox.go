@@ -92,8 +92,8 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 
 	infos := []*provider.ResourceInfo{}
 	for rows.Next() {
-		var storageID, opaqueID string
-		if err := rows.Scan(&storageID, &opaqueID); err != nil {
+		var storageID, nodeID string
+		if err := rows.Scan(&storageID, &nodeID); err != nil {
 			continue
 		}
 
@@ -127,11 +127,9 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 		})
 
 		inf, err := eos.GetMD(ctx, &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: &provider.ResourceId{
-					StorageId: storageID,
-					OpaqueId:  opaqueID,
-				},
+			ResourceId: &provider.ResourceId{
+				StorageId: storageID,
+				OpaqueId:  nodeID,
 			},
 		}, []string{})
 		if err != nil {

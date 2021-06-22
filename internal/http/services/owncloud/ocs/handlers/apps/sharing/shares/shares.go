@@ -52,6 +52,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -217,11 +218,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 	fn := path.Join(h.homeNamespace, r.FormValue("path"))
 
 	statReq := provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: fn,
-			},
-		},
+		Ref: &provider.Reference{Path: fn},
 	}
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
@@ -509,13 +506,9 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	statReq := provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: uRes.Share.ResourceId,
-			},
-		},
-	}
+	statReq := provider.StatRequest{Ref: &provider.Reference{
+		ResourceId: uRes.Share.ResourceId,
+	}}
 
 	statRes, err := client.Stat(r.Context(), &statReq)
 	if err != nil {
@@ -625,8 +618,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		var info *provider.ResourceInfo
 		if pinfo != nil {
 			// check if the shared resource matches the path resource
-			if rs.Share.ResourceId.StorageId != pinfo.GetId().StorageId ||
-				rs.Share.ResourceId.OpaqueId != pinfo.GetId().OpaqueId {
+			if !utils.ResourceIDEqual(rs.Share.ResourceId, pinfo.Id) {
 				// try next share
 				continue
 			}
@@ -795,7 +787,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		}
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
-		s.StorageID = info.Id.StorageId
+		s.StorageID = info.Id.StorageId + "!" + info.Id.OpaqueId
 		// TODO Storage: int
 		s.ItemSource = wrapResourceID(info.Id)
 		s.FileSource = s.ItemSource
@@ -943,18 +935,12 @@ func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentif
 
 func (h *Handler) getResourceInfoByPath(ctx context.Context, client gateway.GatewayAPIClient, path string) (*provider.ResourceInfo, *rpc.Status, error) {
 	return h.getResourceInfo(ctx, client, path, &provider.Reference{
-		Spec: &provider.Reference_Path{
-			Path: path,
-		},
+		Path: path,
 	})
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, wrapResourceID(id), &provider.Reference{
-		Spec: &provider.Reference_Id{
-			Id: id,
-		},
-	})
+	return h.getResourceInfo(ctx, client, wrapResourceID(id), &provider.Reference{ResourceId: id})
 }
 
 // getResourceInfo retrieves the resource info to a target.

@@ -143,7 +143,26 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	var match *registrypb.ProviderInfo
 	var shardedMatches []*registrypb.ProviderInfo
 
-	// Try to find by path first as most storage operations will be done using the path.
+	// If the reference has a resource id set, use it to route
+	if ref.ResourceId != nil {
+		for prefix, rule := range b.c.Rules {
+			addr := getProviderAddr(ctx, rule)
+			r, err := regexp.Compile("^" + prefix + "$")
+			if err != nil {
+				continue
+			}
+			// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
+			if m := r.FindString(ref.ResourceId.StorageId); m != "" {
+				return []*registrypb.ProviderInfo{{
+					ProviderId: ref.ResourceId.StorageId,
+					Address:    addr,
+				}}, nil
+			}
+		}
+	}
+
+	// Try to find by path  as most storage operations will be done using the path.
+	// TODO this needs to be reevaluated once all clients query the storage registry for a list of storage providers
 	fn := path.Clean(ref.GetPath())
 	if fn != "" {
 		for prefix, rule := range b.c.Rules {
@@ -177,27 +196,6 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		// If we don't find a perfect match but at least one provider is encapsulated
 		// by the reference, return all such providers.
 		return shardedMatches, nil
-	}
-
-	// Try with id
-	id := ref.GetId()
-	if id == nil {
-		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
-	}
-
-	for prefix, rule := range b.c.Rules {
-		addr := getProviderAddr(ctx, rule)
-		r, err := regexp.Compile("^" + prefix + "$")
-		if err != nil {
-			continue
-		}
-		// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-		if m := r.FindString(id.StorageId); m != "" {
-			return []*registrypb.ProviderInfo{&registrypb.ProviderInfo{
-				ProviderId: id.StorageId,
-				Address:    addr,
-			}}, nil
-		}
 	}
 
 	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())

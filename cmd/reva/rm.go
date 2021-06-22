@@ -42,9 +42,7 @@ func rmCommand() *command {
 			return err
 		}
 
-		ref := &storageproviderv1beta1pb.Reference{
-			Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
-		}
+		ref := &storageproviderv1beta1pb.Reference{Path: fn}
 		req := &storageproviderv1beta1pb.DeleteRequest{Ref: ref}
 		res, err := client.Delete(ctx, req)
 		if err != nil {

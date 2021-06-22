@@ -62,7 +62,7 @@ func openInAppCommand() *command {
 		}
 
 		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: path},
+			Path: path,
 		}
 
 		opaqueObj := &typespb.Opaque{

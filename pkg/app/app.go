@@ -40,5 +40,5 @@ type ProviderInfo struct {
 // Provider is the interface that application providers implement
 // for providing the iframe location to a iframe UI Provider
 type Provider interface {
-	GetIFrame(ctx context.Context, resID *provider.ResourceId, token string) (string, error)
+	GetIFrame(ctx context.Context, resID *provider.Reference, token string) (string, error)
 }

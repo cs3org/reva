@@ -67,11 +67,7 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 	}
 
 	statRes, err := s.stat(ctx, &storageprovider.StatRequest{
-		Ref: &storageprovider.Reference{
-			Spec: &storageprovider.Reference_Path{
-				Path: resName,
-			},
-		},
+		Ref: &storageprovider.Reference{Path: resName},
 	})
 	if err != nil {
 		return &providerpb.OpenInAppResponse{
@@ -136,11 +132,7 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 		return nil, err
 	}
 
-	ref := &storageprovider.Reference{
-		Spec: &storageprovider.Reference_Path{
-			Path: ep.filePath,
-		},
-	}
+	ref := &storageprovider.Reference{Path: ep.filePath}
 	appProviderReq := &gateway.OpenInAppRequest{
 		Ref:      ref,
 		ViewMode: vm,

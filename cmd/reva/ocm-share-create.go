@@ -87,9 +87,7 @@ func ocmShareCreateCommand() *command {
 			return formatError(remoteUserRes.Status)
 		}
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		}
+		ref := &provider.Reference{Path: fn}
 		req := &provider.StatRequest{Ref: ref}
 		res, err := client.Stat(ctx, req)
 		if err != nil {

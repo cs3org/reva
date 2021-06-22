@@ -122,9 +122,16 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 			id = f.GetId()
 		}
 	}
-	c, err := s.findByID(ctx, &provider.ResourceId{
-		OpaqueId: id.OpaqueId,
-	})
+	parts := strings.SplitN(id.OpaqueId, "!", 2)
+	if len(parts) != 2 {
+		return &provider.ListStorageSpacesResponse{
+			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
+		}, nil
+	}
+	c, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
+		StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + a opaqueid
+		OpaqueId:  parts[1],
+	}})
 	if err != nil {
 		return &provider.ListStorageSpacesResponse{
 			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
@@ -144,7 +151,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	c, err := s.findByID(ctx, req.StorageSpace.Root)
+	c, err := s.find(ctx, &provider.Reference{ResourceId: req.StorageSpace.Root})
 	if err != nil {
 		return &provider.UpdateStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, "error finding ID", err),
@@ -164,9 +171,16 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	c, err := s.findByID(ctx, &provider.ResourceId{
-		OpaqueId: req.Id.OpaqueId,
-	})
+	parts := strings.SplitN(req.Id.OpaqueId, "!", 2)
+	if len(parts) != 2 {
+		return &provider.DeleteStorageSpaceResponse{
+			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
+		}, nil
+	}
+	c, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
+		StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + a opaqueid
+		OpaqueId:  parts[1],
+	}})
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
@@ -282,12 +296,8 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		// if it is a file allow download
 		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
-			req.Ref = &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: ri.Path,
-				},
-			}
-			log.Debug().Msg("download path: " + ri.Path)
+			req.Ref.Path = ri.Path
+			log.Debug().Str("path", ri.Path).Msg("download")
 			return s.initiateFileDownload(ctx, req)
 		}
 
@@ -304,11 +314,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		shareName, shareChild := s.splitShare(ctx, p)
 
 		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
+			Ref: &provider.Reference{Path: shareName},
 		}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
@@ -352,13 +358,8 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
-		req.Ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: target,
-			},
-		}
-		log.Debug().Msg("download path: " + target)
+		req.Ref.Path = path.Join(ri.Path, shareChild)
+		log.Debug().Str("path", req.Ref.Path).Msg("download")
 		return s.initiateFileDownload(ctx, req)
 	}
 
@@ -494,12 +495,8 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		// if it is a file allow upload
 		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
-			req.Ref = &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: ri.Path,
-				},
-			}
-			log.Debug().Msg("upload path: " + ri.Path)
+			req.Ref.Path = ri.Path
+			log.Debug().Str("path", ri.Path).Msg("upload")
 			return s.initiateFileUpload(ctx, req)
 		}
 
@@ -515,13 +512,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		log.Debug().Msgf("shared child: %s", p)
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &gateway.InitiateFileUploadResponse{
@@ -564,12 +555,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
-		req.Ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: target,
-			},
-		}
+		req.Ref.Path = path.Join(ri.Path, shareChild)
 		return s.initiateFileUpload(ctx, req)
 	}
 
@@ -635,13 +621,7 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
-	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: req.ResourceId,
-			},
-		},
-	}
+	statReq := &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.ResourceId}}
 	statRes, err := s.stat(ctx, statReq)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error stating ref:"+statReq.Ref.String())
@@ -687,13 +667,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		log.Debug().Msgf("shared child: %s", p)
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.CreateContainerResponse{
@@ -727,12 +701,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
-		req.Ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: target,
-			},
-		}
+		req.Ref.Path = path.Join(ri.Path, shareChild)
 		return s.createContainer(ctx, req)
 	}
 
@@ -788,11 +757,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 	if s.isShareName(ctx, p) {
 		log.Debug().Msgf("path:%s points to share name", p)
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: p,
-			},
-		}
+		ref := &provider.Reference{Path: p}
 
 		req.Ref = ref
 		return s.delete(ctx, req)
@@ -802,11 +767,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		shareName, shareChild := s.splitShare(ctx, p)
 		log.Debug().Msgf("path:%s sharename:%s sharechild: %s", p, shareName, shareChild)
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: shareName,
-			},
-		}
+		ref := &provider.Reference{Path: shareName}
 
 		statReq := &provider.StatRequest{Ref: ref}
 		statRes, err := s.stat(ctx, statReq)
@@ -842,14 +803,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
-		ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: target,
-			},
-		}
-
-		req.Ref = ref
+		req.Ref.Path = path.Join(ri.Path, shareChild)
 		return s.delete(ctx, req)
 	}
 
@@ -913,13 +867,7 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 
 		}
 
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.MoveResponse{
@@ -953,14 +901,10 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}
 
 		src := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join(ri.Path, shareChild),
-			},
+			Path: path.Join(ri.Path, shareChild),
 		}
 		dst := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join(ri.Path, dshareChild),
-			},
+			Path: path.Join(ri.Path, dshareChild),
 		}
 
 		req.Source = src
@@ -1043,13 +987,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 }
 
 func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
-	statRes, err := s.stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getHome(ctx),
-			},
-		},
-	})
+	statRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: s.getHome(ctx)}})
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error stating home"),
@@ -1097,13 +1035,7 @@ func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
 }
 
 func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, error) {
-	statRes, err := s.stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getSharedFolder(ctx),
-			},
-		},
-	})
+	statRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: s.getSharedFolder(ctx)}})
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
@@ -1214,13 +1146,7 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
 		newPath = p.ProviderPath
 	}
-	r, err := c.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: newPath,
-			},
-		},
-	})
+	r, err := c.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: newPath}})
 	if err != nil {
 		*e = errors.Wrap(err, "gateway: error calling ListContainer")
 		return
@@ -1296,13 +1222,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	if s.isShareChild(ctx, p) {
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.StatResponse{
@@ -1338,11 +1258,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}
 
 		// append child to target
-		req.Ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join(ri.Path, shareChild),
-			},
-		}
+		req.Ref.Path = path.Join(ri.Path, shareChild)
 		res, err := s.stat(ctx, req)
 		if err != nil {
 			return &provider.StatResponse{
@@ -1405,11 +1321,9 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 
 	req := &provider.StatRequest{
 		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: &provider.ResourceId{
-					StorageId: parts[0],
-					OpaqueId:  parts[1],
-				},
+			ResourceId: &provider.ResourceId{
+				StorageId: parts[0],
+				OpaqueId:  parts[1],
 			},
 		},
 	}
@@ -1447,11 +1361,7 @@ func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gate
 
 func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getHome(ctx),
-			},
-		},
+		Ref:                   &provider.Reference{Path: s.getHome(ctx)},
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
 	if err != nil {
@@ -1466,7 +1376,7 @@ func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) 
 	}
 
 	for i := range lcr.Infos {
-		if s.isSharedFolder(ctx, lcr.Infos[i].Path) {
+		if s.isSharedFolder(ctx, lcr.Infos[i].GetPath()) {
 			statSharedFolder, err := s.statSharesFolder(ctx)
 			if err != nil {
 				return &provider.ListContainerResponse{
@@ -1487,13 +1397,7 @@ func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) 
 }
 
 func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResponse, error) {
-	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getSharedFolder(ctx),
-			},
-		},
-	})
+	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{Ref: &provider.Reference{Path: s.getSharedFolder(ctx)}})
 	if err != nil {
 		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error listing shared folder"),
@@ -1524,7 +1428,7 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 			}
 		}
 
-		info.Path = lcr.Infos[i].GetPath()
+		info.Path = lcr.Infos[i].Path
 		checkedInfos = append(checkedInfos, info)
 	}
 	lcr.Infos = checkedInfos
@@ -1603,13 +1507,7 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
 		newPath = p.ProviderPath
 	}
-	r, err := c.ListContainer(ctx, &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: newPath,
-			},
-		},
-	})
+	r, err := c.ListContainer(ctx, &provider.ListContainerRequest{Ref: &provider.Reference{Path: newPath}})
 	if err != nil {
 		*e = errors.Wrap(err, "gateway: error calling ListContainer")
 		return
@@ -1640,13 +1538,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 
 	// we need to provide the info of the target, not the reference.
 	if s.isShareName(ctx, p) {
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: p,
-				},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: p}}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1694,11 +1586,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		newReq := &provider.ListContainerRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: ri.Path,
-				},
-			},
+			Ref:                   &provider.Reference{Path: ri.Path},
 			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 		}
 		newRes, err := s.listContainer(ctx, newReq)
@@ -1727,13 +1615,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	if s.isShareChild(ctx, p) {
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1781,11 +1663,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		newReq := &provider.ListContainerRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: path.Join(ri.Path, shareChild),
-				},
-			},
+			Ref:                   &provider.Reference{Path: path.Join(ri.Path, shareChild)},
 			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 		}
 		newRes, err := s.listContainer(ctx, newReq)
@@ -1815,11 +1693,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 }
 
 func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
-	if ref.GetPath() != "" {
-		return ref.GetPath(), &rpc.Status{Code: rpc.Code_CODE_OK}
-	}
 
-	if ref.GetId() != nil && ref.GetId().GetOpaqueId() != "" {
+	// check if it is an id based or combined reference first
+	if ref.ResourceId != nil {
 		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
 		res, err := s.stat(ctx, req)
 		if (res != nil && res.Status.Code != rpc.Code_CODE_OK) || err != nil {
@@ -1829,6 +1705,9 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 		return res.Info.Path, res.Status
 	}
 
+	if ref.Path != "" {
+		return ref.Path, &rpc.Status{Code: rpc.Code_CODE_OK}
+	}
 	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
 }
 
@@ -2017,21 +1896,8 @@ func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*prov
 	return res, nil
 }
 
-func (s *svc) findByID(ctx context.Context, id *provider.ResourceId) (provider.ProviderAPIClient, error) {
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Id{
-			Id: id,
-		},
-	}
-	return s.find(ctx, ref)
-}
-
 func (s *svc) findByPath(ctx context.Context, path string) (provider.ProviderAPIClient, error) {
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{
-			Path: path,
-		},
-	}
+	ref := &provider.Reference{Path: path}
 	return s.find(ctx, ref)
 }
 

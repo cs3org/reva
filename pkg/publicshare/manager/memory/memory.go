@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 func init() {
@@ -179,7 +180,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			} else {
 				for _, f := range filters {
 					if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
-						if s.ResourceId.StorageId == f.GetResourceId().StorageId && s.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
+						if utils.ResourceEqual(&provider.Reference{ResourceId: s.ResourceId}, &provider.Reference{ResourceId: f.GetResourceId()}) {
 							shares = append(shares, s)
 						}
 					}

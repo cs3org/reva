@@ -117,7 +117,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context) (items []*provider.Recy
 		// lookup origin path in extended attributes
 		var attrBytes []byte
 		if attrBytes, err = xattr.Get(nodePath, xattrs.TrashOriginAttr); err == nil {
-			item.Path = string(attrBytes)
+			item.Ref = &provider.Reference{Path: string(attrBytes)}
 		} else {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", trashnode).Msg("could not read origin path, skipping")
 			continue
@@ -146,8 +146,11 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context) (items []*provider.Recy
 }
 
 // RestoreRecycleItem restores the specified item
-func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key, restorePath string) error {
-	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, restorePath)
+func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
+	if restoreRef == nil {
+		restoreRef = &provider.Reference{}
+	}
+	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, restoreRef.Path)
 	if err != nil {
 		return err
 	}

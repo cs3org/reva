@@ -110,9 +110,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			}
 		}
 	}
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: fn},
-	}
+	ref := &provider.Reference{Path: fn}
 	req := &provider.StatRequest{
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,
@@ -155,9 +153,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		for len(stack) > 0 {
 			// retrieve path on top of stack
 			path := stack[len(stack)-1]
-			ref = &provider.Reference{
-				Spec: &provider.Reference_Path{Path: path},
-			}
+			ref = &provider.Reference{Path: path}
 			req := &provider.ListContainerRequest{
 				Ref:                   ref,
 				ArbitraryMetadataKeys: metadataKeys,

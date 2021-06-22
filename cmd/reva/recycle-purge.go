@@ -46,9 +46,7 @@ func recyclePurgeCommand() *command {
 
 		req := &gateway.PurgeRecycleRequest{
 			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: getHomeRes.Path,
-				},
+				Path: getHomeRes.Path,
 			},
 		}
 

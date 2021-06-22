@@ -38,11 +38,7 @@ var _ = Describe("Decomposed", func() {
 	)
 
 	BeforeEach(func() {
-		ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: "/dir1",
-			},
-		}
+		ref = &provider.Reference{Path: "/dir1"}
 	})
 
 	JustBeforeEach(func() {

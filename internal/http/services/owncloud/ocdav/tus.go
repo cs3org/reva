@@ -84,9 +84,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	sReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref: &provider.Reference{Path: fn},
 	}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
@@ -136,9 +134,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 
 	// initiateUpload
 	uReq := &provider.InitiateFileUploadRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref: &provider.Reference{Path: fn},
 		Opaque: &typespb.Opaque{
 			Map: opaqueMap,
 		},

@@ -46,7 +46,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		if rid == (*provider.ResourceId)(nil) {
+		if rid == nil {
 			http.Error(w, "404 Not Found", http.StatusNotFound)
 			return
 		}
@@ -99,11 +99,8 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Id{Id: rid},
-	}
-	req := &provider.StatRequest{Ref: ref}
-	res, err := client.Stat(ctx, req)
+	ref := &provider.Reference{ResourceId: rid}
+	res, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -116,10 +113,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 	info := res.Info
 
-	lvReq := &provider.ListFileVersionsRequest{
-		Ref: ref,
-	}
-	lvRes, err := client.ListFileVersions(ctx, lvReq)
+	lvRes, err := client.ListFileVersions(ctx, &provider.ListFileVersionsRequest{Ref: ref})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending list container grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -143,7 +137,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 			// Opaque
 			Type: provider.ResourceType_RESOURCE_TYPE_FILE,
 			Id: &provider.ResourceId{
-				StorageId: "versions", // this is a virtual storage
+				StorageId: "versions",
 				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
 			},
 			// Checksum
@@ -193,9 +187,7 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 	}
 
 	req := &provider.RestoreFileVersionRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{Id: rid},
-		},
+		Ref: &provider.Reference{ResourceId: rid},
 		Key: key,
 	}
 

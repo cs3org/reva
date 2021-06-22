@@ -55,9 +55,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	sReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref: &provider.Reference{Path: fn},
 	}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
@@ -79,9 +77,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	dReq := &provider.InitiateFileDownloadRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref: &provider.Reference{Path: fn},
 	}
 
 	dRes, err := client.InitiateFileDownload(ctx, dReq)

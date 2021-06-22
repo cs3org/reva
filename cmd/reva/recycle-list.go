@@ -47,9 +47,7 @@ func recycleListCommand() *command {
 
 		req := &gateway.ListRecycleRequest{
 			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: getHomeRes.Path,
-				},
+				Path: getHomeRes.Path,
 			},
 		}
 		res, err := client.ListRecycle(ctx, req)
