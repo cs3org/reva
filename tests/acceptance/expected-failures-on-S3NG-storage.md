@@ -19,12 +19,6 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiTrashbin/trashbinFilesFolders.feature:278](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L278)
 -   [apiTrashbin/trashbinFilesFolders.feature:279](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L279)
 
-#### [cannot restore to a different file-name](https://github.com/owncloud/ocis/issues/1122)
--   [apiTrashbin/trashbinRestore.feature:108](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L108)
--   [apiTrashbin/trashbinRestore.feature:109](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L109)
--   [apiTrashbin/trashbinRestore.feature:110](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L110)
--   [apiTrashbin/trashbinRestore.feature:111](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L111)
-
 #### [trash-bin restore move does not send back Etag and other headers](https://github.com/owncloud/ocis/issues/1121)
 -   [apiTrashbin/trashbinRestore.feature:130](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L130)
 -   [apiTrashbin/trashbinRestore.feature:131](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L131)
