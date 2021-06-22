@@ -44,6 +44,8 @@ import (
 )
 
 //go:generate mockery -name GatewayClient
+
+// GatewayClient describe the interface of a gateway client
 type GatewayClient interface {
 	Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error)
 	Move(ctx context.Context, in *provider.MoveRequest, opts ...grpc.CallOption) (*provider.MoveResponse, error)
@@ -86,6 +88,7 @@ func (s *service) Register(ss *grpc.Server) {
 	provider.RegisterProviderAPIServer(ss, s)
 }
 
+// NewDefault returns a new instance of the SharesStorageProvider service with default dependencies
 func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
@@ -110,6 +113,7 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error)
 	return New(c.MountPath, gateway, sm)
 }
 
+// New returns a new instance of the SharesStorageProvider service
 func New(mountpath string, gateway GatewayClient, sm share.Manager) (rgrpc.Service, error) {
 	s := &service{
 		mountPath: mountpath,
@@ -141,11 +145,10 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 				return &provider.InitiateFileDownloadResponse{
 					Status: statRes.Status,
 				}, err
-			} else {
-				return &provider.InitiateFileDownloadResponse{
-					Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
-				}, nil
 			}
+			return &provider.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+			}, nil
 		}
 		gwres, err := s.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
 			Ref: &provider.Reference{
@@ -183,8 +186,6 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 			Status:    gwres.Status,
 			Protocols: protocols,
 		}, nil
-	} else {
-		// Is this supported?
 	}
 
 	return &provider.InitiateFileDownloadResponse{
@@ -206,11 +207,10 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 				return &provider.InitiateFileUploadResponse{
 					Status: statRes.Status,
 				}, err
-			} else {
-				return &provider.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
-				}, nil
 			}
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+			}, nil
 		}
 		gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
 			Ref: &provider.Reference{
@@ -250,12 +250,10 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			Status:    gwres.Status,
 			Protocols: protocols,
 		}, nil
-	} else {
-		// Is this supported?
 	}
 
 	return &provider.InitiateFileUploadResponse{
-		Status: status.NewNotFound(ctx, "sharestorageprovider: file not found"),
+		Status: status.NewInvalidArg(ctx, "sharestorageprovider: can not upload directly to the shares folder"),
 	}, nil
 
 }
@@ -307,11 +305,10 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 			return &provider.CreateContainerResponse{
 				Status: statRes.Status,
 			}, err
-		} else {
-			return &provider.CreateContainerResponse{
-				Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
-			}, nil
 		}
+		return &provider.CreateContainerResponse{
+			Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+		}, nil
 	}
 
 	gwres, err := s.gateway.CreateContainer(ctx, &provider.CreateContainerRequest{
@@ -354,11 +351,10 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 			return &provider.DeleteResponse{
 				Status: statRes.Status,
 			}, err
-		} else {
-			return &provider.DeleteResponse{
-				Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
-			}, nil
 		}
+		return &provider.DeleteResponse{
+			Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+		}, nil
 	}
 
 	gwres, err := s.gateway.Delete(ctx, &provider.DeleteRequest{
@@ -409,11 +405,10 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 			return &provider.MoveResponse{
 				Status: statRes.Status,
 			}, err
-		} else {
-			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
-			}, nil
 		}
+		return &provider.MoveResponse{
+			Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+		}, nil
 	}
 
 	gwres, err := s.gateway.Move(ctx, &provider.MoveRequest{
@@ -590,11 +585,10 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 			return &provider.ListFileVersionsResponse{
 				Status: statRes.Status,
 			}, err
-		} else {
-			return &provider.ListFileVersionsResponse{
-				Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
-			}, nil
 		}
+		return &provider.ListFileVersionsResponse{
+			Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+		}, nil
 	}
 
 	gwres, err := s.gateway.ListFileVersions(ctx, &provider.ListFileVersionsRequest{
@@ -632,11 +626,10 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 			return &provider.RestoreFileVersionResponse{
 				Status: statRes.Status,
 			}, err
-		} else {
-			return &provider.RestoreFileVersionResponse{
-				Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
-			}, nil
 		}
+		return &provider.RestoreFileVersionResponse{
+			Status: status.NewInternal(ctx, err, "sharestorageprovider: error stating the requested share"),
+		}, nil
 	}
 
 	gwres, err := s.gateway.RestoreFileVersion(ctx, &provider.RestoreFileVersionRequest{
