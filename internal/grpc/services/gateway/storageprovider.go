@@ -1203,7 +1203,6 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
 			return rsp, err
 		}
-
 		return rsp, nil
 	}
 
@@ -1626,7 +1625,7 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 	if utils.IsAbsoluteReference(req.Ref) {
 		resPath := path.Clean(req.Ref.GetPath())
 		newPath := req.Ref.GetPath()
-		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
+		if resPath != "." && !strings.HasPrefix(resPath, p.ProviderPath) {
 			newPath = p.ProviderPath
 		}
 		req.Ref = &provider.Reference{Path: newPath}
