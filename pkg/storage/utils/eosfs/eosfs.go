@@ -1471,6 +1471,40 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef 
 	return fs.c.RestoreDeletedEntry(ctx, uid, gid, key)
 }
 
+func (fs *eosfs) GetOwners(ctx context.Context, ref *provider.Reference) (*grouppb.Group, error) {
+	u, err := getUser(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return nil, err
+	}
+
+	p, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: error resolving reference")
+	}
+	ownerEOS, err := fs.c.GetAttr(ctx, uid, gid, "sys.auth.owner", p)
+
+	// attribute's val is in the form "egroup:<egroup-name>"
+	egroup := strings.Replace(ownerEOS.Val, "egroup:", "", 1)
+
+	// request the group object that corrisponds to the egroup name
+	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
+	if err != nil {
+		return nil, err
+	}
+
+	groupResp, err := client.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{Claim: "group_name", Value: egroup})
+	if err != nil {
+		return nil, err
+	}
+
+	return groupResp.Group, nil
+}
+
 func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) (*provider.RecycleItem, error) {
 	path, err := fs.unwrap(ctx, eosDeletedItem.RestorePath)
 	if err != nil {
