@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/url"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 )
@@ -47,6 +48,7 @@ type FS interface {
 	PurgeRecycleItem(ctx context.Context, key string) error
 	EmptyRecycle(ctx context.Context) error
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	GetOwners(ctx context.Context, ref *provider.Reference) (*grouppb.Group, error)
 	AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
