@@ -594,6 +594,10 @@ func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient
 
 }
 
+func (c *Client) GetAttr(ctx context.Context, uid, gid, name, path string) (*eosclient.Attribute, error) {
+	return nil, errtypes.NotSupported("GetAttr function not yet implemented")
+}
+
 // GetFileInfoByPath returns the FilInfo at the given path
 func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)

@@ -67,6 +67,17 @@ func attrTypeToString(at eosclient.AttrType) string {
 	}
 }
 
+func attrStringToType(t string) (eosclient.AttrType, error) {
+	switch t {
+	case "sys":
+		return SystemAttr, nil
+	case "user":
+		return UserAttr, nil
+	default:
+		return 0, errtypes.InternalError("attr type not existing")
+	}
+}
+
 func isValidAttribute(a *eosclient.Attribute) bool {
 	// validate that an attribute is correct.
 	if (a.Type != SystemAttr && a.Type != UserAttr) || a.Key == "" {
@@ -444,6 +455,38 @@ func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient
 		return err
 	}
 	return nil
+}
+
+func (c *Client) GetAttr(ctx context.Context, uid, gid, key, path string) (*eosclient.Attribute, error) {
+	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "attr", "get", key, path)
+	attrOut, _, err := c.executeEOS(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	attr, err := deserializeAttribute(attrOut)
+	if err != nil {
+		return nil, err
+	}
+	return attr, nil
+}
+
+func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
+	// the string is in the form sys.forced.checksum="adler"
+	keyValue := strings.Split(attrStr, "=") // keyValue = ["sys.forced.checksum", "\"adler\""]
+	if len(keyValue) != 2 {
+		return nil, errtypes.InternalError("wrong attr format to deserialize")
+	}
+	type2key := strings.SplitN(keyValue[0], ".", 2) // type2key = ["sys", "forced.checksum"]
+	if len(type2key) != 2 {
+		return nil, errtypes.InternalError("wrong attr format to deserialize")
+	}
+	t, err := attrStringToType(type2key[0])
+	if err != nil {
+		return nil, err
+	}
+	// trim \" from value
+	value := strings.Trim(keyValue[1], "\"")
+	return &eosclient.Attribute{Type: t, Key: type2key[1], Val: value}, nil
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path

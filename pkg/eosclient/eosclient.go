@@ -37,6 +37,7 @@ type EOSClient interface {
 	GetFileInfoByPath(ctx context.Context, uid, gid, path string) (*FileInfo, error)
 	SetAttr(ctx context.Context, uid, gid string, attr *Attribute, recursive bool, path string) error
 	UnsetAttr(ctx context.Context, uid, gid string, attr *Attribute, path string) error
+	GetAttr(ctx context.Context, uid, gid, name, path string) (*Attribute, error)
 	GetQuota(ctx context.Context, username, rootUID, rootGID, path string) (*QuotaInfo, error)
 	SetQuota(ctx context.Context, rootUID, rootGID string, info *SetQuotaInfo) error
 	Touch(ctx context.Context, uid, gid, path string) error
