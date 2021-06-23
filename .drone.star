@@ -102,6 +102,7 @@ def main(ctx):
     release(),
     litmusOcisOldWebdav(),
     litmusOcisNewWebdav(),
+    litmusOcisSpacesDav(),
     localIntegrationTestsOwncloud(),
     localIntegrationTestsOcis(),
   ] + ocisIntegrationTests(6) + owncloudIntegrationTests(6) + s3ngIntegrationTests(12)
@@ -518,6 +519,63 @@ def litmusOcisNewWebdav():
       },
     ],
   }
+
+def litmusOcisSpacesDav():
+  return {
+    "kind": "pipeline",
+    "type": "docker",
+    "name": "litmus-owncloud-spaces-dav",
+    "platform": {
+      "os": "linux",
+      "arch": "amd64",
+    },
+    "trigger": {
+      "event": {
+        "include": [
+          "pull_request",
+          "tag",
+        ],
+      },
+    },
+    "steps": [
+      makeStep("build-ci"),
+      {
+        "name": "revad-services",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
+        "detach": True,
+        "commands": [
+          "cd /drone/src/tests/oc-integration-tests/drone/",
+          "/drone/src/cmd/revad/revad -c frontend.toml &",
+          "/drone/src/cmd/revad/revad -c gateway.toml &",
+          "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
+          "/drone/src/cmd/revad/revad -c storage-oc-ocis.toml &",
+          "/drone/src/cmd/revad/revad -c users.toml",
+        ]
+      },
+      {
+        "name": "sleep-for-revad-start",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
+        "commands":[
+          "sleep 5",
+        ],
+      },
+      {
+        "name": "litmus-owncloud-spaces-dav",
+        "image": "registry.cern.ch/docker.io/owncloud/litmus:latest",
+        "environment": {
+          "LITMUS_USERNAME": "einstein",
+          "LITMUS_PASSWORD": "relativity",
+          "TESTS": "basic http copymove props",
+        },
+        "commands": [
+          # The spaceid is randomly generated during the first login so we need this hack to construct the correct url.
+          "curl -s -k -u einstein:relativity -I http://revad-services:20080/remote.php/dav/files/einstein",
+          "export LITMUS_URL=http://revad-services:20080/remote.php/dav/spaces/123e4567-e89b-12d3-a456-426655440000!$(ls /drone/src/tmp/reva/data/spaces/personal/)",
+          "/usr/local/bin/litmus-wrapper", 
+        ]
+      },
+    ],
+  } 
 
 def localIntegrationTestsOwncloud():
   return {
