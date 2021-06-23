@@ -102,6 +102,8 @@ def main(ctx):
     release(),
     litmusOcisOldWebdav(),
     litmusOcisNewWebdav(),
+    litmusOcisSpacesDav(),
+    localIntegrationTestsOcis(),
   ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
 
 
@@ -514,6 +516,124 @@ def litmusOcisNewWebdav():
           "TESTS": "basic http copymove props",
         }
       },
+    ],
+  }
+
+def litmusOcisSpacesDav():
+  return {
+    "kind": "pipeline",
+    "type": "docker",
+    "name": "litmus-owncloud-spaces-dav",
+    "platform": {
+      "os": "linux",
+      "arch": "amd64",
+    },
+    "trigger": {
+      "event": {
+        "include": [
+          "pull_request",
+          "tag",
+        ],
+      },
+    },
+    "steps": [
+      makeStep("build-ci"),
+      {
+        "name": "revad-services",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
+        "detach": True,
+        "commands": [
+          "cd /drone/src/tests/oc-integration-tests/drone/",
+          "/drone/src/cmd/revad/revad -c frontend.toml &",
+          "/drone/src/cmd/revad/revad -c gateway.toml &",
+          "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
+          "/drone/src/cmd/revad/revad -c storage-oc-ocis.toml &",
+          "/drone/src/cmd/revad/revad -c users.toml",
+        ]
+      },
+      {
+        "name": "sleep-for-revad-start",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
+        "commands":[
+          "sleep 5",
+        ],
+      },
+      {
+        "name": "litmus-owncloud-spaces-dav",
+        "image": "registry.cern.ch/docker.io/owncloud/litmus:latest",
+        "environment": {
+          "LITMUS_USERNAME": "einstein",
+          "LITMUS_PASSWORD": "relativity",
+          "TESTS": "basic http copymove props",
+        },
+        "commands": [
+          # The spaceid is randomly generated during the first login so we need this hack to construct the correct url.
+          "curl -s -k -u einstein:relativity -I http://revad-services:20080/remote.php/dav/files/einstein",
+          "export LITMUS_URL=http://revad-services:20080/remote.php/dav/spaces/123e4567-e89b-12d3-a456-426655440000!$(ls /drone/src/tmp/reva/data/spaces/personal/)",
+          "/usr/local/bin/litmus-wrapper", 
+        ]
+      },
+    ],
+  } 
+
+def localIntegrationTestsOcis():
+  return {
+    "kind": "pipeline",
+    "type": "docker",
+    "name": "local-integration-tests-ocis",
+    "platform": {
+      "os": "linux",
+      "arch": "amd64",
+    },
+    "trigger": {
+      "event": {
+        "include": [
+          "pull_request",
+          "tag",
+        ],
+      },
+    },
+    "steps": [
+      makeStep("build-ci"),
+      {
+        "name": "revad-services",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
+        "detach": True,
+        "commands": [
+          "cd /drone/src/tests/oc-integration-tests/drone/",
+          "/drone/src/cmd/revad/revad -c frontend.toml &",
+          "/drone/src/cmd/revad/revad -c gateway.toml &",
+          "/drone/src/cmd/revad/revad -c shares.toml &",
+          "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
+          "/drone/src/cmd/revad/revad -c storage-oc-ocis.toml &",
+          "/drone/src/cmd/revad/revad -c storage-publiclink-ocis.toml &",
+          "/drone/src/cmd/revad/revad -c ldap-users.toml",
+        ],
+      },
+      cloneOc10TestReposStep(),
+      {
+        "name": "localAPIAcceptanceTestsOcisStorage",
+        "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
+        "commands": [
+          "make test-acceptance-api",
+        ],
+        "environment": {
+          "TEST_SERVER_URL": "http://revad-services:20080",
+          "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
+          "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-*",
+          "STORAGE_DRIVER": "OCIS",
+          "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
+          "TEST_WITH_LDAP": "true",
+          "REVA_LDAP_HOSTNAME": "ldap",
+          "TEST_REVA": "true",
+          "SEND_SCENARIO_LINE_REFERENCES": "true",
+          "BEHAT_FILTER_TAGS": "~@skipOnOcis-OCIS-Storage",
+          "PATH_TO_CORE": "/drone/src/tmp/testrunner",
+        }
+      },
+    ],
+    "services": [
+      ldapService(),
     ],
   }
 
