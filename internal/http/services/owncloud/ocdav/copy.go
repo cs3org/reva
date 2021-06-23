@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 	"go.opencensus.io/trace"
 )
@@ -268,7 +269,7 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 		return
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Str("destination", dst).Logger()
 
 	// retrieve a specific storage space
 	srcRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
@@ -357,7 +358,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 		}
 
 		// descend for children
-		listReq := &provider.ListContainerRequest{Ref: &provider.Reference{ResourceId: cp.sourceInfo.Id}}
+		listReq := &provider.ListContainerRequest{Ref: &provider.Reference{ResourceId: cp.sourceInfo.Id, Path: "."}}
 		res, err := client.ListContainer(ctx, listReq)
 		if err != nil {
 			return err
@@ -368,10 +369,9 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 		}
 
 		for i := range res.Infos {
-			childPath := strings.TrimPrefix(res.Infos[i].Path, cp.sourceInfo.Path)
 			childRef := &provider.Reference{
-				ResourceId: cp.sourceInfo.Id,
-				Path:       path.Join(cp.destination.Path, childPath),
+				ResourceId: cp.destination.ResourceId,
+				Path:       utils.MakeRelativePath(path.Join(cp.destination.Path, res.Infos[i].Path)),
 			}
 			err := s.executeSpacesCopy(ctx, w, client, &copy{sourceInfo: res.Infos[i], destination: childRef, depth: cp.depth, successCode: cp.successCode})
 			if err != nil {
@@ -381,7 +381,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 	} else {
 		// copy file
 		// 1. get download url
-		dReq := &provider.InitiateFileDownloadRequest{Ref: &provider.Reference{ResourceId: cp.sourceInfo.Id}}
+		dReq := &provider.InitiateFileDownloadRequest{Ref: &provider.Reference{ResourceId: cp.sourceInfo.Id, Path: "."}}
 		dRes, err := client.InitiateFileDownload(ctx, dReq)
 		if err != nil {
 			return err
@@ -397,7 +397,6 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 				downloadEP, downloadToken = p.DownloadEndpoint, p.Token
 			}
 		}
-
 		// 2. get upload url
 		uReq := &provider.InitiateFileUploadRequest{
 			Ref: cp.destination,
@@ -445,7 +444,9 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 		if err != nil {
 			return err
 		}
-		httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, downloadToken)
+		if downloadToken != "" {
+			httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, downloadToken)
+		}
 
 		httpDownloadRes, err := s.client.Do(httpDownloadReq)
 		if err != nil {
