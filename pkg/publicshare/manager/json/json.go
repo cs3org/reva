@@ -308,7 +308,10 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 			return nil, errors.New("no shares found by token")
 		}
 		if ps.PasswordProtected && sign {
-			publicshare.AddSignature(ps, pw)
+			err := publicshare.AddSignature(ps, pw)
+			if err != nil {
+				return nil, err
+			}
 		}
 		return ps, nil
 	}
@@ -338,7 +341,10 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 				return nil, errors.New("no shares found by id:" + ref.GetId().String())
 			}
 			if ps.PasswordProtected && sign {
-				publicshare.AddSignature(&ps, passDB)
+				err := publicshare.AddSignature(&ps, passDB)
+				if err != nil {
+					return nil, err
+				}
 			}
 			return &ps, nil
 		}
@@ -371,7 +377,9 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		}
 
 		if local.PublicShare.PasswordProtected && sign {
-			publicshare.AddSignature(&local.PublicShare, local.Password)
+			if err := publicshare.AddSignature(&local.PublicShare, local.Password); err != nil {
+				return nil, err
+			}
 		}
 
 		if len(filters) == 0 {
@@ -535,7 +543,10 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 			if local.PasswordProtected {
 				if authenticate(&local, passDB, auth) {
 					if sign {
-						publicshare.AddSignature(&local, passDB)
+						err := publicshare.AddSignature(&local, passDB)
+						if err != nil {
+							return nil, err
+						}
 					}
 					return &local, nil
 				}
@@ -587,7 +598,12 @@ func authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuth
 		if now.After(expiration) {
 			return false
 		}
-		s := publicshare.CreateSignature(share.Token, pw, expiration)
+		s, err := publicshare.CreateSignature(share.Token, pw, expiration)
+		if err != nil {
+			// TODO(labkode): pass ctx to log error
+			// Now we are blind
+			return false
+		}
 		return sig.GetSignature() == s
 	}
 	return false
