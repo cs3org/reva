@@ -1,7 +1,7 @@
-Changelog for reva 1.8.1 (2021-06-23)
+Changelog for reva 1.9.0 (2021-06-23)
 =======================================
 
-The following sections list the changes in reva 1.8.1 relevant to
+The following sections list the changes in reva 1.9.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
@@ -10,12 +10,14 @@ Summary
  * Fix #1815: Drone CI - patch the 'store-dev-release' job to fix malformed requests
  * Fix #1765: 'golang:alpine' as base image & CGO_ENABLED just for the CLI
  * Chg #1721: Absolute and relative references
+ * Enh #1810: Add arbitrary metadata support to EOS
  * Enh #1774: Add user ID cache warmup to EOS storage driver
  * Enh #1471: EOEGrpc progress. Logging discipline and error handling
  * Enh #1811: Harden public shares signing
  * Enh #1793: Remove the user id from the trashbin key
  * Enh #1795: Increase trashbin restore API compatibility
  * Enh #1516: Use UidNumber and GidNumber fields in User objects
+ * Enh #1820: Tag v1.9.0
 
 Details
 -------
@@ -49,6 +51,10 @@ Details
    absolute as well as relative references.
 
    https://github.com/cs3org/reva/pull/1721
+
+ * Enhancement #1810: Add arbitrary metadata support to EOS
+
+   https://github.com/cs3org/reva/pull/1810
 
  * Enhancement #1774: Add user ID cache warmup to EOS storage driver
 
@@ -86,6 +92,13 @@ Details
    `UidNumber` fields instead of storing them in `Opaque` map.
 
    https://github.com/cs3org/reva/issues/1516
+
+ * Enhancement #1820: Tag v1.9.0
+
+   Bump release number to v1.9.0 as it contains breaking changes related to changing the
+   reference type.
+
+   https://github.com/cs3org/reva/pull/1820
 
 
 Changelog for reva 1.8.0 (2021-06-09)
