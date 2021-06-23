@@ -653,7 +653,7 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L171)
 -   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:172](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L172)
 
-#### [file_target in share response](https://github.com/owncloud/product/issues/203)
+#### [file_target has unexpected value](https://github.com/owncloud/ocis/issues/2113)
 
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L36)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L37)
@@ -667,18 +667,15 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L99)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:156](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L156)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:157](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L157)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:290](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L290)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L291)
--   [apiShareManagementBasicToShares/deleteShareFromShares.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L46)
--   [apiShareManagementToShares/mergeShare.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L32)
--   [apiShareManagementToShares/mergeShare.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L42)
--   [apiShareManagementToShares/mergeShare.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L89)
+-   [apiShareOperationsToShares1/gettingShares.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L170)
+-   [apiShareOperationsToShares1/gettingShares.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L171)
 
 #### [Shares are not deleted when user is deleted](https://github.com/owncloud/ocis/issues/1258)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:101](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L101)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:102](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L102)
 
 #### [sharing with group not available](https://github.com/owncloud/product/issues/293)
+
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:238](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L238)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:239](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L239)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:260](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L260)
@@ -692,6 +689,9 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:468](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L468)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L28)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L29)
+-   [apiShareManagementToShares/mergeShare.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L32)
+-   [apiShareManagementToShares/mergeShare.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L42)
+-   [apiShareManagementToShares/mergeShare.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L89)
 
 #### [Cannot move a file to a shared folder](https://github.com/owncloud/ocis/issues/2146)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:508](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L508)
@@ -700,11 +700,9 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:43](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L43)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:44](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L44)
 
-#### [file_target in share response](https://github.com/owncloud/product/issues/203)
+#### [sharing via API and changing the cases in the username does not work correctly](https://github.com/owncloud/core/issues/35484)
+
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:373](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L373)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:536](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L536)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:554](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L554)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:572](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L572)
 
 #### [File deletion using dav gives unique string in filename in the trashbin](https://github.com/owncloud/product/issues/178)
 
@@ -777,11 +775,6 @@ cannot share a folder with create permission
 -   [apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature#L61)
 -   [apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature:79](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature#L79)
 -   [apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature:80](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature#L80)
-
-#### [file_target in share response](https://github.com/owncloud/product/issues/203)
-
--   [apiShareOperationsToShares1/gettingShares.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L170)
--   [apiShareOperationsToShares1/gettingShares.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L171)
 
 #### [Public link enforce permissions](https://github.com/owncloud/ocis/issues/1269)
 
@@ -1054,7 +1047,7 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiShareReshareToShares1/reShare.feature:223](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L223)
 -   [apiShareReshareToShares1/reShare.feature:224](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L224)
 
-#### [file_target in share response](https://github.com/owncloud/product/issues/203)
+#### [path property in pending shares gives only filename](https://github.com/owncloud/ocis/issues/2156)
 
 -   [apiShareReshareToShares2/reShareSubfolder.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L30)
 -   [apiShareReshareToShares2/reShareSubfolder.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L31)
@@ -1064,6 +1057,15 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiShareReshareToShares2/reShareSubfolder.feature:131](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L131)
 -   [apiShareReshareToShares2/reShareSubfolder.feature:152](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L152)
 -   [apiShareReshareToShares2/reShareSubfolder.feature:153](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L153)
+-   [apiShareManagementBasicToShares/deleteShareFromShares.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L46)
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:536](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L536)
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:554](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L554)
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:572](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L572)
+
+#### [Listing shares via ocs API does not show path for parent folders](https://github.com/owncloud/ocis/issues/1231)
+
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:290](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L290)
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L291)
 
 #### [invalid format of sharees response](https://github.com/owncloud/product/issues/292)
 
@@ -2103,6 +2105,7 @@ _ocs: api compatibility, return correct status code_
 -   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:88](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L88)
 -   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:107](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L107)
 -   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:108](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L108)
+
 #### [Group name with emoji can be created but file cannot be shared with such groups](https://github.com/owncloud/ocis/issues/2157)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:444](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L444)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:445](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L445)

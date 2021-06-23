@@ -659,8 +659,6 @@ File and sync features in a shared scenario
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L99)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:156](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L156)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:157](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L157)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:290](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L290)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L291)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L46)
 -   [apiShareManagementToShares/mergeShare.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L32)
 -   [apiShareManagementToShares/mergeShare.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L42)
@@ -954,7 +952,7 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiShareReshareToShares3/reShareUpdate.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L61)
 -   [apiShareReshareToShares3/reShareUpdate.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L62)
 
-#### [file_target in share response](https://github.com/owncloud/product/issues/203)
+#### [path property in pending shares gives only filename](https://github.com/owncloud/ocis/issues/2156)
 
 -   [apiShareReshareToShares2/reShareSubfolder.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L30)
 -   [apiShareReshareToShares2/reShareSubfolder.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L31)
@@ -964,6 +962,11 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiShareReshareToShares2/reShareSubfolder.feature:131](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L131)
 -   [apiShareReshareToShares2/reShareSubfolder.feature:152](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L152)
 -   [apiShareReshareToShares2/reShareSubfolder.feature:153](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L153)
+
+#### [Listing shares via ocs API does not show path for parent folders](https://github.com/owncloud/ocis/issues/1231)
+
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:290](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L290)
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L291)
 
 #### [invalid format of sharees response](https://github.com/owncloud/product/issues/292)
 
