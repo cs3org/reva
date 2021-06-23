@@ -191,12 +191,12 @@ func (h *Handler) Init(c *config.Config) {
 
 	// notifications
 
-	if h.c.Capabilities.Notifications == nil {
-		h.c.Capabilities.Notifications = &data.CapabilitiesNotifications{}
-	}
-	if h.c.Capabilities.Notifications.Endpoints == nil {
-		h.c.Capabilities.Notifications.Endpoints = []string{"list", "get", "delete"}
-	}
+	//if h.c.Capabilities.Notifications == nil {
+	//	h.c.Capabilities.Notifications = &data.CapabilitiesNotifications{}
+	//}
+	//if h.c.Capabilities.Notifications.Endpoints == nil {
+		//h.c.Capabilities.Notifications.Endpoints = []string{"list", "get", "delete"}
+	//}
 
 	// version
 
