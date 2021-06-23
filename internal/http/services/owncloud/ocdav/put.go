@@ -282,7 +282,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 			if httpRes.StatusCode == errtypes.StatusChecksumMismatch {
 				w.WriteHeader(http.StatusBadRequest)
 				b, err := Marshal(exception{
-					code:    SabredavMethodBadRequest,
+					code:    SabredavBadRequest,
 					message: "The computed checksum does not match the one received from the client.",
 				})
 				if err != nil {
