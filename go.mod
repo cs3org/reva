@@ -61,6 +61,7 @@ go 1.16
 
 replace (
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
+	github.com/mattn/go-sqlite3 => github.com/mattn/go-sqlite3 v1.14.7
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 	google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
 )
