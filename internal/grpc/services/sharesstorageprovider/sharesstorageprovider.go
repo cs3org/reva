@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/cs3org/reva/pkg/storage/utils/etag"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -462,6 +463,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 		},
 	}
+	childInfos := []*provider.ResourceInfo{}
 	for _, rs := range shares {
 		if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
 			continue
@@ -499,11 +501,13 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			gwres.Info.Path = filepath.Join(s.mountPath, reqShare, relPath)
 			return gwres, nil
 		} else if reqShare == "" {
+			childInfos = append(childInfos, gwres.Info)
 			res.Info.Size += gwres.Info.Size
 		}
 	}
 
 	res.Status = status.NewOK(ctx)
+	res.Info.Etag = etag.GenerateEtagFromResources(res.Info, childInfos)
 	return res, nil
 }
 func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {
