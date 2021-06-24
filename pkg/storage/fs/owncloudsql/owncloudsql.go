@@ -2134,7 +2134,7 @@ func (fs *ocfs) HashFile(path string) (string, string, string, error) {
 
 func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	// TODO(corby): Implement
-	return nil, nil
+	return nil, errtypes.NotSupported("list storage spaces")
 }
 
 func readChecksumIntoResourceChecksum(ctx context.Context, checksums, algo string, ri *provider.ResourceInfo) {

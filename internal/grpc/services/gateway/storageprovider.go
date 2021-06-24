@@ -169,7 +169,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 			}, nil
 		}
 
-		providers = []*registry.ProviderInfo{}
+		providers = make([]*registry.ProviderInfo, 0, len(res.Providers))
 		// FIXME filter only providers that have an id set ... currently none have?
 		// bug? only ProviderPath is set
 		for i := range res.Providers {
@@ -201,7 +201,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 			uniqueSpaces[spacesFromProviders[i][j].Id.OpaqueId] = spacesFromProviders[i][j]
 		}
 	}
-	spaces := []*provider.StorageSpace{}
+	spaces := make([]*provider.StorageSpace, 0, len(uniqueSpaces))
 	for spaceID := range uniqueSpaces {
 		spaces = append(spaces, uniqueSpaces[spaceID])
 	}

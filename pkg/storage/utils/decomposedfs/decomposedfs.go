@@ -530,7 +530,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return nil, err
 	}
 
-	var spaces []*provider.StorageSpace
+	spaces := make([]*provider.StorageSpace, 0, len(matches))
 
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
@@ -628,12 +628,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 				// -1 = uncalculated
 				// -2 = unknown
 				// -3 = unlimited
-				if quota, err := strconv.ParseInt(string(v), 10, 64); err == nil {
-					if quota >= 0 {
-						space.Quota = &provider.Quota{
-							QuotaMaxBytes: uint64(quota),
-							QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
-						}
+				if quota, err := strconv.ParseUint(string(v), 10, 64); err == nil {
+					space.Quota = &provider.Quota{
+						QuotaMaxBytes: quota,
+						QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
 					}
 				} else {
 					appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", matches[i]).Msg("could not read quota")
