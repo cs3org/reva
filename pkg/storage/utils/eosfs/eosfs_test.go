@@ -241,11 +241,8 @@ func TestAddGrant(t *testing.T) {
 				t.Fatal("error setting initial attributes:", err)
 			}
 
-			dirRef := &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: dir,
-				},
-			}
+			dirRef := &provider.Reference{Path: dir}
+
 			// set new grant
 			err = eos.AddGrant(ctx, dirRef, test.grant)
 			if err != nil {
@@ -272,11 +269,8 @@ func TestAddGrant(t *testing.T) {
 				t.Fatal("error setting initial attributes:", err)
 			}
 
-			fileRef := &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: file,
-				},
-			}
+			fileRef := &provider.Reference{Path: file}
+
 			// set new grant
 			err = eos.AddGrant(ctx, fileRef, test.grant)
 			if err != nil {
