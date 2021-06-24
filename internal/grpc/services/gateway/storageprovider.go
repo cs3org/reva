@@ -20,6 +20,9 @@ package gateway
 
 import (
 	"context"
+	"crypto/md5"
+	"fmt"
+	"io"
 	"net/url"
 	"path"
 	"strings"
@@ -560,7 +563,35 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
 			}, nil
 		}
-		return c.Stat(ctx, req)
+
+		res, err := c.Stat(ctx, req)
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
+			}, nil
+		}
+
+		embeddedMounts := s.findEmbeddedMounts(resPath)
+		if len(embeddedMounts) > 0 {
+			etagHash := md5.New()
+			io.WriteString(etagHash, res.Info.Etag)
+			for _, child := range embeddedMounts {
+				childStatRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: child}})
+				if err != nil {
+					return &provider.StatResponse{
+						Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), err),
+					}, nil
+				}
+				io.WriteString(etagHash, childStatRes.Info.Etag)
+			}
+
+			if res.Info == nil {
+				res.Info = &provider.ResourceInfo{}
+			}
+			res.Info.Etag = fmt.Sprintf("%x", etagHash.Sum(nil))
+		}
+
+		return res, nil
 	}
 
 	infoFromProviders := make([]*provider.ResourceInfo, len(providers))
@@ -1026,6 +1057,19 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 	}
 
 	return c, nil
+}
+
+func (s *svc) findEmbeddedMounts(basePath string) []string {
+	if basePath == "" {
+		return []string{}
+	}
+	mounts := []string{}
+	for mountPath, _ := range s.c.StorageRules {
+		if strings.HasPrefix(mountPath, basePath) && mountPath != basePath {
+			mounts = append(mounts, mountPath)
+		}
+	}
+	return mounts
 }
 
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
