@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
 	"github.com/cs3org/reva/pkg/eosclient/eosgrpc"
 	"github.com/cs3org/reva/pkg/errtypes"
+	grouputils "github.com/cs3org/reva/pkg/group/utils"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -1486,9 +1487,16 @@ func (fs *eosfs) GetOwners(ctx context.Context, ref *provider.Reference) (*group
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+
 	ownerEOS, err := fs.c.GetAttr(ctx, uid, gid, "sys.auth.owner", p)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: error getting owner")
+	}
 
 	// attribute's val is in the form "egroup:<egroup-name>"
+	if !strings.Contains(ownerEOS.Val, "egroup:") {
+		return grouputils.NewEmptyGroup(), nil
+	}
 	egroup := strings.Replace(ownerEOS.Val, "egroup:", "", 1)
 
 	// request the group object that corrisponds to the egroup name
