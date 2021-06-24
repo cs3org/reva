@@ -34,10 +34,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	grouputils "github.com/cs3org/reva/pkg/group/utils"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
@@ -246,6 +248,10 @@ func (fs *s3FS) normalizeCommonPrefix(ctx context.Context, p *s3.CommonPrefix) *
 // thus the file id always points to the filename
 func (fs *s3FS) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	return path.Join("/", strings.TrimPrefix(id.OpaqueId, "fileid-")), nil
+}
+
+func (fs *s3FS) GetOwners(ctx context.Context, ref *provider.Reference) (*grouppb.Group, error) {
+	return grouputils.NewEmptyGroup(), nil
 }
 
 func (fs *s3FS) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {

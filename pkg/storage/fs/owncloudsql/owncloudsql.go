@@ -35,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -42,6 +43,7 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	grouputils "github.com/cs3org/reva/pkg/group/utils"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -647,6 +649,10 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (strin
 	}
 
 	return fs.toStoragePath(ctx, ip), nil
+}
+
+func (fs *ocfs) GetOwners(ctx context.Context, ref *provider.Reference) (*grouppb.Group, error) {
+	return grouputils.NewEmptyGroup(), nil
 }
 
 // resolve takes in a request path or request id and converts it to an internal path.
