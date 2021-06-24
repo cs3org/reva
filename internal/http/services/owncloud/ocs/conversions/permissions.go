@@ -38,23 +38,27 @@ const (
 	PermissionDelete
 	// PermissionShare grants share permissions on a resource
 	PermissionShare
-	// PermissionAll grants all permissions on a resource
-	PermissionAll Permissions = (1 << (iota - 1)) - 1
 	// PermissionNone grants no permissions on a resource
-	PermissionNone = PermissionAll + 1
+	PermissionNone
+	// PermissionMax is to be used within value range checks
+	PermissionMax Permissions = (1 << (iota - 1)) - 1
+	// PermissionAll grants all permissions on a resource
+	PermissionAll = PermissionMax - PermissionNone
+	// PermissionMin is to be used within value range checks
+	PermissionMin = PermissionRead
 )
 
 var (
 	// ErrPermissionNotInRange defines a permission specific error.
-	ErrPermissionNotInRange = fmt.Errorf("The provided permission is not between %d and %d", PermissionRead, PermissionNone)
+	ErrPermissionNotInRange = fmt.Errorf("The provided permission is not between %d and %d", PermissionMin, PermissionMax)
 )
 
 // NewPermissions creates a new Permissions instance.
 // The value must be in the valid range.
 func NewPermissions(val int) (Permissions, error) {
 	if val == int(PermissionInvalid) {
-		return PermissionInvalid, fmt.Errorf("permissions %d out of range %d - %d", val, PermissionRead, PermissionNone)
-	} else if val < int(PermissionInvalid) || int(PermissionNone) < val {
+		return PermissionInvalid, fmt.Errorf("permissions %d out of range %d - %d", val, PermissionMin, PermissionMax)
+	} else if val < int(PermissionInvalid) || int(PermissionMax) < val {
 		return PermissionInvalid, ErrPermissionNotInRange
 	}
 	return Permissions(val), nil

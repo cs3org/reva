@@ -23,7 +23,7 @@ import (
 )
 
 func TestNewPermissions(t *testing.T) {
-	for val := int(PermissionRead); val <= int(PermissionNone); val++ {
+	for val := int(PermissionMin); val <= int(PermissionMax); val++ {
 		_, err := NewPermissions(val)
 		if err != nil {
 			t.Errorf("value %d should be a valid permissions", val)
@@ -35,7 +35,7 @@ func TestNewPermissionsWithInvalidValueShouldFail(t *testing.T) {
 	vals := []int{
 		int(PermissionInvalid),
 		-1,
-		int(PermissionNone) + 1,
+		int(PermissionMax) + 1,
 	}
 	for _, v := range vals {
 		_, err := NewPermissions(v)
