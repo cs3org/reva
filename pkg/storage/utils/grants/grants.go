@@ -143,9 +143,14 @@ func GranteeEqual(g1, g2 *provider.Grantee) bool {
 	return g1 != nil && g2 != nil && cmp.Equal(*g1, *g2)
 }
 
+// IsDenial return true if the grant is a denial grant
+func IsDenial(grant *provider.Grant) bool {
+	return PermissionsEqual(grant.Permissions, &provider.ResourcePermissions{})
+}
+
 // AddGrant adds the newGrant into the list of grants
 func AddGrant(grants *[]*provider.Grant, newGrant *provider.Grant) {
-	if PermissionsEqual(newGrant.Permissions, &provider.ResourcePermissions{}) {
+	if IsDenial(newGrant) {
 		// a denial is appended to the list
 		RemoveGrant(grants, newGrant.Grantee)
 		*grants = append(*grants, newGrant)
