@@ -1499,7 +1499,7 @@ func (fs *eosfs) GetOwners(ctx context.Context, ref *provider.Reference) (*group
 	}
 	egroup := strings.Replace(ownerEOS.Val, "egroup:", "", 1)
 
-	// request the group object that corrisponds to the egroup name
+	// request the group object that corresponds to the egroup name
 	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
 	if err != nil {
 		return nil, err
