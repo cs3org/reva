@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -711,6 +712,14 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 	}
 
 	nodeID := filepath.Base(link)
+	if path == "" {
+		parts := strings.SplitN(filepath.Base(link), ".T.", 2)
+		if len(parts) != 2 {
+			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
+			return
+		}
+		nodeID = parts[0]
+	}
 
 	var attrBytes []byte
 	deletedNodePath = t.lookup.InternalPath(filepath.Base(link))
@@ -753,14 +762,17 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 	// get origin node
 	origin = "/"
 
-	trashItemRoot := filepath.Join(t.lookup.InternalRoot(), "trash", u.Id.OpaqueId, key)
-	rootLink, err := os.Readlink(trashItemRoot)
-	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
-		return
+	deletedNodeRootPath := deletedNodePath
+	if path != "" {
+		trashItemRoot := filepath.Join(t.lookup.InternalRoot(), "trash", u.Id.OpaqueId, key)
+		var rootLink string
+		rootLink, err = os.Readlink(trashItemRoot)
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
+			return
+		}
+		deletedNodeRootPath = t.lookup.InternalPath(filepath.Base(rootLink))
 	}
-
-	deletedNodeRootPath := t.lookup.InternalPath(filepath.Base(rootLink))
 	// lookup origin path in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodeRootPath, xattrs.TrashOriginAttr); err == nil {
 		origin = filepath.Join(string(attrBytes), path)
