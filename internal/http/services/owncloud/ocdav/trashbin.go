@@ -134,7 +134,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		}
 
 		if r.Method == "DELETE" {
-			h.delete(w, r, s, u, key)
+			h.delete(w, r, s, u, key, r.URL.Path)
 			return
 		}
 
@@ -555,7 +555,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 }
 
 // delete has only a key
-func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key string) {
+func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key, path string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "erase")
 	defer span.End()
@@ -599,6 +599,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 				StorageId: sRes.Info.Id.StorageId,
 				OpaqueId:  key,
 			},
+			Path: utils.MakeRelativePath(path),
 		},
 	}
 

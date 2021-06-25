@@ -2060,12 +2060,12 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *ocfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
 	}
-	ip := filepath.Join(rp, filepath.Clean(key))
+	ip := filepath.Join(rp, filepath.Clean(ref.ResourceId.OpaqueId))
 	// TODO check permission?
 
 	// check permissions
@@ -2086,7 +2086,7 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error deleting recycle item")
 	}
-	err = os.RemoveAll(filepath.Join(filepath.Dir(rp), "versions", filepath.Clean(key)))
+	err = os.RemoveAll(filepath.Join(filepath.Dir(rp), "versions", filepath.Clean(ref.ResourceId.OpaqueId)))
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error deleting recycle item versions")
 	}
@@ -2161,7 +2161,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*pr
 	}
 
 	// list files folder
-	mds, err := ioutil.ReadDir(rp)
+	mds, err := ioutil.ReadDir(filepath.Join(rp, ref.Path))
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")

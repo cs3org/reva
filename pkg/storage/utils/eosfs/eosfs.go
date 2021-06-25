@@ -1362,7 +1362,7 @@ func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 	return fs.c.RollbackToVersion(ctx, uid, gid, fn, revisionKey)
 }
 
-func (fs *eosfs) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *eosfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference) error {
 	return errtypes.NotSupported("eosfs: operation not supported")
 }
 

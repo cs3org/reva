@@ -69,7 +69,7 @@ type Tree interface {
 	Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error)
 	Delete(ctx context.Context, node *node.Node) (err error)
 	RestoreRecycleItemFunc(ctx context.Context, key, restorePath string) (*node.Node, func() error, error) // FIXME REFERENCE use ref instead of path
-	PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error)
+	PurgeRecycleItemFunc(ctx context.Context, key, purgePath string) (*node.Node, func() error, error)
 
 	WriteBlob(key string, reader io.Reader) error
 	ReadBlob(key string) (io.ReadCloser, error)

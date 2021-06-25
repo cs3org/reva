@@ -646,7 +646,7 @@ func (fs *s3FS) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return errtypes.NotSupported("restore revision")
 }
 
-func (fs *s3FS) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *s3FS) PurgeRecycleItem(ctx context.Context, ref *provider.Reference) error {
 	return errtypes.NotSupported("purge recycle item")
 }
 

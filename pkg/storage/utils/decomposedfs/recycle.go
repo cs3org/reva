@@ -284,8 +284,8 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key string, rest
 }
 
 // PurgeRecycleItem purges the specified item
-func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, key string) error {
-	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, key)
+func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference) error {
+	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, ref.Path)
 	if err != nil {
 		return err
 	}
@@ -298,7 +298,7 @@ func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, key string) error 
 	case err != nil:
 		return errtypes.InternalError(err.Error())
 	case !ok:
-		return errtypes.PermissionDenied(key)
+		return errtypes.PermissionDenied(ref.ResourceId.OpaqueId)
 	}
 
 	// Run the purge func

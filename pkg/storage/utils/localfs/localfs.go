@@ -1131,8 +1131,8 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 	return fs.propagate(ctx, np)
 }
 
-func (fs *localfs) PurgeRecycleItem(ctx context.Context, key string) error {
-	rp := fs.wrapRecycleBin(ctx, key)
+func (fs *localfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference) error {
+	rp := fs.wrapRecycleBin(ctx, ref.ResourceId.OpaqueId)
 
 	if err := os.Remove(rp); err != nil {
 		return errors.Wrap(err, "localfs: error deleting recycle item")

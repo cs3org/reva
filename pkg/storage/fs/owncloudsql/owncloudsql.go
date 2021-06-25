@@ -1864,12 +1864,12 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *ocfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
-	ip := filepath.Join(rp, filepath.Clean(key))
+	ip := filepath.Join(rp, filepath.Clean(ref.ResourceId.OpaqueId))
 	// TODO check permission?
 
 	// check permissions
@@ -1890,12 +1890,12 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error deleting recycle item")
 	}
-	err = os.RemoveAll(filepath.Join(filepath.Dir(rp), "versions", filepath.Clean(key)))
+	err = os.RemoveAll(filepath.Join(filepath.Dir(rp), "versions", filepath.Clean(ref.ResourceId.OpaqueId)))
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error deleting recycle item versions")
 	}
 
-	base, ttime, err := splitTrashKey(key)
+	base, ttime, err := splitTrashKey(ref.ResourceId.OpaqueId)
 	if err != nil {
 		return err
 	}
