@@ -793,7 +793,7 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 	ctx := ss.Context()
 	log := appctx.GetLogger(ctx)
 
-	items, err := s.storage.ListRecycle(ctx)
+	items, err := s.storage.ListRecycle(ctx, nil)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -829,7 +829,11 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 }
 
 func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	items, err := s.storage.ListRecycle(ctx)
+	ref, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.storage.ListRecycle(ctx, ref)
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err != nil {
 		var st *rpc.Status

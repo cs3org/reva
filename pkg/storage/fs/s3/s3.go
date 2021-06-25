@@ -654,7 +654,7 @@ func (fs *s3FS) EmptyRecycle(ctx context.Context) error {
 	return errtypes.NotSupported("empty recycle")
 }
 
-func (fs *s3FS) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (fs *s3FS) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*provider.RecycleItem, error) {
 	return nil, errtypes.NotSupported("list recycle")
 }
 

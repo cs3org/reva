@@ -107,8 +107,8 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		//	return
 		//}
 
-		if key == "" && r.Method == "PROPFIND" {
-			h.listTrashbin(w, r, s, u)
+		if r.Method == "PROPFIND" {
+			h.listTrashbin(w, r, s, u, path.Join(key, r.URL.Path))
 			return
 		}
 		if key != "" && r.Method == "MOVE" {
@@ -142,12 +142,24 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User) {
+func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "listTrashbin")
 	defer span.End()
 
+	depth := r.Header.Get("Depth")
+	if depth == "" {
+		depth = "1"
+	}
+
 	sublog := appctx.GetLogger(ctx).With().Logger()
+
+	// see https://tools.ietf.org/html/rfc4918#section-9.1
+	if depth != "0" && depth != "1" && depth != "infinity" {
+		sublog.Debug().Str("depth", depth).Msgf("invalid Depth header value")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	pf, status, err := readPropfind(r.Body)
 	if err != nil {
@@ -179,7 +191,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 	// ask gateway for recycle items
 	// TODO(labkode): add Reference to ListRecycleRequest
-	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
+	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: &provider.Reference{Path: filepath.Join(getHomeRes.Path, key)}})
 
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
@@ -192,7 +204,47 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, getRecycleRes.RecycleItems)
+	items := getRecycleRes.RecycleItems
+
+	if depth == "infinity" {
+		var stack []string
+		// check sub-containers in reverse order and add them to the stack
+		// the reversed order here will produce a more logical sorting of results
+		for i := len(items) - 1; i >= 0; i-- {
+			// for i := range res.Infos {
+			if items[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				stack = append(stack, items[i].Key)
+			}
+		}
+
+		for len(stack) > 0 {
+			key := stack[len(stack)-1]
+			getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: &provider.Reference{Path: path.Join(getHomeRes.Path, key)}})
+			if err != nil {
+				sublog.Error().Err(err).Msg("error calling ListRecycle")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
+				HandleErrorStatus(&sublog, w, getRecycleRes.Status)
+				return
+			}
+			items = append(items, getRecycleRes.RecycleItems...)
+
+			stack = stack[:len(stack)-1]
+			// check sub-containers in reverse order and add them to the stack
+			// the reversed order here will produce a more logical sorting of results
+			for i := len(getRecycleRes.RecycleItems) - 1; i >= 0; i-- {
+				// for i := range res.Infos {
+				if getRecycleRes.RecycleItems[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+					stack = append(stack, getRecycleRes.RecycleItems[i].Key)
+				}
+			}
+		}
+	}
+
+	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, items)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

@@ -1181,7 +1181,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 }
 
-func (fs *localfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (fs *localfs) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*provider.RecycleItem, error) {
 
 	rp := fs.wrapRecycleBin(ctx, "/")
 

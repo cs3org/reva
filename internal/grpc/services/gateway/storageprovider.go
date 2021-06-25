@@ -1928,6 +1928,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *gateway.ListRecycleRequest) 
 		Opaque: req.Opaque,
 		FromTs: req.FromTs,
 		ToTs:   req.ToTs,
+		Ref:    req.Ref,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListRecycleRequest")
