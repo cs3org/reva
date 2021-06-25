@@ -76,13 +76,21 @@ var (
 	userProviders          = newProvider()
 	groupProviders         = newProvider()
 	dataTxs                = newProvider()
+	maxCallRecvMsgSize     = 10240000
 )
 
 // NewConn creates a new connection to a grpc server
 // with open census tracing support.
 // TODO(labkode): make grpc tls configurable.
+// TODO make maxCallRecvMsgSize configurable, raised from the default 4MB to be able to list 10k files
 func NewConn(endpoint string) (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(endpoint, grpc.WithInsecure(), grpc.WithStatsHandler(&ocgrpc.ClientHandler{}))
+	conn, err := grpc.Dial(
+		endpoint,
+		grpc.WithInsecure(),
+		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize),
+		))
 	if err != nil {
 		return nil, err
 	}
