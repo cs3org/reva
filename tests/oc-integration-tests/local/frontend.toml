@@ -107,7 +107,7 @@ outgoing = true
 incoming = true
 
 [http.services.ocs.capabilities.capabilities.notifications]
-endpoints = ["disable"]
+endpoints = []
 
 [http.services.ocs.capabilities.capabilities.files.tus_support]
 version = "1.0.0"
