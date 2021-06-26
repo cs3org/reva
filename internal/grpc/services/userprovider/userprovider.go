@@ -24,11 +24,10 @@ import (
 	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"
-	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -38,34 +37,79 @@ func init() {
 	rgrpc.Register("userprovider", New)
 }
 
-type config struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+type pluginConfig struct {
+	Driver   string `mapstructure:"driver"`
+	Location string `mapstructure:"location"`
+	Users    string `mapstructure:"users"`
 }
 
-func (c *config) init() {
-	if c.Driver == "" {
-		c.Driver = "json"
+func (p *pluginConfig) load() (interface{}, error) {
+	sym, err := plugin.Load(p.Location)
+	if err != nil {
+		return nil, err
 	}
+	return sym, nil
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
+func parseConfig(m map[string]interface{}) (*pluginConfig, error) {
+	plgConfig := &pluginConfig{}
+	if err := mapstructure.Decode(m, plgConfig); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
-	c.init()
-	return c, nil
+	return plgConfig, nil
 }
 
-func getDriver(c *config) (user.Manager, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+func getDriver(p *pluginConfig) (user.UserManager, error) {
+	sym, err := p.load()
+	if err != nil {
+		err = errors.Wrap(err, "error loading plugin")
+		return nil, err
 	}
 
-	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
+	manager, ok := sym.(user.UserManager)
+	if !ok {
+		return nil, fmt.Errorf("could not assert")
+	}
+
+	// New method initializes the manager struct in the plugin
+	err = manager.New(p.Users)
+
+	if err != nil {
+		err = errors.Wrap(err, "could not call rpc method `New`")
+		return nil, err
+	}
+	return manager, nil
 }
+
+// type config struct {
+// 	Driver  string                            `mapstructure:"driver"`
+// 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+// }
+
+// func (c *config) init() {
+// 	if c.Driver == "" {
+// 		c.Driver = "json"
+// 	}
+// }
+
+// func parseConfig(m map[string]interface{}) (*config, error) {
+// 	c := &config{}
+// 	if err := mapstructure.Decode(m, c); err != nil {
+// 		err = errors.Wrap(err, "error decoding conf")
+// 		return nil, err
+// 	}
+// 	c.init()
+// 	return c, nil
+// }
+
+// func getDriver(c *config) (user.Manager, error) {
+// 	if f, ok := registry.NewFuncs[c.Driver]; ok {
+// 		return f(c.Drivers[c.Driver])
+// 	}
+
+// 	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
+// }
 
 // New returns a new UserProviderServiceServer.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
@@ -79,13 +123,17 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	// Testing the plugin call
+	user, _ := userManager.GetUser(context.Background(), &userpb.UserId{OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51", Idp: "cernbox.cern.ch"})
+	fmt.Println(user.DisplayName)
+
 	svc := &service{usermgr: userManager}
 
 	return svc, nil
 }
 
 type service struct {
-	usermgr user.Manager
+	usermgr user.UserManager
 }
 
 func (s *service) Close() error {
