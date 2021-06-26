@@ -82,7 +82,7 @@ users = "users.demo.json"
 
 [grpc.services.userprovider]
 driver = "json"
-location = "/home/jimil/Desktop/golang-sqlite/json"
+location = "/home/jimil/Desktop/json"
 users = "/home/jimil/Desktop/reva/examples/ocmd/users.demo.json"
 
 [http]
