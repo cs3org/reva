@@ -658,7 +658,7 @@ func (fs *s3FS) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*pr
 	return nil, errtypes.NotSupported("list recycle")
 }
 
-func (fs *s3FS) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
+func (fs *s3FS) RestoreRecycleItem(ctx context.Context, trashRef *provider.Reference, restoreRef *provider.Reference) error {
 	return errtypes.NotSupported("restore recycle")
 }
 

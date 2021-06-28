@@ -129,7 +129,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 			log.Debug().Str("key", key).Str("dst", dst).Msg("restore")
 
-			h.restore(w, r, s, u, dst, key)
+			h.restore(w, r, s, u, dst, key, r.URL.Path)
 			return
 		}
 
@@ -415,7 +415,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 }
 
 // restore has a destination and a key
-func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst string, key string) {
+func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst, key, resourcePath string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "restore")
 	defer span.End()
@@ -516,7 +516,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
 		// TODO currently limited to the home storage
 		Ref: &provider.Reference{
-			Path: getHomeRes.Path,
+			Path: path.Join(getHomeRes.Path, resourcePath),
 		},
 		Key:        key,
 		RestoreRef: &provider.Reference{Path: dst},

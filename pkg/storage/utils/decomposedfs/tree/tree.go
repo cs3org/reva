@@ -410,8 +410,8 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 }
 
 // RestoreRecycleItemFunc returns a node and a function to restore it from the trash
-func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, restorePath string) (*node.Node, func() error, error) {
-	rn, trashItem, deletedNodePath, origin, err := t.readRecycleItem(ctx, key, "")
+func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, restorePath string) (*node.Node, func() error, error) {
+	rn, trashItem, deletedNodePath, origin, err := t.readRecycleItem(ctx, key, trashPath)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -449,6 +449,12 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, restorePath stri
 		// update name attribute
 		if err := xattr.Set(nodePath, xattrs.NameAttr, []byte(n.Name)); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+		}
+
+		if trashPath != "" {
+			if err := xattr.Set(nodePath, xattrs.ParentidAttr, []byte(n.ParentID)); err != nil {
+				return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+			}
 		}
 
 		// delete item link in trash
@@ -712,7 +718,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 	}
 
 	nodeID := filepath.Base(link)
-	if path == "" {
+	if path == "" || path == "/" {
 		parts := strings.SplitN(filepath.Base(link), ".T.", 2)
 		if len(parts) != 2 {
 			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
@@ -763,7 +769,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 	origin = "/"
 
 	deletedNodeRootPath := deletedNodePath
-	if path != "" {
+	if path != "" && path != "/" {
 		trashItemRoot := filepath.Join(t.lookup.InternalRoot(), "trash", u.Id.OpaqueId, key)
 		var rootLink string
 		rootLink, err = os.Readlink(trashItemRoot)

@@ -1999,32 +1999,32 @@ func (fs *ocfs) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*pr
 	return items, nil
 }
 
-func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
+func (fs *ocfs) RestoreRecycleItem(ctx context.Context, trashRef *provider.Reference, restoreRef *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
-	src := filepath.Join(rp, filepath.Clean(key))
+	src := filepath.Join(rp, filepath.Clean(trashRef.ResourceId.OpaqueId))
 
 	suffix := filepath.Ext(src)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
-		log.Error().Str("key", key).Str("path", src).Msg("invalid trash item suffix")
+		log.Error().Str("key", trashRef.ResourceId.OpaqueId).Str("path", src).Msg("invalid trash item suffix")
 		return nil
 	}
 
 	if restoreRef.Path == "" {
 		v, err := xattr.Get(src, trashOriginPrefix)
 		if err != nil {
-			log.Error().Err(err).Str("key", key).Str("path", src).Msg("could not read origin")
+			log.Error().Err(err).Str("key", trashRef.ResourceId.OpaqueId).Str("path", src).Msg("could not read origin")
 		}
 		restoreRef.Path = filepath.Join("/", filepath.Clean(string(v)), strings.TrimSuffix(filepath.Base(src), suffix))
 	}
 	tgt := fs.toInternalPath(ctx, restoreRef.Path)
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
-		log.Error().Err(err).Str("key", key).Str("restorePath", restoreRef.Path).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
+		log.Error().Err(err).Str("key", trashRef.ResourceId.OpaqueId).Str("restorePath", restoreRef.Path).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
 		return errors.Wrap(err, "owncloudsql: could not restore item")
 	}
 

@@ -1411,7 +1411,7 @@ func (fs *eosfs) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*p
 	return recycleEntries, nil
 }
 
-func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
+func (fs *eosfs) RestoreRecycleItem(ctx context.Context, trashRef *provider.Reference, restoreRef *provider.Reference) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -1422,7 +1422,7 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef 
 		return err
 	}
 
-	return fs.c.RestoreDeletedEntry(ctx, uid, gid, key)
+	return fs.c.RestoreDeletedEntry(ctx, uid, gid, trashRef.ResourceId.OpaqueId)
 }
 
 func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {

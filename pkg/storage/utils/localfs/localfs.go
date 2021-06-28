@@ -1199,14 +1199,14 @@ func (fs *localfs) ListRecycle(ctx context.Context, ref *provider.Reference) ([]
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string, restoreRef *provider.Reference) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, trashRef *provider.Reference, restoreRef *provider.Reference) error {
 
-	suffix := path.Ext(restoreKey)
+	suffix := path.Ext(trashRef.ResourceId.OpaqueId)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
 		return errors.New("localfs: invalid trash item suffix")
 	}
 
-	filePath, err := fs.getRecycledEntry(ctx, restoreKey)
+	filePath, err := fs.getRecycledEntry(ctx, trashRef.ResourceId.OpaqueId)
 	if err != nil {
 		return errors.Wrap(err, "localfs: invalid key")
 	}
@@ -1225,10 +1225,10 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string, re
 		return errors.New("localfs: can't restore - file already exists at original path")
 	}
 
-	rp := fs.wrapRecycleBin(ctx, restoreKey)
+	rp := fs.wrapRecycleBin(ctx, trashRef.ResourceId.OpaqueId)
 	if _, err = os.Stat(rp); err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(restoreKey)
+			return errtypes.NotFound(trashRef.ResourceId.OpaqueId)
 		}
 		return errors.Wrap(err, "localfs: error stating "+rp)
 	}
@@ -1237,7 +1237,7 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string, re
 		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 
-	err = fs.removeFromRecycledDB(ctx, restoreKey)
+	err = fs.removeFromRecycledDB(ctx, trashRef.ResourceId.OpaqueId)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error adding entry to DB")
 	}

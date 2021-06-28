@@ -259,11 +259,11 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context) ([]*provider.RecycleI
 }
 
 // RestoreRecycleItem restores the specified item
-func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
+func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, trashRef *provider.Reference, restoreRef *provider.Reference) error {
 	if restoreRef == nil {
 		restoreRef = &provider.Reference{}
 	}
-	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, restoreRef.Path)
+	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, trashRef.ResourceId.OpaqueId, trashRef.Path, restoreRef.Path)
 	if err != nil {
 		return err
 	}
@@ -276,7 +276,7 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key string, rest
 	case err != nil:
 		return errtypes.InternalError(err.Error())
 	case !ok:
-		return errtypes.PermissionDenied(key)
+		return errtypes.PermissionDenied(trashRef.ResourceId.OpaqueId)
 	}
 
 	// Run the restore func
