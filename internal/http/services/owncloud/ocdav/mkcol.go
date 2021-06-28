@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -85,6 +86,14 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	case rpc.Code_CODE_NOT_FOUND:
 		sublog.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("conflict")
 		w.WriteHeader(http.StatusConflict)
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		w.WriteHeader(http.StatusForbidden)
+		m := fmt.Sprintf("Permission denied to create %v", fn)
+		b, err := Marshal(exception{
+			code:    SabredavPermissionDenied,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
 	default:
 		HandleErrorStatus(&sublog, w, res.Status)
 	}

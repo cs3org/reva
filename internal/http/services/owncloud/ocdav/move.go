@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"fmt"
 	"net/http"
 	"path"
 	"strings"
@@ -76,6 +77,15 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
+		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: m,
+			})
+			HandleWebdavError(&sublog, w, b, err)
+		}
 		HandleErrorStatus(&sublog, w, srcStatRes.Status)
 		return
 	}
@@ -152,6 +162,15 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if mRes.Status.Code != rpc.Code_CODE_OK {
+		if mRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			w.WriteHeader(http.StatusForbidden)
+			m := fmt.Sprintf("Permission denied to move %v", sourceRef.Path)
+			b, err := Marshal(exception{
+				code:    SabredavPermissionDenied,
+				message: m,
+			})
+			HandleWebdavError(&sublog, w, b, err)
+		}
 		HandleErrorStatus(&sublog, w, mRes.Status)
 		return
 	}

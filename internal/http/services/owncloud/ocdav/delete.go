@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"fmt"
 	"net/http"
 	"path"
 
@@ -54,6 +55,32 @@ func (s *svc) handleDelete(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			m := fmt.Sprintf("Resource %v not found", fn)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: m,
+			})
+			HandleWebdavError(&sublog, w, b, err)
+		}
+		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			w.WriteHeader(http.StatusForbidden)
+			m := fmt.Sprintf("Permission denied to delete %v", fn)
+			b, err := Marshal(exception{
+				code:    SabredavPermissionDenied,
+				message: m,
+			})
+			HandleWebdavError(&sublog, w, b, err)
+		}
+		if res.Status.Code == rpc.Code_CODE_INTERNAL && res.Status.Message == "can't delete mount path" {
+			w.WriteHeader(http.StatusForbidden)
+			b, err := Marshal(exception{
+				code:    SabredavPermissionDenied,
+				message: res.Status.Message,
+			})
+			HandleWebdavError(&sublog, w, b, err)
+		}
 		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
