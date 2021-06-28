@@ -41,9 +41,9 @@ const timeoutMs = 30000
 var mutex = sync.Mutex{}
 var port = 19000
 
-func TestGprc(t *testing.T) {
+func TestGrpc(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Gprc Suite")
+	RunSpecs(t, "Grpc Suite")
 }
 
 type cleanupFunc func(bool) error

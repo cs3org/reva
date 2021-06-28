@@ -90,12 +90,12 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		return nil, err
 	} else if !md.IsDir() {
 		// this is the case when we want to directly list a file in the trashbin
-		if item, err := fs.createTrashItem(ctx, parentNode, filepath.Dir(tail), filepath.Join(trashRoot, ref.Path)); err != nil {
-			return items, err
-		} else {
-			items = append(items, item)
+		item, err := fs.createTrashItem(ctx, parentNode, filepath.Dir(tail), filepath.Join(trashRoot, ref.Path))
+		if err != nil {
 			return items, err
 		}
+		items = append(items, item)
+		return items, err
 	}
 
 	names, err := f.Readdirnames(0)
