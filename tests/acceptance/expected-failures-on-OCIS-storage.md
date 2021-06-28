@@ -19,27 +19,11 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiTrashbin/trashbinFilesFolders.feature:278](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L278)
 -   [apiTrashbin/trashbinFilesFolders.feature:279](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L279)
 
-#### [cannot restore to a different file-name](https://github.com/owncloud/ocis/issues/1122)
--   [apiTrashbin/trashbinRestore.feature:108](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L108)
--   [apiTrashbin/trashbinRestore.feature:109](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L109)
--   [apiTrashbin/trashbinRestore.feature:110](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L110)
--   [apiTrashbin/trashbinRestore.feature:111](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L111)
-
 #### [trash-bin restore move does not send back Etag and other headers](https://github.com/owncloud/ocis/issues/1121)
--   [apiTrashbin/trashbinRestore.feature:34](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L34)
--   [apiTrashbin/trashbinRestore.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L35)
 -   [apiTrashbin/trashbinRestore.feature:130](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L130)
 -   [apiTrashbin/trashbinRestore.feature:131](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L131)
 
-#### [cannot restore to a different file-name](https://github.com/owncloud/ocis/issues/1122)
-#### [trash-bin restore move does not send back Etag and other headers](https://github.com/owncloud/ocis/issues/1121)
--   [apiTrashbin/trashbinRestore.feature:88](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L88)
--   [apiTrashbin/trashbinRestore.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L89)
--   [apiTrashbin/trashbinRestore.feature:90](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L90)
--   [apiTrashbin/trashbinRestore.feature:91](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L91)
--   [apiTrashbin/trashbinRestore.feature:92](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L92)
--   [apiTrashbin/trashbinRestore.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L93)
-
+#### [href in trashbin PROPFIND response is wrong](https://github.com/owncloud/ocis/issues/1120)
 #### [cannot restore to a different file-name](https://github.com/owncloud/ocis/issues/1122)
 -   [apiTrashbin/trashbinRestore.feature:309](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L309)
 -   [apiTrashbin/trashbinRestore.feature:310](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L310)
@@ -646,7 +630,7 @@ File and sync features in a shared scenario
 -   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L171)
 -   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:172](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L172)
 
-#### [file_target in share response](https://github.com/owncloud/product/issues/203)
+#### [file_target has unexpected value](https://github.com/owncloud/ocis/issues/2113)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L36)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L37)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L66)
@@ -659,12 +643,10 @@ File and sync features in a shared scenario
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L99)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:156](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L156)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:157](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L157)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:290](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L290)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L291)
--   [apiShareManagementBasicToShares/deleteShareFromShares.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L46)
--   [apiShareManagementToShares/mergeShare.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L32)
--   [apiShareManagementToShares/mergeShare.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L42)
--   [apiShareManagementToShares/mergeShare.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L89)
+-   [apiShareOperationsToShares1/gettingShares.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L170)
+-   [apiShareOperationsToShares1/gettingShares.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L171)
+-   [apiSharePublicLink1/createPublicLinkShare.feature:736](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L736)
+-   [apiSharePublicLink1/createPublicLinkShare.feature:747](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L747)
 
 #### [Shares are not deleted when user is deleted](https://github.com/owncloud/ocis/issues/1258)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:101](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L101)
@@ -684,6 +666,9 @@ File and sync features in a shared scenario
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:468](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L468)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L28)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L29)
+-   [apiShareManagementToShares/mergeShare.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L32)
+-   [apiShareManagementToShares/mergeShare.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L42)
+-   [apiShareManagementToShares/mergeShare.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L89)
 
 #### [Cannot move a file to a shared folder](https://github.com/owncloud/ocis/issues/2146)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:508](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L508)
@@ -693,11 +678,8 @@ File and sync features in a shared scenario
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:43](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L43)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:44](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L44)
 
-#### [file_target in share response](https://github.com/owncloud/product/issues/203)
+#### [sharing via API and changing the cases in the username does not work correctly](https://github.com/owncloud/core/issues/35484)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:373](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L373)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:536](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L536)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:554](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L554)
--   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:572](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L572)
 
 #### [File deletion using dav gives unique string in filename in the trashbin](https://github.com/owncloud/product/issues/178)
 
@@ -771,13 +753,6 @@ File and sync features in a shared scenario
 -   [apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature:79](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature#L79)
 -   [apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature:80](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature#L80)
 
-#### [file_target in share response](https://github.com/owncloud/product/issues/203)
-
--   [apiShareOperationsToShares1/gettingShares.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L170)
--   [apiShareOperationsToShares1/gettingShares.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L171)
-
--   [apiSharePublicLink1/createPublicLinkShare.feature:736](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L736)
--   [apiSharePublicLink1/createPublicLinkShare.feature:747](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L747)
 
 #### [Cannot set mtime on upload](https://github.com/owncloud/product/issues/271)
 
@@ -954,7 +929,7 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiShareReshareToShares3/reShareUpdate.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L61)
 -   [apiShareReshareToShares3/reShareUpdate.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L62)
 
-#### [file_target in share response](https://github.com/owncloud/product/issues/203)
+#### [path property in pending shares gives only filename](https://github.com/owncloud/ocis/issues/2156)
 
 -   [apiShareReshareToShares2/reShareSubfolder.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L30)
 -   [apiShareReshareToShares2/reShareSubfolder.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L31)
@@ -964,6 +939,15 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiShareReshareToShares2/reShareSubfolder.feature:131](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L131)
 -   [apiShareReshareToShares2/reShareSubfolder.feature:152](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L152)
 -   [apiShareReshareToShares2/reShareSubfolder.feature:153](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L153)
+-   [apiShareManagementBasicToShares/deleteShareFromShares.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L46)
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:536](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L536)
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:554](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L554)
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:572](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L572)
+
+#### [Listing shares via ocs API does not show path for parent folders](https://github.com/owncloud/ocis/issues/1231)
+
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:290](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L290)
+-   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L291)
 
 #### [invalid format of sharees response](https://github.com/owncloud/product/issues/292)
 

@@ -382,6 +382,10 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, restorePath stri
 		}
 
 		n.Exists = true
+		// update name attribute
+		if err := xattr.Set(nodePath, xattrs.NameAttr, []byte(n.Name)); err != nil {
+			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+		}
 
 		// delete item link in trash
 		if err = os.Remove(trashItem); err != nil {

@@ -299,7 +299,10 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	}
 
 	if s.PasswordProtected && sign {
-		publicshare.AddSignature(s, pw)
+		if err := publicshare.AddSignature(s, pw); err != nil {
+			return nil, err
+		}
+
 	}
 
 	return s, nil
@@ -354,7 +357,9 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			_ = m.cleanupExpiredShares()
 		} else {
 			if cs3Share.PasswordProtected && sign {
-				publicshare.AddSignature(cs3Share, s.ShareWith)
+				if err := publicshare.AddSignature(cs3Share, s.ShareWith); err != nil {
+					return nil, err
+				}
 			}
 			shares = append(shares, cs3Share)
 		}
@@ -418,7 +423,9 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 		}
 
 		if sign {
-			publicshare.AddSignature(cs3Share, s.ShareWith)
+			if err := publicshare.AddSignature(cs3Share, s.ShareWith); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -480,7 +487,12 @@ func authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuth
 		if now.After(expiration) {
 			return false
 		}
-		s := publicshare.CreateSignature(share.Token, pw, expiration)
+		s, err := publicshare.CreateSignature(share.Token, pw, expiration)
+		if err != nil {
+			// TODO(labkode): pass context to call to log err.
+			// No we are blind
+			return false
+		}
 		return sig.GetSignature() == s
 	}
 	return false
