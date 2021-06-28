@@ -36,14 +36,46 @@ You can also read the [build from sources guide](https://reva.link/docs/getting-
 
 ## Run tests
 
-### unit tests / GRPC tests
-`make test`
+Reva's codebase continuously undergoes testing at various levels.
+
+To understand which tests exist, you can have a look at the [Makefile](https://github.com/cs3org/reva/blob/master/Makefile) and the [Drone run logs](https://drone.cernbox.cern.ch/cs3org/reva/).
+
+The tests run by CERN's instance of [Drone CI/CD](https://docs.drone.io/) are defined in the [.drone.star](https://github.com/cs3org/reva/blob/master/.drone.star) file.
+
+NB: The [tests/oc-integration-tests/drone](https://github.com/cs3org/reva/tree/master/tests/oc-integration-tests/drone) and [tests/oc-integration-tests/local](https://github.com/cs3org/reva/tree/master/tests/oc-integration-tests/local) folders contain the configuration fixtures that are used to start up the Reva instance to test (on drone CI/CD or on your local system, respectively), for both these acceptance tests ("ownCloud legacy integration tests") and the Litmus tests.
+
+### Unit tests
+
+This runs the `<unit>_test.go` files that appear next to some of the `<unit>.go` files in the code tree.
+
+For instance `pkg/utils/utils_test.go` contains unit tests for `pkg/utils/utils.go`.
+
+To run all of them you can do `make test`.
 
 If you see `TestGetManagerWithInvalidUser/Nil_in_user` fail, [try removing](https://github.com/cs3org/reva/issues/1736) `/etc/revad/users.json` on your system.
 
-### litmus tests
+To run a single one of them you can do:
+```sh
+$ go test `go list ./pkg/utils/...`
+ok  	github.com/cs3org/reva/pkg/utils	0.374s
+```
+
+### Integration tests (GRPC)
+See [tests/integration](https://github.com/cs3org/reva/tree/master/tests/integration).
+
+```sh
+export REDIS_ADDRESS=127.0.0.1:6379
+make test-integration
+```
+
+NB: This will work better on Linux than on MacOS because of issues with static linking (`library not found for -lcrt0.o`).
+
+### Litmus tests (WebDAV)
+[Litmus](http://www.webdav.org/neon/litmus/) is a webdav test suite. The litmus tests for Reva's WebDAV interface are run using the [ownCloud's litmus Docker image](https://github.com/owncloud-docker/litmus). The '-old' and '-new' refer to which `LITMUS_URL` environment variable is passed to that Docker image, in other words, which path on the Reva server the litmus tests are run against.
+
 1. start the needed services
    ```
+   mkdir -p /var/tmp/reva/einstein
    cd tests/oc-integration-tests/local
    ../../../cmd/revad/revad -c frontend.toml &
    ../../../cmd/revad/revad -c gateway.toml &
@@ -65,7 +97,11 @@ If you see `TestGetManagerWithInvalidUser/Nil_in_user` fail, [try removing](http
    - change `LITMUS_URL` for other tests e.g. `-e LITMUS_URL=http://localhost:20080/remote.php/dav/files/einstein` or to a public-share link
    - if on MacOS you see `FAIL (connection refused by '127.0.0.1' port 20080: Connection refused)`, it may be necessary to replace 'localhost' with your host IP address (e.g. `ipconfig getifaddr en0` or `sudo ifconfig | grep 192`)
 
-### ownCloud legacy integration tests
+### Acceptance tests (wnCloud legacy)
+See [tests/acceptance](https://github.com/cs3org/reva/tree/master/tests/acceptance).
+
+This will require some PHP-related tools to run, for instance on Ubuntu you will need `apt install -y php-xml php-curl composer`.
+
 1. start an LDAP server
     ```
     docker run --rm --hostname ldap.my-company.com \
