@@ -234,7 +234,7 @@ func (fs *Decomposedfs) createStorageSpace(spaceType, nodeID string) error {
 	// we can reuse the node id as the space id
 	err := os.Symlink("../../nodes/"+nodeID, filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
 	if err != nil {
-		fmt.Printf("could not create symlink for personal space %s, %s\n", nodeID, err)
+		fmt.Printf("could not create symlink for '%s' space %s, %s\n", spaceType, nodeID, err)
 	}
 
 	return nil
@@ -507,8 +507,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// /nodes/root/personal/foo and /nodes/root/shares/foo might be two very different spaces, a /nodes/root/foo is not expressive enough
 	// we would not need /nodes/root if access always happened via spaceid+relative path
 
-	spaceType := "*"
-	spaceID := "*"
+	var (
+		spaceType = "*"
+		spaceID   = "*"
+	)
 
 	for i := range filter {
 		switch filter[i].Type {
@@ -557,8 +559,6 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 			// TODO apply more filters
 
-			// build return value
-
 			space := &provider.StorageSpace{
 				// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
 				//Id: &provider.StorageSpaceId{OpaqueId: "1284d238-aa92-42ce-bdc4-0b0000009157!" + n.ID},
@@ -577,7 +577,6 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 					// do not list shares as spaces for the owner
 					continue
 				}
-				// return folder name?
 				space.Name = n.Name
 			} else {
 				space.Name = "root" // do not expose the id as name, this is the root of a space

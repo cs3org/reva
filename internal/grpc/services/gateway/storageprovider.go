@@ -122,15 +122,17 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		}
 	}
 
-	var providers []*registry.ProviderInfo
-	var err error
+	var (
+		providers []*registry.ProviderInfo
+		err       error
+	)
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
 
 	if id != nil {
-		// query that specific story provider
+		// query that specific storage provider
 		parts := strings.SplitN(id.OpaqueId, "!", 2)
 		if len(parts) != 2 {
 			return &provider.ListStorageSpacesResponse{
@@ -183,8 +185,8 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 	spacesFromProviders := make([][]*provider.StorageSpace, len(providers))
 	errors := make([]error, len(providers))
-	var wg sync.WaitGroup
 
+	var wg sync.WaitGroup
 	for i, p := range providers {
 		wg.Add(1)
 		go s.listStorageSpacesOnProvider(ctx, req, &spacesFromProviders[i], p, &errors[i], &wg)
