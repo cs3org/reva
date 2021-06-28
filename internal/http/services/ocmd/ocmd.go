@@ -94,7 +94,7 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/invites/accept", "shares"}
+	return []string{"/invites/accept", "/shares", "/ocm-provider"}
 }
 
 func (s *svc) Handler() http.Handler {
