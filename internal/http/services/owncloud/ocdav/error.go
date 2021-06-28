@@ -65,10 +65,10 @@ func Marshal(e exception) ([]byte, error) {
 		Message:   e.message,
 		Header:    e.header,
 	})
-	if err == nil {
-		return []byte(xml.Header + string(xmlstring)), err
+	if err != nil {
+		return []byte(""), err
 	}
-	return []byte(""), err
+	return []byte(xml.Header + string(xmlstring)), err
 }
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
