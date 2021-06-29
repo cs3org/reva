@@ -19,12 +19,14 @@
 package demo
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/cs3org/reva/pkg/app"
@@ -44,12 +46,14 @@ func init() {
 }
 
 type config struct {
-	IOPSecret    string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
-	WopiURL      string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
-	AppName      string `mapstructure:"app_name" docs:";The App user-friendly name."`
-	AppURL       string `mapstructure:"app_url" docs:";The App URL."`
-	AppIntURL    string `mapstructure:"app_int_url" docs:";The App internal URL in case of dockerized deployments. Defaults to AppURL"`
-	AppApiKey    string `mapstructure:"app_apikey" docs:";The API key used by the App, if applicable."`
+	IOPSecret  string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
+	WopiURL    string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
+	AppName    string `mapstructure:"app_name" docs:";The App user-friendly name."`
+	AppURL     string `mapstructure:"app_url" docs:";The App URL."`
+	AppIntURL  string `mapstructure:"app_int_url" docs:";The App internal URL in case of dockerized deployments. Defaults to AppURL"`
+	AppViewURL string `mapstructure:"app_view_url" docs:";The App URL to view documents."`
+	AppEditURL string `mapstructure:"app_edit_url" docs:";The App URL to edit documents."`
+	AppApiKey  string `mapstructure:"app_apikey" docs:";The API key used by the App, if applicable."`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -70,7 +74,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 	if app != "" && app != p.conf.AppName {
 		// Sanity check
-		return "", errors.New("AppProvider for "+ p.conf.AppName +" cannot open in "+ app)
+		return "", errors.New("AppProvider for " + p.conf.AppName + " cannot open in " + app)
 	}
 
 	wopiurl, err := url.Parse(p.conf.WopiURL)
@@ -103,7 +107,10 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	if p.conf.AppViewURL != "" {
 		q.Add("appviewurl", p.conf.AppViewURL)
 	}
-	if p.conf.ApiKey != "" {
+	if p.conf.AppEditURL != "" {
+		q.Add("appviewurl", p.conf.AppEditURL)
+	}
+	if p.conf.AppApiKey != "" {
 		httpReq.Header.Set("ApiKey", p.conf.AppApiKey)
 	}
 	if p.conf.IOPSecret == "" {
@@ -130,25 +137,28 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 // New returns an implementation of the app.Provider interface that
 // connects to an application in the backend.
-func New(m map[string]interface{})() (app.Provider, error) {
+func New(m map[string]interface{}) (app.Provider, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
+	}
+
+	if c.AppIntURL == "" {
+		c.AppIntURL = c.AppURL
 	}
 
 	// Initialize WOPI URLs by discovery
 	httpcl := rhttp.GetHTTPClient(
 		rhttp.Timeout(time.Duration(5 * int64(time.Second))),
 	)
-	if c.AppIntURL == "" {
-		c.AppIntURL = c.AppURL
-	}
+
 	appurl, err := url.Parse(c.AppIntURL)
 	if err != nil {
 		return nil, err
 	}
-	appurl.Path = path.Join(c.AppIntURL.Path, "/hosting/discovery")
-	discReq, err := rhttp.NewRequest(ctx, "GET", appurl, nil)
+	appurl.Path = path.Join(appurl.Path, "/hosting/discovery")
+
+	discReq, err := http.NewRequest("GET", appurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -157,27 +167,33 @@ func New(m map[string]interface{})() (app.Provider, error) {
 		return nil, err
 	}
 	defer discRes.Body.Close()
-	if discRes.StatusCode == http.StatusNotFound) {
+
+	if discRes.StatusCode == http.StatusNotFound {
 		// this may be a bridge-supported app, let's find out
-		discReq, err := rhttp.NewRequest(ctx, "GET", c.AppIntURL, nil)
+		discReq, err = http.NewRequest("GET", c.AppIntURL, nil)
 		if err != nil {
 			return nil, err
 		}
-		discRes, err := httpcl.Do(discReq)
+		discRes, err = httpcl.Do(discReq)
 		if err != nil {
 			return nil, err
 		}
 		defer discRes.Body.Close()
-		// scrape app's home page to find the appname
-		if !discRes.Body.Find(c.AppName) {
-		// || (c.AppName != "CodiMD" && c.AppName != "Etherpad") {
-			return nil, errors.New("Application server at " + c.AppURL + " does not match this AppProvider for "+ c.AppName)
+
+		buf := new(bytes.Buffer)
+		_, err = buf.ReadFrom(discRes.Body)
+		if err != nil {
+			return nil, err
 		}
-	} else {
+		bodyStr := buf.String()
+
+		// scrape app's home page to find the appname
+		if !strings.Contains(bodyStr, c.AppName) {
+			// || (c.AppName != "CodiMD" && c.AppName != "Etherpad") {
+			return nil, errors.New("Application server at " + c.AppURL + " does not match this AppProvider for " + c.AppName)
+		}
+	} else if discRes.StatusCode == http.StatusOK {
 		// TODO parse XML from discRes.Body
-		c.AppEditURL := "bla"
-		c.AppViewURL := "bla"
-		// TODO register all supported mimetypes in the AppRegistry
 	}
 
 	wopiClient := rhttp.GetHTTPClient(
@@ -186,6 +202,8 @@ func New(m map[string]interface{})() (app.Provider, error) {
 	wopiClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
+
+	// TODO register all supported mimetypes in the AppRegistry
 
 	return &wopiProvider{
 		conf:       c,
