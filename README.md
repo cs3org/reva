@@ -69,6 +69,8 @@ export REDIS_ADDRESS=127.0.0.1:6379
 make test-integration
 ```
 
+You can get more verbose output with `ginkgo -v -r tests/integration/`.
+
 NB: This will work better on Linux than on MacOS because of issues with static linking (`library not found for -lcrt0.o`).
 
 ### Litmus tests (WebDAV)
