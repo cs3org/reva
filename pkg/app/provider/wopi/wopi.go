@@ -53,7 +53,7 @@ type config struct {
 	AppIntURL  string `mapstructure:"app_int_url" docs:";The App internal URL in case of dockerized deployments. Defaults to AppURL"`
 	AppViewURL string `mapstructure:"app_view_url" docs:";The App URL to view documents."`
 	AppEditURL string `mapstructure:"app_edit_url" docs:";The App URL to edit documents."`
-	AppApiKey  string `mapstructure:"app_apikey" docs:";The API key used by the App, if applicable."`
+	AppAPIKey  string `mapstructure:"app_api_key" docs:";The API key used by the App, if applicable."`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -110,16 +110,17 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	if p.conf.AppEditURL != "" {
 		q.Add("appviewurl", p.conf.AppEditURL)
 	}
-	if p.conf.AppApiKey != "" {
-		httpReq.Header.Set("ApiKey", p.conf.AppApiKey)
+	if p.conf.AppAPIKey != "" {
+		httpReq.Header.Set("ApiKey", p.conf.AppAPIKey)
 	}
 	if p.conf.IOPSecret == "" {
 		p.conf.IOPSecret = os.Getenv("REVA_APPPROVIDER_IOPSECRET")
 	}
+	httpReq.URL.RawQuery = q.Encode()
+
 	httpReq.Header.Set("Authorization", "Bearer "+p.conf.IOPSecret)
 	httpReq.Header.Set("TokenHeader", token)
 
-	httpReq.URL.RawQuery = q.Encode()
 	openRes, err := p.wopiClient.Do(httpReq)
 	if err != nil {
 		return "", errors.Wrap(err, "wopi: error performing open request to WOPI server")
