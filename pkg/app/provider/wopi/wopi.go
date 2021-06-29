@@ -46,11 +46,10 @@ func init() {
 type config struct {
 	IOPSecret    string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
 	WopiURL      string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
-	MSOOURL      string `mapstructure:"msoo_url" docs:";The MS Office Online URL."`
-	CodeURL      string `mapstructure:"code_url" docs:";The Collabora Online URL."`
-	CodiMDURL    string `mapstructure:"codimd_url" docs:";The CodiMD URL."`
-	CodiMDIntURL string `mapstructure:"codimd_int_url" docs:";The CodiMD internal URL."`
-	CodiMDApiKey string `mapstructure:"codimd_url" docs:";The CodiMD URL."`
+	AppName      string `mapstructure:"app_name" docs:";The App user-friendly name."`
+	AppURL       string `mapstructure:"app_url" docs:";The App URL."`
+	AppIntURL    string `mapstructure:"app_int_url" docs:";The App internal URL in case of dockerized deployments. Defaults to AppURL"`
+	AppApiKey    string `mapstructure:"app_apikey" docs:";The API key used by the App, if applicable."`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -66,8 +65,13 @@ type wopiProvider struct {
 	wopiClient *http.Client
 }
 
-func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, app, token string) (string, error) {
+func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, app string, token string) (string, error) {
 	log := appctx.GetLogger(ctx)
+
+	if app != "" && app != p.conf.AppName {
+		// Sanity check
+		return "", errors.New("AppProvider for "+ p.conf.AppName +" cannot open in "+ app)
+	}
 
 	wopiurl, err := url.Parse(p.conf.WopiURL)
 	if err != nil {
@@ -91,29 +95,20 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		q.Add("username", u.Username)
 	}
 	// else defaults to "Anonymous Guest"
-	if app == "" {
-		// Default behavior: look for the default app for this file's mimetype
-		// XXX TODO
-		app = "Collabora Online"
-	}
 	q.Add("appname", app)
-	if app == "CodiMD" {
-		// This is served by the WOPI bridge extensions
-		q.Add("appediturl", p.conf.CodiMDURL)
-		if p.conf.CodiMDIntURL != "" {
-			q.Add("appinturl", p.conf.CodiMDIntURL)
-		}
-		httpReq.Header.Set("ApiKey", p.conf.CodiMDApiKey)
-	} else {
-		// TODO get AppRegistry
-		//q.Add("appediturl", AppRegistry.get(app).getEditUrl())
-		//q.Add("appviewurl", AppRegistry.get(app).getViewUrl())
+	q.Add("appurl", p.conf.AppURL)
+	if p.conf.AppIntURL != "" {
+		q.Add("appinturl", p.conf.AppIntURL)
 	}
-
+	if p.conf.AppViewURL != "" {
+		q.Add("appviewurl", p.conf.AppViewURL)
+	}
+	if p.conf.ApiKey != "" {
+		httpReq.Header.Set("ApiKey", p.conf.AppApiKey)
+	}
 	if p.conf.IOPSecret == "" {
 		p.conf.IOPSecret = os.Getenv("REVA_APPPROVIDER_IOPSECRET")
 	}
-
 	httpReq.Header.Set("Authorization", "Bearer "+p.conf.IOPSecret)
 	httpReq.Header.Set("TokenHeader", token)
 
@@ -125,20 +120,64 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	defer openRes.Body.Close()
 
 	if openRes.StatusCode != http.StatusFound {
-		return "", errors.Wrap(err, "wopi: error performing open request to WOPI server, status: "+openRes.Status)
+		return "", errors.Wrap(err, "wopi: unexpected status from WOPI server: "+openRes.Status)
 	}
-	appURL := openRes.Header.Get("Location")
+	appFullURL := openRes.Header.Get("Location")
 
-	log.Info().Msg(fmt.Sprintf("wopi: returning app URL %s", appURL))
-	return appURL, nil
+	log.Info().Msg(fmt.Sprintf("wopi: returning app URL %s", appFullURL))
+	return appFullURL, nil
 }
 
 // New returns an implementation of the app.Provider interface that
 // connects to an application in the backend.
-func New(m map[string]interface{}) (app.Provider, error) {
+func New(m map[string]interface{})() (app.Provider, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
+	}
+
+	// Initialize WOPI URLs by discovery
+	httpcl := rhttp.GetHTTPClient(
+		rhttp.Timeout(time.Duration(5 * int64(time.Second))),
+	)
+	if c.AppIntURL == "" {
+		c.AppIntURL = c.AppURL
+	}
+	appurl, err := url.Parse(c.AppIntURL)
+	if err != nil {
+		return nil, err
+	}
+	appurl.Path = path.Join(c.AppIntURL.Path, "/hosting/discovery")
+	discReq, err := rhttp.NewRequest(ctx, "GET", appurl, nil)
+	if err != nil {
+		return nil, err
+	}
+	discRes, err := httpcl.Do(discReq)
+	if err != nil {
+		return nil, err
+	}
+	defer discRes.Body.Close()
+	if discRes.StatusCode == http.StatusNotFound) {
+		// this may be a bridge-supported app, let's find out
+		discReq, err := rhttp.NewRequest(ctx, "GET", c.AppIntURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		discRes, err := httpcl.Do(discReq)
+		if err != nil {
+			return nil, err
+		}
+		defer discRes.Body.Close()
+		// scrape app's home page to find the appname
+		if !discRes.Body.Find(c.AppName) {
+		// || (c.AppName != "CodiMD" && c.AppName != "Etherpad") {
+			return nil, errors.New("Application server at " + c.AppURL + " does not match this AppProvider for "+ c.AppName)
+		}
+	} else {
+		// TODO parse XML from discRes.Body
+		c.AppEditURL := "bla"
+		c.AppViewURL := "bla"
+		// TODO register all supported mimetypes in the AppRegistry
 	}
 
 	wopiClient := rhttp.GetHTTPClient(
