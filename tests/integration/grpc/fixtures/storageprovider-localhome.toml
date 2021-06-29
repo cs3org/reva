@@ -1,0 +1,8 @@
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.storageprovider]
+driver = "localhome"
+
+[grpc.services.storageprovider.drivers.localhome]
+user_layout = "{{.Username}}"
