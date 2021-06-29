@@ -1532,15 +1532,19 @@ func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) 
 	// move to trash location
 	dtime := time.Now().Unix()
 	tgt := filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
+
+	// The condition reads: "if the file exists"
+	// I know this check is hard to read because of the double negation
+	// but this way we avoid to duplicate the code following the if block.
+	// If two deletes happen fast consecutively they will have the same `dtime`,
+	// therefore we have to increase the 'dtime' to avoid collisions.
+	if _, err := os.Stat(tgt); !errors.Is(err, os.ErrNotExist) {
+		// timestamp collision, try again with higher value:
+		dtime++
+		tgt = filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
+	}
 	if err := os.Rename(ip, tgt); err != nil {
-		if os.IsExist(err) {
-			// timestamp collision, try again with higher value:
-			dtime++
-			tgt := filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
-			if err := os.Rename(ip, tgt); err != nil {
-				return errors.Wrap(err, "ocfs: could not move item to trash")
-			}
-		}
+		return errors.Wrap(err, "ocfs: could not move item to trash")
 	}
 
 	return fs.propagate(ctx, filepath.Dir(ip))
