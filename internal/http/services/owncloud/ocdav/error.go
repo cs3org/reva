@@ -58,13 +58,17 @@ type exception struct {
 
 // Marshal just calls the xml marshaller for a given exception.
 func Marshal(e exception) ([]byte, error) {
-	return xml.Marshal(&errorXML{
+	xmlstring, err := xml.Marshal(&errorXML{
 		Xmlnsd:    "DAV",
 		Xmlnss:    "http://sabredav.org/ns",
 		Exception: codesEnum[e.code],
 		Message:   e.message,
 		Header:    e.header,
 	})
+	if err != nil {
+		return []byte(""), err
+	}
+	return []byte(xml.Header + string(xmlstring)), err
 }
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
