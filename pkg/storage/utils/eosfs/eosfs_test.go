@@ -20,6 +20,7 @@ package eosfs
 
 import (
 	"context"
+	"os/exec"
 	"path"
 	"reflect"
 	"testing"
@@ -68,7 +69,17 @@ func createTempFile(ctx context.Context, t *testing.T, eos *eosfs, dir string) (
 	return path, cleanup
 }
 
+// return true if the command exist
+func commandExists(path string) bool {
+	_, err := exec.LookPath(path)
+	return err == nil
+}
+
 func TestAddGrant(t *testing.T) {
+
+	if !commandExists("/usr/bin/eos") {
+		t.Skip("/usr/bin/eos does not exist")
+	}
 
 	fs, err := NewEOSFS(&Config{
 		MasterURL:           "root://eoshomecanary.cern.ch",
