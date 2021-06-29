@@ -62,6 +62,7 @@ ok  	github.com/cs3org/reva/pkg/utils	0.374s
 
 ### Integration tests (GRPC)
 See [tests/integration](https://github.com/cs3org/reva/tree/master/tests/integration).
+This requires Redis.
 
 ```sh
 export REDIS_ADDRESS=127.0.0.1:6379
@@ -97,7 +98,7 @@ NB: This will work better on Linux than on MacOS because of issues with static l
    - change `LITMUS_URL` for other tests e.g. `-e LITMUS_URL=http://localhost:20080/remote.php/dav/files/einstein` or to a public-share link
    - if on MacOS you see `FAIL (connection refused by '127.0.0.1' port 20080: Connection refused)`, it may be necessary to replace 'localhost' with your host IP address (e.g. `ipconfig getifaddr en0` or `sudo ifconfig | grep 192`)
 
-### Acceptance tests (wnCloud legacy)
+### Acceptance tests (ownCloud legacy)
 See [tests/acceptance](https://github.com/cs3org/reva/tree/master/tests/acceptance).
 
 This will require some PHP-related tools to run, for instance on Ubuntu you will need `apt install -y php-xml php-curl composer`.
