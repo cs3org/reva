@@ -174,7 +174,7 @@ def buildAndPublishDocker():
         "settings": {
           "repo": "cs3org/reva",
           "tags": "latest",
-          "dockerfile": "Dockerfile.revad",
+          "dockerfile": "Dockerfile.reva",
           "username":{
             "from_secret": "dockerhub_username",
           },
