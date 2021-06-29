@@ -1284,8 +1284,8 @@ _ocs: api compatibility, return correct status code_
 
 #### [Sharing seems to work but does not work](https://github.com/owncloud/ocis/issues/1303)
 -   [apiShareCreateSpecialToShares1/createShareUniqueReceivedNames.feature:15](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareUniqueReceivedNames.feature#L15)
--   [apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature:19](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature#L19)
--   [apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature#L22)
+-   [apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature:20](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature#L20)
+-   [apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature:23](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature#L23)
 -   [apiShareManagementToShares/moveReceivedShare.feature:14](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveReceivedShare.feature#L14)
 -   [apiShareManagementToShares/moveReceivedShare.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveReceivedShare.feature#L28)
 -   [apiShareManagementToShares/moveReceivedShare.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveReceivedShare.feature#L39)
