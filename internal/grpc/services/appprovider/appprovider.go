@@ -55,11 +55,12 @@ type service struct {
 }
 
 type config struct {
-	Driver    string                 `mapstructure:"driver"`
-	Demo      map[string]interface{} `mapstructure:"demo"`
-	IopSecret string                 `mapstructure:"iopsecret" docs:";The iopsecret used to connect to the wopiserver."`
-	WopiURL   string                 `mapstructure:"wopiurl" docs:";The wopiserver's URL."`
-	WopiBrURL string                 `mapstructure:"wopibridgeurl" docs:";The wopibridge's URL."`
+	Driver       string                 `mapstructure:"driver"`
+	Demo         map[string]interface{} `mapstructure:"demo"`
+	IopSecret    string                 `mapstructure:"iopsecret" docs:";The iopsecret used to connect to the wopiserver."`
+	WopiInsecure bool                   `mapstructure:"wopiinsecure" docs:";Don't verify SSL certificates of the wopiserver / wopibridge"`
+	WopiURL      string                 `mapstructure:"wopiurl" docs:";The wopiserver's URL."`
+	WopiBrURL    string                 `mapstructure:"wopibridgeurl" docs:";The wopibridge's URL."`
 }
 
 // New creates a new AppProviderService
@@ -78,7 +79,8 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		conf:     c,
 		provider: provider,
 		client: rhttp.GetHTTPClient(
-			rhttp.Timeout(5 * time.Second),
+			rhttp.Timeout(5*time.Second),
+			rhttp.Insecure(c.WopiInsecure),
 		),
 	}
 
