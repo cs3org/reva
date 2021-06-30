@@ -26,6 +26,7 @@ type Configuration struct {
 		GOCDB struct {
 			Address string `mapstructure:"address"`
 			Scope   string `mapstructure:"scope"`
+			APIKey  string `mapstructure:"apikey"`
 		} `mapstructure:"gocdb"`
 
 		LocalFile struct {
