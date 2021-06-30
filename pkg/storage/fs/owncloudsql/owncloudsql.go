@@ -40,6 +40,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
+	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
@@ -336,10 +337,8 @@ func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
 }
 
 func (fs *ocfs) toDatabasePath(ctx context.Context, ip string) string {
-	// TODO aduffeck: add support for non-home layout
-	u := user.ContextMustGetUser(ctx)
-	layout := templates.WithUser(u, fs.c.UserLayout)
-	trim := filepath.Join(fs.c.DataDirectory, layout)
+	owner := fs.getOwner(ip)
+	trim := filepath.Join(fs.c.DataDirectory, owner)
 	p := strings.TrimPrefix(ip, trim)
 	p = strings.TrimPrefix(p, "/")
 	return p
@@ -374,7 +373,7 @@ func (fs *ocfs) toStoragePath(ctx context.Context, ip string) (sp string) {
 		case 3:
 			sp = filepath.Join("/", segments[1])
 		default:
-			sp = filepath.Join("/", segments[1], segments[3])
+			sp = filepath.Join(segments[1], segments[3])
 		}
 	}
 	log := appctx.GetLogger(ctx)
@@ -545,6 +544,10 @@ func (fs *ocfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provid
 	}
 }
 
+func (fs *ocfs) getStorage(ip string) (int, error) {
+	return fs.filecache.GetNumericStorageID("home::" + fs.getOwner(ip))
+}
+
 func (fs *ocfs) getUserStorage(ctx context.Context) (int, error) {
 	user, ok := user.ContextGetUser(ctx)
 	if !ok {
@@ -554,7 +557,7 @@ func (fs *ocfs) getUserStorage(ctx context.Context) (int, error) {
 }
 
 func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip string, sp string, mdKeys []string) (*provider.ResourceInfo, error) {
-	storage, err := fs.getUserStorage(ctx)
+	storage, err := fs.getStorage(ip)
 	if err != nil {
 		return nil, err
 	}
@@ -650,11 +653,11 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 		}
 		p = strings.TrimPrefix(p, "files/")
 		if !fs.c.EnableHome {
-			u, ok := user.ContextGetUser(ctx)
-			if !ok {
-				return "", fmt.Errorf("could not infer user from context")
+			storageId, err := fs.filecache.GetStorageOwner(ref.GetResourceId().StorageId)
+			if err != nil {
+				return "", err
 			}
-			p = filepath.Join(u.Username, p)
+			p = filepath.Join(storageId, p)
 		}
 
 		return fs.toInternalPath(ctx, p), nil
@@ -725,16 +728,26 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 		return defaultPermissions, nil
 	}
 	// check if the current user is the owner
-	if fs.getOwner(ip) == u.Username {
+	owner := fs.getOwner(ip)
+	if owner == u.Username {
 		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("user is owner, returning owner permissions")
 		return ownerPermissions, nil
 	}
 
-	storageID, err := fs.getUserStorage(ctx)
+	// otherwise this is a share
+	ownerStorageId, err := fs.filecache.GetNumericStorageID("home::" + owner)
 	if err != nil {
 		return nil, err
 	}
-	return fs.filecache.Permissions(storageID, fs.toDatabasePath(ctx, ip))
+	entry, err := fs.filecache.Get(ownerStorageId, fs.toDatabasePath(ctx, ip))
+	if err != nil {
+		return nil, err
+	}
+	perms, err := conversions.NewPermissions(entry.Permissions)
+	if err != nil {
+		return nil, err
+	}
+	return conversions.RoleFromOCSPermissions(perms).CS3ResourcePermissions(), nil
 }
 
 // The os not exists error is buried inside the xattr error,

@@ -80,6 +80,22 @@ func (c *Cache) GetNumericStorageID(id string) (int, error) {
 	}
 }
 
+// GetStorageOwner returns the username of the owner of the given storage
+func (c *Cache) GetStorageOwner(numericId interface{}) (string, error) {
+	numericId, err := toIntID(numericId)
+	if err != nil {
+		return "", err
+	}
+	row := c.db.QueryRow("Select id from oc_storages where numeric_id = ?", numericId)
+	var id string
+	switch err := row.Scan(&id); err {
+	case nil:
+		return strings.TrimPrefix(id, "home::"), nil
+	default:
+		return "", err
+	}
+}
+
 // File represents an entry of the file cache
 type File struct {
 	ID              int

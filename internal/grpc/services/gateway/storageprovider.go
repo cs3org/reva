@@ -667,7 +667,9 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		embeddedMounts := s.findEmbeddedMounts(resPath)
 		if len(embeddedMounts) > 0 {
 			etagHash := md5.New()
-			io.WriteString(etagHash, res.Info.Etag)
+			if res.Info != nil {
+				io.WriteString(etagHash, res.Info.Etag)
+			}
 			for _, child := range embeddedMounts {
 				childStatRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: child}})
 				if err != nil {

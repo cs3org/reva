@@ -499,6 +499,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 			relPath := strings.SplitAfterN(gwres.Info.Path, reqShare, 2)[1]
 			gwres.Info.Path = filepath.Join(s.mountPath, reqShare, relPath)
+			gwres.Info.PermissionSet = rs.Share.Permissions.Permissions
 			return gwres, nil
 		} else if reqShare == "" {
 			childInfos = append(childInfos, gwres.Info)
@@ -559,6 +560,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			for _, info := range gwListRes.Infos {
 				relPath := strings.SplitAfterN(info.Path, reqShare, 2)[1]
 				info.Path = filepath.Join(s.mountPath, reqShare, relPath)
+				info.PermissionSet = rs.Share.Permissions.Permissions
 			}
 			return gwListRes, nil
 		} else if reqShare == "" {
