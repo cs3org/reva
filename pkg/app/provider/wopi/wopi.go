@@ -70,6 +70,42 @@ type wopiProvider struct {
 	appURLs    map[string]map[string]string // map[viewMode]map[extension]appURL
 }
 
+// New returns an implementation of the app.Provider interface that
+// connects to an application in the backend.
+func New(m map[string]interface{}) (app.Provider, error) {
+	c, err := parseConfig(m)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.AppIntURL == "" {
+		c.AppIntURL = c.AppURL
+	}
+
+	appURLs, err := getAppURLs(c)
+	if err != nil {
+		return nil, err
+	}
+
+	err = registerApp(c, appURLs)
+	if err != nil {
+		return nil, err
+	}
+
+	wopiClient := rhttp.GetHTTPClient(
+		rhttp.Timeout(time.Duration(5 * int64(time.Second))),
+	)
+	wopiClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	return &wopiProvider{
+		conf:       c,
+		wopiClient: wopiClient,
+		appURLs:    appURLs,
+	}, nil
+}
+
 func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, app string, token string) (string, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -139,18 +175,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	return appFullURL, nil
 }
 
-// New returns an implementation of the app.Provider interface that
-// connects to an application in the backend.
-func New(m map[string]interface{}) (app.Provider, error) {
-	c, err := parseConfig(m)
-	if err != nil {
-		return nil, err
-	}
-
-	if c.AppIntURL == "" {
-		c.AppIntURL = c.AppURL
-	}
-
+func getAppURLs(c *config) (map[string]map[string]string, error) {
 	// Initialize WOPI URLs by discovery
 	httpcl := rhttp.GetHTTPClient(
 		rhttp.Timeout(time.Duration(5 * int64(time.Second))),
@@ -217,7 +242,10 @@ func New(m map[string]interface{}) (app.Provider, error) {
 			return nil, errors.Wrap(err, "error parsing wopi discovery response")
 		}
 	}
+	return appURLs, nil
+}
 
+func registerApp(c *config, appURLs map[string]map[string]string) error {
 	// Initially we store the mime types in a map to avoid duplicates
 	mimeTypesMap := make(map[string]bool)
 	for _, extensions := range appURLs {
@@ -231,19 +259,7 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	for m := range mimeTypesMap {
 		mimeTypes = append(mimeTypes, m)
 	}
-
-	wopiClient := rhttp.GetHTTPClient(
-		rhttp.Timeout(time.Duration(5 * int64(time.Second))),
-	)
-	wopiClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
-	return &wopiProvider{
-		conf:       c,
-		wopiClient: wopiClient,
-		appURLs:    appURLs,
-	}, nil
+	return nil
 }
 
 func parseWopiDiscovery(body io.Reader, netZoneName string) (map[string]map[string]string, error) {
