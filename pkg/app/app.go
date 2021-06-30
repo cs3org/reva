@@ -40,4 +40,5 @@ type Registry interface {
 // for providing the URL of the app which will serve the requested resource.
 type Provider interface {
 	GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, app, token string) (string, error)
+	GetAppProviderInfo(ctx context.Context) (*registry.ProviderInfo, error)
 }

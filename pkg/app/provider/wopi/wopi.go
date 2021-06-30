@@ -32,6 +32,7 @@ import (
 
 	"github.com/beevik/etree"
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
@@ -52,8 +53,8 @@ type config struct {
 	WopiURL   string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
 	AppName   string `mapstructure:"app_name" docs:";The App user-friendly name."`
 	AppURL    string `mapstructure:"app_url" docs:";The App URL."`
-	AppIntURL string `mapstructure:"app_int_url" docs:";The App internal URL in case of dockerized deployments. Defaults to AppURL"`
-	AppAPIKey string `mapstructure:"app_api_key" docs:";The API key used by the App, if applicable."`
+	AppIntURL string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
+	AppAPIKey string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -81,13 +82,11 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	if c.AppIntURL == "" {
 		c.AppIntURL = c.AppURL
 	}
-
-	appURLs, err := getAppURLs(c)
-	if err != nil {
-		return nil, err
+	if c.IOPSecret == "" {
+		c.IOPSecret = os.Getenv("REVA_APPPROVIDER_IOPSECRET")
 	}
 
-	err = registerApp(c, appURLs)
+	appURLs, err := getAppURLs(c)
 	if err != nil {
 		return nil, err
 	}
@@ -149,13 +148,11 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			q.Add("appviewurl", url)
 		}
 	}
+	httpReq.URL.RawQuery = q.Encode()
+
 	if p.conf.AppAPIKey != "" {
 		httpReq.Header.Set("ApiKey", p.conf.AppAPIKey)
 	}
-	if p.conf.IOPSecret == "" {
-		p.conf.IOPSecret = os.Getenv("REVA_APPPROVIDER_IOPSECRET")
-	}
-	httpReq.URL.RawQuery = q.Encode()
 
 	httpReq.Header.Set("Authorization", "Bearer "+p.conf.IOPSecret)
 	httpReq.Header.Set("TokenHeader", token)
@@ -173,6 +170,27 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 	log.Info().Msg(fmt.Sprintf("wopi: returning app URL %s", appFullURL))
 	return appFullURL, nil
+}
+
+func (p *wopiProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.ProviderInfo, error) {
+	// Initially we store the mime types in a map to avoid duplicates
+	mimeTypesMap := make(map[string]bool)
+	for _, extensions := range p.appURLs {
+		for ext := range extensions {
+			m := mime.Detect(false, ext)
+			mimeTypesMap[m] = true
+		}
+	}
+	// TODO register these mimetypes in the AppRegistry
+	mimeTypes := make([]string, 0, len(mimeTypesMap))
+	for m := range mimeTypesMap {
+		mimeTypes = append(mimeTypes, m)
+	}
+
+	return &appregistry.ProviderInfo{
+		Name:      p.conf.AppName,
+		MimeTypes: mimeTypes,
+	}, nil
 }
 
 func getAppURLs(c *config) (map[string]map[string]string, error) {
@@ -199,7 +217,12 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 
 	var appURLs map[string]map[string]string
 
-	if discRes.StatusCode == http.StatusNotFound {
+	if discRes.StatusCode == http.StatusOK {
+		appURLs, err = parseWopiDiscovery(discRes.Body)
+		if err != nil {
+			return nil, errors.Wrap(err, "error parsing wopi discovery response")
+		}
+	} else if discRes.StatusCode == http.StatusNotFound {
 		// this may be a bridge-supported app
 		discReq, err = http.NewRequest("GET", c.AppIntURL, nil)
 		if err != nil {
@@ -229,40 +252,12 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 		} else if c.AppName == "Etherpad" {
 			appURLs = getEtherpadExtensions(c.AppURL)
 		}
-	} else if discRes.StatusCode == http.StatusOK {
-		var netZoneName string
-		if c.AppName == "Collabora" {
-			netZoneName = "external-http"
 
-		} else if c.AppName == "Office Online" {
-			netZoneName = "external-https"
-		}
-		appURLs, err = parseWopiDiscovery(discRes.Body, netZoneName)
-		if err != nil {
-			return nil, errors.Wrap(err, "error parsing wopi discovery response")
-		}
 	}
 	return appURLs, nil
 }
 
-func registerApp(c *config, appURLs map[string]map[string]string) error {
-	// Initially we store the mime types in a map to avoid duplicates
-	mimeTypesMap := make(map[string]bool)
-	for _, extensions := range appURLs {
-		for ext := range extensions {
-			m := mime.Detect(false, ext)
-			mimeTypesMap[m] = true
-		}
-	}
-	// TODO register these mimetypes in the AppRegistry
-	mimeTypes := make([]string, 0, len(mimeTypesMap))
-	for m := range mimeTypesMap {
-		mimeTypes = append(mimeTypes, m)
-	}
-	return nil
-}
-
-func parseWopiDiscovery(body io.Reader, netZoneName string) (map[string]map[string]string, error) {
+func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 	appURLs := make(map[string]map[string]string)
 
 	doc := etree.NewDocument()
@@ -271,11 +266,10 @@ func parseWopiDiscovery(body io.Reader, netZoneName string) (map[string]map[stri
 	}
 	root := doc.SelectElement("wopi-discovery")
 
-	for _, netZone := range root.SelectElements("net-zone") {
-		nameAttr := netZone.SelectAttr("name")
+	for _, netzone := range root.SelectElements("net-zone") {
 
-		if nameAttr.Value == netZoneName {
-			for _, app := range netZone.SelectElements("app") {
+		if strings.Contains(netzone.SelectAttrValue("name", ""), "external") {
+			for _, app := range netzone.SelectElements("app") {
 				for _, action := range app.SelectElements("action") {
 					access := action.SelectAttrValue("name", "")
 					if access == "view" || access == "edit" {

@@ -45,7 +45,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) UnprotectedEndpoints() []string {
-	return []string{}
+	return []string{"/cs3.app.registry.v1beta1.UserAPI/AddAppProvider"}
 }
 
 func (s *svc) Register(ss *grpc.Server) {

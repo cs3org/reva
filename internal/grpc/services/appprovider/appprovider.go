@@ -22,11 +22,15 @@ import (
 	"context"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -42,14 +46,18 @@ type service struct {
 }
 
 type config struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+	Driver         string                            `mapstructure:"driver"`
+	Drivers        map[string]map[string]interface{} `mapstructure:"drivers"`
+	AppProviderURL string                            `mapstructure:"app_provider_url"`
+	GatewaySvc     string                            `mapstructure:"gatewaysvc"`
 }
 
 func (c *config) init() {
 	if c.Driver == "" {
 		c.Driver = "demo"
 	}
+	c.AppProviderURL = sharedconf.GetGatewaySVC(c.AppProviderURL)
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -71,6 +79,25 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	provider, err := getProvider(c)
 	if err != nil {
 		return nil, err
+	}
+
+	ctx := context.Background()
+	pInfo, err := provider.GetAppProviderInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pInfo.Address = c.AppProviderURL
+
+	client, err := pool.GetGatewayServiceClient(c.GatewaySvc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := client.AddAppProvider(ctx, &registrypb.AddAppProviderRequest{Provider: pInfo})
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, status.NewErrorFromCode(res.Status.Code, "appprovider")
 	}
 
 	service := &service{
