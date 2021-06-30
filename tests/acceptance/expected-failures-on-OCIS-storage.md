@@ -23,7 +23,7 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiTrashbin/trashbinRestore.feature:130](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L130)
 -   [apiTrashbin/trashbinRestore.feature:131](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L131)
 
-#### [href in trashbin PROPFIND response is wrong](https://github.com/owncloud/ocis/issues/1120)
+#### [PROPFIND on trashbin with Depth: infinity only shows the first level](https://github.com/owncloud/ocis/issues/1116)
 #### [cannot restore to a different file-name](https://github.com/owncloud/ocis/issues/1122)
 -   [apiTrashbin/trashbinRestore.feature:309](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L309)
 -   [apiTrashbin/trashbinRestore.feature:310](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L310)
@@ -158,6 +158,9 @@ _etag propagation_
 _ocdav: return checksum in upload response for chunked upload_
 -   [apiMain/checksums.feature:144](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L144) Scenario: Upload new dav chunked file where checksum matches
 -   [apiMain/checksums.feature:153](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L153) Scenario: Upload new dav chunked file where checksum does not match
+-   [apiMain/checksums.feature:164](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L164) Scenario: Upload new dav chunked file using async MOVE where checksum matches
+-   [apiMain/checksums.feature:180](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L180) Scenario: Upload new dav chunked file using async MOVE where checksum does not match
+-   [apiMain/checksums.feature:198](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L198) Scenario: Upload new dav chunked file using async MOVE where checksum does not match - retry with correct checksum
 -   [apiMain/checksums.feature:263](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L263) Scenario: Uploading an old method chunked file with checksum should fail using new DAV path
 -   [apiMain/checksums.feature:319](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L319) Scenario: Upload overwriting a file with new chunking and correct checksum
 -   [apiMain/checksums.feature:331](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L331) Scenario: Upload overwriting a file with new chunking and invalid checksum
@@ -910,9 +913,18 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiShareReshareToShares3/reShareWithExpiryDate.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareWithExpiryDate.feature#L36)
 -   [apiShareReshareToShares3/reShareWithExpiryDate.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareWithExpiryDate.feature#L37)
 
-#### [cannot move from Shares folder](https://github.com/owncloud/ocis/issues/560)
+#### [cannot move/rename an accepted shared resource outside of shares folder](https://github.com/owncloud/ocis/issues/2141)
 
 -   [apiShareReshareToShares2/reShareChain.feature:12](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareChain.feature#L12)
+-   [apiShareOperationsToShares1/changingFilesShare.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L42)
+-   [apiShareOperationsToShares1/changingFilesShare.feature:43](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L43)
+-   [apiShareOperationsToShares1/changingFilesShare.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L62)
+-   [apiShareOperationsToShares1/changingFilesShare.feature:63](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L63)
+-   [apiVersions/fileVersionsSharingToShares.feature:133](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L133)
+-   [apiVersions/fileVersionsSharingToShares.feature:148](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L148)
+-   [apiVersions/fileVersionsSharingToShares.feature:162](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L162)
+-   [apiVersions/fileVersionsSharingToShares.feature:249](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L249)
+-   [apiVersions/fileVersionsSharingToShares.feature:250](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L250)
 
 #### [various sharing settings cannot be set](https://github.com/owncloud/ocis/issues/1328)
 -   [apiShareReshareToShares2/reShareWhenShareWithOnlyMembershipGroups.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareWhenShareWithOnlyMembershipGroups.feature#L27)
@@ -956,10 +968,13 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiShareManagementToShares/acceptShares.feature:491](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L491)
 -   [apiShareManagementToShares/acceptShares.feature:494](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L494)
 
-#### [deleting a file inside a received shared folder is moved to the trash-bin of the sharer not the receiver](https://github.com/owncloud/ocis/issues/1124)
+#### [Deleting a received folder moves it to trashbin](https://github.com/owncloud/ocis/issues/2217)
 
 -   [apiTrashbin/trashbinSharingToShares.feature:23](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L23)
 -   [apiTrashbin/trashbinSharingToShares.feature:24](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L24)
+
+#### [deleting a file inside a received shared folder is moved to the trash-bin of the sharer not the receiver](https://github.com/owncloud/ocis/issues/1124)
+
 -   [apiTrashbin/trashbinSharingToShares.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L39)
 -   [apiTrashbin/trashbinSharingToShares.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L40)
 -   [apiTrashbin/trashbinSharingToShares.feature:63](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L63)
@@ -982,7 +997,6 @@ Scenario Outline: Copying a file to a folder with no permissions
 Scenario Outline: Copying a file to overwrite a file into a folder with no permissions
 -   [apiWebdavProperties1/copyFile.feature:90](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L90)
 -   [apiWebdavProperties1/copyFile.feature:91](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L91)
-
 
 #### Share jail related
 Scenario Outline: delete a folder when there is a default folder for received shares
@@ -1077,12 +1091,6 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiShareOperationsToShares1/changingFilesShare.feature:82](https://github.com/owncloud/core/blob/master/test/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L82)
 -   [apiShareOperationsToShares1/changingFilesShare.feature:98](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L98)
 
-#### [cannot move from Shares folder](https://github.com/owncloud/ocis/issues/560)
--   [apiShareOperationsToShares1/changingFilesShare.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L42)
--   [apiShareOperationsToShares1/changingFilesShare.feature:43](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L43)
--   [apiShareOperationsToShares1/changingFilesShare.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L62)
--   [apiShareOperationsToShares1/changingFilesShare.feature:63](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L63)
-
 Scenario Outline: Moving a file into a shared folder as the sharee and as the sharer
 -   [apiWebdavMove2/moveFile.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L99)
 -   [apiWebdavMove2/moveFile.feature:100](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L100)
@@ -1121,13 +1129,6 @@ Scenario Outline: Renaming a file to a path with extension .part should not be p
 #### [restoring an older version of a shared file deletes the share](https://github.com/owncloud/ocis/issues/765)
 -   [apiShareManagementToShares/acceptShares.feature:494](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L494)
 -   [apiVersions/fileVersionsSharingToShares.feature:43](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L43)
-
-#### [cannot move from Shares folder](https://github.com/owncloud/ocis/issues/560)
--   [apiVersions/fileVersionsSharingToShares.feature:133](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L133)
--   [apiVersions/fileVersionsSharingToShares.feature:148](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L148)
--   [apiVersions/fileVersionsSharingToShares.feature:162](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L162)
--   [apiVersions/fileVersionsSharingToShares.feature:249](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L249)
--   [apiVersions/fileVersionsSharingToShares.feature:250](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L250)
 
 #### [not possible to move file into a received folder](https://github.com/owncloud/ocis/issues/764)
 -   [apiVersions/fileVersionsSharingToShares.feature:221](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L221)
@@ -1388,11 +1389,8 @@ _ocs: api compatibility, return correct status code_
 -   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L27)
 -   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:55](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L55)
 -   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:56](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L56)
-
-#### [OCIS-storage reading a file that a collaborator uploaded is impossible](https://github.com/owncloud/ocis/issues/763)
 -   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:70](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L70)
 -   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:71](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L71)
-
 
 #### [Share lists deleted user as 'user'](https://github.com/owncloud/ocis/issues/903)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:641](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L641)
@@ -1407,9 +1405,6 @@ _ocs: api compatibility, return correct status code_
 
 ### User Management
 User and group management features
-
-#### [quota query](https://github.com/owncloud/ocis/issues/1313)
-_requires a [CS3 user provisioning api that can update the quota for a user](https://github.com/cs3org/cs3apis/pull/95#issuecomment-772780683)_
 
 ### Other
 API, search, favorites, config, capabilities, not existing endpoints, CORS and others
@@ -1861,12 +1856,6 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 -   [apiWebdavMove1/moveFileAsync.feature:246](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFileAsync.feature#L246)
 -   [apiWebdavMove1/moveFileAsync.feature:251](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFileAsync.feature#L251)
 
-#### [Checksum feature](https://github.com/owncloud/ocis/issues/1291)
-_ ocdav: return checksum in upload response for chunked upload_
--   [apiMain/checksums.feature:164](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L164) Scenario: Upload new dav chunked file using async MOVE where checksum matches
--   [apiMain/checksums.feature:180](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L180) Scenario: Upload new dav chunked file using async MOVE where checksum does not match
--   [apiMain/checksums.feature:198](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L198) Scenario: Upload new dav chunked file using async MOVE where checksum does not match - retry with correct checksum
-
 #### [PATCH request for TUS upload with wrong checksum gives incorrect response](https://github.com/owncloud/ocis/issues/1755)
 -   [apiWebdavUploadTUS/checksums.feature:65](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L65)
 -   [apiWebdavUploadTUS/checksums.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L66)
@@ -1955,7 +1944,6 @@ _ocs: api compatibility, return correct status code_
 -   [apiShareReshareToShares3/reShareUpdate.feature:115](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L115)
 -   [apiShareReshareToShares3/reShareUpdate.feature:133](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L133)
 -   [apiShareReshareToShares3/reShareUpdate.feature:134](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L134)
--   [apiVersions/fileVersionsSharingToShares.feature:178](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L178)
 
 #### [[OC-storage] share-types field empty for shared file folder in webdav response](https://github.com/owncloud/ocis/issues/2144)
 -   [apiWebdavProperties2/getFileProperties.feature:156](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L156)
