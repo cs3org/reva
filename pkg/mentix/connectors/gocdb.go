@@ -92,7 +92,7 @@ func (connector *GOCDBConnector) query(v interface{}, method string, isPrivate b
 	}
 
 	// Get the data from GOCDB
-	data, err := gocdb.QueryGOCDB(connector.gocdbAddress, method, isPrivate, scope, params)
+	data, err := gocdb.QueryGOCDB(connector.gocdbAddress, method, isPrivate, scope, connector.conf.Connectors.GOCDB.APIKey, params)
 	if err != nil {
 		return err
 	}
