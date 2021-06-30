@@ -9,3 +9,4 @@ running on Docker <20.10 as it happens on Drone
 
 https://github.com/cs3org/reva/pull/1843
 https://github.com/cs3org/reva/pull/1844
+https://github.com/cs3org/reva/pull/1847
