@@ -46,14 +46,12 @@ func init() {
 }
 
 type config struct {
-	IOPSecret  string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
-	WopiURL    string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
-	AppName    string `mapstructure:"app_name" docs:";The App user-friendly name."`
-	AppURL     string `mapstructure:"app_url" docs:";The App URL."`
-	AppIntURL  string `mapstructure:"app_int_url" docs:";The App internal URL in case of dockerized deployments. Defaults to AppURL"`
-	AppViewURL string `mapstructure:"app_view_url" docs:";The App URL to view documents."`
-	AppEditURL string `mapstructure:"app_edit_url" docs:";The App URL to edit documents."`
-	AppAPIKey  string `mapstructure:"app_api_key" docs:";The API key used by the App, if applicable."`
+	IOPSecret string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
+	WopiURL   string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
+	AppName   string `mapstructure:"app_name" docs:";The App user-friendly name."`
+	AppURL    string `mapstructure:"app_url" docs:";The App URL."`
+	AppIntURL string `mapstructure:"app_int_url" docs:";The App internal URL in case of dockerized deployments. Defaults to AppURL"`
+	AppAPIKey string `mapstructure:"app_api_key" docs:";The API key used by the App, if applicable."`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -67,6 +65,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 type wopiProvider struct {
 	conf       *config
 	wopiClient *http.Client
+	appEditURL string
+	appViewURL string
 }
 
 func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, app string, token string) (string, error) {
@@ -100,15 +100,12 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	// else defaults to "Anonymous Guest"
 	q.Add("appname", app)
-	q.Add("appurl", p.conf.AppURL)
+	q.Add("appurl", p.appEditURL)
 	if p.conf.AppIntURL != "" {
 		q.Add("appinturl", p.conf.AppIntURL)
 	}
-	if p.conf.AppViewURL != "" {
-		q.Add("appviewurl", p.conf.AppViewURL)
-	}
-	if p.conf.AppEditURL != "" {
-		q.Add("appviewurl", p.conf.AppEditURL)
+	if p.appViewURL != "" {
+		q.Add("appviewurl", p.appViewURL)
 	}
 	if p.conf.AppAPIKey != "" {
 		httpReq.Header.Set("ApiKey", p.conf.AppAPIKey)
@@ -169,6 +166,8 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}
 	defer discRes.Body.Close()
 
+	var appEditURL string
+	var appViewURL string
 	if discRes.StatusCode == http.StatusNotFound {
 		// this may be a bridge-supported app, let's find out
 		discReq, err = http.NewRequest("GET", c.AppIntURL, nil)
@@ -193,8 +192,19 @@ func New(m map[string]interface{}) (app.Provider, error) {
 			// || (c.AppName != "CodiMD" && c.AppName != "Etherpad") {
 			return nil, errors.New("Application server at " + c.AppURL + " does not match this AppProvider for " + c.AppName)
 		}
+		appEditURL = c.AppURL
+		appViewURL = ""
+		// register the supported mimetypes in the AppRegistry: this is hardcoded for the time being
+		if c.AppName == "CodiMD" {
+			// TODO register `text/markdown` and `application/compressed-markdown`
+		} else if c.AppName == "Etherpad" {
+			// TODO register some `application/compressed-pad` yet to be defined
+		}
 	} else if discRes.StatusCode == http.StatusOK {
-		// TODO parse XML from discRes.Body
+		// TODO parse XML from discRes.Body and populate appEditURL and appViewURL
+		appEditURL = ""
+		appViewURL = ""
+		// TODO register all supported mimetypes in the AppRegistry from the XML parsing
 	}
 
 	wopiClient := rhttp.GetHTTPClient(
@@ -204,10 +214,10 @@ func New(m map[string]interface{}) (app.Provider, error) {
 		return http.ErrUseLastResponse
 	}
 
-	// TODO register all supported mimetypes in the AppRegistry
-
 	return &wopiProvider{
 		conf:       c,
 		wopiClient: wopiClient,
+		appEditURL: appEditURL,
+		appViewURL: appViewURL,
 	}, nil
 }
