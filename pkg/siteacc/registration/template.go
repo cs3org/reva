@@ -71,6 +71,11 @@ const formTemplate = `
 				return false;
 			}
 
+			if (formData.get("organization") == "") {
+				setError("Please specify your organization/company.", "organization");
+				return false;
+			}
+
 			return true;
 		}
 
@@ -105,7 +110,10 @@ const formTemplate = `
 			var postData = {
 	            "email": formData.get("email"),
 				"firstName": formData.get("fname"),
-				"lastName": formData.get("lname")
+				"lastName": formData.get("lname"),
+				"organization": formData.get("organization"),
+				"website": formData.get("website"),
+				"phoneNumber": formData.get("phone"),
 	        };
 
 	        xhr.send(JSON.stringify(postData));
@@ -193,10 +201,18 @@ const formTemplate = `
 			<div style="grid-row: 3;"><label for="lname">Last name: <span class="mandatory">*</span></label></div>
 			<div style="grid-row: 4;"><input type="text" id="lname" name="lname"/></div>
 
-			<div style="grid-row: 5; align-self: center;">
+			<div style="grid-row: 5;"><label for="organization">Organization/Company: <span class="mandatory">*</span></label></div>
+			<div style="grid-row: 6;"><input type="text" id="organization" name="organization"/></div>
+			<div style="grid-row: 5;"><label for="website">Website:</label></div>
+			<div style="grid-row: 6;"><input type="text" id="website" name="website"/></div>
+
+			<div style="grid-row: 7;"><label for="phone">Phone number:</label></div>
+			<div style="grid-row: 8;"><input type="text" id="phone" name="phone"/></div>
+
+			<div style="grid-row: 9; align-self: center;">
 				Fields marked with <span class="mandatory">*</span> are mandatory.
 			</div>
-			<div style="grid-row: 5; grid-column: 2; text-align: right;">
+			<div style="grid-row: 9; grid-column: 2; text-align: right;">
 				<button type="reset">Reset</button>
 				<button type="button" style="font-weight: bold;" onClick="handleAction('create');">Register</button>
 			</div>

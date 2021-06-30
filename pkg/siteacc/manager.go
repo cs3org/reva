@@ -26,12 +26,12 @@ import (
 	"sync"
 	"time"
 
-	config2 "github.com/cs3org/reva/pkg/siteacc/config"
-	data2 "github.com/cs3org/reva/pkg/siteacc/data"
-	email2 "github.com/cs3org/reva/pkg/siteacc/email"
-	panel2 "github.com/cs3org/reva/pkg/siteacc/panel"
-	registration2 "github.com/cs3org/reva/pkg/siteacc/registration"
-	sitereg2 "github.com/cs3org/reva/pkg/siteacc/sitereg"
+	"github.com/cs3org/reva/pkg/siteacc/config"
+	"github.com/cs3org/reva/pkg/siteacc/data"
+	"github.com/cs3org/reva/pkg/siteacc/email"
+	"github.com/cs3org/reva/pkg/siteacc/panel"
+	"github.com/cs3org/reva/pkg/siteacc/registration"
+	"github.com/cs3org/reva/pkg/siteacc/sitereg"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -50,20 +50,20 @@ const (
 
 // Manager is responsible for all site account related tasks.
 type Manager struct {
-	conf *config2.Configuration
+	conf *config.Configuration
 	log  *zerolog.Logger
 
-	accounts data2.Accounts
-	storage  data2.Storage
+	accounts data.Accounts
+	storage  data.Storage
 
-	panel            *panel2.Panel
-	registrationForm *registration2.Form
+	panel            *panel.Panel
+	registrationForm *registration.Form
 	smtp             *smtpclient.SMTPCredentials
 
 	mutex sync.RWMutex
 }
 
-func (mngr *Manager) initialize(conf *config2.Configuration, log *zerolog.Logger) error {
+func (mngr *Manager) initialize(conf *config.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return errors.Errorf("no configuration provided")
 	}
@@ -74,7 +74,7 @@ func (mngr *Manager) initialize(conf *config2.Configuration, log *zerolog.Logger
 	}
 	mngr.log = log
 
-	mngr.accounts = make(data2.Accounts, 0, 32) // Reserve some space for accounts
+	mngr.accounts = make(data.Accounts, 0, 32) // Reserve some space for accounts
 
 	// Create the site accounts storage and read all stored data
 	if storage, err := mngr.createStorage(conf.Storage.Driver); err == nil {
@@ -85,14 +85,14 @@ func (mngr *Manager) initialize(conf *config2.Configuration, log *zerolog.Logger
 	}
 
 	// Create the web interface panel
-	if pnl, err := panel2.NewPanel(conf, log); err == nil {
+	if pnl, err := panel.NewPanel(conf, log); err == nil {
 		mngr.panel = pnl
 	} else {
 		return errors.Wrap(err, "unable to create panel")
 	}
 
 	// Create the web interface registrationForm
-	if frm, err := registration2.NewForm(conf, log); err == nil {
+	if frm, err := registration.NewForm(conf, log); err == nil {
 		mngr.registrationForm = frm
 	} else {
 		return errors.Wrap(err, "unable to create registrationForm")
@@ -106,9 +106,9 @@ func (mngr *Manager) initialize(conf *config2.Configuration, log *zerolog.Logger
 	return nil
 }
 
-func (mngr *Manager) createStorage(driver string) (data2.Storage, error) {
+func (mngr *Manager) createStorage(driver string) (data.Storage, error) {
 	if driver == "file" {
-		return data2.NewFileStorage(mngr.conf, mngr.log)
+		return data.NewFileStorage(mngr.conf, mngr.log)
 	}
 
 	return nil, errors.Errorf("unknown storage driver %v", driver)
@@ -130,21 +130,21 @@ func (mngr *Manager) writeAllAccounts() {
 	}
 }
 
-func (mngr *Manager) findAccount(by string, value string) (*data2.Account, error) {
+func (mngr *Manager) findAccount(by string, value string) (*data.Account, error) {
 	if len(value) == 0 {
 		return nil, errors.Errorf("no search value specified")
 	}
 
-	var account *data2.Account
+	var account *data.Account
 	switch strings.ToLower(by) {
 	case FindByEmail:
-		account = mngr.findAccountByPredicate(func(account *data2.Account) bool { return strings.EqualFold(account.Email, value) })
+		account = mngr.findAccountByPredicate(func(account *data.Account) bool { return strings.EqualFold(account.Email, value) })
 
 	case FindByAPIKey:
-		account = mngr.findAccountByPredicate(func(account *data2.Account) bool { return account.Data.APIKey == value })
+		account = mngr.findAccountByPredicate(func(account *data.Account) bool { return account.Data.APIKey == value })
 
 	case FindBySiteID:
-		account = mngr.findAccountByPredicate(func(account *data2.Account) bool { return account.GetSiteID() == value })
+		account = mngr.findAccountByPredicate(func(account *data.Account) bool { return account.GetSiteID() == value })
 
 	default:
 		return nil, errors.Errorf("invalid search type %v", by)
@@ -157,7 +157,7 @@ func (mngr *Manager) findAccount(by string, value string) (*data2.Account, error
 	return nil, errors.Errorf("no user found matching the specified criteria")
 }
 
-func (mngr *Manager) findAccountByPredicate(predicate func(*data2.Account) bool) *data2.Account {
+func (mngr *Manager) findAccountByPredicate(predicate func(*data.Account) bool) *data.Account {
 	for _, account := range mngr.accounts {
 		if predicate(account) {
 			return account
@@ -179,7 +179,7 @@ func (mngr *Manager) ShowRegistrationForm(w http.ResponseWriter) error {
 }
 
 // CreateAccount creates a new account; if an account with the same email address already exists, an error is returned.
-func (mngr *Manager) CreateAccount(accountData *data2.Account) error {
+func (mngr *Manager) CreateAccount(accountData *data.Account) error {
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
@@ -188,12 +188,12 @@ func (mngr *Manager) CreateAccount(accountData *data2.Account) error {
 		return errors.Errorf("an account with the specified email address already exists")
 	}
 
-	if account, err := data2.NewAccount(accountData.Email, accountData.FirstName, accountData.LastName); err == nil {
+	if account, err := data.NewAccount(accountData.Email, accountData.FirstName, accountData.LastName, accountData.Organization, accountData.Website, accountData.PhoneNumber); err == nil {
 		mngr.accounts = append(mngr.accounts, account)
 		mngr.storage.AccountAdded(account)
 		mngr.writeAllAccounts()
 
-		_ = email2.SendAccountCreated(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
+		_ = email.SendAccountCreated(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
 	} else {
 		return errors.Wrap(err, "error while creating account")
 	}
@@ -202,7 +202,7 @@ func (mngr *Manager) CreateAccount(accountData *data2.Account) error {
 }
 
 // UpdateAccount updates the account identified by the account email; if no such account exists, an error is returned.
-func (mngr *Manager) UpdateAccount(accountData *data2.Account, copyData bool) error {
+func (mngr *Manager) UpdateAccount(accountData *data.Account, copyData bool) error {
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
@@ -224,7 +224,7 @@ func (mngr *Manager) UpdateAccount(accountData *data2.Account, copyData bool) er
 }
 
 // FindAccount is used to find an account by various criteria.
-func (mngr *Manager) FindAccount(by string, value string) (*data2.Account, error) {
+func (mngr *Manager) FindAccount(by string, value string) (*data.Account, error) {
 	mngr.mutex.RLock()
 	defer mngr.mutex.RUnlock()
 
@@ -239,7 +239,7 @@ func (mngr *Manager) FindAccount(by string, value string) (*data2.Account, error
 }
 
 // AuthorizeAccount sets the authorization status of the account identified by the account email; if no such account exists, an error is returned.
-func (mngr *Manager) AuthorizeAccount(accountData *data2.Account, authorized bool) error {
+func (mngr *Manager) AuthorizeAccount(accountData *data.Account, authorized bool) error {
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
@@ -255,14 +255,14 @@ func (mngr *Manager) AuthorizeAccount(accountData *data2.Account, authorized boo
 	mngr.writeAllAccounts()
 
 	if account.Data.Authorized && account.Data.Authorized != authorizedOld {
-		_ = email2.SendAccountAuthorized(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
+		_ = email.SendAccountAuthorized(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
 	}
 
 	return nil
 }
 
 // AssignAPIKeyToAccount is used to assign a new API key to the account identified by the account email; if no such account exists, an error is returned.
-func (mngr *Manager) AssignAPIKeyToAccount(accountData *data2.Account, flags int) error {
+func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int) error {
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
@@ -293,13 +293,13 @@ func (mngr *Manager) AssignAPIKeyToAccount(accountData *data2.Account, flags int
 	mngr.storage.AccountUpdated(account)
 	mngr.writeAllAccounts()
 
-	_ = email2.SendAPIKeyAssigned(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
+	_ = email.SendAPIKeyAssigned(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
 
 	return nil
 }
 
 // UnregisterAccountSite unregisters the site associated with the given account.
-func (mngr *Manager) UnregisterAccountSite(accountData *data2.Account) error {
+func (mngr *Manager) UnregisterAccountSite(accountData *data.Account) error {
 	mngr.mutex.RLock()
 	defer mngr.mutex.RUnlock()
 
@@ -314,7 +314,7 @@ func (mngr *Manager) UnregisterAccountSite(accountData *data2.Account) error {
 		return errors.Wrap(err, "unable to get site ID")
 	}
 
-	if err := sitereg2.UnregisterSite(mngr.conf.SiteRegistration.URL, account.Data.APIKey, siteID, salt); err != nil {
+	if err := sitereg.UnregisterSite(mngr.conf.SiteRegistration.URL, account.Data.APIKey, siteID, salt); err != nil {
 		return errors.Wrap(err, "error while unregistering the site")
 	}
 
@@ -322,7 +322,7 @@ func (mngr *Manager) UnregisterAccountSite(accountData *data2.Account) error {
 }
 
 // RemoveAccount removes the account identified by the account email; if no such account exists, an error is returned.
-func (mngr *Manager) RemoveAccount(accountData *data2.Account) error {
+func (mngr *Manager) RemoveAccount(accountData *data.Account) error {
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
@@ -339,11 +339,11 @@ func (mngr *Manager) RemoveAccount(accountData *data2.Account) error {
 }
 
 // CloneAccounts retrieves all accounts currently stored by cloning the data, thus avoiding race conflicts and making outside modifications impossible.
-func (mngr *Manager) CloneAccounts() data2.Accounts {
+func (mngr *Manager) CloneAccounts() data.Accounts {
 	mngr.mutex.RLock()
 	defer mngr.mutex.RUnlock()
 
-	clone := make(data2.Accounts, 0)
+	clone := make(data.Accounts, 0)
 
 	// To avoid any "deep copy" packages, use gob en- and decoding instead
 	var buf bytes.Buffer
@@ -353,14 +353,14 @@ func (mngr *Manager) CloneAccounts() data2.Accounts {
 	if err := enc.Encode(mngr.accounts); err == nil {
 		if err := dec.Decode(&clone); err != nil {
 			// In case of an error, create an empty data set
-			clone = make(data2.Accounts, 0)
+			clone = make(data.Accounts, 0)
 		}
 	}
 
 	return clone
 }
 
-func newManager(conf *config2.Configuration, log *zerolog.Logger) (*Manager, error) {
+func newManager(conf *config.Configuration, log *zerolog.Logger) (*Manager, error) {
 	mngr := &Manager{}
 	if err := mngr.initialize(conf, log); err != nil {
 		return nil, errors.Wrapf(err, "unable to initialize the accounts manager")

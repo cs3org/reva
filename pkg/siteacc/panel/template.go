@@ -63,8 +63,17 @@ const panelTemplate = `
 	{{range .Accounts}}
 		<li>
 			<p>
-				<strong>{{.Email}}</strong><br>
-				{{.FirstName}} {{.LastName}} <em>(Joined: {{.DateCreated.Format "Jan 02, 2006 15:04"}}; Last modified: {{.DateModified.Format "Jan 02, 2006 15:04"}})</em>
+				<div>
+					<strong>{{.Email}}</strong><br>
+					{{.FirstName}} {{.LastName}} <em>(Joined: {{.DateCreated.Format "Jan 02, 2006 15:04"}}; Last modified: {{.DateModified.Format "Jan 02, 2006 15:04"}})</em>
+				</div>
+				<div>
+					<ul style="padding-left: 1em;">
+						<li>Organization: {{.Organization}}</li>
+						<li>Website: <a href="{{.Website}}" target="_blank">{{.Website}}</a></li>
+						<li>Phone: {{.PhoneNumber}}</li>
+					</ul>
+				</div>
 			</p>
 			<p>
 				<strong>API Key:</strong>

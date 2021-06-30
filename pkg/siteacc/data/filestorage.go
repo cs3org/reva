@@ -24,7 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
-	config2 "github.com/cs3org/reva/pkg/siteacc/config"
+	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -33,13 +33,13 @@ import (
 type FileStorage struct {
 	Storage
 
-	conf *config2.Configuration
+	conf *config.Configuration
 	log  *zerolog.Logger
 
 	filePath string
 }
 
-func (storage *FileStorage) initialize(conf *config2.Configuration, log *zerolog.Logger) error {
+func (storage *FileStorage) initialize(conf *config.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return errors.Errorf("no configuration provided")
 	}
@@ -106,7 +106,7 @@ func (storage *FileStorage) AccountRemoved(account *Account) {
 }
 
 // NewFileStorage creates a new filePath storage.
-func NewFileStorage(conf *config2.Configuration, log *zerolog.Logger) (*FileStorage, error) {
+func NewFileStorage(conf *config.Configuration, log *zerolog.Logger) (*FileStorage, error) {
 	storage := &FileStorage{}
 	if err := storage.initialize(conf, log); err != nil {
 		return nil, errors.Wrapf(err, "unable to initialize the filePath storage")

@@ -29,9 +29,19 @@ import (
 
 // Account represents a single site account.
 type Account struct {
-	Email     string `json:"email"`
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
+	Email        string `json:"email"`
+	FirstName    string `json:"firstName"`
+	LastName     string `json:"lastName"`
+	Organization string `json:"organization"`
+	Website      string `json:"website"`
+	PhoneNumber  string `json:"phoneNumber"`
+
+	/*
+		Password struct {
+			Hash string `json:"hash"`
+			Salt string `json:"salt"`
+		} `json:"password"`
+	*/
 
 	DateCreated  time.Time `json:"dateCreated"`
 	DateModified time.Time `json:"dateModified"`
@@ -66,6 +76,9 @@ func (acc *Account) Copy(other *Account, copyData bool) error {
 	// Manually update fields
 	acc.FirstName = other.FirstName
 	acc.LastName = other.LastName
+	acc.Organization = other.Organization
+	acc.Website = other.Website
+	acc.PhoneNumber = other.PhoneNumber
 
 	if copyData {
 		acc.Data = other.Data
@@ -85,17 +98,24 @@ func (acc *Account) verify() error {
 		return errors.Errorf("no or incomplete name provided")
 	}
 
+	if acc.Organization == "" {
+		return errors.Errorf("no organization provided")
+	}
+
 	return nil
 }
 
 // NewAccount creates a new site account.
-func NewAccount(email string, firstName, lastName string) (*Account, error) {
+func NewAccount(email string, firstName, lastName string, organization, website string, phoneNumber string) (*Account, error) {
 	t := time.Now()
 
 	acc := &Account{
 		Email:        email,
 		FirstName:    firstName,
 		LastName:     lastName,
+		Organization: organization,
+		Website:      website,
+		PhoneNumber:  phoneNumber,
 		DateCreated:  t,
 		DateModified: t,
 		Data: AccountData{
