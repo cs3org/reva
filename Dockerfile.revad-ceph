@@ -1,0 +1,66 @@
+# Copyright 2018-2021 CERN
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# In applying this license, CERN does not waive the privileges and immunities
+# granted to it by virtue of its status as an Intergovernmental Organization
+# or submit itself to any jurisdiction.
+
+FROM ceph/daemon-base
+
+RUN dnf update -y && dnf install -y \
+  git \
+  gcc \
+  make \
+  libcephfs-devel \
+  librbd-devel \
+  librados-devel
+
+ENV CEPH_KEYRING='AQAu88Fg5iekGhAAeVP0Td05PuybytuRJgBRqA=='
+ENV CEPH_FSID='8aaa35c4-75dc-42e5-a812-cbc1cdfd3323'
+ENV CEPH_MON_HOSTS='[v2:188.184.96.178:3300/0,v1:188.184.96.178:6789/0] [v2:188.185.88.76:3300/0,v1:188.185.88.76:6789/0] [v2:188.185.126.6:3300/0,v1:188.185.126.6:6789/0]'
+
+RUN mkdir /etc/ceph
+RUN cat << EOF > /etc/ceph/keyring
+[client.admin]
+    key = ${CEPH_KEYRING}
+EOF
+
+RUN cat << EOF > /etc/ceph/ceph.conf
+[global]
+    fsid = ${CEPH_FSID}
+    mon_host = ${CEPH_MON_HOSTS}
+EOF
+
+ADD https://golang.org/dl/go1.16.4.linux-amd64.tar.gz \
+  go1.16.4.linux-amd64.tar.gz
+
+RUN rm -rf /usr/local/go && \
+  tar -C /usr/local -xzf go1.16.4.linux-amd64.tar.gz && \
+  rm go1.16.4.linux-amd64.tar.gz
+
+ENV PATH /go/bin:/usr/local/go/bin:$PATH
+ENV GOPATH /go
+
+WORKDIR /go/src/github/cs3org/reva
+COPY . .
+RUN mkdir -p /go/bin \
+    make build-revad-cephfs-docker && \
+    cp /go/src/github/cs3org/reva/cmd/revad/revad /go/bin/revad
+
+RUN mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
+
+EXPOSE 9999 10000
+
+ENTRYPOINT [ "/usr/bin/revad" ]
+CMD [ "-c", "/etc/revad/revad.toml", "-p", "/var/run/revad.pid" ]

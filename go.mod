@@ -12,10 +12,12 @@ require (
 	github.com/aws/aws-sdk-go v1.38.68
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.5
+	github.com/ceph/go-ceph v0.9.0
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
 	github.com/cs3org/go-cs3apis v0.0.0-20210614143420-5ee2eb1e7887
+	github.com/dgraph-io/ristretto v0.0.3
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/gdexlab/go-render v1.0.1
@@ -31,6 +33,7 @@ require (
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
+	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
 	github.com/minio/minio-go/v7 v7.0.11
 	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.1

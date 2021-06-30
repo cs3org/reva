@@ -16,21 +16,17 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package cephfs
 
-import (
-	// Load core storage filesystem backends.
-	_ "github.com/cs3org/reva/pkg/storage/fs/cephfs"
-	_ "github.com/cs3org/reva/pkg/storage/fs/eos"
-	_ "github.com/cs3org/reva/pkg/storage/fs/eosgrpc"
-	_ "github.com/cs3org/reva/pkg/storage/fs/eosgrpchome"
-	_ "github.com/cs3org/reva/pkg/storage/fs/eoshome"
-	_ "github.com/cs3org/reva/pkg/storage/fs/local"
-	_ "github.com/cs3org/reva/pkg/storage/fs/localhome"
-	_ "github.com/cs3org/reva/pkg/storage/fs/ocis"
-	_ "github.com/cs3org/reva/pkg/storage/fs/owncloud"
-	_ "github.com/cs3org/reva/pkg/storage/fs/owncloudsql"
-	_ "github.com/cs3org/reva/pkg/storage/fs/s3"
-	_ "github.com/cs3org/reva/pkg/storage/fs/s3ng"
-	// Add your own here
-)
+// Options for the cephfs module
+type Options struct {
+	Root           string `mapstructure:"root"`
+	ShareFolder    string `mapstructure:"share_folder"`
+	Uploads        string `mapstructure:"uploads"`
+	Shadow         string `mapstructure:"shadow"`
+	References     string `mapstructure:"references"`
+	GatewaySvc     string `mapstructure:"gatewaysvc"`
+	DirMode        uint32 `mapstructure:"dirmode"`
+	DisableHome    bool   `mapstructure:"disable_home"`
+	UserQuotaBytes uint64 `mapstructure:"user_quota_bytes"`
+}

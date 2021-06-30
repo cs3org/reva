@@ -30,15 +30,18 @@ off:
 imports: off
 	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
 
-build: imports test-go-version
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
+build: build-revad build-reva test-go-version
+
+build-cephfs: build-revad-cephfs build-reva
 
 tidy:
 	go mod tidy
 
 build-revad: imports
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
+
+build-revad-cephfs: imports
+	go build -ldflags ${BUILD_FLAGS} -tags ceph -o ./cmd/revad/revad ./cmd/revad
 
 build-reva: imports
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
@@ -103,8 +106,10 @@ ci: build-ci test  lint-ci
 # to be run in Docker build
 build-revad-docker: off
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
+build-revad-cephfs-docker: off
+	go build -ldflags ${BUILD_FLAGS} -tags ceph -o ./cmd/revad/revad ./cmd/revad
 build-reva-docker: off
-	env CGO_ENABLED=0 go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
+	env CGO_ENABLED=0  go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 clean:
 	rm -rf dist
 
