@@ -25,3 +25,11 @@ The scope to use for filtering sites and services.
 scope = "SM"
 {{< /highlight >}}
 {{% /dir %}}
+
+{{% dir name="apikey" type="string" default="" %}}
+The API key to use for the GOCDB PI.
+{{< highlight toml >}}
+[http.services.mentix.connectors.gocdb]
+apikey = "abc123"
+{{< /highlight >}}
+{{% /dir %}}
