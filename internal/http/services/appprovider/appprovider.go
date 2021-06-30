@@ -105,6 +105,7 @@ func (s *svc) Handler() http.Handler {
 	})
 }
 
+// WopiResponse holds the various fields to be returned for a wopi open call
 type WopiResponse struct {
 	WopiClientURL  string `json:"wopiclienturl"`
 	AccessToken    string `json:"accesstoken"`

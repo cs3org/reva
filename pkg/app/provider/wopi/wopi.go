@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -29,12 +30,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/pkg/app"
-
+	"github.com/beevik/etree"
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
@@ -65,8 +67,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 type wopiProvider struct {
 	conf       *config
 	wopiClient *http.Client
-	appEditURL string
-	appViewURL string
+	appURLs    map[string]map[string]string // map[viewMode]map[extension]appURL
 }
 
 func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, app string, token string) (string, error) {
@@ -77,11 +78,13 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		return "", errors.New("AppProvider for " + p.conf.AppName + " cannot open in " + app)
 	}
 
+	ext := path.Ext(resource.Path)
 	wopiurl, err := url.Parse(p.conf.WopiURL)
 	if err != nil {
 		return "", err
 	}
 	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/iop/openinapp")
+
 	httpReq, err := rhttp.NewRequest(ctx, "GET", wopiurl.String(), nil)
 	if err != nil {
 		return "", err
@@ -95,17 +98,20 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	// or should be deprecated/removed altogether, needs discussion and decision.
 	// q.Add("folderurl", "...")
 	u, ok := user.ContextGetUser(ctx)
-	if ok {
+	if ok { // else defaults to "Anonymous Guest"
 		q.Add("username", u.Username)
 	}
-	// else defaults to "Anonymous Guest"
+
 	q.Add("appname", app)
-	q.Add("appurl", p.appEditURL)
+	q.Add("appurl", p.appURLs["edit"][ext])
+
 	if p.conf.AppIntURL != "" {
 		q.Add("appinturl", p.conf.AppIntURL)
 	}
-	if p.appViewURL != "" {
-		q.Add("appviewurl", p.appViewURL)
+	if viewExts, ok := p.appURLs["view"]; ok {
+		if url, ok := viewExts[ext]; ok {
+			q.Add("appviewurl", url)
+		}
 	}
 	if p.conf.AppAPIKey != "" {
 		httpReq.Header.Set("ApiKey", p.conf.AppAPIKey)
@@ -166,10 +172,10 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}
 	defer discRes.Body.Close()
 
-	var appEditURL string
-	var appViewURL string
+	var appURLs map[string]map[string]string
+
 	if discRes.StatusCode == http.StatusNotFound {
-		// this may be a bridge-supported app, let's find out
+		// this may be a bridge-supported app
 		discReq, err = http.NewRequest("GET", c.AppIntURL, nil)
 		if err != nil {
 			return nil, err
@@ -185,26 +191,45 @@ func New(m map[string]interface{}) (app.Provider, error) {
 		if err != nil {
 			return nil, err
 		}
-		bodyStr := buf.String()
 
 		// scrape app's home page to find the appname
-		if !strings.Contains(bodyStr, c.AppName) {
+		if !strings.Contains(buf.String(), c.AppName) {
 			// || (c.AppName != "CodiMD" && c.AppName != "Etherpad") {
 			return nil, errors.New("Application server at " + c.AppURL + " does not match this AppProvider for " + c.AppName)
 		}
-		appEditURL = c.AppURL
-		appViewURL = ""
+
 		// register the supported mimetypes in the AppRegistry: this is hardcoded for the time being
 		if c.AppName == "CodiMD" {
-			// TODO register `text/markdown` and `application/compressed-markdown`
+			appURLs = getCodimdExtensions(c.AppURL)
 		} else if c.AppName == "Etherpad" {
-			// TODO register some `application/compressed-pad` yet to be defined
+			appURLs = getEtherpadExtensions(c.AppURL)
 		}
 	} else if discRes.StatusCode == http.StatusOK {
-		// TODO parse XML from discRes.Body and populate appEditURL and appViewURL
-		appEditURL = ""
-		appViewURL = ""
-		// TODO register all supported mimetypes in the AppRegistry from the XML parsing
+		var netZoneName string
+		if c.AppName == "Collabora" {
+			netZoneName = "external-http"
+
+		} else if c.AppName == "Office Online" {
+			netZoneName = "external-https"
+		}
+		appURLs, err = parseWopiDiscovery(discRes.Body, netZoneName)
+		if err != nil {
+			return nil, errors.Wrap(err, "error parsing wopi discovery response")
+		}
+	}
+
+	// Initially we store the mime types in a map to avoid duplicates
+	mimeTypesMap := make(map[string]bool)
+	for _, extensions := range appURLs {
+		for ext := range extensions {
+			m := mime.Detect(false, ext)
+			mimeTypesMap[m] = true
+		}
+	}
+	// TODO register these mimetypes in the AppRegistry
+	mimeTypes := make([]string, 0, len(mimeTypesMap))
+	for m := range mimeTypesMap {
+		mimeTypes = append(mimeTypes, m)
 	}
 
 	wopiClient := rhttp.GetHTTPClient(
@@ -217,7 +242,60 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	return &wopiProvider{
 		conf:       c,
 		wopiClient: wopiClient,
-		appEditURL: appEditURL,
-		appViewURL: appViewURL,
+		appURLs:    appURLs,
 	}, nil
+}
+
+func parseWopiDiscovery(body io.Reader, netZoneName string) (map[string]map[string]string, error) {
+	appURLs := make(map[string]map[string]string)
+
+	doc := etree.NewDocument()
+	if _, err := doc.ReadFrom(body); err != nil {
+		return nil, err
+	}
+	root := doc.SelectElement("wopi-discovery")
+
+	for _, netZone := range root.SelectElements("net-zone") {
+		nameAttr := netZone.SelectAttr("name")
+
+		if nameAttr.Value == netZoneName {
+			for _, app := range netZone.SelectElements("app") {
+				for _, action := range app.SelectElements("action") {
+					access := action.SelectAttrValue("name", "")
+					if access == "view" || access == "edit" {
+						ext := action.SelectAttrValue("ext", "")
+						url := action.SelectAttrValue("urlsrc", "")
+
+						if ext == "" || url == "" {
+							continue
+						}
+
+						if _, ok := appURLs[access]; !ok {
+							appURLs[access] = make(map[string]string)
+						}
+						appURLs[access][ext] = url
+					}
+				}
+			}
+		}
+	}
+	return appURLs, nil
+}
+
+func getCodimdExtensions(appURL string) map[string]map[string]string {
+	appURLs := make(map[string]map[string]string)
+	appURLs["edit"] = map[string]string{
+		"txt": appURL,
+		"md":  appURL,
+		"zmd": appURL,
+	}
+	return appURLs
+}
+
+func getEtherpadExtensions(appURL string) map[string]map[string]string {
+	appURLs := make(map[string]map[string]string)
+	appURLs["edit"] = map[string]string{
+		"etherpad": appURL,
+	}
+	return appURLs
 }
