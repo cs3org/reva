@@ -32,6 +32,7 @@ import (
 const (
 	viewerPermission string = "viewer"
 	editorPermission string = "editor"
+	denyPermission   string = "deny"
 )
 
 type config struct {
