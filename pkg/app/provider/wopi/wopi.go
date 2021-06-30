@@ -49,12 +49,13 @@ func init() {
 }
 
 type config struct {
-	IOPSecret string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
-	WopiURL   string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
-	AppName   string `mapstructure:"app_name" docs:";The App user-friendly name."`
-	AppURL    string `mapstructure:"app_url" docs:";The App URL."`
-	AppIntURL string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
-	AppAPIKey string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
+	IOPSecret           string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
+	WopiURL             string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
+	AppName             string `mapstructure:"app_name" docs:";The App user-friendly name."`
+	AppURL              string `mapstructure:"app_url" docs:";The App URL."`
+	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
+	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
+	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -92,7 +93,8 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}
 
 	wopiClient := rhttp.GetHTTPClient(
-		rhttp.Timeout(time.Duration(5 * int64(time.Second))),
+		rhttp.Timeout(time.Duration(5*int64(time.Second))),
+		rhttp.Insecure(c.InsecureConnections),
 	)
 	wopiClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -181,7 +183,7 @@ func (p *wopiProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.Pro
 			mimeTypesMap[m] = true
 		}
 	}
-	// TODO register these mimetypes in the AppRegistry
+
 	mimeTypes := make([]string, 0, len(mimeTypesMap))
 	for m := range mimeTypesMap {
 		mimeTypes = append(mimeTypes, m)
@@ -196,7 +198,8 @@ func (p *wopiProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.Pro
 func getAppURLs(c *config) (map[string]map[string]string, error) {
 	// Initialize WOPI URLs by discovery
 	httpcl := rhttp.GetHTTPClient(
-		rhttp.Timeout(time.Duration(5 * int64(time.Second))),
+		rhttp.Timeout(time.Duration(5*int64(time.Second))),
+		rhttp.Insecure(c.InsecureConnections),
 	)
 
 	appurl, err := url.Parse(c.AppIntURL)
