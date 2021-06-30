@@ -156,6 +156,12 @@ func getSharePerm(p string) (*provider.ResourcePermissions, error) {
 	switch p {
 	case viewerPermission:
 		return &provider.ResourcePermissions{
+			GetPath:       true,
+			ListContainer: true,
+			Stat:          true,
+		}, nil
+	case readerPermission:
+		return &provider.ResourcePermissions{
 			GetPath:              true,
 			InitiateFileDownload: true,
 			ListFileVersions:     true,
@@ -174,6 +180,22 @@ func getSharePerm(p string) (*provider.ResourcePermissions, error) {
 			InitiateFileUpload:   true,
 			RestoreFileVersion:   true,
 			Move:                 true,
+		}, nil
+	case coownerPermission:
+		return &provider.ResourcePermissions{
+			GetPath:              true,
+			InitiateFileDownload: true,
+			ListFileVersions:     true,
+			ListContainer:        true,
+			Stat:                 true,
+			CreateContainer:      true,
+			Delete:               true,
+			InitiateFileUpload:   true,
+			RestoreFileVersion:   true,
+			Move:                 true,
+			AddGrant:             true,
+			UpdateGrant:          true,
+			RemoveGrant:          true,
 		}, nil
 	case denyPermission:
 		return &provider.ResourcePermissions{}, nil
