@@ -22,21 +22,20 @@ import (
 	"html/template"
 	"net/http"
 
+	config2 "github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-
-	"github.com/cs3org/reva/internal/http/services/siteacc/config"
 )
 
 // Form represents the web interface form for user account registration.
 type Form struct {
-	conf *config.Configuration
+	conf *config2.Configuration
 	log  *zerolog.Logger
 
 	tpl *template.Template
 }
 
-func (form *Form) initialize(conf *config.Configuration, log *zerolog.Logger) error {
+func (form *Form) initialize(conf *config2.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return errors.Errorf("no configuration provided")
 	}
@@ -67,7 +66,7 @@ func (form *Form) Execute(w http.ResponseWriter) error {
 }
 
 // NewForm creates a new web interface form.
-func NewForm(conf *config.Configuration, log *zerolog.Logger) (*Form, error) {
+func NewForm(conf *config2.Configuration, log *zerolog.Logger) (*Form, error) {
 	form := &Form{}
 	if err := form.initialize(conf, log); err != nil {
 		return nil, errors.Wrapf(err, "unable to initialize the form")

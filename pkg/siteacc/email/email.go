@@ -22,24 +22,24 @@ import (
 	"bytes"
 	"text/template"
 
+	data2 "github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/pkg/errors"
 
-	"github.com/cs3org/reva/internal/http/services/siteacc/data"
 	"github.com/cs3org/reva/pkg/smtpclient"
 )
 
 // SendAccountCreated sends an email about account creation.
-func SendAccountCreated(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
+func SendAccountCreated(account *data2.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
 	return send(recipients, "ScienceMesh: Site account created", accountCreatedTemplate, account, smtp)
 }
 
 // SendAPIKeyAssigned sends an email about API key assignment.
-func SendAPIKeyAssigned(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
+func SendAPIKeyAssigned(account *data2.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
 	return send(recipients, "ScienceMesh: Your API key", apiKeyAssignedTemplate, account, smtp)
 }
 
 // SendAccountAuthorized sends an email about account authorization.
-func SendAccountAuthorized(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
+func SendAccountAuthorized(account *data2.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
 	return send(recipients, "ScienceMesh: Site registration authorized", accountAuthorizedTemplate, account, smtp)
 }
 

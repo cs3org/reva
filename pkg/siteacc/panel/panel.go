@@ -22,22 +22,21 @@ import (
 	"html/template"
 	"net/http"
 
+	config2 "github.com/cs3org/reva/pkg/siteacc/config"
+	data2 "github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-
-	"github.com/cs3org/reva/internal/http/services/siteacc/config"
-	"github.com/cs3org/reva/internal/http/services/siteacc/data"
 )
 
 // Panel represents the web interface panel of the accounts service.
 type Panel struct {
-	conf *config.Configuration
+	conf *config2.Configuration
 	log  *zerolog.Logger
 
 	tpl *template.Template
 }
 
-func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
+func (panel *Panel) initialize(conf *config2.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return errors.Errorf("no configuration provided")
 	}
@@ -58,9 +57,9 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 }
 
 // Execute generates the HTTP output of the panel and writes it to the response writer.
-func (panel *Panel) Execute(w http.ResponseWriter, accounts *data.Accounts) error {
+func (panel *Panel) Execute(w http.ResponseWriter, accounts *data2.Accounts) error {
 	type TemplateData struct {
-		Accounts *data.Accounts
+		Accounts *data2.Accounts
 	}
 
 	tplData := TemplateData{
@@ -71,7 +70,7 @@ func (panel *Panel) Execute(w http.ResponseWriter, accounts *data.Accounts) erro
 }
 
 // NewPanel creates a new web interface panel.
-func NewPanel(conf *config.Configuration, log *zerolog.Logger) (*Panel, error) {
+func NewPanel(conf *config2.Configuration, log *zerolog.Logger) (*Panel, error) {
 	panel := &Panel{}
 	if err := panel.initialize(conf, log); err != nil {
 		return nil, errors.Wrapf(err, "unable to initialize the panel")
