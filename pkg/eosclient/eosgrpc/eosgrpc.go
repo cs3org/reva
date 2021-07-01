@@ -148,13 +148,6 @@ func (c *Client) GetHTTPCl() *ehttp.Client {
 	return ehttp.New(&c.htopts, c.httptransport)
 }
 
-// GetHTTPCl creates an http client for immediate usage, using the already instantiated resources
-func (c *Client) GetHTTPCl() *ehttp.Client {
-	var htopts ehttp.Options
-
-	return ehttp.New(&c.htopts, c.httptransport)
-}
-
 // Create and connect a grpc eos Client
 func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	log := appctx.GetLogger(ctx)
