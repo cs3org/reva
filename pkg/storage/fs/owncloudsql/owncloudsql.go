@@ -653,11 +653,16 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 		}
 		p = strings.TrimPrefix(p, "files/")
 		if !fs.c.EnableHome {
-			storageId, err := fs.filecache.GetStorageOwner(ref.GetResourceId().StorageId)
+			storageID := ref.GetResourceId().StorageId
+			parts := strings.SplitN(storageID, "!", 2) // the owncloudsql storage ids is "<ocis-mount-id>!<oc1-storage-id>"
+			if len(parts) > 1 {
+				storageID = parts[1]
+			}
+			owner, err := fs.filecache.GetStorageOwner(storageID)
 			if err != nil {
 				return "", err
 			}
-			p = filepath.Join(storageId, p)
+			p = filepath.Join(owner, p)
 		}
 
 		return fs.toInternalPath(ctx, p), nil

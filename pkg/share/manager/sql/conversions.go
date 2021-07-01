@@ -141,7 +141,7 @@ func extractGroupID(u string) *grouppb.GroupId {
 	return &grouppb.GroupId{OpaqueId: u}
 }
 
-func convertToCS3Share(s DBShare) (*collaboration.Share, error) {
+func convertToCS3Share(s DBShare, storageMountID string) (*collaboration.Share, error) {
 	ts := &typespb.Timestamp{
 		Seconds: uint64(s.STime),
 	}
@@ -154,7 +154,7 @@ func convertToCS3Share(s DBShare) (*collaboration.Share, error) {
 			OpaqueId: s.ID,
 		},
 		ResourceId: &provider.ResourceId{
-			StorageId: s.ItemStorage,
+			StorageId: storageMountID + "!" + s.ItemStorage,
 			OpaqueId:  s.ItemSource,
 		},
 		Permissions: &collaboration.SharePermissions{Permissions: permissions},
@@ -166,8 +166,8 @@ func convertToCS3Share(s DBShare) (*collaboration.Share, error) {
 	}, nil
 }
 
-func convertToCS3ReceivedShare(s DBShare) (*collaboration.ReceivedShare, error) {
-	share, err := convertToCS3Share(s)
+func convertToCS3ReceivedShare(s DBShare, storageMountID string) (*collaboration.ReceivedShare, error) {
+	share, err := convertToCS3Share(s, storageMountID)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func convertToCS3ReceivedShare(s DBShare) (*collaboration.ReceivedShare, error) 
 	}, nil
 }
 
-func convertToCS3PublicShare(s DBShare) (*link.PublicShare, error) {
+func convertToCS3PublicShare(s DBShare, storageMountID string) (*link.PublicShare, error) {
 	ts := &typespb.Timestamp{
 		Seconds: uint64(s.STime),
 	}
@@ -209,7 +209,7 @@ func convertToCS3PublicShare(s DBShare) (*link.PublicShare, error) {
 			OpaqueId: s.ID,
 		},
 		ResourceId: &provider.ResourceId{
-			StorageId: s.ItemStorage,
+			StorageId: storageMountID + "!" + s.ItemStorage,
 			OpaqueId:  s.ItemSource,
 		},
 		Permissions:       &link.PublicSharePermissions{Permissions: permissions},

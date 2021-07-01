@@ -47,11 +47,12 @@ func init() {
 }
 
 type config struct {
-	DbUsername string `mapstructure:"db_username"`
-	DbPassword string `mapstructure:"db_password"`
-	DbHost     string `mapstructure:"db_host"`
-	DbPort     int    `mapstructure:"db_port"`
-	DbName     string `mapstructure:"db_name"`
+	StorageMountID string `mapstructure:"storage_mount_id"`
+	DbUsername     string `mapstructure:"db_username"`
+	DbPassword     string `mapstructure:"db_password"`
+	DbHost         string `mapstructure:"db_host"`
+	DbPort         int    `mapstructure:"db_port"`
+	DbName         string `mapstructure:"db_name"`
 }
 
 type mgr struct {
@@ -166,7 +167,7 @@ func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collabor
 		}
 		return nil, err
 	}
-	return convertToCS3Share(s)
+	return convertToCS3Share(s, m.c.StorageMountID)
 }
 
 func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
@@ -182,7 +183,7 @@ func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*colla
 		}
 		return nil, err
 	}
-	return convertToCS3Share(s)
+	return convertToCS3Share(s, m.c.StorageMountID)
 }
 
 func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
@@ -302,7 +303,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.ListShare
 		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
 			continue
 		}
-		share, err := convertToCS3Share(s)
+		share, err := convertToCS3Share(s, m.c.StorageMountID)
 		if err != nil {
 			return nil, err
 		}
@@ -344,7 +345,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.Received
 		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.ItemStorage); err != nil {
 			continue
 		}
-		share, err := convertToCS3ReceivedShare(s)
+		share, err := convertToCS3ReceivedShare(s, m.c.StorageMountID)
 		if err != nil {
 			return nil, err
 		}
@@ -379,7 +380,7 @@ func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*
 		}
 		return nil, err
 	}
-	return convertToCS3ReceivedShare(s)
+	return convertToCS3ReceivedShare(s, m.c.StorageMountID)
 }
 
 func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.ReceivedShare, error) {
@@ -406,7 +407,7 @@ func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey)
 		}
 		return nil, err
 	}
-	return convertToCS3ReceivedShare(s)
+	return convertToCS3ReceivedShare(s, m.c.StorageMountID)
 }
 
 func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
