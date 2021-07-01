@@ -954,7 +954,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
 		"mtime":         mtime,
 		"storage_mtime": mtime,
 	}
-	storageID, err := fs.getUserStorage(ctx)
+	storageID, err := fs.getStorage(ip)
 	if err != nil {
 		return err
 	}
@@ -1324,7 +1324,7 @@ func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) 
 		}
 	}
 
-	storage, err := fs.getUserStorage(ctx)
+	storage, err := fs.getStorage(ip)
 	if err != nil {
 		return err
 	}
@@ -1382,7 +1382,7 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 	}
 
 	// TODO check target permissions ... if it exists
-	storage, err := fs.getUserStorage(ctx)
+	storage, err := fs.getStorage(oldIP)
 	if err != nil {
 		return err
 	}
@@ -1672,7 +1672,7 @@ func (fs *ocfs) archiveRevision(ctx context.Context, vbp string, ip string) erro
 		return errors.Wrap(err, "owncloudsql: error renaming from "+ip+" to "+vp)
 	}
 
-	storage, err := fs.getUserStorage(ctx)
+	storage, err := fs.getStorage(ip)
 	if err != nil {
 		return err
 	}
@@ -1868,7 +1868,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 		"mtime":         mtime,
 		"storage_mtime": mtime,
 	}
-	storageID, err := fs.getUserStorage(ctx)
+	storageID, err := fs.getStorage(ip)
 	if err != nil {
 		return err
 	}
@@ -2045,7 +2045,7 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restor
 		return errors.Wrap(err, "owncloudsql: could not restore item")
 	}
 
-	storage, err := fs.getUserStorage(ctx)
+	storage, err := fs.getStorage(src)
 	if err != nil {
 		return err
 	}
@@ -2087,7 +2087,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 		return err
 	}
 
-	storageID, err := fs.getUserStorage(ctx)
+	storageID, err := fs.getStorage(leafPath)
 	if err != nil {
 		return err
 	}
