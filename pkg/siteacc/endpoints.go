@@ -58,43 +58,43 @@ func createMethodCallbacks(cbGet methodCallback, cbPost methodCallback) map[stri
 func getEndpoints(enableRegistrationForm bool) []endpoint {
 	endpoints := []endpoint{
 		// Form endpoints
-		{config.EndpointPanel, handlePanelEndpoint, nil, false},
+		{config.EndpointPanel, callPanelEndpoint, nil, false},
 		// Request endpoints
-		{config.EndpointGenerateAPIKey, handleMethodEndpoint, createMethodCallbacks(handleGenerateAPIKey, nil), false},
-		{config.EndpointVerifyAPIKey, handleMethodEndpoint, createMethodCallbacks(handleVerifyAPIKey, nil), false},
-		{config.EndpointAssignAPIKey, handleMethodEndpoint, createMethodCallbacks(nil, handleAssignAPIKey), false},
-		{config.EndpointList, handleMethodEndpoint, createMethodCallbacks(handleList, nil), false},
-		{config.EndpointFind, handleMethodEndpoint, createMethodCallbacks(handleFind, nil), false},
-		{config.EndpointCreate, handleMethodEndpoint, createMethodCallbacks(nil, handleCreate), true},
-		{config.EndpointUpdate, handleMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
-		{config.EndpointRemove, handleMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
-		{config.EndpointAuthorize, handleMethodEndpoint, createMethodCallbacks(nil, handleAuthorize), false},
-		{config.EndpointIsAuthorized, handleMethodEndpoint, createMethodCallbacks(handleIsAuthorized, nil), false},
-		{config.EndpointUnregisterSite, handleMethodEndpoint, createMethodCallbacks(nil, handleUnregisterSite), false},
+		{config.EndpointGenerateAPIKey, callMethodEndpoint, createMethodCallbacks(handleGenerateAPIKey, nil), false},
+		{config.EndpointVerifyAPIKey, callMethodEndpoint, createMethodCallbacks(handleVerifyAPIKey, nil), false},
+		{config.EndpointAssignAPIKey, callMethodEndpoint, createMethodCallbacks(nil, handleAssignAPIKey), false},
+		{config.EndpointList, callMethodEndpoint, createMethodCallbacks(handleList, nil), false},
+		{config.EndpointFind, callMethodEndpoint, createMethodCallbacks(handleFind, nil), false},
+		{config.EndpointCreate, callMethodEndpoint, createMethodCallbacks(nil, handleCreate), true},
+		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
+		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
+		{config.EndpointAuthorize, callMethodEndpoint, createMethodCallbacks(nil, handleAuthorize), false},
+		{config.EndpointIsAuthorized, callMethodEndpoint, createMethodCallbacks(handleIsAuthorized, nil), false},
+		{config.EndpointUnregisterSite, callMethodEndpoint, createMethodCallbacks(nil, handleUnregisterSite), false},
 	}
 
 	if enableRegistrationForm {
-		endpoints = append(endpoints, endpoint{config.EndpointRegistration, handleRegistrationEndpoint, nil, true})
+		endpoints = append(endpoints, endpoint{config.EndpointRegistration, callRegistrationEndpoint, nil, true})
 	}
 
 	return endpoints
 }
 
-func handlePanelEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
+func callPanelEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
 	if err := mngr.ShowPanel(w); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface panel: %v", err)))
 	}
 }
 
-func handleRegistrationEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
+func callRegistrationEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
 	if err := mngr.ShowRegistrationForm(w); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface registration registrationForm: %v", err)))
 	}
 }
 
-func handleMethodEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
+func callMethodEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
 	// Every request to the accounts service results in a standardized JSON response
 	type Response struct {
 		Success bool        `json:"success"`
@@ -195,7 +195,7 @@ func handleAssignAPIKey(mngr *Manager, values url.Values, body []byte) (interfac
 }
 
 func handleList(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
-	return mngr.CloneAccounts(), nil
+	return mngr.CloneAccounts(true), nil
 }
 
 func handleFind(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
@@ -203,7 +203,7 @@ func handleFind(mngr *Manager, values url.Values, body []byte) (interface{}, err
 	if err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{"account": account}, nil
+	return map[string]interface{}{"account": account.Clone(true)}, nil
 }
 
 func handleCreate(mngr *Manager, values url.Values, body []byte) (interface{}, error) {

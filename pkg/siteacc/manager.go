@@ -19,8 +19,6 @@
 package siteacc
 
 import (
-	"bytes"
-	"encoding/gob"
 	"net/http"
 	"strings"
 	"sync"
@@ -169,7 +167,7 @@ func (mngr *Manager) findAccountByPredicate(predicate func(*data.Account) bool) 
 // ShowPanel writes the panel HTTP output directly to the response writer.
 func (mngr *Manager) ShowPanel(w http.ResponseWriter) error {
 	// The panel only shows the stored accounts and offers actions through links, so let it use cloned data
-	accounts := mngr.CloneAccounts()
+	accounts := mngr.CloneAccounts(true)
 	return mngr.panel.Execute(w, &accounts)
 }
 
@@ -188,7 +186,7 @@ func (mngr *Manager) CreateAccount(accountData *data.Account) error {
 		return errors.Errorf("an account with the specified email address already exists")
 	}
 
-	if account, err := data.NewAccount(accountData.Email, accountData.FirstName, accountData.LastName, accountData.Organization, accountData.Website, accountData.PhoneNumber); err == nil {
+	if account, err := data.NewAccount(accountData.Email, accountData.FirstName, accountData.LastName, accountData.Organization, accountData.Website, accountData.PhoneNumber, accountData.Password.Value); err == nil {
 		mngr.accounts = append(mngr.accounts, account)
 		mngr.storage.AccountAdded(account)
 		mngr.writeAllAccounts()
@@ -211,7 +209,7 @@ func (mngr *Manager) UpdateAccount(accountData *data.Account, copyData bool) err
 		return errors.Wrap(err, "user to update not found")
 	}
 
-	if err := account.Copy(accountData, copyData); err == nil {
+	if err := account.Update(accountData, copyData); err == nil {
 		account.DateModified = time.Now()
 
 		mngr.storage.AccountUpdated(account)
@@ -339,25 +337,16 @@ func (mngr *Manager) RemoveAccount(accountData *data.Account) error {
 }
 
 // CloneAccounts retrieves all accounts currently stored by cloning the data, thus avoiding race conflicts and making outside modifications impossible.
-func (mngr *Manager) CloneAccounts() data.Accounts {
+func (mngr *Manager) CloneAccounts(erasePasswords bool) data.Accounts {
 	mngr.mutex.RLock()
 	defer mngr.mutex.RUnlock()
 
-	clone := make(data.Accounts, 0)
-
-	// To avoid any "deep copy" packages, use gob en- and decoding instead
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	dec := gob.NewDecoder(&buf)
-
-	if err := enc.Encode(mngr.accounts); err == nil {
-		if err := dec.Decode(&clone); err != nil {
-			// In case of an error, create an empty data set
-			clone = make(data.Accounts, 0)
-		}
+	clones := make(data.Accounts, 0, len(mngr.accounts))
+	for _, acc := range mngr.accounts {
+		clones = append(clones, acc.Clone(erasePasswords))
 	}
 
-	return clone
+	return clones
 }
 
 func newManager(conf *config.Configuration, log *zerolog.Logger) (*Manager, error) {

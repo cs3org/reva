@@ -19,8 +19,11 @@
 package data
 
 import (
+	"bytes"
+	"encoding/gob"
 	"time"
 
+	"github.com/cs3org/reva/pkg/siteacc/password"
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/pkg/mentix/key"
@@ -36,12 +39,7 @@ type Account struct {
 	Website      string `json:"website"`
 	PhoneNumber  string `json:"phoneNumber"`
 
-	/*
-		Password struct {
-			Hash string `json:"hash"`
-			Salt string `json:"salt"`
-		} `json:"password"`
-	*/
+	Password password.Password `json:"password"`
 
 	DateCreated  time.Time `json:"dateCreated"`
 	DateModified time.Time `json:"dateModified"`
@@ -67,9 +65,9 @@ func (acc *Account) GetSiteID() key.SiteIdentifier {
 	return ""
 }
 
-// Copy copies the data of the given account to this account; if copyData is true, the account data is copied as well.
-func (acc *Account) Copy(other *Account, copyData bool) error {
-	if err := other.verify(); err != nil {
+// Update copies the data of the given account to this account; if copyData is true, the account data is copied as well.
+func (acc *Account) Update(other *Account, copyData bool) error {
+	if err := other.verify(false); err != nil {
 		return errors.Wrap(err, "unable to update account data")
 	}
 
@@ -87,26 +85,59 @@ func (acc *Account) Copy(other *Account, copyData bool) error {
 	return nil
 }
 
-func (acc *Account) verify() error {
+// UpdatePassword assigns a new password to the account, salting and hashing it first.
+func (acc *Account) UpdatePassword(newPwd string) error {
+	pwd, err := password.GeneratePassword(newPwd)
+	if err != nil {
+		return errors.Wrap(err, "unable to update the user password")
+	}
+	acc.Password = *pwd
+	return nil
+}
+
+func (acc *Account) Clone(erasePassword bool) *Account {
+	clone := &Account{}
+
+	// To avoid any "deep copy" packages, use gob en- and decoding instead
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	dec := gob.NewDecoder(&buf)
+
+	if err := enc.Encode(acc); err == nil {
+		_ = dec.Decode(clone)
+	}
+
+	if erasePassword {
+		clone.Password.Clear()
+	}
+
+	return clone
+}
+
+func (acc *Account) verify(verifyPassword bool) error {
 	if acc.Email == "" {
 		return errors.Errorf("no email address provided")
 	} else if !utils.IsEmailValid(acc.Email) {
 		return errors.Errorf("invalid email address: %v", acc.Email)
 	}
-
 	if acc.FirstName == "" || acc.LastName == "" {
 		return errors.Errorf("no or incomplete name provided")
 	}
-
 	if acc.Organization == "" {
 		return errors.Errorf("no organization provided")
+	}
+
+	if verifyPassword {
+		if !acc.Password.IsValid() {
+			return errors.Errorf("no valid password set")
+		}
 	}
 
 	return nil
 }
 
 // NewAccount creates a new site account.
-func NewAccount(email string, firstName, lastName string, organization, website string, phoneNumber string) (*Account, error) {
+func NewAccount(email string, firstName, lastName string, organization, website string, phoneNumber string, password string) (*Account, error) {
 	t := time.Now()
 
 	acc := &Account{
@@ -124,7 +155,12 @@ func NewAccount(email string, firstName, lastName string, organization, website 
 		},
 	}
 
-	if err := acc.verify(); err != nil {
+	// Set the user password, which also makes sure that the given password is strong enough
+	if err := acc.UpdatePassword(password); err != nil {
+		return nil, err
+	}
+
+	if err := acc.verify(true); err != nil {
 		return nil, err
 	}
 

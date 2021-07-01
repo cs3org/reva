@@ -76,6 +76,21 @@ const formTemplate = `
 				return false;
 			}
 
+			if (formData.get("password") == "") {
+				setError("Please set a password.", "password");
+				return false;
+			}
+
+			if (formData.get("password2") == "") {
+				setError("Please repeat your password.", "password2");
+				return false;
+			}
+
+			if (formData.get("password") != formData.get("password2")) {
+				setError("The entered passwords do not match.", "password2");
+				return false;
+			}
+
 			return true;
 		}
 
@@ -114,6 +129,9 @@ const formTemplate = `
 				"organization": formData.get("organization"),
 				"website": formData.get("website"),
 				"phoneNumber": formData.get("phone"),
+				"password": {
+					"value": formData.get("password")
+				}
 	        };
 
 	        xhr.send(JSON.stringify(postData));
@@ -209,10 +227,27 @@ const formTemplate = `
 			<div style="grid-row: 7;"><label for="phone">Phone number:</label></div>
 			<div style="grid-row: 8;"><input type="text" id="phone" name="phone"/></div>
 
-			<div style="grid-row: 9; align-self: center;">
+			<div style="grid-row: 9;">&nbsp;</div>
+
+			<div style="grid-row: 10;"><label for="password">Password: <span class="mandatory">*</span></label></div>
+			<div style="grid-row: 11;"><input type="password" id="password" name="password"/></div>
+			<div style="grid-row: 10;"><label for="password2">Repeat password: <span class="mandatory">*</span></label></div>
+			<div style="grid-row: 11;"><input type="password" id="password2" name="password2"/></div>
+
+			<div style="grid-row: 12; font-style: italic; font-size: 0.8em;">
+				The password must fulfil the following criteria:
+				<ul style="margin-top: 0em;">
+					<li>Must be at least 8 characters long</li>
+					<li>Must contain at least 1 lowercase letter</li>
+					<li>Must contain at least 1 uppercase letter</li>
+					<li>Must contain at least 1 digit</li>
+				</ul>
+			</div>
+
+			<div style="grid-row: 13; align-self: center;">
 				Fields marked with <span class="mandatory">*</span> are mandatory.
 			</div>
-			<div style="grid-row: 9; grid-column: 2; text-align: right;">
+			<div style="grid-row: 13; grid-column: 2; text-align: right;">
 				<button type="reset">Reset</button>
 				<button type="button" style="font-weight: bold;" onClick="handleAction('create');">Register</button>
 			</div>
