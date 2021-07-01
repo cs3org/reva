@@ -523,7 +523,7 @@ func (fs *eosfs) setACLs(ctx context.Context, c eosclient.EOSClient, uid, gid, p
 	return nil
 }
 
-func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *eosfs) addGrantNonAtomic(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -541,45 +541,87 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 
 	fn := fs.wrap(ctx, p)
 
-	// workaround until EOS has native support
-	// for persisting order of the acl entries
-	if grants.IsDenial(g) {
-		gs, err := fs.ListGrants(ctx, ref)
-		if err != nil {
-			return err
-		}
-
-		// update list of grants
-		grants.AddGrant(&gs, g)
-
-		acls, err := fs.getEosACLs(ctx, gs)
-		if err != nil {
-			return err
-		}
-
-		if err = fs.setACLs(ctx, fs.c, uid, gid, fn, acls); err != nil {
-			return errors.Wrap(err, "eosfs: error setting acls")
-		}
-		return nil
-
-	}
-
-	eosACL, err := fs.getEosACL(ctx, g)
+	gs, err := fs.ListGrants(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
+	// update list of grants
+	grants.AddGrant(&gs, g)
+
+	acls, err := fs.getEosACLs(ctx, gs)
 	if err != nil {
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, eosACL)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error adding acl")
+	if err = fs.setACLs(ctx, fs.c, uid, gid, fn, acls); err != nil {
+		return errors.Wrap(err, "eosfs: error setting acls")
 	}
-
 	return nil
+
+}
+
+func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	// TODO(labkode): force using always eos set attr to store desired order of acls
+	return fs.addGrantNonAtomic(ctx, ref, g)
+	/*
+		u, err := getUser(ctx)
+		if err != nil {
+			return errors.Wrap(err, "eosfs: no user in ctx")
+		}
+
+		uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+		if err != nil {
+			return err
+		}
+
+		p, err := fs.resolve(ctx, u, ref)
+		if err != nil {
+			return errors.Wrap(err, "eosfs: error resolving reference")
+		}
+
+		fn := fs.wrap(ctx, p)
+
+		// workaround until EOS has native support
+		// for persisting order of the acl entries
+		if grants.IsDenial(g) {
+			gs, err := fs.ListGrants(ctx, ref)
+			if err != nil {
+				return err
+			}
+
+			// update list of grants
+			grants.AddGrant(&gs, g)
+
+			acls, err := fs.getEosACLs(ctx, gs)
+			if err != nil {
+				return err
+			}
+
+			if err = fs.setACLs(ctx, fs.c, uid, gid, fn, acls); err != nil {
+				return errors.Wrap(err, "eosfs: error setting acls")
+			}
+			return nil
+
+		}
+
+		eosACL, err := fs.getEosACL(ctx, g)
+		if err != nil {
+			return err
+		}
+
+		rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
+		if err != nil {
+			return err
+		}
+
+		err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, eosACL)
+		if err != nil {
+			return errors.Wrap(err, "eosfs: error adding acl")
+		}
+
+		return nil
+	*/
 }
 
 func (fs *eosfs) getEosACLs(ctx context.Context, gs []*provider.Grant) ([]*acl.Entry, error) {
