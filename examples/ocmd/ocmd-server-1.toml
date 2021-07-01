@@ -76,19 +76,18 @@ providers = "providers.demo.json"
 [grpc.services.publicshareprovider]
 driver = "memory"
 
+[grpc.services.appregistry]
+driver = "static"
+
 [grpc.services.appprovider]
-driver = "wopi"
+driver = "demo"
+app_provider_url = "localhost:19000"
 
 [grpc.services.appprovider.drivers.wopi]
 iop_secret = "hello"
 wopi_url = "http://0.0.0.0:8880/"
-wopi_bridge_url = "http://localhost:8000/wopib"
-
-[grpc.services.appregistry]
-driver = "static"
-
-[grpc.services.appregistry.drivers.static.providers]
-"localhost:19000" = {"address" = "localhost:19000", "name" = "WOPIServer", mimetypes = ["text/plain", "text/markdown", "application/compressed-markdown", "application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation"]}
+app_name = "Collabora"
+app_url = "https://your-collabora-server.org:9980"
 
 [grpc.services.storageprovider]
 driver = "localhome"

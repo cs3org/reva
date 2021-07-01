@@ -20,6 +20,8 @@ package appprovider
 
 import (
 	"context"
+	"os"
+	"time"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -27,6 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -81,31 +84,43 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	ctx := context.Background()
-	pInfo, err := provider.GetAppProviderInfo(ctx)
-	if err != nil {
-		return nil, err
-	}
-	pInfo.Address = c.AppProviderURL
-
-	client, err := pool.GetGatewayServiceClient(c.GatewaySvc)
-	if err != nil {
-		return nil, err
-	}
-	res, err := client.AddAppProvider(ctx, &registrypb.AddAppProviderRequest{Provider: pInfo})
-	if err != nil {
-		return nil, err
-	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, status.NewErrorFromCode(res.Status.Code, "appprovider")
-	}
-
 	service := &service{
 		conf:     c,
 		provider: provider,
 	}
 
+	go service.registerProvider()
 	return service, nil
+}
+
+func (s *service) registerProvider() {
+	// Give the appregistry service time to come up
+	time.Sleep(2 * time.Second)
+
+	ctx := context.Background()
+	log := logger.New().With().Int("pid", os.Getpid()).Logger()
+	pInfo, err := s.provider.GetAppProviderInfo(ctx)
+	if err != nil {
+		log.Error().Err(err).Msgf("error registering app provider: could not get provider info")
+		return
+	}
+	pInfo.Address = s.conf.AppProviderURL
+
+	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
+	if err != nil {
+		log.Error().Err(err).Msgf("error registering app provider: could not get gateway client")
+		return
+	}
+	res, err := client.AddAppProvider(ctx, &registrypb.AddAppProviderRequest{Provider: pInfo})
+	if err != nil {
+		log.Error().Err(err).Msgf("error registering app provider: error calling add app provider")
+		return
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		err = status.NewErrorFromCode(res.Status.Code, "appprovider")
+		log.Error().Err(err).Msgf("error registering app provider: add app provider returned error")
+		return
+	}
 }
 
 func (s *service) Close() error {

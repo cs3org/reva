@@ -286,7 +286,7 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 						if _, ok := appURLs[access]; !ok {
 							appURLs[access] = make(map[string]string)
 						}
-						appURLs[access][ext] = url
+						appURLs[access]["."+ext] = url
 					}
 				}
 			}
@@ -298,9 +298,9 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 func getCodimdExtensions(appURL string) map[string]map[string]string {
 	appURLs := make(map[string]map[string]string)
 	appURLs["edit"] = map[string]string{
-		"txt": appURL,
-		"md":  appURL,
-		"zmd": appURL,
+		".txt": appURL,
+		".md":  appURL,
+		".zmd": appURL,
 	}
 	return appURLs
 }
@@ -308,7 +308,7 @@ func getCodimdExtensions(appURL string) map[string]map[string]string {
 func getEtherpadExtensions(appURL string) map[string]map[string]string {
 	appURLs := make(map[string]map[string]string)
 	appURLs["edit"] = map[string]string{
-		"etherpad": appURL,
+		".etherpad": appURL,
 	}
 	return appURLs
 }
