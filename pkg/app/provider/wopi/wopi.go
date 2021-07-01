@@ -107,13 +107,8 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}, nil
 }
 
-func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, app string, token string) (string, error) {
+func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string) (string, error) {
 	log := appctx.GetLogger(ctx)
-
-	if app != "" && app != p.conf.AppName {
-		// Sanity check
-		return "", errors.New("AppProvider for " + p.conf.AppName + " cannot open in " + app)
-	}
 
 	ext := path.Ext(resource.Path)
 	wopiurl, err := url.Parse(p.conf.WopiURL)
@@ -139,7 +134,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		q.Add("username", u.Username)
 	}
 
-	q.Add("appname", app)
+	q.Add("appname", p.conf.AppName)
 	q.Add("appurl", p.appURLs["edit"][ext])
 
 	if p.conf.AppIntURL != "" {

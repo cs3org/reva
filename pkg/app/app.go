@@ -39,6 +39,6 @@ type Registry interface {
 // Provider is the interface that application providers implement
 // for providing the URL of the app which will serve the requested resource.
 type Provider interface {
-	GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, app, token string) (string, error)
+	GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string) (string, error)
 	GetAppProviderInfo(ctx context.Context) (*registry.ProviderInfo, error)
 }
