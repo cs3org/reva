@@ -60,6 +60,7 @@ type config struct {
 	Idp          string     `mapstructure:"idp"`
 	GatewaySvc   string     `mapstructure:"gatewaysvc"`
 	Schema       attributes `mapstructure:"schema"`
+	Nobody       int64      `mapstructure:"nobody"`
 }
 
 type attributes struct {
@@ -115,6 +116,9 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	if c.LoginFilter == "" {
 		c.LoginFilter = c.UserFilter
 		c.LoginFilter = strings.ReplaceAll(c.LoginFilter, "%s", "{{login}}")
+	}
+	if c.Nobody == 0 {
+		c.Nobody = 99
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
@@ -184,13 +188,21 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
 		return nil, nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
 	}
-	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber), 10, 64)
-	if err != nil {
-		return nil, nil, err
+	gidNumber := am.c.Nobody
+	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber)
+	if gidValue != "" {
+		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
-	uidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber), 10, 64)
-	if err != nil {
-		return nil, nil, err
+	uidNumber := am.c.Nobody
+	uidValue := sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber)
+	if uidValue != "" {
+		uidNumber, err = strconv.ParseInt(uidValue, 10, 64)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	u := &user.User{
 		Id: userID,
