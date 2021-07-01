@@ -882,11 +882,6 @@ func (fs *eosfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 		return 0, 0, errors.Wrap(err, "eosfs: no uid in ctx")
 	}
 
-	uid, _, err := fs.getUserUIDAndGID(ctx, u)
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "eos: no uid in ctx")
-	}
-
 	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return 0, 0, err
