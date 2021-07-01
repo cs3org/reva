@@ -432,9 +432,9 @@ func (c *Client) SetAttr(ctx context.Context, uid, gid string, attr *eosclient.A
 	}
 	var cmd *exec.Cmd
 	if recursive {
-		cmd = exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "attr", "-r", "set", serializeAttribute(attr), path)
+		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "attr", "-r", "set", serializeAttribute(attr), path)
 	} else {
-		cmd = exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "attr", "set", serializeAttribute(attr), path)
+		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "attr", "set", serializeAttribute(attr), path)
 	}
 
 	_, _, err := c.executeEOS(ctx, cmd)
@@ -449,7 +449,7 @@ func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "attr", "-r", "rm", fmt.Sprintf("%d.%s", attr.Type, attr.Key), path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "attr", "-r", "rm", fmt.Sprintf("%d.%s", attr.Type, attr.Key), path)
 	_, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return err
@@ -457,8 +457,9 @@ func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient
 	return nil
 }
 
+// GetAttr returns the attribute specified by key
 func (c *Client) GetAttr(ctx context.Context, uid, gid, key, path string) (*eosclient.Attribute, error) {
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "attr", "get", key, path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "attr", "get", key, path)
 	attrOut, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return nil, err
@@ -513,7 +514,7 @@ func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eo
 
 // Touch creates a 0-size,0-replica file in the EOS namespace.
 func (c *Client) Touch(ctx context.Context, uid, gid, path string) error {
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "file", "touch", path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "touch", path)
 	_, _, err := c.executeEOS(ctx, cmd)
 	return err
 }
