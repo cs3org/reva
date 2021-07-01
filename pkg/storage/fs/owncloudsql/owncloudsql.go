@@ -756,14 +756,6 @@ func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
 	return fs.propagate(ctx, filepath.Dir(ip))
 }
 
-func (fs *ocfs) isShareFolderChild(sp string) bool {
-	return strings.HasPrefix(sp, fs.c.ShareFolder)
-}
-
-func (fs *ocfs) isShareFolderRoot(sp string) bool {
-	return sp == fs.c.ShareFolder
-}
-
 func (fs *ocfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
 	return errtypes.NotSupported("owncloudsql: operation not supported")
 }
@@ -1213,12 +1205,6 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 	}
 	p := fs.toStoragePath(ctx, ip)
 
-	if fs.c.EnableHome {
-		if fs.isShareFolderChild(p) {
-			return fs.getMDShareFolder(ctx, p, mdKeys)
-		}
-	}
-
 	// If GetMD is called for a path shared with the user then the path is
 	// already wrapped. (fs.resolve wraps the path)
 	if strings.HasPrefix(p, fs.c.DataDirectory) {
@@ -1250,48 +1236,6 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 	}
 
 	return fs.convertToResourceInfo(ctx, entry, ip, mdKeys)
-}
-
-func (fs *ocfs) getMDShareFolder(ctx context.Context, sp string, mdKeys []string) (*provider.ResourceInfo, error) {
-	ip := fs.toInternalShadowPath(ctx, sp)
-
-	// check permissions
-	if perm, err := fs.readPermissions(ctx, ip); err == nil {
-		if !perm.Stat {
-			return nil, errtypes.PermissionDenied("")
-		}
-	} else {
-		if isNotFound(err) {
-			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
-		}
-		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
-	}
-
-	md, err := os.Stat(ip)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(fs.toStorageShadowPath(ctx, ip))
-		}
-		return nil, errors.Wrapf(err, "owncloudsql: error stating %s", ip)
-	}
-	m, err := fs.convertToResourceInfo(ctx, md, ip, fs.toStorageShadowPath(ctx, ip), mdKeys)
-	if err != nil {
-		return nil, err
-	}
-
-	if !fs.isShareFolderRoot(sp) {
-		m.Type = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-		ref, err := xattr.Get(ip, mdPrefix+"target")
-		if err != nil {
-			if isNotFound(err) {
-				return nil, errtypes.NotFound(fs.toStorageShadowPath(ctx, ip))
-			}
-			return nil, err
-		}
-		m.Target = string(ref)
-	}
-
-	return m, nil
 }
 
 func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
@@ -1368,15 +1312,6 @@ func (fs *ocfs) listWithHome(ctx context.Context, home, p string, mdKeys []strin
 		return fs.listHome(ctx, home, mdKeys)
 	}
 
-	if fs.isShareFolderRoot(p) {
-		log.Debug().Msg("listing share folder root")
-		return fs.listShareFolderRoot(ctx, p, mdKeys)
-	}
-
-	if fs.isShareFolderChild(p) {
-		return nil, errtypes.PermissionDenied("owncloudsql: error listing folders inside the shared folder, only file references are stored inside")
-	}
-
 	log.Debug().Msg("listing nominal home")
 	return fs.listWithNominalHome(ctx, p, mdKeys)
 }
@@ -1415,48 +1350,6 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 		}
 		finfos = append(finfos, m)
 	}
-	return finfos, nil
-}
-
-func (fs *ocfs) listShareFolderRoot(ctx context.Context, sp string, mdKeys []string) ([]*provider.ResourceInfo, error) {
-	ip := fs.toInternalShadowPath(ctx, sp)
-
-	// check permissions
-	if perm, err := fs.readPermissions(ctx, ip); err == nil {
-		if !perm.ListContainer {
-			return nil, errtypes.PermissionDenied("")
-		}
-	} else {
-		if isNotFound(err) {
-			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
-		}
-		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
-	}
-
-	mds, err := ioutil.ReadDir(ip)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
-		}
-		return nil, errors.Wrap(err, "owncloudsql: error listing shadow_files")
-	}
-
-	finfos := []*provider.ResourceInfo{}
-	for _, md := range mds {
-		cp := filepath.Join(ip, md.Name())
-		m, err := fs.convertToResourceInfo(ctx, md, cp, fs.toStorageShadowPath(ctx, cp), mdKeys)
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("path", cp).Msg("error converting to a resource info")
-		}
-		m.Type = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-		ref, err := xattr.Get(cp, mdPrefix+"target")
-		if err != nil {
-			return nil, err
-		}
-		m.Target = string(ref)
-		finfos = append(finfos, m)
-	}
-
 	return finfos, nil
 }
 
