@@ -30,6 +30,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
@@ -201,7 +202,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		return nil, errors.Wrap(err, "owncloudsql: error resolving upload path")
 	}
 	usr := user.ContextMustGetUser(ctx)
-	storageID, err := fs.getUserStorage(ctx)
+	storageID, err := fs.getStorage(ip)
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +210,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		"Type":                "OwnCloudStore",
 		"BinPath":             binPath,
 		"InternalDestination": ip,
+		"Permissions":         strconv.Itoa((int)(conversions.RoleFromResourcePermissions(perm).OCSPermissions())),
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
@@ -406,13 +408,17 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		return err
 	}
 
+	perms, err := strconv.Atoi(upload.info.Storage["Permissions"])
+	if err != nil {
+		return err
+	}
 	data := map[string]interface{}{
 		"path":          upload.fs.toDatabasePath(upload.ctx, ip),
 		"checksum":      fmt.Sprintf("SHA1:%032x MD5:%032x ADLER32:%032x", sha1h, md5h, adler32h),
 		"etag":          calcEtag(upload.ctx, fi),
 		"size":          upload.info.Size,
 		"mimetype":      mime.Detect(false, ip),
-		"permissions":   27, // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
+		"permissions":   perms,
 		"mtime":         upload.info.MetaData["mtime"],
 		"storage_mtime": upload.info.MetaData["mtime"],
 	}
