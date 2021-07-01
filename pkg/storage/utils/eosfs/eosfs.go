@@ -488,7 +488,7 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 	return nil
 }
 
-func setACLs(ctx context.Context, c eosclient.EOSClient, uid, gid, path string, acls []*acl.Entry) error {
+func (fs *eosfs) setACLs(ctx context.Context, c eosclient.EOSClient, uid, gid, path string, acls []*acl.Entry) error {
 	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
 	if err != nil {
 		return err
@@ -507,6 +507,16 @@ func setACLs(ctx context.Context, c eosclient.EOSClient, uid, gid, path string, 
 		attr.Type = UserAttr
 	}
 
+	// system acls can only be modified by root users
+	if attr.Type == SystemAttr {
+		rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
+		if err != nil {
+			return err
+		}
+
+		uid, gid = rootUID, rootGID
+	}
+
 	if err = c.SetAttr(ctx, uid, gid, attr, true, path); err != nil {
 		return err
 	}
@@ -519,6 +529,11 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
+	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return err
+	}
+
 	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
@@ -526,34 +541,43 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 
 	fn := fs.wrap(ctx, p)
 
-	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	// workaround until EOS has native support
+	// for persisting order of the acl entries
+	if grants.IsDenial(g) {
+		gs, err := fs.ListGrants(ctx, ref)
+		if err != nil {
+			return err
+		}
+
+		// update list of grants
+		grants.AddGrant(&gs, g)
+
+		acls, err := fs.getEosACLs(ctx, gs)
+		if err != nil {
+			return err
+		}
+
+		if err = fs.setACLs(ctx, fs.c, uid, gid, fn, acls); err != nil {
+			return errors.Wrap(err, "eosfs: error setting acls")
+		}
+		return nil
+
+	}
+
+	eosACL, err := fs.getEosACL(ctx, g)
 	if err != nil {
 		return err
 	}
 
-	gs, err := fs.ListGrants(ctx, ref)
+	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return err
 	}
 
-	// update list of grants
-	grants.AddGrant(&gs, g)
-
-	acls, err := fs.getEosACLs(ctx, gs)
+	err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, eosACL)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "eosfs: error adding acl")
 	}
-
-	// rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
-
-	if err = setACLs(ctx, fs.c, uid, gid, fn, acls); err != nil {
-		return errors.Wrap(err, "eosfs: error setting acls")
-	}
-
-	// err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, eosACL)
-	// if err != nil {
-	// 	return errors.Wrap(err, "eosfs: error adding acl")
-	// }
 
 	return nil
 }

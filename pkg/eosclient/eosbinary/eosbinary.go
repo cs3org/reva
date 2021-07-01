@@ -287,7 +287,7 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path st
 			Key:  "eval.useracl",
 			Val:  "1",
 		}
-		if err = c.SetAttr(ctx, uid, gid, userACLAttr, false, path); err != nil {
+		if err = c.SetAttr(ctx, rootUID, rootGID, userACLAttr, false, path); err != nil {
 			return err
 		}
 	}
