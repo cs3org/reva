@@ -88,6 +88,7 @@ func GetDataGateway(val string) string {
 	return val
 }
 
+// GetPluginFlag returns the configured plugin flag.
 func GetPluginFlag() bool {
 	return sharedConf.Plugin
 }
