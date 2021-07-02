@@ -652,12 +652,7 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 		}
 		p = strings.TrimPrefix(p, "files/")
 		if !fs.c.EnableHome {
-			storageID := ref.GetResourceId().StorageId
-			parts := strings.SplitN(storageID, "!", 2) // the owncloudsql storage ids is "<ocis-mount-id>!<oc1-storage-id>"
-			if len(parts) > 1 {
-				storageID = parts[1]
-			}
-			owner, err := fs.filecache.GetStorageOwner(storageID)
+			owner, err := fs.filecache.GetStorageOwnerByFileID(ref.GetResourceId().OpaqueId)
 			if err != nil {
 				return "", err
 			}
