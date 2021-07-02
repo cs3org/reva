@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	// "os"
 	"google.golang.org/grpc/metadata"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -41,6 +42,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+// "github.com/cs3org/reva/pkg/storage/fs/owncloud"
 // This test suite tests the gprc storageprovider interface using different
 // storage backends
 //
@@ -464,6 +466,64 @@ var _ = Describe("storage providers", func() {
 			Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(BeEmpty())
 		})
 	}
+
+	Describe("nextcloud", func() {
+		BeforeEach(func() {
+			dependencies = map[string]string{
+				"storage": "storageprovider-nextcloud.toml",
+			}
+		})
+
+		assertCreateHome()
+
+		Context("with a home and a subdirectory", func() {
+			JustBeforeEach(func() {
+				res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				subdirRes, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: subdirRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(subdirRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			})
+
+			assertCreateContainer()
+			assertListContainer()
+			assertGetPath()
+			assertDelete()
+			assertMove()
+			assertGrants()
+			assertUploads()
+			assertDownloads()
+			assertRecycle()
+			assertReferences()
+			assertMetadata()
+		})
+
+		Context("with an existing file /versioned_file", func() {
+			JustBeforeEach(func() {
+				fs, err := ocis.New(map[string]interface{}{
+					"root":        revads["storage"].TmpRoot,
+					"enable_home": true,
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
+				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+
+				ctx := ruser.ContextSetUser(context.Background(), user)
+
+				err = fs.CreateHome(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content1)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content2)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			assertFileVersions()
+		})
+	})
 
 	Describe("ocis", func() {
 		BeforeEach(func() {
