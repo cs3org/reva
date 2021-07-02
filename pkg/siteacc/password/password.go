@@ -19,61 +19,51 @@
 package password
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Password holds a hash password alongside its salt value.
 type Password struct {
 	Value string `json:"value"`
-	Salt  string `json:"salt"`
 }
 
 const (
-	passwordMinLength  = 8
-	passwordSaltLength = 16
+	passwordMinLength = 8
 )
+
+// Set sets a new password by hashing the plaintext version using bcrypt.
+func (password *Password) Set(pwd string) error {
+	if err := VerifyPassword(pwd); err != nil {
+		return errors.Wrap(err, "invalid password")
+	}
+
+	pwdData, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.Wrap(err, "unable to generate password hash")
+	}
+	password.Value = string(pwdData)
+	fmt.Println(password.Value)
+	return nil
+}
+
+// Compare checks whether the given password string equals the stored one.
+func (password *Password) Compare(pwd string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(password.Value), []byte(pwd)) == nil
+}
 
 // IsValid checks whether the password is valid.
 func (password *Password) IsValid() bool {
-	return len(password.Value) == 64 && len(password.Salt) == passwordSaltLength
+	// bcrypt hashes are in the form of $[version]$[cost]$[22 character salt][31 character hash], so they have a minimum length of 58
+	return len(password.Value) > 58 && strings.Count(password.Value, "$") >= 3
 }
 
 // Clear resets the password.
 func (password *Password) Clear() {
 	password.Value = ""
-	password.Salt = ""
-}
-
-// Compare checks whether the given password string equals the stored one.
-func (password *Password) Compare(pwd string) bool {
-	hashedPwd := hashPassword(pwd, password.Salt)
-	return hashedPwd == password.Value
-}
-
-// GeneratePassword salts and hashes the given password.
-func GeneratePassword(pwd string) (*Password, error) {
-	if err := VerifyPassword(pwd); err != nil {
-		return nil, errors.Wrap(err, "invalid password")
-	}
-
-	// Create a random salt string
-	salt := utils.RandString(passwordSaltLength)
-
-	return &Password{Value: hashPassword(pwd, salt), Salt: salt}, nil
-}
-
-func hashPassword(pwd, salt string) string {
-	saltedPwd := pwd + salt
-
-	// Value the salted password using SHA256
-	h := sha256.New()
-	h.Write([]byte(saltedPwd))
-	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // VerifyPassword checks whether the given password abides to the enforced password strength.

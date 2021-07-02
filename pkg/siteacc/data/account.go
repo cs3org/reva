@@ -85,16 +85,15 @@ func (acc *Account) Update(other *Account, copyData bool) error {
 	return nil
 }
 
-// UpdatePassword assigns a new password to the account, salting and hashing it first.
-func (acc *Account) UpdatePassword(newPwd string) error {
-	pwd, err := password.GeneratePassword(newPwd)
-	if err != nil {
+// UpdatePassword assigns a new password to the account, hashing it first.
+func (acc *Account) UpdatePassword(pwd string) error {
+	if err := acc.Password.Set(pwd); err != nil {
 		return errors.Wrap(err, "unable to update the user password")
 	}
-	acc.Password = *pwd
 	return nil
 }
 
+// Clone creates a copy of the account; if erasePassword is set to true, the password will be cleared in the cloned object.
 func (acc *Account) Clone(erasePassword bool) *Account {
 	clone := &Account{}
 
