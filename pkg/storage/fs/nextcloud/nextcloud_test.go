@@ -72,13 +72,14 @@ var _ = Describe("Nextcloud", func() {
 				}`
 			)
 			h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// assert.Equal(t, "key", r.Header.Get("Key"))
-				// assert.Equal(t, "secret", r.Header.Get("Secret"))
-				w.Write([]byte(okResponse))
+				_, err := w.Write([]byte(okResponse))
+				if err != nil {
+					panic(err)
+				}
 			})
 			mock, teardown := helpers.TestingHTTPClient(h)
 			defer teardown()
-			nc.SetHttpClient(mock)
+			nc.SetHTTPClient(mock)
 			err2 := nc.CreateHome(context.TODO())
 			Expect(err2).ToNot(HaveOccurred())
 		})
