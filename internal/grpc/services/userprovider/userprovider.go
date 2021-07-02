@@ -21,13 +21,17 @@ package userprovider
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -37,79 +41,72 @@ func init() {
 	rgrpc.Register("userprovider", New)
 }
 
-type pluginConfig struct {
-	Driver   string `mapstructure:"driver"`
-	Location string `mapstructure:"location"`
-	Users    string `mapstructure:"users"`
+type config struct {
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
-func (p *pluginConfig) load() (interface{}, error) {
-	sym, err := plugin.Load(p.Location)
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+}
+
+func (c *config) load() (interface{}, error) {
+	sym, err := plugin.Load(c.Driver, "userprovider")
 	if err != nil {
 		return nil, err
 	}
 	return sym, nil
 }
 
-func parseConfig(m map[string]interface{}) (*pluginConfig, error) {
-	plgConfig := &pluginConfig{}
-	if err := mapstructure.Decode(m, plgConfig); err != nil {
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
-	return plgConfig, nil
+	c.init()
+	return c, nil
 }
 
-func getDriver(p *pluginConfig) (user.UserManager, error) {
-	sym, err := p.load()
+// getDriverPlugin fetches the runtime driver from the plugins package
+func getDriverPlugin(c *config) (user.UserManager, error) {
+	sym, err := c.load()
 	if err != nil {
-		err = errors.Wrap(err, "error loading plugin")
 		return nil, err
 	}
 
+	// assert the loaded plugin into required interface
 	manager, ok := sym.(user.UserManager)
 	if !ok {
-		return nil, fmt.Errorf("could not assert")
+		return nil, fmt.Errorf("could not assert the loaded plugin")
 	}
 
-	// New method initializes the manager struct in the plugin
-	err = manager.New(p.Users)
-
+	pluginConfig := filepath.Base(c.Driver)
+	err = manager.New(c.Drivers[pluginConfig])
 	if err != nil {
-		err = errors.Wrap(err, "could not call rpc method `New`")
 		return nil, err
 	}
 	return manager, nil
 }
 
-// type config struct {
-// 	Driver  string                            `mapstructure:"driver"`
-// 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
-// }
+func getDriver(c *config, plugin bool) (user.Manager, error) {
+	// if plugin flag is set, we fetch the driver from the plugin package via hashicorp go-plugin system
+	if plugin {
+		mgr, err := getDriverPlugin(c)
+		if err != nil {
+			return nil, err
+		}
+		return mgr, nil
+	}
+	// fetch drivers from the in-memory registry
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
+	}
 
-// func (c *config) init() {
-// 	if c.Driver == "" {
-// 		c.Driver = "json"
-// 	}
-// }
-
-// func parseConfig(m map[string]interface{}) (*config, error) {
-// 	c := &config{}
-// 	if err := mapstructure.Decode(m, c); err != nil {
-// 		err = errors.Wrap(err, "error decoding conf")
-// 		return nil, err
-// 	}
-// 	c.init()
-// 	return c, nil
-// }
-
-// func getDriver(c *config) (user.Manager, error) {
-// 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-// 		return f(c.Drivers[c.Driver])
-// 	}
-
-// 	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
-// }
+	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
+}
 
 // New returns a new UserProviderServiceServer.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
@@ -117,23 +114,19 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	plugin := sharedconf.GetPluginFlag()
 
-	userManager, err := getDriver(c)
+	userManager, err := getDriver(c, plugin)
 	if err != nil {
 		return nil, err
 	}
-
-	// Testing the plugin call
-	user, _ := userManager.GetUser(context.Background(), &userpb.UserId{OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51", Idp: "cernbox.cern.ch"})
-	fmt.Println(user.DisplayName)
-
 	svc := &service{usermgr: userManager}
 
 	return svc, nil
 }
 
 type service struct {
-	usermgr user.UserManager
+	usermgr user.Manager
 }
 
 func (s *service) Close() error {

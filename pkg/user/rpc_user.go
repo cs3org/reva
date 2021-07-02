@@ -8,16 +8,15 @@ import (
 	"github.com/hashicorp/go-plugin"
 )
 
-// JSONPlugin is the implementation of
-type JSONPlugin struct {
+type UserProviderPlugin struct {
 	Impl UserManager
 }
 
-func (p *JSONPlugin) Server(*plugin.MuxBroker) (interface{}, error) {
+func (p *UserProviderPlugin) Server(*plugin.MuxBroker) (interface{}, error) {
 	return &RPCServer{Impl: p.Impl}, nil
 }
 
-func (p *JSONPlugin) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
+func (p *UserProviderPlugin) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
 	return &RPCClient{Client: c}, nil
 }
 
@@ -26,7 +25,7 @@ type RPCClient struct{ Client *rpc.Client }
 
 // NewArg for RPC
 type NewArg struct {
-	Users string
+	Ml map[string]interface{}
 }
 
 // NewReply for RPC
@@ -34,8 +33,8 @@ type NewReply struct {
 	Err error
 }
 
-func (m *RPCClient) New(users string) error {
-	args := NewArg{Users: users}
+func (m *RPCClient) New(ml map[string]interface{}) error {
+	args := NewArg{Ml: ml}
 	resp := NewReply{}
 	err := m.Client.Call("Plugin.New", args, &resp)
 	if err != nil {
@@ -129,7 +128,7 @@ type RPCServer struct {
 }
 
 func (m *RPCServer) New(args NewArg, resp *NewReply) error {
-	resp.Err = m.Impl.New(args.Users)
+	resp.Err = m.Impl.New(args.Ml)
 	return nil
 }
 

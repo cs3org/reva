@@ -31,6 +31,8 @@ type conf struct {
 	JWTSecret   string `mapstructure:"jwt_secret"`
 	GatewaySVC  string `mapstructure:"gatewaysvc"`
 	DataGateway string `mapstructure:"datagateway"`
+	Plugin      bool   `mapstructure:"plugin"`
+	Compile     bool   `mapstructure:"compile"`
 }
 
 // Decode decodes the configuration.
@@ -85,4 +87,12 @@ func GetDataGateway(val string) string {
 		return sharedConf.DataGateway
 	}
 	return val
+}
+
+func GetPluginFlag() bool {
+	return sharedConf.Plugin
+}
+
+func GetCompileFlag() bool {
+	return sharedConf.Compile
 }
