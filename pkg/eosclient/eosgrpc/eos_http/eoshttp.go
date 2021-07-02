@@ -265,6 +265,7 @@ func (c *Client) buildFullURL(urlpath, uid, gid string) (string, error) {
 		v.Set("eos.rgid", gid)
 	}
 
+	u.RawQuery = v.Encode()
 	return u.String(), nil
 }
 
