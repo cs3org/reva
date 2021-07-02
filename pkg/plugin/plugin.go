@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 
@@ -10,8 +9,9 @@ import (
 	"github.com/hashicorp/go-plugin"
 )
 
+// pluginMap contains all the plugins that can be consumed.
 var pluginMap = map[string]plugin.Plugin{
-	"json": &user.JSONPlugin{},
+	"userprovider": &user.UserProviderPlugin{},
 }
 
 var Handshake = plugin.HandshakeConfig{
@@ -20,8 +20,7 @@ var Handshake = plugin.HandshakeConfig{
 	MagicCookieValue: "hello",
 }
 
-// for the time being, I'm assuming the location to be the location of the binary
-func Load(location string) (interface{}, error) {
+func Load(driver string, pluginType string) (interface{}, error) {
 	logger := hclog.New(&hclog.LoggerOptions{
 		Name:   "plugin",
 		Output: os.Stdout,
@@ -31,25 +30,22 @@ func Load(location string) (interface{}, error) {
 	client := plugin.NewClient(&plugin.ClientConfig{
 		HandshakeConfig: Handshake,
 		Plugins:         pluginMap,
-		Cmd:             exec.Command(location),
+		Cmd:             exec.Command(driver),
 		AllowedProtocols: []plugin.Protocol{
 			plugin.ProtocolNetRPC,
 		},
 		Logger: logger,
 	})
 
-	//	defer client.Kill()
-
 	rpcClient, err := client.Client()
 	if err != nil {
 		return nil, err
 	}
 
-	raw, err := rpcClient.Dispense("json")
+	raw, err := rpcClient.Dispense(pluginType)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println("PLUGIN: plugin loaded")
 	return raw, nil
 }
