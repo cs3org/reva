@@ -222,16 +222,16 @@ const formTemplate = `
 			<div style="grid-row: 5;"><label for="organization">Organization/Company: <span class="mandatory">*</span></label></div>
 			<div style="grid-row: 6;"><input type="text" id="organization" name="organization"/></div>
 			<div style="grid-row: 5;"><label for="website">Website:</label></div>
-			<div style="grid-row: 6;"><input type="text" id="website" name="website"/></div>
+			<div style="grid-row: 6;"><input type="text" id="website" name="website" placeholder="https://www.example.com"/></div>
 
 			<div style="grid-row: 7;"><label for="phone">Phone number:</label></div>
-			<div style="grid-row: 8;"><input type="text" id="phone" name="phone"/></div>
+			<div style="grid-row: 8;"><input type="text" id="phone" name="phone" placeholder="+49 030 123456"/></div>
 
 			<div style="grid-row: 9;">&nbsp;</div>
 
 			<div style="grid-row: 10;"><label for="password">Password: <span class="mandatory">*</span></label></div>
 			<div style="grid-row: 11;"><input type="password" id="password" name="password"/></div>
-			<div style="grid-row: 10;"><label for="password2">Repeat password: <span class="mandatory">*</span></label></div>
+			<div style="grid-row: 10;"><label for="password2">Confirm password: <span class="mandatory">*</span></label></div>
 			<div style="grid-row: 11;"><input type="password" id="password2" name="password2"/></div>
 
 			<div style="grid-row: 12; font-style: italic; font-size: 0.8em;">

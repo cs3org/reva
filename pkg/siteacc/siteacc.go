@@ -56,8 +56,8 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 	return nil
 }
 
-// RequestHandler returns the HTTP request handler of the service.
-func (siteacc *SiteAccounts) RequestHandler() http.Handler {
+// HTTPHandler returns the HTTP request handler of the service.
+func (siteacc *SiteAccounts) HTTPHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
