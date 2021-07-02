@@ -6,6 +6,7 @@ update_interval = "15m"
 
 [http.services.mentix.connectors.gocdb]
 address = "http://sciencemesh-test.uni-muenster.de"
+apikey = "abc123"
 
 # Sites can also be stored in a local file
 [http.services.mentix.connectors.localfile]
