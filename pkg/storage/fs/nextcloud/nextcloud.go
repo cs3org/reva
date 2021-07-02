@@ -532,7 +532,7 @@ func (nc *NextcloudStorageDriver) SetArbitraryMetadata(ctx context.Context, ref 
 	return err
 }
 
-// UnsetArbitrarymetadata as defined in the storage.FS interface
+// UnsetArbitraryMetadata as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"UnsetArbitraryMetadata", string(bodyStr)}, nc.endPoint)
