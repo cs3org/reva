@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -793,7 +794,12 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 	ctx := ss.Context()
 	log := appctx.GetLogger(ctx)
 
-	items, err := s.storage.ListRecycle(ctx, nil)
+	ref, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return err
+	}
+
+	items, err := s.storage.ListRecycle(ctx, ref.ResourceId.OpaqueId, ref.Path)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -833,7 +839,8 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 	if err != nil {
 		return nil, err
 	}
-	items, err := s.storage.ListRecycle(ctx, ref)
+	key, itemPath := router.ShiftPath(ref.Path)
+	items, err := s.storage.ListRecycle(ctx, key, itemPath)
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err != nil {
 		var st *rpc.Status
@@ -863,10 +870,7 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 	if err != nil {
 		return nil, err
 	}
-	ref.ResourceId = &provider.ResourceId{
-		OpaqueId: req.Key,
-	}
-	if err := s.storage.RestoreRecycleItem(ctx, ref, req.RestoreRef); err != nil {
+	if err := s.storage.RestoreRecycleItem(ctx, req.Key, ref.Path, req.RestoreRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -890,7 +894,7 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
 	// if a key was sent as opaque id purge only that item
 	if req.GetRef().GetResourceId() != nil && req.GetRef().GetResourceId().OpaqueId != "" {
-		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef()); err != nil {
+		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetResourceId().OpaqueId, req.GetRef().Path); err != nil {
 			var st *rpc.Status
 			switch err.(type) {
 			case errtypes.IsNotFound:

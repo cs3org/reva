@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -108,7 +107,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		//}
 
 		if r.Method == "PROPFIND" {
-			h.listTrashbin(w, r, s, u, path.Join(key, r.URL.Path))
+			h.listTrashbin(w, r, s, u, key, r.URL.Path)
 			return
 		}
 		if key != "" && r.Method == "MOVE" {
@@ -142,7 +141,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key string) {
+func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key, itemPath string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "listTrashbin")
 	defer span.End()
@@ -190,8 +189,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	// ask gateway for recycle items
-	// TODO(labkode): add Reference to ListRecycleRequest
-	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: &provider.Reference{Path: filepath.Join(getHomeRes.Path, key)}})
+	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: &provider.Reference{Path: path.Join(getHomeRes.Path, key, itemPath)}})
 
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
@@ -331,7 +329,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 			Prop:   []*propertyXML{},
 		})
 		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", filepath.Base(item.Ref.Path)))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
@@ -368,7 +366,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 					}
 				case "trashbin-original-filename":
 					// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", filepath.Base(item.Ref.Path)))
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
 				case "trashbin-original-location":
 					// TODO (jfd) double check and clarify the cs3 spec what the Key is about and if Path is only the folder that contains the file or if it includes the filename
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
@@ -415,7 +413,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 }
 
 // restore has a destination and a key
-func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst, key, resourcePath string) {
+func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst, key, itemPath string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "restore")
 	defer span.End()
@@ -453,7 +451,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	}
 
 	dstRef := &provider.Reference{
-		Path: filepath.Join(getHomeRes.Path, dst),
+		Path: path.Join(getHomeRes.Path, dst),
 	}
 
 	dstStatReq := &provider.StatRequest{
@@ -516,7 +514,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
 		// TODO currently limited to the home storage
 		Ref: &provider.Reference{
-			Path: path.Join(getHomeRes.Path, resourcePath),
+			Path: path.Join(getHomeRes.Path, itemPath),
 		},
 		Key:        key,
 		RestoreRef: &provider.Reference{Path: dst},
@@ -555,7 +553,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 }
 
 // delete has only a key
-func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key, path string) {
+func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key, itemPath string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "erase")
 	defer span.End()
@@ -599,7 +597,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 				StorageId: sRes.Info.Id.StorageId,
 				OpaqueId:  key,
 			},
-			Path: utils.MakeRelativePath(path),
+			Path: utils.MakeRelativePath(itemPath),
 		},
 	}
 

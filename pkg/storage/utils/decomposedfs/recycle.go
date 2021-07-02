@@ -46,7 +46,7 @@ import (
 // contain a directory with symlinks to trash files for every userid/"root"
 
 // ListRecycle returns the list of available recycle items
-func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*provider.RecycleItem, error) {
+func (fs *Decomposedfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 
 	items := make([]*provider.RecycleItem, 0)
@@ -65,12 +65,12 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		}
 	}
 
-	if ref.Path == "/" {
+	if key == "" && path == "/" {
 		return fs.listTrashRoot(ctx)
 	}
 
 	trashRoot := fs.getRecycleRoot(ctx)
-	f, err := os.Open(filepath.Join(trashRoot, ref.Path))
+	f, err := os.Open(filepath.Join(trashRoot, key, path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return items, nil
@@ -79,8 +79,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	}
 	defer f.Close()
 
-	root, tail := shiftPath(ref.Path)
-	parentNode, err := os.Readlink(filepath.Join(trashRoot, root))
+	parentNode, err := os.Readlink(filepath.Join(trashRoot, key))
 	if err != nil {
 		log.Error().Err(err).Str("trashRoot", trashRoot).Msg("error reading trash link, skipping")
 		return nil, err
@@ -90,7 +89,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		return nil, err
 	} else if !md.IsDir() {
 		// this is the case when we want to directly list a file in the trashbin
-		item, err := fs.createTrashItem(ctx, parentNode, filepath.Dir(tail), filepath.Join(trashRoot, ref.Path))
+		item, err := fs.createTrashItem(ctx, parentNode, filepath.Dir(path), filepath.Join(trashRoot, key, path))
 		if err != nil {
 			return items, err
 		}
@@ -103,7 +102,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		return nil, err
 	}
 	for i := range names {
-		if item, err := fs.createTrashItem(ctx, parentNode, tail, filepath.Join(trashRoot, ref.Path, names[i])); err == nil {
+		if item, err := fs.createTrashItem(ctx, parentNode, path, filepath.Join(trashRoot, key, path, names[i])); err == nil {
 			items = append(items, item)
 		}
 	}
@@ -259,11 +258,11 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context) ([]*provider.RecycleI
 }
 
 // RestoreRecycleItem restores the specified item
-func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, trashRef *provider.Reference, restoreRef *provider.Reference) error {
+func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error {
 	if restoreRef == nil {
 		restoreRef = &provider.Reference{}
 	}
-	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, trashRef.ResourceId.OpaqueId, trashRef.Path, restoreRef.Path)
+	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, path, restoreRef.Path)
 	if err != nil {
 		return err
 	}
@@ -276,7 +275,7 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, trashRef *provid
 	case err != nil:
 		return errtypes.InternalError(err.Error())
 	case !ok:
-		return errtypes.PermissionDenied(trashRef.ResourceId.OpaqueId)
+		return errtypes.PermissionDenied(key)
 	}
 
 	// Run the restore func
@@ -284,8 +283,8 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, trashRef *provid
 }
 
 // PurgeRecycleItem purges the specified item
-func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference) error {
-	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, ref.Path)
+func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
+	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, key, path)
 	if err != nil {
 		return err
 	}
@@ -298,7 +297,7 @@ func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Refe
 	case err != nil:
 		return errtypes.InternalError(err.Error())
 	case !ok:
-		return errtypes.PermissionDenied(ref.ResourceId.OpaqueId)
+		return errtypes.PermissionDenied(key)
 	}
 
 	// Run the purge func
@@ -332,21 +331,4 @@ func (fs *Decomposedfs) getRecycleRoot(ctx context.Context) string {
 		return filepath.Join(fs.o.Root, "trash", u.Id.OpaqueId)
 	}
 	return filepath.Join(fs.o.Root, "trash", "root")
-}
-
-// shiftPath splits off the first component of p, which will be cleaned of
-// relative components before processing. head will never contain a slash and
-// tail will always be a rooted path without trailing slash.
-// see https://blog.merovius.de/2017/06/18/how-not-to-use-an-http-router.html
-// and https://gist.github.com/weatherglass/62bd8a704d4dfdc608fe5c5cb5a6980c#gistcomment-2161690 for the zero alloc code below
-func shiftPath(p string) (head, tail string) {
-	if p == "" {
-		return "", "/"
-	}
-	p = strings.TrimPrefix(path.Clean(p), "/")
-	i := strings.Index(p, "/")
-	if i < 0 {
-		return p, "/"
-	}
-	return p[:i], p[i:]
 }

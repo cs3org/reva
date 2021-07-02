@@ -2060,12 +2060,12 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *ocfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference) error {
+func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
 	}
-	ip := filepath.Join(rp, filepath.Clean(ref.ResourceId.OpaqueId))
+	ip := filepath.Join(rp, filepath.Clean(key))
 	// TODO check permission?
 
 	// check permissions
@@ -2086,7 +2086,7 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference) e
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error deleting recycle item")
 	}
-	err = os.RemoveAll(filepath.Join(filepath.Dir(rp), "versions", filepath.Clean(ref.ResourceId.OpaqueId)))
+	err = os.RemoveAll(filepath.Join(filepath.Dir(rp), "versions", filepath.Clean(key)))
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error deleting recycle item versions")
 	}
@@ -2153,7 +2153,7 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 	}
 }
 
-func (fs *ocfs) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*provider.RecycleItem, error) {
+func (fs *ocfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -2161,7 +2161,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*pr
 	}
 
 	// list files folder
-	mds, err := ioutil.ReadDir(filepath.Join(rp, ref.Path))
+	mds, err := ioutil.ReadDir(filepath.Join(rp, key))
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")
@@ -2180,18 +2180,18 @@ func (fs *ocfs) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*pr
 	return items, nil
 }
 
-func (fs *ocfs) RestoreRecycleItem(ctx context.Context, trashRef *provider.Reference, restoreRef *provider.Reference) error {
+func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
 	}
-	src := filepath.Join(rp, filepath.Clean(trashRef.ResourceId.OpaqueId))
+	src := filepath.Join(rp, filepath.Clean(key))
 
 	suffix := filepath.Ext(src)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
-		log.Error().Str("key", trashRef.ResourceId.OpaqueId).Str("path", src).Msg("invalid trash item suffix")
+		log.Error().Str("key", key).Str("path", src).Msg("invalid trash item suffix")
 		return nil
 	}
 
@@ -2201,20 +2201,20 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, trashRef *provider.Refer
 	if restoreRef.Path == "" {
 		v, err := xattr.Get(src, trashOriginPrefix)
 		if err != nil {
-			log.Error().Err(err).Str("key", trashRef.ResourceId.OpaqueId).Str("path", src).Msg("could not read origin")
+			log.Error().Err(err).Str("key", key).Str("path", src).Msg("could not read origin")
 		}
 		restoreRef.Path = filepath.Join("/", filepath.Clean(string(v)), strings.TrimSuffix(filepath.Base(src), suffix))
 	}
 	tgt := fs.toInternalPath(ctx, restoreRef.Path)
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
-		log.Error().Err(err).Str("key", trashRef.ResourceId.OpaqueId).Str("restorePath", restoreRef.Path).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
+		log.Error().Err(err).Str("key", key).Str("restorePath", restoreRef.Path).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
 		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 	// unset trash origin location in metadata
 	if err := xattr.Remove(tgt, trashOriginPrefix); err != nil {
 		// just a warning, will be overwritten next time it is deleted
-		log.Warn().Err(err).Str("key", trashRef.ResourceId.OpaqueId).Str("tgt", tgt).Msg("could not unset origin")
+		log.Warn().Err(err).Str("key", key).Str("tgt", tgt).Msg("could not unset origin")
 	}
 	// TODO(jfd) restore versions
 

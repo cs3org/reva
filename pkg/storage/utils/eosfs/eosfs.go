@@ -1362,7 +1362,7 @@ func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 	return fs.c.RollbackToVersion(ctx, uid, gid, fn, revisionKey)
 }
 
-func (fs *eosfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference) error {
+func (fs *eosfs) PurgeRecycleItem(ctx context.Context, key, itemPath string) error {
 	return errtypes.NotSupported("eosfs: operation not supported")
 }
 
@@ -1380,7 +1380,7 @@ func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
 	return fs.c.PurgeDeletedEntries(ctx, uid, gid)
 }
 
-func (fs *eosfs) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*provider.RecycleItem, error) {
+func (fs *eosfs) ListRecycle(ctx context.Context, key, itemPath string) ([]*provider.RecycleItem, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: no user in ctx")
@@ -1411,7 +1411,7 @@ func (fs *eosfs) ListRecycle(ctx context.Context, ref *provider.Reference) ([]*p
 	return recycleEntries, nil
 }
 
-func (fs *eosfs) RestoreRecycleItem(ctx context.Context, trashRef *provider.Reference, restoreRef *provider.Reference) error {
+func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key, itemPath string, restoreRef *provider.Reference) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -1422,7 +1422,7 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, trashRef *provider.Refe
 		return err
 	}
 
-	return fs.c.RestoreDeletedEntry(ctx, uid, gid, trashRef.ResourceId.OpaqueId)
+	return fs.c.RestoreDeletedEntry(ctx, uid, gid, key)
 }
 
 func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {

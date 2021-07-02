@@ -42,9 +42,9 @@ type FS interface {
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
 	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
-	ListRecycle(ctx context.Context, ref *provider.Reference) ([]*provider.RecycleItem, error)
-	RestoreRecycleItem(ctx context.Context, trashRef *provider.Reference, restoreRef *provider.Reference) error
-	PurgeRecycleItem(ctx context.Context, ref *provider.Reference) error
+	ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error)
+	RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error
+	PurgeRecycleItem(ctx context.Context, key, path string) error
 	EmptyRecycle(ctx context.Context) error
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
