@@ -1520,12 +1520,16 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	var perm provider.ResourcePermissions
 	for _, e := range eosFileInfo.SysACL.Entries {
 		var userInGroup bool
-		for _, g := range u.Groups {
-			if e.Qualifier == g {
-				userInGroup = true
+		if e.Type == acl.TypeGroup {
+			for _, g := range u.Groups {
+				if e.Qualifier == g {
+					userInGroup = true
+					break
+				}
 			}
 		}
-		if e.Qualifier == uid || userInGroup {
+
+		if (e.Type == acl.TypeUser && e.Qualifier == uid) || userInGroup {
 			mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions, eosFileInfo.IsDir))
 		}
 	}
