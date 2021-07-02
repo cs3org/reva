@@ -19,8 +19,8 @@
 package config
 
 const (
-	// EndpointPanel is the endpoint path of the web interface panel.
-	EndpointPanel = "/panel"
+	// EndpointAdministration is the endpoint path of the web interface administration panel.
+	EndpointAdministration = "/admin"
 	// EndpointRegistration is the endpoint path of the web interface registration form.
 	EndpointRegistration = "/register"
 

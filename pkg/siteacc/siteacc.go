@@ -56,13 +56,13 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 	return nil
 }
 
-// HTTPHandler returns the HTTP request handler of the service.
-func (siteacc *SiteAccounts) HTTPHandler() http.Handler {
+// RequestHandler returns the HTTP request handler of the service.
+func (siteacc *SiteAccounts) RequestHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
 		epHandled := false
-		for _, ep := range getEndpoints(siteacc.conf.EnableRegistrationForm) {
+		for _, ep := range getEndpoints() {
 			if ep.Path == r.URL.Path {
 				ep.Handler(siteacc.manager, ep, w, r)
 				epHandled = true
@@ -82,7 +82,7 @@ func (siteacc *SiteAccounts) GetPublicEndpoints() []string {
 	return []string{"/"}
 
 	endpoints := make([]string, 0, 5)
-	for _, ep := range getEndpoints(siteacc.conf.EnableRegistrationForm) {
+	for _, ep := range getEndpoints() {
 		if ep.IsPublic {
 			endpoints = append(endpoints, ep.Path)
 		}

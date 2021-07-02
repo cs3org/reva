@@ -55,10 +55,11 @@ func createMethodCallbacks(cbGet methodCallback, cbPost methodCallback) map[stri
 	return callbacks
 }
 
-func getEndpoints(enableRegistrationForm bool) []endpoint {
+func getEndpoints() []endpoint {
 	endpoints := []endpoint{
-		// Form endpoints
-		{config.EndpointPanel, callPanelEndpoint, nil, false},
+		// Form/panel endpoints
+		{config.EndpointAdministration, callAdministrationEndpoint, nil, false},
+		{config.EndpointRegistration, callRegistrationEndpoint, nil, true},
 		// Request endpoints
 		{config.EndpointGenerateAPIKey, callMethodEndpoint, createMethodCallbacks(handleGenerateAPIKey, nil), false},
 		{config.EndpointVerifyAPIKey, callMethodEndpoint, createMethodCallbacks(handleVerifyAPIKey, nil), false},
@@ -73,17 +74,13 @@ func getEndpoints(enableRegistrationForm bool) []endpoint {
 		{config.EndpointUnregisterSite, callMethodEndpoint, createMethodCallbacks(nil, handleUnregisterSite), false},
 	}
 
-	if enableRegistrationForm {
-		endpoints = append(endpoints, endpoint{config.EndpointRegistration, callRegistrationEndpoint, nil, true})
-	}
-
 	return endpoints
 }
 
-func callPanelEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
-	if err := mngr.ShowPanel(w); err != nil {
+func callAdministrationEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
+	if err := mngr.ShowAdministrationPanel(w); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface panel: %v", err)))
+		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface administration adminPanel: %v", err)))
 	}
 }
 

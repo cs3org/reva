@@ -24,10 +24,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cs3org/reva/pkg/siteacc/admin"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/email"
-	"github.com/cs3org/reva/pkg/siteacc/panel"
 	"github.com/cs3org/reva/pkg/siteacc/registration"
 	"github.com/cs3org/reva/pkg/siteacc/sitereg"
 	"github.com/pkg/errors"
@@ -54,7 +54,7 @@ type Manager struct {
 	accounts data.Accounts
 	storage  data.Storage
 
-	panel            *panel.Panel
+	adminPanel       *admin.AdministrationPanel
 	registrationForm *registration.Form
 	smtp             *smtpclient.SMTPCredentials
 
@@ -82,11 +82,11 @@ func (mngr *Manager) initialize(conf *config.Configuration, log *zerolog.Logger)
 		return errors.Wrap(err, "unable to create accounts storage")
 	}
 
-	// Create the web interface panel
-	if pnl, err := panel.NewPanel(conf, log); err == nil {
-		mngr.panel = pnl
+	// Create the web interface adminPanel
+	if pnl, err := admin.NewPanel(conf, log); err == nil {
+		mngr.adminPanel = pnl
 	} else {
-		return errors.Wrap(err, "unable to create panel")
+		return errors.Wrap(err, "unable to create adminPanel")
 	}
 
 	// Create the web interface registrationForm
@@ -164,11 +164,11 @@ func (mngr *Manager) findAccountByPredicate(predicate func(*data.Account) bool) 
 	return nil
 }
 
-// ShowPanel writes the panel HTTP output directly to the response writer.
-func (mngr *Manager) ShowPanel(w http.ResponseWriter) error {
-	// The panel only shows the stored accounts and offers actions through links, so let it use cloned data
+// ShowAdministrationPanel writes the adminPanel HTTP output directly to the response writer.
+func (mngr *Manager) ShowAdministrationPanel(w http.ResponseWriter) error {
+	// The adminPanel only shows the stored accounts and offers actions through links, so let it use cloned data
 	accounts := mngr.CloneAccounts(true)
-	return mngr.panel.Execute(w, &accounts)
+	return mngr.adminPanel.Execute(w, &accounts)
 }
 
 // ShowRegistrationForm writes the registration registrationForm HTTP output directly to the response writer.

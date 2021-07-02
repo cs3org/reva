@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package panel
+package admin
 
 import (
 	"html/template"
@@ -28,15 +28,15 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Panel represents the web interface panel of the accounts service.
-type Panel struct {
+// AdministrationPanel represents the web interface panel of the accounts service administration.
+type AdministrationPanel struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
 	tpl *template.Template
 }
 
-func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
+func (panel *AdministrationPanel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return errors.Errorf("no configuration provided")
 	}
@@ -57,7 +57,7 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 }
 
 // Execute generates the HTTP output of the panel and writes it to the response writer.
-func (panel *Panel) Execute(w http.ResponseWriter, accounts *data.Accounts) error {
+func (panel *AdministrationPanel) Execute(w http.ResponseWriter, accounts *data.Accounts) error {
 	type TemplateData struct {
 		Accounts *data.Accounts
 	}
@@ -70,10 +70,10 @@ func (panel *Panel) Execute(w http.ResponseWriter, accounts *data.Accounts) erro
 }
 
 // NewPanel creates a new web interface panel.
-func NewPanel(conf *config.Configuration, log *zerolog.Logger) (*Panel, error) {
-	panel := &Panel{}
+func NewPanel(conf *config.Configuration, log *zerolog.Logger) (*AdministrationPanel, error) {
+	panel := &AdministrationPanel{}
 	if err := panel.initialize(conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the panel")
+		return nil, errors.Wrapf(err, "unable to initialize the administration panel")
 	}
 	return panel, nil
 }
