@@ -70,6 +70,7 @@ type Manager interface {
 	FindUsers(ctx context.Context, query string) ([]*userpb.User, error)
 }
 
+// UserManager is the interface to implement to manipulate users via RPC
 type UserManager interface {
 	New(m map[string]interface{}) error
 	GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error)
