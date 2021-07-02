@@ -131,6 +131,7 @@ var responses = map[string]Response{
 	`POST /apps/sciencemesh/~alice/UpdateGrant {"path":"/subdir"}`: {200, ``, serverStateGrantUpdated},
 }
 
+// GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server
 func GetNextcloudServerMock() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		buf := new(strings.Builder)
