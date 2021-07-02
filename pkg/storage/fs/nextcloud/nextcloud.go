@@ -93,11 +93,13 @@ func NewNextcloudStorageDriver(c *NextcloudStorageDriverConfig) (*NextcloudStora
 	}, nil
 }
 
+// Action describes a REST request to forward to the Nextcloud backend
 type Action struct {
 	verb string
 	argS string
 }
 
+// SetHTTPClient sets the HTTP client
 func (nc *NextcloudStorageDriver) SetHTTPClient(c *http.Client) {
 	nc.client = c
 }
@@ -144,14 +146,19 @@ func (nc *NextcloudStorageDriver) do(a Action, endPoint string) (int, []byte, er
 	return resp.StatusCode, body, err
 }
 
+// GetHome as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) GetHome(ctx context.Context) (string, error) {
 	_, respBody, err := nc.do(Action{"GetHome", ""}, nc.endPoint)
 	return string(respBody), err
 }
+
+// CreateHome as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) CreateHome(ctx context.Context) error {
 	_, _, err := nc.do(Action{"CreateHome", ""}, nc.endPoint)
 	return err
 }
+
+// CreateDir as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) CreateDir(ctx context.Context, fn string) error {
 	data := make(map[string]string)
 	data["path"] = fn
@@ -162,6 +169,8 @@ func (nc *NextcloudStorageDriver) CreateDir(ctx context.Context, fn string) erro
 	_, _, err = nc.do(Action{"CreateDir", string(bodyStr)}, nc.endPoint)
 	return err
 }
+
+// Delete as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) Delete(ctx context.Context, ref *provider.Reference) error {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
@@ -170,6 +179,8 @@ func (nc *NextcloudStorageDriver) Delete(ctx context.Context, ref *provider.Refe
 	_, _, err = nc.do(Action{"Delete", string(bodyStr)}, nc.endPoint)
 	return err
 }
+
+// Move as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
 	data := make(map[string]string)
 	data["from"] = oldRef.Path
@@ -178,6 +189,8 @@ func (nc *NextcloudStorageDriver) Move(ctx context.Context, oldRef, newRef *prov
 	_, _, err := nc.do(Action{"Move", string(bodyStr)}, nc.endPoint)
 	return err
 }
+
+// GetMD as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
@@ -230,6 +243,8 @@ func (nc *NextcloudStorageDriver) GetMD(ctx context.Context, ref *provider.Refer
 
 	return md, nil
 }
+
+// ListFolder as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
@@ -269,8 +284,7 @@ func (nc *NextcloudStorageDriver) ListFolder(ctx context.Context, ref *provider.
 	return infos, err
 }
 
-// Copied from https://github.com/cs3org/reva/blob/a8c61401b662d8e09175416c0556da8ef3ba8ed6/pkg/storage/utils/eosfs/upload.go#L77-L81
-// This should fit into https://github.com/cs3org/reva/blob/9740eed/internal/grpc/services/storageprovider/storageprovider.go#L327
+// InitiateUpload as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	bodyStr, _ := json.Marshal(ref)
 	_, respBody, err := nc.do(Action{"InitiateUpload", string(bodyStr)}, nc.endPoint)
@@ -284,6 +298,8 @@ func (nc *NextcloudStorageDriver) InitiateUpload(ctx context.Context, ref *provi
 	}
 	return respMap, err
 }
+
+// Upload as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	bodyStr, _ := json.Marshal(ref)
 	err := nc.doUpload(r)
@@ -293,11 +309,15 @@ func (nc *NextcloudStorageDriver) Upload(ctx context.Context, ref *provider.Refe
 	_, _, err = nc.do(Action{"Upload", string(bodyStr)}, nc.endPoint)
 	return err
 }
+
+// Download as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"Download", string(bodyStr)}, nc.endPoint)
 	return nil, err
 }
+
+// ListRevisions as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
 	bodyStr, _ := json.Marshal(ref)
 	_, respBody, err := nc.do(Action{"ListRevisions", string(bodyStr)}, nc.endPoint)
@@ -324,16 +344,22 @@ func (nc *NextcloudStorageDriver) ListRevisions(ctx context.Context, ref *provid
 	}
 	return revs, err
 }
+
+// DownloadRevision as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error) {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"DownloadRevision", string(bodyStr)}, nc.endPoint)
 	return nil, err
 }
+
+// RestoreRevision as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"RestoreRevision", string(bodyStr)}, nc.endPoint)
 	return err
 }
+
+// ListRecycle as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
 	_, respBody, err := nc.do(Action{"ListRecycle", ""}, nc.endPoint)
 	if err != nil {
@@ -367,41 +393,55 @@ func (nc *NextcloudStorageDriver) ListRecycle(ctx context.Context) ([]*provider.
 	return items, err
 }
 
+// RestoreRecycleItem as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
 	bodyStr, _ := json.Marshal(restoreRef)
 	_, _, err := nc.do(Action{"RestoreRecycleItem", string(bodyStr)}, nc.endPoint)
 	return err
 }
+
+// PurgeRecycleItem as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) PurgeRecycleItem(ctx context.Context, key string) error {
 	bodyStr, _ := json.Marshal(key)
 	_, _, err := nc.do(Action{"PurgeRecycleItem", string(bodyStr)}, nc.endPoint)
 	return err
 }
+
+// EmptyRecycle as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) EmptyRecycle(ctx context.Context) error {
 	_, _, err := nc.do(Action{"EmptyRecycle", ""}, nc.endPoint)
 	return err
 }
+
+// GetPathByID as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	bodyStr, _ := json.Marshal(id)
 	_, respBody, err := nc.do(Action{"GetPathByID", string(bodyStr)}, nc.endPoint)
 	return string(respBody), err
 }
 
+// AddGrant as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"AddGrant", string(bodyStr)}, nc.endPoint)
 	return err
 }
+
+// RemoveGrant as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"RemoveGrant", string(bodyStr)}, nc.endPoint)
 	return err
 }
+
+// UpdateGrant as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"UpdateGrant", string(bodyStr)}, nc.endPoint)
 	return err
 }
+
+// ListGrants as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
 	bodyStr, _ := json.Marshal(ref)
 	_, respBody, err := nc.do(Action{"ListGrants", string(bodyStr)}, nc.endPoint)
@@ -466,23 +506,33 @@ func (nc *NextcloudStorageDriver) ListGrants(ctx context.Context, ref *provider.
 	}
 	return grants, err
 }
+
+// GetQuota as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	_, _, err := nc.do(Action{"GetQuota", ""}, nc.endPoint)
 	return 0, 0, err
 }
+
+// CreateReference as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	_, _, err := nc.do(Action{"CreateReference", fmt.Sprintf(`{"path":"%s"}`, path)}, nc.endPoint)
 	return err
 }
+
+// Shutdown as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) Shutdown(ctx context.Context) error {
 	_, _, err := nc.do(Action{"Shutdown", ""}, nc.endPoint)
 	return err
 }
+
+// SetArbitraryMetadata as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
 	bodyStr, _ := json.Marshal(md)
 	_, _, err := nc.do(Action{"SetArbitraryMetadata", string(bodyStr)}, nc.endPoint)
 	return err
 }
+
+// UnsetArbitrarymetadata as defined in the storage.FS interface
 func (nc *NextcloudStorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"UnsetArbitraryMetadata", string(bodyStr)}, nc.endPoint)
