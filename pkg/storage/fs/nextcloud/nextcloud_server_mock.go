@@ -25,6 +25,8 @@ import (
 	"strings"
 )
 
+// Response contains data for the Nextcloud mock server to respond
+// and to switch to a new server state
 type Response struct {
 	code           int
 	body           string

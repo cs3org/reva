@@ -42,18 +42,24 @@ func init() {
 	registry.Register("nextcloud", New)
 }
 
-type Config struct {
+// NextcloudStorageDriverConfig
+// Configuration for a NextcloudStorageDriver
+//
+
+type NextcloudStorageDriverConfig struct {
 	EndPoint string `mapstructure:"end_point"` // e.g. "http://nc/apps/sciencemesh/~alice/"
 	MockHTTP bool   `mapstructure:"mock_http"`
 }
 
-type Nextcloud struct {
+// NextcloudStorageDriver
+// Implementation of storage.FS that connects with a NextcloudStorageDriver server as its backend
+type NextcloudStorageDriver struct {
 	endPoint string
 	client   *http.Client
 }
 
-func parseConfig(m map[string]interface{}) (*Config, error) {
-	c := &Config{}
+func parseConfig(m map[string]interface{}) (*NextcloudStorageDriverConfig, error) {
+	c := &NextcloudStorageDriverConfig{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
@@ -69,10 +75,11 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	return NewNextcloud(conf)
+	return NewNextcloudStorageDriver(conf)
 }
 
-func NewNextcloud(c *Config) (*Nextcloud, error) {
+// NewNextcloudStorageDriver returns a new NextcloudStorageDriver
+func NewNextcloudStorageDriver(c *NextcloudStorageDriverConfig) (*NextcloudStorageDriver, error) {
 	var client *http.Client
 	if c.MockHTTP {
 		nextcloudServerMock := GetNextcloudServerMock()
@@ -80,7 +87,7 @@ func NewNextcloud(c *Config) (*Nextcloud, error) {
 	} else {
 		client = &http.Client{}
 	}
-	return &Nextcloud{
+	return &NextcloudStorageDriver{
 		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/~alice/"
 		client:   client,
 	}, nil
@@ -91,11 +98,11 @@ type Action struct {
 	argS string
 }
 
-func (nc *Nextcloud) SetHTTPClient(c *http.Client) {
+func (nc *NextcloudStorageDriver) SetHTTPClient(c *http.Client) {
 	nc.client = c
 }
 
-func (nc *Nextcloud) doUpload(r io.ReadCloser) error {
+func (nc *NextcloudStorageDriver) doUpload(r io.ReadCloser) error {
 	filePath := "test.txt"
 
 	// initialize http client
@@ -119,7 +126,7 @@ func (nc *Nextcloud) doUpload(r io.ReadCloser) error {
 	return err
 }
 
-func (nc *Nextcloud) do(a Action, endPoint string) (int, []byte, error) {
+func (nc *NextcloudStorageDriver) do(a Action, endPoint string) (int, []byte, error) {
 	url := endPoint + a.verb
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
@@ -137,15 +144,15 @@ func (nc *Nextcloud) do(a Action, endPoint string) (int, []byte, error) {
 	return resp.StatusCode, body, err
 }
 
-func (nc *Nextcloud) GetHome(ctx context.Context) (string, error) {
+func (nc *NextcloudStorageDriver) GetHome(ctx context.Context) (string, error) {
 	_, respBody, err := nc.do(Action{"GetHome", ""}, nc.endPoint)
 	return string(respBody), err
 }
-func (nc *Nextcloud) CreateHome(ctx context.Context) error {
+func (nc *NextcloudStorageDriver) CreateHome(ctx context.Context) error {
 	_, _, err := nc.do(Action{"CreateHome", ""}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) CreateDir(ctx context.Context, fn string) error {
+func (nc *NextcloudStorageDriver) CreateDir(ctx context.Context, fn string) error {
 	data := make(map[string]string)
 	data["path"] = fn
 	bodyStr, err := json.Marshal(data)
@@ -155,7 +162,7 @@ func (nc *Nextcloud) CreateDir(ctx context.Context, fn string) error {
 	_, _, err = nc.do(Action{"CreateDir", string(bodyStr)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) Delete(ctx context.Context, ref *provider.Reference) error {
+func (nc *NextcloudStorageDriver) Delete(ctx context.Context, ref *provider.Reference) error {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
 		return err
@@ -163,7 +170,7 @@ func (nc *Nextcloud) Delete(ctx context.Context, ref *provider.Reference) error 
 	_, _, err = nc.do(Action{"Delete", string(bodyStr)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
+func (nc *NextcloudStorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
 	data := make(map[string]string)
 	data["from"] = oldRef.Path
 	data["to"] = newRef.Path
@@ -171,7 +178,7 @@ func (nc *Nextcloud) Move(ctx context.Context, oldRef, newRef *provider.Referenc
 	_, _, err := nc.do(Action{"Move", string(bodyStr)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+func (nc *NextcloudStorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
 		return nil, err
@@ -223,7 +230,7 @@ func (nc *Nextcloud) GetMD(ctx context.Context, ref *provider.Reference, mdKeys 
 
 	return md, nil
 }
-func (nc *Nextcloud) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+func (nc *NextcloudStorageDriver) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
 		return nil, err
@@ -264,7 +271,7 @@ func (nc *Nextcloud) ListFolder(ctx context.Context, ref *provider.Reference, md
 
 // Copied from https://github.com/cs3org/reva/blob/a8c61401b662d8e09175416c0556da8ef3ba8ed6/pkg/storage/utils/eosfs/upload.go#L77-L81
 // This should fit into https://github.com/cs3org/reva/blob/9740eed/internal/grpc/services/storageprovider/storageprovider.go#L327
-func (nc *Nextcloud) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+func (nc *NextcloudStorageDriver) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	bodyStr, _ := json.Marshal(ref)
 	_, respBody, err := nc.do(Action{"InitiateUpload", string(bodyStr)}, nc.endPoint)
 	if err != nil {
@@ -277,7 +284,7 @@ func (nc *Nextcloud) InitiateUpload(ctx context.Context, ref *provider.Reference
 	}
 	return respMap, err
 }
-func (nc *Nextcloud) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (nc *NextcloudStorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	bodyStr, _ := json.Marshal(ref)
 	err := nc.doUpload(r)
 	if err != nil {
@@ -286,12 +293,12 @@ func (nc *Nextcloud) Upload(ctx context.Context, ref *provider.Reference, r io.R
 	_, _, err = nc.do(Action{"Upload", string(bodyStr)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+func (nc *NextcloudStorageDriver) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"Download", string(bodyStr)}, nc.endPoint)
 	return nil, err
 }
-func (nc *Nextcloud) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
+func (nc *NextcloudStorageDriver) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
 	bodyStr, _ := json.Marshal(ref)
 	_, respBody, err := nc.do(Action{"ListRevisions", string(bodyStr)}, nc.endPoint)
 	if err != nil {
@@ -317,17 +324,17 @@ func (nc *Nextcloud) ListRevisions(ctx context.Context, ref *provider.Reference)
 	}
 	return revs, err
 }
-func (nc *Nextcloud) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error) {
+func (nc *NextcloudStorageDriver) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error) {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"DownloadRevision", string(bodyStr)}, nc.endPoint)
 	return nil, err
 }
-func (nc *Nextcloud) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
+func (nc *NextcloudStorageDriver) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"RestoreRevision", string(bodyStr)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (nc *NextcloudStorageDriver) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
 	_, respBody, err := nc.do(Action{"ListRecycle", ""}, nc.endPoint)
 	if err != nil {
 		return nil, err
@@ -360,42 +367,42 @@ func (nc *Nextcloud) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, 
 	return items, err
 }
 
-func (nc *Nextcloud) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
+func (nc *NextcloudStorageDriver) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
 	bodyStr, _ := json.Marshal(restoreRef)
 	_, _, err := nc.do(Action{"RestoreRecycleItem", string(bodyStr)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) PurgeRecycleItem(ctx context.Context, key string) error {
+func (nc *NextcloudStorageDriver) PurgeRecycleItem(ctx context.Context, key string) error {
 	bodyStr, _ := json.Marshal(key)
 	_, _, err := nc.do(Action{"PurgeRecycleItem", string(bodyStr)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) EmptyRecycle(ctx context.Context) error {
+func (nc *NextcloudStorageDriver) EmptyRecycle(ctx context.Context) error {
 	_, _, err := nc.do(Action{"EmptyRecycle", ""}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+func (nc *NextcloudStorageDriver) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	bodyStr, _ := json.Marshal(id)
 	_, respBody, err := nc.do(Action{"GetPathByID", string(bodyStr)}, nc.endPoint)
 	return string(respBody), err
 }
 
-func (nc *Nextcloud) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (nc *NextcloudStorageDriver) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"AddGrant", string(bodyStr)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (nc *NextcloudStorageDriver) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"RemoveGrant", string(bodyStr)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (nc *NextcloudStorageDriver) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"UpdateGrant", string(bodyStr)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
+func (nc *NextcloudStorageDriver) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
 	bodyStr, _ := json.Marshal(ref)
 	_, respBody, err := nc.do(Action{"ListGrants", string(bodyStr)}, nc.endPoint)
 	if err != nil {
@@ -459,24 +466,24 @@ func (nc *Nextcloud) ListGrants(ctx context.Context, ref *provider.Reference) ([
 	}
 	return grants, err
 }
-func (nc *Nextcloud) GetQuota(ctx context.Context) (uint64, uint64, error) {
+func (nc *NextcloudStorageDriver) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	_, _, err := nc.do(Action{"GetQuota", ""}, nc.endPoint)
 	return 0, 0, err
 }
-func (nc *Nextcloud) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+func (nc *NextcloudStorageDriver) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	_, _, err := nc.do(Action{"CreateReference", fmt.Sprintf(`{"path":"%s"}`, path)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) Shutdown(ctx context.Context) error {
+func (nc *NextcloudStorageDriver) Shutdown(ctx context.Context) error {
 	_, _, err := nc.do(Action{"Shutdown", ""}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
+func (nc *NextcloudStorageDriver) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
 	bodyStr, _ := json.Marshal(md)
 	_, _, err := nc.do(Action{"SetArbitraryMetadata", string(bodyStr)}, nc.endPoint)
 	return err
 }
-func (nc *Nextcloud) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
+func (nc *NextcloudStorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"UnsetArbitraryMetadata", string(bodyStr)}, nc.endPoint)
 	return err

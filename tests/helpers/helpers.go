@@ -49,7 +49,7 @@ func TempDir(name string) (string, error) {
 	return tmpRoot, nil
 }
 
-// Thanks to https://itnext.io/how-to-stub-requests-to-remote-hosts-with-go-6c2c1db32bf2
+// TestingHTTPClient thanks to https://itnext.io/how-to-stub-requests-to-remote-hosts-with-go-6c2c1db32bf2
 func TestingHTTPClient(handler http.Handler) (*http.Client, func()) {
 	s := httptest.NewServer(handler)
 
