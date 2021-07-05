@@ -322,7 +322,11 @@ func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 		return "", err
 	}
 	layout := templates.WithUser(u, fs.c.UserLayout)
-	return filepath.Join(fs.c.DataDirectory, layout, "files_trashbin/files"), nil
+	return fs.getRecyclePathForUser(layout)
+}
+
+func (fs *ocfs) getRecyclePathForUser(user string) (string, error) {
+	return filepath.Join(fs.c.DataDirectory, user, "files_trashbin/files"), nil
 }
 
 func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
@@ -1280,7 +1284,8 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 		return errors.Wrap(err, "owncloudsql: error stating "+ip)
 	}
 
-	rp, err := fs.getRecyclePath(ctx)
+	// Delete file into the owner's trash, not the user's (in case of shares)
+	rp, err := fs.getRecyclePathForUser(fs.getOwner(ip))
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
@@ -1323,7 +1328,7 @@ func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) 
 	if err != nil {
 		return err
 	}
-	err = fs.filecache.Delete(storage, user.ContextMustGetUser(ctx).Username, fs.toDatabasePath(ctx, ip), fs.toDatabasePath(ctx, tgt))
+	err = fs.filecache.Delete(storage, fs.getOwner(ip), fs.toDatabasePath(ctx, ip), fs.toDatabasePath(ctx, tgt))
 	if err != nil {
 		return err
 	}
