@@ -473,7 +473,7 @@ func (c *Client) GetAttr(ctx context.Context, uid, gid, key, path string) (*eosc
 
 func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
 	// the string is in the form sys.forced.checksum="adler"
-	keyValue := strings.Split(attrStr, "=") // keyValue = ["sys.forced.checksum", "\"adler\""]
+	keyValue := strings.Split(strings.TrimSpace(attrStr), "=") // keyValue = ["sys.forced.checksum", "\"adler\""]
 	if len(keyValue) != 2 {
 		return nil, errtypes.InternalError("wrong attr format to deserialize")
 	}
