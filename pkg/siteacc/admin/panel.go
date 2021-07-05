@@ -28,14 +28,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// AdministrationPanel represents the web interface panel of the accounts service administration.
-type AdministrationPanel struct {
+// Panel represents the web interface panel of the accounts service administration.
+type Panel struct {
 	html.ContentProvider
 
 	htmlPanel *html.Panel
 }
 
-func (panel *AdministrationPanel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
+func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
 	// Create the internal HTML panel
 	htmlPanel, err := html.NewPanel("admin-panel", panel, conf, log)
 	if err != nil {
@@ -47,32 +47,32 @@ func (panel *AdministrationPanel) initialize(conf *config.Configuration, log *ze
 }
 
 // GetTitle returns the title of the htmlPanel.
-func (panel *AdministrationPanel) GetTitle() string {
-	return "Administration Panel"
+func (panel *Panel) GetTitle() string {
+	return "ScienceMesh Administration Panel"
 }
 
 // GetCaption returns the caption which is displayed on the htmlPanel.
-func (panel *AdministrationPanel) GetCaption() string {
+func (panel *Panel) GetCaption() string {
 	return "Accounts ({{.Accounts | len}})"
 }
 
 // GetContentJavaScript delivers additional JavaScript code.
-func (panel *AdministrationPanel) GetContentJavaScript() string {
+func (panel *Panel) GetContentJavaScript() string {
 	return tplJavaScript
 }
 
 // GetContentStyleSheet delivers additional stylesheet code.
-func (panel *AdministrationPanel) GetContentStyleSheet() string {
+func (panel *Panel) GetContentStyleSheet() string {
 	return tplStyleSheet
 }
 
 // GetContentBody delivers the actual body content.
-func (panel *AdministrationPanel) GetContentBody() string {
+func (panel *Panel) GetContentBody() string {
 	return tplBody
 }
 
 // Execute generates the HTTP output of the htmlPanel and writes it to the response writer.
-func (panel *AdministrationPanel) Execute(w http.ResponseWriter, accounts *data.Accounts) error {
+func (panel *Panel) Execute(w http.ResponseWriter, accounts *data.Accounts) error {
 	type TemplateData struct {
 		Accounts *data.Accounts
 	}
@@ -85,8 +85,8 @@ func (panel *AdministrationPanel) Execute(w http.ResponseWriter, accounts *data.
 }
 
 // NewPanel creates a new administration panel.
-func NewPanel(conf *config.Configuration, log *zerolog.Logger) (*AdministrationPanel, error) {
-	panel := &AdministrationPanel{}
+func NewPanel(conf *config.Configuration, log *zerolog.Logger) (*Panel, error) {
+	panel := &Panel{}
 	if err := panel.initialize(conf, log); err != nil {
 		return nil, errors.Wrapf(err, "unable to initialize the administration panel")
 	}

@@ -21,8 +21,8 @@ package config
 const (
 	// EndpointAdministration is the endpoint path of the web interface administration panel.
 	EndpointAdministration = "/admin"
-	// EndpointRegistration is the endpoint path of the web interface registration form.
-	EndpointRegistration = "/register"
+	// EndpointAccount is the endpoint path of the web interface account panel.
+	EndpointAccount = "/account"
 
 	// EndpointGenerateAPIKey is the endpoint path of the API key generator.
 	EndpointGenerateAPIKey = "/generate-api-key"

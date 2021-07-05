@@ -59,7 +59,7 @@ func getEndpoints() []endpoint {
 	endpoints := []endpoint{
 		// Form/panel endpoints
 		{config.EndpointAdministration, callAdministrationEndpoint, nil, false},
-		{config.EndpointRegistration, callRegistrationEndpoint, nil, true},
+		{config.EndpointAccount, callAccountEndpoint, nil, true},
 		// Request endpoints
 		{config.EndpointGenerateAPIKey, callMethodEndpoint, createMethodCallbacks(handleGenerateAPIKey, nil), false},
 		{config.EndpointVerifyAPIKey, callMethodEndpoint, createMethodCallbacks(handleVerifyAPIKey, nil), false},
@@ -80,14 +80,14 @@ func getEndpoints() []endpoint {
 func callAdministrationEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
 	if err := mngr.ShowAdministrationPanel(w); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface administration adminPanel: %v", err)))
+		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the administration panel: %v", err)))
 	}
 }
 
-func callRegistrationEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
-	if err := mngr.ShowRegistrationForm(w); err != nil {
+func callAccountEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
+	if err := mngr.ShowAccountPanel(w); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface registration registrationForm: %v", err)))
+		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the account panel: %v", err)))
 	}
 }
 

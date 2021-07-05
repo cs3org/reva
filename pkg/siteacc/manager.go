@@ -24,11 +24,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cs3org/reva/pkg/siteacc/account"
 	"github.com/cs3org/reva/pkg/siteacc/admin"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/email"
-	"github.com/cs3org/reva/pkg/siteacc/registration"
 	"github.com/cs3org/reva/pkg/siteacc/sitereg"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -54,9 +54,10 @@ type Manager struct {
 	accounts data.Accounts
 	storage  data.Storage
 
-	adminPanel       *admin.AdministrationPanel
-	registrationForm *registration.Form
-	smtp             *smtpclient.SMTPCredentials
+	adminPanel   *admin.Panel
+	accountPanel *account.Panel
+
+	smtp *smtpclient.SMTPCredentials
 
 	mutex sync.RWMutex
 }
@@ -82,18 +83,18 @@ func (mngr *Manager) initialize(conf *config.Configuration, log *zerolog.Logger)
 		return errors.Wrap(err, "unable to create accounts storage")
 	}
 
-	// Create the web interface adminPanel
+	// Create the admin panel
 	if pnl, err := admin.NewPanel(conf, log); err == nil {
 		mngr.adminPanel = pnl
 	} else {
-		return errors.Wrap(err, "unable to create adminPanel")
+		return errors.Wrap(err, "unable to create the administration panel")
 	}
 
-	// Create the web interface registrationForm
-	if frm, err := registration.NewForm(conf, log); err == nil {
-		mngr.registrationForm = frm
+	// Create the account panel
+	if pnl, err := account.NewPanel(conf, log); err == nil {
+		mngr.accountPanel = pnl
 	} else {
-		return errors.Wrap(err, "unable to create registrationForm")
+		return errors.Wrap(err, "unable to create the account panel")
 	}
 
 	// Create the SMTP client
@@ -164,16 +165,16 @@ func (mngr *Manager) findAccountByPredicate(predicate func(*data.Account) bool) 
 	return nil
 }
 
-// ShowAdministrationPanel writes the adminPanel HTTP output directly to the response writer.
+// ShowAdministrationPanel writes the administration panel HTTP output directly to the response writer.
 func (mngr *Manager) ShowAdministrationPanel(w http.ResponseWriter) error {
 	// The adminPanel only shows the stored accounts and offers actions through links, so let it use cloned data
 	accounts := mngr.CloneAccounts(true)
 	return mngr.adminPanel.Execute(w, &accounts)
 }
 
-// ShowRegistrationForm writes the registration registrationForm HTTP output directly to the response writer.
-func (mngr *Manager) ShowRegistrationForm(w http.ResponseWriter) error {
-	return mngr.registrationForm.Execute(w)
+// ShowAccountPanel writes the account panel HTTP output directly to the response writer.
+func (mngr *Manager) ShowAccountPanel(w http.ResponseWriter) error {
+	return mngr.accountPanel.Execute(w)
 }
 
 // CreateAccount creates a new account; if an account with the same email address already exists, an error is returned.

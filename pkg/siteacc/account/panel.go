@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package registration
+package account
 
 import (
 	"net/http"
@@ -27,64 +27,64 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Form represents the web interface form for user account registration.
-type Form struct {
+// Panel represents the account panel.
+type Panel struct {
 	html.ContentProvider
 
 	htmlPanel *html.Panel
 }
 
-func (form *Form) initialize(conf *config.Configuration, log *zerolog.Logger) error {
+func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
 	// Create the internal HTML panel
-	htmlPanel, err := html.NewPanel("registration-form", form, conf, log)
+	htmlPanel, err := html.NewPanel("account-panel", panel, conf, log)
 	if err != nil {
-		return errors.Wrap(err, "unable to create the registration form")
+		return errors.Wrap(err, "unable to create the account panel")
 	}
-	form.htmlPanel = htmlPanel
+	panel.htmlPanel = htmlPanel
 
 	return nil
 }
 
 // GetTitle returns the title of the htmlPanel.
-func (form *Form) GetTitle() string {
-	return "ScienceMesh Account Registration"
+func (panel *Panel) GetTitle() string {
+	return "ScienceMesh Account Panel"
 }
 
 // GetCaption returns the caption which is displayed on the htmlPanel.
-func (form *Form) GetCaption() string {
+func (panel *Panel) GetCaption() string {
 	return "Welcome to the ScienceMesh Account Registration!"
 }
 
 // GetContentJavaScript delivers additional JavaScript code.
-func (form *Form) GetContentJavaScript() string {
+func (panel *Panel) GetContentJavaScript() string {
 	return tplJavaScript
 }
 
 // GetContentStyleSheet delivers additional stylesheet code.
-func (form *Form) GetContentStyleSheet() string {
+func (panel *Panel) GetContentStyleSheet() string {
 	return tplStyleSheet
 }
 
 // GetContentBody delivers the actual body content.
-func (form *Form) GetContentBody() string {
+func (panel *Panel) GetContentBody() string {
 	return tplBody
 }
 
 // Execute generates the HTTP output of the form and writes it to the response writer.
-func (form *Form) Execute(w http.ResponseWriter) error {
+func (panel *Panel) Execute(w http.ResponseWriter) error {
 	type TemplateData struct {
 	}
 
 	tplData := TemplateData{}
 
-	return form.htmlPanel.Execute(w, tplData)
+	return panel.htmlPanel.Execute(w, tplData)
 }
 
-// NewForm creates a new web interface form.
-func NewForm(conf *config.Configuration, log *zerolog.Logger) (*Form, error) {
-	form := &Form{}
+// NewPanel creates a new account panel.
+func NewPanel(conf *config.Configuration, log *zerolog.Logger) (*Panel, error) {
+	form := &Panel{}
 	if err := form.initialize(conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the registration form")
+		return nil, errors.Wrapf(err, "unable to initialize the account panel")
 	}
 	return form, nil
 }
