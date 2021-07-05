@@ -1554,7 +1554,9 @@ func (fs *eosfs) GetOwners(ctx context.Context, ref *provider.Reference) (*group
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	ownerEOS, err := fs.c.GetAttr(ctx, uid, gid, "sys.auth.owner", p)
+	fn := fs.wrap(ctx, p)
+
+	ownerEOS, err := fs.c.GetAttr(ctx, uid, gid, "sys.auth.owner", fn)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error getting owner")
 	}
