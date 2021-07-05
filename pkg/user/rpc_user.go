@@ -62,10 +62,12 @@ func (m *RPCClient) New(ml map[string]interface{}) error {
 	return resp.Err
 }
 
+// GetUserArg for RPC
 type GetUserArg struct {
 	Uid *userpb.UserId
 }
 
+// GetUserReply for RPC
 type GetUserReply struct {
 	User *userpb.User
 	Err  error
@@ -81,11 +83,13 @@ func (m *RPCClient) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.Us
 	return resp.User, resp.Err
 }
 
+// GetUserByClaimArg for RPC
 type GetUserByClaimArg struct {
 	Claim string
 	Value string
 }
 
+// GetUserByClaimReply for RPC
 type GetUserByClaimReply struct {
 	User *userpb.User
 	Err  error
@@ -101,10 +105,12 @@ func (m *RPCClient) GetUserByClaim(ctx context.Context, claim, value string) (*u
 	return resp.User, resp.Err
 }
 
+// GetUserGroupsArg for RPC
 type GetUserGroupsArg struct {
 	User *userpb.UserId
 }
 
+// GetUserGroupsReply for RPC
 type GetUserGroupsReply struct {
 	Group []string
 	Err   error
@@ -120,10 +126,12 @@ func (m *RPCClient) GetUserGroups(ctx context.Context, user *userpb.UserId) ([]s
 	return resp.Group, resp.Err
 }
 
+// FindUsersArg for RPC
 type FindUsersArg struct {
 	Query string
 }
 
+// FindUserReply for RPC
 type FindUsersReply struct {
 	User []*userpb.User
 	Err  error
