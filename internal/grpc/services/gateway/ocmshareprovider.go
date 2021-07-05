@@ -347,7 +347,7 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 		TargetUri: targetURI,
 	}
 
-	c, err := s.findByPath(ctx, refPath)
+	c, _, err := s.findByPath(ctx, refPath)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
