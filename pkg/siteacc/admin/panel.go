@@ -19,44 +19,59 @@
 package admin
 
 import (
-	"html/template"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
+	"github.com/cs3org/reva/pkg/siteacc/html"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 // AdministrationPanel represents the web interface panel of the accounts service administration.
 type AdministrationPanel struct {
-	conf *config.Configuration
-	log  *zerolog.Logger
+	html.ContentProvider
 
-	tpl *template.Template
+	htmlPanel *html.Panel
 }
 
 func (panel *AdministrationPanel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
-	if conf == nil {
-		return errors.Errorf("no configuration provided")
+	// Create the internal HTML panel
+	htmlPanel, err := html.NewPanel("admin-panel", panel, conf, log)
+	if err != nil {
+		return errors.Wrap(err, "unable to create the administration panel")
 	}
-	panel.conf = conf
-
-	if log == nil {
-		return errors.Errorf("no logger provided")
-	}
-	panel.log = log
-
-	// Create the panel template
-	panel.tpl = template.New("panel")
-	if _, err := panel.tpl.Parse(panelTemplate); err != nil {
-		return errors.Wrap(err, "error while parsing panel template")
-	}
+	panel.htmlPanel = htmlPanel
 
 	return nil
 }
 
-// Execute generates the HTTP output of the panel and writes it to the response writer.
+// GetTitle returns the title of the htmlPanel.
+func (panel *AdministrationPanel) GetTitle() string {
+	return "Administration Panel"
+}
+
+// GetCaption returns the caption which is displayed on the htmlPanel.
+func (panel *AdministrationPanel) GetCaption() string {
+	return "Accounts ({{.Accounts | len}})"
+}
+
+// GetContentJavaScript delivers additional JavaScript code.
+func (panel *AdministrationPanel) GetContentJavaScript() string {
+	return tplJavaScript
+}
+
+// GetContentStyleSheet delivers additional stylesheet code.
+func (panel *AdministrationPanel) GetContentStyleSheet() string {
+	return tplStyleSheet
+}
+
+// GetContentBody delivers the actual body content.
+func (panel *AdministrationPanel) GetContentBody() string {
+	return tplBody
+}
+
+// Execute generates the HTTP output of the htmlPanel and writes it to the response writer.
 func (panel *AdministrationPanel) Execute(w http.ResponseWriter, accounts *data.Accounts) error {
 	type TemplateData struct {
 		Accounts *data.Accounts
@@ -66,10 +81,10 @@ func (panel *AdministrationPanel) Execute(w http.ResponseWriter, accounts *data.
 		Accounts: accounts,
 	}
 
-	return panel.tpl.Execute(w, tplData)
+	return panel.htmlPanel.Execute(w, tplData)
 }
 
-// NewPanel creates a new web interface panel.
+// NewPanel creates a new administration panel.
 func NewPanel(conf *config.Configuration, log *zerolog.Logger) (*AdministrationPanel, error) {
 	panel := &AdministrationPanel{}
 	if err := panel.initialize(conf, log); err != nil {

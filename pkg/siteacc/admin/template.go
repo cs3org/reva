@@ -18,47 +18,41 @@
 
 package admin
 
-const panelTemplate = `
-<!DOCTYPE html>
-<html>
-<head>	
-	<script>
-		function handleAction(action, email) {
-			var xhr = new XMLHttpRequest();
-	        xhr.open("POST", action);
-	        xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+const tplJavaScript = `
+function handleAction(action, email) {
+	var xhr = new XMLHttpRequest();
+    xhr.open("POST", action);
+    xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
 
-			xhr.onreadystatechange = function() {
-				if (this.readyState === XMLHttpRequest.DONE) {
-					if (this.status == 200) {
-						location.reload();	
-					} else {
-						console.log(this.responseText)
-					}
-	            }
+	setState(STATE_STATUS, "Performing request...");
+
+	xhr.onreadystatechange = function() {
+		if (this.readyState === XMLHttpRequest.DONE) {
+			if (this.status == 200) {
+				setState(STATE_SUCCESS, "Done! Reloading...");
+				location.reload();
+			} else {
+				setState(STATE_ERROR, "An error occurred while performing the request: " + this.responseText);
 			}
-	        
-			var postData = {
-	            "email": email,
-	        };
+        }
+	}
+    
+	var postData = {
+        "email": email,
+    };
 
-	        xhr.send(JSON.stringify(postData));
-		}
-	</script>
-	<style>
-		html * {
-			font-family: monospace !important;
-		}
-		button {
-			min-width: 140px;
-		}
-	</style>
-	<title>Accounts panel</title>
-</head>
-<body>
+    xhr.send(JSON.stringify(postData));
+}
+`
 
-<h1>Accounts ({{.Accounts | len}})</h1>
-<p>
+const tplStyleSheet = `
+html * {
+	font-family: monospace !important;
+}
+`
+
+const tplBody = `
+<div>
 	<ul>
 	{{range .Accounts}}
 		<li>
@@ -114,8 +108,5 @@ const panelTemplate = `
 		</li>
 	{{end}}
 	</ul>
-</p>
-
-</body>
-</html>
+</div>
 `

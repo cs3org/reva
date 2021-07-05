@@ -18,250 +18,147 @@
 
 package registration
 
-const formTemplate = `
-<!DOCTYPE html>
-<html>
-<head>	
-	<script>
-		function enableForm(enable) {
-			var form = document.getElementById("form");
-			var elements = form.elements;
-			for (var i = 0, len = elements.length; i < len; ++i) {
-				elements[i].disabled = !enable;
-			}
-		}
+const tplJavaScript = `
+function verifyForm(formData) {
+	if (formData.get("email") == "") {
+		setState(STATE_ERROR, "Please specify your email address.", "form", "email", true);
+		return false;
+	}
 
-		function setElementVisibility(id, visible) {
-			var elem = document.getElementById(id);
-			if (visible) {			
-				elem.classList.add("visible");
-				elem.classList.remove("hidden");
+	if (formData.get("fname") == "") {
+		setState(STATE_ERROR, "Please specify your first name.", "form", "fname", true);
+		return false;
+	}
+
+	if (formData.get("lname") == "") {
+		setState(STATE_ERROR, "Please specify your last name.", "form", "lname", true);	
+		return false;
+	}
+
+	if (formData.get("organization") == "") {
+		setState(STATE_ERROR, "Please specify your organization/company.", "form", "organization", true);
+		return false;
+	}
+
+	if (formData.get("password") == "") {
+		setState(STATE_ERROR, "Please set a password.", "form", "password", true);
+		return false;
+	}
+
+	if (formData.get("password2") == "") {
+		setState(STATE_ERROR, "Please confirm your password.", "form", "password2", true);
+		return false;
+	}
+
+	if (formData.get("password") != formData.get("password2")) {
+		setState(STATE_ERROR, "The entered passwords do not match.", "form", "password2", true);
+		return false;
+	}
+
+	return true;
+}
+
+function handleAction(action) {
+	const formData = new FormData(document.querySelector("form"));
+	if (!verifyForm(formData)) {
+		return;
+	}
+
+	setState(STATE_STATUS, "Sending registration... this should only take a moment.", "form", null, false);
+
+	var xhr = new XMLHttpRequest();
+    xhr.open("POST", action);
+    xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+
+	xhr.onreadystatechange = function() {
+		if (this.readyState === XMLHttpRequest.DONE) {
+			if (this.status == 200) {
+				setState(STATE_SUCCESS, "Your registration was successful! Please check your inbox for a confirmation email.");
 			} else {
-				elem.classList.remove("visible");
-				elem.classList.add("hidden");
+				var resp = JSON.parse(this.responseText);
+				setState(STATE_ERROR, "An error occurred while trying to register your account:<br><em>" + resp.error + "</em>", "form", null, true);
 			}
+        }
+	}
+
+	var postData = {
+        "email": formData.get("email"),
+		"firstName": formData.get("fname"),
+		"lastName": formData.get("lname"),
+		"organization": formData.get("organization"),
+		"website": formData.get("website"),
+		"phoneNumber": formData.get("phone"),
+		"password": {
+			"value": formData.get("password")
 		}
+    };
 
-		function setError(err, focusElem = "") {
-			setElementVisibility("error", true);
-			var elem = document.getElementById("error");
-			elem.innerHTML = err;
+    xhr.send(JSON.stringify(postData));
+}
+`
 
-			enableForm(true);
+const tplStyleSheet = `
+html * {
+	font-family: arial !important;
+}
 
-			if (focusElem != "") {
-				var elem = document.getElementById(focusElem);
-				elem.focus();
-			}
-		}
+.mandatory {
+	color: red;
+	font-weight: bold;
+}
+`
 
-		function verifyForm(formData) {
-			if (formData.get("email") == "") {
-				setError("Please specify your email address.", "email");
-				return false;
-			}
-
-			if (formData.get("fname") == "") {
-				setError("Please specify your first name.", "fname");
-				return false;
-			}
-
-			if (formData.get("lname") == "") {
-				setError("Please specify your last name.", "lname");
-				return false;
-			}
-
-			if (formData.get("organization") == "") {
-				setError("Please specify your organization/company.", "organization");
-				return false;
-			}
-
-			if (formData.get("password") == "") {
-				setError("Please set a password.", "password");
-				return false;
-			}
-
-			if (formData.get("password2") == "") {
-				setError("Please repeat your password.", "password2");
-				return false;
-			}
-
-			if (formData.get("password") != formData.get("password2")) {
-				setError("The entered passwords do not match.", "password2");
-				return false;
-			}
-
-			return true;
-		}
-
-		function handleAction(action) {
-			const formData = new FormData(document.querySelector("form"));
-			if (!verifyForm(formData)) {
-				return;
-			}
-
-			enableForm(false);
-			setElementVisibility("progress", true);
-			setElementVisibility("success", false);
-			setElementVisibility("error", false);
-
-			var xhr = new XMLHttpRequest();
-	        xhr.open("POST", action);
-	        xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
-
-			xhr.onreadystatechange = function() {
-				if (this.readyState === XMLHttpRequest.DONE) {
-					setElementVisibility("progress", false);
-
-					if (this.status == 200) {
-						setElementVisibility("success", true);
-					} else {
-						var resp = JSON.parse(this.responseText);
-						setError("An error occurred while trying to register your account:<br><em>" + resp.error + "</em>");
-					}
-	            }
-			}
-	
-			var postData = {
-	            "email": formData.get("email"),
-				"firstName": formData.get("fname"),
-				"lastName": formData.get("lname"),
-				"organization": formData.get("organization"),
-				"website": formData.get("website"),
-				"phoneNumber": formData.get("phone"),
-				"password": {
-					"value": formData.get("password")
-				}
-	        };
-
-	        xhr.send(JSON.stringify(postData));
-		}
-	</script>
-	<style>
-		html * {
-			font-family: arial !important;
-		}
-		form {
-			border-color: lightgray !important;
-		}
-		button {
-			min-width: 140px;
-		}
-		input {
-			width: 95%;
-		}
-		label {
-			font-weight: bold;
-		}
-
-		.box {
-			width: 100%;
-			border: 1px solid black;
-			border-radius: 10px;
-			padding: 10px;
-		}
-		.container {
-			width: 900px;
-			display: grid;
-			grid-gap: 10px;
-			position: absolute;
-			left: 50%;
-			transform: translate(-50%, 0);
-		}
-		.container-inline {
-			display: inline-grid;
-			grid-gap: 10px;
-		}
-		.mandatory {
-			color: red;
-			font-weight: bold;
-		}
-		.progress {
-			border-color: #F7B22A;
-			background: #FFEABF;
-		}
-		.success {
-			border-color: #3CAC3A;
-			background: #D3EFD2;
-		}
-		.error {
-			border-color: #F20000;
-			background: #F4D0D0;
-		}
-		.visible {
-			display: block;
-		}
-		.hidden {
-			display: none;
-		}
-	</style>
-	<title>ScienceMesh Account Registration</title>
-</head>
-<body>
-
-<div class="container">
-	<div><h1>Welcome to the ScienceMesh Account Registration!</h1></div>
-	<div>
-		<p>Fill out the form below to register for a ScienceMesh account. A confirmation email will be sent to you shortly after registration.</p>
-		<p>
-			After inspection by a ScienceMesh administrator, you will also receive an API key which can then be used in the
-			<a href="https://github.com/sciencemesh/oc-sciencemesh" target="_blank">ownCloud</a> or
-			<a href="https://github.com/sciencemesh/nc-sciencemesh" target="_blank">Nextcloud</a> web application.
-		</p>
-	</div>
-	<div>&nbsp;</div>
-	<div>
-		<form id="form" method="POST" class="box container-inline" style="width: 100%;">
-			<div style="grid-row: 1;"><label for="email">Email address: <span class="mandatory">*</span></label></div>
-			<div style="grid-row: 2;"><input type="text" id="email" name="email" placeholder="me@example.com"/></div>
-			<div style="grid-row: 3;"><label for="fname">First name: <span class="mandatory">*</span></label></div>
-			<div style="grid-row: 4;"><input type="text" id="fname" name="fname"/></div>
-			<div style="grid-row: 3;"><label for="lname">Last name: <span class="mandatory">*</span></label></div>
-			<div style="grid-row: 4;"><input type="text" id="lname" name="lname"/></div>
-
-			<div style="grid-row: 5;"><label for="organization">Organization/Company: <span class="mandatory">*</span></label></div>
-			<div style="grid-row: 6;"><input type="text" id="organization" name="organization"/></div>
-			<div style="grid-row: 5;"><label for="website">Website:</label></div>
-			<div style="grid-row: 6;"><input type="text" id="website" name="website" placeholder="https://www.example.com"/></div>
-
-			<div style="grid-row: 7;"><label for="phone">Phone number:</label></div>
-			<div style="grid-row: 8;"><input type="text" id="phone" name="phone" placeholder="+49 030 123456"/></div>
-
-			<div style="grid-row: 9;">&nbsp;</div>
-
-			<div style="grid-row: 10;"><label for="password">Password: <span class="mandatory">*</span></label></div>
-			<div style="grid-row: 11;"><input type="password" id="password" name="password"/></div>
-			<div style="grid-row: 10;"><label for="password2">Confirm password: <span class="mandatory">*</span></label></div>
-			<div style="grid-row: 11;"><input type="password" id="password2" name="password2"/></div>
-
-			<div style="grid-row: 12; font-style: italic; font-size: 0.8em;">
-				The password must fulfil the following criteria:
-				<ul style="margin-top: 0em;">
-					<li>Must be at least 8 characters long</li>
-					<li>Must contain at least 1 lowercase letter</li>
-					<li>Must contain at least 1 uppercase letter</li>
-					<li>Must contain at least 1 digit</li>
-				</ul>
-			</div>
-
-			<div style="grid-row: 13; align-self: center;">
-				Fields marked with <span class="mandatory">*</span> are mandatory.
-			</div>
-			<div style="grid-row: 13; grid-column: 2; text-align: right;">
-				<button type="reset">Reset</button>
-				<button type="button" style="font-weight: bold;" onClick="handleAction('create');">Register</button>
-			</div>
-		</form>	
-	</div>
-	<div id="progress" class="box progress hidden">
-		Sending registration...	this should only take a moment.
-	</div>
-	<div id="success" class="box success hidden">
-		Your registration was successful! Please check your inbox for a confirmation email.
-	</div>
-	<div id="error" class="box error hidden">
-	</div>
+const tplBody = `
+<div>
+	<p>Fill out the form below to register for a ScienceMesh account. A confirmation email will be sent to you shortly after registration.</p>
+	<p>
+		After inspection by a ScienceMesh administrator, you will also receive an API key which can then be used in the
+		<a href="https://github.com/sciencemesh/oc-sciencemesh" target="_blank">ownCloud</a> or
+		<a href="https://github.com/sciencemesh/nc-sciencemesh" target="_blank">Nextcloud</a> web application.
+	</p>
 </div>
-</body>
-</html>
+<div>&nbsp;</div>
+<div>
+	<form id="form" method="POST" class="box container-inline" style="width: 100%;">
+		<div style="grid-row: 1;"><label for="email">Email address: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 2;"><input type="text" id="email" name="email" placeholder="me@example.com"/></div>
+		<div style="grid-row: 3;"><label for="fname">First name: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 4;"><input type="text" id="fname" name="fname"/></div>
+		<div style="grid-row: 3;"><label for="lname">Last name: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 4;"><input type="text" id="lname" name="lname"/></div>
+
+		<div style="grid-row: 5;"><label for="organization">Organization/Company: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 6;"><input type="text" id="organization" name="organization"/></div>
+		<div style="grid-row: 5;"><label for="website">Website:</label></div>
+		<div style="grid-row: 6;"><input type="text" id="website" name="website" placeholder="https://www.example.com"/></div>
+
+		<div style="grid-row: 7;"><label for="phone">Phone number:</label></div>
+		<div style="grid-row: 8;"><input type="text" id="phone" name="phone" placeholder="+49 030 123456"/></div>
+
+		<div style="grid-row: 9;">&nbsp;</div>
+
+		<div style="grid-row: 10;"><label for="password">Password: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 11;"><input type="password" id="password" name="password"/></div>
+		<div style="grid-row: 10;"><label for="password2">Confirm password: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 11;"><input type="password" id="password2" name="password2"/></div>
+
+		<div style="grid-row: 12; font-style: italic; font-size: 0.8em;">
+			The password must fulfil the following criteria:
+			<ul style="margin-top: 0em;">
+				<li>Must be at least 8 characters long</li>
+				<li>Must contain at least 1 lowercase letter</li>
+				<li>Must contain at least 1 uppercase letter</li>
+				<li>Must contain at least 1 digit</li>
+			</ul>
+		</div>
+
+		<div style="grid-row: 13; align-self: center;">
+			Fields marked with <span class="mandatory">*</span> are mandatory.
+		</div>
+		<div style="grid-row: 13; grid-column: 2; text-align: right;">
+			<button type="reset">Reset</button>
+			<button type="button" style="font-weight: bold;" onClick="handleAction('create');">Register</button>
+		</div>
+	</form>	
+</div>
 `
