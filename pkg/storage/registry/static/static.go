@@ -43,9 +43,10 @@ func init() {
 var bracketRegex = regexp.MustCompile(`\[(.*?)\]`)
 
 type rule struct {
-	Mapping string            `mapstructure:"mapping"`
-	Address string            `mapstructure:"address"`
-	Aliases map[string]string `mapstructure:"aliases"`
+	Mapping    string            `mapstructure:"mapping"`
+	Address    string            `mapstructure:"address"`
+	ProviderId string            `mapstructure:"provider_id"`
+	Aliases    map[string]string `mapstructure:"aliases"`
 }
 
 type config struct {
@@ -173,6 +174,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 			}
 			if m := r.FindString(fn); m != "" {
 				match = &registrypb.ProviderInfo{
+					ProviderId:   rule.ProviderId,
 					ProviderPath: m,
 					Address:      addr,
 				}
@@ -182,6 +184,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 				combs := generateRegexCombinations(prefix)
 				for _, c := range combs {
 					shardedMatches = append(shardedMatches, &registrypb.ProviderInfo{
+						ProviderId:   rule.ProviderId,
 						ProviderPath: c,
 						Address:      addr,
 					})
