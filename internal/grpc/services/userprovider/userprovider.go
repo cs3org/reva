@@ -71,14 +71,14 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // getDriverPlugin fetches the runtime driver from the plugins package
-func getDriverPlugin(c *config) (user.UserManager, error) {
+func getDriverPlugin(c *config) (user.ManagerRPC, error) {
 	sym, err := c.load()
 	if err != nil {
 		return nil, err
 	}
 
 	// assert the loaded plugin into required interface
-	manager, ok := sym.(user.UserManager)
+	manager, ok := sym.(user.ManagerRPC)
 	if !ok {
 		return nil, fmt.Errorf("could not assert the loaded plugin")
 	}

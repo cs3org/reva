@@ -29,7 +29,7 @@ import (
 
 // pluginMap contains all the plugins that can be consumed.
 var pluginMap = map[string]plugin.Plugin{
-	"userprovider": &user.UserProviderPlugin{},
+	"userprovider": &user.ProviderPlugin{},
 }
 
 var handshake = plugin.HandshakeConfig{
@@ -38,7 +38,7 @@ var handshake = plugin.HandshakeConfig{
 	MagicCookieValue: "hello",
 }
 
-// Load loads the plugin using the hashicorp go-plugin sytem
+// Load loads the plugin using the hashicorp go-plugin system
 func Load(driver string, pluginType string) (interface{}, error) {
 	logger := hclog.New(&hclog.LoggerOptions{
 		Name:   "plugin",
