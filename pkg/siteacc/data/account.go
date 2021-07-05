@@ -37,6 +37,7 @@ type Account struct {
 	LastName     string `json:"lastName"`
 	Organization string `json:"organization"`
 	Website      string `json:"website"`
+	Role         string `json:"role"`
 	PhoneNumber  string `json:"phoneNumber"`
 
 	Password password.Password `json:"password"`
@@ -76,6 +77,7 @@ func (acc *Account) Update(other *Account, copyData bool) error {
 	acc.LastName = other.LastName
 	acc.Organization = other.Organization
 	acc.Website = other.Website
+	acc.Role = other.Role
 	acc.PhoneNumber = other.PhoneNumber
 
 	if copyData {
@@ -125,6 +127,9 @@ func (acc *Account) verify(verifyPassword bool) error {
 	if acc.Organization == "" {
 		return errors.Errorf("no organization provided")
 	}
+	if acc.Role == "" {
+		return errors.Errorf("no role provided")
+	}
 
 	if verifyPassword {
 		if !acc.Password.IsValid() {
@@ -136,7 +141,7 @@ func (acc *Account) verify(verifyPassword bool) error {
 }
 
 // NewAccount creates a new site account.
-func NewAccount(email string, firstName, lastName string, organization, website string, phoneNumber string, password string) (*Account, error) {
+func NewAccount(email string, firstName, lastName string, organization, website string, role string, phoneNumber string, password string) (*Account, error) {
 	t := time.Now()
 
 	acc := &Account{
@@ -145,6 +150,7 @@ func NewAccount(email string, firstName, lastName string, organization, website 
 		LastName:     lastName,
 		Organization: organization,
 		Website:      website,
+		Role:         role,
 		PhoneNumber:  phoneNumber,
 		DateCreated:  t,
 		DateModified: t,

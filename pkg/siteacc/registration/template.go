@@ -40,6 +40,11 @@ function verifyForm(formData) {
 		return false;
 	}
 
+	if (formData.get("role") == "") {
+		setState(STATE_ERROR, "Please specify your role within the organization/company.", "form", "role", true);
+		return false;
+	}
+
 	if (formData.get("password") == "") {
 		setState(STATE_ERROR, "Please set a password.", "form", "password", true);
 		return false;
@@ -87,6 +92,7 @@ function handleAction(action) {
 		"lastName": formData.get("lname"),
 		"organization": formData.get("organization"),
 		"website": formData.get("website"),
+		"role": formData.get("role"),
 		"phoneNumber": formData.get("phone"),
 		"password": {
 			"value": formData.get("password")
@@ -132,6 +138,8 @@ const tplBody = `
 		<div style="grid-row: 5;"><label for="website">Website:</label></div>
 		<div style="grid-row: 6;"><input type="text" id="website" name="website" placeholder="https://www.example.com"/></div>
 
+		<div style="grid-row: 7;"><label for="role">Role: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 8;"><input type="text" id="role" name="role" placeholder="Site administrator"/></div>
 		<div style="grid-row: 7;"><label for="phone">Phone number:</label></div>
 		<div style="grid-row: 8;"><input type="text" id="phone" name="phone" placeholder="+49 030 123456"/></div>
 

@@ -65,6 +65,7 @@ const tplBody = `
 					<ul style="padding-left: 1em;">
 						<li>Organization: {{.Organization}}</li>
 						<li>Website: <a href="{{.Website}}" target="_blank">{{.Website}}</a></li>
+						<li>Role: {{.Role}}</li>
 						<li>Phone: {{.PhoneNumber}}</li>
 					</ul>
 				</div>
