@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -55,7 +56,7 @@ func parseConfig(m map[string]interface{}) (*eosfs.Config, string, error) {
 
 	t, ok := m["mount_id_template"].(string)
 	if !ok || t == "" {
-		t = "eoshome-{{ trimAll \"/\" .Path | substr 0 1 }}"
+		t = "eoshome-{{substr 0 1 .Username}}"
 	}
 
 	return c, t, nil
@@ -94,8 +95,8 @@ func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 
 	// We need to extract the mount ID based on the mapping template.
 	//
-	// Take the first letter of the resource path after the namespace has been removed.
-	// If it's empty, leave it empty to be filled by storageprovider.
+	// Take the first letter of the username of the logged-in user, as the home
+	// storage provider restricts requests only to the home namespace.
 	res.Id.StorageId = w.getMountID(ctx, res)
 	return res, nil
 }
@@ -112,11 +113,9 @@ func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 }
 
 func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) string {
-	if r == nil {
-		return ""
-	}
+	u := user.ContextMustGetUser(ctx)
 	b := bytes.Buffer{}
-	if err := w.mountIDTemplate.Execute(&b, r); err != nil {
+	if err := w.mountIDTemplate.Execute(&b, u); err != nil {
 		return ""
 	}
 	return b.String()
