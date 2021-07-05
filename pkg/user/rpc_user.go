@@ -26,16 +26,16 @@ import (
 	"github.com/hashicorp/go-plugin"
 )
 
-// UserProviderPlugin is the implemenation of plugin.Plugin so we can serve/consume this.
-type UserProviderPlugin struct {
-	Impl UserManager
+// ProviderPlugin is the implemenation of plugin.Plugin so we can serve/consume this.
+type ProviderPlugin struct {
+	Impl ManagerRPC
 }
 
-func (p *UserProviderPlugin) Server(*plugin.MuxBroker) (interface{}, error) {
+func (p *ProviderPlugin) Server(*plugin.MuxBroker) (interface{}, error) {
 	return &RPCServer{Impl: p.Impl}, nil
 }
 
-func (p *UserProviderPlugin) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
+func (p *ProviderPlugin) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
 	return &RPCClient{Client: c}, nil
 }
 
@@ -64,7 +64,7 @@ func (m *RPCClient) New(ml map[string]interface{}) error {
 
 // GetUserArg for RPC
 type GetUserArg struct {
-	Uid *userpb.UserId
+	UID *userpb.UserId
 }
 
 // GetUserReply for RPC
@@ -74,7 +74,7 @@ type GetUserReply struct {
 }
 
 func (m *RPCClient) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
-	args := GetUserArg{Uid: uid}
+	args := GetUserArg{UID: uid}
 	resp := GetUserReply{}
 	err := m.Client.Call("Plugin.GetUser", args, &resp)
 	if err != nil {
@@ -150,7 +150,7 @@ func (m *RPCClient) FindUsers(ctx context.Context, query string) ([]*userpb.User
 // RPCServer is the server that RPCClient talks to, conforming to the requirements of net/rpc
 type RPCServer struct {
 	// This is the real implementation
-	Impl UserManager
+	Impl ManagerRPC
 }
 
 func (m *RPCServer) New(args NewArg, resp *NewReply) error {
@@ -159,7 +159,7 @@ func (m *RPCServer) New(args NewArg, resp *NewReply) error {
 }
 
 func (m *RPCServer) GetUser(args GetUserArg, resp *GetUserReply) error {
-	resp.User, resp.Err = m.Impl.GetUser(context.Background(), args.Uid)
+	resp.User, resp.Err = m.Impl.GetUser(context.Background(), args.UID)
 	return nil
 }
 
