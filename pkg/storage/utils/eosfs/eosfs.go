@@ -1578,6 +1578,10 @@ func (fs *eosfs) GetOwners(ctx context.Context, ref *provider.Reference) (*group
 		return nil, err
 	}
 
+	if groupResp.Status.Code != rpc.Code_CODE_OK {
+		return nil, errtypes.InternalError("eos GetOwners: " + groupResp.Status.Message)
+	}
+
 	return groupResp.Group, nil
 }
 
