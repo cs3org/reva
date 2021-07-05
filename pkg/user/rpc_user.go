@@ -131,7 +131,7 @@ type FindUsersArg struct {
 	Query string
 }
 
-// FindUserReply for RPC
+// FindUsersReply for RPC
 type FindUsersReply struct {
 	User []*userpb.User
 	Err  error
