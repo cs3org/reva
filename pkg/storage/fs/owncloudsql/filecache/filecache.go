@@ -146,8 +146,9 @@ type Scannable interface {
 }
 
 func (c *Cache) rowToFile(row Scannable) (*File, error) {
-	var fileid, storage, parent, mimetype, mimepart, size, mtime, storageMtime, encrypted, unencryptedSize, permissions int
-	var path, name, etag, checksum string
+	var fileid, storage, parent, mimetype, mimepart, size, mtime, storageMtime, encrypted, unencryptedSize int
+	var permissions sql.NullInt32
+	var path, name, etag, checksum sql.NullString
 	err := row.Scan(&fileid, &storage, &path, &parent, &permissions, &mimetype, &mimepart, &size, &mtime, &storageMtime, &encrypted, &unencryptedSize, &name, &etag, &checksum)
 	if err != nil {
 		return nil, err
@@ -156,9 +157,9 @@ func (c *Cache) rowToFile(row Scannable) (*File, error) {
 	return &File{
 		ID:              fileid,
 		Storage:         storage,
-		Path:            path,
+		Path:            path.String,
 		Parent:          parent,
-		Permissions:     permissions,
+		Permissions:     int(permissions.Int32),
 		MimeType:        mimetype,
 		MimePart:        mimepart,
 		Size:            size,
@@ -166,9 +167,9 @@ func (c *Cache) rowToFile(row Scannable) (*File, error) {
 		StorageMTime:    storageMtime,
 		Encrypted:       encrypted == 1,
 		UnencryptedSize: unencryptedSize,
-		Name:            name,
-		Etag:            etag,
-		Checksum:        checksum,
+		Name:            name.String,
+		Etag:            etag.String,
+		Checksum:        checksum.String,
 	}, nil
 }
 
