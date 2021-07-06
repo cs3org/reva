@@ -439,6 +439,10 @@ func (fs *localfs) GetOwners(ctx context.Context, ref *provider.Reference) (*gro
 	return grouputils.NewEmptyGroup(), nil
 }
 
+func (fs *localfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	return errtypes.NotSupported("localfs: deny grant not supported")
+}
+
 func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {

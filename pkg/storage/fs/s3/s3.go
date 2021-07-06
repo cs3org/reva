@@ -258,6 +258,10 @@ func (fs *s3FS) AddGrant(ctx context.Context, ref *provider.Reference, g *provid
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
+func (fs *s3FS) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	return errtypes.NotSupported("s3: operation not supported")
+}
+
 func (fs *s3FS) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
 	return nil, errtypes.NotSupported("s3: operation not supported")
 }

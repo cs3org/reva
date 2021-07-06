@@ -91,6 +91,7 @@ func (r *Role) OCSPermissions() Permissions {
 // S = Shared
 // R = Shareable
 // M = Mounted
+// Z = Deniable (NEW)
 func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) string {
 	var b strings.Builder
 	// b.Grow(7)
@@ -115,6 +116,11 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 	if isDir && r.ocsPermissions.Contain(PermissionCreate) {
 		fmt.Fprintf(&b, "CK")
 	}
+
+	if r.ocsPermissions.Contain(PermissionDeny) {
+		fmt.Fprintf(&b, "Z")
+	}
+
 	return b.String()
 }
 
@@ -400,6 +406,10 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		rp.UpdateGrant {
 		r.ocsPermissions |= PermissionShare
 	}
+	if rp.DenyGrant {
+		r.ocsPermissions |= PermissionDeny
+	}
+
 	if r.ocsPermissions.Contain(PermissionRead) {
 		if r.ocsPermissions.Contain(PermissionWrite) && r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) {
 			r.Name = RoleEditor

@@ -561,6 +561,50 @@ func (fs *eosfs) addGrantNonAtomic(ctx context.Context, ref *provider.Reference,
 
 }
 
+func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+
+	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return err
+	}
+
+	p, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error resolving reference")
+	}
+
+	fn := fs.wrap(ctx, p)
+
+	gs, err := fs.ListGrants(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	// empty permissions => deny
+	grant := &provider.Grant{
+		Grantee:     g,
+		Permissions: &provider.ResourcePermissions{},
+	}
+
+	// update list of grant
+	grants.AddGrant(&gs, grant)
+
+	acls, err := fs.getEosACLs(ctx, gs)
+	if err != nil {
+		return err
+	}
+
+	if err = fs.setACLs(ctx, fs.c, uid, gid, fn, acls); err != nil {
+		return errors.Wrap(err, "eosfs: error setting acls")
+	}
+	return nil
+
+}
+
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	// TODO(labkode): force using always eos set attr to store desired order of acls
 	return fs.addGrantNonAtomic(ctx, ref, g)
@@ -1661,6 +1705,7 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 			RestoreRecycleItem:   true,
 			Stat:                 true,
 			UpdateGrant:          true,
+			DenyGrant:            true,
 		}
 	}
 

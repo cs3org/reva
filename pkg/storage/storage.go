@@ -50,6 +50,7 @@ type FS interface {
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	GetOwners(ctx context.Context, ref *provider.Reference) (*grouppb.Group, error)
 	AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error
 	RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)

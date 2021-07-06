@@ -38,6 +38,9 @@ const (
 	PermissionDelete
 	// PermissionShare grants share permissions on a resource
 	PermissionShare
+	// PermissionDeny grants permissions to deny access on a resource
+	// The recipient of the resource will then have PermissionNone.
+	PermissionDeny
 	// PermissionNone grants no permissions on a resource
 	PermissionNone
 	// PermissionMax is to be used within value range checks
