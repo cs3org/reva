@@ -270,7 +270,7 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
+func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, pos uint, a *acl.Entry) error {
 	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
 	if err != nil {
 		return err
@@ -291,6 +291,13 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path st
 			return err
 		}
 	}
+
+	// set position of ACLs to add. The default is to append to the end, so no arguments will be added in this case
+	// the first position starts at 1 = eosclient.StartPosition
+	if pos != eosclient.EndPosition {
+		args = append(args, "--position", fmt.Sprint(pos))
+	}
+
 	args = append(args, sysACL, path)
 
 	cmd := exec.CommandContext(ctx, c.opt.EosBinary, args...)
@@ -329,7 +336,7 @@ func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path
 
 // UpdateACL updates the EOS acl.
 func (c *Client) UpdateACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
-	return c.AddACL(ctx, uid, gid, rootUID, rootGID, path, a)
+	return c.AddACL(ctx, uid, gid, rootUID, rootGID, path, eosclient.EndPosition, a)
 }
 
 // GetACL for a file
