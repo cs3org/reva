@@ -28,13 +28,15 @@ import (
 
 // ProviderPlugin is the implemenation of plugin.Plugin so we can serve/consume this.
 type ProviderPlugin struct {
-	Impl ManagerRPC
+	Impl Manager
 }
 
+// Server returns the RPC Server which serves the methods that the Client calls over net/rpc
 func (p *ProviderPlugin) Server(*plugin.MuxBroker) (interface{}, error) {
 	return &RPCServer{Impl: p.Impl}, nil
 }
 
+// Client returns interface implementation for the plugin that communicates to the server end of the plugin
 func (p *ProviderPlugin) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
 	return &RPCClient{Client: c}, nil
 }
@@ -42,19 +44,19 @@ func (p *ProviderPlugin) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}
 // RPCClient is an implementation of Manager that talks over RPC.
 type RPCClient struct{ Client *rpc.Client }
 
-// NewArg for RPC
-type NewArg struct {
+// ConfigureArg for RPC
+type ConfigureArg struct {
 	Ml map[string]interface{}
 }
 
-// NewReply for RPC
-type NewReply struct {
+// ConfigureReply for RPC
+type ConfigureReply struct {
 	Err error
 }
 
-func (m *RPCClient) New(ml map[string]interface{}) error {
-	args := NewArg{Ml: ml}
-	resp := NewReply{}
+func (m *RPCClient) Configure(ml map[string]interface{}) error {
+	args := ConfigureArg{Ml: ml}
+	resp := ConfigureReply{}
 	err := m.Client.Call("Plugin.New", args, &resp)
 	if err != nil {
 		return err
@@ -150,11 +152,11 @@ func (m *RPCClient) FindUsers(ctx context.Context, query string) ([]*userpb.User
 // RPCServer is the server that RPCClient talks to, conforming to the requirements of net/rpc
 type RPCServer struct {
 	// This is the real implementation
-	Impl ManagerRPC
+	Impl Manager
 }
 
-func (m *RPCServer) New(args NewArg, resp *NewReply) error {
-	resp.Err = m.Impl.New(args.Ml)
+func (m *RPCServer) Configure(args ConfigureArg, resp *ConfigureReply) error {
+	resp.Err = m.Impl.Configure(args.Ml)
 	return nil
 }
 

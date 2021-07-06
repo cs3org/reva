@@ -106,19 +106,26 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns a user manager implementation that makes calls to the GRAPPA API.
 func New(m map[string]interface{}) (user.Manager, error) {
-	c, err := parseConfig(m)
+	mgr := &manager{}
+	err := mgr.Configure(m)
 	if err != nil {
 		return nil, err
 	}
-	c.init()
+	return mgr, err
+}
 
+func (m *manager) Configure(ml map[string]interface{}) error {
+	c, err := parseConfig(ml)
+	if err != nil {
+		return err
+	}
+	c.init()
 	redisPool := initRedisPool(c.RedisAddress, c.RedisUsername, c.RedisPassword)
 	apiTokenManager := utils.InitAPITokenManager(c.TargetAPI, c.OIDCTokenEndpoint, c.ClientID, c.ClientSecret)
-	return &manager{
-		conf:            c,
-		redisPool:       redisPool,
-		apiTokenManager: apiTokenManager,
-	}, nil
+	m.conf = c
+	m.redisPool = redisPool
+	m.apiTokenManager = apiTokenManager
+	return nil
 }
 
 func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {

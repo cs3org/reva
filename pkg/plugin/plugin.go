@@ -22,15 +22,10 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/pluginregistry"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 )
-
-// pluginMap contains all the plugins that can be consumed.
-var pluginMap = map[string]plugin.Plugin{
-	"userprovider": &user.ProviderPlugin{},
-}
 
 var handshake = plugin.HandshakeConfig{
 	ProtocolVersion:  1,
@@ -48,7 +43,7 @@ func Load(driver string, pluginType string) (interface{}, error) {
 
 	client := plugin.NewClient(&plugin.ClientConfig{
 		HandshakeConfig: handshake,
-		Plugins:         pluginMap,
+		Plugins:         pluginregistry.PluginMap,
 		Cmd:             exec.Command(driver),
 		AllowedProtocols: []plugin.Protocol{
 			plugin.ProtocolNetRPC,

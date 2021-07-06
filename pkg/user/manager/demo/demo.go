@@ -40,8 +40,18 @@ type manager struct {
 
 // New returns a new user manager.
 func New(m map[string]interface{}) (user.Manager, error) {
+	mgr := &manager{}
+	err := mgr.Configure(m)
+	if err != nil {
+		return nil, err
+	}
+	return mgr, err
+}
+
+func (m *manager) Configure(ml map[string]interface{}) error {
 	cat := getUsers()
-	return &manager{catalog: cat}, nil
+	m.catalog = cat
+	return nil
 }
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
