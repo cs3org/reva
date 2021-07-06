@@ -28,18 +28,27 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type TemplateID = string
+
 // Panel provides basic HTML panel functionality.
 type Panel struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	provider ContentProvider
+	name string
 
-	tpl      *template.Template
-	sessions *SessionManager
+	provider PanelProvider
+
+	templates map[TemplateID]*template.Template
+	sessions  *SessionManager
 }
 
-func (panel *Panel) initialize(name string, provider ContentProvider, conf *config.Configuration, log *zerolog.Logger) error {
+func (panel *Panel) initialize(name string, provider PanelProvider, conf *config.Configuration, log *zerolog.Logger) error {
+	if name == "" {
+		return errors.Errorf("no name provided")
+	}
+	panel.name = name
+
 	if conf == nil {
 		return errors.Errorf("no configuration provided")
 	}
@@ -51,21 +60,12 @@ func (panel *Panel) initialize(name string, provider ContentProvider, conf *conf
 	panel.log = log
 
 	if provider == nil {
-		return errors.Errorf("no content provider provided")
+		return errors.Errorf("no panel provider provided")
 	}
 	panel.provider = provider
 
-	// Create the panel template
-	// TODO: Dynamic content; use session object for handling
-	content, err := panel.compile()
-	if err != nil {
-		return errors.Wrap(err, "error while compiling the panel template")
-	}
-
-	panel.tpl = template.New(name)
-	if _, err := panel.tpl.Parse(content); err != nil {
-		return errors.Wrap(err, "error while parsing the panel template")
-	}
+	// Create space for the panel templates
+	panel.templates = make(map[string]*template.Template, 5)
 
 	// Create the session mananger
 	sessions, err := NewSessionManager(name+"_session", conf, log)
@@ -77,33 +77,70 @@ func (panel *Panel) initialize(name string, provider ContentProvider, conf *conf
 	return nil
 }
 
-func (panel *Panel) compile() (string, error) {
+func (panel *Panel) compile(provider ContentProvider) (string, error) {
 	content := panelTemplate
 
 	// Replace placeholders by the values provided by the content provider
-	content = strings.ReplaceAll(content, "$(TITLE)", panel.provider.GetTitle())
-	content = strings.ReplaceAll(content, "$(CAPTION)", panel.provider.GetCaption())
+	content = strings.ReplaceAll(content, "$(TITLE)", provider.GetTitle())
+	content = strings.ReplaceAll(content, "$(CAPTION)", provider.GetCaption())
 
-	content = strings.ReplaceAll(content, "$(CONTENT_JAVASCRIPT)", panel.provider.GetContentJavaScript())
-	content = strings.ReplaceAll(content, "$(CONTENT_STYLESHEET)", panel.provider.GetContentStyleSheet())
-	content = strings.ReplaceAll(content, "$(CONTENT_BODY)", panel.provider.GetContentBody())
+	content = strings.ReplaceAll(content, "$(CONTENT_JAVASCRIPT)", provider.GetContentJavaScript())
+	content = strings.ReplaceAll(content, "$(CONTENT_STYLESHEET)", provider.GetContentStyleSheet())
+	content = strings.ReplaceAll(content, "$(CONTENT_BODY)", provider.GetContentBody())
 
 	return content, nil
 }
 
+// AddTemplate adds and compiles a new template.
+func (panel *Panel) AddTemplate(name TemplateID, provider ContentProvider) error {
+	name = panel.getFullTemplateName(name)
+
+	if provider == nil {
+		return errors.Errorf("no content provider provided")
+	}
+
+	content, err := panel.compile(provider)
+	if err != nil {
+		return errors.Wrapf(err, "error while compiling panel template %v", name)
+	}
+
+	tpl := template.New(name)
+	if _, err := tpl.Parse(content); err != nil {
+		return errors.Wrapf(err, "error while parsing panel template %v", name)
+	}
+	panel.templates[name] = tpl
+
+	return nil
+}
+
 // Execute generates the HTTP output of the panel and writes it to the response writer.
-func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, data interface{}) error {
-	// TODO: Use returned session
-	_, err := panel.sessions.HandleRequest(w, r)
+func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, dataProvider PanelDataProvider) error {
+	session, err := panel.sessions.HandleRequest(w, r)
 	if err != nil {
 		return errors.Wrap(err, "an error occurred while handling sessions")
 	}
 
-	return panel.tpl.Execute(w, data)
+	tplName := panel.getFullTemplateName(panel.provider.GetActiveTemplate(session))
+	tpl, ok := panel.templates[tplName]
+	if !ok {
+		return errors.Errorf("template %v not found", tplName)
+	}
+
+	// If a data provider is specified, use it to get additional template data
+	var data interface{}
+	if dataProvider != nil {
+		data = dataProvider(session)
+	}
+
+	return tpl.Execute(w, data)
+}
+
+func (panel *Panel) getFullTemplateName(name string) string {
+	return panel.name + "-" + name
 }
 
 // NewPanel creates a new panel.
-func NewPanel(name string, provider ContentProvider, conf *config.Configuration, log *zerolog.Logger) (*Panel, error) {
+func NewPanel(name string, provider PanelProvider, conf *config.Configuration, log *zerolog.Logger) (*Panel, error) {
 	panel := &Panel{}
 	if err := panel.initialize(name, provider, conf, log); err != nil {
 		return nil, errors.Wrapf(err, "unable to initialize the panel")

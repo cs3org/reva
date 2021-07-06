@@ -29,10 +29,15 @@ import (
 
 // Panel represents the account panel.
 type Panel struct {
+	html.PanelProvider
 	html.ContentProvider
 
 	htmlPanel *html.Panel
 }
+
+const (
+	templateRegister = "register"
+)
 
 func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
 	// Create the internal HTML panel
@@ -42,7 +47,17 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	}
 	panel.htmlPanel = htmlPanel
 
+	// Add all templates
+	if err := panel.htmlPanel.AddTemplate(templateRegister, panel); err != nil {
+		return errors.Wrap(err, "unable to create the registration template")
+	}
+
 	return nil
+}
+
+// GetActiveTemplate returns the name of the active template.
+func (panel *Panel) GetActiveTemplate(*html.Session) string {
+	return templateRegister
 }
 
 // GetTitle returns the title of the htmlPanel.
@@ -72,12 +87,13 @@ func (panel *Panel) GetContentBody() string {
 
 // Execute generates the HTTP output of the form and writes it to the response writer.
 func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request) error {
-	type TemplateData struct {
+	dataProvider := func(*html.Session) interface{} {
+		type TemplateData struct {
+		}
+
+		return TemplateData{}
 	}
-
-	tplData := TemplateData{}
-
-	return panel.htmlPanel.Execute(w, r, tplData)
+	return panel.htmlPanel.Execute(w, r, dataProvider)
 }
 
 // NewPanel creates a new account panel.

@@ -19,7 +19,6 @@
 package password
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -46,7 +45,6 @@ func (password *Password) Set(pwd string) error {
 		return errors.Wrap(err, "unable to generate password hash")
 	}
 	password.Value = string(pwdData)
-	fmt.Println(password.Value)
 	return nil
 }
 

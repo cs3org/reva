@@ -57,7 +57,7 @@ func (sess *Session) VerifyRequest(r *http.Request) error {
 	}
 
 	if r.RemoteAddr != sess.RemoteAddress {
-		return errors.Errorf("remote address has changed")
+		return errors.Errorf("remote address has changed (%v != %v)", r.RemoteAddr, sess.RemoteAddress)
 	}
 
 	return nil

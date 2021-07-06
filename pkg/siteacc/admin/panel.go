@@ -30,10 +30,15 @@ import (
 
 // Panel represents the web interface panel of the accounts service administration.
 type Panel struct {
+	html.PanelProvider
 	html.ContentProvider
 
 	htmlPanel *html.Panel
 }
+
+const (
+	templateMain = "main"
+)
 
 func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
 	// Create the internal HTML panel
@@ -43,7 +48,17 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	}
 	panel.htmlPanel = htmlPanel
 
+	// Add all templates
+	if err := panel.htmlPanel.AddTemplate(templateMain, panel); err != nil {
+		return errors.Wrap(err, "unable to create the main template")
+	}
+
 	return nil
+}
+
+// GetActiveTemplate returns the name of the active template.
+func (panel *Panel) GetActiveTemplate(*html.Session) string {
+	return templateMain
 }
 
 // GetTitle returns the title of the htmlPanel.
@@ -73,15 +88,16 @@ func (panel *Panel) GetContentBody() string {
 
 // Execute generates the HTTP output of the htmlPanel and writes it to the response writer.
 func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, accounts *data.Accounts) error {
-	type TemplateData struct {
-		Accounts *data.Accounts
-	}
+	dataProvider := func(*html.Session) interface{} {
+		type TemplateData struct {
+			Accounts *data.Accounts
+		}
 
-	tplData := TemplateData{
-		Accounts: accounts,
+		return TemplateData{
+			Accounts: accounts,
+		}
 	}
-
-	return panel.htmlPanel.Execute(w, r, tplData)
+	return panel.htmlPanel.Execute(w, r, dataProvider)
 }
 
 // NewPanel creates a new administration panel.
