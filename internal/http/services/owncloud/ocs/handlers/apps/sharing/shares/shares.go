@@ -243,23 +243,23 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 
 	switch shareType {
 	case int(conversions.ShareTypeUser):
-		// user collaborations default to coowner
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCoownerRole()); err == nil {
+		// user collaborations default to collab
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCollaboratorRole()); err == nil {
 			h.createUserShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypeGroup):
-		// group collaborations default to coowner
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCoownerRole()); err == nil {
+		// group collaborations default to collab
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCollaboratorRole()); err == nil {
 			h.createGroupShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
-		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewReaderRole()); err == nil {
 			h.createPublicLinkShare(w, r, statRes.Info)
 		}
 	case int(conversions.ShareTypeFederatedCloudShare):
 		// federated shares default to read only
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewReaderRole()); err == nil {
 			h.createFederatedCloudShare(w, r, statRes.Info, role, val)
 		}
 	default:
