@@ -72,7 +72,7 @@ func (panel *Panel) GetContentBody() string {
 }
 
 // Execute generates the HTTP output of the htmlPanel and writes it to the response writer.
-func (panel *Panel) Execute(w http.ResponseWriter, accounts *data.Accounts) error {
+func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, accounts *data.Accounts) error {
 	type TemplateData struct {
 		Accounts *data.Accounts
 	}
@@ -81,7 +81,7 @@ func (panel *Panel) Execute(w http.ResponseWriter, accounts *data.Accounts) erro
 		Accounts: accounts,
 	}
 
-	return panel.htmlPanel.Execute(w, tplData)
+	return panel.htmlPanel.Execute(w, r, tplData)
 }
 
 // NewPanel creates a new administration panel.

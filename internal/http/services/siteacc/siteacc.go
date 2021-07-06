@@ -82,6 +82,10 @@ func applyDefaultConfig(conf *config.Configuration) {
 	if conf.Storage.Driver == "" {
 		conf.Storage.Driver = "file"
 	}
+
+	if conf.Webserver.SessionTimeout < 60 {
+		conf.Webserver.SessionTimeout = 120
+	}
 }
 
 // New returns a new Site Accounts service.

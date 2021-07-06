@@ -71,13 +71,13 @@ func (panel *Panel) GetContentBody() string {
 }
 
 // Execute generates the HTTP output of the form and writes it to the response writer.
-func (panel *Panel) Execute(w http.ResponseWriter) error {
+func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request) error {
 	type TemplateData struct {
 	}
 
 	tplData := TemplateData{}
 
-	return panel.htmlPanel.Execute(w, tplData)
+	return panel.htmlPanel.Execute(w, r, tplData)
 }
 
 // NewPanel creates a new account panel.

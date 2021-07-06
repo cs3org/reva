@@ -78,14 +78,14 @@ func getEndpoints() []endpoint {
 }
 
 func callAdministrationEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
-	if err := mngr.ShowAdministrationPanel(w); err != nil {
+	if err := mngr.ShowAdministrationPanel(w, r); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the administration panel: %v", err)))
 	}
 }
 
 func callAccountEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
-	if err := mngr.ShowAccountPanel(w); err != nil {
+	if err := mngr.ShowAccountPanel(w, r); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the account panel: %v", err)))
 	}

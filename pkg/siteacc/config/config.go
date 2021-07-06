@@ -38,4 +38,8 @@ type Configuration struct {
 	SiteRegistration struct {
 		URL string `mapstructure:"url"`
 	} `mapstructure:"sitereg"`
+
+	Webserver struct {
+		SessionTimeout int `mapstructure:"session_timeout"`
+	} `mapstructure:"webserver"`
 }

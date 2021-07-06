@@ -111,3 +111,12 @@ The registration service URL.
 url = "https://iop.example.com/sitereg"
 {{< /highlight >}}
 {{% /dir %}}
+
+## Webserver settings
+{{% dir name="session_timeout" type="int" default="120" %}}
+The session timeout in seconds.
+{{< highlight toml >}}
+[http.services.siteacc.webserver]
+session_timeout = 600
+{{< /highlight >}}
+{{% /dir %}}

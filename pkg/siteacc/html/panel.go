@@ -35,7 +35,8 @@ type Panel struct {
 
 	provider ContentProvider
 
-	tpl *template.Template
+	tpl      *template.Template
+	sessions *SessionManager
 }
 
 func (panel *Panel) initialize(name string, provider ContentProvider, conf *config.Configuration, log *zerolog.Logger) error {
@@ -55,6 +56,7 @@ func (panel *Panel) initialize(name string, provider ContentProvider, conf *conf
 	panel.provider = provider
 
 	// Create the panel template
+	// TODO: Dynamic content; use session object for handling
 	content, err := panel.compile()
 	if err != nil {
 		return errors.Wrap(err, "error while compiling the panel template")
@@ -64,6 +66,13 @@ func (panel *Panel) initialize(name string, provider ContentProvider, conf *conf
 	if _, err := panel.tpl.Parse(content); err != nil {
 		return errors.Wrap(err, "error while parsing the panel template")
 	}
+
+	// Create the session mananger
+	sessions, err := NewSessionManager(name+"_session", conf, log)
+	if err != nil {
+		return errors.Wrap(err, "error while creating the session manager")
+	}
+	panel.sessions = sessions
 
 	return nil
 }
@@ -83,7 +92,13 @@ func (panel *Panel) compile() (string, error) {
 }
 
 // Execute generates the HTTP output of the panel and writes it to the response writer.
-func (panel *Panel) Execute(w http.ResponseWriter, data interface{}) error {
+func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, data interface{}) error {
+	// TODO: Use returned session
+	_, err := panel.sessions.HandleRequest(w, r)
+	if err != nil {
+		return errors.Wrap(err, "an error occurred while handling sessions")
+	}
+
 	return panel.tpl.Execute(w, data)
 }
 

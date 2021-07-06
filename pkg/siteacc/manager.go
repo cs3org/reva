@@ -166,15 +166,15 @@ func (mngr *Manager) findAccountByPredicate(predicate func(*data.Account) bool) 
 }
 
 // ShowAdministrationPanel writes the administration panel HTTP output directly to the response writer.
-func (mngr *Manager) ShowAdministrationPanel(w http.ResponseWriter) error {
+func (mngr *Manager) ShowAdministrationPanel(w http.ResponseWriter, r *http.Request) error {
 	// The adminPanel only shows the stored accounts and offers actions through links, so let it use cloned data
 	accounts := mngr.CloneAccounts(true)
-	return mngr.adminPanel.Execute(w, &accounts)
+	return mngr.adminPanel.Execute(w, r, &accounts)
 }
 
 // ShowAccountPanel writes the account panel HTTP output directly to the response writer.
-func (mngr *Manager) ShowAccountPanel(w http.ResponseWriter) error {
-	return mngr.accountPanel.Execute(w)
+func (mngr *Manager) ShowAccountPanel(w http.ResponseWriter, r *http.Request) error {
+	return mngr.accountPanel.Execute(w, r)
 }
 
 // CreateAccount creates a new account; if an account with the same email address already exists, an error is returned.
