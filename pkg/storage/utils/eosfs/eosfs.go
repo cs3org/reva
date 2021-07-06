@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
 	"github.com/cs3org/reva/pkg/eosclient/eosgrpc"
 	"github.com/cs3org/reva/pkg/errtypes"
+	grouputils "github.com/cs3org/reva/pkg/group/utils"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -493,6 +494,11 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
+	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return err
+	}
+
 	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
@@ -500,14 +506,12 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 
 	fn := fs.wrap(ctx, p)
 
-	eosACL, err := fs.getEosACL(ctx, g)
-	if err != nil {
-		return err
-	}
+	// position where put the ACL
+	position := eosclient.StartPosition
 
-	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
-	if err != nil {
-		return err
+	// is the permission is a denial, put always at the end
+	if grants.IsDenial(g) {
+		position = eosclient.EndPosition
 	}
 
 	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
@@ -515,12 +519,18 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, eosACL)
+	eosACL, err := fs.getEosACL(ctx, g)
+	if err != nil {
+		return err
+	}
+
+	err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, position, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error adding acl")
 	}
 
 	return nil
+
 }
 
 func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, error) {
@@ -1423,6 +1433,53 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef 
 	}
 
 	return fs.c.RestoreDeletedEntry(ctx, uid, gid, key)
+}
+
+func (fs *eosfs) GetOwners(ctx context.Context, ref *provider.Reference) (*grouppb.Group, error) {
+	u, err := getUser(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return nil, err
+	}
+
+	p, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: error resolving reference")
+	}
+
+	fn := fs.wrap(ctx, p)
+
+	ownerEOS, err := fs.c.GetAttr(ctx, uid, gid, "sys.auth.owner", fn)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: error getting owner")
+	}
+
+	// attribute's val is in the form "egroup:<egroup-name>"
+	if !strings.Contains(ownerEOS.Val, "egroup:") {
+		return grouputils.NewEmptyGroup(), nil
+	}
+	egroup := strings.Replace(ownerEOS.Val, "egroup:", "", 1)
+
+	// request the group object that corresponds to the egroup name
+	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
+	if err != nil {
+		return nil, err
+	}
+
+	groupResp, err := client.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{Claim: "group_name", Value: egroup})
+	if err != nil {
+		return nil, err
+	}
+
+	if groupResp.Status.Code != rpc.Code_CODE_OK {
+		return nil, errtypes.InternalError("eos GetOwners: " + groupResp.Status.Message)
+	}
+
+	return groupResp.Group, nil
 }
 
 func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) (*provider.RecycleItem, error) {

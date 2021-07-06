@@ -30,9 +30,11 @@ import (
 	"strconv"
 	"strings"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	grouputils "github.com/cs3org/reva/pkg/group/utils"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
@@ -232,6 +234,10 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 	}
 
 	return fs.lu.Path(ctx, node)
+}
+
+func (fs *Decomposedfs) GetOwners(ctx context.Context, ref *provider.Reference) (*grouppb.Group, error) {
+	return grouputils.NewEmptyGroup(), nil
 }
 
 // CreateDir creates the specified directory

@@ -27,7 +27,7 @@ import (
 
 // EOSClient is the interface which enables access to EOS instances through various interfaces.
 type EOSClient interface {
-	AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error
+	AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, position uint, a *acl.Entry) error
 	RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error
 	UpdateACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error
 	GetACL(ctx context.Context, uid, gid, path, aclType, target string) (*acl.Entry, error)
@@ -37,6 +37,7 @@ type EOSClient interface {
 	GetFileInfoByPath(ctx context.Context, uid, gid, path string) (*FileInfo, error)
 	SetAttr(ctx context.Context, uid, gid string, attr *Attribute, recursive bool, path string) error
 	UnsetAttr(ctx context.Context, uid, gid string, attr *Attribute, path string) error
+	GetAttr(ctx context.Context, uid, gid, name, path string) (*Attribute, error)
 	GetQuota(ctx context.Context, username, rootUID, rootGID, path string) (*QuotaInfo, error)
 	SetQuota(ctx context.Context, rootUID, rootGID string, info *SetQuotaInfo) error
 	Touch(ctx context.Context, uid, gid, path string) error
@@ -119,3 +120,9 @@ type SetQuotaInfo struct {
 	MaxBytes  uint64
 	MaxFiles  uint64
 }
+
+// Constants for ACL position
+const (
+	EndPosition   uint = 0
+	StartPosition uint = 1
+)

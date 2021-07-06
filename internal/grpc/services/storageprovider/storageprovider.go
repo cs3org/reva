@@ -28,16 +28,23 @@ import (
 	"strconv"
 	"strings"
 
+	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+
 	// link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	grouputils "github.com/cs3org/reva/pkg/group/utils"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/utils/grants"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -58,6 +65,7 @@ type config struct {
 	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
 	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
 	MimeTypes        map[string]string                 `mapstructure:"mimetypes" docs:"nil;List of supported mime types and corresponding file extensions."`
+	GatewaySvc       string                            `mapstructure:"gatewaysvc" docs:"/;Stores the endpoint at which the GRPC gateway is exposed."`
 }
 
 func (c *config) init() {
@@ -90,6 +98,9 @@ func (c *config) init() {
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
+
+	// get default GatewaySVC value if not set
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 type service struct {
@@ -920,6 +931,43 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 		return &provider.AddGrantResponse{
 			Status: status.NewInvalid(ctx, "grantee type is invalid"),
 		}, nil
+	}
+
+	// if the grant is a denial, check if the current user is an owner of the reference
+	if grants.IsDenial(req.Grant) {
+		user, ok := user.ContextGetUser(ctx)
+		if !ok {
+			return nil, errtypes.InternalError("user not found in context")
+		}
+
+		client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
+		if err != nil {
+			return nil, err
+		}
+
+		// get owner of the reference
+		owners, err := s.storage.GetOwners(ctx, req.Ref)
+		if err != nil {
+			return nil, err
+		}
+
+		// check if the group is empty
+		if grouputils.IsEmptyGroup(owners) {
+			return nil, errtypes.PermissionDenied("user is not an owner")
+		}
+
+		// check if the user is in the owner list
+		hasMemberResp, err := client.HasMember(ctx, &groupv1beta1.HasMemberRequest{
+			GroupId: owners.Id,
+			UserId:  user.Id,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if !hasMemberResp.Ok {
+			return nil, errtypes.PermissionDenied("user is not an owner")
+		}
 	}
 
 	err = s.storage.AddGrant(ctx, newRef, req.Grant)

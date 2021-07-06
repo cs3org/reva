@@ -153,7 +153,14 @@ func getGrantType(t string) provider.GranteeType {
 }
 
 func getSharePerm(p string) (*provider.ResourcePermissions, error) {
-	if p == viewerPermission {
+	switch p {
+	case viewerPermission:
+		return &provider.ResourcePermissions{
+			GetPath:       true,
+			ListContainer: true,
+			Stat:          true,
+		}, nil
+	case readerPermission:
 		return &provider.ResourcePermissions{
 			GetPath:              true,
 			InitiateFileDownload: true,
@@ -161,7 +168,7 @@ func getSharePerm(p string) (*provider.ResourcePermissions, error) {
 			ListContainer:        true,
 			Stat:                 true,
 		}, nil
-	} else if p == editorPermission {
+	case editorPermission:
 		return &provider.ResourcePermissions{
 			GetPath:              true,
 			InitiateFileDownload: true,
@@ -174,6 +181,25 @@ func getSharePerm(p string) (*provider.ResourcePermissions, error) {
 			RestoreFileVersion:   true,
 			Move:                 true,
 		}, nil
+	case collabPermission:
+		return &provider.ResourcePermissions{
+			GetPath:              true,
+			InitiateFileDownload: true,
+			ListFileVersions:     true,
+			ListContainer:        true,
+			Stat:                 true,
+			CreateContainer:      true,
+			Delete:               true,
+			InitiateFileUpload:   true,
+			RestoreFileVersion:   true,
+			Move:                 true,
+			AddGrant:             true,
+			UpdateGrant:          true,
+			RemoveGrant:          true,
+		}, nil
+	case denyPermission:
+		return &provider.ResourcePermissions{}, nil
+	default:
+		return nil, errors.New("invalid rol: " + p)
 	}
-	return nil, errors.New("invalid rol: " + p)
 }

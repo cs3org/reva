@@ -24,11 +24,17 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/google/go-cmp/cmp"
 )
 
 // GetACLPerm generates a string representation of CS3APIs' ResourcePermissions
 // TODO(labkode): fine grained permission controls.
 func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
+	// resource permission is denied
+	if cmp.Equal(provider.ResourcePermissions{}, *set) {
+		return "!r!w!x!m!u!d!c", nil
+	}
+
 	var b strings.Builder
 
 	if set.Stat || set.InitiateFileDownload {
@@ -61,7 +67,7 @@ func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 // EOS acls are a mix of ACLs and POSIX permissions. More details can be found in
 // https://github.com/cern-eos/eos/blob/master/doc/configuration/permission.rst
 func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermissions {
-	var rp provider.ResourcePermissions
+	var rp provider.ResourcePermissions // default to 0 == all denied
 
 	if strings.Contains(perm, "r") && !strings.Contains(perm, "!r") {
 		rp.GetPath = true
@@ -124,5 +130,50 @@ func GetGranteeType(aclType string) provider.GranteeType {
 		return provider.GranteeType_GRANTEE_TYPE_GROUP
 	default:
 		return provider.GranteeType_GRANTEE_TYPE_INVALID
+	}
+}
+
+// PermissionsEqual returns true if the permissions are equal
+func PermissionsEqual(p1, p2 *provider.ResourcePermissions) bool {
+	return p1 != nil && p2 != nil && cmp.Equal(*p1, *p2)
+}
+
+// GranteeEqual returns true if the grantee are equal
+func GranteeEqual(g1, g2 *provider.Grantee) bool {
+	return g1 != nil && g2 != nil && cmp.Equal(*g1, *g2)
+}
+
+// IsDenial return true if the grant is a denial grant
+func IsDenial(grant *provider.Grant) bool {
+	return PermissionsEqual(grant.Permissions, &provider.ResourcePermissions{})
+}
+
+// AddGrant adds the newGrant into the list of grants
+func AddGrant(grants *[]*provider.Grant, newGrant *provider.Grant) {
+	if IsDenial(newGrant) {
+		// a denial is appended to the list
+		RemoveGrant(grants, newGrant.Grantee)
+		*grants = append(*grants, newGrant)
+	} else {
+		// check if the grant is already in the list
+		for _, g := range *grants {
+			if GranteeEqual(g.Grantee, newGrant.Grantee) {
+				// update the permissions
+				g.Permissions = newGrant.Permissions
+				return
+			}
+		}
+		// add the grant in head
+		*grants = append([]*provider.Grant{newGrant}, *grants...)
+	}
+}
+
+// RemoveGrant remove the grantee's grant from the grants list
+func RemoveGrant(grants *[]*provider.Grant, grantee *provider.Grantee) {
+	for i, grant := range *grants {
+		if GranteeEqual(grant.Grantee, grantee) {
+			*grants = append((*grants)[:i], (*grants)[i+1:]...)
+			return
+		}
 	}
 }

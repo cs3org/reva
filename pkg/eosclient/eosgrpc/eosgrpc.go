@@ -270,8 +270,8 @@ func (c *Client) initMDRequest(ctx context.Context, uid, gid string) (*erpc.MDRe
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
-
+func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, pos uint, a *acl.Entry) error {
+	// TODO(gmgigi96): set position
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "AddACL").Str("uid,gid", uid+","+gid).Str("rootuid,rootgid", rootUID+","+rootGID).Str("path", path).Msg("")
 
@@ -372,7 +372,7 @@ func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path
 
 // UpdateACL updates the EOS acl.
 func (c *Client) UpdateACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
-	return c.AddACL(ctx, uid, gid, path, rootUID, rootGID, a)
+	return c.AddACL(ctx, uid, gid, path, rootUID, rootGID, eosclient.EndPosition, a)
 }
 
 // GetACL for a file
@@ -592,6 +592,11 @@ func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient
 	}
 	return err
 
+}
+
+// GetAttr returns the attribute specified by key
+func (c *Client) GetAttr(ctx context.Context, uid, gid, name, path string) (*eosclient.Attribute, error) {
+	return nil, errtypes.NotSupported("GetAttr function not yet implemented")
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path

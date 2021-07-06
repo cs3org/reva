@@ -67,6 +67,17 @@ func attrTypeToString(at eosclient.AttrType) string {
 	}
 }
 
+func attrStringToType(t string) (eosclient.AttrType, error) {
+	switch t {
+	case "sys":
+		return SystemAttr, nil
+	case "user":
+		return UserAttr, nil
+	default:
+		return 0, errtypes.InternalError("attr type not existing")
+	}
+}
+
 func isValidAttribute(a *eosclient.Attribute) bool {
 	// validate that an attribute is correct.
 	if (a.Type != SystemAttr && a.Type != UserAttr) || a.Key == "" {
@@ -259,7 +270,7 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
+func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, pos uint, a *acl.Entry) error {
 	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
 	if err != nil {
 		return err
@@ -276,10 +287,17 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path st
 			Key:  "eval.useracl",
 			Val:  "1",
 		}
-		if err = c.SetAttr(ctx, uid, gid, userACLAttr, false, path); err != nil {
+		if err = c.SetAttr(ctx, rootUID, rootGID, userACLAttr, false, path); err != nil {
 			return err
 		}
 	}
+
+	// set position of ACLs to add. The default is to append to the end, so no arguments will be added in this case
+	// the first position starts at 1 = eosclient.StartPosition
+	if pos != eosclient.EndPosition {
+		args = append(args, "--position", fmt.Sprint(pos))
+	}
+
 	args = append(args, sysACL, path)
 
 	cmd := exec.CommandContext(ctx, c.opt.EosBinary, args...)
@@ -318,7 +336,7 @@ func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path
 
 // UpdateACL updates the EOS acl.
 func (c *Client) UpdateACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
-	return c.AddACL(ctx, uid, gid, rootUID, rootGID, path, a)
+	return c.AddACL(ctx, uid, gid, rootUID, rootGID, path, eosclient.EndPosition, a)
 }
 
 // GetACL for a file
@@ -421,9 +439,9 @@ func (c *Client) SetAttr(ctx context.Context, uid, gid string, attr *eosclient.A
 	}
 	var cmd *exec.Cmd
 	if recursive {
-		cmd = exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "attr", "-r", "set", serializeAttribute(attr), path)
+		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "attr", "-r", "set", serializeAttribute(attr), path)
 	} else {
-		cmd = exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "attr", "set", serializeAttribute(attr), path)
+		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "attr", "set", serializeAttribute(attr), path)
 	}
 
 	_, _, err := c.executeEOS(ctx, cmd)
@@ -438,12 +456,45 @@ func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "attr", "-r", "rm", fmt.Sprintf("%d.%s", attr.Type, attr.Key), path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "attr", "-r", "rm", fmt.Sprintf("%d.%s", attr.Type, attr.Key), path)
 	_, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+// GetAttr returns the attribute specified by key
+func (c *Client) GetAttr(ctx context.Context, uid, gid, key, path string) (*eosclient.Attribute, error) {
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "attr", "get", key, path)
+	attrOut, _, err := c.executeEOS(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	attr, err := deserializeAttribute(attrOut)
+	if err != nil {
+		return nil, err
+	}
+	return attr, nil
+}
+
+func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
+	// the string is in the form sys.forced.checksum="adler"
+	keyValue := strings.Split(strings.TrimSpace(attrStr), "=") // keyValue = ["sys.forced.checksum", "\"adler\""]
+	if len(keyValue) != 2 {
+		return nil, errtypes.InternalError("wrong attr format to deserialize")
+	}
+	type2key := strings.SplitN(keyValue[0], ".", 2) // type2key = ["sys", "forced.checksum"]
+	if len(type2key) != 2 {
+		return nil, errtypes.InternalError("wrong attr format to deserialize")
+	}
+	t, err := attrStringToType(type2key[0])
+	if err != nil {
+		return nil, err
+	}
+	// trim \" from value
+	value := strings.Trim(keyValue[1], "\"")
+	return &eosclient.Attribute{Type: t, Key: type2key[1], Val: value}, nil
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path
@@ -470,7 +521,7 @@ func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eo
 
 // Touch creates a 0-size,0-replica file in the EOS namespace.
 func (c *Client) Touch(ctx context.Context, uid, gid, path string) error {
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "file", "touch", path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "touch", path)
 	_, _, err := c.executeEOS(ctx, cmd)
 	return err
 }
