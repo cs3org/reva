@@ -128,7 +128,7 @@ func (m *manager) getGroupByParam(ctx context.Context, param, val string) (map[s
 		return nil, err
 	}
 	if len(responseData) != 1 {
-		return nil, errors.New("rest: group not found")
+		return nil, errors.New("rest: group not found: " + param + ":" + val)
 	}
 
 	userData, ok := responseData[0].(map[string]interface{})
@@ -227,7 +227,7 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 	case "group_name":
 		claim = "groupIdentifier"
 	default:
-		return nil, errors.New("rest: invalid field")
+		return nil, errors.New("rest: invalid field: " + claim)
 	}
 
 	groupData, err := m.getGroupByParam(ctx, claim, value)

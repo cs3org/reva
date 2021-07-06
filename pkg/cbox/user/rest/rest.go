@@ -129,7 +129,7 @@ func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[st
 		return nil, err
 	}
 	if len(responseData) != 1 {
-		return nil, errors.New("rest: user not found")
+		return nil, errors.New("rest: user not found: " + param + ":" + val)
 	}
 
 	userData, ok := responseData[0].(map[string]interface{})
@@ -230,7 +230,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	case "username":
 		claim = "upn"
 	default:
-		return nil, errors.New("rest: invalid field")
+		return nil, errors.New("rest: invalid field: " + claim)
 	}
 
 	userData, err := m.getUserByParam(ctx, claim, value)
@@ -294,7 +294,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	case emailRegex.MatchString(query):
 		filters = []string{"primaryAccountEmail"}
 	default:
-		return nil, errors.New("rest: illegal characters present in query")
+		return nil, errors.New("rest: illegal characters present in query: " + query)
 	}
 
 	users := make(map[string]*userpb.User)
