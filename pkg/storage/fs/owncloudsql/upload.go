@@ -58,7 +58,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 			return err
 		}
 		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
-			return errors.Wrap(err, "ocfs: error retrieving upload")
+			return errors.Wrap(err, "owncloudsql: error retrieving upload")
 		}
 	}
 
@@ -67,7 +67,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 	p := uploadInfo.info.Storage["InternalDestination"]
 	ok, err := chunking.IsChunked(p)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error checking path")
+		return errors.Wrap(err, "owncloudsql: error checking path")
 	}
 	if ok {
 		var assembledFile string
@@ -77,14 +77,14 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 		}
 		if p == "" {
 			if err = uploadInfo.Terminate(ctx); err != nil {
-				return errors.Wrap(err, "ocfs: error removing auxiliary files")
+				return errors.Wrap(err, "owncloudsql: error removing auxiliary files")
 			}
 			return errtypes.PartialContent(ref.String())
 		}
 		uploadInfo.info.Storage["InternalDestination"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "ocfs: error opening assembled file")
+			return errors.Wrap(err, "owncloudsql: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -92,7 +92,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
-		return errors.Wrap(err, "ocfs: error writing to binary file")
+		return errors.Wrap(err, "owncloudsql: error writing to binary file")
 	}
 
 	return uploadInfo.FinishUpload(ctx)
@@ -103,7 +103,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error resolving reference")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// permissions are checked in NewUpload below
@@ -155,16 +155,16 @@ func (fs *ocfs) UseIn(composer *tusd.StoreComposer) {
 func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("info", info).Msg("ocfs: NewUpload")
+	log.Debug().Interface("info", info).Msg("owncloudsql: NewUpload")
 
 	if info.MetaData["filename"] == "" {
-		return nil, errors.New("ocfs: missing filename in metadata")
+		return nil, errors.New("owncloudsql: missing filename in metadata")
 	}
 	info.MetaData["filename"] = filepath.Clean(info.MetaData["filename"])
 
 	dir := info.MetaData["dir"]
 	if dir == "" {
-		return nil, errors.New("ocfs: missing dir in metadata")
+		return nil, errors.New("owncloudsql: missing dir in metadata")
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
@@ -189,16 +189,16 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
-	log.Debug().Interface("info", info).Msg("ocfs: resolved filename")
+	log.Debug().Interface("info", info).Msg("owncloudsql: resolved filename")
 
 	info.ID = uuid.New().String()
 
 	binPath, err := fs.getUploadPath(ctx, info.ID)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error resolving upload path")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving upload path")
 	}
 	usr := user.ContextMustGetUser(ctx)
 	storageID, err := fs.getUserStorage(ctx)
@@ -219,7 +219,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		"StorageId": strconv.Itoa(storageID),
 	}
 	// Create binary file in the upload folder with no content
-	log.Debug().Interface("info", info).Msg("ocfs: built storage info")
+	log.Debug().Interface("info", info).Msg("owncloudsql: built storage info")
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
 	if err != nil {
 		return nil, err
@@ -235,7 +235,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	}
 
 	if !info.SizeIsDeferred && info.Size == 0 {
-		log.Debug().Interface("info", info).Msg("ocfs: finishing upload for empty file")
+		log.Debug().Interface("info", info).Msg("owncloudsql: finishing upload for empty file")
 		// no need to create info file and finish directly
 		err := u.FinishUpload(ctx)
 		if err != nil {
@@ -375,27 +375,11 @@ func (upload *fileUpload) writeInfo() error {
 // FinishUpload finishes an upload and moves the file to the internal destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
-	/*
-		checksum := upload.info.MetaData["checksum"]
-		if checksum != "" {
-			// TODO check checksum
-			s := strings.SplitN(checksum, " ", 2)
-			if len(s) == 2 {
-				alg, hash := s[0], s[1]
-
-			}
-		}
-	*/
-
 	ip := upload.info.Storage["InternalDestination"]
 
 	// if destination exists
 	// TODO check etag with If-Match header
 	if _, err := os.Stat(ip); err == nil {
-		// copy attributes of existing file to tmp file
-		if err := upload.fs.copyMD(ip, upload.binPath); err != nil {
-			return errors.Wrap(err, "ocfs: error copying metadata from "+ip+" to "+upload.binPath)
-		}
 		// create revision
 		if err := upload.fs.archiveRevision(upload.ctx, upload.fs.getVersionsPath(upload.ctx, ip), ip); err != nil {
 			return err
@@ -412,7 +396,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		log.Err(err).Interface("info", upload.info).
 			Str("binPath", upload.binPath).
 			Str("ipath", ip).
-			Msg("ocfs: could not rename")
+			Msg("owncloudsql: could not rename")
 		return err
 	}
 
@@ -440,7 +424,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// only delete the upload if it was successfully written to the storage
 	if err := os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
-			log.Err(err).Interface("info", upload.info).Msg("ocfs: could not delete upload info")
+			log.Err(err).Interface("info", upload.info).Msg("owncloudsql: could not delete upload info")
 			return err
 		}
 	}
