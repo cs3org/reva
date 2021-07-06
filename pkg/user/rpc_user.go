@@ -54,6 +54,7 @@ type ConfigureReply struct {
 	Err error
 }
 
+// Configure RPCClient configure method
 func (m *RPCClient) Configure(ml map[string]interface{}) error {
 	args := ConfigureArg{Ml: ml}
 	resp := ConfigureReply{}
@@ -75,6 +76,7 @@ type GetUserReply struct {
 	Err  error
 }
 
+// GetUser RPCClient GetUser method
 func (m *RPCClient) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	args := GetUserArg{UID: uid}
 	resp := GetUserReply{}
@@ -97,6 +99,7 @@ type GetUserByClaimReply struct {
 	Err  error
 }
 
+// GetUserByClaim RPCClient GetUserByClaim method
 func (m *RPCClient) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
 	args := GetUserByClaimArg{Claim: claim, Value: value}
 	resp := GetUserByClaimReply{}
@@ -118,6 +121,7 @@ type GetUserGroupsReply struct {
 	Err   error
 }
 
+// GetUserGroups RPCClient GetUserGroups method
 func (m *RPCClient) GetUserGroups(ctx context.Context, user *userpb.UserId) ([]string, error) {
 	args := GetUserGroupsArg{User: user}
 	resp := GetUserGroupsReply{}
@@ -139,6 +143,7 @@ type FindUsersReply struct {
 	Err  error
 }
 
+// FindUsers RPCClient FindUsers method
 func (m *RPCClient) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 	args := FindUsersArg{Query: query}
 	resp := FindUsersReply{}
@@ -155,26 +160,31 @@ type RPCServer struct {
 	Impl Manager
 }
 
+// Configure RPCServer Configure method
 func (m *RPCServer) Configure(args ConfigureArg, resp *ConfigureReply) error {
 	resp.Err = m.Impl.Configure(args.Ml)
 	return nil
 }
 
+// GetUser RPCServer GetUser method
 func (m *RPCServer) GetUser(args GetUserArg, resp *GetUserReply) error {
 	resp.User, resp.Err = m.Impl.GetUser(context.Background(), args.UID)
 	return nil
 }
 
+// GetUserByClaim RPCServer GetUserByClaim method
 func (m *RPCServer) GetUserByClaim(args GetUserByClaimArg, resp *GetUserByClaimReply) error {
 	resp.User, resp.Err = m.Impl.GetUserByClaim(context.Background(), args.Claim, args.Value)
 	return nil
 }
 
+// GetUserGroups RPCServer GetUserGroups method
 func (m *RPCServer) GetUserGroups(args GetUserGroupsArg, resp *GetUserGroupsReply) error {
 	resp.Group, resp.Err = m.Impl.GetUserGroups(context.Background(), args.User)
 	return nil
 }
 
+// FindUsers RPCServer FindUsers method
 func (m *RPCServer) FindUsers(args FindUsersArg, resp *FindUsersReply) error {
 	resp.User, resp.Err = m.Impl.FindUsers(context.Background(), args.Query)
 	return nil
