@@ -55,7 +55,7 @@ func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret strin
 		if c.Secret == clientSecret {
 			var scopes map[string]*authpb.Scope
 			var err error
-			if c.User.Id.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
+			if c.User.Id != nil && c.User.Id.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
 				scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
 				if err != nil {
 					return nil, nil, err

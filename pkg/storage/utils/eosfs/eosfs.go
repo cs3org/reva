@@ -1651,7 +1651,7 @@ func (fs *eosfs) extractUIDAndGID(u *userpb.User) (eosclient.Authorization, erro
 	if u.GidNumber == 0 {
 		return eosclient.Authorization{}, errors.New("eosfs: gid missing for user")
 	}
-	return eosclient.Authorization{Role: eosclient.Role{strconv.FormatInt(u.UidNumber, 10), strconv.FormatInt(u.GidNumber, 10)}}, nil
+	return eosclient.Authorization{Role: eosclient.Role{UID: strconv.FormatInt(u.UidNumber, 10), GID: strconv.FormatInt(u.GidNumber, 10)}}, nil
 }
 
 func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient.Authorization, error) {
