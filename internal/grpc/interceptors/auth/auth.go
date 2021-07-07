@@ -292,7 +292,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 						continue
 					}
 					for _, share := range shares.Shares {
-						if utils.ResourceEqual(share.Share.ResourceId, ref.GetId()) {
+						if utils.ResourceIDEqual(share.Share.ResourceId, ref.GetResourceId()) {
 							return u, nil
 						}
 					}

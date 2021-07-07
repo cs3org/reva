@@ -281,9 +281,7 @@ func (s *svc) expandScopes(ctx context.Context, scopeMap map[string]*authpb.Scop
 
 func (s *svc) statAndAddResource(ctx context.Context, r *storageprovider.ResourceId, role authpb.Role, scopeMap map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
 	statReq := &storageprovider.StatRequest{
-		Ref: &storageprovider.Reference{
-			Spec: &storageprovider.Reference_Id{Id: r},
-		},
+		Ref: &storageprovider.Reference{ResourceId: r},
 	}
 	statResponse, err := s.Stat(ctx, statReq)
 	if err != nil {
