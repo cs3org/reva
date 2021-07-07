@@ -239,7 +239,7 @@ func (c *Client) buildFullURL(urlpath, uid, gid string) (string, error) {
 		return "", err
 	}
 
-	u, err = u.Parse(urlpath)
+	u, err = u.Parse(url.PathEscape(urlpath))
 	if err != nil {
 		return "", err
 	}
