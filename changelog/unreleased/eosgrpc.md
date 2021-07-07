@@ -1,3 +1,3 @@
-Enhancement: EOEGrpc progress. Logging discipline and error handling
+Minor fixes to the grpc/http plugin: checksum, url escaping
 
-https://github.com/cs3org/reva/pull/1471
+https://github.com/cs3org/reva/pull/1868
