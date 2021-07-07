@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cs3org/reva/pkg/siteacc/account"
+	accpanel "github.com/cs3org/reva/pkg/siteacc/account"
 	"github.com/cs3org/reva/pkg/siteacc/admin"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
@@ -55,7 +55,7 @@ type Manager struct {
 	storage  data.Storage
 
 	adminPanel   *admin.Panel
-	accountPanel *account.Panel
+	accountPanel *accpanel.Panel
 
 	smtp *smtpclient.SMTPCredentials
 
@@ -91,7 +91,7 @@ func (mngr *Manager) initialize(conf *config.Configuration, log *zerolog.Logger)
 	}
 
 	// Create the account panel
-	if pnl, err := account.NewPanel(conf, log); err == nil {
+	if pnl, err := accpanel.NewPanel(conf, log); err == nil {
 		mngr.accountPanel = pnl
 	} else {
 		return errors.Wrap(err, "unable to create the account panel")
@@ -348,6 +348,21 @@ func (mngr *Manager) CloneAccounts(erasePasswords bool) data.Accounts {
 	}
 
 	return clones
+}
+
+// AuthenticateUser tries to authenticate a given username/password pair. On success, the corresponding user account is returned.
+func (mngr *Manager) AuthenticateUser(name, password string) (*data.Account, error) {
+	account, err := mngr.findAccount(FindByEmail, name)
+	if err != nil {
+		return nil, errors.Wrap(err, "no account with the specified email exists")
+	}
+
+	// Verify the provided password
+	if !account.Password.Compare(password) {
+		return nil, errors.Errorf("invalid password")
+	}
+
+	return account, nil
 }
 
 func newManager(conf *config.Configuration, log *zerolog.Logger) (*Manager, error) {

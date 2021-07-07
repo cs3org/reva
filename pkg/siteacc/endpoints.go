@@ -70,6 +70,8 @@ func getEndpoints() []endpoint {
 		{config.EndpointCreate, callMethodEndpoint, createMethodCallbacks(nil, handleCreate), true},
 		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
+		// Authentication endpoints
+		{config.EndpointAuthenticate, callMethodEndpoint, createMethodCallbacks(nil, handleAuthenticate), true},
 		// Authorization endpoints
 		{config.EndpointAuthorize, callMethodEndpoint, createMethodCallbacks(nil, handleAuthorize), false},
 		{config.EndpointIsAuthorized, callMethodEndpoint, createMethodCallbacks(handleIsAuthorized, nil), false},
@@ -265,6 +267,20 @@ func handleUnregisterSite(mngr *Manager, values url.Values, body []byte) (interf
 	// Unregister the account's site through the account manager
 	if err := mngr.UnregisterAccountSite(account); err != nil {
 		return nil, errors.Wrap(err, "unable to unregister the site of the given account")
+	}
+
+	return nil, nil
+}
+
+func handleAuthenticate(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
+	account, err := unmarshalRequestData(body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Authenticate the user through the account manager
+	if _, err := mngr.AuthenticateUser(account.Email, account.Password.Value); err != nil {
+		return nil, errors.Wrap(err, "unable to authenticate user")
 	}
 
 	return nil, nil
