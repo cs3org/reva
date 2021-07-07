@@ -146,11 +146,11 @@ type Client struct {
 }
 
 // New creates a new client with the given options.
-func New(opt *Options) *Client {
+func New(opt *Options) (*Client, error) {
 	opt.init()
 	c := new(Client)
 	c.opt = opt
-	return c
+	return c, nil
 }
 
 // executeXRDCopy executes xrdcpy commands and returns the stdout, stderr and return code

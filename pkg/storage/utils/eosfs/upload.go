@@ -34,7 +34,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
-	auth, err := fs.getUserUIDAndGID(ctx, u)
+	auth, err := fs.getUserAuth(ctx, u)
 	if err != nil {
 		return err
 	}
