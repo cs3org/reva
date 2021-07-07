@@ -557,7 +557,11 @@ func (fs *ocfs) getUserStorage(ctx context.Context) (int, error) {
 	if !ok {
 		return -1, fmt.Errorf("could not get user for context")
 	}
-	return fs.filecache.GetNumericStorageID("home::" + user.Username)
+	id, err := fs.filecache.GetNumericStorageID("home::" + user.Username)
+	if err != nil {
+		id, err = fs.filecache.CreateStorage("home::" + user.Username)
+	}
+	return id, err
 }
 
 func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip string, sp string, mdKeys []string) (*provider.ResourceInfo, error) {

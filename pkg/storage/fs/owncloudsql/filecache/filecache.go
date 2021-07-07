@@ -80,6 +80,47 @@ func (c *Cache) GetNumericStorageID(id string) (int, error) {
 	}
 }
 
+// CreateStorage creates a new storage and returns its numeric id
+func (c *Cache) CreateStorage(id string) (int, error) {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return -1, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.Prepare("INSERT INTO oc_storages(id) VALUES(?)")
+	if err != nil {
+		return -1, err
+	}
+	defer stmt.Close()
+
+	res, err := stmt.Exec(id)
+	if err != nil {
+		return -1, err
+	}
+	insertedId, err := res.LastInsertId()
+	if err != nil {
+		return -1, err
+	}
+
+	data := map[string]interface{}{
+		"path":     "",
+		"etag":     "",
+		"mimetype": "httpd/unix-directory",
+	}
+	_, err = c.doInsertOrUpdate(tx, int(insertedId), data, true)
+	if err != nil {
+		return -1, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return -1, err
+	}
+
+	return int(insertedId), err
+}
+
 // GetStorageOwner returns the username of the owner of the given storage
 func (c *Cache) GetStorageOwner(numericId interface{}) (string, error) {
 	numericId, err := toIntID(numericId)
@@ -220,6 +261,23 @@ func (c *Cache) Permissions(storage interface{}, p string) (*provider.ResourcePe
 
 // InsertOrUpdate creates or updates a cache entry
 func (c *Cache) InsertOrUpdate(storage interface{}, data map[string]interface{}) (int, error) {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return -1, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	id, err := c.doInsertOrUpdate(tx, storage, data, false)
+
+	err = tx.Commit()
+	if err != nil {
+		return -1, err
+	}
+
+	return id, err
+}
+
+func (c *Cache) doInsertOrUpdate(tx *sql.Tx, storage interface{}, data map[string]interface{}, allowEmptyParent bool) (int, error) {
 	storageID, err := toIntID(storage)
 	if err != nil {
 		return -1, err
@@ -241,10 +299,15 @@ func (c *Cache) InsertOrUpdate(storage interface{}, data map[string]interface{})
 		parentPath = ""
 	}
 	parent, err := c.Get(storageID, parentPath)
-	if err != nil {
-		return -1, fmt.Errorf("could not find parent %s, %s, %v, %w", parentPath, path, parent, err)
+	if err == nil {
+		data["parent"] = parent.ID
+	} else {
+		if allowEmptyParent {
+			data["parent"] = -1
+		} else {
+			return -1, fmt.Errorf("could not find parent %s, %s, %v, %w", parentPath, path, parent, err)
+		}
 	}
-	data["parent"] = parent.ID
 	data["name"] = filepath.Base(path)
 	if _, exists := data["checksum"]; !exists {
 		data["checksum"] = ""
@@ -280,7 +343,7 @@ func (c *Cache) InsertOrUpdate(storage interface{}, data map[string]interface{})
 		placeholders = append(placeholders, "?")
 	}
 
-	err = c.InsertMimetype(data["mimetype"].(string))
+	err = c.insertMimetype(tx, data["mimetype"].(string))
 	if err != nil {
 		return -1, err
 	}
@@ -301,7 +364,7 @@ func (c *Cache) InsertOrUpdate(storage interface{}, data map[string]interface{})
 	}
 	query += strings.Join(updates, ",")
 
-	stmt, err := c.db.Prepare(query)
+	stmt, err := tx.Prepare(query)
 	if err != nil {
 		return -1, err
 	}
@@ -507,9 +570,8 @@ func (c *Cache) SetEtag(storage interface{}, path, etag string) error {
 	return err
 }
 
-// InsertMimetype adds a new mimetype to the database
-func (c *Cache) InsertMimetype(mimetype string) error {
-	stmt, err := c.db.Prepare("INSERT INTO oc_mimetypes(mimetype) VALUES(?)")
+func (c *Cache) insertMimetype(tx *sql.Tx, mimetype string) error {
+	stmt, err := tx.Prepare("INSERT INTO oc_mimetypes(mimetype) VALUES(?)")
 	if err != nil {
 		return err
 	}

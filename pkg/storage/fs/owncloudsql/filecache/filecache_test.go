@@ -79,6 +79,21 @@ var _ = Describe("Filecache", func() {
 		})
 	})
 
+	Describe("CreateStorage", func() {
+		It("creates the storage and a root item", func() {
+			id, err := cache.CreateStorage("bar")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(id > 0).To(BeTrue())
+
+			owner, err := cache.GetStorageOwner(id)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(owner).To(Equal("bar"))
+
+			file, err := cache.Get(1, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(file).ToNot(BeNil())
+		})
+	})
 	Describe("GetStorageOwnerByFileID", func() {
 		It("returns the owner", func() {
 			owner, err := cache.GetStorageOwnerByFileID("10")
