@@ -433,6 +433,7 @@ func hasNodeID(s *provider.StorageSpace) bool {
 }
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+	log := appctx.GetLogger(ctx)
 	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters)
 	if err != nil {
 		var st *rpc.Status
@@ -461,6 +462,8 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			if spaces[i].Root.StorageId == "" {
 				spaces[i].Root.StorageId = s.mountID
 			}
+		} else if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
+			log.Warn().Str("service", "storageprovider").Str("driver", s.conf.Driver).Interface("space", spaces[i]).Msg("space is missing space id and root id")
 		}
 	}
 

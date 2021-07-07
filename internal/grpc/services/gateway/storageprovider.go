@@ -196,8 +196,13 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	uniqueSpaces := map[string]*provider.StorageSpace{}
 	for i := range providers {
 		if errors[i] != nil {
-			log.Debug().Err(errors[i]).Msg("skipping provider")
-			continue
+			if len(providers) > 1 {
+				log.Debug().Err(errors[i]).Msg("skipping provider")
+				continue
+			}
+			return &provider.ListStorageSpacesResponse{
+				Status: status.NewStatusFromErrType(ctx, "error listing space", errors[i]),
+			}, nil
 		}
 		for j := range spacesFromProviders[i] {
 			uniqueSpaces[spacesFromProviders[i][j].Id.OpaqueId] = spacesFromProviders[i][j]
@@ -206,6 +211,11 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	spaces := make([]*provider.StorageSpace, 0, len(uniqueSpaces))
 	for spaceID := range uniqueSpaces {
 		spaces = append(spaces, uniqueSpaces[spaceID])
+	}
+	if len(spaces) == 0 {
+		return &provider.ListStorageSpacesResponse{
+			Status: status.NewNotFound(ctx, "space not found"),
+		}, nil
 	}
 
 	return &provider.ListStorageSpacesResponse{

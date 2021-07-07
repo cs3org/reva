@@ -577,7 +577,6 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 					// do not list shares as spaces for the owner
 					continue
 				}
-				space.Name = n.Name
 			} else {
 				space.Name = "root" // do not expose the id as name, this is the root of a space
 				// TODO read from extended attribute for project / group spaces
