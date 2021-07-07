@@ -57,7 +57,7 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 }
 
 // GetActiveTemplate returns the name of the active template.
-func (panel *Panel) GetActiveTemplate(*html.Session) string {
+func (panel *Panel) GetActiveTemplate(*html.Session, string) string {
 	return templateMain
 }
 

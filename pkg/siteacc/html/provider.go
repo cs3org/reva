@@ -21,7 +21,7 @@ package html
 // PanelProvider handles general panel tasks.
 type PanelProvider interface {
 	// GetActiveTemplate returns the name of the active template.
-	GetActiveTemplate(*Session) string
+	GetActiveTemplate(*Session, string) string
 }
 
 type PanelDataProvider = func(*Session) interface{}

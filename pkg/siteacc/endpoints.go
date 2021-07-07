@@ -60,17 +60,20 @@ func getEndpoints() []endpoint {
 		// Form/panel endpoints
 		{config.EndpointAdministration, callAdministrationEndpoint, nil, false},
 		{config.EndpointAccount, callAccountEndpoint, nil, true},
-		// Request endpoints
+		// API key endpoints
 		{config.EndpointGenerateAPIKey, callMethodEndpoint, createMethodCallbacks(handleGenerateAPIKey, nil), false},
 		{config.EndpointVerifyAPIKey, callMethodEndpoint, createMethodCallbacks(handleVerifyAPIKey, nil), false},
 		{config.EndpointAssignAPIKey, callMethodEndpoint, createMethodCallbacks(nil, handleAssignAPIKey), false},
+		// General account endpoints
 		{config.EndpointList, callMethodEndpoint, createMethodCallbacks(handleList, nil), false},
 		{config.EndpointFind, callMethodEndpoint, createMethodCallbacks(handleFind, nil), false},
 		{config.EndpointCreate, callMethodEndpoint, createMethodCallbacks(nil, handleCreate), true},
 		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
+		// Authorization endpoints
 		{config.EndpointAuthorize, callMethodEndpoint, createMethodCallbacks(nil, handleAuthorize), false},
 		{config.EndpointIsAuthorized, callMethodEndpoint, createMethodCallbacks(handleIsAuthorized, nil), false},
+		// Account site endpoints
 		{config.EndpointUnregisterSite, callMethodEndpoint, createMethodCallbacks(nil, handleUnregisterSite), false},
 	}
 

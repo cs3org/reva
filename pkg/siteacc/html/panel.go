@@ -43,6 +43,10 @@ type Panel struct {
 	sessions  *SessionManager
 }
 
+const (
+	pathParameterName = "path"
+)
+
 func (panel *Panel) initialize(name string, provider PanelProvider, conf *config.Configuration, log *zerolog.Logger) error {
 	if name == "" {
 		return errors.Errorf("no name provided")
@@ -120,7 +124,10 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, dataProvider
 		return errors.Wrap(err, "an error occurred while handling sessions")
 	}
 
-	tplName := panel.getFullTemplateName(panel.provider.GetActiveTemplate(session))
+	// Get the path query parameter; the panel provider may use this to determine the template to use
+	path := r.URL.Query().Get(pathParameterName)
+
+	tplName := panel.getFullTemplateName(panel.provider.GetActiveTemplate(session, path))
 	tpl, ok := panel.templates[tplName]
 	if !ok {
 		return errors.Errorf("template %v not found", tplName)

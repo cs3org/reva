@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package account
+package registration
 
 const tplJavaScript = `
 function verifyForm(formData) {
@@ -168,5 +168,8 @@ const tplBody = `
 			<button type="button" style="font-weight: bold;" onClick="handleAction('create');">Register</button>
 		</div>
 	</form>	
+</div>
+<div>
+	<p>Already have an account? Login <a href="?path=login">here</a>.</p>
 </div>
 `

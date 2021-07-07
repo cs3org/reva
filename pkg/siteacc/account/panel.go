@@ -21,6 +21,8 @@ package account
 import (
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/siteacc/account/login"
+	"github.com/cs3org/reva/pkg/siteacc/account/registration"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/html"
 	"github.com/pkg/errors"
@@ -30,13 +32,13 @@ import (
 // Panel represents the account panel.
 type Panel struct {
 	html.PanelProvider
-	html.ContentProvider
 
 	htmlPanel *html.Panel
 }
 
 const (
-	templateRegister = "register"
+	templateLogin        = "login"
+	templateRegistration = "register"
 )
 
 func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
@@ -48,7 +50,11 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	panel.htmlPanel = htmlPanel
 
 	// Add all templates
-	if err := panel.htmlPanel.AddTemplate(templateRegister, panel); err != nil {
+	if err := panel.htmlPanel.AddTemplate(templateLogin, &login.PanelTemplate{}); err != nil {
+		return errors.Wrap(err, "unable to create the login template")
+	}
+
+	if err := panel.htmlPanel.AddTemplate(templateRegistration, &registration.PanelTemplate{}); err != nil {
 		return errors.Wrap(err, "unable to create the registration template")
 	}
 
@@ -56,33 +62,20 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 }
 
 // GetActiveTemplate returns the name of the active template.
-func (panel *Panel) GetActiveTemplate(*html.Session) string {
-	return templateRegister
-}
+func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string {
+	template := templateLogin // TODO: Check if user is logged in
 
-// GetTitle returns the title of the htmlPanel.
-func (panel *Panel) GetTitle() string {
-	return "ScienceMesh Account Panel"
-}
+	// Invalid paths are just ignored and redirected to the login/main page
+	switch path {
+	case templateLogin:
+	case templateRegistration:
+		template = path
+	}
 
-// GetCaption returns the caption which is displayed on the htmlPanel.
-func (panel *Panel) GetCaption() string {
-	return "Welcome to the ScienceMesh Account Registration!"
-}
+	// TODO: Check path access
+	// TODO: If user is logged in and path == login, redirect to main
 
-// GetContentJavaScript delivers additional JavaScript code.
-func (panel *Panel) GetContentJavaScript() string {
-	return tplJavaScript
-}
-
-// GetContentStyleSheet delivers additional stylesheet code.
-func (panel *Panel) GetContentStyleSheet() string {
-	return tplStyleSheet
-}
-
-// GetContentBody delivers the actual body content.
-func (panel *Panel) GetContentBody() string {
-	return tplBody
+	return template
 }
 
 // Execute generates the HTTP output of the form and writes it to the response writer.
