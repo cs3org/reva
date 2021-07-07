@@ -23,8 +23,13 @@ import (
 	"net/rpc"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/pluginregistry"
 	"github.com/hashicorp/go-plugin"
 )
+
+func init() {
+	pluginregistry.Register("userprovider", &ProviderPlugin{})
+}
 
 // ProviderPlugin is the implemenation of plugin.Plugin so we can serve/consume this.
 type ProviderPlugin struct {

@@ -27,7 +27,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/plugin"
-	"github.com/cs3org/reva/pkg/pluginregistry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -95,8 +94,6 @@ func getDriverPlugin(c *config) (user.Manager, error) {
 func getDriver(c *config, plugin bool) (user.Manager, error) {
 	// if plugin flag is set, we fetch the driver from the plugin package via hashicorp go-plugin system
 	if plugin {
-		// populate the plugin registry
-		pluginregistry.Register("userprovider", &user.ProviderPlugin{})
 		mgr, err := getDriverPlugin(c)
 		if err != nil {
 			return nil, err
