@@ -19,15 +19,18 @@
 package sql
 
 import (
-	"time"
+	"context"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
 // DBShare stores information about user and public shares.
@@ -49,35 +52,43 @@ type DBShare struct {
 	State        int
 }
 
-func formatGrantee(g *provider.Grantee) (int, string) {
+func (m *mgr) formatGrantee(ctx context.Context, g *provider.Grantee) (int, string, error) {
 	var granteeType int
 	var formattedID string
 	switch g.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		granteeType = 0
-		formattedID = formatUserID(g.GetUserId())
+		var err error
+		formattedID, err = m.userIdToUserName(ctx, g.GetUserId())
+		if err != nil {
+			return 0, "", err
+		}
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		granteeType = 1
 		formattedID = formatGroupID(g.GetGroupId())
 	default:
 		granteeType = -1
 	}
-	return granteeType, formattedID
+	return granteeType, formattedID, nil
 }
 
-func extractGrantee(t int, g string) *provider.Grantee {
+func (m *mgr) extractGrantee(ctx context.Context, t int, g string) (*provider.Grantee, error) {
 	var grantee provider.Grantee
 	switch t {
 	case 0:
+		userid, err := m.userNameToUserId(ctx, g)
+		if err != nil {
+			return nil, err
+		}
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_USER
-		grantee.Id = &provider.Grantee_UserId{UserId: extractUserID(g)}
+		grantee.Id = &provider.Grantee_UserId{UserId: userid}
 	case 1:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_GROUP
 		grantee.Id = &provider.Grantee_GroupId{GroupId: extractGroupID(g)}
 	default:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_INVALID
 	}
-	return &grantee
+	return &grantee, nil
 }
 
 func resourceTypeToItem(r provider.ResourceType) string {
@@ -125,12 +136,43 @@ func intToShareState(g int) collaboration.ShareState {
 	}
 }
 
-func formatUserID(u *userpb.UserId) string {
-	return u.OpaqueId
+func (m *mgr) userIdToUserName(ctx context.Context, userid *userpb.UserId) (string, error) {
+	gwConn, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
+	if err != nil {
+		return "", err
+	}
+	getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{
+		UserId: userid,
+	})
+	if err != nil {
+		return "", err
+	}
+	if getUserResponse.Status.Code != rpc.Code_CODE_OK {
+		return "", status.NewErrorFromCode(getUserResponse.Status.Code, "gateway")
+	}
+	return getUserResponse.User.Username, nil
 }
 
-func extractUserID(u string) *userpb.UserId {
-	return &userpb.UserId{OpaqueId: u}
+func (m *mgr) userNameToUserId(ctx context.Context, username string) (*userpb.UserId, error) {
+	gwConn, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+	getUserResponse, err := gwConn.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+		Claim: "username",
+		Value: username,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if getUserResponse.Status.Code != rpc.Code_CODE_OK {
+		return nil, status.NewErrorFromCode(getUserResponse.Status.Code, "gateway")
+	}
+	return getUserResponse.User.Id, nil
+}
+
+func formatUserID(u *userpb.UserId) string {
+	return u.OpaqueId
 }
 
 func formatGroupID(u *grouppb.GroupId) string {
@@ -141,13 +183,30 @@ func extractGroupID(u string) *grouppb.GroupId {
 	return &grouppb.GroupId{OpaqueId: u}
 }
 
-func convertToCS3Share(s DBShare, storageMountID string) (*collaboration.Share, error) {
+func (m *mgr) convertToCS3Share(ctx context.Context, s DBShare, storageMountID string) (*collaboration.Share, error) {
 	ts := &typespb.Timestamp{
 		Seconds: uint64(s.STime),
 	}
 	permissions, err := intTosharePerm(s.Permissions)
 	if err != nil {
 		return nil, err
+	}
+	grantee, err := m.extractGrantee(ctx, s.ShareType, s.ShareWith)
+	if err != nil {
+		return nil, err
+	}
+	owner, err := m.userNameToUserId(ctx, s.UIDOwner)
+	if err != nil {
+		return nil, err
+	}
+	var creator *userpb.UserId
+	if s.UIDOwner == s.UIDInitiator {
+		creator = owner
+	} else {
+		creator, err = m.userNameToUserId(ctx, s.UIDOwner)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &collaboration.Share{
 		Id: &collaboration.ShareId{
@@ -158,16 +217,16 @@ func convertToCS3Share(s DBShare, storageMountID string) (*collaboration.Share, 
 			OpaqueId:  s.ItemSource,
 		},
 		Permissions: &collaboration.SharePermissions{Permissions: permissions},
-		Grantee:     extractGrantee(s.ShareType, s.ShareWith),
-		Owner:       extractUserID(s.UIDOwner),
-		Creator:     extractUserID(s.UIDInitiator),
+		Grantee:     grantee,
+		Owner:       owner,
+		Creator:     creator,
 		Ctime:       ts,
 		Mtime:       ts,
 	}, nil
 }
 
-func convertToCS3ReceivedShare(s DBShare, storageMountID string) (*collaboration.ReceivedShare, error) {
-	share, err := convertToCS3Share(s, storageMountID)
+func (m *mgr) convertToCS3ReceivedShare(ctx context.Context, s DBShare, storageMountID string) (*collaboration.ReceivedShare, error) {
+	share, err := m.convertToCS3Share(ctx, s, storageMountID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,45 +240,4 @@ func convertToCS3ReceivedShare(s DBShare, storageMountID string) (*collaboration
 		Share: share,
 		State: state,
 	}, nil
-}
-
-func convertToCS3PublicShare(s DBShare, storageMountID string) (*link.PublicShare, error) {
-	ts := &typespb.Timestamp{
-		Seconds: uint64(s.STime),
-	}
-	pwd := false
-	if s.ShareWith != "" {
-		pwd = true
-	}
-	var expires *typespb.Timestamp
-	if s.Expiration != "" {
-		t, err := time.Parse("2006-01-02 03:04:05", s.Expiration)
-		if err == nil {
-			expires = &typespb.Timestamp{
-				Seconds: uint64(t.Unix()),
-			}
-		}
-	}
-	permissions, err := intTosharePerm(s.Permissions)
-	if err != nil {
-		return nil, err
-	}
-	return &link.PublicShare{
-		Id: &link.PublicShareId{
-			OpaqueId: s.ID,
-		},
-		ResourceId: &provider.ResourceId{
-			StorageId: storageMountID + "!" + s.ItemStorage,
-			OpaqueId:  s.ItemSource,
-		},
-		Permissions:       &link.PublicSharePermissions{Permissions: permissions},
-		Owner:             extractUserID(s.UIDOwner),
-		Creator:           extractUserID(s.UIDInitiator),
-		Token:             s.Token,
-		DisplayName:       s.ShareName,
-		PasswordProtected: pwd,
-		Expiration:        expires,
-		Ctime:             ts,
-		Mtime:             ts,
-	}, err
 }

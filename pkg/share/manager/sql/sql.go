@@ -47,6 +47,7 @@ func init() {
 }
 
 type config struct {
+	GatewayAddr    string `mapstructure:"gateway_addr"`
 	StorageMountID string `mapstructure:"storage_mount_id"`
 	DbUsername     string `mapstructure:"db_username"`
 	DbPassword     string `mapstructure:"db_password"`
@@ -115,7 +116,14 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 		Seconds: uint64(now),
 	}
 
-	shareType, shareWith := formatGrantee(g.Grantee)
+	owner, err := m.userIdToUserName(ctx, md.Owner)
+	if err != nil {
+		return nil, err
+	}
+	shareType, shareWith, err := m.formatGrantee(ctx, g.Grantee)
+	if err != nil {
+		return nil, err
+	}
 	itemType := resourceTypeToItem(md.Type)
 	targetPath := path.Join("/", path.Base(md.Path))
 	permissions := sharePermToInt(g.Permissions.Permissions)
@@ -128,7 +136,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	}
 
 	stmtString := "insert into oc_share set share_type=?,uid_owner=?,uid_initiator=?,item_type=?,item_source=?,file_source=?,permissions=?,stime=?,share_with=?,file_target=?"
-	stmtValues := []interface{}{shareType, formatUserID(md.Owner), user.Username, itemType, itemSource, fileSource, permissions, now, shareWith, targetPath}
+	stmtValues := []interface{}{shareType, owner, user.Username, itemType, itemSource, fileSource, permissions, now, shareWith, targetPath}
 
 	stmt, err := m.db.Prepare(stmtString)
 	if err != nil {
@@ -167,23 +175,29 @@ func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collabor
 		}
 		return nil, err
 	}
-	return convertToCS3Share(s, m.c.StorageMountID)
+	return m.convertToCS3Share(ctx, s, m.c.StorageMountID)
 }
 
 func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
-	owner := formatUserID(key.Owner)
+	owner, err := m.userIdToUserName(ctx, key.Owner)
+	if err != nil {
+		return nil, err
+	}
 	uid := user.ContextMustGetUser(ctx).Username
 
 	s := DBShare{}
-	shareType, shareWith := formatGrantee(key.Grantee)
+	shareType, shareWith, err := m.formatGrantee(ctx, key.Grantee)
+	if err != nil {
+		return nil, err
+	}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_source, '') as item_source, id, stime, permissions, share_type FROM oc_share WHERE uid_owner=? AND item_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
-	if err := m.db.QueryRow(query, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+	if err = m.db.QueryRow(query, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(key.String())
 		}
 		return nil, err
 	}
-	return convertToCS3Share(s, m.c.StorageMountID)
+	return m.convertToCS3Share(ctx, s, m.c.StorageMountID)
 }
 
 func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
@@ -215,7 +229,10 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 		params = append(params, ref.GetId().OpaqueId, uid, uid)
 	case ref.GetKey() != nil:
 		key := ref.GetKey()
-		shareType, shareWith := formatGrantee(key.Grantee)
+		shareType, shareWith, err := m.formatGrantee(ctx, key.Grantee)
+		if err != nil {
+			return err
+		}
 		owner := formatUserID(key.Owner)
 		query = "delete from oc_share where uid_owner=? AND item_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
 		params = append(params, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid)
@@ -254,7 +271,10 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 		params = append(params, permissions, time.Now().Unix(), ref.GetId().OpaqueId, uid, uid)
 	case ref.GetKey() != nil:
 		key := ref.GetKey()
-		shareType, shareWith := formatGrantee(key.Grantee)
+		shareType, shareWith, err := m.formatGrantee(ctx, key.Grantee)
+		if err != nil {
+			return nil, err
+		}
 		owner := formatUserID(key.Owner)
 		query = "update oc_share set permissions=?,stime=? where (uid_owner=? or uid_initiator=?) AND item_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
 		params = append(params, permissions, time.Now().Unix(), owner, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid)
@@ -303,7 +323,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.ListShare
 		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
 			continue
 		}
-		share, err := convertToCS3Share(s, m.c.StorageMountID)
+		share, err := m.convertToCS3Share(ctx, s, m.c.StorageMountID)
 		if err != nil {
 			return nil, err
 		}
@@ -345,7 +365,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.Received
 		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.ItemStorage); err != nil {
 			continue
 		}
-		share, err := convertToCS3ReceivedShare(s, m.c.StorageMountID)
+		share, err := m.convertToCS3ReceivedShare(ctx, s, m.c.StorageMountID)
 		if err != nil {
 			return nil, err
 		}
@@ -380,14 +400,17 @@ func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*
 		}
 		return nil, err
 	}
-	return convertToCS3ReceivedShare(s, m.c.StorageMountID)
+	return m.convertToCS3ReceivedShare(ctx, s, m.c.StorageMountID)
 }
 
 func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.ReceivedShare, error) {
 	user := user.ContextMustGetUser(ctx)
 	uid := user.Username
 
-	shareType, shareWith := formatGrantee(key.Grantee)
+	shareType, shareWith, err := m.formatGrantee(ctx, key.Grantee)
+	if err != nil {
+		return nil, err
+	}
 	params := []interface{}{uid, formatUserID(key.Owner), key.ResourceId.StorageId, key.ResourceId.OpaqueId, shareType, shareWith, shareWith}
 	for _, v := range user.Groups {
 		params = append(params, v)
@@ -407,7 +430,7 @@ func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey)
 		}
 		return nil, err
 	}
-	return convertToCS3ReceivedShare(s, m.c.StorageMountID)
+	return m.convertToCS3ReceivedShare(ctx, s, m.c.StorageMountID)
 }
 
 func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
