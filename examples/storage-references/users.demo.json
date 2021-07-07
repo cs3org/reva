@@ -34,5 +34,17 @@
 		"mail": "richard@example.org",
 		"display_name": "Richard Feynman",
 		"groups": ["quantum-lovers", "philosophy-haters", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "0e4d9dc1-8349-49fe-8afc-6b844aec1cf6",
+			"idp": "localhost:20080",
+			"type": 7
+		},
+		"username": "lwaccount",
+		"secret": "lightweight",
+		"mail": "lwaccount@example.org",
+		"display_name": "Lightweight Test Account",
+		"groups": ["guest-users", "weight-loss-club", "physics-lovers"]
 	}
 ]

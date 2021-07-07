@@ -121,7 +121,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
-			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
+			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
 
 		// store user and core access token in context.
@@ -192,7 +192,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
-			return status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
+			return status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
 
 		// store user and core access token in context.
@@ -299,6 +299,29 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 				}
 			}
 		}
+	} else if ref, ok := extractShareRef(req); ok {
+		client, err := pool.GetGatewayServiceClient(gatewayAddr)
+		if err != nil {
+			return nil, err
+		}
+		for k := range tokenScope {
+			if strings.HasPrefix(k, "lightweight") {
+				shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+				if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
+					log.Warn().Err(err).Msg("error listing received shares")
+					continue
+				}
+				for _, s := range shares.Shares {
+					if ref.GetId() != nil && ref.GetId().OpaqueId == s.Share.Id.OpaqueId {
+						return u, nil
+					}
+					if key := ref.GetKey(); key != nil && (utils.UserEqual(key.Owner, s.Share.Owner) || utils.UserEqual(key.Owner, s.Share.Creator)) &&
+						utils.ResourceIDEqual(key.ResourceId, s.Share.ResourceId) && utils.GranteeEqual(key.Grantee, s.Share.Grantee) {
+						return u, nil
+					}
+				}
+			}
+		}
 	}
 
 	return nil, errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
@@ -349,6 +372,16 @@ func extractRef(req interface{}) (*provider.Reference, bool) {
 	case *provider.InitiateFileDownloadRequest:
 		return v.GetRef(), true
 	case *provider.InitiateFileUploadRequest:
+		return v.GetRef(), true
+	}
+	return nil, false
+}
+
+func extractShareRef(req interface{}) (*collaboration.ShareReference, bool) {
+	switch v := req.(type) {
+	case *collaboration.GetReceivedShareRequest:
+		return v.GetRef(), true
+	case *collaboration.UpdateReceivedShareRequest:
 		return v.GetRef(), true
 	}
 	return nil, false

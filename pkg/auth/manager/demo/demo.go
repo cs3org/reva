@@ -51,14 +51,22 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 }
 
 func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
-	scope, err := scope.AddOwnerScope(nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	if c, ok := m.credentials[clientID]; ok {
 		if c.Secret == clientSecret {
-			return c.User, scope, nil
+			var scopes map[string]*authpb.Scope
+			var err error
+			if c.User.Id.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
+				scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
+				if err != nil {
+					return nil, nil, err
+				}
+			} else {
+				scopes, err = scope.AddOwnerScope(nil)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+			return c.User, scopes, nil
 		}
 	}
 	return nil, nil, errtypes.InvalidCredentials(clientID)

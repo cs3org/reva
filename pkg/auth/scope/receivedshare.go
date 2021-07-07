@@ -19,35 +19,44 @@
 package scope
 
 import (
+	"fmt"
+
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-func lightweightAccountScope(scope *authpb.Scope, resource interface{}) (bool, error) {
-	// Lightweight accounts have access to resources shared with them.
-	// These cannot be resolved from here, but need to be added to the scope from
-	// where the call to mint tokens is made.
-	// From here, we only allow ListReceivedShares calls
-	if _, ok := resource.(*collaboration.ListReceivedSharesRequest); ok {
-		return true, nil
+func receivedShareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+	var share collaboration.ReceivedShare
+	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
+	if err != nil {
+		return false, err
 	}
-	return false, nil
+
+	switch v := resource.(type) {
+	case *collaboration.GetReceivedShareRequest:
+		return checkShareRef(share.Share, v.GetRef()), nil
+	case *collaboration.UpdateReceivedShareRequest:
+		return checkShareRef(share.Share, v.GetRef()), nil
+	case string:
+		return checkSharePath(v) || checkResourcePath(v), nil
+	}
+	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
 }
 
-// AddLightweightAccountScope adds the scope to allow access to lightweight user.
-func AddLightweightAccountScope(role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-	ref := &provider.Reference{Path: "/"}
-	val, err := utils.MarshalProtoV1ToJSON(ref)
+// AddReceivedShareScope adds the scope to allow access to a received user/group share and
+// the shared resource.
+func AddReceivedShareScope(share *collaboration.ReceivedShare, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
+	val, err := utils.MarshalProtoV1ToJSON(share)
 	if err != nil {
 		return nil, err
 	}
 	if scopes == nil {
 		scopes = make(map[string]*authpb.Scope)
 	}
-	scopes["lightweight"] = &authpb.Scope{
+	scopes["receivedshare:"+share.Share.Id.OpaqueId] = &authpb.Scope{
 		Resource: &types.OpaqueEntry{
 			Decoder: "json",
 			Value:   val,

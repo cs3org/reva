@@ -28,11 +28,12 @@ import (
 type Verifier func(*authpb.Scope, interface{}) (bool, error)
 
 var supportedScopes = map[string]Verifier{
-	"user":         userScope,
-	"publicshare":  publicshareScope,
-	"resourceinfo": resourceinfoScope,
-	"share":        shareScope,
-	"lightweight":  lightweightAccountScope,
+	"user":          userScope,
+	"publicshare":   publicshareScope,
+	"resourceinfo":  resourceinfoScope,
+	"share":         shareScope,
+	"receivedshare": receivedShareScope,
+	"lightweight":   lightweightAccountScope,
 }
 
 // VerifyScope is the function to be called when dismantling tokens to check if

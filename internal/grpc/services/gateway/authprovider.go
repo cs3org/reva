@@ -239,7 +239,7 @@ func (s *svc) expandScopes(ctx context.Context, scopeMap map[string]*authpb.Scop
 			}
 			newMap, err = s.statAndAddResource(ctx, share.ResourceId, v.Role, newMap)
 			if err != nil {
-				log.Warn().Err(err).Msgf("error expanding publicshare scope %+v", share.ResourceId)
+				log.Warn().Err(err).Msgf("error expanding publicshare resource scope %+v", share.ResourceId)
 				continue
 			}
 
@@ -252,7 +252,7 @@ func (s *svc) expandScopes(ctx context.Context, scopeMap map[string]*authpb.Scop
 			}
 			newMap, err = s.statAndAddResource(ctx, share.ResourceId, v.Role, newMap)
 			if err != nil {
-				log.Warn().Err(err).Msgf("error expanding share scope %+v", share.ResourceId)
+				log.Warn().Err(err).Msgf("error expanding share resource scope %+v", share.ResourceId)
 				continue
 			}
 
@@ -263,14 +263,14 @@ func (s *svc) expandScopes(ctx context.Context, scopeMap map[string]*authpb.Scop
 				continue
 			}
 			for _, share := range shares.Shares {
-				newMap, err = scope.AddShareScope(share.Share, v.Role, newMap)
+				newMap, err = scope.AddReceivedShareScope(share, v.Role, newMap)
 				if err != nil {
 					log.Warn().Err(err).Msgf("error expanding received share scope %+v", share.Share.ResourceId)
 					continue
 				}
 				newMap, err = s.statAndAddResource(ctx, share.Share.ResourceId, v.Role, newMap)
 				if err != nil {
-					log.Warn().Err(err).Msgf("error expanding received share scope %+v", share.Share.ResourceId)
+					log.Warn().Err(err).Msgf("error expanding received share resource scope %+v", share.Share.ResourceId)
 					continue
 				}
 			}

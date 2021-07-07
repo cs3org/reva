@@ -172,12 +172,20 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		GidNumber:    int64(gid),
 	}
 
-	scope, err := scope.AddOwnerScope(nil)
-	if err != nil {
-		return nil, nil, err
+	var scopes map[string]*authpb.Scope
+	if userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
+		scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		scopes, err = scope.AddOwnerScope(nil)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
-	return u, scope, nil
+	return u, scopes, nil
 }
 
 func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
