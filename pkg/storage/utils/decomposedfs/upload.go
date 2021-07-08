@@ -587,13 +587,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		}
 	}
 	// use set arbitrary metadata?
-	/*if upload.info.MetaData["mtime"] != "" {
-		err := upload.fs.SetMtime(ctx, np, upload.info.MetaData["mtime"])
+	if upload.info.MetaData["mtime"] != "" {
+		err := n.SetMtime(ctx, upload.info.MetaData["mtime"])
 		if err != nil {
-			log.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
+			sublog.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
 		}
-	}*/
+	}
 
 	n.Exists = true
 
