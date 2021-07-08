@@ -428,9 +428,48 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	}, nil
 }
 
+func hasNodeID(s *provider.StorageSpace) bool {
+	return s != nil && s.Root != nil && s.Root.OpaqueId != ""
+}
+
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+	log := appctx.GetLogger(ctx)
+	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters)
+	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "not found when listing spaces")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.NotSupported:
+			st = status.NewUnimplemented(ctx, err, "not implemented")
+		default:
+			st = status.NewInternal(ctx, err, "error listing spaces")
+		}
+		return &provider.ListStorageSpacesResponse{
+			Status: st,
+		}, nil
+	}
+
+	for i := range spaces {
+		if hasNodeID(spaces[i]) {
+			// fill in storagespace id if it is not set
+			if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
+				spaces[i].Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "!" + spaces[i].Root.OpaqueId}
+			}
+			// fill in storage id if it is not set
+			if spaces[i].Root.StorageId == "" {
+				spaces[i].Root.StorageId = s.mountID
+			}
+		} else if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
+			log.Warn().Str("service", "storageprovider").Str("driver", s.conf.Driver).Interface("space", spaces[i]).Msg("space is missing space id and root id")
+		}
+	}
+
 	return &provider.ListStorageSpacesResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("ListStorageSpaces not implemented"), "ListStorageSpaces not implemented"),
+		Status:        status.NewOK(ctx),
+		StorageSpaces: spaces,
 	}, nil
 }
 
