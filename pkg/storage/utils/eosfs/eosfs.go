@@ -551,13 +551,19 @@ func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, 
 
 	var qualifier string
 	if t == acl.TypeUser {
-		// since EOS Citrine ACLs are stored with uid, we need to convert username to
-		// uid only for users.
-		auth, err := fs.getUIDGateway(ctx, g.Grantee.GetUserId())
-		if err != nil {
-			return nil, err
+		// if the grantee is a lightweight account, we need to set it accordingly
+		if g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+			t = acl.TypeLightweight
+			qualifier = g.Grantee.GetUserId().OpaqueId
+		} else {
+			// since EOS Citrine ACLs are stored with uid, we need to convert username to
+			// uid only for users.
+			auth, err := fs.getUIDGateway(ctx, g.Grantee.GetUserId())
+			if err != nil {
+				return nil, err
+			}
+			qualifier = auth.Role.UID
 		}
-		qualifier = auth.Role.UID
 	} else {
 		qualifier = g.Grantee.GetGroupId().OpaqueId
 	}
@@ -578,12 +584,18 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 
 	var recipient string
 	if eosACLType == acl.TypeUser {
-		// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
-		auth, err := fs.getUIDGateway(ctx, g.Grantee.GetUserId())
-		if err != nil {
-			return err
+		// if the grantee is a lightweight account, we need to set it accordingly
+		if g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+			eosACLType = acl.TypeLightweight
+			recipient = g.Grantee.GetUserId().OpaqueId
+		} else {
+			// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
+			auth, err := fs.getUIDGateway(ctx, g.Grantee.GetUserId())
+			if err != nil {
+				return err
+			}
+			recipient = auth.Role.UID
 		}
-		recipient = auth.Role.UID
 	} else {
 		recipient = g.Grantee.GetGroupId().OpaqueId
 	}
@@ -648,7 +660,8 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 	grantList := []*provider.Grant{}
 	for _, a := range acls {
 		var grantee *provider.Grantee
-		if a.Type == acl.TypeUser {
+		switch {
+		case a.Type == acl.TypeUser:
 			// EOS Citrine ACLs are stored with uid for users.
 			// This needs to be resolved to the user opaque ID.
 			qualifier, err := fs.getUserIDGateway(ctx, a.Qualifier)
@@ -659,12 +672,19 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 				Id:   &provider.Grantee_UserId{UserId: qualifier},
 				Type: grants.GetGranteeType(a.Type),
 			}
-		} else {
+		case a.Type == acl.TypeLightweight:
+			a.Type = acl.TypeUser
+			grantee = &provider.Grantee{
+				Id:   &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: a.Qualifier}},
+				Type: grants.GetGranteeType(a.Type),
+			}
+		default:
 			grantee = &provider.Grantee{
 				Id:   &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: a.Qualifier}},
 				Type: grants.GetGranteeType(a.Type),
 			}
 		}
+
 		grantList = append(grantList, &provider.Grant{
 			Grantee:     grantee,
 			Permissions: grants.GetGrantPermissionSet(a.Permissions, true),
@@ -716,7 +736,9 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string
 	if err != nil {
 		return nil, err
 	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
+
+	// lightweight accounts don't have share folders, so we're passing an empty string as path
+	auth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
 		return nil, err
 	}
@@ -813,13 +835,14 @@ func (fs *eosfs) listHome(ctx context.Context, home string) ([]*provider.Resourc
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: no user in ctx")
 	}
+	// lightweight accounts don't have home folders, so we're passing an empty string as path
+	auth, err := fs.getUserAuth(ctx, u, "")
+	if err != nil {
+		return nil, err
+	}
 
 	finfos := []*provider.ResourceInfo{}
 	for _, fn := range fns {
-		auth, err := fs.getUserAuth(ctx, u, fn)
-		if err != nil {
-			return nil, err
-		}
 		eosFileInfos, err := fs.c.List(ctx, auth, fn)
 		if err != nil {
 			return nil, errors.Wrap(err, "eosfs: error listing")
@@ -850,7 +873,8 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
+	// lightweight accounts don't have share folders, so we're passing an empty string as path
+	auth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
 		return nil, err
 	}
@@ -882,6 +906,7 @@ func (fs *eosfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
 	}
+	// lightweight accounts don't quota nodes, so we're passing an empty string as path
 	auth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eosfs: error getting uid and gid for user")
@@ -961,7 +986,7 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	auth, err := fs.getUserAuth(ctx, u, home)
+	auth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
 		return err
 	}
@@ -1027,7 +1052,7 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 		return nil
 	}
 
-	chownAuth, err := fs.getUserAuth(ctx, u, path)
+	chownAuth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
 		return err
 	}
@@ -1187,7 +1212,7 @@ func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
 
 		fn := fs.wrapShadow(ctx, p)
 
-		auth, err := fs.getUserAuth(ctx, u, fn)
+		auth, err := fs.getUserAuth(ctx, u, "")
 		if err != nil {
 			return err
 		}
@@ -1248,7 +1273,7 @@ func (fs *eosfs) moveShadow(ctx context.Context, oldPath, newPath string) error 
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	auth, err := fs.getUserAuth(ctx, u, oldfn)
+	auth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
 		return err
 	}
@@ -1511,7 +1536,7 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		}
 	}
 
-	auth, err := fs.getUserAuth(ctx, u, "")
+	auth, err := fs.getUserAuth(ctx, u, eosFileInfo.File)
 	if err != nil {
 		return &provider.ResourcePermissions{
 			// no permissions
@@ -1530,7 +1555,7 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 			}
 		}
 
-		if (e.Type == acl.TypeUser && e.Qualifier == auth.Role.UID) || userInGroup {
+		if (e.Type == acl.TypeUser && e.Qualifier == auth.Role.UID) || (e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId) || userInGroup {
 			mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions, eosFileInfo.IsDir))
 		}
 	}
@@ -1687,7 +1712,7 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	return getUserResp.User.Id, nil
 }
 
-func (fs *eosfs) getUserAuth(ctx context.Context, u *userpb.User, path string) (eosclient.Authorization, error) {
+func (fs *eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {
 	if fs.conf.ForceSingleUserMode {
 		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
 			return fs.singleUserAuth, nil
@@ -1698,11 +1723,45 @@ func (fs *eosfs) getUserAuth(ctx context.Context, u *userpb.User, path string) (
 	}
 
 	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
-		// return fs.c.GenerateToken(ctx, auth, path, acl)
-		return eosclient.Authorization{Token: "temp-token"}, nil
+		return fs.getEOSToken(ctx, u, fn)
 	}
 
 	return fs.extractUIDAndGID(u)
+}
+
+func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {
+	if fn == "" {
+		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
+	}
+
+	rootAuth, err := fs.getRootAuth(ctx)
+	if err != nil {
+		return eosclient.Authorization{}, err
+	}
+	info, err := fs.c.GetFileInfoByPath(ctx, rootAuth, fn)
+	if err != nil {
+		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting file info by path")
+	}
+	auth := eosclient.Authorization{
+		Role: eosclient.Role{
+			UID: strconv.FormatUint(info.UID, 10),
+			GID: strconv.FormatUint(info.GID, 10),
+		},
+	}
+
+	var a *acl.Entry
+	for _, e := range info.SysACL.Entries {
+		if e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId {
+			a = e
+			break
+		}
+	}
+
+	tkn, err := fs.c.GenerateToken(ctx, auth, fn, a)
+	if err != nil {
+		return eosclient.Authorization{}, err
+	}
+	return eosclient.Authorization{Token: tkn}, nil
 }
 
 func (fs *eosfs) getRootAuth(ctx context.Context) (eosclient.Authorization, error) {

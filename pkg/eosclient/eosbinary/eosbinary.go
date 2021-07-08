@@ -42,7 +42,8 @@ import (
 )
 
 const (
-	versionPrefix = ".sys.v#."
+	versionPrefix  = ".sys.v#."
+	lwShareAttrKey = "reva.lwshare"
 )
 
 const (
@@ -276,6 +277,34 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	if err != nil {
 		return err
 	}
+
+	if a.Type == acl.TypeLightweight {
+		sysACL := ""
+		aclStr, ok := finfo.Attrs[lwShareAttrKey]
+		if ok {
+			acls, err := acl.Parse(aclStr, acl.ShortTextForm)
+			if err != nil {
+				return err
+			}
+			err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
+			if err != nil {
+				return err
+			}
+			sysACL = acls.Serialize()
+		} else {
+			sysACL = a.CitrineSerialize()
+		}
+		sysACLAttr := &eosclient.Attribute{
+			Type: SystemAttr,
+			Key:  lwShareAttrKey,
+			Val:  sysACL,
+		}
+		if err = c.SetAttr(ctx, auth, sysACLAttr, true, path); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	sysACL := a.CitrineSerialize()
 	args := []string{"acl"}
 
@@ -304,6 +333,33 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 	finfo, err := c.GetFileInfoByPath(ctx, auth, path)
 	if err != nil {
 		return err
+	}
+
+	if a.Type == acl.TypeLightweight {
+		sysACL := ""
+		aclStr, ok := finfo.Attrs[lwShareAttrKey]
+		if ok {
+			acls, err := acl.Parse(aclStr, acl.ShortTextForm)
+			if err != nil {
+				return err
+			}
+			acls.DeleteEntry(a.Type, a.Qualifier)
+			if err != nil {
+				return err
+			}
+			sysACL = acls.Serialize()
+		} else {
+			sysACL = a.CitrineSerialize()
+		}
+		sysACLAttr := &eosclient.Attribute{
+			Type: SystemAttr,
+			Key:  lwShareAttrKey,
+			Val:  sysACL,
+		}
+		if err = c.SetAttr(ctx, auth, sysACLAttr, true, path); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	sysACL := a.CitrineSerialize()
@@ -950,6 +1006,19 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error
 	sysACL, err := acl.Parse(kv["sys.acl"], acl.ShortTextForm)
 	if err != nil {
 		return nil, err
+	}
+	lwACLStr, ok := kv[lwShareAttrKey]
+	if ok {
+		lwAcls, err := acl.Parse(lwACLStr, acl.ShortTextForm)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range lwAcls.Entries {
+			err = sysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	fi := &eosclient.FileInfo{
