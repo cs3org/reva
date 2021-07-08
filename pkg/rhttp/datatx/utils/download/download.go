@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"path"
 	"strconv"
-	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -55,10 +54,10 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		ref = &provider.Reference{Path: path.Join("/", fn)}
 	} else {
 		// build a storage space reference
-		parts := strings.SplitN(spaceID, "!", 2)
-		if len(parts) == 2 {
+		storageid, opaqeid, err := utils.SplitStorageSpaceID(spaceID)
+		if err != nil {
 			ref = &provider.Reference{
-				ResourceId: &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]},
+				ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
 				// ensure the relative path starts with '.'
 				Path: utils.MakeRelativePath(fn),
 			}

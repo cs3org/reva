@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -83,21 +84,18 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 
 			// TODO refactor: pass Reference to Upload & GetOrHeadFile
 			// build a storage space reference
-			parts := strings.SplitN(spaceID, "!", 2)
-			if len(parts) != 2 {
+			storageid, opaqeid, err := utils.SplitStorageSpaceID(spaceID)
+			if err != nil {
 				sublog.Error().Msg("space id must be separated by !")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
 			ref := &provider.Reference{
-				ResourceId: &provider.ResourceId{
-					StorageId: parts[0],
-					OpaqueId:  parts[1],
-				},
-				Path: fn,
+				ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
+				Path:       fn,
 			}
-			err := fs.Upload(ctx, ref, r.Body)
+			err = fs.Upload(ctx, ref, r.Body)
 			switch v := err.(type) {
 			case nil:
 				w.WriteHeader(http.StatusOK)
