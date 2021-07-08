@@ -304,7 +304,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.ListShare
 			if i != len(filters)-1 {
 				filterQuery += " AND "
 			}
-			params = append(params, f.GetResourceId().StorageId)
+			params = append(params, f.GetResourceId().OpaqueId)
 		}
 	}
 	if filterQuery != "" {
