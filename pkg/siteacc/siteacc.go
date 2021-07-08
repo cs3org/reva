@@ -22,7 +22,11 @@ import (
 	"fmt"
 	"net/http"
 
+	accpanel "github.com/cs3org/reva/pkg/siteacc/account"
+	"github.com/cs3org/reva/pkg/siteacc/admin"
 	"github.com/cs3org/reva/pkg/siteacc/config"
+	"github.com/cs3org/reva/pkg/siteacc/html"
+	"github.com/cs3org/reva/pkg/siteacc/manager"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -32,7 +36,13 @@ type SiteAccounts struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	manager *Manager
+	sessions *html.SessionManager
+
+	accountsManager *manager.AccountsManager
+	usersManager    *manager.UsersManager
+
+	adminPanel   *admin.Panel
+	accountPanel *accpanel.Panel
 }
 
 func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog.Logger) error {
@@ -46,12 +56,40 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 	}
 	siteacc.log = log
 
-	// Create the accounts manager instance
-	mngr, err := newManager(conf, log)
+	// Create the session mananger
+	sessions, err := html.NewSessionManager("siteacc_session", conf, log)
 	if err != nil {
-		return errors.Wrap(err, "error creating the site accounts manager")
+		return errors.Wrap(err, "error while creating the session manager")
 	}
-	siteacc.manager = mngr
+	siteacc.sessions = sessions
+
+	// Create the accounts manager instance
+	amngr, err := manager.NewAccountsManager(conf, log)
+	if err != nil {
+		return errors.Wrap(err, "error creating the accounts manager")
+	}
+	siteacc.accountsManager = amngr
+
+	// Create the users manager instance
+	umngr, err := manager.NewUsersManager(conf, log, siteacc.accountsManager)
+	if err != nil {
+		return errors.Wrap(err, "error creating the users manager")
+	}
+	siteacc.usersManager = umngr
+
+	// Create the admin panel
+	if pnl, err := admin.NewPanel(conf, log); err == nil {
+		siteacc.adminPanel = pnl
+	} else {
+		return errors.Wrap(err, "unable to create the administration panel")
+	}
+
+	// Create the account panel
+	if pnl, err := accpanel.NewPanel(conf, log); err == nil {
+		siteacc.accountPanel = pnl
+	} else {
+		return errors.Wrap(err, "unable to create the account panel")
+	}
 
 	return nil
 }
@@ -61,10 +99,16 @@ func (siteacc *SiteAccounts) RequestHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
+		// Get the active session for the request (or create a new one); a valid session object will always be returned
+		session, err := siteacc.sessions.HandleRequest(w, r)
+		if err != nil {
+			siteacc.log.Err(err).Msg("an error occurred while handling sessions")
+		}
+
 		epHandled := false
 		for _, ep := range getEndpoints() {
 			if ep.Path == r.URL.Path {
-				ep.Handler(siteacc.manager, ep, w, r)
+				ep.Handler(siteacc, ep, w, r, session)
 				epHandled = true
 				break
 			}
@@ -75,6 +119,28 @@ func (siteacc *SiteAccounts) RequestHandler() http.Handler {
 			_, _ = w.Write([]byte(fmt.Sprintf("Unknown endpoint %v", r.URL.Path)))
 		}
 	})
+}
+
+// ShowAdministrationPanel writes the administration panel HTTP output directly to the response writer.
+func (siteacc *SiteAccounts) ShowAdministrationPanel(w http.ResponseWriter, r *http.Request, session *html.Session) error {
+	// The admin panel only shows the stored accounts and offers actions through links, so let it use cloned data
+	accounts := siteacc.accountsManager.CloneAccounts(true)
+	return siteacc.adminPanel.Execute(w, r, session, &accounts)
+}
+
+// ShowAccountPanel writes the account panel HTTP output directly to the response writer.
+func (siteacc *SiteAccounts) ShowAccountPanel(w http.ResponseWriter, r *http.Request, session *html.Session) error {
+	return siteacc.accountPanel.Execute(w, r, session)
+}
+
+// AccountsManager returns the central accounts manager instance.
+func (siteacc *SiteAccounts) AccountsManager() *manager.AccountsManager {
+	return siteacc.accountsManager
+}
+
+// UsersManager returns the central users manager instance.
+func (siteacc *SiteAccounts) UsersManager() *manager.UsersManager {
+	return siteacc.usersManager
 }
 
 func (siteacc *SiteAccounts) GetPublicEndpoints() []string {

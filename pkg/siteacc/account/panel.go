@@ -78,15 +78,24 @@ func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string
 	return template
 }
 
+// PreExecute is called before the actual template is being executed.
+func (panel *Panel) PreExecute(*html.Session, string, *http.Request) error {
+	return nil
+}
+
 // Execute generates the HTTP output of the form and writes it to the response writer.
-func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request) error {
+func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *html.Session) error {
 	dataProvider := func(*html.Session) interface{} {
 		type TemplateData struct {
 		}
 
 		return TemplateData{}
 	}
-	return panel.htmlPanel.Execute(w, r, dataProvider)
+	return panel.htmlPanel.Execute(w, r, session, dataProvider)
+}
+
+func (panel *Panel) executeLogin(session *html.Session, r *http.Request) error {
+	return nil
 }
 
 // NewPanel creates a new account panel.

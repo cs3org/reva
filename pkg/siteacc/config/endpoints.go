@@ -43,8 +43,10 @@ const (
 	// EndpointRemove is the endpoint path for account removal.
 	EndpointRemove = "/remove"
 
-	// EndpointAuthenticate is the endpoint path for user authentication.
-	EndpointAuthenticate = "/authenticate"
+	// EndpointLogin is the endpoint path for (internal) user login.
+	EndpointLogin = "/login"
+	// EndpointLogout is the endpoint path for (internal) user logout.
+	EndpointLogout = "/logout"
 
 	// EndpointAuthorize is the endpoint path for account authorization.
 	EndpointAuthorize = "/authorize"

@@ -58,53 +58,51 @@ func (mngr *SessionManager) initialize(name string, conf *config.Configuration, 
 	return nil
 }
 
-// HandleRequest performs all session-related tasks during an HTML request.
+// HandleRequest performs all session-related tasks during an HTML request. Always returns a valid session object.
 func (mngr *SessionManager) HandleRequest(w http.ResponseWriter, r *http.Request) (*Session, error) {
 	var session *Session
+	var sessionErr error
 
 	// Try to get the session ID from the request; if none has been set yet, a new one will be assigned
 	cookie, err := r.Cookie(mngr.sessionName)
 	if err == nil {
 		session = mngr.findSession(cookie.Value)
 		if session != nil {
-			// Verify the request against the session: If it is invalid, return an error; if the session has expired, migrate to a new one; otherwise, just continue
+			// Verify the request against the session: If it is invalid, set an error; if the session has expired, migrate to a new one; otherwise, just continue
 			if err := session.VerifyRequest(r); err == nil {
 				if session.HasExpired() {
 					session, err = mngr.migrateSession(session, r)
 					if err != nil {
-						return nil, errors.Wrap(err, "unable to migrate to a new session")
+						session = nil
+						sessionErr = errors.Wrap(err, "unable to migrate to a new session")
 					}
 				}
 			} else {
-				return nil, errors.Wrap(err, "invalid session")
+				session = nil
+				sessionErr = errors.Wrap(err, "invalid session")
 			}
 		}
 	} else if err != http.ErrNoCookie {
-		// The session cookie exists but seems to be invalid, so return an error
-		return nil, errors.Wrap(err, "unable to get the session ID from the client")
+		// The session cookie exists but seems to be invalid, so set an error
+		session = nil
+		sessionErr = errors.Wrap(err, "unable to get the session ID from the client")
 	}
 
 	if session == nil {
-		// No session found for the client, so create a new one
-		session, err = mngr.createSession(r)
-		if err != nil {
-			return nil, errors.Wrap(err, "unable to assign a new session to the client")
-		}
+		// No session found for the client, so create a new one; this will always succeed
+		session = mngr.createSession(r)
 	}
 
 	// Store the session ID on the client side
 	session.Save(w)
 
-	return session, nil
+	return session, sessionErr
 }
 
-func (mngr *SessionManager) createSession(r *http.Request) (*Session, error) {
-	session, err := NewSession(mngr.sessionName, time.Duration(mngr.conf.Webserver.SessionTimeout)*time.Second, r)
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to create a new session")
-	}
+func (mngr *SessionManager) createSession(r *http.Request) *Session {
+	session := NewSession(mngr.sessionName, time.Duration(mngr.conf.Webserver.SessionTimeout)*time.Second, r)
 	mngr.sessions[session.ID] = session
-	return session, nil
+	return session
 }
 
 func (mngr *SessionManager) findSession(id string) *Session {
@@ -115,10 +113,7 @@ func (mngr *SessionManager) findSession(id string) *Session {
 }
 
 func (mngr *SessionManager) migrateSession(session *Session, r *http.Request) (*Session, error) {
-	sessionNew, err := mngr.createSession(r)
-	if err != nil {
-		return nil, err
-	}
+	sessionNew := mngr.createSession(r)
 
 	// Carry over the old session data, thus preserving the existing session
 	sessionNew.Data = session.Data

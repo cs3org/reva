@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
@@ -31,6 +32,8 @@ type Session struct {
 	ID            string
 	RemoteAddress string
 	Expires       time.Time
+
+	LoggedInUser *data.Account
 
 	Data map[string]interface{}
 
@@ -69,7 +72,7 @@ func (sess *Session) HasExpired() bool {
 }
 
 // NewSession creates a new session, giving it a random ID.
-func NewSession(name string, timeout time.Duration, r *http.Request) (*Session, error) {
+func NewSession(name string, timeout time.Duration, r *http.Request) *Session {
 	session := &Session{
 		ID:                uuid.NewString(),
 		RemoteAddress:     r.RemoteAddr,
@@ -77,5 +80,5 @@ func NewSession(name string, timeout time.Duration, r *http.Request) (*Session, 
 		Data:              nil,
 		sessionCookieName: name,
 	}
-	return session, nil
+	return session
 }

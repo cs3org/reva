@@ -29,14 +29,15 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
+	"github.com/cs3org/reva/pkg/siteacc/html"
 	"github.com/pkg/errors"
 )
 
-type methodCallback = func(*Manager, url.Values, []byte) (interface{}, error)
+type methodCallback = func(*SiteAccounts, url.Values, []byte, *html.Session) (interface{}, error)
 
 type endpoint struct {
 	Path            string
-	Handler         func(*Manager, endpoint, http.ResponseWriter, *http.Request)
+	Handler         func(*SiteAccounts, endpoint, http.ResponseWriter, *http.Request, *html.Session)
 	MethodCallbacks map[string]methodCallback
 	IsPublic        bool
 }
@@ -70,8 +71,9 @@ func getEndpoints() []endpoint {
 		{config.EndpointCreate, callMethodEndpoint, createMethodCallbacks(nil, handleCreate), true},
 		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
-		// Authentication endpoints
-		{config.EndpointAuthenticate, callMethodEndpoint, createMethodCallbacks(nil, handleAuthenticate), true},
+		// Login endpoints
+		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), false},
+		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), false},
 		// Authorization endpoints
 		{config.EndpointAuthorize, callMethodEndpoint, createMethodCallbacks(nil, handleAuthorize), false},
 		{config.EndpointIsAuthorized, callMethodEndpoint, createMethodCallbacks(handleIsAuthorized, nil), false},
@@ -82,21 +84,21 @@ func getEndpoints() []endpoint {
 	return endpoints
 }
 
-func callAdministrationEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
-	if err := mngr.ShowAdministrationPanel(w, r); err != nil {
+func callAdministrationEndpoint(siteacc *SiteAccounts, ep endpoint, w http.ResponseWriter, r *http.Request, session *html.Session) {
+	if err := siteacc.ShowAdministrationPanel(w, r, session); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the administration panel: %v", err)))
 	}
 }
 
-func callAccountEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
-	if err := mngr.ShowAccountPanel(w, r); err != nil {
+func callAccountEndpoint(siteacc *SiteAccounts, ep endpoint, w http.ResponseWriter, r *http.Request, session *html.Session) {
+	if err := siteacc.ShowAccountPanel(w, r, session); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the account panel: %v", err)))
 	}
 }
 
-func callMethodEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *http.Request) {
+func callMethodEndpoint(siteacc *SiteAccounts, ep endpoint, w http.ResponseWriter, r *http.Request, session *html.Session) {
 	// Every request to the accounts service results in a standardized JSON response
 	type Response struct {
 		Success bool        `json:"success"`
@@ -117,7 +119,7 @@ func callMethodEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *ht
 			if method == r.Method {
 				body, _ := ioutil.ReadAll(r.Body)
 
-				if respData, err := cb(mngr, r.URL.Query(), body); err == nil {
+				if respData, err := cb(siteacc, r.URL.Query(), body, session); err == nil {
 					resp.Success = true
 					resp.Error = ""
 					resp.Data = respData
@@ -139,7 +141,7 @@ func callMethodEndpoint(mngr *Manager, ep endpoint, w http.ResponseWriter, r *ht
 	_, _ = w.Write(jsonData)
 }
 
-func handleGenerateAPIKey(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
+func handleGenerateAPIKey(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	email := values.Get("email")
 	flags := key.FlagDefault
 
@@ -158,7 +160,7 @@ func handleGenerateAPIKey(mngr *Manager, values url.Values, body []byte) (interf
 	return map[string]string{"apiKey": apiKey}, nil
 }
 
-func handleVerifyAPIKey(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
+func handleVerifyAPIKey(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	apiKey := values.Get("apiKey")
 	email := values.Get("email")
 
@@ -177,7 +179,7 @@ func handleVerifyAPIKey(mngr *Manager, values url.Values, body []byte) (interfac
 	return nil, nil
 }
 
-func handleAssignAPIKey(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
+func handleAssignAPIKey(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
@@ -188,105 +190,111 @@ func handleAssignAPIKey(mngr *Manager, values url.Values, body []byte) (interfac
 		flags |= key.FlagScienceMesh
 	}
 
-	// Assign a new API key to the account through the account manager
-	if err := mngr.AssignAPIKeyToAccount(account, flags); err != nil {
+	// Assign a new API key to the account through the account accountsManager
+	if err := siteacc.AccountsManager().AssignAPIKeyToAccount(account, flags); err != nil {
 		return nil, errors.Wrap(err, "unable to assign API key")
 	}
 
 	return nil, nil
 }
 
-func handleList(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
-	return mngr.CloneAccounts(true), nil
+func handleList(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	return siteacc.AccountsManager().CloneAccounts(true), nil
 }
 
-func handleFind(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
-	account, err := findAccount(mngr, values.Get("by"), values.Get("value"))
+func handleFind(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	account, err := findAccount(siteacc, values.Get("by"), values.Get("value"))
 	if err != nil {
 		return nil, err
 	}
 	return map[string]interface{}{"account": account.Clone(true)}, nil
 }
 
-func handleCreate(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
+func handleCreate(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create a new account through the account manager
-	if err := mngr.CreateAccount(account); err != nil {
+	// Create a new account through the account accountsManager
+	if err := siteacc.AccountsManager().CreateAccount(account); err != nil {
 		return nil, errors.Wrap(err, "unable to create account")
 	}
 
 	return nil, nil
 }
 
-func handleUpdate(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
+func handleUpdate(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update the account through the account manager; only the basic data of an account can be updated through this requestHandler
-	if err := mngr.UpdateAccount(account, false); err != nil {
+	// Update the account through the account accountsManager; only the basic data of an account can be updated through this requestHandler
+	if err := siteacc.AccountsManager().UpdateAccount(account, false); err != nil {
 		return nil, errors.Wrap(err, "unable to update account")
 	}
 
 	return nil, nil
 }
 
-func handleRemove(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
+func handleRemove(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Remove the account through the account manager
-	if err := mngr.RemoveAccount(account); err != nil {
+	// Remove the account through the account accountsManager
+	if err := siteacc.AccountsManager().RemoveAccount(account); err != nil {
 		return nil, errors.Wrap(err, "unable to remove account")
 	}
 
 	return nil, nil
 }
 
-func handleIsAuthorized(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
-	account, err := findAccount(mngr, values.Get("by"), values.Get("value"))
+func handleIsAuthorized(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	account, err := findAccount(siteacc, values.Get("by"), values.Get("value"))
 	if err != nil {
 		return nil, err
 	}
 	return account.Data.Authorized, nil
 }
 
-func handleUnregisterSite(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
+func handleUnregisterSite(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Unregister the account's site through the account manager
-	if err := mngr.UnregisterAccountSite(account); err != nil {
+	// Unregister the account's site through the account accountsManager
+	if err := siteacc.AccountsManager().UnregisterAccountSite(account); err != nil {
 		return nil, errors.Wrap(err, "unable to unregister the site of the given account")
 	}
 
 	return nil, nil
 }
 
-func handleAuthenticate(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
+func handleLogin(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Authenticate the user through the account manager
-	if _, err := mngr.AuthenticateUser(account.Email, account.Password.Value); err != nil {
-		return nil, errors.Wrap(err, "unable to authenticate user")
+	// Login the user through the users manager
+	if err := siteacc.UsersManager().LoginUser(account.Email, account.Password.Value, session); err != nil {
+		return nil, errors.Wrap(err, "unable to login user")
 	}
 
 	return nil, nil
 }
 
-func handleAuthorize(mngr *Manager, values url.Values, body []byte) (interface{}, error) {
+func handleLogout(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	// Logout the user through the users manager
+	siteacc.UsersManager().LogoutUser(session)
+	return nil, nil
+}
+
+func handleAuthorize(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
@@ -305,8 +313,8 @@ func handleAuthorize(mngr *Manager, values url.Values, body []byte) (interface{}
 			return nil, errors.Errorf("unsupported authorization status %v", val[0])
 		}
 
-		// Authorize the account through the account manager
-		if err := mngr.AuthorizeAccount(account, authorize); err != nil {
+		// Authorize the account through the account accountsManager
+		if err := siteacc.AccountsManager().AuthorizeAccount(account, authorize); err != nil {
 			return nil, errors.Wrap(err, "unable to (un)authorize account")
 		}
 	} else {
@@ -324,13 +332,13 @@ func unmarshalRequestData(body []byte) (*data.Account, error) {
 	return account, nil
 }
 
-func findAccount(mngr *Manager, by string, value string) (*data.Account, error) {
+func findAccount(siteacc *SiteAccounts, by string, value string) (*data.Account, error) {
 	if len(by) == 0 && len(value) == 0 {
 		return nil, errors.Errorf("missing search criteria")
 	}
 
-	// Find the account using the account manager
-	account, err := mngr.FindAccount(by, value)
+	// Find the account using the account accountsManager
+	account, err := siteacc.AccountsManager().FindAccount(by, value)
 	if err != nil {
 		return nil, errors.Wrap(err, "user not found")
 	}

@@ -79,11 +79,12 @@ func queryEndpoint(method string, endpointURL *url.URL, auth *BasicAuth, checkSt
 	if err != nil {
 		return nil, fmt.Errorf("unable to get data from endpoint: %v", err)
 	}
+	defer resp.Body.Close()
+
 	if checkStatus && resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("invalid response received: %v", resp.Status)
 	}
 
-	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	return body, nil
 }

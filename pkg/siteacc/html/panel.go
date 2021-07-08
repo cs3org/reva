@@ -40,7 +40,6 @@ type Panel struct {
 	provider PanelProvider
 
 	templates map[TemplateID]*template.Template
-	sessions  *SessionManager
 }
 
 const (
@@ -70,13 +69,6 @@ func (panel *Panel) initialize(name string, provider PanelProvider, conf *config
 
 	// Create space for the panel templates
 	panel.templates = make(map[string]*template.Template, 5)
-
-	// Create the session mananger
-	sessions, err := NewSessionManager(name+"_session", conf, log)
-	if err != nil {
-		return errors.Wrap(err, "error while creating the session manager")
-	}
-	panel.sessions = sessions
 
 	return nil
 }
@@ -118,16 +110,12 @@ func (panel *Panel) AddTemplate(name TemplateID, provider ContentProvider) error
 }
 
 // Execute generates the HTTP output of the panel and writes it to the response writer.
-func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, dataProvider PanelDataProvider) error {
-	session, err := panel.sessions.HandleRequest(w, r)
-	if err != nil {
-		return errors.Wrap(err, "an error occurred while handling sessions")
-	}
-
+func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *Session, dataProvider PanelDataProvider) error {
 	// Get the path query parameter; the panel provider may use this to determine the template to use
 	path := r.URL.Query().Get(pathParameterName)
 
-	tplName := panel.getFullTemplateName(panel.provider.GetActiveTemplate(session, path))
+	actTpl := panel.provider.GetActiveTemplate(session, path)
+	tplName := panel.getFullTemplateName(actTpl)
 	tpl, ok := panel.templates[tplName]
 	if !ok {
 		return errors.Errorf("template %v not found", tplName)
@@ -137,6 +125,11 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, dataProvider
 	var data interface{}
 	if dataProvider != nil {
 		data = dataProvider(session)
+	}
+
+	// Perform the pre-execution phase in which the panel provider can intercept the actual execution
+	if err := panel.provider.PreExecute(session, actTpl, r); err != nil {
+		return errors.Wrapf(err, "pre-execution of template %v failed", tplName)
 	}
 
 	return tpl.Execute(w, data)

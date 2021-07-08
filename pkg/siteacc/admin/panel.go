@@ -86,8 +86,13 @@ func (panel *Panel) GetContentBody() string {
 	return tplBody
 }
 
+// PreExecute is called before the actual template is being executed.
+func (panel *Panel) PreExecute(*html.Session, string, *http.Request) error {
+	return nil
+}
+
 // Execute generates the HTTP output of the htmlPanel and writes it to the response writer.
-func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, accounts *data.Accounts) error {
+func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *html.Session, accounts *data.Accounts) error {
 	dataProvider := func(*html.Session) interface{} {
 		type TemplateData struct {
 			Accounts *data.Accounts
@@ -97,7 +102,7 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, accounts *da
 			Accounts: accounts,
 		}
 	}
-	return panel.htmlPanel.Execute(w, r, dataProvider)
+	return panel.htmlPanel.Execute(w, r, session, dataProvider)
 }
 
 // NewPanel creates a new administration panel.

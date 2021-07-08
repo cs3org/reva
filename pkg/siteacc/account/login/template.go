@@ -48,8 +48,7 @@ function handleAction(action) {
 	xhr.onreadystatechange = function() {
 		if (this.readyState === XMLHttpRequest.DONE) {
 			if (this.status == 200) {
-				setState(STATE_SUCCESS, "Your login was successful! Redirecting...");
-				window.location.replace("?manage");
+				setState(STATE_SUCCESS, "Your login was successful!");
 			} else {
 				var resp = JSON.parse(this.responseText);
 				setState(STATE_ERROR, "An error occurred while trying to login your account:<br><em>" + resp.error + "</em>", "form", null, true);
@@ -96,7 +95,7 @@ const tplBody = `
 		</div>
 		<div style="grid-row: 3; grid-column: 2; text-align: right;">
 			<button type="reset">Reset</button>
-			<button type="button" style="font-weight: bold;" onClick="handleAction('authenticate');">Login</button>
+			<button type="button" style="font-weight: bold;" onClick="handleAction('login');">Login</button>
 		</div>
 	</form>	
 </div>
