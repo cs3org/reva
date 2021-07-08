@@ -107,13 +107,7 @@ func resourceTypeToItem(r provider.ResourceType) string {
 }
 
 func sharePermToInt(p *provider.ResourcePermissions) int {
-	var perm int
-	if p.CreateContainer {
-		perm = 15
-	} else if p.ListContainer {
-		perm = 1
-	}
-	return perm
+	return int(conversions.RoleFromResourcePermissions(p).OCSPermissions())
 }
 
 func intTosharePerm(p int) (*provider.ResourcePermissions, error) {
