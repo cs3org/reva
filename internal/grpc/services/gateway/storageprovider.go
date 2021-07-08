@@ -136,16 +136,16 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 	if id != nil {
 		// query that specific storage provider
-		parts := strings.SplitN(id.OpaqueId, "!", 2)
-		if len(parts) != 2 {
+		storageid, opaqeid, err := utils.SplitStorageSpaceID(id.OpaqueId)
+		if err != nil {
 			return &provider.ListStorageSpacesResponse{
 				Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
 			}, nil
 		}
 		res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
 			Ref: &provider.Reference{ResourceId: &provider.ResourceId{
-				StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + an opaqueid
-				OpaqueId:  parts[1],
+				StorageId: storageid,
+				OpaqueId:  opaqeid,
 			}},
 		})
 		if err != nil {
@@ -267,15 +267,15 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	parts := strings.SplitN(req.Id.OpaqueId, "!", 2)
-	if len(parts) != 2 {
+	storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
+	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
 			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
 		}, nil
 	}
 	c, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
-		StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + a opaqueid
-		OpaqueId:  parts[1],
+		StorageId: storageid,
+		OpaqueId:  opaqeid,
 	}})
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
