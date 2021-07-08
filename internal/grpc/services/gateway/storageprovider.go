@@ -1931,7 +1931,7 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 		return res.Info.Path, res.Status
 	}
 
-	if ref.ResourceId == nil && strings.HasPrefix(ref.Path, "/") {
+	if utils.IsAbsolutePathReference(ref) {
 		return ref.Path, &rpc.Status{Code: rpc.Code_CODE_OK}
 	}
 	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
