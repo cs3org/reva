@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
@@ -116,6 +117,10 @@ type Options struct {
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
+
+	// TokenExpiry stores in seconds the time after which generated tokens will expire
+	// Default is 3600
+	TokenExpiry int
 }
 
 func (opt *Options) init() {
@@ -691,8 +696,10 @@ func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, 
 	return c.Read(ctx, auth, versionFile)
 }
 
+// GenerateToken returns a token on behalf of the resource owner to be used by lightweight accounts
 func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization, p string, a *acl.Entry) (string, error) {
-	args := []string{"token", "--permission", a.Permissions, "--tree", "--path", path.Clean(p) + "/"}
+	expiration := strconv.FormatInt(time.Now().Add(time.Duration(c.opt.TokenExpiry)*time.Second).Unix(), 10)
+	args := []string{"token", "--permission", a.Permissions, "--tree", "--path", path.Clean(p) + "/", "--expires", expiration}
 	stdout, _, err := c.executeEOS(ctx, args, auth)
 	return stdout, err
 }

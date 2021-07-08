@@ -29,6 +29,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bluele/gcache"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -126,6 +127,10 @@ func (c *Config) init() {
 		c.UserIDCacheWarmupDepth = 2
 	}
 
+	if c.TokenExpiry == 0 {
+		c.TokenExpiry = 3600
+	}
+
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
@@ -135,6 +140,7 @@ type eosfs struct {
 	chunkHandler   *chunking.ChunkHandler
 	singleUserAuth eosclient.Authorization
 	userIDCache    gcache.Cache
+	tokenCache     gcache.Cache
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance
@@ -198,6 +204,7 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
 		userIDCache:  gcache.New(c.UserIDCacheSize).LFU().Build(),
+		tokenCache:   gcache.New(c.UserIDCacheSize).LFU().Build(),
 	}
 
 	go eosfs.userIDcacheWarmup()
@@ -1757,10 +1764,23 @@ func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 		}
 	}
 
+	p := path.Clean(fn)
+	for p != "." && p != fs.conf.Namespace {
+		key := p + "!" + a.Permissions
+		if tknIf, err := fs.tokenCache.Get(key); err == nil {
+			return eosclient.Authorization{Token: tknIf.(string)}, nil
+		}
+		p = path.Dir(p)
+	}
+
 	tkn, err := fs.c.GenerateToken(ctx, auth, fn, a)
 	if err != nil {
 		return eosclient.Authorization{}, err
 	}
+
+	key := path.Clean(fn) + "!" + a.Permissions
+	_ = fs.tokenCache.SetWithExpire(key, tkn, time.Second*time.Duration(fs.conf.TokenExpiry))
+
 	return eosclient.Authorization{Token: tkn}, nil
 }
 

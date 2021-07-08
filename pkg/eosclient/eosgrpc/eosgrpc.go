@@ -1394,6 +1394,7 @@ func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, 
 	return c.Read(ctx, auth, versionFile)
 }
 
+// GenerateToken returns a token on behalf of the resource owner to be used by lightweight accounts
 func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry) (string, error) {
 	return "", errtypes.NotSupported("TODO")
 }
