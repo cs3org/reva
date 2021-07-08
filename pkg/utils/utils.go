@@ -219,6 +219,12 @@ func IsAbsoluteReference(ref *provider.Reference) bool {
 	return (ref.ResourceId != nil && ref.Path == "") || (ref.ResourceId == nil) && strings.HasPrefix(ref.Path, "/")
 }
 
+// IsAbsolutePathReference returns true if the given reference qualifies as a global path
+// when only the path is set and starts with /
+func IsAbsolutePathReference(ref *provider.Reference) bool {
+	return ref.ResourceId == nil && strings.HasPrefix(ref.Path, "/")
+}
+
 // MakeRelativePath prefixes the path with a . to use it in a relative reference
 func MakeRelativePath(p string) string {
 	p = path.Join("/", p)
