@@ -187,13 +187,11 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 	if err != nil {
 		return err
 	}
-
 	if rsp == nil || rsp.Error == nil || rsp.Error.Code == 0 {
 		return nil
 	}
 
-	err2 := errtypes.InternalError("Err from EOS: " + fmt.Sprintf("%#v", rsp.Error))
-	return err2
+	return errtypes.InternalError("Err from EOS: " + fmt.Sprintf("%#v", rsp.Error))
 }
 
 // Common code to create and initialize a NSRequest
@@ -1394,6 +1392,10 @@ func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, 
 
 	versionFile := path.Join(getVersionFolder(p), version)
 	return c.Read(ctx, auth, versionFile)
+}
+
+func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry) (string, error) {
+	return "", errtypes.NotSupported("TODO")
 }
 
 func (c *Client) getVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {

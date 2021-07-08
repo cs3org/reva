@@ -538,8 +538,9 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	args := []string{"--nopbar", "--silent", "-f", xrdPath, localTarget}
+
 	if auth.Token != "" {
-		args[3] += "authz=" + auth.Token
+		args[3] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
 		args = append(args, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
 	}
@@ -573,11 +574,13 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, path, source string) error {
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	args := []string{"--nopbar", "--silent", "-f", source, xrdPath}
+
 	if auth.Token != "" {
-		args[4] += "authz=" + auth.Token
+		args[4] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
-		args = append(args, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
+		args = append(args, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
 	}
+
 	_, _, err := c.executeXRDCopy(ctx, args)
 	return err
 }
@@ -630,6 +633,12 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, p, version string) (io.ReadCloser, error) {
 	versionFile := path.Join(getVersionFolder(p), version)
 	return c.Read(ctx, auth, versionFile)
+}
+
+func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization, p string, a *acl.Entry) (string, error) {
+	args := []string{"token", "--permission", a.Permissions, "--tree", "--path", path.Clean(p) + "/"}
+	stdout, _, err := c.executeEOS(ctx, args, auth)
+	return stdout, err
 }
 
 func (c *Client) getVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {

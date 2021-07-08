@@ -55,6 +55,7 @@ type EOSClient interface {
 	ListVersions(ctx context.Context, auth Authorization, p string) ([]*FileInfo, error)
 	RollbackToVersion(ctx context.Context, auth Authorization, path, version string) error
 	ReadVersion(ctx context.Context, auth Authorization, p, version string) (io.ReadCloser, error)
+	GenerateToken(ctx context.Context, auth Authorization, path string, a *acl.Entry) (string, error)
 }
 
 // AttrType is the type of extended attribute,
