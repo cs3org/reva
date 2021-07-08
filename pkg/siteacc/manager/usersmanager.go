@@ -64,6 +64,8 @@ func (mngr *UsersManager) LoginUser(name, password string, session *html.Session
 		return errors.Errorf("invalid password")
 	}
 
+	// Store the user account in the session
+	session.LoggedInUser = account
 	return nil
 }
 

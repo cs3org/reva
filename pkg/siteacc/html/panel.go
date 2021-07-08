@@ -128,7 +128,11 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *Ses
 	}
 
 	// Perform the pre-execution phase in which the panel provider can intercept the actual execution
-	if err := panel.provider.PreExecute(session, actTpl, r); err != nil {
+	if state, err := panel.provider.PreExecute(session, actTpl, w, r); err == nil {
+		if state == AbortExecution {
+			return nil
+		}
+	} else {
 		return errors.Wrapf(err, "pre-execution of template %v failed", tplName)
 	}
 

@@ -24,12 +24,12 @@ type PanelTemplate struct {
 	html.ContentProvider
 }
 
-// GetTitle returns the title of the htmlPanel.
+// GetTitle returns the title of the panel.
 func (template *PanelTemplate) GetTitle() string {
 	return "ScienceMesh Account Registration"
 }
 
-// GetCaption returns the caption which is displayed on the htmlPanel.
+// GetCaption returns the caption which is displayed on the panel.
 func (template *PanelTemplate) GetCaption() string {
 	return "Welcome to the ScienceMesh Account Registration!"
 }

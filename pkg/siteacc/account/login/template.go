@@ -48,7 +48,8 @@ function handleAction(action) {
 	xhr.onreadystatechange = function() {
 		if (this.readyState === XMLHttpRequest.DONE) {
 			if (this.status == 200) {
-				setState(STATE_SUCCESS, "Your login was successful!");
+				setState(STATE_SUCCESS, "Your login was successful! Redirecting...");
+				window.location.replace("?path=manage");
 			} else {
 				var resp = JSON.parse(this.responseText);
 				setState(STATE_ERROR, "An error occurred while trying to login your account:<br><em>" + resp.error + "</em>", "form", null, true);

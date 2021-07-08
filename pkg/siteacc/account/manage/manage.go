@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package login
+package manage
 
 import "github.com/cs3org/reva/pkg/siteacc/html"
 
@@ -26,12 +26,12 @@ type PanelTemplate struct {
 
 // GetTitle returns the title of the panel.
 func (template *PanelTemplate) GetTitle() string {
-	return "ScienceMesh Account Login"
+	return "ScienceMesh Account Management"
 }
 
 // GetCaption returns the caption which is displayed on the panel.
 func (template *PanelTemplate) GetCaption() string {
-	return "Login to your ScienceMesh Account!"
+	return "Welcome to your ScienceMesh Account!"
 }
 
 // GetContentJavaScript delivers additional JavaScript code.

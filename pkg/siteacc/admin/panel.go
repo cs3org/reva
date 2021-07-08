@@ -87,8 +87,8 @@ func (panel *Panel) GetContentBody() string {
 }
 
 // PreExecute is called before the actual template is being executed.
-func (panel *Panel) PreExecute(*html.Session, string, *http.Request) error {
-	return nil
+func (panel *Panel) PreExecute(*html.Session, string, http.ResponseWriter, *http.Request) (html.ExecutionResult, error) {
+	return html.ContinueExecution, nil
 }
 
 // Execute generates the HTTP output of the htmlPanel and writes it to the response writer.

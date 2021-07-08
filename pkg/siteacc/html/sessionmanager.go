@@ -115,7 +115,8 @@ func (mngr *SessionManager) findSession(id string) *Session {
 func (mngr *SessionManager) migrateSession(session *Session, r *http.Request) (*Session, error) {
 	sessionNew := mngr.createSession(r)
 
-	// Carry over the old session data, thus preserving the existing session
+	// Carry over the old session information, thus preserving the existing session
+	sessionNew.LoggedInUser = session.LoggedInUser
 	sessionNew.Data = session.Data
 
 	// Delete the old session

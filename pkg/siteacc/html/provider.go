@@ -22,13 +22,20 @@ import (
 	"net/http"
 )
 
+const (
+	ContinueExecution = true
+	AbortExecution    = false
+)
+
+type ExecutionResult = bool
+
 // PanelProvider handles general panel tasks.
 type PanelProvider interface {
 	// GetActiveTemplate returns the name of the active template.
 	GetActiveTemplate(*Session, string) string
 
 	// PreExecute is called before the actual template is being executed.
-	PreExecute(*Session, string, *http.Request) error
+	PreExecute(*Session, string, http.ResponseWriter, *http.Request) (ExecutionResult, error)
 }
 
 type PanelDataProvider = func(*Session) interface{}

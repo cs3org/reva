@@ -20,10 +20,13 @@ package account
 
 import (
 	"net/http"
+	"net/url"
 
 	"github.com/cs3org/reva/pkg/siteacc/account/login"
+	"github.com/cs3org/reva/pkg/siteacc/account/manage"
 	"github.com/cs3org/reva/pkg/siteacc/account/registration"
 	"github.com/cs3org/reva/pkg/siteacc/config"
+	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -38,6 +41,7 @@ type Panel struct {
 
 const (
 	templateLogin        = "login"
+	templateManage       = "manage"
 	templateRegistration = "register"
 )
 
@@ -54,6 +58,10 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 		return errors.Wrap(err, "unable to create the login template")
 	}
 
+	if err := panel.htmlPanel.AddTemplate(templateManage, &manage.PanelTemplate{}); err != nil {
+		return errors.Wrap(err, "unable to create the account management template")
+	}
+
 	if err := panel.htmlPanel.AddTemplate(templateRegistration, &registration.PanelTemplate{}); err != nil {
 		return errors.Wrap(err, "unable to create the registration template")
 	}
@@ -63,39 +71,63 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 
 // GetActiveTemplate returns the name of the active template.
 func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string {
-	template := templateLogin // TODO: Check if user is logged in
+	template := templateLogin
 
-	// Invalid paths are just ignored and redirected to the login/main page
+	// Invalid paths are just ignored and redirected to the login page
 	switch path {
-	case templateLogin:
-	case templateRegistration:
+	case templateLogin,
+		templateManage,
+		templateRegistration:
 		template = path
 	}
-
-	// TODO: Check path access
-	// TODO: If user is logged in and path == login, redirect to main
 
 	return template
 }
 
 // PreExecute is called before the actual template is being executed.
-func (panel *Panel) PreExecute(*html.Session, string, *http.Request) error {
-	return nil
+func (panel *Panel) PreExecute(session *html.Session, path string, w http.ResponseWriter, r *http.Request) (html.ExecutionResult, error) {
+	protectedPaths := []string{templateManage}
+
+	if session.LoggedInUser == nil {
+		// If no user is logged in, redirect protected paths to the login page
+		for _, protected := range protectedPaths {
+			if protected == path {
+				return panel.redirect(templateLogin, w, r), nil
+			}
+		}
+	} else {
+		// If a user is logged in and tries to login or register again, redirect to the main account page
+		if path == templateLogin || path == templateRegistration {
+			return panel.redirect(templateManage, w, r), nil
+		}
+	}
+
+	return html.ContinueExecution, nil
 }
 
 // Execute generates the HTTP output of the form and writes it to the response writer.
 func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *html.Session) error {
 	dataProvider := func(*html.Session) interface{} {
 		type TemplateData struct {
+			Account *data.Account
 		}
 
-		return TemplateData{}
+		return TemplateData{
+			Account: session.LoggedInUser,
+		}
 	}
 	return panel.htmlPanel.Execute(w, r, session, dataProvider)
 }
 
-func (panel *Panel) executeLogin(session *html.Session, r *http.Request) error {
-	return nil
+func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request) html.ExecutionResult {
+	// Modify the original request URI by replacing the path parameter
+	newURI, _ := url.Parse(r.RequestURI)
+	params := newURI.Query()
+	params.Del("path")
+	params.Add("path", path)
+	newURI.RawQuery = params.Encode()
+	http.Redirect(w, r, newURI.String(), http.StatusFound)
+	return html.AbortExecution
 }
 
 // NewPanel creates a new account panel.
