@@ -22,6 +22,7 @@ import (
 	"context"
 	"strings"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -217,7 +218,6 @@ func (ss *wrappedServerStream) Context() context.Context {
 }
 
 func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string) (*userpb.User, error) {
-	log := appctx.GetLogger(ctx)
 	u, tokenScope, err := mgr.DismantleToken(ctx, tkn)
 	if err != nil {
 		return nil, err
@@ -232,35 +232,43 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		return u, nil
 	}
 
-	// Check if req is of type *provider.Reference_Path
-	// If yes, the request might be coming from a share where the accessor is
-	// trying to impersonate the owner, since the share manager doesn't know the
-	// share path.
-	if ref, ok := extractRef(req); ok {
-		if ref.GetPath() != "" {
+	if err = expandAndVerifyScope(ctx, req, tokenScope, gatewayAddr); err != nil {
+		return nil, err
+	}
 
-			// Try to extract the resource ID from the scope resource.
+	return u, nil
+}
+
+func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, gatewayAddr string) error {
+	log := appctx.GetLogger(ctx)
+
+	if ref, ok := extractRef(req); ok {
+		// Check if req is of type *provider.Reference_Path
+		// If yes, the request might be coming from a share where the accessor is
+		// trying to impersonate the owner, since the share manager doesn't know the
+		// share path.
+		if ref.GetPath() != "" {
 			log.Info().Msgf("resolving path reference to ID to check token scope %+v", ref.GetPath())
 			for k := range tokenScope {
 				switch {
 				case strings.HasPrefix(k, "publicshare"):
 					var share link.PublicShare
-					err = utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
+					err := utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
 					if err != nil {
 						continue
 					}
 					if ok, err := checkResourcePath(ctx, ref, share.ResourceId, gatewayAddr); err == nil && ok {
-						return u, nil
+						return nil
 					}
 
 				case strings.HasPrefix(k, "share"):
 					var share collaboration.Share
-					err = utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
+					err := utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
 					if err != nil {
 						continue
 					}
 					if ok, err := checkResourcePath(ctx, ref, share.ResourceId, gatewayAddr); err == nil && ok {
-						return u, nil
+						return nil
 					}
 				case strings.HasPrefix(k, "lightweight"):
 					client, err := pool.GetGatewayServiceClient(gatewayAddr)
@@ -274,15 +282,19 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 					}
 					for _, share := range shares.Shares {
 						if ok, err := checkResourcePath(ctx, ref, share.Share.ResourceId, gatewayAddr); err == nil && ok {
-							return u, nil
+							return nil
 						}
 					}
 				}
 			}
-		} else { // ref has ID present
+		} else {
+			// ref has ID present
+			// The request might be coming from a share created for a lightweight account
+			// after the token was minted.
+			log.Info().Msgf("resolving ID reference against received shares to verify token scope %+v", ref.GetResourceId())
 			client, err := pool.GetGatewayServiceClient(gatewayAddr)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			for k := range tokenScope {
 				if strings.HasPrefix(k, "lightweight") {
@@ -293,16 +305,20 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 					}
 					for _, share := range shares.Shares {
 						if utils.ResourceIDEqual(share.Share.ResourceId, ref.GetResourceId()) {
-							return u, nil
+							return nil
 						}
 					}
 				}
 			}
 		}
 	} else if ref, ok := extractShareRef(req); ok {
+		// It's a share ref
+		// The request might be coming from a share created for a lightweight account
+		// after the token was minted.
+		log.Info().Msgf("resolving share reference against received shares to verify token scope %+v", ref)
 		client, err := pool.GetGatewayServiceClient(gatewayAddr)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for k := range tokenScope {
 			if strings.HasPrefix(k, "lightweight") {
@@ -313,18 +329,18 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 				}
 				for _, s := range shares.Shares {
 					if ref.GetId() != nil && ref.GetId().OpaqueId == s.Share.Id.OpaqueId {
-						return u, nil
+						return nil
 					}
 					if key := ref.GetKey(); key != nil && (utils.UserEqual(key.Owner, s.Share.Owner) || utils.UserEqual(key.Owner, s.Share.Creator)) &&
 						utils.ResourceIDEqual(key.ResourceId, s.Share.ResourceId) && utils.GranteeEqual(key.Grantee, s.Share.Grantee) {
-						return u, nil
+						return nil
 					}
 				}
 			}
 		}
 	}
 
-	return nil, errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
+	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
 }
 
 func checkResourcePath(ctx context.Context, ref *provider.Reference, r *provider.ResourceId, gatewayAddr string) (bool, error) {

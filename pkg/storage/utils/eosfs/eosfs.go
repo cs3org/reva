@@ -964,14 +964,15 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
+	auth, err := fs.getUserAuth(ctx, u)
+	if err != nil {
+		return err
+	}
+
 	home := fs.wrap(ctx, "/")
 	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return nil
-	}
-	auth, err := fs.getUserAuth(ctx, u)
-	if err != nil {
-		return err
 	}
 
 	_, err = fs.c.GetFileInfoByPath(ctx, rootAuth, home)

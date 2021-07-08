@@ -28,7 +28,6 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -140,8 +139,8 @@ func NewEOSHTTPClient(opt *HTTPOptions) (*EOSHTTPClient, error) {
 	log.Debug().Str("func", "New").Str("Creating new eoshttp client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
 
 	if opt == nil {
-		log.Debug().Str("opt is nil, Error creating http client ", "").Msg("")
-		return nil, errtypes.InternalError("HTTPOptions are nil")
+		log.Debug().Str("opt is nil, error creating http client ", "").Msg("")
+		return nil, errtypes.InternalError("HTTPOptions is nil")
 	}
 
 	opt.init()
@@ -234,19 +233,11 @@ func (c *EOSHTTPClient) buildFullURL(urlpath string, auth eosclient.Authorizatio
 		return "", err
 	}
 
-	// I feel safer putting here a check, to prohibit malicious users to
-	// inject a false uid/gid into the url
-	// Who knows, maybe it's redundant? Better more than nothing.
-	p1 := strings.Index(urlpath, "eos.ruid")
-	if p1 > 0 && (urlpath[p1-1] == '&' || urlpath[p1-1] == '?') {
-		return "", errtypes.PermissionDenied("Illegal malicious url " + urlpath)
-	}
-	p1 = strings.Index(urlpath, "eos.guid")
-	if p1 > 0 && (urlpath[p1-1] == '&' || urlpath[p1-1] == '?') {
-		return "", errtypes.PermissionDenied("Illegal malicious url " + urlpath)
-	}
-
+	// Prohibit malicious users from injecting a false uid/gid into the url
 	v := u.Query()
+	if v.Get("eos.ruid") != "" || v.Get("eos.rgid") != "" {
+		return "", errtypes.PermissionDenied("Illegal malicious url " + urlpath)
+	}
 
 	if len(auth.Role.UID) > 0 {
 		v.Set("eos.ruid", auth.Role.UID)

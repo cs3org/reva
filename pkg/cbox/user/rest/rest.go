@@ -128,22 +128,26 @@ func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[st
 	if err != nil {
 		return nil, err
 	}
-	if len(responseData) != 1 {
+
+	var users []map[string]interface{}
+	for _, usr := range responseData {
+		userData, ok := usr.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		t, _ := userData["type"].(string)
+		userType := getUserType(t, userData["upn"].(string))
+		if userType != userpb.UserType_USER_TYPE_APPLICATION && userType != userpb.UserType_USER_TYPE_FEDERATED {
+			users = append(users, userData)
+		}
+	}
+
+	if len(users) != 1 {
 		return nil, errors.New("rest: user not found: " + param + ":" + val)
 	}
 
-	userData, ok := responseData[0].(map[string]interface{})
-	if !ok {
-		return nil, errors.New("rest: error in type assertion")
-	}
-
-	t, _ := userData["type"].(string)
-	userType := getUserType(t, userData["upn"].(string))
-	if userType == userpb.UserType_USER_TYPE_APPLICATION || userType == userpb.UserType_USER_TYPE_FEDERATED {
-		return nil, errors.New("rest: federated and application accounts not supported")
-	}
-
-	return userData, nil
+	return users[0], nil
 }
 
 func (m *manager) getInternalUserID(ctx context.Context, uid *userpb.UserId) (string, error) {
