@@ -62,6 +62,11 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	if err := xattr.Set(np, xattrs.GrantPrefix+principal, value); err != nil {
 		return err
 	}
+
+	if err := fs.createStorageSpace("share", node.ID); err != nil {
+		return err
+	}
+
 	return fs.tp.Propagate(ctx, node)
 }
 
