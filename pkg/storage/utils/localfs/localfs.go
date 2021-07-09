@@ -1131,7 +1131,7 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 	return fs.propagate(ctx, np)
 }
 
-func (fs *localfs) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *localfs) PurgeRecycleItem(ctx context.Context, key, itemPath string) error {
 	rp := fs.wrapRecycleBin(ctx, key)
 
 	if err := os.Remove(rp); err != nil {
@@ -1181,7 +1181,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 }
 
-func (fs *localfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (fs *localfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error) {
 
 	rp := fs.wrapRecycleBin(ctx, "/")
 
@@ -1199,14 +1199,14 @@ func (fs *localfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, er
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string, restoreRef *provider.Reference) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, key, itemPath string, restoreRef *provider.Reference) error {
 
-	suffix := path.Ext(restoreKey)
+	suffix := path.Ext(key)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
 		return errors.New("localfs: invalid trash item suffix")
 	}
 
-	filePath, err := fs.getRecycledEntry(ctx, restoreKey)
+	filePath, err := fs.getRecycledEntry(ctx, key)
 	if err != nil {
 		return errors.Wrap(err, "localfs: invalid key")
 	}
@@ -1225,10 +1225,10 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string, re
 		return errors.New("localfs: can't restore - file already exists at original path")
 	}
 
-	rp := fs.wrapRecycleBin(ctx, restoreKey)
+	rp := fs.wrapRecycleBin(ctx, key)
 	if _, err = os.Stat(rp); err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(restoreKey)
+			return errtypes.NotFound(key)
 		}
 		return errors.Wrap(err, "localfs: error stating "+rp)
 	}
@@ -1237,7 +1237,7 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string, re
 		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 
-	err = fs.removeFromRecycledDB(ctx, restoreKey)
+	err = fs.removeFromRecycledDB(ctx, key)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error adding entry to DB")
 	}

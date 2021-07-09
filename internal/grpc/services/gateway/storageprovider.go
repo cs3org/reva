@@ -1928,6 +1928,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *gateway.ListRecycleRequest) 
 		Opaque: req.Opaque,
 		FromTs: req.FromTs,
 		ToTs:   req.ToTs,
+		Ref:    req.Ref,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListRecycleRequest")
@@ -1953,7 +1954,6 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *gateway.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
-	// lookup storage by treating the key as a path. It has been prefixed with the storage path in ListRecycle
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.PurgeRecycleResponse{
