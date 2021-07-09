@@ -322,7 +322,7 @@ var _ = Describe("storage providers", func() {
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			By("listing the recycle items")
-			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
+			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -337,7 +337,7 @@ var _ = Describe("storage providers", func() {
 
 			restoreRes, err := serviceClient.RestoreRecycleItem(ctx,
 				&storagep.RestoreRecycleItemRequest{
-					Ref: subdirRef,
+					Ref: homeRef,
 					Key: item.Key,
 				},
 			)
@@ -357,7 +357,7 @@ var _ = Describe("storage providers", func() {
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			By("listing the recycle items")
-			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
+			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -372,7 +372,7 @@ var _ = Describe("storage providers", func() {
 
 			restoreRes, err := serviceClient.RestoreRecycleItem(ctx,
 				&storagep.RestoreRecycleItemRequest{
-					Ref:        subdirRef,
+					Ref:        homeRef,
 					Key:        item.Key,
 					RestoreRef: &storagep.Reference{Path: "/subdirRestored"},
 				},
@@ -392,7 +392,7 @@ var _ = Describe("storage providers", func() {
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			By("listing recycle items")
-			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
+			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(len(listRes.RecycleItems)).To(Equal(1))
@@ -402,7 +402,7 @@ var _ = Describe("storage providers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(purgeRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-			listRes, err = serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
+			listRes, err = serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(len(listRes.RecycleItems)).To(Equal(0))
