@@ -239,7 +239,7 @@ func (c *Client) buildFullURL(urlpath, uid, gid string) (string, error) {
 		return "", err
 	}
 
-	u, err = u.Parse(urlpath)
+	u, err = u.Parse(url.PathEscape(urlpath))
 	if err != nil {
 		return "", err
 	}
@@ -418,6 +418,15 @@ func (c *Client) PUTFile(ctx context.Context, httptransport *http.Transport, rem
 				Transport: httptransport}
 
 			req, err = http.NewRequestWithContext(ctx, "PUT", loc.String(), stream)
+			if err != nil {
+				log.Error().Str("func", "PUTFile").Str("url", loc.String()).Str("err", err.Error()).Msg("can't create redirected request")
+				return err
+			}
+			if length >= 0 {
+				log.Debug().Str("func", "PUTFile").Int64("Content-Length", length).Msg("setting header")
+				req.Header.Set("Content-Length", strconv.FormatInt(length, 10))
+
+			}
 			if err != nil {
 				log.Error().Str("func", "PUTFile").Str("url", loc.String()).Str("err", err.Error()).Msg("can't create redirected request")
 				return err

@@ -21,6 +21,7 @@ package eosgrpc
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -1490,6 +1491,14 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 
 		fi.Size = st.Fmd.Size
 
+		xs := &eosclient.Checksum{
+			XSSum:  hex.EncodeToString(st.Fmd.Checksum.Value),
+			XSType: st.Fmd.Checksum.Type,
+		}
+		fi.XS = xs
+
+		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
+
 	} else {
 		fi.Inode = st.Cmd.Id
 		fi.UID = st.Cmd.Uid
@@ -1513,9 +1522,9 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 		}
 
 		fi.Size = 0
-	}
 
-	log.Debug().Str("stat info - path", fi.File).Uint64("inode:", fi.Inode).Uint64("uid:", fi.UID).Uint64("gid:", fi.GID).Str("etag:", fi.ETag).Msg("grpc response")
+		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
+	}
 
 	return fi, nil
 }
