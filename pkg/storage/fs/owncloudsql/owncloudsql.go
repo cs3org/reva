@@ -339,7 +339,7 @@ func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
 	return filepath.Join(fs.c.DataDirectory, layout, "files_trashbin/versions"), nil
 }
 
-func (fs *ocfs) toDatabasePath(ctx context.Context, ip string) string {
+func (fs *ocfs) toDatabasePath(ip string) string {
 	owner := fs.getOwner(ip)
 	trim := filepath.Join(fs.c.DataDirectory, owner)
 	p := strings.TrimPrefix(ip, trim)
@@ -569,7 +569,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip st
 		return nil, err
 	}
 
-	p := fs.toDatabasePath(ctx, ip)
+	p := fs.toDatabasePath(ip)
 	cacheEntry, err := fs.filecache.Get(storage, p)
 	if err != nil {
 		return nil, err
@@ -746,7 +746,7 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 	if err != nil {
 		return nil, err
 	}
-	entry, err := fs.filecache.Get(ownerStorageID, fs.toDatabasePath(ctx, ip))
+	entry, err := fs.filecache.Get(ownerStorageID, fs.toDatabasePath(ip))
 	if err != nil {
 		return nil, err
 	}
@@ -875,18 +875,20 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return err
 	}
-	layout := templates.WithUser(u, fs.c.UserLayout)
+	return fs.createHomeForUser(ctx, templates.WithUser(u, fs.c.UserLayout))
+}
 
+func (fs *ocfs) createHomeForUser(ctx context.Context, user string) error {
 	homePaths := []string{
-		filepath.Join(fs.c.DataDirectory, layout, "files"),
-		filepath.Join(fs.c.DataDirectory, layout, "files_trashbin"),
-		filepath.Join(fs.c.DataDirectory, layout, "files_trashbin/files"),
-		filepath.Join(fs.c.DataDirectory, layout, "files_trashbin/versions"),
-		filepath.Join(fs.c.DataDirectory, layout, "uploads"),
-		filepath.Join(fs.c.DataDirectory, layout, "shadow_files"),
+		filepath.Join(fs.c.DataDirectory, user, "files"),
+		filepath.Join(fs.c.DataDirectory, user, "files_trashbin"),
+		filepath.Join(fs.c.DataDirectory, user, "files_trashbin/files"),
+		filepath.Join(fs.c.DataDirectory, user, "files_trashbin/versions"),
+		filepath.Join(fs.c.DataDirectory, user, "uploads"),
+		filepath.Join(fs.c.DataDirectory, user, "shadow_files"),
 	}
 
-	storageID, err := fs.getUserStorage(ctx)
+	storageID, err := fs.filecache.GetNumericStorageID("home::" + user)
 	if err != nil {
 		return err
 	}
@@ -900,7 +902,7 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 			return err
 		}
 		data := map[string]interface{}{
-			"path":     fs.toDatabasePath(ctx, v),
+			"path":     fs.toDatabasePath(v),
 			"etag":     calcEtag(ctx, fi),
 			"mimetype": "httpd/unix-directory",
 		}
@@ -909,7 +911,6 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -950,7 +951,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
 	}
 	mtime := time.Now().Unix()
 	data := map[string]interface{}{
-		"path":          fs.toDatabasePath(ctx, ip),
+		"path":          fs.toDatabasePath(ip),
 		"etag":          calcEtag(ctx, fi),
 		"mimetype":      "httpd/unix-directory",
 		"permissions":   31, // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
@@ -1332,9 +1333,20 @@ func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) 
 	if err != nil {
 		return err
 	}
-	err = fs.filecache.Delete(storage, fs.getOwner(ip), fs.toDatabasePath(ctx, ip), fs.toDatabasePath(ctx, tgt))
+
+	tryDelete := func() error {
+		return fs.filecache.Delete(storage, fs.getOwner(ip), fs.toDatabasePath(ip), fs.toDatabasePath(tgt))
+	}
+	err = tryDelete()
 	if err != nil {
-		return err
+		err = fs.createHomeForUser(ctx, fs.getOwner(ip)) // Try setting up the owner's home (incl. trash) to fix the problem
+		if err != nil {
+			return err
+		}
+		err = tryDelete()
+		if err != nil {
+			return err
+		}
 	}
 
 	return fs.propagate(ctx, filepath.Dir(ip))
@@ -1390,7 +1402,7 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 	if err != nil {
 		return err
 	}
-	err = fs.filecache.Move(storage, fs.toDatabasePath(ctx, oldIP), fs.toDatabasePath(ctx, newIP))
+	err = fs.filecache.Move(storage, fs.toDatabasePath(oldIP), fs.toDatabasePath(newIP))
 	if err != nil {
 		return err
 	}
@@ -1681,7 +1693,7 @@ func (fs *ocfs) archiveRevision(ctx context.Context, vbp string, ip string) erro
 		return err
 	}
 
-	vdp := fs.toDatabasePath(ctx, vp)
+	vdp := fs.toDatabasePath(vp)
 	basePath := strings.TrimSuffix(vp, vdp)
 	parts := strings.Split(filepath.Dir(vdp), "/")
 	walkPath := ""
@@ -1708,7 +1720,7 @@ func (fs *ocfs) archiveRevision(ctx context.Context, vbp string, ip string) erro
 			return errors.Wrap(err, "could not create parent version directory")
 		}
 	}
-	_, err = fs.filecache.Copy(storage, fs.toDatabasePath(ctx, ip), vdp)
+	_, err = fs.filecache.Copy(storage, fs.toDatabasePath(ip), vdp)
 	return err
 }
 
@@ -1864,7 +1876,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	}
 	mtime := time.Now().Unix()
 	data := map[string]interface{}{
-		"path":          fs.toDatabasePath(ctx, ip),
+		"path":          fs.toDatabasePath(ip),
 		"checksum":      fmt.Sprintf("SHA1:%032x MD5:%032x ADLER32:%032x", sha1h, md5h, adler32h),
 		"etag":          calcEtag(ctx, fi),
 		"size":          fi.Size(),
@@ -2053,7 +2065,7 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restor
 	if err != nil {
 		return err
 	}
-	err = fs.filecache.Move(storage, fs.toDatabasePath(ctx, src), fs.toDatabasePath(ctx, tgt))
+	err = fs.filecache.Move(storage, fs.toDatabasePath(src), fs.toDatabasePath(tgt))
 	if err != nil {
 		return err
 	}
@@ -2118,7 +2130,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 			return err
 		}
 		etag := calcEtag(ctx, fi)
-		if err := fs.filecache.SetEtag(storageID, fs.toDatabasePath(ctx, root), etag); err != nil {
+		if err := fs.filecache.SetEtag(storageID, fs.toDatabasePath(root), etag); err != nil {
 			appctx.GetLogger(ctx).Error().
 				Err(err).
 				Str("leafPath", leafPath).
