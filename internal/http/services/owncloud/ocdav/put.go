@@ -248,6 +248,14 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
+		if uRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			w.WriteHeader(http.StatusForbidden)
+			b, err := Marshal(exception{
+				code:    SabredavPermissionDenied,
+				message: "permission denied: you have no permission to upload content",
+			})
+			HandleWebdavError(&sublog, w, b, err)
+		}
 		HandleErrorStatus(&sublog, w, uRes.Status)
 		return
 	}
@@ -285,16 +293,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 					code:    SabredavBadRequest,
 					message: "The computed checksum does not match the one received from the client.",
 				})
-				if err != nil {
-					sublog.Error().Msgf("error marshaling xml response: %s", b)
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-				_, err = w.Write(b)
-				if err != nil {
-					sublog.Err(err).Msg("error writing response")
-				}
-				return
+				HandleWebdavError(&sublog, w, b, err)
 			}
 			sublog.Error().Err(err).Msg("PUT request to data server failed")
 			w.WriteHeader(httpRes.StatusCode)

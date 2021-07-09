@@ -18,4 +18,8 @@
 
 package loader
 
-// Add your own.
+import (
+	// Load core GRPC services
+	_ "github.com/cs3org/reva/internal/grpc/interceptors/readonly"
+	// Add your own service here
+)

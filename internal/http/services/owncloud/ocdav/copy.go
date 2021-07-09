@@ -65,11 +65,23 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 
 	if overwrite != "T" && overwrite != "F" {
 		w.WriteHeader(http.StatusBadRequest)
+		m := fmt.Sprintf("Overwrite header is set to incorrect value %v", overwrite)
+		b, err := Marshal(exception{
+			code:    SabredavBadRequest,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
 		return
 	}
 
 	if depth != "infinity" && depth != "0" {
 		w.WriteHeader(http.StatusBadRequest)
+		m := fmt.Sprintf("Depth header is set to incorrect value %v", depth)
+		b, err := Marshal(exception{
+			code:    SabredavBadRequest,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
 		return
 	}
 
@@ -91,6 +103,15 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
+		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: m,
+			})
+			HandleWebdavError(&sublog, w, b, err)
+		}
 		HandleErrorStatus(&sublog, w, srcStatRes.Status)
 		return
 	}
@@ -115,7 +136,13 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 
 		if overwrite == "F" {
 			sublog.Warn().Str("overwrite", overwrite).Msg("dst already exists")
-			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+			w.WriteHeader(http.StatusPreconditionFailed)
+			m := fmt.Sprintf("Could not overwrite Resource %v", dst)
+			b, err := Marshal(exception{
+				code:    SabredavPreconditionFailed,
+				message: m,
+			})
+			HandleWebdavError(&sublog, w, b, err) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 			return
 		}
 
@@ -143,7 +170,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		// TODO what if intermediate is a file?
 	}
 
-	err = s.descend(ctx, client, srcStatRes.Info, dst, depth == "infinity")
+	err = s.descend(ctx, w, client, srcStatRes.Info, dst, depth == "infinity")
 	if err != nil {
 		sublog.Error().Err(err).Str("depth", depth).Msg("error descending directory")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -152,7 +179,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	w.WriteHeader(successCode)
 }
 
-func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider.ResourceInfo, dst string, recurse bool) error {
+func (s *svc) descend(ctx context.Context, w http.ResponseWriter, client gateway.GatewayAPIClient, src *provider.ResourceInfo, dst string, recurse bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("src", src.Path).Str("dst", dst).Msg("descending")
 	if src.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -161,8 +188,23 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 			Ref: &provider.Reference{Path: dst},
 		}
 		createRes, err := client.CreateContainer(ctx, createReq)
-		if err != nil || createRes.Status.Code != rpc.Code_CODE_OK {
+		if err != nil {
+			log.Error().Err(err).Msg("error performing create container grpc request")
+			w.WriteHeader(http.StatusInternalServerError)
 			return err
+		}
+
+		if createRes.Status.Code != rpc.Code_CODE_OK {
+			if createRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+				w.WriteHeader(http.StatusForbidden)
+				m := fmt.Sprintf("Permission denied to create %v", createReq.Ref.Path)
+				b, err := Marshal(exception{
+					code:    SabredavPermissionDenied,
+					message: m,
+				})
+				HandleWebdavError(log, w, b, err)
+			}
+			return nil
 		}
 
 		// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
@@ -185,7 +227,7 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 
 		for i := range res.Infos {
 			childDst := path.Join(dst, path.Base(res.Infos[i].Path))
-			err := s.descend(ctx, client, res.Infos[i], childDst, recurse)
+			err := s.descend(ctx, w, client, res.Infos[i], childDst, recurse)
 			if err != nil {
 				return err
 			}
@@ -237,7 +279,17 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 		}
 
 		if uRes.Status.Code != rpc.Code_CODE_OK {
-			return fmt.Errorf("status code %d", uRes.Status.Code)
+			if uRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+				w.WriteHeader(http.StatusForbidden)
+				m := fmt.Sprintf("Permission denied to create %v", uReq.Ref.Path)
+				b, err := Marshal(exception{
+					code:    SabredavPermissionDenied,
+					message: m,
+				})
+				HandleWebdavError(log, w, b, err)
+			}
+			HandleErrorStatus(log, w, uRes.Status)
+			return nil
 		}
 
 		var uploadEP, uploadToken string
