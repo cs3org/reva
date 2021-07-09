@@ -180,7 +180,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			} else {
 				for _, f := range filters {
 					if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
-						if utils.ResourceEqual(&provider.Reference{ResourceId: s.ResourceId}, &provider.Reference{ResourceId: f.GetResourceId()}) {
+						if utils.ResourceIDEqual(s.ResourceId, f.GetResourceId()) {
 							shares = append(shares, s)
 						}
 					}
