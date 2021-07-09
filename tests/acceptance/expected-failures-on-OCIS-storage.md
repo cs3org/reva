@@ -165,33 +165,6 @@ _ocdav: return checksum in upload response for chunked upload_
 -   [apiMain/checksums.feature:319](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L319) Scenario: Upload overwriting a file with new chunking and correct checksum
 -   [apiMain/checksums.feature:331](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L331) Scenario: Upload overwriting a file with new chunking and invalid checksum
 
-#### [Preserve mtime after TUS upload](https://github.com/owncloud/ocis-reva/issues/174)
-Scenario Outline: upload file with mtime `expected -'1565237893', actual +'1611153591'`
--   [apiWebdavUpload1/uploadFile.feature:160](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L160)
--   [apiWebdavUpload1/uploadFile.feature:161](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L161)
-Scenario Outline: upload a file with mtime in a folder `expected -'1565237893', actual +'1611153591'`
--   [apiWebdavUpload1/uploadFile.feature:173](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L173)
--   [apiWebdavUpload1/uploadFile.feature:174](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L174)
-Scenario Outline: moving a file does not change its mtime `expected -'1565237893', actual +'1611153591'`
--   [apiWebdavUpload1/uploadFile.feature:187](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L187)
--   [apiWebdavUpload1/uploadFile.feature:188](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L188)
-Scenario Outline: overwriting a file changes its mtime `expected -'1565237893', actual +'1611153591'`
--   [apiWebdavUpload1/uploadFile.feature:200](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L200)
--   [apiWebdavUpload1/uploadFile.feature:201](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L201)
-
-#### [ocis-storage does not use the mtime send in the `Upload-Metadata` header when uploading via TUS](https://github.com/owncloud/ocis/issues/965)
--   [apiWebdavUploadTUS/uploadFileMtime.feature:17](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtime.feature#L17)
--   [apiWebdavUploadTUS/uploadFileMtime.feature:18](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtime.feature#L18)
--   [apiWebdavUploadTUS/uploadFileMtime.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtime.feature#L27)
--   [apiWebdavUploadTUS/uploadFileMtime.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtime.feature#L28)
--   [apiWebdavUploadTUS/uploadFileMtime.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtime.feature#L38)
--   [apiWebdavUploadTUS/uploadFileMtime.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtime.feature#L39)
--   [apiWebdavUploadTUS/uploadFileMtime.feature:49](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtime.feature#L49)
--   [apiWebdavUploadTUS/uploadFileMtime.feature:50](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtime.feature#L50)
--   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L40)
--   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:41](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L41)
-
-
 #### [Webdav LOCK operations](https://github.com/owncloud/ocis/issues/1284)
 -   [apiWebdavLocks/exclusiveLocks.feature:18](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocks/exclusiveLocks.feature#L18)
 -   [apiWebdavLocks/exclusiveLocks.feature:19](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocks/exclusiveLocks.feature#L19)
@@ -648,8 +621,6 @@ File and sync features in a shared scenario
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:157](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L157)
 -   [apiShareOperationsToShares1/gettingShares.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L170)
 -   [apiShareOperationsToShares1/gettingShares.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L171)
--   [apiSharePublicLink1/createPublicLinkShare.feature:736](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L736)
--   [apiSharePublicLink1/createPublicLinkShare.feature:747](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L747)
 
 #### [Shares are not deleted when user is deleted](https://github.com/owncloud/ocis/issues/1258)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:101](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L101)
@@ -755,14 +726,6 @@ File and sync features in a shared scenario
 -   [apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature#L61)
 -   [apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature:79](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature#L79)
 -   [apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature:80](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingSharesSharedFilteredEmpty.feature#L80)
-
-
-#### [Cannot set mtime on upload](https://github.com/owncloud/product/issues/271)
-
--   [apiSharePublicLink1/createPublicLinkShare.feature:717](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L717)
--   [apiSharePublicLink1/createPublicLinkShare.feature:718](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L718)
--   [apiSharePublicLink1/createPublicLinkShare.feature:732](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L732)
--   [apiSharePublicLink1/createPublicLinkShare.feature:733](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L733)
 
 #### [Public link enforce permissions](https://github.com/owncloud/ocis/issues/1269)
 
@@ -1383,14 +1346,6 @@ _ocs: api compatibility, return correct status code_
 
 #### [user can access version metadata of a received share before accepting it](https://github.com/owncloud/ocis/issues/760)
 -   [apiVersions/fileVersionsSharingToShares.feature:278](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L278)
-
-#### [ocis-storage PROPFIND on a file uploaded by share receiver is not possible](https://github.com/owncloud/ocis/issues/968)
--   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L26)
--   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L27)
--   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:55](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L55)
--   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:56](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L56)
--   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:70](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L70)
--   [apiWebdavUploadTUS/uploadFileMtimeShares.feature:71](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFileMtimeShares.feature#L71)
 
 #### [Share lists deleted user as 'user'](https://github.com/owncloud/ocis/issues/903)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:641](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L641)
