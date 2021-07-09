@@ -482,15 +482,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 				message: "The destination node already exists, and the overwrite header is set to false",
 				header:  "Overwrite",
 			})
-			if err != nil {
-				sublog.Error().Msgf("error marshaling xml response: %s", b)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			_, err = w.Write(b)
-			if err != nil {
-				sublog.Err(err).Msg("error writing response")
-			}
+			HandleWebdavError(&sublog, w, b, err)
 			return
 		}
 		// delete existing tree
@@ -528,6 +520,14 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			w.WriteHeader(http.StatusForbidden)
+			b, err := Marshal(exception{
+				code:    SabredavPermissionDenied,
+				message: "Permission denied to restore",
+			})
+			HandleWebdavError(&sublog, w, b, err)
+		}
 		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
@@ -613,6 +613,25 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	case rpc.Code_CODE_NOT_FOUND:
 		sublog.Debug().Str("storageid", sRes.Info.Id.StorageId).Str("key", key).Interface("status", res.Status).Msg("resource not found")
 		w.WriteHeader(http.StatusConflict)
+		m := fmt.Sprintf("storageid %v not found", sRes.Info.Id.StorageId)
+		b, err := Marshal(exception{
+			code:    SabredavConflict,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		w.WriteHeader(http.StatusForbidden)
+		var m string
+		if key == "" {
+			m = "Permission denied to purge recycle"
+		} else {
+			m = "Permission denied to delete"
+		}
+		b, err := Marshal(exception{
+			code:    SabredavPermissionDenied,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
 	default:
 		HandleErrorStatus(&sublog, w, res.Status)
 	}
