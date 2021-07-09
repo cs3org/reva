@@ -116,7 +116,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 		Seconds: uint64(now),
 	}
 
-	owner, err := m.userIdToUserName(ctx, md.Owner)
+	owner, err := m.userIDToUserName(ctx, md.Owner)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collabor
 }
 
 func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
-	owner, err := m.userIdToUserName(ctx, key.Owner)
+	owner, err := m.userIDToUserName(ctx, key.Owner)
 	if err != nil {
 		return nil, err
 	}

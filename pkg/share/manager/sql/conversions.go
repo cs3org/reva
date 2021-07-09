@@ -59,7 +59,7 @@ func (m *mgr) formatGrantee(ctx context.Context, g *provider.Grantee) (int, stri
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		granteeType = 0
 		var err error
-		formattedID, err = m.userIdToUserName(ctx, g.GetUserId())
+		formattedID, err = m.userIDToUserName(ctx, g.GetUserId())
 		if err != nil {
 			return 0, "", err
 		}
@@ -76,7 +76,7 @@ func (m *mgr) extractGrantee(ctx context.Context, t int, g string) (*provider.Gr
 	var grantee provider.Grantee
 	switch t {
 	case 0:
-		userid, err := m.userNameToUserId(ctx, g)
+		userid, err := m.userNameToUserID(ctx, g)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +130,7 @@ func intToShareState(g int) collaboration.ShareState {
 	}
 }
 
-func (m *mgr) userIdToUserName(ctx context.Context, userid *userpb.UserId) (string, error) {
+func (m *mgr) userIDToUserName(ctx context.Context, userid *userpb.UserId) (string, error) {
 	gwConn, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
 	if err != nil {
 		return "", err
@@ -147,7 +147,7 @@ func (m *mgr) userIdToUserName(ctx context.Context, userid *userpb.UserId) (stri
 	return getUserResponse.User.Username, nil
 }
 
-func (m *mgr) userNameToUserId(ctx context.Context, username string) (*userpb.UserId, error) {
+func (m *mgr) userNameToUserID(ctx context.Context, username string) (*userpb.UserId, error) {
 	gwConn, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
 	if err != nil {
 		return nil, err
@@ -189,7 +189,7 @@ func (m *mgr) convertToCS3Share(ctx context.Context, s DBShare, storageMountID s
 	if err != nil {
 		return nil, err
 	}
-	owner, err := m.userNameToUserId(ctx, s.UIDOwner)
+	owner, err := m.userNameToUserID(ctx, s.UIDOwner)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +197,7 @@ func (m *mgr) convertToCS3Share(ctx context.Context, s DBShare, storageMountID s
 	if s.UIDOwner == s.UIDInitiator {
 		creator = owner
 	} else {
-		creator, err = m.userNameToUserId(ctx, s.UIDOwner)
+		creator, err = m.userNameToUserID(ctx, s.UIDOwner)
 		if err != nil {
 			return nil, err
 		}

@@ -1159,7 +1159,7 @@ func (s *svc) findEmbeddedMounts(basePath string) []string {
 		return []string{}
 	}
 	mounts := []string{}
-	for mountPath, _ := range s.c.StorageRules {
+	for mountPath := range s.c.StorageRules {
 		if strings.HasPrefix(mountPath, basePath) && mountPath != basePath {
 			mounts = append(mounts, mountPath)
 		}
