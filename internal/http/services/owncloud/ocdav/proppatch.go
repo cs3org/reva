@@ -51,6 +51,12 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading proppatch")
 		w.WriteHeader(status)
+		m := fmt.Sprintf("Error reading proppatch: %v", err)
+		b, err := Marshal(exception{
+			code:    SabredavBadRequest,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
 		return
 	}
 
@@ -73,6 +79,15 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
+		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			m := fmt.Sprintf("Resource %v not found", fn)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: m,
+			})
+			HandleWebdavError(&sublog, w, b, err)
+		}
 		HandleErrorStatus(&sublog, w, statRes.Status)
 		return
 	}
@@ -119,6 +134,16 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 				}
 
 				if res.Status.Code != rpc.Code_CODE_OK {
+					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+						w.WriteHeader(http.StatusForbidden)
+						m := fmt.Sprintf("Permission denied to remove properties on resource %v", fn)
+						b, err := Marshal(exception{
+							code:    SabredavPermissionDenied,
+							message: m,
+						})
+						HandleWebdavError(&sublog, w, b, err)
+						return
+					}
 					HandleErrorStatus(&sublog, w, res.Status)
 					return
 				}
@@ -133,6 +158,16 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 				}
 
 				if res.Status.Code != rpc.Code_CODE_OK {
+					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+						w.WriteHeader(http.StatusForbidden)
+						m := fmt.Sprintf("Permission denied to set properties on resource %v", fn)
+						b, err := Marshal(exception{
+							code:    SabredavPermissionDenied,
+							message: m,
+						})
+						HandleWebdavError(&sublog, w, b, err)
+						return
+					}
 					HandleErrorStatus(&sublog, w, res.Status)
 					return
 				}
