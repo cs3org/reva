@@ -23,7 +23,6 @@ package decomposedfs
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math"
 	"net/url"
@@ -31,6 +30,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -217,14 +217,14 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	}
 
 	// add storage space
-	if err := fs.createStorageSpace("personal", h.ID); err != nil {
+	if err := fs.createStorageSpace(ctx, "personal", h.ID); err != nil {
 		return err
 	}
 
 	return
 }
 
-func (fs *Decomposedfs) createStorageSpace(spaceType, nodeID string) error {
+func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeID string) error {
 
 	// create space type dir
 	if err := os.MkdirAll(filepath.Join(fs.o.Root, "spaces", spaceType), 0700); err != nil {
@@ -234,10 +234,26 @@ func (fs *Decomposedfs) createStorageSpace(spaceType, nodeID string) error {
 	// we can reuse the node id as the space id
 	err := os.Symlink("../../nodes/"+nodeID, filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
 	if err != nil {
-		fmt.Printf("could not create symlink for '%s' space %s, %s\n", spaceType, nodeID, err)
+		if isAlreadyExists(err) {
+			appctx.GetLogger(ctx).Debug().Err(err).Str("node", nodeID).Str("spacetype", spaceType).Msg("symlink already exists")
+		} else {
+			// TODO how should we handle error cases here?
+			appctx.GetLogger(ctx).Error().Err(err).Str("node", nodeID).Str("spacetype", spaceType).Msg("could not create symlink")
+		}
 	}
 
 	return nil
+}
+
+// The os not exists error is buried inside the xattr error,
+// so we cannot just use os.IsNotExists().
+func isAlreadyExists(err error) bool {
+	if xerr, ok := err.(*os.LinkError); ok {
+		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
+			return serr == syscall.EEXIST
+		}
+	}
+	return false
 }
 
 // GetHome is called to look up the home path for a user
