@@ -970,7 +970,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
 		}
 	}
 
-	return fs.propagate(ctx, ip)
+	return fs.propagate(ctx, filepath.Dir(ip))
 }
 
 func (fs *ocfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
@@ -1998,9 +1998,8 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 		return err
 	}
 	parts := strings.Split(strings.TrimPrefix(leafPath, root), "/")
-	// root never ends in / so the split returns an empty first element, which we can skip
-	// we do not need to chmod the last element because it is the leaf path (< and not <= comparison)
-	for i := 1; i < len(parts); i++ {
+	for i := 0; i < len(parts); i++ {
+		root = filepath.Join(root, parts[i])
 		appctx.GetLogger(ctx).Debug().
 			Str("leafPath", leafPath).
 			Str("root", root).
@@ -2028,7 +2027,6 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 				Msg("could not set etag")
 			return err
 		}
-		root = filepath.Join(root, parts[i])
 	}
 	return nil
 }
