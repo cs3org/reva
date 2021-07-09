@@ -11,10 +11,13 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiTrashbin/trashbinFilesFolders.feature:230](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L230)
 -   [apiTrashbin/trashbinFilesFolders.feature:231](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L231)
 
-#### [href in trashbin PROPFIND response is wrong](https://github.com/owncloud/ocis/issues/1120)
+#### [PROPFIND on trashbin with Depth: infinity only shows the first level](https://github.com/owncloud/ocis/issues/1116)
+-   [apiTrashbinRestore/trashbinRestore.feature:478](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbinRestore/trashbinRestore.feature#L478)
+-   [apiTrashbinRestore/trashbinRestore.feature:479](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbinRestore/trashbinRestore.feature#L479)
+
 #### [cannot restore to a different file-name](https://github.com/owncloud/ocis/issues/1122)
--   [apiTrashbin/trashbinRestore.feature:309](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L309)
--   [apiTrashbin/trashbinRestore.feature:310](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L310)
+-   [apiTrashbinRestore/trashbinRestore.feature:309](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L309)
+-   [apiTrashbinRestore/trashbinRestore.feature:310](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L310)
 
 #### [Version count is 1 more than on oC10](https://github.com/owncloud/ocis/issues/1633)
 -   [apiVersions/fileVersionsSharingToShares.feature:178](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L178)
