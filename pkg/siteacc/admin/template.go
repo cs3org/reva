@@ -88,7 +88,7 @@ const tplBody = `
 			{{end}}	
 			</p>
 			<p>
-				<form method="POST">
+				<form method="POST" style="width: 100%;">
 					<button type="button" onClick="handleAction('assign-api-key', '{{.Email}}');" {{if .Data.APIKey}}disabled{{end}}>Default API Key</button>
 					<button type="button" onClick="handleAction('assign-api-key?isScienceMesh', '{{.Email}}');" {{if .Data.APIKey}}disabled{{end}}>ScienceMesh API Key</button>
 	

@@ -79,6 +79,7 @@ html * {
 }
 `
 
+// TODO: Default values raus
 const tplBody = `
 <div>
 	<p>Login to your ScienceMesh account using the form below.</p>
@@ -87,9 +88,9 @@ const tplBody = `
 <div>
 	<form id="form" method="POST" class="box container-inline" style="width: 100%;">
 		<div style="grid-row: 1;"><label for="email">Email address: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 2;"><input type="text" id="email" name="email" placeholder="me@example.com"/></div>
+		<div style="grid-row: 2;"><input type="text" id="email" name="email" placeholder="me@example.com" value="test@xyz.de"/></div>
 		<div style="grid-row: 1;"><label for="password">Password: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 2;"><input type="password" id="password" name="password"/></div>
+		<div style="grid-row: 2;"><input type="password" id="password" name="password" value="Test1234"/></div>
 
 		<div style="grid-row: 3; align-self: center;">
 			Fields marked with <span class="mandatory">*</span> are mandatory.
