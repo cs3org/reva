@@ -413,7 +413,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		return err
 	}
 	data := map[string]interface{}{
-		"path":          upload.fs.toDatabasePath(upload.ctx, ip),
+		"path":          upload.fs.toDatabasePath(ip),
 		"checksum":      fmt.Sprintf("SHA1:%032x MD5:%032x ADLER32:%032x", sha1h, md5h, adler32h),
 		"etag":          calcEtag(upload.ctx, fi),
 		"size":          upload.info.Size,
