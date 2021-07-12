@@ -100,6 +100,7 @@ func (siteacc *SiteAccounts) RequestHandler() http.Handler {
 		defer r.Body.Close()
 
 		// Get the active session for the request (or create a new one); a valid session object will always be returned
+		siteacc.sessions.PurgeSessions() // Remove expired sessions first
 		session, err := siteacc.sessions.HandleRequest(w, r)
 		if err != nil {
 			siteacc.log.Err(err).Msg("an error occurred while handling sessions")

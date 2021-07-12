@@ -20,6 +20,7 @@ package html
 
 import (
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/cs3org/reva/pkg/siteacc/config"
@@ -35,6 +36,8 @@ type SessionManager struct {
 	sessions map[string]*Session
 
 	sessionName string
+
+	mutex sync.Mutex
 }
 
 func (mngr *SessionManager) initialize(name string, conf *config.Configuration, log *zerolog.Logger) error {
@@ -60,6 +63,9 @@ func (mngr *SessionManager) initialize(name string, conf *config.Configuration, 
 
 // HandleRequest performs all session-related tasks during an HTML request. Always returns a valid session object.
 func (mngr *SessionManager) HandleRequest(w http.ResponseWriter, r *http.Request) (*Session, error) {
+	mngr.mutex.Lock()
+	defer mngr.mutex.Unlock()
+
 	var session *Session
 	var sessionErr error
 
@@ -68,15 +74,17 @@ func (mngr *SessionManager) HandleRequest(w http.ResponseWriter, r *http.Request
 	if err == nil {
 		session = mngr.findSession(cookie.Value)
 		if session != nil {
-			// Verify the request against the session: If it is invalid, set an error; if the session has expired, migrate to a new one; otherwise, just continue
-			// TODO: Refresh session; new ID, new timeout
-			// TODO: Expired sessions are NOT restored but removed!
+			// Verify the request against the session: If it is invalid, set an error; if the session has expired, create a new one; if it has already passed its halftime, migrate to a new one
 			if err := session.VerifyRequest(r); err == nil {
 				if session.HasExpired() {
+					// The session has expired, so a new one needs to be created
+					session = nil
+				} else if session.HalftimePassed() {
+					// The session has passed its halftime, so migrate it to a new one (makes hijacking session IDs harder)
 					session, err = mngr.migrateSession(session, r)
 					if err != nil {
 						session = nil
-						sessionErr = errors.Wrap(err, "unable to migrate to a new session")
+						sessionErr = errors.Wrap(err, "unable to migrate session")
 					}
 				}
 			} else {
@@ -99,6 +107,23 @@ func (mngr *SessionManager) HandleRequest(w http.ResponseWriter, r *http.Request
 	session.Save(w)
 
 	return session, sessionErr
+}
+
+// PurgeSessions removes any expired sessions.
+func (mngr *SessionManager) PurgeSessions() {
+	mngr.mutex.Lock()
+	defer mngr.mutex.Unlock()
+
+	var expiredSessions []string
+	for id, session := range mngr.sessions {
+		if session.HasExpired() {
+			expiredSessions = append(expiredSessions, id)
+		}
+	}
+
+	for _, id := range expiredSessions {
+		delete(mngr.sessions, id)
+	}
 }
 
 func (mngr *SessionManager) createSession(r *http.Request) *Session {

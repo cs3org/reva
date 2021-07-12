@@ -31,12 +31,15 @@ import (
 type Session struct {
 	ID            string
 	RemoteAddress string
+	CreationTime  time.Time
 	Timeout       time.Duration
-	Expires       time.Time
 
 	LoggedInUser *data.Account
 
 	Data map[string]interface{}
+
+	expirationTime time.Time
+	halflifeTime   time.Time
 
 	sessionCookieName string
 }
@@ -67,9 +70,14 @@ func (sess *Session) VerifyRequest(r *http.Request) error {
 	return nil
 }
 
+// HalftimePassed checks whether the session has passed the first half of its lifetime.
+func (sess *Session) HalftimePassed() bool {
+	return time.Now().After(sess.halflifeTime)
+}
+
 // HasExpired checks whether the session has reached is timeout.
 func (sess *Session) HasExpired() bool {
-	return time.Now().After(sess.Expires)
+	return time.Now().After(sess.expirationTime)
 }
 
 // NewSession creates a new session, giving it a random ID.
@@ -77,9 +85,11 @@ func NewSession(name string, timeout time.Duration, r *http.Request) *Session {
 	session := &Session{
 		ID:                uuid.NewString(),
 		RemoteAddress:     r.RemoteAddr,
+		CreationTime:      time.Now(),
 		Timeout:           timeout,
-		Expires:           time.Now().Add(timeout),
 		Data:              nil,
+		expirationTime:    time.Now().Add(timeout),
+		halflifeTime:      time.Now().Add(timeout / 2),
 		sessionCookieName: name,
 	}
 	return session
