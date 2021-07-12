@@ -33,6 +33,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	invokerDefault = ""
+	invokerUser    = "user"
+)
+
 type methodCallback = func(*SiteAccounts, url.Values, []byte, *html.Session) (interface{}, error)
 
 type endpoint struct {
@@ -190,7 +195,7 @@ func handleAssignAPIKey(siteacc *SiteAccounts, values url.Values, body []byte, s
 		flags |= key.FlagScienceMesh
 	}
 
-	// Assign a new API key to the account through the account accountsManager
+	// Assign a new API key to the account through the accounts manager
 	if err := siteacc.AccountsManager().AssignAPIKeyToAccount(account, flags); err != nil {
 		return nil, errors.Wrap(err, "unable to assign API key")
 	}
@@ -216,7 +221,7 @@ func handleCreate(siteacc *SiteAccounts, values url.Values, body []byte, session
 		return nil, err
 	}
 
-	// Create a new account through the account accountsManager
+	// Create a new account through the accounts manager
 	if err := siteacc.AccountsManager().CreateAccount(account); err != nil {
 		return nil, errors.Wrap(err, "unable to create account")
 	}
@@ -230,8 +235,18 @@ func handleUpdate(siteacc *SiteAccounts, values url.Values, body []byte, session
 		return nil, err
 	}
 
-	// Update the account through the account accountsManager; only the basic data of an account can be updated through this requestHandler
-	if err := siteacc.AccountsManager().UpdateAccount(account, false); err != nil {
+	invokedByUser := strings.EqualFold(values.Get("invoker"), invokerUser)
+	if invokedByUser {
+		// If this endpoint was called by the user, set the account email from the stored session
+		if session.LoggedInUser == nil {
+			return nil, errors.Errorf("no user is currently logged in")
+		}
+
+		account.Email = session.LoggedInUser.Email
+	}
+
+	// Update the account through the accounts manager; only the basic data of an account can be updated through this requestHandler
+	if err := siteacc.AccountsManager().UpdateAccount(account, invokedByUser, false); err != nil {
 		return nil, errors.Wrap(err, "unable to update account")
 	}
 
@@ -244,7 +259,7 @@ func handleRemove(siteacc *SiteAccounts, values url.Values, body []byte, session
 		return nil, err
 	}
 
-	// Remove the account through the account accountsManager
+	// Remove the account through the accounts manager
 	if err := siteacc.AccountsManager().RemoveAccount(account); err != nil {
 		return nil, errors.Wrap(err, "unable to remove account")
 	}
@@ -266,7 +281,7 @@ func handleUnregisterSite(siteacc *SiteAccounts, values url.Values, body []byte,
 		return nil, err
 	}
 
-	// Unregister the account's site through the account accountsManager
+	// Unregister the account's site through the accounts manager
 	if err := siteacc.AccountsManager().UnregisterAccountSite(account); err != nil {
 		return nil, errors.Wrap(err, "unable to unregister the site of the given account")
 	}
@@ -313,7 +328,7 @@ func handleAuthorize(siteacc *SiteAccounts, values url.Values, body []byte, sess
 			return nil, errors.Errorf("unsupported authorization status %v", val[0])
 		}
 
-		// Authorize the account through the account accountsManager
+		// Authorize the account through the accounts manager
 		if err := siteacc.AccountsManager().AuthorizeAccount(account, authorize); err != nil {
 			return nil, errors.Wrap(err, "unable to (un)authorize account")
 		}
@@ -337,7 +352,7 @@ func findAccount(siteacc *SiteAccounts, by string, value string) (*data.Account,
 		return nil, errors.Errorf("missing search criteria")
 	}
 
-	// Find the account using the account accountsManager
+	// Find the account using the accounts manager
 	account, err := siteacc.AccountsManager().FindAccount(by, value)
 	if err != nil {
 		return nil, errors.Wrap(err, "user not found")

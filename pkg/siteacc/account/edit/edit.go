@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package manage
+package edit
 
 import "github.com/cs3org/reva/pkg/siteacc/html"
 
@@ -31,7 +31,7 @@ func (template *PanelTemplate) GetTitle() string {
 
 // GetCaption returns the caption which is displayed on the panel.
 func (template *PanelTemplate) GetCaption() string {
-	return "Welcome to your ScienceMesh Account!"
+	return "Edit your ScienceMesh Account!"
 }
 
 // GetContentJavaScript delivers additional JavaScript code.

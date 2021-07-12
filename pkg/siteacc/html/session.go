@@ -31,6 +31,7 @@ import (
 type Session struct {
 	ID            string
 	RemoteAddress string
+	Timeout       time.Duration
 	Expires       time.Time
 
 	LoggedInUser *data.Account
@@ -43,9 +44,9 @@ type Session struct {
 // Save stores the session ID in a cookie using a response writer.
 func (sess *Session) Save(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
-		Name:    sess.sessionCookieName,
-		Value:   sess.ID,
-		Expires: sess.Expires,
+		Name:   sess.sessionCookieName,
+		Value:  sess.ID,
+		MaxAge: int(sess.Timeout / time.Second),
 	})
 }
 
@@ -76,6 +77,7 @@ func NewSession(name string, timeout time.Duration, r *http.Request) *Session {
 	session := &Session{
 		ID:                uuid.NewString(),
 		RemoteAddress:     r.RemoteAddr,
+		Timeout:           timeout,
 		Expires:           time.Now().Add(timeout),
 		Data:              nil,
 		sessionCookieName: name,

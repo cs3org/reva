@@ -69,6 +69,8 @@ func (mngr *SessionManager) HandleRequest(w http.ResponseWriter, r *http.Request
 		session = mngr.findSession(cookie.Value)
 		if session != nil {
 			// Verify the request against the session: If it is invalid, set an error; if the session has expired, migrate to a new one; otherwise, just continue
+			// TODO: Refresh session; new ID, new timeout
+			// TODO: Expired sessions are NOT restored but removed!
 			if err := session.VerifyRequest(r); err == nil {
 				if session.HasExpired() {
 					session, err = mngr.migrateSession(session, r)

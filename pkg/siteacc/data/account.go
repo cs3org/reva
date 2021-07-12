@@ -66,8 +66,8 @@ func (acc *Account) GetSiteID() key.SiteIdentifier {
 	return ""
 }
 
-// Update copies the data of the given account to this account; if copyData is true, the account data is copied as well.
-func (acc *Account) Update(other *Account, copyData bool) error {
+// Update copies the data of the given account to this account.
+func (acc *Account) Update(other *Account, setPassword bool, copyData bool) error {
 	if err := other.verify(false); err != nil {
 		return errors.Wrap(err, "unable to update account data")
 	}
@@ -79,6 +79,13 @@ func (acc *Account) Update(other *Account, copyData bool) error {
 	acc.Website = other.Website
 	acc.Role = other.Role
 	acc.PhoneNumber = other.PhoneNumber
+
+	if setPassword && other.Password.Value != "" {
+		// If a password was provided, use that as the new one
+		if err := acc.UpdatePassword(other.Password.Value); err != nil {
+			return errors.Wrap(err, "unable to update account data")
+		}
+	}
 
 	if copyData {
 		acc.Data = other.Data

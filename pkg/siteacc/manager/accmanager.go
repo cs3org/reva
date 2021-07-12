@@ -169,7 +169,7 @@ func (mngr *AccountsManager) CreateAccount(accountData *data.Account) error {
 }
 
 // UpdateAccount updates the account identified by the account email; if no such account exists, an error is returned.
-func (mngr *AccountsManager) UpdateAccount(accountData *data.Account, copyData bool) error {
+func (mngr *AccountsManager) UpdateAccount(accountData *data.Account, setPassword bool, copyData bool) error {
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
@@ -178,7 +178,7 @@ func (mngr *AccountsManager) UpdateAccount(accountData *data.Account, copyData b
 		return errors.Wrap(err, "user to update not found")
 	}
 
-	if err := account.Update(accountData, copyData); err == nil {
+	if err := account.Update(accountData, setPassword, copyData); err == nil {
 		account.DateModified = time.Now()
 
 		mngr.storage.AccountUpdated(account)

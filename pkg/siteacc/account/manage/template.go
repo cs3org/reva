@@ -20,7 +20,8 @@ package manage
 
 const tplJavaScript = `
 function handleEditAccount() {
-	setState(STATE_STATUS, "No one has implemented this function yet :(");
+	setState(STATE_STATUS, "Redirecting to the account editor...");
+	window.location.replace("?path=edit");
 }
 
 function handleRequestAccess() {
