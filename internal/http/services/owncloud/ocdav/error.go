@@ -43,6 +43,8 @@ const (
 	SabredavPermissionDenied
 	// SabredavNotFound maps to HTTP 404
 	SabredavNotFound
+	// SabredavConflict maps to HTTP 409
+	SabredavConflict
 )
 
 var (
@@ -53,6 +55,7 @@ var (
 		"Sabre\\DAV\\Exception\\PreconditionFailed",
 		"Sabre\\DAV\\Exception\\PermissionDenied",
 		"Sabre\\DAV\\Exception\\NotFound",
+		"Sabre\\DAV\\Exception\\Conflict",
 	}
 )
 
