@@ -304,7 +304,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 			Key:  lwShareAttrKey,
 			Val:  sysACL,
 		}
-		if err = c.SetAttr(ctx, auth, sysACLAttr, true, path); err != nil {
+		if err = c.SetAttr(ctx, auth, sysACLAttr, finfo.IsDir, path); err != nil {
 			return err
 		}
 		return nil
@@ -361,7 +361,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 			Key:  lwShareAttrKey,
 			Val:  sysACL,
 		}
-		if err = c.SetAttr(ctx, auth, sysACLAttr, true, path); err != nil {
+		if err = c.SetAttr(ctx, auth, sysACLAttr, finfo.IsDir, path); err != nil {
 			return err
 		}
 		return nil
@@ -373,13 +373,6 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 		args = append(args, "--sys", "--recursive")
 	} else {
 		args = append(args, "--user")
-		userACLAttr := &eosclient.Attribute{
-			Type: SystemAttr,
-			Key:  "eval.useracl",
-		}
-		if err = c.UnsetAttr(ctx, auth, userACLAttr, path); err != nil {
-			return err
-		}
 	}
 	args = append(args, sysACL, path)
 
@@ -509,6 +502,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
+
 	args := []string{"attr", "-r", "rm", fmt.Sprintf("%d.%s", attr.Type, attr.Key), path}
 	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
@@ -699,7 +693,7 @@ func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, 
 // GenerateToken returns a token on behalf of the resource owner to be used by lightweight accounts
 func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization, p string, a *acl.Entry) (string, error) {
 	expiration := strconv.FormatInt(time.Now().Add(time.Duration(c.opt.TokenExpiry)*time.Second).Unix(), 10)
-	args := []string{"token", "--permission", a.Permissions, "--tree", "--path", path.Clean(p) + "/", "--expires", expiration}
+	args := []string{"token", "--permission", a.Permissions, "--tree", "--path", p, "--expires", expiration}
 	stdout, _, err := c.executeEOS(ctx, args, auth)
 	return stdout, err
 }
