@@ -509,10 +509,6 @@ File and sync features in a shared scenario
 -   [apiShareManagementToShares/acceptShares.feature:261](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L261)
 -   [apiShareManagementToShares/acceptSharesToSharesFolder.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptSharesToSharesFolder.feature#L31)
 -   [apiShareManagementToShares/acceptSharesToSharesFolder.feature:52](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptSharesToSharesFolder.feature#L52)
--   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:138](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L138)
--   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:139](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L139)
--   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L171)
--   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:172](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L172)
 
 #### [file_target in share response](https://github.com/owncloud/product/issues/203)
 
@@ -830,7 +826,7 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 #### [remote.php/dav/uploads endpoint does not exist](https://github.com/owncloud/ocis/issues/1321)
 -   [apiShareOperationsToShares2/uploadToShare.feature:256](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L256)
 
-#### Share jail related
+#### [No way to set default folder for received shares](https://github.com/owncloud/ocis/issues/1327)
 Scenario Outline: delete a folder when there is a default folder for received shares
 -   [apiWebdavOperations/deleteFolder.feature:67](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/deleteFolder.feature#L67)
 -   [apiWebdavOperations/deleteFolder.feature:68](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/deleteFolder.feature#L68)
@@ -1315,18 +1311,7 @@ And other missing implementation of favorites
 -   [apiFavorites/favoritesSharingToShares.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L62)
 -   [apiFavorites/favoritesSharingToShares.feature:63](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L63)
 
-#### CSRF Headers
-Scenario Outline: Downloading a file should serve security headers
--   [apiWebdavOperations/downloadFile.feature:60](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L60)
--   [apiWebdavOperations/downloadFile.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L61)
-Scenario Outline: Doing a GET with a web login should work without CSRF token on the new backend
--   [apiWebdavOperations/downloadFile.feature:72](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L72)
--   [apiWebdavOperations/downloadFile.feature:73](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L73)
-Scenario Outline: Doing a GET with a web login should work with CSRF token on the new backend
--   [apiWebdavOperations/downloadFile.feature:84](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L84)
--   [apiWebdavOperations/downloadFile.feature:85](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L85)
-
-#### Authentication
+#### [WWW-Authenticate header for unauthenticated requests is not clear](https://github.com/owncloud/ocis/issues/2285)
 Scenario Outline: Unauthenticated call
 -   [apiWebdavOperations/refuseAccess.feature:21](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/refuseAccess.feature#L21)
 -   [apiWebdavOperations/refuseAccess.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/refuseAccess.feature#L22)
@@ -1692,6 +1677,19 @@ _ocs: api compatibility, return correct status code_
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:505](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L505)
 -   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L39)
 -   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L40)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:138](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L138)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:139](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L139)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L171)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:172](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L172)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:196](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L196)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:218](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L218)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:240](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L240)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:262](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L262)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:283](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L283)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:305](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L305)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:327](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L327)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:349](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L349)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:370](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L370)
 
 #### [path property in pending shares only gives filename](https://github.com/owncloud/ocis/issues/2156)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L89)
