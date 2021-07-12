@@ -1413,8 +1413,10 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 	if err := fs.propagate(ctx, newIP); err != nil {
 		return err
 	}
-	if err := fs.propagate(ctx, filepath.Dir(oldIP)); err != nil {
-		return err
+	if filepath.Dir(newIP) != filepath.Dir(oldIP) {
+		if err := fs.propagate(ctx, filepath.Dir(oldIP)); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2078,10 +2080,10 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restor
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 	var root string
 	if fs.c.EnableHome {
-		root = fs.toInternalPath(ctx, "/")
+		root = filepath.Clean(fs.toInternalPath(ctx, "/"))
 	} else {
 		owner := fs.getOwner(leafPath)
-		root = fs.toInternalPath(ctx, owner)
+		root = filepath.Clean(fs.toInternalPath(ctx, owner))
 	}
 	if !strings.HasPrefix(leafPath, root) {
 		err := errors.New("internal path outside root")
@@ -2107,36 +2109,42 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 	if err != nil {
 		return err
 	}
-	parts := strings.Split(strings.TrimPrefix(leafPath, root), "/")
-	for i := 0; i < len(parts); i++ {
-		root = filepath.Join(root, parts[i])
+
+	currentPath := filepath.Clean(leafPath)
+	for currentPath != root {
 		appctx.GetLogger(ctx).Debug().
 			Str("leafPath", leafPath).
-			Str("root", root).
-			Int("i", i).
-			Interface("parts", parts).
+			Str("currentPath", currentPath).
 			Msg("propagating change")
-		if err := os.Chtimes(filepath.Join(root), fi.ModTime(), fi.ModTime()); err != nil {
-			appctx.GetLogger(ctx).Error().
-				Err(err).
-				Str("leafPath", leafPath).
-				Str("root", root).
-				Msg("could not propagate change")
+		parentFi, err := os.Stat(filepath.Join(currentPath))
+		if err != nil {
 			return err
 		}
-		fi, err := os.Stat(filepath.Join(root))
+		if fi.ModTime().UnixNano() > parentFi.ModTime().UnixNano() {
+			if err := os.Chtimes(filepath.Join(currentPath), fi.ModTime(), fi.ModTime()); err != nil {
+				appctx.GetLogger(ctx).Error().
+					Err(err).
+					Str("leafPath", leafPath).
+					Str("currentPath", currentPath).
+					Msg("could not propagate change")
+				return err
+			}
+		}
+		fi, err = os.Stat(filepath.Join(currentPath))
 		if err != nil {
 			return err
 		}
 		etag := calcEtag(ctx, fi)
-		if err := fs.filecache.SetEtag(storageID, fs.toDatabasePath(root), etag); err != nil {
+		if err := fs.filecache.SetEtag(storageID, fs.toDatabasePath(currentPath), etag); err != nil {
 			appctx.GetLogger(ctx).Error().
 				Err(err).
 				Str("leafPath", leafPath).
-				Str("root", root).
+				Str("currentPath", currentPath).
 				Msg("could not set etag")
 			return err
 		}
+
+		currentPath = filepath.Dir(currentPath)
 	}
 	return nil
 }
