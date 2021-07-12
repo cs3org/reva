@@ -2,7 +2,8 @@
 	{
 		"id": {
 			"opaque_id": "ishank1234",
-			"idp": "cern.ch"
+			"idp": "cern.ch",
+			"type": 1
 		},
 		"username": "ishank",
 		"secret": "ishankpass",
@@ -13,7 +14,8 @@
 	{
 		"id": {
 			"opaque_id": "hugo5678",
-			"idp": "cern.ch"
+			"idp": "cern.ch",
+			"type": 1
 		},
 		"username": "hugo",
 		"secret": "hugopass",
@@ -24,7 +26,8 @@
 	{
 		"id": {
 			"opaque_id": "samuel9876",
-			"idp": "cern.ch"
+			"idp": "cern.ch",
+			"type": 1
 		},
 		"username": "samuel",
 		"secret": "samuelpass",
@@ -35,7 +38,8 @@
 	{
 		"id": {
 			"opaque_id": "test4242",
-			"idp": "cern.ch"
+			"idp": "cern.ch",
+			"type": 1
 		},
 		"username": "test",
 		"secret": "testpass",

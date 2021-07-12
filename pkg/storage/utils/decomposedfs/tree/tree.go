@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -740,6 +741,12 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 	// lookup ownerIdp in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.OwnerIDPAttr); err == nil {
 		owner.Idp = string(attrBytes)
+	} else {
+		return
+	}
+	// lookup ownerType in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.OwnerTypeAttr); err == nil {
+		owner.Type = utils.UserTypeMap(string(attrBytes))
 	} else {
 		return
 	}

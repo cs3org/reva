@@ -28,9 +28,12 @@ import (
 type Verifier func(*authpb.Scope, interface{}) (bool, error)
 
 var supportedScopes = map[string]Verifier{
-	"user":         userScope,
-	"publicshare":  publicshareScope,
-	"resourceinfo": resourceinfoScope,
+	"user":          userScope,
+	"publicshare":   publicshareScope,
+	"resourceinfo":  resourceinfoScope,
+	"share":         shareScope,
+	"receivedshare": receivedShareScope,
+	"lightweight":   lightweightAccountScope,
 }
 
 // VerifyScope is the function to be called when dismantling tokens to check if
@@ -39,11 +42,7 @@ func VerifyScope(scopeMap map[string]*authpb.Scope, resource interface{}) (bool,
 	for k, scope := range scopeMap {
 		for s, f := range supportedScopes {
 			if strings.HasPrefix(k, s) {
-				valid, err := f(scope, resource)
-				if err != nil {
-					continue
-				}
-				if valid {
+				if valid, err := f(scope, resource); err == nil && valid {
 					return true, nil
 				}
 			}

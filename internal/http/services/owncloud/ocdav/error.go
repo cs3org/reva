@@ -107,6 +107,9 @@ func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		log.Debug().Interface("status", s).Msg("permission denied")
 		w.WriteHeader(http.StatusForbidden)
+	case rpc.Code_CODE_UNAUTHENTICATED:
+		log.Debug().Interface("status", s).Msg("unauthenticated")
+		w.WriteHeader(http.StatusUnauthorized)
 	case rpc.Code_CODE_INVALID_ARGUMENT:
 		log.Debug().Interface("status", s).Msg("bad request")
 		w.WriteHeader(http.StatusBadRequest)

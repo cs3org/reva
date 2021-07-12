@@ -145,4 +145,8 @@ type Config struct {
 
 	// HTTP connections to EOS: idle conections TTL
 	IdleConnTimeout int `mapstructure:"idle_conn_timeout"`
+
+	// TokenExpiry stores in seconds the time after which generated tokens will expire
+	// Default is 3600
+	TokenExpiry int
 }

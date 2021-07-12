@@ -61,7 +61,7 @@ func resourceinfoScope(scope *authpb.Scope, resource interface{}) (bool, error) 
 		return checkResourceInfo(&r, v.GetRef()), nil
 
 	case string:
-		return checkPath(v), nil
+		return checkResourcePath(v), nil
 	}
 
 	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
@@ -71,7 +71,7 @@ func checkResourceInfo(inf *provider.ResourceInfo, ref *provider.Reference) bool
 	// ref: <id:<storage_id:$storageID node_id:$nodeID path:$path> >
 	if ref.ResourceId != nil { // path can be empty or a relative path
 		// TODO what about the path?
-		return inf.Id.StorageId == ref.ResourceId.StorageId && inf.Id.OpaqueId == ref.ResourceId.OpaqueId
+		return utils.ResourceIDEqual(inf.Id, ref.ResourceId)
 	}
 	// ref: <path:$path >
 	if strings.HasPrefix(ref.GetPath(), inf.Path) {
@@ -80,7 +80,7 @@ func checkResourceInfo(inf *provider.ResourceInfo, ref *provider.Reference) bool
 	return false
 }
 
-func checkPath(path string) bool {
+func checkResourcePath(path string) bool {
 	paths := []string{
 		"/dataprovider",
 		"/data",
@@ -93,19 +93,21 @@ func checkPath(path string) bool {
 	return false
 }
 
-// GetResourceInfoScope returns the scope to allow access to a resource info object.
-func GetResourceInfoScope(r *provider.ResourceInfo, role authpb.Role) (map[string]*authpb.Scope, error) {
+// AddResourceInfoScope adds the scope to allow access to a resource info object.
+func AddResourceInfoScope(r *provider.ResourceInfo, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
 	val, err := utils.MarshalProtoV1ToJSON(r)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]*authpb.Scope{
-		"resourceinfo:" + r.Id.String(): &authpb.Scope{
-			Resource: &types.OpaqueEntry{
-				Decoder: "json",
-				Value:   val,
-			},
-			Role: role,
+	if scopes == nil {
+		scopes = make(map[string]*authpb.Scope)
+	}
+	scopes["resourceinfo:"+r.Id.String()] = &authpb.Scope{
+		Resource: &types.OpaqueEntry{
+			Decoder: "json",
+			Value:   val,
 		},
-	}, nil
+		Role: role,
+	}
+	return scopes, nil
 }

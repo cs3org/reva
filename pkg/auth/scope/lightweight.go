@@ -20,19 +20,25 @@ package scope
 
 import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-func userScope(scope *authpb.Scope, resource interface{}) (bool, error) {
-	// Always return true. Registered users can access all paths.
-	// TODO(ishank011): Add checks for read/write permissions.
-	return true, nil
+func lightweightAccountScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+	// Lightweight accounts have access to resources shared with them.
+	// These cannot be resolved from here, but need to be added to the scope from
+	// where the call to mint tokens is made.
+	// From here, we only allow ListReceivedShares calls
+	if _, ok := resource.(*collaboration.ListReceivedSharesRequest); ok {
+		return true, nil
+	}
+	return false, nil
 }
 
-// AddOwnerScope adds the default owner scope with access to all resources.
-func AddOwnerScope(scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
+// AddLightweightAccountScope adds the scope to allow access to lightweight user.
+func AddLightweightAccountScope(role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
 	ref := &provider.Reference{Path: "/"}
 	val, err := utils.MarshalProtoV1ToJSON(ref)
 	if err != nil {
@@ -41,12 +47,12 @@ func AddOwnerScope(scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, e
 	if scopes == nil {
 		scopes = make(map[string]*authpb.Scope)
 	}
-	scopes["user"] = &authpb.Scope{
+	scopes["lightweight"] = &authpb.Scope{
 		Resource: &types.OpaqueEntry{
 			Decoder: "json",
 			Value:   val,
 		},
-		Role: authpb.Role_ROLE_OWNER,
+		Role: role,
 	}
 	return scopes, nil
 }

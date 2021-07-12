@@ -19,34 +19,49 @@
 package scope
 
 import (
+	"fmt"
+
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-func userScope(scope *authpb.Scope, resource interface{}) (bool, error) {
-	// Always return true. Registered users can access all paths.
-	// TODO(ishank011): Add checks for read/write permissions.
-	return true, nil
+func receivedShareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+	var share collaboration.ReceivedShare
+	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
+	if err != nil {
+		return false, err
+	}
+
+	switch v := resource.(type) {
+	case *collaboration.GetReceivedShareRequest:
+		return checkShareRef(share.Share, v.GetRef()), nil
+	case *collaboration.UpdateReceivedShareRequest:
+		return checkShareRef(share.Share, v.GetRef()), nil
+	case string:
+		return checkSharePath(v) || checkResourcePath(v), nil
+	}
+	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
 }
 
-// AddOwnerScope adds the default owner scope with access to all resources.
-func AddOwnerScope(scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-	ref := &provider.Reference{Path: "/"}
-	val, err := utils.MarshalProtoV1ToJSON(ref)
+// AddReceivedShareScope adds the scope to allow access to a received user/group share and
+// the shared resource.
+func AddReceivedShareScope(share *collaboration.ReceivedShare, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
+	val, err := utils.MarshalProtoV1ToJSON(share)
 	if err != nil {
 		return nil, err
 	}
 	if scopes == nil {
 		scopes = make(map[string]*authpb.Scope)
 	}
-	scopes["user"] = &authpb.Scope{
+	scopes["receivedshare:"+share.Share.Id.OpaqueId] = &authpb.Scope{
 		Resource: &types.OpaqueEntry{
 			Decoder: "json",
 			Value:   val,
 		},
-		Role: authpb.Role_ROLE_OWNER,
+		Role: role,
 	}
 	return scopes, nil
 }

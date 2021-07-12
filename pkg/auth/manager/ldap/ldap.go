@@ -174,6 +174,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	userID := &user.UserId{
 		Idp:      am.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
+		Type:     user.UserType_USER_TYPE_PRIMARY, // TODO: assign the appropriate user type
 	}
 	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
 	if err != nil {
@@ -216,14 +217,22 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		GidNumber:   gidNumber,
 	}
 
-	scope, err := scope.GetOwnerScope()
-	if err != nil {
-		return nil, nil, err
+	var scopes map[string]*authpb.Scope
+	if userID != nil && userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
+		scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		scopes, err = scope.AddOwnerScope(nil)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	log.Debug().Interface("entry", sr.Entries[0]).Interface("user", u).Msg("authenticated user")
 
-	return u, scope, nil
+	return u, scopes, nil
 
 }
 

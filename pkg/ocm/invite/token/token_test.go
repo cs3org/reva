@@ -31,6 +31,7 @@ func TestCreateToken(t *testing.T) {
 		Id: &userpb.UserId{
 			Idp:      "http://localhost:20080",
 			OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		},
 		Username:     "",
 		Mail:         "",
@@ -63,6 +64,7 @@ func TestCreateTokenCollision(t *testing.T) {
 		Id: &userpb.UserId{
 			Idp:      "http://localhost:20080",
 			OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		},
 		Username:     "",
 		Mail:         "",

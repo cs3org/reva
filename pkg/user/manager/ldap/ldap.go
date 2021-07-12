@@ -176,6 +176,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	id := &userpb.UserId{
 		Idp:      m.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
 	groups, err := m.GetUserGroups(ctx, id)
 	if err != nil {
@@ -263,6 +264,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	id := &userpb.UserId{
 		Idp:      m.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
 	groups, err := m.GetUserGroups(ctx, id)
 	if err != nil {
@@ -331,6 +333,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		id := &userpb.UserId{
 			Idp:      m.c.Idp,
 			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.UID),
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		}
 		groups, err := m.GetUserGroups(ctx, id)
 		if err != nil {

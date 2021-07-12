@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
@@ -42,7 +43,8 @@ import (
 )
 
 const (
-	versionPrefix = ".sys.v#."
+	versionPrefix  = ".sys.v#."
+	lwShareAttrKey = "reva.lwshare"
 )
 
 const (
@@ -115,6 +117,10 @@ type Options struct {
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
+
+	// TokenExpiry stores in seconds the time after which generated tokens will expire
+	// Default is 3600
+	TokenExpiry int
 }
 
 func (opt *Options) init() {
@@ -146,19 +152,21 @@ type Client struct {
 }
 
 // New creates a new client with the given options.
-func New(opt *Options) *Client {
+func New(opt *Options) (*Client, error) {
 	opt.init()
 	c := new(Client)
 	c.opt = opt
-	return c
+	return c, nil
 }
 
-// exec executes the command and returns the stdout, stderr and return code
-func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, error) {
+// executeXRDCopy executes xrdcpy commands and returns the stdout, stderr and return code
+func (c *Client) executeXRDCopy(ctx context.Context, cmdArgs []string) (string, string, error) {
 	log := appctx.GetLogger(ctx)
 
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
+
+	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, cmdArgs...)
 	cmd.Stdout = outBuf
 	cmd.Stderr = errBuf
 	cmd.Env = []string{
@@ -203,21 +211,31 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 }
 
 // exec executes only EOS commands the command and returns the stdout, stderr and return code.
-// execute() executes arbitrary commands.
-func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string, error) {
+func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclient.Authorization) (string, string, error) {
 	log := appctx.GetLogger(ctx)
 
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
+
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary)
 	cmd.Stdout = outBuf
 	cmd.Stderr = errBuf
 	cmd.Env = []string{
 		"EOS_MGM_URL=" + c.opt.URL,
 	}
+
+	if auth.Token != "" {
+		cmd.Env = append(cmd.Env, "EOSAUTHZ="+auth.Token)
+	} else if auth.Role.UID != "" && auth.Role.GID != "" {
+		cmd.Args = append(cmd.Args, []string{"-r", auth.Role.UID, auth.Role.GID}...)
+	}
+
 	if c.opt.UseKeytab {
 		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
 		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
 	}
+
+	cmd.Args = append(cmd.Args, cmdArgs...)
 
 	trace := trace.FromContext(ctx).SpanContext().TraceID.String()
 	cmd.Args = append(cmd.Args, "--comment", trace)
@@ -259,13 +277,41 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
-	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
+func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
+	finfo, err := c.GetFileInfoByPath(ctx, auth, path)
 	if err != nil {
 		return err
 	}
+
+	if a.Type == acl.TypeLightweight {
+		sysACL := ""
+		aclStr, ok := finfo.Attrs[lwShareAttrKey]
+		if ok {
+			acls, err := acl.Parse(aclStr, acl.ShortTextForm)
+			if err != nil {
+				return err
+			}
+			err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
+			if err != nil {
+				return err
+			}
+			sysACL = acls.Serialize()
+		} else {
+			sysACL = a.CitrineSerialize()
+		}
+		sysACLAttr := &eosclient.Attribute{
+			Type: SystemAttr,
+			Key:  lwShareAttrKey,
+			Val:  sysACL,
+		}
+		if err = c.SetAttr(ctx, auth, sysACLAttr, true, path); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	sysACL := a.CitrineSerialize()
-	args := []string{"-r", rootUID, rootGID, "acl"}
+	args := []string{"acl"}
 
 	if finfo.IsDir {
 		args = append(args, "--sys", "--recursive")
@@ -276,27 +322,53 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path st
 			Key:  "eval.useracl",
 			Val:  "1",
 		}
-		if err = c.SetAttr(ctx, uid, gid, userACLAttr, false, path); err != nil {
+		if err = c.SetAttr(ctx, auth, userACLAttr, false, path); err != nil {
 			return err
 		}
 	}
 	args = append(args, sysACL, path)
 
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, args...)
-	_, _, err = c.executeEOS(ctx, cmd)
+	_, _, err = c.executeEOS(ctx, args, rootAuth)
 	return err
 
 }
 
 // RemoveACL removes the acl from EOS.
-func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
-	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
+func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
+	finfo, err := c.GetFileInfoByPath(ctx, auth, path)
 	if err != nil {
 		return err
 	}
 
+	if a.Type == acl.TypeLightweight {
+		sysACL := ""
+		aclStr, ok := finfo.Attrs[lwShareAttrKey]
+		if ok {
+			acls, err := acl.Parse(aclStr, acl.ShortTextForm)
+			if err != nil {
+				return err
+			}
+			acls.DeleteEntry(a.Type, a.Qualifier)
+			if err != nil {
+				return err
+			}
+			sysACL = acls.Serialize()
+		} else {
+			sysACL = a.CitrineSerialize()
+		}
+		sysACLAttr := &eosclient.Attribute{
+			Type: SystemAttr,
+			Key:  lwShareAttrKey,
+			Val:  sysACL,
+		}
+		if err = c.SetAttr(ctx, auth, sysACLAttr, true, path); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	sysACL := a.CitrineSerialize()
-	args := []string{"-r", rootUID, rootGID, "acl"}
+	args := []string{"acl"}
 	if finfo.IsDir {
 		args = append(args, "--sys", "--recursive")
 	} else {
@@ -305,25 +377,24 @@ func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path
 			Type: SystemAttr,
 			Key:  "eval.useracl",
 		}
-		if err = c.UnsetAttr(ctx, uid, gid, userACLAttr, path); err != nil {
+		if err = c.UnsetAttr(ctx, auth, userACLAttr, path); err != nil {
 			return err
 		}
 	}
 	args = append(args, sysACL, path)
 
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, args...)
-	_, _, err = c.executeEOS(ctx, cmd)
+	_, _, err = c.executeEOS(ctx, args, rootAuth)
 	return err
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
-	return c.AddACL(ctx, uid, gid, rootUID, rootGID, path, a)
+func (c *Client) UpdateACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
+	return c.AddACL(ctx, auth, rootAuth, path, a)
 }
 
 // GetACL for a file
-func (c *Client) GetACL(ctx context.Context, uid, gid, path, aclType, target string) (*acl.Entry, error) {
-	acls, err := c.ListACLs(ctx, uid, gid, path)
+func (c *Client) GetACL(ctx context.Context, auth eosclient.Authorization, path, aclType, target string) (*acl.Entry, error) {
+	acls, err := c.ListACLs(ctx, auth, path)
 	if err != nil {
 		return nil, err
 	}
@@ -339,9 +410,9 @@ func (c *Client) GetACL(ctx context.Context, uid, gid, path, aclType, target str
 // ListACLs returns the list of ACLs present under the given path.
 // EOS returns uids/gid for Citrine version and usernames for older versions.
 // For Citire we need to convert back the uid back to username.
-func (c *Client) ListACLs(ctx context.Context, uid, gid, path string) ([]*acl.Entry, error) {
+func (c *Client) ListACLs(ctx context.Context, auth eosclient.Authorization, path string) ([]*acl.Entry, error) {
 
-	parsedACLs, err := c.getACLForPath(ctx, uid, gid, path)
+	parsedACLs, err := c.getACLForPath(ctx, auth, path)
 	if err != nil {
 		return nil, err
 	}
@@ -351,8 +422,8 @@ func (c *Client) ListACLs(ctx context.Context, uid, gid, path string) ([]*acl.En
 	return parsedACLs.Entries, nil
 }
 
-func (c *Client) getACLForPath(ctx context.Context, uid, gid, path string) (*acl.ACLs, error) {
-	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
+func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization, path string) (*acl.ACLs, error) {
+	finfo, err := c.GetFileInfoByPath(ctx, auth, path)
 	if err != nil {
 		return nil, err
 	}
@@ -361,9 +432,9 @@ func (c *Client) getACLForPath(ctx context.Context, uid, gid, path string) (*acl
 }
 
 // GetFileInfoByInode returns the FileInfo by the given inode
-func (c *Client) GetFileInfoByInode(ctx context.Context, uid, gid string, inode uint64) (*eosclient.FileInfo, error) {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "info", fmt.Sprintf("inode:%d", inode), "-m")
-	stdout, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authorization, inode uint64) (*eosclient.FileInfo, error) {
+	args := []string{"file", "info", fmt.Sprintf("inode:%d", inode), "-m"}
+	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +444,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, uid, gid string, inode 
 	}
 
 	if c.opt.VersionInvariant && isVersionFolder(info.File) {
-		info, err = c.getFileInfoFromVersion(ctx, uid, gid, info.File)
+		info, err = c.getFileInfoFromVersion(ctx, auth, info.File)
 		if err != nil {
 			return nil, err
 		}
@@ -384,9 +455,9 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, uid, gid string, inode 
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal
-func (c *Client) GetFileInfoByFXID(ctx context.Context, uid, gid string, fxid string) (*eosclient.FileInfo, error) {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "info", fmt.Sprintf("fxid:%s", fxid), "-m")
-	stdout, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) GetFileInfoByFXID(ctx context.Context, auth eosclient.Authorization, fxid string) (*eosclient.FileInfo, error) {
+	args := []string{"file", "info", fmt.Sprintf("fxid:%s", fxid), "-m"}
+	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -394,9 +465,9 @@ func (c *Client) GetFileInfoByFXID(ctx context.Context, uid, gid string, fxid st
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path
-func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (*eosclient.FileInfo, error) {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "info", path, "-m")
-	stdout, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
+	args := []string{"file", "info", path, "-m"}
+	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +477,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (
 	}
 
 	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
-		if inode, err := c.getVersionFolderInode(ctx, uid, gid, path); err == nil {
+		if inode, err := c.getVersionFolderInode(ctx, auth, path); err == nil {
 			info.Inode = inode
 		}
 	}
@@ -415,18 +486,18 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (
 }
 
 // SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, uid, gid string, attr *eosclient.Attribute, recursive bool, path string) error {
+func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
-	var cmd *exec.Cmd
+	var args []string
 	if recursive {
-		cmd = exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "attr", "-r", "set", serializeAttribute(attr), path)
+		args = []string{"attr", "-r", "set", serializeAttribute(attr), path}
 	} else {
-		cmd = exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "attr", "set", serializeAttribute(attr), path)
+		args = []string{"attr", "set", serializeAttribute(attr), path}
 	}
 
-	_, _, err := c.executeEOS(ctx, cmd)
+	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return err
 	}
@@ -434,12 +505,12 @@ func (c *Client) SetAttr(ctx context.Context, uid, gid string, attr *eosclient.A
 }
 
 // UnsetAttr unsets an extended attribute on a path.
-func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient.Attribute, path string) error {
+func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, path string) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "attr", "-r", "rm", fmt.Sprintf("%d.%s", attr.Type, attr.Key), path)
-	_, _, err := c.executeEOS(ctx, cmd)
+	args := []string{"attr", "-r", "rm", fmt.Sprintf("%d.%s", attr.Type, attr.Key), path}
+	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return err
 	}
@@ -447,9 +518,9 @@ func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path
-func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path string) (*eosclient.QuotaInfo, error) {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "quota", "ls", "-u", username, "-m")
-	stdout, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
+	args := []string{"quota", "ls", "-u", username, "-m"}
+	stdout, _, err := c.executeEOS(ctx, args, rootAuth)
 	if err != nil {
 		return nil, err
 	}
@@ -457,11 +528,11 @@ func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path 
 }
 
 // SetQuota sets the quota of a user on the quota node defined by path
-func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eosclient.SetQuotaInfo) error {
+func (c *Client) SetQuota(ctx context.Context, rootAuth eosclient.Authorization, info *eosclient.SetQuotaInfo) error {
 	maxBytes := fmt.Sprintf("%d", info.MaxBytes)
 	maxFiles := fmt.Sprintf("%d", info.MaxFiles)
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "quota", "set", "-u", info.Username, "-p", info.QuotaNode, "-v", maxBytes, "-i", maxFiles)
-	_, _, err := c.executeEOS(ctx, cmd)
+	args := []string{"quota", "set", "-u", info.Username, "-p", info.QuotaNode, "-v", maxBytes, "-i", maxFiles}
+	_, _, err := c.executeEOS(ctx, args, rootAuth)
 	if err != nil {
 		return err
 	}
@@ -469,51 +540,51 @@ func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eo
 }
 
 // Touch creates a 0-size,0-replica file in the EOS namespace.
-func (c *Client) Touch(ctx context.Context, uid, gid, path string) error {
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "file", "touch", path)
-	_, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) Touch(ctx context.Context, auth eosclient.Authorization, path string) error {
+	args := []string{"file", "touch", path}
+	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // Chown given path
-func (c *Client) Chown(ctx context.Context, uid, gid, chownUID, chownGID, path string) error {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "chown", chownUID+":"+chownGID, path)
-	_, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) Chown(ctx context.Context, auth, chownauth eosclient.Authorization, path string) error {
+	args := []string{"chown", chownauth.Role.UID + ":" + chownauth.Role.GID, path}
+	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // Chmod given path
-func (c *Client) Chmod(ctx context.Context, uid, gid, mode, path string) error {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "chmod", mode, path)
-	_, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) Chmod(ctx context.Context, auth eosclient.Authorization, mode, path string) error {
+	args := []string{"chmod", mode, path}
+	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // CreateDir creates a directory at the given path
-func (c *Client) CreateDir(ctx context.Context, uid, gid, path string) error {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "mkdir", "-p", path)
-	_, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) CreateDir(ctx context.Context, auth eosclient.Authorization, path string) error {
+	args := []string{"mkdir", "-p", path}
+	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // Remove removes the resource at the given path
-func (c *Client) Remove(ctx context.Context, uid, gid, path string) error {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "rm", "-r", path)
-	_, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path string) error {
+	args := []string{"rm", "-r", path}
+	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // Rename renames the resource referenced by oldPath to newPath
-func (c *Client) Rename(ctx context.Context, uid, gid, oldPath, newPath string) error {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "rename", oldPath, newPath)
-	_, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPath, newPath string) error {
+	args := []string{"file", "rename", oldPath, newPath}
+	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // List the contents of the directory given by path
-func (c *Client) List(ctx context.Context, uid, gid, path string) ([]*eosclient.FileInfo, error) {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "find", "--fileinfo", "--maxdepth", "1", path)
-	stdout, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.FileInfo, error) {
+	args := []string{"find", "--fileinfo", "--maxdepth", "1", path}
+	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
 	}
@@ -521,14 +592,21 @@ func (c *Client) List(ctx context.Context, uid, gid, path string) ([]*eosclient.
 }
 
 // Read reads a file from the mgm
-func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser, error) {
+func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path string) (io.ReadCloser, error) {
 	rand := "eosread-" + uuid.New().String()
 	localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
 	defer os.RemoveAll(localTarget)
 
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", xrdPath, localTarget, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", uid, gid))
-	_, _, err := c.execute(ctx, cmd)
+	args := []string{"--nopbar", "--silent", "-f", xrdPath, localTarget}
+
+	if auth.Token != "" {
+		args[3] += "?authz=" + auth.Token
+	} else if auth.Role.UID != "" && auth.Role.GID != "" {
+		args = append(args, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
+	}
+
+	_, _, err := c.executeXRDCopy(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -536,7 +614,7 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 }
 
 // Write writes a stream to the mgm
-func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.ReadCloser) error {
+func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser) error {
 	fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err
@@ -550,23 +628,30 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 		return err
 	}
 
-	return c.WriteFile(ctx, uid, gid, path, fd.Name())
+	return c.WriteFile(ctx, auth, path, fd.Name())
 }
 
 // WriteFile writes an existing file to the mgm
-func (c *Client) WriteFile(ctx context.Context, uid, gid, path, source string) error {
+func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, path, source string) error {
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", uid, gid))
-	_, _, err := c.execute(ctx, cmd)
+	args := []string{"--nopbar", "--silent", "-f", source, xrdPath}
+
+	if auth.Token != "" {
+		args[4] += "?authz=" + auth.Token
+	} else if auth.Role.UID != "" && auth.Role.GID != "" {
+		args = append(args, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
+	}
+
+	_, _, err := c.executeXRDCopy(ctx, args)
 	return err
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, uid, gid string) ([]*eosclient.DeletedEntry, error) {
+func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization) ([]*eosclient.DeletedEntry, error) {
 	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
 	// triggering the recycle ls call that could break the instance because of unavailable memory.
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "recycle", "ls", "-m")
-	stdout, _, err := c.executeEOS(ctx, cmd)
+	args := []string{"recycle", "ls", "-m"}
+	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -574,23 +659,23 @@ func (c *Client) ListDeletedEntries(ctx context.Context, uid, gid string) ([]*eo
 }
 
 // RestoreDeletedEntry restores a deleted entry.
-func (c *Client) RestoreDeletedEntry(ctx context.Context, uid, gid, key string) error {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "recycle", "restore", key)
-	_, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authorization, key string) error {
+	args := []string{"recycle", "restore", key}
+	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // PurgeDeletedEntries purges all entries from the recycle bin.
-func (c *Client) PurgeDeletedEntries(ctx context.Context, uid, gid string) error {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "recycle", "purge")
-	_, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) PurgeDeletedEntries(ctx context.Context, auth eosclient.Authorization) error {
+	args := []string{"recycle", "purge"}
+	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // ListVersions list all the versions for a given file.
-func (c *Client) ListVersions(ctx context.Context, uid, gid, p string) ([]*eosclient.FileInfo, error) {
+func (c *Client) ListVersions(ctx context.Context, auth eosclient.Authorization, p string) ([]*eosclient.FileInfo, error) {
 	versionFolder := getVersionFolder(p)
-	finfos, err := c.List(ctx, uid, gid, versionFolder)
+	finfos, err := c.List(ctx, auth, versionFolder)
 	if err != nil {
 		// we send back an empty list
 		return []*eosclient.FileInfo{}, nil
@@ -599,26 +684,34 @@ func (c *Client) ListVersions(ctx context.Context, uid, gid, p string) ([]*eoscl
 }
 
 // RollbackToVersion rollbacks a file to a previous version.
-func (c *Client) RollbackToVersion(ctx context.Context, uid, gid, path, version string) error {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "versions", path, version)
-	_, _, err := c.executeEOS(ctx, cmd)
+func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authorization, path, version string) error {
+	args := []string{"file", "versions", path, version}
+	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // ReadVersion reads the version for the given file.
-func (c *Client) ReadVersion(ctx context.Context, uid, gid, p, version string) (io.ReadCloser, error) {
+func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, p, version string) (io.ReadCloser, error) {
 	versionFile := path.Join(getVersionFolder(p), version)
-	return c.Read(ctx, uid, gid, versionFile)
+	return c.Read(ctx, auth, versionFile)
 }
 
-func (c *Client) getVersionFolderInode(ctx context.Context, uid, gid, p string) (uint64, error) {
+// GenerateToken returns a token on behalf of the resource owner to be used by lightweight accounts
+func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization, p string, a *acl.Entry) (string, error) {
+	expiration := strconv.FormatInt(time.Now().Add(time.Duration(c.opt.TokenExpiry)*time.Second).Unix(), 10)
+	args := []string{"token", "--permission", a.Permissions, "--tree", "--path", path.Clean(p) + "/", "--expires", expiration}
+	stdout, _, err := c.executeEOS(ctx, args, auth)
+	return stdout, err
+}
+
+func (c *Client) getVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {
 	versionFolder := getVersionFolder(p)
-	md, err := c.GetFileInfoByPath(ctx, uid, gid, versionFolder)
+	md, err := c.GetFileInfoByPath(ctx, auth, versionFolder)
 	if err != nil {
-		if err = c.CreateDir(ctx, uid, gid, versionFolder); err != nil {
+		if err = c.CreateDir(ctx, auth, versionFolder); err != nil {
 			return 0, err
 		}
-		md, err = c.GetFileInfoByPath(ctx, uid, gid, versionFolder)
+		md, err = c.GetFileInfoByPath(ctx, auth, versionFolder)
 		if err != nil {
 			return 0, err
 		}
@@ -626,9 +719,9 @@ func (c *Client) getVersionFolderInode(ctx context.Context, uid, gid, p string) 
 	return md.Inode, nil
 }
 
-func (c *Client) getFileInfoFromVersion(ctx context.Context, uid, gid, p string) (*eosclient.FileInfo, error) {
+func (c *Client) getFileInfoFromVersion(ctx context.Context, auth eosclient.Authorization, p string) (*eosclient.FileInfo, error) {
 	file := getFileFromVersionFolder(p)
-	md, err := c.GetFileInfoByPath(ctx, uid, gid, file)
+	md, err := c.GetFileInfoByPath(ctx, auth, file)
 	if err != nil {
 		return nil, err
 	}
@@ -920,6 +1013,19 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error
 	sysACL, err := acl.Parse(kv["sys.acl"], acl.ShortTextForm)
 	if err != nil {
 		return nil, err
+	}
+	lwACLStr, ok := kv[lwShareAttrKey]
+	if ok {
+		lwAcls, err := acl.Parse(lwACLStr, acl.ShortTextForm)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range lwAcls.Entries {
+			err = sysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	fi := &eosclient.FileInfo{

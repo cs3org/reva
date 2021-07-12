@@ -227,3 +227,47 @@ func MakeRelativePath(p string) string {
 	}
 	return "." + p
 }
+
+// UserTypeMap translates account type string to CS3 UserType
+func UserTypeMap(accountType string) userpb.UserType {
+	var t userpb.UserType
+	switch accountType {
+	case "primary":
+		t = userpb.UserType_USER_TYPE_PRIMARY
+	case "secondary":
+		t = userpb.UserType_USER_TYPE_SECONDARY
+	case "service":
+		t = userpb.UserType_USER_TYPE_SERVICE
+	case "application":
+		t = userpb.UserType_USER_TYPE_APPLICATION
+	case "guest":
+		t = userpb.UserType_USER_TYPE_GUEST
+	case "federated":
+		t = userpb.UserType_USER_TYPE_FEDERATED
+	case "lightweight":
+		t = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+	}
+	return t
+}
+
+// UserTypeToString translates CS3 UserType to user-readable string
+func UserTypeToString(accountType userpb.UserType) string {
+	var t string
+	switch accountType {
+	case userpb.UserType_USER_TYPE_PRIMARY:
+		t = "primary"
+	case userpb.UserType_USER_TYPE_SECONDARY:
+		t = "secondary"
+	case userpb.UserType_USER_TYPE_SERVICE:
+		t = "service"
+	case userpb.UserType_USER_TYPE_APPLICATION:
+		t = "application"
+	case userpb.UserType_USER_TYPE_GUEST:
+		t = "guest"
+	case userpb.UserType_USER_TYPE_FEDERATED:
+		t = "federated"
+	case userpb.UserType_USER_TYPE_LIGHTWEIGHT:
+		t = "lightweight"
+	}
+	return t
+}

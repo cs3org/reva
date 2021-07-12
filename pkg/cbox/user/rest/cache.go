@@ -132,19 +132,11 @@ func (m *manager) cacheUserDetails(u *userpb.User) error {
 	}
 
 	uid, err := extractUID(u)
-	if err != nil {
-		return err
+	if err == nil {
+		_ = m.setVal(userPrefix+"uid:"+uid, u.Id.OpaqueId, -1)
 	}
-
-	if err = m.setVal(userPrefix+"uid:"+uid, u.Id.OpaqueId, -1); err != nil {
-		return err
-	}
-	if err = m.setVal(userPrefix+"mail:"+u.Mail, u.Id.OpaqueId, -1); err != nil {
-		return err
-	}
-	if err = m.setVal(userPrefix+"username:"+u.Username, u.Id.OpaqueId, -1); err != nil {
-		return err
-	}
+	_ = m.setVal(userPrefix+"mail:"+u.Mail, u.Id.OpaqueId, -1)
+	_ = m.setVal(userPrefix+"username:"+u.Username, u.Id.OpaqueId, -1)
 	return nil
 }
 

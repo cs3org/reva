@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -452,9 +453,9 @@ func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 	}
 	var grantee string
 	if granteeType == acl.TypeUser {
-		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, g.Grantee.GetUserId().Idp)
+		grantee = fmt.Sprintf("%s:%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, utils.UserTypeToString(g.Grantee.GetUserId().Type), g.Grantee.GetUserId().Idp)
 	} else if granteeType == acl.TypeGroup {
-		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetGroupId().OpaqueId, g.Grantee.GetGroupId().Idp)
+		grantee = fmt.Sprintf("%s::%s@%s", granteeType, g.Grantee.GetGroupId().OpaqueId, g.Grantee.GetGroupId().Idp)
 	}
 
 	err = fs.addToACLDB(ctx, fn, grantee, role)
@@ -486,9 +487,9 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 		}
 		grantSplit := strings.Split(granteeID, ":")
 		grantee := &provider.Grantee{Type: grants.GetGranteeType(grantSplit[0])}
-		parts := strings.Split(grantSplit[1], "@")
+		parts := strings.Split(grantSplit[2], "@")
 		if grantSplit[0] == acl.TypeUser {
-			grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: parts[0], Idp: parts[1]}}
+			grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: parts[0], Idp: parts[1], Type: utils.UserTypeMap(grantSplit[1])}}
 		} else if grantSplit[0] == acl.TypeGroup {
 			grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: parts[0], Idp: parts[1]}}
 		}
