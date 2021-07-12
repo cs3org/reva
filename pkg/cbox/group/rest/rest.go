@@ -128,7 +128,7 @@ func (m *manager) getGroupByParam(ctx context.Context, param, val string) (map[s
 		return nil, err
 	}
 	if len(responseData) != 1 {
-		return nil, errors.New("rest: group not found: " + param + ":" + val)
+		return nil, errors.New("rest: group not found: " + param + ": " + val)
 	}
 
 	userData, ok := responseData[0].(map[string]interface{})

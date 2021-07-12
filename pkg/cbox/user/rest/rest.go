@@ -144,7 +144,7 @@ func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[st
 	}
 
 	if len(users) != 1 {
-		return nil, errors.New("rest: user not found: " + param + ":" + val)
+		return nil, errors.New("rest: user not found: " + param + ": " + val)
 	}
 
 	return users[0], nil
