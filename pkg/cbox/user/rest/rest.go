@@ -178,10 +178,13 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 	name, _ := userData["displayName"].(string)
 	uidNumber, _ := userData["uid"].(float64)
 	gidNumber, _ := userData["gid"].(float64)
+	t, _ := userData["type"].(string)
+	userType := getUserType(t, upn)
 
 	userID := &userpb.UserId{
 		OpaqueId: upn,
 		Idp:      m.conf.IDProvider,
+		Type:     userType,
 	}
 	u := &userpb.User{
 		Id:          userID,
@@ -275,8 +278,8 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 		uidNumber, _ := usrInfo["uid"].(float64)
 		gidNumber, _ := usrInfo["gid"].(float64)
 		t, _ := usrInfo["type"].(string)
-
 		userType := getUserType(t, upn)
+
 		if userType == userpb.UserType_USER_TYPE_APPLICATION || userType == userpb.UserType_USER_TYPE_FEDERATED {
 			continue
 		}

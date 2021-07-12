@@ -913,7 +913,7 @@ func (fs *eosfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	// lightweight accounts don't quota nodes, so we're passing an empty string as path
+	// lightweight accounts don't have quota nodes, so we're passing an empty string as path
 	auth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eosfs: error getting uid and gid for user")
