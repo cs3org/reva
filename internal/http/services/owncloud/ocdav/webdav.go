@@ -91,7 +91,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
 		switch r.Method {
 		case MethodPropfind:
-			s.handlePropfind(w, r, ns)
+			s.handlePathPropfind(w, r, ns)
 		case MethodLock:
 			s.handleLock(w, r, ns)
 		case MethodUnlock:
