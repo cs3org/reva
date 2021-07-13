@@ -115,7 +115,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case http.MethodOptions:
 			s.handleOptions(w, r, ns)
 		case http.MethodHead:
-			s.handleHead(w, r, ns)
+			s.handlePathHead(w, r, ns)
 		case http.MethodDelete:
 			s.handlePathDelete(w, r, ns)
 		default:
