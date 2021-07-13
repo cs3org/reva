@@ -107,7 +107,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case MethodReport:
 			s.handleReport(w, r, ns)
 		case http.MethodGet:
-			s.handleGet(w, r, ns)
+			s.handlePathGet(w, r, ns)
 		case http.MethodPut:
 			s.handlePut(w, r, ns)
 		case http.MethodPost:

@@ -60,7 +60,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 			case "PROPFIND":
 				s.handlePropfindOnToken(w, r, h.namespace, false)
 			case http.MethodGet:
-				s.handleGet(w, r, h.namespace)
+				s.handlePathGet(w, r, h.namespace)
 			case http.MethodOptions:
 				s.handleOptions(w, r, h.namespace)
 			case http.MethodHead:
