@@ -19,8 +19,6 @@
 package data
 
 import (
-	"bytes"
-	"encoding/gob"
 	"time"
 
 	"github.com/cs3org/reva/pkg/siteacc/password"
@@ -104,22 +102,13 @@ func (acc *Account) UpdatePassword(pwd string) error {
 
 // Clone creates a copy of the account; if erasePassword is set to true, the password will be cleared in the cloned object.
 func (acc *Account) Clone(erasePassword bool) *Account {
-	clone := &Account{}
-
-	// To avoid any "deep copy" packages, use gob en- and decoding instead
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	dec := gob.NewDecoder(&buf)
-
-	if err := enc.Encode(acc); err == nil {
-		_ = dec.Decode(clone)
-	}
+	clone := *acc
 
 	if erasePassword {
 		clone.Password.Clear()
 	}
 
-	return clone
+	return &clone
 }
 
 func (acc *Account) verify(verifyPassword bool) error {

@@ -58,7 +58,7 @@ func (mngr *UsersManager) initialize(conf *config.Configuration, log *zerolog.Lo
 
 // LoginUser tries to login a given username/password pair. On success, the corresponding user account is stored in the session.
 func (mngr *UsersManager) LoginUser(name, password string, session *html.Session) error {
-	account, err := mngr.accountsManager.FindAccount(FindByEmail, name)
+	account, err := mngr.accountsManager.FindAccountEx(FindByEmail, name, false)
 	if err != nil {
 		return errors.Wrap(err, "no account with the specified email exists")
 	}

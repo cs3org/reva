@@ -207,8 +207,13 @@ func (mngr *AccountsManager) ResetPassword(name string) error {
 	return err
 }
 
-// FindAccount is used to find an account by various criteria.
+// FindAccount is used to find an account by various criteria. The account is cloned to prevent data changes.
 func (mngr *AccountsManager) FindAccount(by string, value string) (*data.Account, error) {
+	return mngr.FindAccountEx(by, value, true)
+}
+
+// FindAccountEx is used to find an account by various criteria and optionally clone the account.
+func (mngr *AccountsManager) FindAccountEx(by string, value string, cloneAccount bool) (*data.Account, error) {
 	mngr.mutex.RLock()
 	defer mngr.mutex.RUnlock()
 
@@ -217,9 +222,11 @@ func (mngr *AccountsManager) FindAccount(by string, value string) (*data.Account
 		return nil, err
 	}
 
-	// Clone the account to avoid external data changes
-	clonedAccount := *account
-	return &clonedAccount, nil
+	if cloneAccount {
+		account = account.Clone(false)
+	}
+
+	return account, nil
 }
 
 // AuthorizeAccount sets the authorization status of the account identified by the account email; if no such account exists, an error is returned.
