@@ -97,7 +97,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case MethodUnlock:
 			s.handleUnlock(w, r, ns)
 		case MethodProppatch:
-			s.handleProppatch(w, r, ns)
+			s.handlePathProppatch(w, r, ns)
 		case MethodMkcol:
 			s.handlePathMkcol(w, r, ns)
 		case MethodMove:
