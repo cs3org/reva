@@ -70,7 +70,7 @@ func New(driver string, sqldb *sql.DB) (*Cache, error) {
 
 // GetNumericStorageID returns the database id for the given storage
 func (c *Cache) GetNumericStorageID(id string) (int, error) {
-	row := c.db.QueryRow("Select numeric_id from oc_storages where id = ?", id)
+	row := c.db.QueryRow("SELECT numeric_id FROM oc_storages WHERE id = ?", id)
 	var nid int
 	switch err := row.Scan(&nid); err {
 	case nil:
@@ -127,7 +127,7 @@ func (c *Cache) GetStorageOwner(numericID interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	row := c.db.QueryRow("Select id from oc_storages where numeric_id = ?", numericID)
+	row := c.db.QueryRow("SELECT id FROM oc_storages WHERE numeric_id = ?", numericID)
 	var id string
 	switch err := row.Scan(&id); err {
 	case nil:
@@ -143,7 +143,7 @@ func (c *Cache) GetStorageOwnerByFileID(numericID interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	row := c.db.QueryRow("Select id from oc_storages storages, oc_filecache cache where storages.numeric_id = cache.storage and cache.fileid = ?", numericID)
+	row := c.db.QueryRow("SELECT id FROM oc_storages storages, oc_filecache cache WHERE storages.numeric_id = cache.storage AND cache.fileid = ?", numericID)
 	var id string
 	switch err := row.Scan(&id); err {
 	case nil:
@@ -244,7 +244,7 @@ func (c *Cache) Path(id interface{}) (string, error) {
 		return "", err
 	}
 
-	row := c.db.QueryRow("Select path from oc_filecache where fileid = ?", id)
+	row := c.db.QueryRow("SELECT path FROM oc_filecache WHERE fileid = ?", id)
 	var path string
 	err = row.Scan(&path)
 	if err != nil {
@@ -340,10 +340,10 @@ func (c *Cache) doInsertOrUpdate(tx *sql.Tx, storage interface{}, data map[strin
 			parts := strings.Split(v.(string), "/")
 			columns = append(columns, "mimetype")
 			values = append(values, v)
-			placeholders = append(placeholders, "(SELECT id from oc_mimetypes where mimetype=?)")
+			placeholders = append(placeholders, "(SELECT id FROM oc_mimetypes WHERE mimetype=?)")
 			columns = append(columns, "mimepart")
 			values = append(values, parts[0])
-			placeholders = append(placeholders, "(SELECT id from oc_mimetypes where mimetype=?)")
+			placeholders = append(placeholders, "(SELECT id FROM oc_mimetypes WHERE mimetype=?)")
 			continue
 		}
 
@@ -444,7 +444,7 @@ func (c *Cache) Move(storage interface{}, sourcePath, targetPath string) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	stmt, err := tx.Prepare("UPDATE oc_filecache SET parent=?, path=?, name=?, path_hash=? WHERE storage = ? and fileid=?")
+	stmt, err := tx.Prepare("UPDATE oc_filecache SET parent=?, path=?, name=?, path_hash=? WHERE storage = ? AND fileid=?")
 	if err != nil {
 		return err
 	}
@@ -455,7 +455,7 @@ func (c *Cache) Move(storage interface{}, sourcePath, targetPath string) error {
 		return err
 	}
 
-	childRows, err := tx.Query("SELECT fileid, path from oc_filecache where parent = ?", source.ID)
+	childRows, err := tx.Query("SELECT fileid, path FROM oc_filecache WHERE parent = ?", source.ID)
 	if err != nil {
 		return err
 	}
@@ -516,7 +516,7 @@ func (c *Cache) Delete(storage interface{}, user, path, trashPath string) error 
 
 // GetRecycleItem returns the specified recycle item
 func (c *Cache) GetRecycleItem(user, path string, timestamp int) (*TrashItem, error) {
-	row := c.db.QueryRow("SELECT auto_id, id, location FROM oc_files_trash WHERE id = ? and user = ? and timestamp = ?", path, user, timestamp)
+	row := c.db.QueryRow("SELECT auto_id, id, location FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
 	var autoID int
 	var id, location string
 	err := row.Scan(&autoID, &id, &location)
@@ -535,7 +535,7 @@ func (c *Cache) GetRecycleItem(user, path string, timestamp int) (*TrashItem, er
 
 // PurgeRecycleItem deletes the specified item from the cache
 func (c *Cache) PurgeRecycleItem(user, path string, timestamp int) error {
-	row := c.db.QueryRow("Select auto_id, location from oc_files_trash where id = ? and user = ? and timestamp = ?", path, user, timestamp)
+	row := c.db.QueryRow("SELECT auto_id, location FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
 	var autoID int
 	var location string
 	err := row.Scan(&autoID, &location)
@@ -571,7 +571,7 @@ func (c *Cache) SetEtag(storage interface{}, path, etag string) error {
 	if err != nil {
 		return errors.Wrap(err, "could not find source")
 	}
-	stmt, err := c.db.Prepare("UPDATE oc_filecache SET etag=? WHERE storage = ? and fileid=?")
+	stmt, err := c.db.Prepare("UPDATE oc_filecache SET etag=? WHERE storage = ? AND fileid=?")
 	if err != nil {
 		return err
 	}
