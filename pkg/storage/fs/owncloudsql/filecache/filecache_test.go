@@ -126,6 +126,26 @@ var _ = Describe("Filecache", func() {
 		})
 	})
 
+	Describe("List", func() {
+		It("lists all entries", func() {
+			list, err := cache.List(1, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(list)).To(Equal(3))
+		})
+
+		It("filters", func() {
+			list, err := cache.List(1, "files_trashbin/")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(list)).To(Equal(3))
+		})
+
+		It("filters deep", func() {
+			list, err := cache.List(1, "files/Photos/")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(list)).To(Equal(3))
+		})
+	})
+
 	Describe("Path", func() {
 		It("returns the path", func() {
 			path, err := cache.Path(10)
