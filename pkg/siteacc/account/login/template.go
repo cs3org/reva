@@ -70,8 +70,8 @@ function handleAction(action) {
 }
 
 function handleResetPassword() {
-	const formData = new FormData(document.querySelector("form"), false);
-	if (!verifyForm(formData)) {
+	const formData = new FormData(document.querySelector("form"));
+	if (!verifyForm(formData, false)) {
 		return;
 	}
 
