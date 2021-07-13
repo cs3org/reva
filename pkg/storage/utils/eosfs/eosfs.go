@@ -191,6 +191,7 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 			Keytab:              c.Keytab,
 			SecProtocol:         c.SecProtocol,
 			VersionInvariant:    c.VersionInvariant,
+			TokenExpiry:         c.TokenExpiry,
 		}
 		eosClient, err = eosbinary.New(eosClientOpts)
 	}
@@ -456,7 +457,7 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 			Val:  v,
 		}
 
-		// TODO(labkode): SetArbitraryMetadata does not has semantic for recursivity.
+		// TODO(labkode): SetArbitraryMetadata does not have semantics for recursivity.
 		// We set it to false
 		err := fs.c.SetAttr(ctx, auth, attr, false, fn)
 		if err != nil {
@@ -1750,29 +1751,33 @@ func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 		},
 	}
 
-	var a *acl.Entry
+	perm := "rwx"
 	for _, e := range info.SysACL.Entries {
 		if e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId {
-			a = e
+			perm = e.Permissions
 			break
 		}
 	}
 
 	p := path.Clean(fn)
 	for p != "." && p != fs.conf.Namespace {
-		key := p + "!" + a.Permissions
+		key := p + "!" + perm
 		if tknIf, err := fs.tokenCache.Get(key); err == nil {
 			return eosclient.Authorization{Token: tknIf.(string)}, nil
 		}
 		p = path.Dir(p)
 	}
 
-	tkn, err := fs.c.GenerateToken(ctx, auth, fn, a)
+	if info.IsDir {
+		// EOS expects directories to have a trailing slash when generating tokens
+		fn = path.Clean(fn) + "/"
+	}
+	tkn, err := fs.c.GenerateToken(ctx, auth, fn, &acl.Entry{Permissions: perm})
 	if err != nil {
 		return eosclient.Authorization{}, err
 	}
 
-	key := path.Clean(fn) + "!" + a.Permissions
+	key := path.Clean(fn) + "!" + perm
 	_ = fs.tokenCache.SetWithExpire(key, tkn, time.Second*time.Duration(fs.conf.TokenExpiry))
 
 	return eosclient.Authorization{Token: tkn}, nil

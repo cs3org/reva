@@ -41,22 +41,15 @@ func initRedisPool(address, username, password string) *redis.Pool {
 		IdleTimeout: 240 * time.Second,
 
 		Dial: func() (redis.Conn, error) {
-			var c redis.Conn
-			var err error
-			switch {
-			case username != "":
-				c, err = redis.Dial("tcp", address,
-					redis.DialUsername(username),
-					redis.DialPassword(password),
-				)
-			case password != "":
-				c, err = redis.Dial("tcp", address,
-					redis.DialPassword(password),
-				)
-			default:
-				c, err = redis.Dial("tcp", address)
+			var opts []redis.DialOption
+			if username != "" {
+				opts = append(opts, redis.DialUsername(username))
+			}
+			if password != "" {
+				opts = append(opts, redis.DialPassword(password))
 			}
 
+			c, err := redis.Dial("tcp", address, opts...)
 			if err != nil {
 				return nil, err
 			}
