@@ -36,10 +36,9 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	defer span.End()
 
 	src := path.Join(ns, r.URL.Path)
-	dstHeader := r.Header.Get("Destination")
 	overwrite := r.Header.Get("Overwrite")
 
-	dst, err := extractDestination(dstHeader, r.Context().Value(ctxKeyBaseURI).(string))
+	dst, err := extractDestination(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return

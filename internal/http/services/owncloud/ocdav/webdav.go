@@ -103,7 +103,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case MethodMove:
 			s.handleMove(w, r, ns)
 		case MethodCopy:
-			s.handleCopy(w, r, ns)
+			s.handlePathCopy(w, r, ns)
 		case MethodReport:
 			s.handleReport(w, r, ns)
 		case http.MethodGet:
