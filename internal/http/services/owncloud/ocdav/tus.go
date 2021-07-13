@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"context"
 	"net/http"
 	"path"
 	"strconv"
@@ -31,15 +32,34 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 	"go.opencensus.io/trace"
 )
 
-func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "tus-post")
 	defer span.End()
 
+	// read filename from metadata
+	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
+	if meta["filename"] == "" {
+		w.WriteHeader(http.StatusPreconditionFailed)
+		return
+	}
+
+	// append filename to current dir
+	fn := path.Join(ns, r.URL.Path, meta["filename"])
+
+	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	// check tus headers?
+
+	ref := &provider.Reference{Path: fn}
+	s.handleTusPost(ctx, w, r, meta, ref, sublog)
+}
+
+func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.Request, meta map[string]string, ref *provider.Reference, log zerolog.Logger) {
 	w.Header().Add(HeaderAccessControlAllowHeaders, strings.Join([]string{HeaderTusResumable, HeaderUploadLength, HeaderUploadMetadata, HeaderIfMatch}, ", "))
 	w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderLocation}, ", "))
 
@@ -62,45 +82,32 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 
 	// TODO check Expect: 100-continue
 
-	// read filename from metadata
-	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
-	if meta["filename"] == "" {
-		w.WriteHeader(http.StatusPreconditionFailed)
-		return
-	}
-
-	// append filename to current dir
-	fn := path.Join(ns, r.URL.Path, meta["filename"])
-
-	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
-	// check tus headers?
-
 	// check if destination exists or is a file
 	client, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	sReq := &provider.StatRequest{
-		Ref: &provider.Reference{Path: fn},
+		Ref: ref,
 	}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending grpc stat request")
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&sublog, w, sRes.Status)
+		HandleErrorStatus(&log, w, sRes.Status)
 		return
 	}
 
 	info := sRes.Info
 	if info != nil && info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-		sublog.Warn().Msg("resource is not a file")
+		log.Warn().Msg("resource is not a file")
 		w.WriteHeader(http.StatusConflict)
 		return
 	}
@@ -110,7 +117,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		serverETag := info.Etag
 		if clientETag != "" {
 			if clientETag != serverETag {
-				sublog.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
+				log.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
 				w.WriteHeader(http.StatusPreconditionFailed)
 				return
 			}
@@ -134,7 +141,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 
 	// initiateUpload
 	uReq := &provider.InitiateFileUploadRequest{
-		Ref: &provider.Reference{Path: fn},
+		Ref: ref,
 		Opaque: &typespb.Opaque{
 			Map: opaqueMap,
 		},
@@ -142,13 +149,13 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error initiating file upload")
+		log.Error().Err(err).Msg("error initiating file upload")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, uRes.Status)
+		HandleErrorStatus(&log, w, uRes.Status)
 		return
 	}
 
@@ -176,7 +183,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 
 		length, err := strconv.ParseInt(r.Header.Get(HeaderContentLength), 10, 64)
 		if err != nil {
-			sublog.Debug().Err(err).Msg("wrong request")
+			log.Debug().Err(err).Msg("wrong request")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -186,7 +193,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		if length != 0 {
 			httpReq, err := rhttp.NewRequest(ctx, http.MethodPatch, ep, r.Body)
 			if err != nil {
-				sublog.Debug().Err(err).Msg("wrong request")
+				log.Debug().Err(err).Msg("wrong request")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -202,7 +209,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 
 			httpRes, err = s.client.Do(httpReq)
 			if err != nil {
-				sublog.Error().Err(err).Msg("error doing GET request to data service")
+				log.Error().Err(err).Msg("error doing GET request to data service")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -215,7 +222,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 				return
 			}
 		} else {
-			sublog.Debug().Msg("Skipping sending a Patch request as body is empty")
+			log.Debug().Msg("Skipping sending a Patch request as body is empty")
 		}
 
 		// check if upload was fully completed
@@ -223,19 +230,19 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 			// get uploaded file metadata
 			sRes, err := client.Stat(ctx, sReq)
 			if err != nil {
-				sublog.Error().Err(err).Msg("error sending grpc stat request")
+				log.Error().Err(err).Msg("error sending grpc stat request")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
 			if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-				HandleErrorStatus(&sublog, w, sRes.Status)
+				HandleErrorStatus(&log, w, sRes.Status)
 				return
 			}
 
 			info := sRes.Info
 			if info == nil {
-				sublog.Error().Msg("No info found for uploaded file")
+				log.Error().Msg("No info found for uploaded file")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
