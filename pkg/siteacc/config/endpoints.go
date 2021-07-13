@@ -47,6 +47,8 @@ const (
 	EndpointLogin = "/login"
 	// EndpointLogout is the endpoint path for (internal) user logout.
 	EndpointLogout = "/logout"
+	// EndpointResetPassword is the endpoint path for resetting user passwords
+	EndpointResetPassword = "/reset-password"
 
 	// EndpointAuthorize is the endpoint path for account authorization.
 	EndpointAuthorize = "/authorize"

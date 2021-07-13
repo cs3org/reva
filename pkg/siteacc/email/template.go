@@ -49,3 +49,15 @@ Congratulations - your site registration has been authorized!
 Kind regards,
 The ScienceMesh Team
 `
+
+const passwordResetTemplate = `
+Dear {{.FirstName}} {{.LastName}},
+
+Your password has been successfully reset!
+Your new password is: {{.Password.Value}}
+
+We recommend to change this password immediately after logging in.
+
+Kind regards,
+The ScienceMesh Team
+`

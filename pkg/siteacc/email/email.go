@@ -23,10 +23,12 @@ import (
 	"text/template"
 
 	"github.com/cs3org/reva/pkg/siteacc/data"
-	"github.com/pkg/errors"
-
 	"github.com/cs3org/reva/pkg/smtpclient"
+	"github.com/pkg/errors"
 )
+
+// SendFunction is the definition of email send functions.
+type SendFunction = func(*data.Account, []string, *smtpclient.SMTPCredentials) error
 
 // SendAccountCreated sends an email about account creation.
 func SendAccountCreated(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
@@ -41,6 +43,11 @@ func SendAPIKeyAssigned(account *data.Account, recipients []string, smtp *smtpcl
 // SendAccountAuthorized sends an email about account authorization.
 func SendAccountAuthorized(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
 	return send(recipients, "ScienceMesh: Site registration authorized", accountAuthorizedTemplate, account, smtp)
+}
+
+// SendPasswordReset sends an email containing the user's new password.
+func SendPasswordReset(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
+	return send(recipients, "ScienceMesh: Password reset", passwordResetTemplate, account, smtp)
 }
 
 func send(recipients []string, subject string, bodyTemplate string, data interface{}, smtp *smtpclient.SMTPCredentials) error {

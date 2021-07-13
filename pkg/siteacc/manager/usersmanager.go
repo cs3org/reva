@@ -33,6 +33,10 @@ type UsersManager struct {
 	accountsManager *AccountsManager
 }
 
+const (
+	defaultPasswordLength = 12
+)
+
 func (mngr *UsersManager) initialize(conf *config.Configuration, log *zerolog.Logger, accountsManager *AccountsManager) error {
 	if conf == nil {
 		return errors.Errorf("no configuration provided")

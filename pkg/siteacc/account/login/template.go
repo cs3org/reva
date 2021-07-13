@@ -19,15 +19,17 @@
 package login
 
 const tplJavaScript = `
-function verifyForm(formData) {
+function verifyForm(formData, requirePassword = true) {
 	if (formData.get("email") == "") {
 		setState(STATE_ERROR, "Please enter your email address.", "form", "email", true);
 		return false;
 	}
 
-	if (formData.get("password") == "") {
-		setState(STATE_ERROR, "Please enter your password.", "form", "password", true);
-		return false;
+	if (requirePassword) {
+		if (formData.get("password") == "") {
+			setState(STATE_ERROR, "Please enter your password.", "form", "password", true);
+			return false;
+		}
 	}
 
 	return true;
@@ -66,6 +68,36 @@ function handleAction(action) {
 
     xhr.send(JSON.stringify(postData));
 }
+
+function handleResetPassword() {
+	const formData = new FormData(document.querySelector("form"), false);
+	if (!verifyForm(formData)) {
+		return;
+	}
+
+	setState(STATE_STATUS, "Resetting password... this should only take a moment.", "form", null, false);
+
+	var xhr = new XMLHttpRequest();
+    xhr.open("POST", "reset-password");
+    xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+
+	xhr.onreadystatechange = function() {
+		if (this.readyState === XMLHttpRequest.DONE) {
+			if (this.status == 200) {
+				setState(STATE_SUCCESS, "Your password was successfully reset! Please check your inbox for your new password.", "form", null, true);
+			} else {
+				var resp = JSON.parse(this.responseText);
+				setState(STATE_ERROR, "An error occurred while trying to reset your password:<br><em>" + resp.error + "</em>", "form", null, true);
+			}
+        }
+	}
+
+	var postData = {
+        "email": formData.get("email")
+    };
+
+    xhr.send(JSON.stringify(postData));
+}
 `
 
 const tplStyleSheet = `
@@ -91,14 +123,17 @@ const tplBody = `
 		<div style="grid-row: 2;"><input type="text" id="email" name="email" placeholder="me@example.com" value="test@xyz.de"/></div>
 		<div style="grid-row: 1;"><label for="password">Password: <span class="mandatory">*</span></label></div>
 		<div style="grid-row: 2;"><input type="password" id="password" name="password" value="Test1234"/></div>
+		<div style="grid-row: 3; grid-column: 2; font-style: italic; font-size: 0.8em;">
+			Forgot your password? Click <a href="#" onClick="handleResetPassword();">here</a> to reset it.
+		</div>
 
-		<div style="grid-row: 3; align-self: center;">
+		<div style="grid-row: 4; align-self: center;">
 			Fields marked with <span class="mandatory">*</span> are mandatory.
 		</div>
-		<div style="grid-row: 3; grid-column: 2; text-align: right;">
+		<div style="grid-row: 4; grid-column: 2; text-align: right;">
 			<button type="reset">Reset</button>
 			<button type="button" style="font-weight: bold;" onClick="handleAction('login');">Login</button>
-		</div>
+		</div>	
 	</form>	
 </div>
 <div>

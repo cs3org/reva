@@ -23,15 +23,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/email"
 	"github.com/cs3org/reva/pkg/siteacc/sitereg"
+	"github.com/cs3org/reva/pkg/smtpclient"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-
-	"github.com/cs3org/reva/pkg/mentix/key"
-	"github.com/cs3org/reva/pkg/smtpclient"
+	"github.com/sethvargo/go-password/password"
 )
 
 const (
@@ -160,7 +160,7 @@ func (mngr *AccountsManager) CreateAccount(accountData *data.Account) error {
 		mngr.storage.AccountAdded(account)
 		mngr.writeAllAccounts()
 
-		_ = email.SendAccountCreated(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
+		mngr.sendEmail(account, email.SendAccountCreated)
 	} else {
 		return errors.Wrap(err, "error while creating account")
 	}
@@ -188,6 +188,23 @@ func (mngr *AccountsManager) UpdateAccount(accountData *data.Account, setPasswor
 	}
 
 	return nil
+}
+
+// ResetPassword resets the password for the given user.
+func (mngr *AccountsManager) ResetPassword(name string) error {
+	account, err := mngr.findAccount(FindByEmail, name)
+	if err != nil {
+		return errors.Wrap(err, "user to reset password for not found")
+	}
+	accountUpd := account.Clone(true)
+	accountUpd.Password.Value = password.MustGenerate(defaultPasswordLength, 2, 0, false, true)
+
+	err = mngr.UpdateAccount(accountUpd, true, false)
+	if err == nil {
+		mngr.sendEmail(accountUpd, email.SendPasswordReset)
+	}
+
+	return err
 }
 
 // FindAccount is used to find an account by various criteria.
@@ -222,7 +239,7 @@ func (mngr *AccountsManager) AuthorizeAccount(accountData *data.Account, authori
 	mngr.writeAllAccounts()
 
 	if account.Data.Authorized && account.Data.Authorized != authorizedOld {
-		_ = email.SendAccountAuthorized(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
+		mngr.sendEmail(account, email.SendAccountAuthorized)
 	}
 
 	return nil
@@ -260,7 +277,7 @@ func (mngr *AccountsManager) AssignAPIKeyToAccount(accountData *data.Account, fl
 	mngr.storage.AccountUpdated(account)
 	mngr.writeAllAccounts()
 
-	_ = email.SendAPIKeyAssigned(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
+	mngr.sendEmail(account, email.SendAPIKeyAssigned)
 
 	return nil
 }
@@ -316,6 +333,10 @@ func (mngr *AccountsManager) CloneAccounts(erasePasswords bool) data.Accounts {
 	}
 
 	return clones
+}
+
+func (mngr *AccountsManager) sendEmail(account *data.Account, sendFunc email.SendFunction) {
+	_ = sendFunc(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
 }
 
 // NewAccountsManager creates a new accounts manager instance.

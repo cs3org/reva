@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
+	"github.com/cs3org/reva/pkg/siteacc/manager"
 	"github.com/pkg/errors"
 )
 
@@ -74,11 +75,12 @@ func getEndpoints() []endpoint {
 		{config.EndpointList, callMethodEndpoint, createMethodCallbacks(handleList, nil), false},
 		{config.EndpointFind, callMethodEndpoint, createMethodCallbacks(handleFind, nil), false},
 		{config.EndpointCreate, callMethodEndpoint, createMethodCallbacks(nil, handleCreate), true},
-		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
+		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), true},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
 		// Login endpoints
-		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), false},
-		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), false},
+		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
+		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), true},
+		{config.EndpointResetPassword, callMethodEndpoint, createMethodCallbacks(nil, handleResetPassword), true},
 		// Authorization endpoints
 		{config.EndpointAuthorize, callMethodEndpoint, createMethodCallbacks(nil, handleAuthorize), false},
 		{config.EndpointIsAuthorized, callMethodEndpoint, createMethodCallbacks(handleIsAuthorized, nil), false},
@@ -235,18 +237,37 @@ func handleUpdate(siteacc *SiteAccounts, values url.Values, body []byte, session
 		return nil, err
 	}
 
-	invokedByUser := strings.EqualFold(values.Get("invoker"), invokerUser)
-	if invokedByUser {
+	setPassword := false
+
+	switch strings.ToLower(values.Get("invoker")) {
+	case invokerDefault:
+		// If the endpoint was called through the API, an API key must be provided identifying the account
+		apiKey := values.Get("apikey")
+		if apiKey == "" {
+			return nil, errors.Errorf("no API key provided")
+		}
+
+		accountFound, err := findAccount(siteacc, manager.FindByAPIKey, apiKey)
+		if err != nil {
+			return nil, errors.Wrap(err, "no account for the specified API key found")
+		}
+		account.Email = accountFound.Email
+
+	case invokerUser:
 		// If this endpoint was called by the user, set the account email from the stored session
 		if session.LoggedInUser == nil {
 			return nil, errors.Errorf("no user is currently logged in")
 		}
 
 		account.Email = session.LoggedInUser.Email
+		setPassword = true
+
+	default:
+		return nil, errors.Errorf("no invoker provided")
 	}
 
-	// Update the account through the accounts manager; only the basic data of an account can be updated through this requestHandler
-	if err := siteacc.AccountsManager().UpdateAccount(account, invokedByUser, false); err != nil {
+	// Update the account through the accounts manager
+	if err := siteacc.AccountsManager().UpdateAccount(account, setPassword, false); err != nil {
 		return nil, errors.Wrap(err, "unable to update account")
 	}
 
@@ -306,6 +327,20 @@ func handleLogin(siteacc *SiteAccounts, values url.Values, body []byte, session 
 func handleLogout(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	// Logout the user through the users manager
 	siteacc.UsersManager().LogoutUser(session)
+	return nil, nil
+}
+
+func handleResetPassword(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	account, err := unmarshalRequestData(body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Reset the password through the users manager
+	if err := siteacc.AccountsManager().ResetPassword(account.Email); err != nil {
+		return nil, errors.Wrap(err, "unable to reset password")
+	}
+
 	return nil, nil
 }
 
