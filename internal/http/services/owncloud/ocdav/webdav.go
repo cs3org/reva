@@ -117,7 +117,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case http.MethodHead:
 			s.handleHead(w, r, ns)
 		case http.MethodDelete:
-			s.handleDelete(w, r, ns)
+			s.handlePathDelete(w, r, ns)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
