@@ -60,6 +60,7 @@ var _ = Describe("storage providers", func() {
 			Id: &userpb.UserId{
 				Idp:      "0.0.0.0:19000",
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 		}
 
@@ -81,7 +82,7 @@ var _ = Describe("storage providers", func() {
 		// Add auth token
 		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
-		scope, err := scope.GetOwnerScope()
+		scope, err := scope.AddOwnerScope(nil)
 		Expect(err).ToNot(HaveOccurred())
 		t, err := tokenManager.MintToken(ctx, user, scope)
 		Expect(err).ToNot(HaveOccurred())
@@ -322,7 +323,7 @@ var _ = Describe("storage providers", func() {
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			By("listing the recycle items")
-			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
+			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -337,7 +338,7 @@ var _ = Describe("storage providers", func() {
 
 			restoreRes, err := serviceClient.RestoreRecycleItem(ctx,
 				&storagep.RestoreRecycleItemRequest{
-					Ref: subdirRef,
+					Ref: homeRef,
 					Key: item.Key,
 				},
 			)
@@ -357,7 +358,7 @@ var _ = Describe("storage providers", func() {
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			By("listing the recycle items")
-			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
+			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -372,7 +373,7 @@ var _ = Describe("storage providers", func() {
 
 			restoreRes, err := serviceClient.RestoreRecycleItem(ctx,
 				&storagep.RestoreRecycleItemRequest{
-					Ref:        subdirRef,
+					Ref:        homeRef,
 					Key:        item.Key,
 					RestoreRef: &storagep.Reference{Path: "/subdirRestored"},
 				},
@@ -392,7 +393,7 @@ var _ = Describe("storage providers", func() {
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			By("listing recycle items")
-			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
+			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(len(listRes.RecycleItems)).To(Equal(1))
@@ -402,7 +403,7 @@ var _ = Describe("storage providers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(purgeRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-			listRes, err = serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
+			listRes, err = serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(len(listRes.RecycleItems)).To(Equal(0))

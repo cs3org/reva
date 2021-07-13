@@ -64,7 +64,7 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 	case *link.GetPublicShareRequest:
 		return checkPublicShareRef(&share, v.GetRef()), nil
 	case string:
-		return checkPath(v), nil
+		return checkResourcePath(v), nil
 	}
 
 	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
@@ -73,7 +73,7 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 func checkStorageRef(s *link.PublicShare, r *provider.Reference) bool {
 	// r: <id:<storage_id:$storageID node_id:$nodeID path:$path > >
 	if r.ResourceId != nil && r.Path == "" { // path must be empty
-		return s.ResourceId.StorageId == r.ResourceId.StorageId && s.ResourceId.OpaqueId == r.ResourceId.OpaqueId
+		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId())
 	}
 
 	// r: <path:"/public/$token" >
@@ -88,20 +88,22 @@ func checkPublicShareRef(s *link.PublicShare, ref *link.PublicShareReference) bo
 	return ref.GetToken() == s.Token
 }
 
-// GetPublicShareScope returns the scope to allow access to a public share and
+// AddPublicShareScope adds the scope to allow access to a public share and
 // the shared resource.
-func GetPublicShareScope(share *link.PublicShare, role authpb.Role) (map[string]*authpb.Scope, error) {
+func AddPublicShareScope(share *link.PublicShare, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
 	val, err := utils.MarshalProtoV1ToJSON(share)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]*authpb.Scope{
-		"publicshare:" + share.Id.OpaqueId: &authpb.Scope{
-			Resource: &types.OpaqueEntry{
-				Decoder: "json",
-				Value:   val,
-			},
-			Role: role,
+	if scopes == nil {
+		scopes = make(map[string]*authpb.Scope)
+	}
+	scopes["publicshare:"+share.Id.OpaqueId] = &authpb.Scope{
+		Resource: &types.OpaqueEntry{
+			Decoder: "json",
+			Value:   val,
 		},
-	}, nil
+		Role: role,
+	}
+	return scopes, nil
 }

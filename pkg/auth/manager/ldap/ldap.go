@@ -60,6 +60,7 @@ type config struct {
 	Idp          string     `mapstructure:"idp"`
 	GatewaySvc   string     `mapstructure:"gatewaysvc"`
 	Schema       attributes `mapstructure:"schema"`
+	Nobody       int64      `mapstructure:"nobody"`
 }
 
 type attributes struct {
@@ -116,6 +117,9 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 		c.LoginFilter = c.UserFilter
 		c.LoginFilter = strings.ReplaceAll(c.LoginFilter, "%s", "{{login}}")
 	}
+	if c.Nobody == 0 {
+		c.Nobody = 99
+	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 
@@ -170,6 +174,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	userID := &user.UserId{
 		Idp:      am.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
+		Type:     user.UserType_USER_TYPE_PRIMARY, // TODO: assign the appropriate user type
 	}
 	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
 	if err != nil {
@@ -184,13 +189,21 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
 		return nil, nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
 	}
-	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber), 10, 64)
-	if err != nil {
-		return nil, nil, err
+	gidNumber := am.c.Nobody
+	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber)
+	if gidValue != "" {
+		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
-	uidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber), 10, 64)
-	if err != nil {
-		return nil, nil, err
+	uidNumber := am.c.Nobody
+	uidValue := sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber)
+	if uidValue != "" {
+		uidNumber, err = strconv.ParseInt(uidValue, 10, 64)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	u := &user.User{
 		Id: userID,
@@ -204,14 +217,22 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		GidNumber:   gidNumber,
 	}
 
-	scope, err := scope.GetOwnerScope()
-	if err != nil {
-		return nil, nil, err
+	var scopes map[string]*authpb.Scope
+	if userID != nil && userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
+		scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		scopes, err = scope.AddOwnerScope(nil)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	log.Debug().Interface("entry", sr.Entries[0]).Interface("user", u).Msg("authenticated user")
 
-	return u, scope, nil
+	return u, scopes, nil
 
 }
 

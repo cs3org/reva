@@ -158,6 +158,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	ownerID := &userpb.UserId{
 		OpaqueId: owner,
 		Idp:      meshProvider,
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
 	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
 		Name:       resource,

@@ -112,9 +112,7 @@ type config struct {
 	DeprecatedShareDirectory string `mapstructure:"sharedirectory"`
 	ShareFolder              string `mapstructure:"share_folder"`
 	UserLayout               string `mapstructure:"user_layout"`
-	Redis                    string `mapstructure:"redis"`
 	EnableHome               bool   `mapstructure:"enable_home"`
-	Scan                     bool   `mapstructure:"scan"`
 	UserProviderEndpoint     string `mapstructure:"userprovidersvc"`
 	DbUsername               string `mapstructure:"dbusername"`
 	DbPassword               string `mapstructure:"dbpassword"`
@@ -133,9 +131,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 func (c *config) init(m map[string]interface{}) {
-	if c.Redis == "" {
-		c.Redis = ":6379"
-	}
 	if c.UserLayout == "" {
 		c.UserLayout = "{{.Username}}"
 	}
@@ -152,10 +147,6 @@ func (c *config) init(m map[string]interface{}) {
 	// ensure share folder always starts with slash
 	c.ShareFolder = filepath.Join("/", c.ShareFolder)
 
-	// default to scanning if not configured
-	if _, ok := m["scan"]; !ok {
-		c.Scan = true
-	}
 	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.UserProviderEndpoint)
 }
 
@@ -557,7 +548,7 @@ func (fs *ocfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provid
 func (fs *ocfs) getUserStorage(ctx context.Context) (int, error) {
 	user, ok := user.ContextGetUser(ctx)
 	if !ok {
-		return -1, fmt.Errorf("Could not get user for context")
+		return -1, fmt.Errorf("could not get user for context")
 	}
 	return fs.filecache.GetNumericStorageID("home::" + user.Username)
 }
@@ -643,7 +634,7 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (strin
 		if isNotFound(err) {
 			return "", errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return "", errors.Wrap(err, "ocfs: error reading permissions")
+		return "", errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	return fs.toStoragePath(ctx, ip), nil
@@ -680,7 +671,7 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
+		return errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
@@ -692,7 +683,7 @@ func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provid
 		if isNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return errors.Wrap(err, "ocfs: error reading permissions")
+		return errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	e := ace.FromGrant(g)
@@ -761,7 +752,7 @@ func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants
 	log := appctx.GetLogger(ctx)
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
-		return nil, errors.Wrap(err, "ocfs: error resolving reference")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
@@ -773,7 +764,7 @@ func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants
 		if isNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	var attrs []string
@@ -799,7 +790,7 @@ func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pro
 
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
+		return errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
@@ -811,7 +802,7 @@ func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pro
 		if isNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return errors.Wrap(err, "ocfs: error reading permissions")
+		return errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	var attr string
@@ -831,7 +822,7 @@ func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pro
 func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
+		return errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
@@ -843,7 +834,7 @@ func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pro
 		if isNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return errors.Wrap(err, "ocfs: error reading permissions")
+		return errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	e := ace.FromGrant(g)
@@ -881,7 +872,7 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 	}
 	for _, v := range homePaths {
 		if err := os.MkdirAll(v, 0700); err != nil {
-			return errors.Wrap(err, "ocfs: error creating home path: "+v)
+			return errors.Wrap(err, "owncloudsql: error creating home path: "+v)
 		}
 
 		fi, err := os.Stat(v)
@@ -905,7 +896,7 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 // If home is enabled, the relative home is always the empty string
 func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 	if !fs.c.EnableHome {
-		return "", errtypes.NotSupported("ocfs: get home not supported")
+		return "", errtypes.NotSupported("owncloudsql: get home not supported")
 	}
 	return "", nil
 }
@@ -922,7 +913,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
 		if isNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return errors.Wrap(err, "ocfs: error reading permissions")
+		return errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	if err = os.Mkdir(ip, 0700); err != nil {
@@ -930,7 +921,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
 			return errtypes.NotFound(sp)
 		}
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
-		return errors.Wrap(err, "ocfs: error creating dir "+ip)
+		return errors.Wrap(err, "owncloudsql: error creating dir "+ip)
 	}
 
 	fi, err := os.Stat(ip)
@@ -970,7 +961,7 @@ func (fs *ocfs) isShareFolderRoot(sp string) bool {
 
 func (fs *ocfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
 	if !fs.isShareFolderChild(sp) {
-		return errtypes.PermissionDenied("ocfs: cannot create references outside the share folder: share_folder=" + "/Shares" + " path=" + sp)
+		return errtypes.PermissionDenied("owncloudsql: cannot create references outside the share folder: share_folder=" + "/Shares" + " path=" + sp)
 	}
 
 	ip := fs.toInternalShadowPath(ctx, sp)
@@ -978,17 +969,17 @@ func (fs *ocfs) CreateReference(ctx context.Context, sp string, targetURI *url.U
 
 	dir, _ := filepath.Split(ip)
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return errors.Wrapf(err, "ocfs: error creating shadow path %s", dir)
+		return errors.Wrapf(err, "owncloudsql: error creating shadow path %s", dir)
 	}
 
 	f, err := os.Create(ip)
 	if err != nil {
-		return errors.Wrapf(err, "ocfs: error creating shadow file %s", ip)
+		return errors.Wrapf(err, "owncloudsql: error creating shadow file %s", ip)
 	}
 
 	err = xattr.FSet(f, mdPrefix+"target", []byte(targetURI.String()))
 	if err != nil {
-		return errors.Wrapf(err, "ocfs: error setting the target %s on the shadow file %s", targetURI.String(), ip)
+		return errors.Wrapf(err, "owncloudsql: error setting the target %s on the shadow file %s", targetURI.String(), ip)
 	}
 	return nil
 }
@@ -1018,7 +1009,7 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
+		return errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
@@ -1030,7 +1021,7 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 		if isNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return errors.Wrap(err, "ocfs: error reading permissions")
+		return errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	var fi os.FileInfo
@@ -1039,7 +1030,7 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return errors.Wrap(err, "ocfs: error stating "+ip)
+		return errors.Wrap(err, "owncloudsql: error stating "+ip)
 	}
 
 	errs := []error{}
@@ -1161,7 +1152,7 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
+		return errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
@@ -1173,7 +1164,7 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 		if isNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return errors.Wrap(err, "ocfs: error reading permissions")
+		return errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	_, err = os.Stat(ip)
@@ -1181,7 +1172,7 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return errors.Wrap(err, "ocfs: error stating "+ip)
+		return errors.Wrap(err, "owncloudsql: error stating "+ip)
 	}
 
 	errs := []error{}
@@ -1254,7 +1245,7 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
+		return errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
@@ -1266,7 +1257,7 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 		if isNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return errors.Wrap(err, "ocfs: error reading permissions")
+		return errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	_, err = os.Stat(ip)
@@ -1274,16 +1265,16 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return errors.Wrap(err, "ocfs: error stating "+ip)
+		return errors.Wrap(err, "owncloudsql: error stating "+ip)
 	}
 
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error resolving recycle path")
+		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
 
 	if err := os.MkdirAll(rp, 0700); err != nil {
-		return errors.Wrap(err, "ocfs: error creating trashbin dir "+rp)
+		return errors.Wrap(err, "owncloudsql: error creating trashbin dir "+rp)
 	}
 
 	// ip is the path on disk ... we need only the path relative to root
@@ -1291,11 +1282,11 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 
 	err = fs.trash(ctx, ip, rp, origin)
 	if err != nil {
-		return errors.Wrapf(err, "ocfs: error deleting file %s", ip)
+		return errors.Wrapf(err, "owncloudsql: error deleting file %s", ip)
 	}
 	err = fs.trashVersions(ctx, ip, origin)
 	if err != nil {
-		return errors.Wrapf(err, "ocfs: error deleting versions of file %s", ip)
+		return errors.Wrapf(err, "owncloudsql: error deleting versions of file %s", ip)
 	}
 	return nil
 }
@@ -1311,7 +1302,7 @@ func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) 
 			dtime++
 			tgt := filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
 			if err := os.Rename(ip, tgt); err != nil {
-				return errors.Wrap(err, "ocfs: could not move item to trash")
+				return errors.Wrap(err, "owncloudsql: could not move item to trash")
 			}
 		}
 	}
@@ -1336,7 +1327,7 @@ func (fs *ocfs) trashVersions(ctx context.Context, ip string, origin string) err
 	}
 
 	if err := os.MkdirAll(vrp, 0700); err != nil {
-		return errors.Wrap(err, "ocfs: error creating trashbin dir "+vrp)
+		return errors.Wrap(err, "owncloudsql: error creating trashbin dir "+vrp)
 	}
 
 	// Ignore error since the only possible error is malformed pattern.
@@ -1344,7 +1335,7 @@ func (fs *ocfs) trashVersions(ctx context.Context, ip string, origin string) err
 	for _, v := range versions {
 		err := fs.trash(ctx, v, vrp, origin)
 		if err != nil {
-			return errors.Wrap(err, "ocfs: error deleting file "+v)
+			return errors.Wrap(err, "owncloudsql: error deleting file "+v)
 		}
 	}
 	return nil
@@ -1353,7 +1344,7 @@ func (fs *ocfs) trashVersions(ctx context.Context, ip string, origin string) err
 func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
 	var oldIP string
 	if oldIP, err = fs.resolve(ctx, oldRef); err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
+		return errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
@@ -1365,12 +1356,12 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 		if isNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(oldIP)))
 		}
-		return errors.Wrap(err, "ocfs: error reading permissions")
+		return errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	var newIP string
 	if newIP, err = fs.resolve(ctx, newRef); err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
+		return errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// TODO check target permissions ... if it exists
@@ -1383,7 +1374,7 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 		return err
 	}
 	if err = os.Rename(oldIP, newIP); err != nil {
-		return errors.Wrap(err, "ocfs: error moving "+oldIP+" to "+newIP)
+		return errors.Wrap(err, "owncloudsql: error moving "+oldIP+" to "+newIP)
 	}
 
 	if err := fs.propagate(ctx, newIP); err != nil {
@@ -1402,7 +1393,7 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return nil, err
 		}
-		return nil, errors.Wrap(err, "ocfs: error resolving reference")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 	p := fs.toStoragePath(ctx, ip)
 
@@ -1423,7 +1414,7 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return nil, errors.Wrap(err, "ocfs: error stating "+ip)
+		return nil, errors.Wrap(err, "owncloudsql: error stating "+ip)
 	}
 
 	// check permissions
@@ -1435,7 +1426,7 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 		if isNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	return fs.convertToResourceInfo(ctx, md, ip, fs.toStoragePath(ctx, ip), mdKeys)
@@ -1453,7 +1444,7 @@ func (fs *ocfs) getMDShareFolder(ctx context.Context, sp string, mdKeys []string
 		if isNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	md, err := os.Stat(ip)
@@ -1461,7 +1452,7 @@ func (fs *ocfs) getMDShareFolder(ctx context.Context, sp string, mdKeys []string
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fs.toStorageShadowPath(ctx, ip))
 		}
-		return nil, errors.Wrapf(err, "ocfs: error stating %s", ip)
+		return nil, errors.Wrapf(err, "owncloudsql: error stating %s", ip)
 	}
 	m, err := fs.convertToResourceInfo(ctx, md, ip, fs.toStorageShadowPath(ctx, ip), mdKeys)
 	if err != nil {
@@ -1488,7 +1479,7 @@ func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys 
 
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error resolving reference")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 	sp := fs.toStoragePath(ctx, ip)
 
@@ -1523,12 +1514,12 @@ func (fs *ocfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []str
 		if isNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	mds, err := ioutil.ReadDir(ip)
 	if err != nil {
-		return nil, errors.Wrapf(err, "ocfs: error listing %s", ip)
+		return nil, errors.Wrapf(err, "owncloudsql: error listing %s", ip)
 	}
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
@@ -1555,7 +1546,7 @@ func (fs *ocfs) listWithHome(ctx context.Context, home, p string, mdKeys []strin
 	}
 
 	if fs.isShareFolderChild(p) {
-		return nil, errtypes.PermissionDenied("ocfs: error listing folders inside the shared folder, only file references are stored inside")
+		return nil, errtypes.PermissionDenied("owncloudsql: error listing folders inside the shared folder, only file references are stored inside")
 	}
 
 	log.Debug().Msg("listing nominal home")
@@ -1575,12 +1566,12 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 		if isNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	mds, err := ioutil.ReadDir(ip)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error listing files")
+		return nil, errors.Wrap(err, "owncloudsql: error listing files")
 	}
 
 	finfos := []*provider.ResourceInfo{}
@@ -1597,7 +1588,7 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 	ip = fs.toInternalShadowPath(ctx, home)
 	mds, err = ioutil.ReadDir(ip)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
+		return nil, errors.Wrap(err, "owncloudsql: error listing shadow_files")
 	}
 	for _, md := range mds {
 		cp := filepath.Join(ip, md.Name())
@@ -1622,7 +1613,7 @@ func (fs *ocfs) listShareFolderRoot(ctx context.Context, sp string, mdKeys []str
 		if isNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	mds, err := ioutil.ReadDir(ip)
@@ -1630,7 +1621,7 @@ func (fs *ocfs) listShareFolderRoot(ctx context.Context, sp string, mdKeys []str
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
+		return nil, errors.Wrap(err, "owncloudsql: error listing shadow_files")
 	}
 
 	finfos := []*provider.ResourceInfo{}
@@ -1656,12 +1647,12 @@ func (fs *ocfs) archiveRevision(ctx context.Context, vbp string, ip string) erro
 	// move existing file to versions dir
 	vp := fmt.Sprintf("%s.v%d", vbp, time.Now().Unix())
 	if err := os.MkdirAll(filepath.Dir(vp), 0700); err != nil {
-		return errors.Wrap(err, "ocfs: error creating versions dir "+vp)
+		return errors.Wrap(err, "owncloudsql: error creating versions dir "+vp)
 	}
 
 	// TODO(jfd): make sure rename is atomic, missing fsync ...
 	if err := os.Rename(ip, vp); err != nil {
-		return errors.Wrap(err, "ocfs: error renaming from "+ip+" to "+vp)
+		return errors.Wrap(err, "owncloudsql: error renaming from "+ip+" to "+vp)
 	}
 
 	storage, err := fs.getUserStorage(ctx)
@@ -1700,29 +1691,10 @@ func (fs *ocfs) archiveRevision(ctx context.Context, vbp string, ip string) erro
 	return err
 }
 
-func (fs *ocfs) copyMD(s string, t string) (err error) {
-	var attrs []string
-	if attrs, err = xattr.List(s); err != nil {
-		return err
-	}
-	for i := range attrs {
-		if strings.HasPrefix(attrs[i], ocPrefix) {
-			var d []byte
-			if d, err = xattr.Get(s, attrs[i]); err != nil {
-				return err
-			}
-			if err = xattr.Set(t, attrs[i], d); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 func (fs *ocfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error resolving reference")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
@@ -1734,7 +1706,7 @@ func (fs *ocfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadC
 		if isNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	r, err := os.Open(ip)
@@ -1742,7 +1714,7 @@ func (fs *ocfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadC
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading "+ip)
+		return nil, errors.Wrap(err, "owncloudsql: error reading "+ip)
 	}
 	return r, nil
 }
@@ -1750,7 +1722,7 @@ func (fs *ocfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadC
 func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error resolving reference")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
@@ -1762,7 +1734,7 @@ func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*
 		if isNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	vp := fs.getVersionsPath(ctx, ip)
@@ -1771,7 +1743,7 @@ func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*
 	revisions := []*provider.FileVersion{}
 	mds, err := ioutil.ReadDir(filepath.Dir(vp))
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error reading"+filepath.Dir(vp))
+		return nil, errors.Wrap(err, "owncloudsql: error reading"+filepath.Dir(vp))
 	}
 	for i := range mds {
 		rev := fs.filterAsRevision(ctx, bn, mds[i])
@@ -1810,7 +1782,7 @@ func (fs *ocfs) DownloadRevision(ctx context.Context, ref *provider.Reference, r
 func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
+		return errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
@@ -1822,7 +1794,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 		if isNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return errors.Wrap(err, "ocfs: error reading permissions")
+		return errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	vp := fs.getVersionsPath(ctx, ip)
@@ -1892,10 +1864,10 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error resolving recycle path")
+		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
 	ip := filepath.Join(rp, filepath.Clean(key))
 	// TODO check permission?
@@ -1910,17 +1882,17 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
 		if isNotFound(err) {
 			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(ip)))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 	*/
 
 	err = os.RemoveAll(ip)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error deleting recycle item")
+		return errors.Wrap(err, "owncloudsql: error deleting recycle item")
 	}
 	err = os.RemoveAll(filepath.Join(filepath.Dir(rp), "versions", filepath.Clean(key)))
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error deleting recycle item versions")
+		return errors.Wrap(err, "owncloudsql: error deleting recycle item versions")
 	}
 
 	base, ttime, err := splitTrashKey(key)
@@ -1939,15 +1911,15 @@ func (fs *ocfs) EmptyRecycle(ctx context.Context) error {
 	// TODO check permission? on what? user must be the owner
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error resolving recycle path")
+		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
 	err = os.RemoveAll(rp)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error deleting recycle files")
+		return errors.Wrap(err, "owncloudsql: error deleting recycle files")
 	}
 	err = os.RemoveAll(filepath.Join(filepath.Dir(rp), "versions"))
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error deleting recycle files versions")
+		return errors.Wrap(err, "owncloudsql: error deleting recycle files versions")
 	}
 	// TODO delete keyfiles, keys, share-keys ... or just everything?
 	return nil
@@ -2000,11 +1972,11 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, md os.FileInfo) *provi
 	}
 }
 
-func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (fs *ocfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error resolving recycle path")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
 
 	// list files folder
@@ -2027,12 +1999,12 @@ func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 	return items, nil
 }
 
-func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
+func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error resolving recycle path")
+		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
 	src := filepath.Join(rp, filepath.Clean(key))
 
@@ -2053,7 +2025,7 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
 		log.Error().Err(err).Str("key", key).Str("restorePath", restoreRef.Path).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
-		return errors.Wrap(err, "ocfs: could not restore item")
+		return errors.Wrap(err, "owncloudsql: could not restore item")
 	}
 
 	storage, err := fs.getUserStorage(ctx)
@@ -2158,6 +2130,11 @@ func (fs *ocfs) HashFile(path string) (string, string, string, error) {
 
 		return string(sha1h.Sum(nil)), string(md5h.Sum(nil)), string(adler32h.Sum(nil)), nil
 	}
+}
+
+func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	// TODO(corby): Implement
+	return nil, errtypes.NotSupported("list storage spaces")
 }
 
 func readChecksumIntoResourceChecksum(ctx context.Context, checksums, algo string, ri *provider.ResourceInfo) {

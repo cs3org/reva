@@ -27,34 +27,35 @@ import (
 
 // EOSClient is the interface which enables access to EOS instances through various interfaces.
 type EOSClient interface {
-	AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error
-	RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error
-	UpdateACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error
-	GetACL(ctx context.Context, uid, gid, path, aclType, target string) (*acl.Entry, error)
-	ListACLs(ctx context.Context, uid, gid, path string) ([]*acl.Entry, error)
-	GetFileInfoByInode(ctx context.Context, uid, gid string, inode uint64) (*FileInfo, error)
-	GetFileInfoByFXID(ctx context.Context, uid, gid string, fxid string) (*FileInfo, error)
-	GetFileInfoByPath(ctx context.Context, uid, gid, path string) (*FileInfo, error)
-	SetAttr(ctx context.Context, uid, gid string, attr *Attribute, recursive bool, path string) error
-	UnsetAttr(ctx context.Context, uid, gid string, attr *Attribute, path string) error
-	GetQuota(ctx context.Context, username, rootUID, rootGID, path string) (*QuotaInfo, error)
-	SetQuota(ctx context.Context, rootUID, rootGID string, info *SetQuotaInfo) error
-	Touch(ctx context.Context, uid, gid, path string) error
-	Chown(ctx context.Context, uid, gid, chownUID, chownGID, path string) error
-	Chmod(ctx context.Context, uid, gid, mode, path string) error
-	CreateDir(ctx context.Context, uid, gid, path string) error
-	Remove(ctx context.Context, uid, gid, path string) error
-	Rename(ctx context.Context, uid, gid, oldPath, newPath string) error
-	List(ctx context.Context, uid, gid, path string) ([]*FileInfo, error)
-	Read(ctx context.Context, uid, gid, path string) (io.ReadCloser, error)
-	Write(ctx context.Context, uid, gid, path string, stream io.ReadCloser) error
-	WriteFile(ctx context.Context, uid, gid, path, source string) error
-	ListDeletedEntries(ctx context.Context, uid, gid string) ([]*DeletedEntry, error)
-	RestoreDeletedEntry(ctx context.Context, uid, gid, key string) error
-	PurgeDeletedEntries(ctx context.Context, uid, gid string) error
-	ListVersions(ctx context.Context, uid, gid, p string) ([]*FileInfo, error)
-	RollbackToVersion(ctx context.Context, uid, gid, path, version string) error
-	ReadVersion(ctx context.Context, uid, gid, p, version string) (io.ReadCloser, error)
+	AddACL(ctx context.Context, auth, rootAuth Authorization, path string, a *acl.Entry) error
+	RemoveACL(ctx context.Context, auth, rootAuth Authorization, path string, a *acl.Entry) error
+	UpdateACL(ctx context.Context, auth, rootAuth Authorization, path string, a *acl.Entry) error
+	GetACL(ctx context.Context, auth Authorization, path, aclType, target string) (*acl.Entry, error)
+	ListACLs(ctx context.Context, auth Authorization, path string) ([]*acl.Entry, error)
+	GetFileInfoByInode(ctx context.Context, auth Authorization, inode uint64) (*FileInfo, error)
+	GetFileInfoByFXID(ctx context.Context, auth Authorization, fxid string) (*FileInfo, error)
+	GetFileInfoByPath(ctx context.Context, auth Authorization, path string) (*FileInfo, error)
+	SetAttr(ctx context.Context, auth Authorization, attr *Attribute, recursive bool, path string) error
+	UnsetAttr(ctx context.Context, auth Authorization, attr *Attribute, path string) error
+	GetQuota(ctx context.Context, username string, rootAuth Authorization, path string) (*QuotaInfo, error)
+	SetQuota(ctx context.Context, rooAuth Authorization, info *SetQuotaInfo) error
+	Touch(ctx context.Context, auth Authorization, path string) error
+	Chown(ctx context.Context, auth, chownauth Authorization, path string) error
+	Chmod(ctx context.Context, auth Authorization, mode, path string) error
+	CreateDir(ctx context.Context, auth Authorization, path string) error
+	Remove(ctx context.Context, auth Authorization, path string) error
+	Rename(ctx context.Context, auth Authorization, oldPath, newPath string) error
+	List(ctx context.Context, auth Authorization, path string) ([]*FileInfo, error)
+	Read(ctx context.Context, auth Authorization, path string) (io.ReadCloser, error)
+	Write(ctx context.Context, auth Authorization, path string, stream io.ReadCloser) error
+	WriteFile(ctx context.Context, auth Authorization, path, source string) error
+	ListDeletedEntries(ctx context.Context, auth Authorization) ([]*DeletedEntry, error)
+	RestoreDeletedEntry(ctx context.Context, auth Authorization, key string) error
+	PurgeDeletedEntries(ctx context.Context, auth Authorization) error
+	ListVersions(ctx context.Context, auth Authorization, p string) ([]*FileInfo, error)
+	RollbackToVersion(ctx context.Context, auth Authorization, path, version string) error
+	ReadVersion(ctx context.Context, auth Authorization, p, version string) (io.ReadCloser, error)
+	GenerateToken(ctx context.Context, auth Authorization, path string, a *acl.Entry) (string, error)
 }
 
 // AttrType is the type of extended attribute,
@@ -118,4 +119,16 @@ type SetQuotaInfo struct {
 	QuotaNode string
 	MaxBytes  uint64
 	MaxFiles  uint64
+}
+
+// Role holds the attributes required to authenticate to EOS via role-based access.
+type Role struct {
+	UID, GID string
+}
+
+// Authorization specifies the mechanisms through which EOS can be accessed.
+// One of the data members must be set.
+type Authorization struct {
+	Role  Role
+	Token string
 }

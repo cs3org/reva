@@ -60,6 +60,7 @@ type config struct {
 	BindPassword    string     `mapstructure:"bind_password"`
 	Idp             string     `mapstructure:"idp"`
 	Schema          attributes `mapstructure:"schema"`
+	Nobody          int64      `mapstructure:"nobody"`
 }
 
 type attributes struct {
@@ -116,6 +117,10 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}
 	c.GroupFilter = strings.ReplaceAll(c.GroupFilter, "%s", "{{.OpaqueId}}")
 
+	if c.Nobody == 0 {
+		c.Nobody = 99
+	}
+
 	mgr := &manager{
 		c: c,
 	}
@@ -171,18 +176,27 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	id := &userpb.UserId{
 		Idp:      m.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
 	groups, err := m.GetUserGroups(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
-	if err != nil {
-		return nil, err
+	gidNumber := m.c.Nobody
+	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
+	if gidValue != "" {
+		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+		if err != nil {
+			return nil, err
+		}
 	}
-	uidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber), 10, 64)
-	if err != nil {
-		return nil, err
+	uidNumber := m.c.Nobody
+	uidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)
+	if uidValue != "" {
+		uidNumber, err = strconv.ParseInt(uidValue, 10, 64)
+		if err != nil {
+			return nil, err
+		}
 	}
 	u := &userpb.User{
 		Id:          id,
@@ -250,18 +264,27 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	id := &userpb.UserId{
 		Idp:      m.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
 	groups, err := m.GetUserGroups(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
-	if err != nil {
-		return nil, err
+	gidNumber := m.c.Nobody
+	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
+	if gidValue != "" {
+		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+		if err != nil {
+			return nil, err
+		}
 	}
-	uidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber), 10, 64)
-	if err != nil {
-		return nil, err
+	uidNumber := m.c.Nobody
+	uidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)
+	if uidValue != "" {
+		uidNumber, err = strconv.ParseInt(uidValue, 10, 64)
+		if err != nil {
+			return nil, err
+		}
 	}
 	u := &userpb.User{
 		Id:          id,
@@ -310,18 +333,27 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		id := &userpb.UserId{
 			Idp:      m.c.Idp,
 			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.UID),
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		}
 		groups, err := m.GetUserGroups(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-		gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
-		if err != nil {
-			return nil, err
+		gidNumber := m.c.Nobody
+		gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
+		if gidValue != "" {
+			gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+			if err != nil {
+				return nil, err
+			}
 		}
-		uidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber), 10, 64)
-		if err != nil {
-			return nil, err
+		uidNumber := m.c.Nobody
+		uidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)
+		if uidValue != "" {
+			uidNumber, err = strconv.ParseInt(uidValue, 10, 64)
+			if err != nil {
+				return nil, err
+			}
 		}
 		user := &userpb.User{
 			Id:          id,

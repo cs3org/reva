@@ -68,8 +68,9 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 			if err == ErrNoOverlap {
 				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", md.Size))
 			}
+			sublog.Error().Err(err).Interface("md", md).Interface("ranges", ranges).Msg("range request not satisfiable")
 			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
-			fmt.Fprintln(w, err)
+
 			return
 		}
 		if SumRangesSize(ranges) > int64(md.Size) {

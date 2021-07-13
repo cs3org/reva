@@ -31,6 +31,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
@@ -42,10 +43,11 @@ func ocmShareCreateCommand() *command {
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
+	userType := cmd.String("user-type", "primary", "the type of user account, defaults to primary")
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
 
 	cmd.ResetFlags = func() {
-		*grantType, *grantee, *idp, *rol = "user", "", "", "viewer"
+		*grantType, *grantee, *idp, *rol, *userType = "user", "", "", "viewer", "primary"
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -77,8 +79,9 @@ func ocmShareCreateCommand() *command {
 			return err
 		}
 
+		u := &userpb.UserId{OpaqueId: *grantee, Idp: *idp, Type: utils.UserTypeMap(*userType)}
 		remoteUserRes, err := client.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
-			RemoteUserId: &userpb.UserId{OpaqueId: *grantee, Idp: *idp},
+			RemoteUserId: u,
 		})
 		if err != nil {
 			return err
@@ -109,10 +112,7 @@ func ocmShareCreateCommand() *command {
 				Type: gt,
 				// For now, we only support user shares.
 				// TODO (ishank011): To be updated once this is decided.
-				Id: &provider.Grantee_UserId{UserId: &userpb.UserId{
-					Idp:      *idp,
-					OpaqueId: *grantee,
-				}},
+				Id: &provider.Grantee_UserId{UserId: u},
 			},
 		}
 

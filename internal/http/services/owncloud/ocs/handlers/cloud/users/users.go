@@ -125,28 +125,35 @@ func (h *Handler) handleUsers(w http.ResponseWriter, r *http.Request, u *userpb.
 		ocdav.HandleErrorStatus(sublog, w, getHomeRes.Status)
 		return
 	}
+	var total, used uint64
+	var relative float32
+	// lightweight accounts don't have access to their storage space
+	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
+		if err != nil {
+			sublog.Error().Err(err).Msg("error calling GetQuota")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-	getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
-	if err != nil {
-		sublog.Error().Err(err).Msg("error calling GetQuota")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if getQuotaRes.Status.Code != rpc.Code_CODE_OK {
-		ocdav.HandleErrorStatus(sublog, w, getQuotaRes.Status)
-		return
+		if getQuotaRes.Status.Code != rpc.Code_CODE_OK {
+			ocdav.HandleErrorStatus(sublog, w, getQuotaRes.Status)
+			return
+		}
+		total = getQuotaRes.TotalBytes
+		used = getQuotaRes.UsedBytes
+		relative = float32(float64(used) / float64(total))
 	}
 
 	response.WriteOCSSuccess(w, r, &Users{
 		// ocs can only return the home storage quota
 		Quota: &Quota{
-			Free: int64(getQuotaRes.TotalBytes - getQuotaRes.UsedBytes),
-			Used: int64(getQuotaRes.UsedBytes),
+			Free: int64(total - used),
+			Used: int64(used),
 			// TODO support negative values or flags for the quota to carry special meaning: -1 = uncalculated, -2 = unknown, -3 = unlimited
 			// for now we can only report total and used
-			Total:      int64(getQuotaRes.TotalBytes),
-			Relative:   float32(float64(getQuotaRes.UsedBytes) / float64(getQuotaRes.TotalBytes)),
+			Total:      int64(total),
+			Relative:   relative,
 			Definition: "default",
 		},
 		DisplayName: u.DisplayName,
