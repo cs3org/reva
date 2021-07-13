@@ -304,6 +304,19 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 
+	// Look at namespaces filters. If the query starts with:
+	// "a" => look into primary/secondary/service accounts
+	// "l" => look into lightweight accounts
+	// none => look into primary
+
+	parts := strings.SplitN(query, ":", 2)
+
+	var namespace string
+	if len(parts) == 2 {
+		// the query contains a namespace filter
+		namespace, query = parts[0], parts[1]
+	}
+
 	var filters []string
 	switch {
 	case usernameRegex.MatchString(query):
@@ -326,11 +339,34 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	}
 
 	userSlice := []*userpb.User{}
-	for _, v := range users {
-		userSlice = append(userSlice, v)
+
+	var accountsFilters []userpb.UserType
+	switch namespace {
+	case "":
+		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_PRIMARY}
+	case "a":
+		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_PRIMARY, userpb.UserType_USER_TYPE_SECONDARY, userpb.UserType_USER_TYPE_SERVICE}
+	case "l":
+		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_LIGHTWEIGHT}
+	}
+
+	for _, u := range users {
+		if isUserAnyType(u, accountsFilters) {
+			userSlice = append(userSlice, u)
+		}
 	}
 
 	return userSlice, nil
+}
+
+// isUserAnyType returns true if the user's type is one of types list
+func isUserAnyType(user *userpb.User, types []userpb.UserType) bool {
+	for _, t := range types {
+		if user.GetId().Type == t {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
