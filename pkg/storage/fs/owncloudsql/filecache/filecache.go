@@ -160,6 +160,7 @@ type File struct {
 	Parent          int
 	MimePart        int
 	MimeType        int
+	MimeTypeString  string
 	Size            int
 	MTime           int
 	StorageMTime    int
@@ -189,8 +190,8 @@ type Scannable interface {
 func (c *Cache) rowToFile(row Scannable) (*File, error) {
 	var fileid, storage, parent, mimetype, mimepart, size, mtime, storageMtime, encrypted, unencryptedSize int
 	var permissions sql.NullInt32
-	var path, name, etag, checksum sql.NullString
-	err := row.Scan(&fileid, &storage, &path, &parent, &permissions, &mimetype, &mimepart, &size, &mtime, &storageMtime, &encrypted, &unencryptedSize, &name, &etag, &checksum)
+	var path, name, etag, checksum, mimetypestring sql.NullString
+	err := row.Scan(&fileid, &storage, &path, &parent, &permissions, &mimetype, &mimepart, &mimetypestring, &size, &mtime, &storageMtime, &encrypted, &unencryptedSize, &name, &etag, &checksum)
 	if err != nil {
 		return nil, err
 	}
@@ -202,6 +203,7 @@ func (c *Cache) rowToFile(row Scannable) (*File, error) {
 		Parent:          parent,
 		Permissions:     int(permissions.Int32),
 		MimeType:        mimetype,
+		MimeTypeString:  mimetypestring.String,
 		MimePart:        mimepart,
 		Size:            size,
 		MTime:           mtime,
@@ -224,7 +226,14 @@ func (c *Cache) Get(s interface{}, p string) (*File, error) {
 	phashBytes := md5.Sum([]byte(p))
 	phash := hex.EncodeToString(phashBytes[:])
 
-	row := c.db.QueryRow("Select fileid, storage, path, parent, permissions, mimetype, mimepart, size, mtime, storage_mtime, encrypted, unencrypted_size, name, etag, checksum from oc_filecache where path_hash = ? and storage = ?", phash, storageID)
+	row := c.db.QueryRow(`
+		SELECT
+			fc.fileid, fc.storage, fc.path, fc.parent, fc.permissions, fc.mimetype, fc.mimepart,
+			mt.mimetype, fc.size, fc.mtime, fc.storage_mtime, fc.encrypted, fc.unencrypted_size,
+			fc.name, fc.etag, fc.checksum
+		FROM oc_filecache fc
+		LEFT JOIN oc_mimetypes mt ON fc.mimetype = mt.id
+		WHERE path_hash = ? AND storage = ?`, phash, storageID)
 	return c.rowToFile(row)
 }
 

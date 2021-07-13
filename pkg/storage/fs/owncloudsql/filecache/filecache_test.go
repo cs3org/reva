@@ -114,6 +114,7 @@ var _ = Describe("Filecache", func() {
 			Expect(file.Parent).To(Equal(9))
 			Expect(file.MimeType).To(Equal(6))
 			Expect(file.MimePart).To(Equal(5))
+			Expect(file.MimeTypeString).To(Equal("image/jpeg"))
 			Expect(file.Size).To(Equal(243733))
 			Expect(file.MTime).To(Equal(1619007009))
 			Expect(file.StorageMTime).To(Equal(1619007009))
