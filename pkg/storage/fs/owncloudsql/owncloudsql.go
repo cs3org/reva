@@ -940,11 +940,16 @@ func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
 		return err
 	}
 	mtime := time.Now().Unix()
+
+	permissions := 31 // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
+	if perm, err := fs.readPermissions(ctx, filepath.Dir(ip)); err == nil {
+		permissions = int(conversions.RoleFromResourcePermissions(perm).OCSPermissions()) // inherit permissions of parent
+	}
 	data := map[string]interface{}{
 		"path":          fs.toDatabasePath(ip),
 		"etag":          calcEtag(ctx, fi),
 		"mimetype":      "httpd/unix-directory",
-		"permissions":   31, // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
+		"permissions":   permissions,
 		"mtime":         mtime,
 		"storage_mtime": mtime,
 	}
