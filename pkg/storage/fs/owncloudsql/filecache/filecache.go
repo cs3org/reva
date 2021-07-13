@@ -253,6 +253,38 @@ func (c *Cache) Path(id interface{}) (string, error) {
 	return path, nil
 }
 
+// List returns the list of entries below the given path
+func (c *Cache) List(storage interface{}, p string) ([]*File, error) {
+	storageID, err := toIntID(storage)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := c.db.Query(`
+		SELECT
+			fc.fileid, fc.storage, fc.path, fc.parent, fc.permissions, fc.mimetype, fc.mimepart,
+			mt.mimetype, fc.size, fc.mtime, fc.storage_mtime, fc.encrypted, fc.unencrypted_size,
+			fc.name, fc.etag, fc.checksum
+		FROM oc_filecache fc
+		LEFT JOIN oc_mimetypes mt ON fc.mimetype = mt.id
+		WHERE path != '' AND path LIKE ? AND PATH NOT LIKE ? AND storage = ?
+	`, p+"%", p+"%/%", storageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	entries := []*File{}
+	for rows.Next() {
+		entry, err := c.rowToFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+
+	return entries, nil
+}
+
 // Permissions returns the permissions for the specified storage/path
 func (c *Cache) Permissions(storage interface{}, p string) (*provider.ResourcePermissions, error) {
 	entry, err := c.Get(storage, p)
@@ -277,6 +309,9 @@ func (c *Cache) InsertOrUpdate(storage interface{}, data map[string]interface{})
 	defer func() { _ = tx.Rollback() }()
 
 	id, err := c.doInsertOrUpdate(tx, storage, data, false)
+	if err != nil {
+		return -1, err
+	}
 
 	err = tx.Commit()
 	if err != nil {

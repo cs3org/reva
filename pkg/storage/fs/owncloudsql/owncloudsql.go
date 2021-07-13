@@ -563,18 +563,7 @@ func (fs *ocfs) getStorage(ip string) (int, error) {
 	return fs.filecache.GetNumericStorageID("home::" + fs.getOwner(ip))
 }
 
-func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip string, sp string, mdKeys []string) (*provider.ResourceInfo, error) {
-	storage, err := fs.getStorage(ip)
-	if err != nil {
-		return nil, err
-	}
-
-	p := fs.toDatabasePath(ip)
-	cacheEntry, err := fs.filecache.Get(storage, p)
-	if err != nil {
-		return nil, err
-	}
-
+func (fs *ocfs) convertToResourceInfo(ctx context.Context, entry *filecache.File, ip string, mdKeys []string) (*provider.ResourceInfo, error) {
 	mdKeysMap := make(map[string]struct{})
 	for _, k := range mdKeys {
 		mdKeysMap[k] = struct{}{}
@@ -585,16 +574,23 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip st
 		returnAllKeys = true
 	}
 
+	var resourceType provider.ResourceType
+	isDir := entry.MimeTypeString == "httpd/unix-directory"
+	if isDir {
+		resourceType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+	} else {
+		resourceType = provider.ResourceType_RESOURCE_TYPE_FILE
+	}
+
 	ri := &provider.ResourceInfo{
-		Id:       &provider.ResourceId{OpaqueId: strconv.Itoa(cacheEntry.ID)},
-		Path:     sp,
-		Type:     getResourceType(fi.IsDir()),
-		Etag:     cacheEntry.Etag,
-		MimeType: mime.Detect(fi.IsDir(), ip),
-		Size:     uint64(fi.Size()),
+		Id:       &provider.ResourceId{OpaqueId: strconv.Itoa(entry.ID)},
+		Path:     strings.TrimPrefix(entry.Path, "files/"),
+		Type:     resourceType,
+		Etag:     entry.Etag,
+		MimeType: entry.MimeTypeString,
+		Size:     uint64(entry.Size),
 		Mtime: &types.Timestamp{
-			Seconds: uint64(fi.ModTime().Unix()),
-			// TODO read nanos from where? Nanos:   fi.MTimeNanos,
+			Seconds: uint64(entry.MTime),
 		},
 		ArbitraryMetadata: &provider.ArbitraryMetadata{
 			Metadata: map[string]string{}, // TODO aduffeck: which metadata needs to go in here?
@@ -610,22 +606,16 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip st
 	ri.PermissionSet = fs.permissionSet(ctx, ri.Owner)
 
 	// checksums
-	if !fi.IsDir() {
+	if !isDir {
 		if _, checksumRequested := mdKeysMap[checksumsKey]; returnAllKeys || checksumRequested {
 			// TODO which checksum was requested? sha1 adler32 or md5? for now hardcode sha1?
-			readChecksumIntoResourceChecksum(ctx, cacheEntry.Checksum, storageprovider.XSSHA1, ri)
-			readChecksumIntoOpaque(ctx, cacheEntry.Checksum, storageprovider.XSMD5, ri)
+			readChecksumIntoResourceChecksum(ctx, entry.Checksum, storageprovider.XSSHA1, ri)
+			readChecksumIntoOpaque(ctx, entry.Checksum, storageprovider.XSMD5, ri)
 			readChecksumIntoOpaque(ctx, ip, storageprovider.XSAdler32, ri)
 		}
 	}
 
 	return ri, nil
-}
-func getResourceType(isDir bool) provider.ResourceType {
-	if isDir {
-		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
-	}
-	return provider.ResourceType_RESOURCE_TYPE_FILE
 }
 
 // GetPathByID returns the storage relative path for the file id, without the internal namespace
@@ -1552,14 +1542,22 @@ func (fs *ocfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []str
 		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
-	mds, err := ioutil.ReadDir(ip)
+	storage, err := fs.getStorage(ip)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := fs.filecache.List(storage, fs.toDatabasePath(ip)+"/")
 	if err != nil {
 		return nil, errors.Wrapf(err, "owncloudsql: error listing %s", ip)
 	}
+	owner := fs.getOwner(ip)
 	finfos := []*provider.ResourceInfo{}
-	for _, md := range mds {
-		cp := filepath.Join(ip, md.Name())
-		m, err := fs.convertToResourceInfo(ctx, md, cp, fs.toStoragePath(ctx, cp), mdKeys)
+	for _, entry := range entries {
+		cp := filepath.Join(fs.c.DataDirectory, owner, entry.Path)
+		if err != nil {
+			return nil, err
+		}
+		m, err := fs.convertToResourceInfo(ctx, entry, cp, mdKeys)
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("path", cp).Msg("error converting to a resource info")
 		}
@@ -1604,15 +1602,19 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
-	mds, err := ioutil.ReadDir(ip)
+	storage, err := fs.getStorage(ip)
 	if err != nil {
-		return nil, errors.Wrap(err, "owncloudsql: error listing files")
+		return nil, err
 	}
-
+	entries, err := fs.filecache.List(storage, fs.toDatabasePath(ip)+"/")
+	if err != nil {
+		return nil, errors.Wrapf(err, "owncloudsql: error listing %s", ip)
+	}
+	owner := fs.getOwner(ip)
 	finfos := []*provider.ResourceInfo{}
-	for _, md := range mds {
-		cp := filepath.Join(ip, md.Name())
-		m, err := fs.convertToResourceInfo(ctx, md, cp, fs.toStoragePath(ctx, cp), mdKeys)
+	for _, entry := range entries {
+		cp := filepath.Join(fs.c.DataDirectory, owner, entry.Path)
+		m, err := fs.convertToResourceInfo2(ctx, entry, cp, mdKeys)
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("path", cp).Msg("error converting to a resource info")
 		}
@@ -1621,7 +1623,7 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 
 	// list shadow_files
 	ip = fs.toInternalShadowPath(ctx, home)
-	mds, err = ioutil.ReadDir(ip)
+	mds, err := ioutil.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrap(err, "owncloudsql: error listing shadow_files")
 	}
