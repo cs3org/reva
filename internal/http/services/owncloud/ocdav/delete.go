@@ -31,7 +31,11 @@ import (
 	"go.opencensus.io/trace"
 )
 
+<<<<<<< HEAD
 func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string) {
+=======
+func (s *svc) handleDelete(w http.ResponseWriter, r *http.Request, ns string) {
+>>>>>>> dc5c2add... remove unusedf key
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "delete")
 	defer span.End()
