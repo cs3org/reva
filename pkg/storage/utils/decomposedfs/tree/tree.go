@@ -339,7 +339,13 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 
 // Delete deletes a node in the tree by moving it to the trash
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
+	deletingSharedResource := ctx.Value(appctx.DeletingSharedResource)
 
+	if deletingSharedResource != nil && deletingSharedResource.(bool) {
+		src := filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name)
+		err = os.Remove(src)
+		return nil
+	}
 	// Prepare the trash
 	// TODO use layout?, but it requires resolving the owners user if the username is used instead of the id.
 	// the node knows the owner id so we use that for now

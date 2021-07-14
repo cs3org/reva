@@ -24,6 +24,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// DeletingSharedResource flags to a storage a shared resource is being deleted not by the owner.
+var DeletingSharedResource struct{}
+
 // WithLogger returns a context with an associated logger.
 func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
 	return l.WithContext(ctx)
