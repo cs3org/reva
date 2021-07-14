@@ -19,8 +19,11 @@
 package plugin
 
 import (
+	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/cs3org/reva/pkg/pluginregistry"
 	"github.com/hashicorp/go-hclog"
@@ -33,8 +36,34 @@ var handshake = plugin.HandshakeConfig{
 	MagicCookieValue: "hello",
 }
 
+func compile(path string, pluginType string) (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("could not find current directory: %v", err)
+	}
+	name := fmt.Sprintf("%d", rand.Int())
+	pluginsDir := filepath.Join(wd, "bin", pluginType, name)
+
+	command := fmt.Sprintf("go build -o %s %s", pluginsDir, path)
+	cmd := exec.Command("bash", "-c", command)
+	err = cmd.Run()
+	if err != nil {
+		return "", err
+	}
+	return pluginsDir, nil
+}
+
 // Load loads the plugin using the hashicorp go-plugin system
 func Load(driver string, pluginType string) (interface{}, error) {
+	bin := driver
+	if filepath.Ext(driver) == ".go" {
+		var err error
+		bin, err = compile(driver, pluginType)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	logger := hclog.New(&hclog.LoggerOptions{
 		Name:   "plugin",
 		Output: os.Stdout,
@@ -44,7 +73,7 @@ func Load(driver string, pluginType string) (interface{}, error) {
 	client := plugin.NewClient(&plugin.ClientConfig{
 		HandshakeConfig: handshake,
 		Plugins:         pluginregistry.PluginMap,
-		Cmd:             exec.Command(driver),
+		Cmd:             exec.Command(bin),
 		AllowedProtocols: []plugin.Protocol{
 			plugin.ProtocolNetRPC,
 		},

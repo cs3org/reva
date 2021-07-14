@@ -63,7 +63,7 @@ type ConfigureReply struct {
 func (m *RPCClient) Configure(ml map[string]interface{}) error {
 	args := ConfigureArg{Ml: ml}
 	resp := ConfigureReply{}
-	err := m.Client.Call("Plugin.New", args, &resp)
+	err := m.Client.Call("Plugin.Configure", args, &resp)
 	if err != nil {
 		return err
 	}
