@@ -20,7 +20,6 @@ package plugin
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,10 +40,8 @@ func compile(path string, pluginType string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not find current directory: %v", err)
 	}
-	name := fmt.Sprintf("%d", rand.Int())
-	pluginsDir := filepath.Join(wd, "bin", pluginType, name)
-
-	command := fmt.Sprintf("go build -o %s %s", pluginsDir, path)
+	pluginsDir := filepath.Join(wd, "bin", pluginType, filepath.Base(path))
+	command := fmt.Sprintf("GO111MODULE=off go build -o %s %s", pluginsDir, path)
 	cmd := exec.Command("bash", "-c", command)
 	err = cmd.Run()
 	if err != nil {
@@ -56,8 +53,12 @@ func compile(path string, pluginType string) (string, error) {
 // Load loads the plugin using the hashicorp go-plugin system
 func Load(driver string, pluginType string) (interface{}, error) {
 	bin := driver
-	if filepath.Ext(driver) == ".go" {
-		var err error
+	file, err := os.Stat(driver)
+	if err != nil {
+		return nil, err
+	}
+	// compile if we point to a package.
+	if file.IsDir() {
 		bin, err = compile(driver, pluginType)
 		if err != nil {
 			return nil, err
