@@ -574,18 +574,11 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, entry *filecache.File
 		returnAllKeys = true
 	}
 
-	var resourceType provider.ResourceType
 	isDir := entry.MimeTypeString == "httpd/unix-directory"
-	if isDir {
-		resourceType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-	} else {
-		resourceType = provider.ResourceType_RESOURCE_TYPE_FILE
-	}
-
 	ri := &provider.ResourceInfo{
 		Id:       &provider.ResourceId{OpaqueId: strconv.Itoa(entry.ID)},
-		Path:     strings.TrimPrefix(entry.Path, "files/"),
-		Type:     resourceType,
+		Path:     fs.toStoragePath(ctx, ip),
+		Type:     getResourceType(isDir),
 		Etag:     entry.Etag,
 		MimeType: entry.MimeTypeString,
 		Size:     uint64(entry.Size),
@@ -1439,14 +1432,6 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 		ip = p
 	}
 
-	md, err := os.Stat(ip)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(fs.toStoragePath(ctx, ip))
-		}
-		return nil, errors.Wrap(err, "owncloudsql: error stating "+ip)
-	}
-
 	// check permissions
 	if perm, err := fs.readPermissions(ctx, ip); err == nil {
 		if !perm.Stat {
@@ -1459,7 +1444,16 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
-	return fs.convertToResourceInfo(ctx, md, ip, fs.toStoragePath(ctx, ip), mdKeys)
+	ownerStorageID, err := fs.filecache.GetNumericStorageID("home::" + fs.getOwner(ip))
+	if err != nil {
+		return nil, err
+	}
+	entry, err := fs.filecache.Get(ownerStorageID, fs.toDatabasePath(ip))
+	if err != nil {
+		return nil, err
+	}
+
+	return fs.convertToResourceInfo(ctx, entry, ip, mdKeys)
 }
 
 func (fs *ocfs) getMDShareFolder(ctx context.Context, sp string, mdKeys []string) (*provider.ResourceInfo, error) {
@@ -1619,22 +1613,7 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 	finfos := []*provider.ResourceInfo{}
 	for _, entry := range entries {
 		cp := filepath.Join(fs.c.DataDirectory, owner, entry.Path)
-		m, err := fs.convertToResourceInfo2(ctx, entry, cp, mdKeys)
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("path", cp).Msg("error converting to a resource info")
-		}
-		finfos = append(finfos, m)
-	}
-
-	// list shadow_files
-	ip = fs.toInternalShadowPath(ctx, home)
-	mds, err := ioutil.ReadDir(ip)
-	if err != nil {
-		return nil, errors.Wrap(err, "owncloudsql: error listing shadow_files")
-	}
-	for _, md := range mds {
-		cp := filepath.Join(ip, md.Name())
-		m, err := fs.convertToResourceInfo(ctx, md, cp, fs.toStorageShadowPath(ctx, cp), mdKeys)
+		m, err := fs.convertToResourceInfo(ctx, entry, cp, mdKeys)
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("path", cp).Msg("error converting to a resource info")
 		}
@@ -2220,6 +2199,13 @@ func readChecksumIntoOpaque(ctx context.Context, checksums, algo string, ri *pro
 			Value:   []byte(matches[1]),
 		}
 	}
+}
+
+func getResourceType(isDir bool) provider.ResourceType {
+	if isDir {
+		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
+	}
+	return provider.ResourceType_RESOURCE_TYPE_FILE
 }
 
 // TODO propagate etag and mtime or append event to history? propagate on disk ...
