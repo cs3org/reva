@@ -343,7 +343,9 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	if deletingSharedResource != nil && deletingSharedResource.(bool) {
 		src := filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name)
-		err = os.Remove(src)
+		if err := os.Remove(src); err != nil {
+			return err
+		}
 		return nil
 	}
 	// Prepare the trash
