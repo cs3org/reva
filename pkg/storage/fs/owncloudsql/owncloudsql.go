@@ -50,7 +50,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/owncloudsql/filecache"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
@@ -69,8 +68,6 @@ const (
 	// "user.oc."
 	ocPrefix string = "user.oc."
 
-	// SharePrefix is the prefix for sharing related extended attributes
-	sharePrefix       string = ocPrefix + "grant." // grants are similar to acls, but they are not propagated down the tree when being changed
 	trashOriginPrefix string = ocPrefix + "o"
 	mdPrefix          string = ocPrefix + "md."   // arbitrary metadata
 	favPrefix         string = ocPrefix + "fav."  // favorite flag, per user
@@ -593,56 +590,6 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 	return "", fmt.Errorf("invalid reference %+v", ref)
 }
 
-func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	ip, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "owncloudsql: error resolving reference")
-	}
-
-	// check permissions
-	if perm, err := fs.readPermissions(ctx, ip); err == nil {
-		if !perm.AddGrant {
-			return errtypes.PermissionDenied("")
-		}
-	} else {
-		if isNotFound(err) {
-			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
-		}
-		return errors.Wrap(err, "owncloudsql: error reading permissions")
-	}
-
-	e := ace.FromGrant(g)
-	principal, value := e.Marshal()
-	if err := xattr.Set(ip, sharePrefix+principal, value); err != nil {
-		return err
-	}
-	return fs.propagate(ctx, ip)
-}
-
-// extractACEsFromAttrs reads ACEs in the list of attrs from the file
-func extractACEsFromAttrs(ctx context.Context, ip string, attrs []string) (entries []*ace.ACE) {
-	log := appctx.GetLogger(ctx)
-	entries = []*ace.ACE{}
-	for i := range attrs {
-		if strings.HasPrefix(attrs[i], sharePrefix) {
-			var value []byte
-			var err error
-			if value, err = xattr.Get(ip, attrs[i]); err != nil {
-				log.Error().Err(err).Str("attr", attrs[i]).Msg("could not read attribute")
-				continue
-			}
-			var e *ace.ACE
-			principal := attrs[i][len(sharePrefix):]
-			if e, err = ace.Unmarshal(principal, value); err != nil {
-				log.Error().Err(err).Str("principal", principal).Str("attr", attrs[i]).Msg("could not unmarshal ace")
-				continue
-			}
-			entries = append(entries, e)
-		}
-	}
-	return
-}
-
 func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
@@ -684,100 +631,19 @@ func isNotFound(err error) bool {
 }
 
 func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
-	log := appctx.GetLogger(ctx)
-	var ip string
-	if ip, err = fs.resolve(ctx, ref); err != nil {
-		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
-	}
+	return []*provider.Grant{}, nil // nop
+}
 
-	// check permissions
-	if perm, err := fs.readPermissions(ctx, ip); err == nil {
-		if !perm.ListGrants {
-			return nil, errtypes.PermissionDenied("")
-		}
-	} else {
-		if isNotFound(err) {
-			return nil, errtypes.NotFound(fs.toStoragePath(ctx, ip))
-		}
-		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
-	}
-
-	var attrs []string
-	if attrs, err = xattr.List(ip); err != nil {
-		// TODO err might be a not exists
-		log.Error().Err(err).Msg("error listing attributes")
-		return nil, err
-	}
-
-	log.Debug().Interface("attrs", attrs).Msg("read attributes")
-
-	aces := extractACEsFromAttrs(ctx, ip, attrs)
-
-	grants = make([]*provider.Grant, 0, len(aces))
-	for i := range aces {
-		grants = append(grants, aces[i].Grant())
-	}
-
-	return grants, nil
+func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	return nil // nop
 }
 
 func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
-
-	var ip string
-	if ip, err = fs.resolve(ctx, ref); err != nil {
-		return errors.Wrap(err, "owncloudsql: error resolving reference")
-	}
-
-	// check permissions
-	if perm, err := fs.readPermissions(ctx, ip); err == nil {
-		if !perm.ListContainer {
-			return errtypes.PermissionDenied("")
-		}
-	} else {
-		if isNotFound(err) {
-			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
-		}
-		return errors.Wrap(err, "owncloudsql: error reading permissions")
-	}
-
-	var attr string
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		attr = sharePrefix + "g:" + g.Grantee.GetGroupId().OpaqueId
-	} else {
-		attr = sharePrefix + "u:" + g.Grantee.GetUserId().OpaqueId
-	}
-
-	if err = xattr.Remove(ip, attr); err != nil {
-		return
-	}
-
-	return fs.propagate(ctx, ip)
+	return nil // nop
 }
 
 func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	ip, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "owncloudsql: error resolving reference")
-	}
-
-	// check permissions
-	if perm, err := fs.readPermissions(ctx, ip); err == nil {
-		if !perm.UpdateGrant {
-			return errtypes.PermissionDenied("")
-		}
-	} else {
-		if isNotFound(err) {
-			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
-		}
-		return errors.Wrap(err, "owncloudsql: error reading permissions")
-	}
-
-	e := ace.FromGrant(g)
-	principal, value := e.Marshal()
-	if err := xattr.Set(ip, sharePrefix+principal, value); err != nil {
-		return err
-	}
-	return fs.propagate(ctx, ip)
+	return nil // nop
 }
 
 func (fs *ocfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
