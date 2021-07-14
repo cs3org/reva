@@ -50,6 +50,18 @@ Kind regards,
 The ScienceMesh Team
 `
 
+const gocdbAccessGrantedTemplate = `
+Dear {{.FirstName}} {{.LastName}},
+
+You have been granted access to the ScienceMesh GOCDB instance:
+https://gocdb.sciencemesh.uni-muenster.de
+
+Simply use your regular ScienceMesh account credentials to log in. 
+
+Kind regards,
+The ScienceMesh Team
+`
+
 const passwordResetTemplate = `
 Dear {{.FirstName}} {{.LastName}},
 

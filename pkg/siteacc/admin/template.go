@@ -71,26 +71,25 @@ const tplBody = `
 				</div>
 			</p>
 			<p>
-				<strong>API Key:</strong>
-			{{if .Data.APIKey}}
-				{{.Data.APIKey}}
-			{{else}}
-				<em>Not assigned</em>
-			{{end}}
+				<strong>API Key:</strong>{{if .Data.APIKey}}{{.Data.APIKey}}{{else}}<em>Not assigned</em>{{end}}
 				<br>
 				<strong>Site ID:</strong> {{.GetSiteID}}
 				<br><br>
-				<strong>Authorized:</strong>
-			{{if .Data.Authorized}}
-				<em>Yes</em>
-			{{else}}
-				<em>No</em>
-			{{end}}	
+				<strong>Authorized:</strong> <em>{{if .Data.Authorized}}Yes{{else}}No{{end}}</em>
+				<br>
+				<strong>GOCDB access:</strong> <em>{{if .Data.GOCDBAccess}}Granted{{else}}Not granted{{end}}</em>
 			</p>
 			<p>
 				<form method="POST" style="width: 100%;">
 					<button type="button" onClick="handleAction('assign-api-key', '{{.Email}}');" {{if .Data.APIKey}}disabled{{end}}>Default API Key</button>
 					<button type="button" onClick="handleAction('assign-api-key?isScienceMesh', '{{.Email}}');" {{if .Data.APIKey}}disabled{{end}}>ScienceMesh API Key</button>
+					<br><br>
+
+				{{if .Data.GOCDBAccess}}
+					<button type="button" onClick="handleAction('grant-gocdb-access?status=false', '{{.Email}}');">Revoke GOCDB access</button>
+				{{else}}
+					<button type="button" onClick="handleAction('grant-gocdb-access?status=true', '{{.Email}}');">Grant GOCDB access</button>
+				{{end}}
 	
 				{{if .Data.Authorized}}
 					<button type="button" onClick="handleAction('authorize?status=false', '{{.Email}}');" {{if not .Data.APIKey}}disabled{{end}}>Unauthorize</button>
@@ -102,7 +101,7 @@ const tplBody = `
 					<button type="button" onClick="handleAction('unregister-site', '{{.Email}}');" {{if not .Data.APIKey}}disabled{{end}}>Unregister site</button>
 
 					<span style="width: 25px;">&nbsp;</span>
-					<button type="button" onClick="handleAction('remove', '{{.Email}}');">Remove</button>
+					<button type="button" onClick="handleAction('remove', '{{.Email}}');" style="float: right;">Remove</button>
 				</form>
 			</p>
 			<hr>

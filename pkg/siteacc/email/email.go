@@ -45,6 +45,11 @@ func SendAccountAuthorized(account *data.Account, recipients []string, smtp *smt
 	return send(recipients, "ScienceMesh: Site registration authorized", accountAuthorizedTemplate, account, smtp)
 }
 
+// SendGOCDBAccessGranted sends an email about granted GOCDB access.
+func SendGOCDBAccessGranted(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
+	return send(recipients, "ScienceMesh: GOCDB access granted", gocdbAccessGrantedTemplate, account, smtp)
+}
+
 // SendPasswordReset sends an email containing the user's new password.
 func SendPasswordReset(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
 	return send(recipients, "ScienceMesh: Password reset", passwordResetTemplate, account, smtp)

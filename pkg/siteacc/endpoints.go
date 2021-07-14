@@ -84,6 +84,8 @@ func getEndpoints() []endpoint {
 		// Authorization endpoints
 		{config.EndpointAuthorize, callMethodEndpoint, createMethodCallbacks(nil, handleAuthorize), false},
 		{config.EndpointIsAuthorized, callMethodEndpoint, createMethodCallbacks(handleIsAuthorized, nil), false},
+		// Access management endpoints
+		{config.EndpointGrantGOCDBAccess, callMethodEndpoint, createMethodCallbacks(nil, handleGrantGOCDBAccess), false},
 		// Account site endpoints
 		{config.EndpointUnregisterSite, callMethodEndpoint, createMethodCallbacks(nil, handleUnregisterSite), false},
 	}
@@ -369,6 +371,36 @@ func handleAuthorize(siteacc *SiteAccounts, values url.Values, body []byte, sess
 		}
 	} else {
 		return nil, errors.Errorf("no authorization status provided")
+	}
+
+	return nil, nil
+}
+
+func handleGrantGOCDBAccess(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	account, err := unmarshalRequestData(body)
+	if err != nil {
+		return nil, err
+	}
+
+	if val := values.Get("status"); len(val) > 0 {
+		var grantAccess bool
+		switch strings.ToLower(val) {
+		case "true":
+			grantAccess = true
+
+		case "false":
+			grantAccess = false
+
+		default:
+			return nil, errors.Errorf("unsupported access status %v", val[0])
+		}
+
+		// Grant access to the account through the accounts manager
+		if err := siteacc.AccountsManager().GrantGOCDBAccess(account, grantAccess); err != nil {
+			return nil, errors.Wrap(err, "unable to change the GOCDB access status of the account")
+		}
+	} else {
+		return nil, errors.Errorf("no access status provided")
 	}
 
 	return nil, nil

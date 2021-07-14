@@ -48,8 +48,9 @@ type Account struct {
 
 // AccountData holds additional data for a site account.
 type AccountData struct {
-	APIKey     key.APIKey `json:"apiKey"`
-	Authorized bool       `json:"authorized"`
+	APIKey      key.APIKey `json:"apiKey"`
+	GOCDBAccess bool       `json:"gocdbAccess"`
+	Authorized  bool       `json:"authorized"`
 }
 
 // Accounts holds an array of site accounts.
@@ -151,8 +152,9 @@ func NewAccount(email string, firstName, lastName string, organization, website 
 		DateCreated:  t,
 		DateModified: t,
 		Data: AccountData{
-			APIKey:     "",
-			Authorized: false,
+			APIKey:      "",
+			GOCDBAccess: false,
+			Authorized:  false,
 		},
 	}
 

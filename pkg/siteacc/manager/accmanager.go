@@ -252,6 +252,29 @@ func (mngr *AccountsManager) AuthorizeAccount(accountData *data.Account, authori
 	return nil
 }
 
+// GrantGOCDBAccess sets the GOCDB access status of the account identified by the account email; if no such account exists, an error is returned.
+func (mngr *AccountsManager) GrantGOCDBAccess(accountData *data.Account, grantAccess bool) error {
+	mngr.mutex.Lock()
+	defer mngr.mutex.Unlock()
+
+	account, err := mngr.findAccount(FindByEmail, accountData.Email)
+	if err != nil {
+		return errors.Wrap(err, "no account with the specified email exists")
+	}
+
+	accessOld := account.Data.GOCDBAccess
+	account.Data.GOCDBAccess = grantAccess
+
+	mngr.storage.AccountUpdated(account)
+	mngr.writeAllAccounts()
+
+	if account.Data.GOCDBAccess && account.Data.GOCDBAccess != accessOld {
+		mngr.sendEmail(account, email.SendGOCDBAccessGranted)
+	}
+
+	return nil
+}
+
 // AssignAPIKeyToAccount is used to assign a new API key to the account identified by the account email; if no such account exists, an error is returned.
 func (mngr *AccountsManager) AssignAPIKeyToAccount(accountData *data.Account, flags int) error {
 	mngr.mutex.Lock()

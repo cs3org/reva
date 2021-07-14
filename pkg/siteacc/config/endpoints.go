@@ -54,6 +54,10 @@ const (
 	EndpointAuthorize = "/authorize"
 	// EndpointIsAuthorized is the endpoint path used to check the authorization status of an account.
 	EndpointIsAuthorized = "/is-authorized"
+
+	// EndpointGrantGOCDBAccess is the endpoint path for granting or revoking GOCDB access.
+	EndpointGrantGOCDBAccess = "/grant-gocdb-access"
+
 	// EndpointUnregisterSite is the endpoint path for site unregistration.
 	EndpointUnregisterSite = "/unregister-site"
 )

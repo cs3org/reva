@@ -89,6 +89,7 @@ const tplBody = `
 	<strong>Account data:</strong>
 	<ul style="margin-top: 0em;">
 		<li>API Key: <em>{{if .Account.Data.APIKey}}<span class="apikey">{{.Account.Data.APIKey}}</span>{{else}}(no key assigned yet){{end}}</em></li>	
+		<li>GOCDB access: <em>{{if .Account.Data.GOCDBAccess}}Granted{{else}}Not granted{{end}}</em></li>
 	</ul>
 </div>
 <div>
