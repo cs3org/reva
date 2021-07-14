@@ -124,8 +124,14 @@ func (acc *Account) verify(verifyPassword bool) error {
 	if acc.Organization == "" {
 		return errors.Errorf("no organization provided")
 	}
+	if acc.Website != "" && !utils.IsValidWebAddress(acc.Website) {
+		return errors.Errorf("invalid website provided")
+	}
 	if acc.Role == "" {
 		return errors.Errorf("no role provided")
+	}
+	if acc.PhoneNumber != "" && !utils.IsValidPhoneNumber(acc.PhoneNumber) {
+		return errors.Errorf("invalid phone number provided")
 	}
 
 	if verifyPassword {

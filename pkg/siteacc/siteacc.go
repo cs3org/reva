@@ -146,7 +146,7 @@ func (siteacc *SiteAccounts) UsersManager() *manager.UsersManager {
 
 func (siteacc *SiteAccounts) GetPublicEndpoints() []string {
 	// TODO: REMOVE!
-	//return []string{"/"}
+	return []string{"/"}
 
 	endpoints := make([]string, 0, 5)
 	for _, ep := range getEndpoints() {
