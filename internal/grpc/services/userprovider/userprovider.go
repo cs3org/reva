@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -84,8 +83,7 @@ func getDriverPlugin(c *config) (user.Manager, error) {
 		return nil, fmt.Errorf("could not assert the loaded plugin")
 	}
 
-	basename := filepath.Base(c.Driver)
-	pluginConfig := strings.TrimSuffix(basename, filepath.Ext(basename))
+	pluginConfig := filepath.Base(c.Driver)
 	err = manager.Configure(c.Drivers[pluginConfig])
 	if err != nil {
 		return nil, err
