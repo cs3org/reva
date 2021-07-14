@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/sha1"
+	"database/sql"
 	"fmt"
 	"hash/adler32"
 	"io"
@@ -1449,7 +1450,10 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 		return nil, err
 	}
 	entry, err := fs.filecache.Get(ownerStorageID, fs.toDatabasePath(ip))
-	if err != nil {
+	switch {
+	case err == sql.ErrNoRows:
+		return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+	case err != nil:
 		return nil, err
 	}
 
