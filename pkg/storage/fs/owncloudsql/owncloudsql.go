@@ -244,43 +244,6 @@ func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 	return
 }
 
-func (fs *ocfs) toInternalShadowPath(ctx context.Context, sp string) (internal string) {
-	if fs.c.EnableHome {
-		u := user.ContextMustGetUser(ctx)
-		layout := templates.WithUser(u, fs.c.UserLayout)
-		internal = filepath.Join(fs.c.DataDirectory, layout, "shadow_files", sp)
-	} else {
-		// trim all /
-		sp = strings.Trim(sp, "/")
-		// p = "" or
-		// p = <username> or
-		// p = <username>/foo/bar.txt
-		segments := strings.SplitN(sp, "/", 2)
-
-		if len(segments) == 1 && segments[0] == "" {
-			internal = fs.c.DataDirectory
-			return
-		}
-
-		// parts[0] contains the username or userid.
-		u, err := fs.getUser(ctx, segments[0])
-		if err != nil {
-			// TODO return invalid internal path?
-			return
-		}
-		layout := templates.WithUser(u, fs.c.UserLayout)
-
-		if len(segments) == 1 {
-			// parts = "<username>"
-			internal = filepath.Join(fs.c.DataDirectory, layout, "shadow_files")
-		} else {
-			// parts = "<username>", "foo/bar.txt"
-			internal = filepath.Join(fs.c.DataDirectory, layout, "shadow_files", segments[1])
-		}
-	}
-	return
-}
-
 // ownloud stores versions in the files_versions subfolder
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
 // and prefix the data directory
@@ -383,38 +346,6 @@ func (fs *ocfs) toStoragePath(ctx context.Context, ip string) (sp string) {
 	}
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("driver", "ocfs").Str("ipath", ip).Str("spath", sp).Msg("toStoragePath")
-	return
-}
-
-func (fs *ocfs) toStorageShadowPath(ctx context.Context, ip string) (sp string) {
-	if fs.c.EnableHome {
-		u := user.ContextMustGetUser(ctx)
-		layout := templates.WithUser(u, fs.c.UserLayout)
-		trim := filepath.Join(fs.c.DataDirectory, layout, "shadow_files")
-		sp = strings.TrimPrefix(ip, trim)
-	} else {
-		// ip = /data/<username>/shadow_files/foo/bar.txt
-		// remove data dir
-		if fs.c.DataDirectory != "/" {
-			// fs.c.DataDirectory is a clean path, so it never ends in /
-			ip = strings.TrimPrefix(ip, fs.c.DataDirectory)
-			// ip = /<username>/shadow_files/foo/bar.txt
-		}
-
-		segments := strings.SplitN(ip, "/", 4)
-		// parts = "", "<username>", "shadow_files", "foo/bar.txt"
-		switch len(segments) {
-		case 1:
-			sp = "/"
-		case 2:
-			sp = filepath.Join("/", segments[1])
-		case 3:
-			sp = filepath.Join("/", segments[1])
-		default:
-			sp = filepath.Join("/", segments[1], segments[3])
-		}
-	}
-	appctx.GetLogger(ctx).Debug().Str("driver", "ocfs").Str("ipath", ip).Str("spath", sp).Msg("toStorageShadowPath")
 	return
 }
 
@@ -870,7 +801,6 @@ func (fs *ocfs) createHomeForUser(ctx context.Context, user string) error {
 		filepath.Join(fs.c.DataDirectory, user, "files_trashbin/files"),
 		filepath.Join(fs.c.DataDirectory, user, "files_trashbin/versions"),
 		filepath.Join(fs.c.DataDirectory, user, "uploads"),
-		filepath.Join(fs.c.DataDirectory, user, "shadow_files"),
 	}
 
 	storageID, err := fs.filecache.GetNumericStorageID("home::" + user)
@@ -963,24 +893,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
 }
 
 func (fs *ocfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
-	ip := fs.toInternalShadowPath(ctx, sp)
-	// TODO check permission?
-
-	dir, _ := filepath.Split(ip)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return errors.Wrapf(err, "owncloudsql: error creating shadow path %s", dir)
-	}
-
-	f, err := os.Create(ip)
-	if err != nil {
-		return errors.Wrapf(err, "owncloudsql: error creating shadow file %s", ip)
-	}
-
-	err = xattr.FSet(f, mdPrefix+"target", []byte(targetURI.String()))
-	if err != nil {
-		return errors.Wrapf(err, "owncloudsql: error setting the target %s on the shadow file %s", targetURI.String(), ip)
-	}
-	return nil
+	return errtypes.NotSupported("owncloudsql: operation not supported")
 }
 
 func (fs *ocfs) setMtime(ctx context.Context, ip string, mtime string) error {
