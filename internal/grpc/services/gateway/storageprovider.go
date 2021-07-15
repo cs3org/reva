@@ -855,7 +855,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 
 		sRes, err := s.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 		if err != nil {
-			// deal with this
+			return nil, err
 		}
 
 		statRes, err := s.Stat(ctx, &provider.StatRequest{
@@ -901,7 +901,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 
 				_, err := s.UpdateReceivedShare(ctx, r)
 				if err != nil {
-					// deal with this
+					return nil, err
 				}
 			}
 		}
