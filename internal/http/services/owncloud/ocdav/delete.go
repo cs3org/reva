@@ -55,7 +55,20 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
+<<<<<<< HEAD
 	req := &provider.DeleteRequest{Ref: ref}
+=======
+	req := &provider.DeleteRequest{
+		Ref: &provider.Reference{
+			Path: fn,
+		},
+	}
+
+	//if err := s.deleteReceivedShare(ctx, fn, client, w, req); err != nil {
+	//	sublog.Error().Err(err).Msg("deleting shared resource")
+	//}
+
+>>>>>>> a7293b40... comment out fc
 	res, err := client.Delete(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error performing delete grpc request")
