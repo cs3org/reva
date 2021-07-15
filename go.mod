@@ -11,6 +11,7 @@ require (
 	github.com/ReneKroon/ttlcache/v2 v2.7.0
 	github.com/asaskevich/govalidator v0.0.0-20200428143746-21a406dcc535 // indirect
 	github.com/aws/aws-sdk-go v1.40.0
+	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.5
 	github.com/cheggaaa/pb v1.0.29
@@ -68,6 +69,7 @@ require (
 go 1.16
 
 replace (
+	github.com/cs3org/go-cs3apis => github.com/ishank011/go-cs3apis v0.0.0-20210715114809-34729f68a479
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 	google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
