@@ -568,7 +568,13 @@ func (c *Cache) GetRecycleItem(user, path string, timestamp int) (*TrashItem, er
 	}, nil
 }
 
-// PurgeRecycleItem deletes the specified item from the cache
+// DeleteRecycleItem deletes the specified item from the trash
+func (c *Cache) DeleteRecycleItem(user, path string, timestamp int) error {
+	_, err := c.db.Exec("DELETE FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
+	return err
+}
+
+// PurgeRecycleItem deletes the specified item from the filecache and the trash
 func (c *Cache) PurgeRecycleItem(user, path string, timestamp int) error {
 	row := c.db.QueryRow("SELECT auto_id, location FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
 	var autoID int
