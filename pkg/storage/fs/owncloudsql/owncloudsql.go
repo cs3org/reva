@@ -1800,27 +1800,31 @@ func (fs *ocfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.
 }
 
 func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error {
-	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
+
+	base, ttime, err := splitTrashKey(key)
+	if err != nil {
+		log.Error().Str("path", key).Msg("invalid trash item key")
+		return fmt.Errorf("invalid trash item suffix")
+	}
+
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
 	src := filepath.Join(rp, filepath.Clean(key))
 
-	suffix := filepath.Ext(src)
-	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
-		log.Error().Str("key", key).Str("path", src).Msg("invalid trash item suffix")
-		return nil
+	if restoreRef.Path == "" {
+		u := user.ContextMustGetUser(ctx)
+		item, err := fs.filecache.GetRecycleItem(u.Username, base, ttime)
+		if err != nil {
+			log := appctx.GetLogger(ctx)
+			log.Error().Err(err).Str("path", key).Msg("could not get trash item")
+			return nil
+		}
+		restoreRef.Path = filepath.Join(item.Path, item.Name)
 	}
 
-	if restoreRef.Path == "" {
-		v, err := xattr.Get(src, trashOriginPrefix)
-		if err != nil {
-			log.Error().Err(err).Str("key", key).Str("path", src).Msg("could not read origin")
-		}
-		restoreRef.Path = filepath.Join("/", filepath.Clean(string(v)), strings.TrimSuffix(filepath.Base(src), suffix))
-	}
 	tgt := fs.toInternalPath(ctx, restoreRef.Path)
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
@@ -1836,8 +1840,10 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restor
 	if err != nil {
 		return err
 	}
-
-	// TODO(jfd) restore versions
+	err = fs.filecache.DeleteRecycleItem(user.ContextMustGetUser(ctx).Username, base, ttime)
+	if err != nil {
+		return err
+	}
 
 	return fs.propagate(ctx, tgt)
 }

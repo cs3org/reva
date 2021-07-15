@@ -439,6 +439,29 @@ var _ = Describe("Filecache", func() {
 		})
 
 		Describe("PurgeRecycleItem", func() {
+			It("removes the item from the trash", func() {
+				err := cache.Delete(1, "admin", filePath, trashPath)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = cache.DeleteRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = cache.GetRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("does not remove the item from the file cache", func() {
+				err := cache.Delete(1, "admin", filePath, trashPath)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = cache.DeleteRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = cache.Get(1, trashPath)
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+		Describe("PurgeRecycleItem", func() {
 			It("removes the item from the database", func() {
 				err := cache.Delete(1, "admin", filePath, trashPath)
 				Expect(err).ToNot(HaveOccurred())
@@ -460,7 +483,7 @@ var _ = Describe("Filecache", func() {
 				err = cache.PurgeRecycleItem("admin", trashPathBase, trashPathTimestamp)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = cache.Get(1, "files_trashbin/files/Photos.d1619007109")
+				_, err = cache.Get(1, trashPath)
 				Expect(err).To(HaveOccurred())
 			})
 
