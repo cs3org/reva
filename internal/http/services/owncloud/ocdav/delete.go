@@ -64,9 +64,9 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		},
 	}
 
-	//if err := s.deleteReceivedShare(ctx, fn, client, w, req); err != nil {
-	//	sublog.Error().Err(err).Msg("deleting shared resource")
-	//}
+	if err := s.deleteReceivedShare(ctx, fn, client, w, req); err != nil {
+		sublog.Error().Err(err).Msg("deleting shared resource")
+	}
 
 >>>>>>> a7293b40... comment out fc
 	res, err := client.Delete(ctx, req)
