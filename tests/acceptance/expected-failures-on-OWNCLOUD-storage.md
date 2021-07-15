@@ -63,7 +63,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:13](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L13)
 -   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L31)
 -   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L46)
--   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L61)
 -   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:86](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L86)
 -   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L93)
 -   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:103](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L103)
@@ -88,14 +87,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 #### [PUT request with missing parent must return status code 409](https://github.com/owncloud/ocis/issues/824)
 -   [apiWebdavUpload1/uploadFile.feature:112](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L112)
 -   [apiWebdavUpload1/uploadFile.feature:113](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L113)
-
-#### [uploading with old-chunking does not work](https://github.com/owncloud/ocis/issues/1343)
--   [apiWebdavUpload2/uploadFileUsingOldChunking.feature:43](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingOldChunking.feature#L43)
--   [apiWebdavUpload2/uploadFileUsingOldChunking.feature:97](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingOldChunking.feature#L97)
--   [apiWebdavUpload2/uploadFileUsingOldChunking.feature:98](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingOldChunking.feature#L98)
--   [apiWebdavUpload2/uploadFileUsingOldChunking.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingOldChunking.feature#L99)
--   [apiWebdavUpload2/uploadFileUsingOldChunking.feature:100](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingOldChunking.feature#L100)
--   [apiWebdavUpload2/uploadFileUsingOldChunking.feature:101](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingOldChunking.feature#L101)
 
 #### [invalid file-names should not be created using the TUS protocol](https://github.com/owncloud/ocis/issues/1001)
 -   [apiWebdavUploadTUS/uploadFile.feature:143](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L135)
