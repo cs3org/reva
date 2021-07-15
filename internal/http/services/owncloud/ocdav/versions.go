@@ -62,11 +62,11 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 			s.handleOptions(w, r, "versions")
 			return
 		}
-		if key == "" && r.Method == "PROPFIND" {
+		if key == "" && r.Method == MethodPropfind {
 			h.doListVersions(w, r, s, rid)
 			return
 		}
-		if key != "" && r.Method == "COPY" {
+		if key != "" && r.Method == MethodCopy {
 			// TODO(jfd) it seems we cannot directly GET version content with cs3 ...
 			// TODO(jfd) cs3api has no delete file version call
 			// TODO(jfd) restore version to given Destination, but cs3api has no destination
@@ -161,8 +161,8 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("DAV", "1, 3, extended-mkcol")
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	_, err = w.Write([]byte(propRes))
 	if err != nil {

@@ -106,11 +106,11 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		//	return
 		//}
 
-		if r.Method == "PROPFIND" {
+		if r.Method == MethodPropfind {
 			h.listTrashbin(w, r, s, u, key, r.URL.Path)
 			return
 		}
-		if key != "" && r.Method == "MOVE" {
+		if key != "" && r.Method == MethodMove {
 			// find path in url relative to trash base
 			trashBase := ctx.Value(ctxKeyBaseURI).(string)
 			baseURI := path.Join(path.Dir(trashBase), "files", username)
@@ -118,8 +118,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			r = r.WithContext(ctx)
 
 			// TODO make request.php optional in destination header
-			dstHeader := r.Header.Get("Destination")
-			dst, err := extractDestination(dstHeader, baseURI)
+			dst, err := extractDestination(r)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
@@ -132,7 +131,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		if r.Method == "DELETE" {
+		if r.Method == http.MethodDelete {
 			h.delete(w, r, s, u, key, r.URL.Path)
 			return
 		}
@@ -146,7 +145,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	ctx, span := trace.StartSpan(ctx, "listTrashbin")
 	defer span.End()
 
-	depth := r.Header.Get("Depth")
+	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
 		depth = "1"
 	}
@@ -248,8 +247,8 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("DAV", "1, 3, extended-mkcol")
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	_, err = w.Write([]byte(propRes))
 	if err != nil {
@@ -420,7 +419,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
 
-	overwrite := r.Header.Get("Overwrite")
+	overwrite := r.Header.Get(HeaderOverwrite)
 
 	overwrite = strings.ToUpper(overwrite)
 	if overwrite == "" {
@@ -480,7 +479,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 			b, err := Marshal(exception{
 				code:    SabredavPreconditionFailed,
 				message: "The destination node already exists, and the overwrite header is set to false",
-				header:  "Overwrite",
+				header:  HeaderOverwrite,
 			})
 			HandleWebdavError(&sublog, w, b, err)
 			return
@@ -544,10 +543,10 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	}
 
 	info := dstStatRes.Info
-	w.Header().Set("Content-Type", info.MimeType)
-	w.Header().Set("ETag", info.Etag)
-	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
-	w.Header().Set("OC-ETag", info.Etag)
+	w.Header().Set(HeaderContentType, info.MimeType)
+	w.Header().Set(HeaderETag, info.Etag)
+	w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
+	w.Header().Set(HeaderOCETag, info.Etag)
 
 	w.WriteHeader(successCode)
 }
