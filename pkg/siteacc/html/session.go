@@ -94,7 +94,6 @@ func (sess *Session) HasExpired() bool {
 
 // NewSession creates a new session, giving it a random ID.
 func NewSession(name string, timeout time.Duration, r *http.Request) *Session {
-
 	session := &Session{
 		ID:                uuid.NewString(),
 		RemoteAddress:     getRemoteAddress(r),

@@ -83,8 +83,8 @@ func applyDefaultConfig(conf *config.Configuration) {
 		conf.Storage.Driver = "file"
 	}
 
-	// Enforce a minimum session timeout of 5 minutes
-	if conf.Webserver.SessionTimeout < 5*60 {
+	// Enforce a minimum session timeout of 1 minute (and default to 5 minutes)
+	if conf.Webserver.SessionTimeout < 60 {
 		conf.Webserver.SessionTimeout = 5 * 60
 	}
 }
