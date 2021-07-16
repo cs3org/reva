@@ -577,7 +577,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token st
 		return "", "", errtypes.BadRequest("need absolute path ref: got " + ref.String())
 	}
 
-	if ref.GetPath() == "" {
+	if !strings.HasPrefix(ref.GetPath(), "/") {
 		// abort, no valid id nor path
 		return "", "", errtypes.BadRequest("invalid ref: " + ref.String())
 	}

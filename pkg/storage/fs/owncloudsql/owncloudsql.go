@@ -656,8 +656,11 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 			}
 			p = filepath.Join(u.Username, p)
 		}
+		return p, nil
+	}
 
-		return fs.toInternalPath(ctx, p), nil
+	if ref.GetPath() != "" {
+		return fs.toInternalPath(ctx, ref.GetPath()), nil
 	}
 
 	if ref.GetPath() != "" {
@@ -901,7 +904,7 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
+func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference, sp string) (err error) {
 	ip := fs.toInternalPath(ctx, sp)
 
 	// check permissions of parent dir

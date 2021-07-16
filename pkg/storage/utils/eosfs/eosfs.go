@@ -1108,12 +1108,18 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 	return nil
 }
 
-func (fs *eosfs) CreateDir(ctx context.Context, p string) error {
+func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference, name string) error {
 	log := appctx.GetLogger(ctx)
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
+	dir, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil
+	}
+
+	p := path.Join(dir, name)
 	auth, err := fs.getUserAuth(ctx, u, p)
 	if err != nil {
 		return err

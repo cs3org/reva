@@ -138,7 +138,8 @@ var _ = Describe("Decomposed", func() {
 			It("handle already existing directories", func() {
 				for i := 0; i < 10; i++ {
 					go func() {
-						err := fs.CreateDir(ctx, "fightforit")
+						defer GinkgoRecover()
+						err := fs.CreateDir(ctx, &provider.Reference{Path: "."}, "fightforit")
 						if err != nil {
 							rinfo, err := fs.GetMD(ctx, &provider.Reference{Path: "fightforit"}, nil)
 							Expect(err).ToNot(HaveOccurred())

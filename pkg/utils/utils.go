@@ -19,6 +19,7 @@
 package utils
 
 import (
+	"fmt"
 	"math/rand"
 	"net"
 	"net/http"
@@ -218,6 +219,12 @@ func IsAbsoluteReference(ref *provider.Reference) bool {
 	return (ref.ResourceId != nil && ref.Path == "") || (ref.ResourceId == nil) && strings.HasPrefix(ref.Path, "/")
 }
 
+// IsAbsolutePathReference returns true if the given reference qualifies as a global path
+// when only the path is set and starts with /
+func IsAbsolutePathReference(ref *provider.Reference) bool {
+	return ref.ResourceId == nil && strings.HasPrefix(ref.Path, "/")
+}
+
 // MakeRelativePath prefixes the path with a . to use it in a relative reference
 func MakeRelativePath(p string) string {
 	p = path.Join("/", p)
@@ -270,4 +277,17 @@ func UserTypeToString(accountType userpb.UserType) string {
 		t = "lightweight"
 	}
 	return t
+}
+
+// SplitStorageSpaceID can be used to split `storagespaceid` into `storageid` and `nodeid`
+// Currently they are built using `<storageid>!<nodeid>` in the decomposedfs, but other drivers might return different ids.
+// any place in the code that relies on this function should instead use the storage registry to look up the responsible storage provider.
+// Note: This would in effect change the storage registry into a storage space registry.
+func SplitStorageSpaceID(ssid string) (storageid, nodeid string, err error) {
+	// query that specific storage provider
+	parts := strings.SplitN(ssid, "!", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("storage space id must be separated by '!'")
+	}
+	return parts[0], parts[1], nil
 }

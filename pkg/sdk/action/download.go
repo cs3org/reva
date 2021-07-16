@@ -89,7 +89,7 @@ func (action *DownloadAction) Download(fileInfo *storage.ResourceInfo) ([]byte, 
 
 func (action *DownloadAction) initiateDownload(fileInfo *storage.ResourceInfo) (*gateway.InitiateFileDownloadResponse, error) {
 	// Initiating a download request gets us the download endpoint for the specified resource
-	req := &provider.InitiateFileDownloadRequest{Ref: &provider.Reference{ResourceId: fileInfo.Id}}
+	req := &provider.InitiateFileDownloadRequest{Ref: &storage.Reference{ResourceId: fileInfo.Id}}
 	res, err := action.session.Client().InitiateFileDownload(action.session.Context(), req)
 	if err := net.CheckRPCInvocation("initiating download", res, err); err != nil {
 		return nil, err
