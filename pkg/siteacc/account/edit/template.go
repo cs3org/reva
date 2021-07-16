@@ -112,7 +112,7 @@ const tplBody = `
 </div>
 <div>&nbsp;</div>
 <div>
-	<form id="form" method="POST" class="box container-inline" style="width: 100%;" autocomplete="off">
+	<form id="form" method="POST" class="box container-inline" style="width: 100%;">
 		<div style="grid-row: 1;"><label for="fname">First name: <span class="mandatory">*</span></label></div>
 		<div style="grid-row: 2;"><input type="text" id="fname" name="fname" value="{{.Account.FirstName}}"/></div>
 		<div style="grid-row: 1;"><label for="lname">Last name: <span class="mandatory">*</span></label></div>
@@ -132,9 +132,9 @@ const tplBody = `
 
 		<div style="grid-row: 8; grid-column: 1 / span 2;">If you want to change your password, fill out the fields below. Otherwise, leave them empty to keep your current one.</div>
 		<div style="grid-row: 9;"><label for="password">New password:</label></div>
-		<div style="grid-row: 10;"><input type="password" id="password" name="password"/></div>
+		<div style="grid-row: 10;"><input type="password" id="password" name="password" autocomplete="new-password"/></div>
 		<div style="grid-row: 9"><label for="password2">Confirm new password:</label></div>
-		<div style="grid-row: 10;"><input type="password" id="password2" name="password2"/></div>
+		<div style="grid-row: 10;"><input type="password" id="password2" name="password2" autocomplete="new-password"/></div>
 
 		<div style="grid-row: 11; font-style: italic; font-size: 0.8em;">
 			The password must fulfil the following criteria:
