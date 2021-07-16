@@ -181,7 +181,7 @@ func getSharePerm(p string) (*provider.ResourcePermissions, error) {
 			RestoreFileVersion:   true,
 			Move:                 true,
 		}, nil
-	case coownerPermission:
+	case collabPermission:
 		return &provider.ResourcePermissions{
 			GetPath:              true,
 			InitiateFileDownload: true,

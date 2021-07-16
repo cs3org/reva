@@ -488,42 +488,7 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 	return nil
 }
 
-func (fs *eosfs) setACLs(ctx context.Context, c eosclient.EOSClient, uid, gid, path string, acls []*acl.Entry) error {
-	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
-	if err != nil {
-		return err
-	}
-
-	a := acl.ACLs{Entries: acls}
-	aclsSerialized := a.Serialize()
-
-	attr := &eosclient.Attribute{
-		Key: "acl",
-		Val: aclsSerialized,
-	}
-	if finfo.IsDir {
-		attr.Type = SystemAttr
-	} else {
-		attr.Type = UserAttr
-	}
-
-	// system acls can only be modified by root users
-	if attr.Type == SystemAttr {
-		rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
-		if err != nil {
-			return err
-		}
-
-		uid, gid = rootUID, rootGID
-	}
-
-	if err = c.SetAttr(ctx, uid, gid, attr, true, path); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (fs *eosfs) addGrantNonAtomic(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -541,21 +506,27 @@ func (fs *eosfs) addGrantNonAtomic(ctx context.Context, ref *provider.Reference,
 
 	fn := fs.wrap(ctx, p)
 
-	gs, err := fs.ListGrants(ctx, ref)
+	// position where put the ACL
+	position := eosclient.StartPosition
+
+	// is the permission is a denial, put always at the end
+	if grants.IsDenial(g) {
+		position = eosclient.EndPosition
+	}
+
+	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return err
 	}
 
-	// update list of grants
-	grants.AddGrant(&gs, g)
-
-	acls, err := fs.getEosACLs(ctx, gs)
+	eosACL, err := fs.getEosACL(ctx, g)
 	if err != nil {
 		return err
 	}
 
-	if err = fs.setACLs(ctx, fs.c, uid, gid, fn, acls); err != nil {
-		return errors.Wrap(err, "eosfs: error setting acls")
+	err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, position, eosACL)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error adding acl")
 	}
 	return nil
 
@@ -579,7 +550,9 @@ func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *prov
 
 	fn := fs.wrap(ctx, p)
 
-	gs, err := fs.ListGrants(ctx, ref)
+	position := eosclient.EndPosition
+
+	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return err
 	}
@@ -590,94 +563,16 @@ func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *prov
 		Permissions: &provider.ResourcePermissions{},
 	}
 
-	// update list of grant
-	grants.AddGrant(&gs, grant)
-
-	acls, err := fs.getEosACLs(ctx, gs)
+	eosACL, err := fs.getEosACL(ctx, grant)
 	if err != nil {
 		return err
 	}
 
-	if err = fs.setACLs(ctx, fs.c, uid, gid, fn, acls); err != nil {
-		return errors.Wrap(err, "eosfs: error setting acls")
+	err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, position, eosACL)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error adding acl")
 	}
 	return nil
-
-}
-
-func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	// TODO(labkode): force using always eos set attr to store desired order of acls
-	return fs.addGrantNonAtomic(ctx, ref, g)
-	/*
-		u, err := getUser(ctx)
-		if err != nil {
-			return errors.Wrap(err, "eosfs: no user in ctx")
-		}
-
-		uid, gid, err := fs.getUserUIDAndGID(ctx, u)
-		if err != nil {
-			return err
-		}
-
-		p, err := fs.resolve(ctx, u, ref)
-		if err != nil {
-			return errors.Wrap(err, "eosfs: error resolving reference")
-		}
-
-		fn := fs.wrap(ctx, p)
-
-		// workaround until EOS has native support
-		// for persisting order of the acl entries
-		if grants.IsDenial(g) {
-			gs, err := fs.ListGrants(ctx, ref)
-			if err != nil {
-				return err
-			}
-
-			// update list of grants
-			grants.AddGrant(&gs, g)
-
-			acls, err := fs.getEosACLs(ctx, gs)
-			if err != nil {
-				return err
-			}
-
-			if err = fs.setACLs(ctx, fs.c, uid, gid, fn, acls); err != nil {
-				return errors.Wrap(err, "eosfs: error setting acls")
-			}
-			return nil
-
-		}
-
-		eosACL, err := fs.getEosACL(ctx, g)
-		if err != nil {
-			return err
-		}
-
-		rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
-		if err != nil {
-			return err
-		}
-
-		err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, eosACL)
-		if err != nil {
-			return errors.Wrap(err, "eosfs: error adding acl")
-		}
-
-		return nil
-	*/
-}
-
-func (fs *eosfs) getEosACLs(ctx context.Context, gs []*provider.Grant) ([]*acl.Entry, error) {
-	acls := []*acl.Entry{}
-	for _, g := range gs {
-		a, err := fs.getEosACL(ctx, g)
-		if err != nil {
-			return nil, err
-		}
-		acls = append(acls, a)
-	}
-	return acls, nil
 }
 
 func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, error) {
@@ -1598,7 +1493,9 @@ func (fs *eosfs) GetOwners(ctx context.Context, ref *provider.Reference) (*group
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	ownerEOS, err := fs.c.GetAttr(ctx, uid, gid, "sys.auth.owner", p)
+	fn := fs.wrap(ctx, p)
+
+	ownerEOS, err := fs.c.GetAttr(ctx, uid, gid, "sys.auth.owner", fn)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error getting owner")
 	}
@@ -1618,6 +1515,10 @@ func (fs *eosfs) GetOwners(ctx context.Context, ref *provider.Reference) (*group
 	groupResp, err := client.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{Claim: "group_name", Value: egroup})
 	if err != nil {
 		return nil, err
+	}
+
+	if groupResp.Status.Code != rpc.Code_CODE_OK {
+		return nil, errtypes.InternalError("eos GetOwners: " + groupResp.Status.Message)
 	}
 
 	return groupResp.Group, nil

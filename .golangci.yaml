@@ -30,7 +30,6 @@ linters:
     - goimports
     - unconvert
     - scopelint
-    - maligned
     - misspell
     - gocritic
     - prealloc
