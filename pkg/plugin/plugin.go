@@ -35,6 +35,7 @@ type RevaPlugin struct {
 	Client *plugin.Client
 }
 
+// Kill kills the plugin process
 func (plug *RevaPlugin) Kill() {
 	plug.Client.Kill()
 }
