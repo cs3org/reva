@@ -1539,40 +1539,35 @@ func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*
 
 	vp := fs.getVersionsPath(ctx, ip)
 	bn := filepath.Base(ip)
-
-	revisions := []*provider.FileVersion{}
-	mds, err := ioutil.ReadDir(filepath.Dir(vp))
+	storageID, err := fs.getStorage(ip)
 	if err != nil {
-		return nil, errors.Wrap(err, "owncloudsql: error reading"+filepath.Dir(vp))
+		return nil, err
 	}
-	for i := range mds {
-		rev := fs.filterAsRevision(ctx, bn, mds[i])
-		if rev != nil {
-			revisions = append(revisions, rev)
+	entries, err := fs.filecache.List(storageID, filepath.Dir(fs.toDatabasePath(vp))+"/")
+	if err != nil {
+		return nil, err
+	}
+	revisions := []*provider.FileVersion{}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name, bn) {
+			// versions have filename.ext.v12345678
+			version := entry.Name[len(bn)+2:] // truncate "<base filename>.v" to get version mtime
+			mtime, err := strconv.Atoi(version)
+			if err != nil {
+				log := appctx.GetLogger(ctx)
+				log.Error().Err(err).Str("path", entry.Name).Msg("invalid version mtime")
+				return nil, err
+			}
+			revisions = append(revisions, &provider.FileVersion{
+				Key:   version,
+				Size:  uint64(entry.Size),
+				Mtime: uint64(mtime),
+				Etag:  entry.Etag,
+			})
 		}
 	}
-	return revisions, nil
-}
 
-func (fs *ocfs) filterAsRevision(ctx context.Context, bn string, md os.FileInfo) *provider.FileVersion {
-	if strings.HasPrefix(md.Name(), bn) {
-		// versions have filename.ext.v12345678
-		version := md.Name()[len(bn)+2:] // truncate "<base filename>.v" to get version mtime
-		mtime, err := strconv.Atoi(version)
-		if err != nil {
-			log := appctx.GetLogger(ctx)
-			log.Error().Err(err).Str("path", md.Name()).Msg("invalid version mtime")
-			return nil
-		}
-		// TODO(jfd) trashed versions are in the files_trashbin/versions folder ... not relevant here
-		return &provider.FileVersion{
-			Key:   version,
-			Size:  uint64(md.Size()),
-			Mtime: uint64(mtime),
-			Etag:  calcEtag(ctx, md),
-		}
-	}
-	return nil
+	return revisions, nil
 }
 
 func (fs *ocfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
