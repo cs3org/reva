@@ -22,7 +22,7 @@ userprovidersvc = "localhost:19000"
 
 [grpc.services.userprovider]
 # replace the driver with the plugin binary file
-driver = "/home/jimil/Desktop/reva/examples/plugin/json"
+driver = "./json"
 
 [grpc.services.userprovider.drivers.json]
 users = "users.demo.json"
