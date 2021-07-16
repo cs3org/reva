@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/pkg/errors"
 )
 
@@ -46,6 +47,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
+
 	// TODO the user share manager needs to be able to decide if the current user is allowed to create that share (and not eg. incerase permissions)
 	// jfd: AFAICT this can only be determined by a storage driver - either the storage provider is queried first or the share manager needs to access the storage using a storage driver
 	res, err := c.CreateShare(ctx, req)
@@ -63,6 +65,20 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
+		// If the share is a denial we call  denyGrant instead.
+		if grants.PermissionsEqual(req.Grant.Permissions.Permissions, &provider.ResourcePermissions{}) {
+			denyGrantStatus, err := s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee)
+			if err != nil {
+				return nil, errors.Wrap(err, "gateway: error denying grant in storage")
+			}
+			if denyGrantStatus.Code != rpc.Code_CODE_OK {
+				return &collaboration.CreateShareResponse{
+					Status: denyGrantStatus,
+				}, err
+			}
+			return res, nil
+		}
+
 		addGrantStatus, err := s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error adding grant to storage")
@@ -397,6 +413,36 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 	}
 
 	return status.NewOK(ctx)
+}
+
+func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee) (*rpc.Status, error) {
+	ref := &provider.Reference{
+		ResourceId: id,
+	}
+
+	grantReq := &provider.DenyGrantRequest{
+		Ref:     ref,
+		Grantee: g,
+	}
+
+	c, err := s.find(ctx, ref)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return status.NewNotFound(ctx, "storage provider not found"), nil
+		}
+		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+	}
+
+	grantRes, err := c.DenyGrant(ctx, grantReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling AddGrant")
+	}
+	if grantRes.Status.Code != rpc.Code_CODE_OK {
+		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
+			"error committing share to storage grant"), nil
+	}
+
+	return status.NewOK(ctx), nil
 }
 
 func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {

@@ -809,6 +809,10 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 
 }
 
+func (fs *ocfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	return errtypes.NotSupported("ocfs: deny grant not supported")
+}
+
 func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {

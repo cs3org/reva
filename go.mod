@@ -27,6 +27,7 @@ require (
 	github.com/golang/mock v1.4.4 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/gomodule/redigo v1.8.5
+	github.com/google/go-cmp v0.5.5
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/google/uuid v1.3.0
@@ -38,6 +39,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.12
 	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.1
+	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.14.0
 	github.com/pkg/errors v0.9.1
@@ -49,6 +51,7 @@ require (
 	github.com/sethvargo/go-password v0.2.0
 	github.com/stretchr/testify v1.7.0
 	github.com/studio-b12/gowebdav v0.0.0-20200303150724-9380631c29a1
+	github.com/thanhpk/randstr v1.0.4
 	github.com/tidwall/pretty v1.1.0 // indirect
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
 	go.mongodb.org/mongo-driver v1.3.4 // indirect
@@ -68,6 +71,7 @@ require (
 go 1.16
 
 replace (
+	github.com/cs3org/go-cs3apis => github.com/labkode/go-cs3apis v0.0.0-20210716084248-5b525d721d76
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 	google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade

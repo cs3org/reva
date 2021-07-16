@@ -435,6 +435,10 @@ func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.ResourceId) (s
 	return url.QueryUnescape(strings.TrimPrefix(ref.OpaqueId, "fileid-"+layout))
 }
 
+func (fs *localfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	return errtypes.NotSupported("localfs: deny grant not supported")
+}
+
 func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
