@@ -20,6 +20,7 @@ package html
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/cs3org/reva/pkg/siteacc/data"
@@ -44,6 +45,15 @@ type Session struct {
 	sessionCookieName string
 }
 
+func getRemoteAddress(r *http.Request) string {
+	// Remove the port number from the remote address
+	remoteAddress := ""
+	if address := strings.Split(r.RemoteAddr, ":"); len(address) == 2 {
+		remoteAddress = address[0]
+	}
+	return remoteAddress
+}
+
 // Save stores the session ID in a cookie using a response writer.
 func (sess *Session) Save(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
@@ -63,8 +73,10 @@ func (sess *Session) VerifyRequest(r *http.Request) error {
 		return errors.Errorf("the session ID doesn't match")
 	}
 
-	if r.RemoteAddr != sess.RemoteAddress {
-		return errors.Errorf("remote address has changed (%v != %v)", r.RemoteAddr, sess.RemoteAddress)
+	if sess.RemoteAddress != "" {
+		if !strings.EqualFold(getRemoteAddress(r), sess.RemoteAddress) {
+			return errors.Errorf("remote address has changed (%v != %v)", r.RemoteAddr, sess.RemoteAddress)
+		}
 	}
 
 	return nil
@@ -82,9 +94,10 @@ func (sess *Session) HasExpired() bool {
 
 // NewSession creates a new session, giving it a random ID.
 func NewSession(name string, timeout time.Duration, r *http.Request) *Session {
+
 	session := &Session{
 		ID:                uuid.NewString(),
-		RemoteAddress:     r.RemoteAddr,
+		RemoteAddress:     getRemoteAddress(r),
 		CreationTime:      time.Now(),
 		Timeout:           timeout,
 		Data:              nil,

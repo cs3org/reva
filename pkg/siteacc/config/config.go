@@ -40,6 +40,7 @@ type Configuration struct {
 	} `mapstructure:"sitereg"`
 
 	Webserver struct {
-		SessionTimeout int `mapstructure:"session_timeout"`
+		SessionTimeout int  `mapstructure:"session_timeout"`
+		LogSessions    bool `mapstructure:"log_sessions"`
 	} `mapstructure:"webserver"`
 }

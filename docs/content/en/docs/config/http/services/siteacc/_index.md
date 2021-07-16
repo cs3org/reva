@@ -113,10 +113,18 @@ url = "https://iop.example.com/sitereg"
 {{% /dir %}}
 
 ## Webserver settings
-{{% dir name="session_timeout" type="int" default="120" %}}
+{{% dir name="session_timeout" type="int" default="300" %}}
 The session timeout in seconds.
 {{< highlight toml >}}
 [http.services.siteacc.webserver]
 session_timeout = 600
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="log_sessions" type="bool" default="false" %}}
+If enabled, debug information about sessions will be printed.
+{{< highlight toml >}}
+[http.services.siteacc.webserver]
+log_sessions = true
 {{< /highlight >}}
 {{% /dir %}}

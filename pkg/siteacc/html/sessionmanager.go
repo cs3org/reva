@@ -19,6 +19,7 @@
 package html
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -74,11 +75,15 @@ func (mngr *SessionManager) HandleRequest(w http.ResponseWriter, r *http.Request
 	if err == nil {
 		session = mngr.findSession(cookie.Value)
 		if session != nil {
+			mngr.logSessionInfo(session, r, "existing session found")
+
 			// Verify the request against the session: If it is invalid, set an error; if the session has expired, create a new one; if it has already passed its halftime, migrate to a new one
 			if err := session.VerifyRequest(r); err == nil {
 				if session.HasExpired() {
 					// The session has expired, so a new one needs to be created
 					session = nil
+
+					mngr.logSessionInfo(session, r, "session expired")
 				} else if session.HalftimePassed() {
 					// The session has passed its halftime, so migrate it to a new one (makes hijacking session IDs harder)
 					session, err = mngr.migrateSession(session, r)
@@ -86,21 +91,29 @@ func (mngr *SessionManager) HandleRequest(w http.ResponseWriter, r *http.Request
 						session = nil
 						sessionErr = errors.Wrap(err, "unable to migrate session")
 					}
+
+					mngr.logSessionInfo(session, r, "session migrated")
 				}
 			} else {
 				session = nil
 				sessionErr = errors.Wrap(err, "invalid session")
+
+				mngr.logSessionInfo(session, r, "session invalid (verify failed)")
 			}
 		}
 	} else if err != http.ErrNoCookie {
 		// The session cookie exists but seems to be invalid, so set an error
 		session = nil
 		sessionErr = errors.Wrap(err, "unable to get the session ID from the client")
+
+		mngr.logSessionInfo(session, r, fmt.Sprintf("session cookie error: %v", err))
 	}
 
 	if session == nil {
 		// No session found for the client, so create a new one; this will always succeed
 		session = mngr.createSession(r)
+
+		mngr.logSessionInfo(session, r, "assigned new session")
 	}
 
 	// Store the session ID on the client side
@@ -150,6 +163,16 @@ func (mngr *SessionManager) migrateSession(session *Session, r *http.Request) (*
 	delete(mngr.sessions, session.ID)
 
 	return sessionNew, nil
+}
+
+func (mngr *SessionManager) logSessionInfo(session *Session, r *http.Request, info string) {
+	if mngr.conf.Webserver.LogSessions {
+		if session != nil {
+			mngr.log.Debug().Str("id", session.ID).Str("address", r.RemoteAddr).Str("path", r.URL.Path).Msg(info)
+		} else {
+			mngr.log.Debug().Str("address", r.RemoteAddr).Str("path", r.URL.Path).Msg(info)
+		}
+	}
 }
 
 // NewSessionManager creates a new session manager.
