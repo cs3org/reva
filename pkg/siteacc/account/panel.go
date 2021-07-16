@@ -19,7 +19,6 @@
 package account
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -128,13 +127,14 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 }
 
 func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request) html.ExecutionResult {
-	// Modify the original request URI by replacing the path parameter
-	fmt.Println("------------------------------------------------------")
-	fmt.Println(r)
-	fmt.Println(r.URL)
-	fmt.Println(r.Header)
-	fmt.Println("------------------------------------------------------")
-	newURI, _ := url.Parse(r.RequestURI)
+	fullPath := r.Header.Get("X-Replaced-Path")
+	if fullPath == "" {
+		uri, _ := url.Parse(r.RequestURI)
+		fullPath = uri.Path
+	}
+
+	// Modify the original request URL by replacing the path parameter
+	newURI, _ := url.Parse(fullPath)
 	params := newURI.Query()
 	params.Del("path")
 	params.Add("path", path)
