@@ -863,6 +863,9 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 				Path: p,
 			},
 		})
+		if err != nil {
+			return nil, err
+		}
 
 		// the following will check that:
 		// - the resource to delete is a share the current user received
