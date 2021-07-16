@@ -1164,16 +1164,16 @@ func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference, name st
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
+	dir, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil
+	}
+
+	p := path.Join(dir, name)
 	auth, err := fs.getUserAuth(ctx, u, p)
 	if err != nil {
 		return err
 	}
-
-	dir, err := fs.resolve(ctx, u, ref)
-	if err != nil {
-		return nil
-	}
-	p := path.Join(dir, name)
 
 	log.Info().Msgf("eosfs: createdir: path=%s", p)
 
