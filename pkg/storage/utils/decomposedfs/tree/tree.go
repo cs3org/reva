@@ -343,10 +343,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	if deletingSharedResource != nil && deletingSharedResource.(bool) {
 		src := filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name)
-		if err := os.Remove(src); err != nil {
-			return err
-		}
-		return nil
+		return os.Remove(src)
 	}
 	// Prepare the trash
 	// TODO use layout?, but it requires resolving the owners user if the username is used instead of the id.
