@@ -36,7 +36,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
-	grouputils "github.com/cs3org/reva/pkg/group/utils"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
@@ -434,10 +433,6 @@ func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.ResourceId) (s
 		}
 	}
 	return url.QueryUnescape(strings.TrimPrefix(ref.OpaqueId, "fileid-"+layout))
-}
-
-func (fs *localfs) GetOwners(ctx context.Context, ref *provider.Reference) (*grouppb.Group, error) {
-	return grouputils.NewEmptyGroup(), nil
 }
 
 func (fs *localfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {

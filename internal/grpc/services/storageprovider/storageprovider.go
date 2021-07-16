@@ -38,7 +38,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -61,7 +60,6 @@ type config struct {
 	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
 	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
 	MimeTypes        map[string]string                 `mapstructure:"mimetypes" docs:"nil;List of supported mime types and corresponding file extensions."`
-	GatewaySvc       string                            `mapstructure:"gatewaysvc" docs:"/;Stores the endpoint at which the GRPC gateway is exposed."`
 }
 
 func (c *config) init() {
@@ -95,8 +93,6 @@ func (c *config) init() {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
 
-	// get default GatewaySVC value if not set
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 type service struct {
