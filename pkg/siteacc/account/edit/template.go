@@ -112,7 +112,7 @@ const tplBody = `
 </div>
 <div>&nbsp;</div>
 <div>
-	<form id="form" method="POST" class="box container-inline" style="width: 100%;">
+	<form id="form" method="POST" class="box container-inline" style="width: 100%;" autocomplete="off">
 		<div style="grid-row: 1;"><label for="fname">First name: <span class="mandatory">*</span></label></div>
 		<div style="grid-row: 2;"><input type="text" id="fname" name="fname" value="{{.Account.FirstName}}"/></div>
 		<div style="grid-row: 1;"><label for="lname">Last name: <span class="mandatory">*</span></label></div>

@@ -127,6 +127,7 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 }
 
 func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request) html.ExecutionResult {
+	// Check if the original (full) URI path is stored in the request header; if not, use the request URI to get the path
 	fullPath := r.Header.Get("X-Replaced-Path")
 	if fullPath == "" {
 		uri, _ := url.Parse(r.RequestURI)
@@ -134,12 +135,12 @@ func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request
 	}
 
 	// Modify the original request URL by replacing the path parameter
-	newURI, _ := url.Parse(fullPath)
-	params := newURI.Query()
+	newURL, _ := url.Parse(fullPath)
+	params := newURL.Query()
 	params.Del("path")
 	params.Add("path", path)
-	newURI.RawQuery = params.Encode()
-	http.Redirect(w, r, newURI.String(), http.StatusFound)
+	newURL.RawQuery = params.Encode()
+	http.Redirect(w, r, newURL.String(), http.StatusFound)
 	return html.AbortExecution
 }
 
