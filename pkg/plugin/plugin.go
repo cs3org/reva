@@ -29,6 +29,16 @@ import (
 	"github.com/hashicorp/go-plugin"
 )
 
+// RevaPlugin represents the runtime plugin
+type RevaPlugin struct {
+	Plugin interface{}
+	Client *plugin.Client
+}
+
+func (plug *RevaPlugin) Kill() {
+	plug.Client.Kill()
+}
+
 var handshake = plugin.HandshakeConfig{
 	ProtocolVersion:  1,
 	MagicCookieKey:   "BASIC_PLUGIN",
@@ -51,7 +61,7 @@ func compile(path string, pluginType string) (string, error) {
 }
 
 // Load loads the plugin using the hashicorp go-plugin system
-func Load(driver string, pluginType string) (interface{}, error) {
+func Load(driver string, pluginType string) (*RevaPlugin, error) {
 	bin := driver
 	file, err := os.Stat(driver)
 	if err != nil {
@@ -91,5 +101,10 @@ func Load(driver string, pluginType string) (interface{}, error) {
 		return nil, err
 	}
 
-	return raw, nil
+	revaPlugin := &RevaPlugin{
+		Plugin: raw,
+		Client: client,
+	}
+
+	return revaPlugin, nil
 }
