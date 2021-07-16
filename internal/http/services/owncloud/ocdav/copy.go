@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -32,23 +33,26 @@ import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/rs/zerolog"
 	"go.opencensus.io/trace"
 )
 
-func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
+type copy struct {
+	sourceInfo  *provider.ResourceInfo
+	destination *provider.Reference
+	depth       string
+	successCode int
+}
+
+type intermediateDirRefFunc func() (*provider.Reference, *rpc.Status, error)
+
+func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "head")
 	defer span.End()
 
 	src := path.Join(ns, r.URL.Path)
-	dstHeader := r.Header.Get("Destination")
-	overwrite := r.Header.Get("Overwrite")
-	depth := r.Header.Get("Depth")
-	if depth == "" {
-		depth = "infinity"
-	}
-
-	dst, err := extractDestination(dstHeader, r.Context().Value(ctxKeyBaseURI).(string))
+	dst, err := extractDestination(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -56,20 +60,20 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	dst = path.Join(ns, dst)
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
-	sublog.Debug().Str("overwrite", overwrite).Str("depth", depth).Msg("copy")
 
-	overwrite = strings.ToUpper(overwrite)
-	if overwrite == "" {
-		overwrite = "T"
+	srcRef := &provider.Reference{Path: src}
+
+	// check dst exists
+	dstRef := &provider.Reference{Path: dst}
+
+	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
+		intermediateDir := path.Dir(dst)
+		ref := &provider.Reference{Path: intermediateDir}
+		return ref, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
 	}
 
-	if overwrite != "T" && overwrite != "F" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	if depth != "infinity" && depth != "0" {
-		w.WriteHeader(http.StatusBadRequest)
+	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
+	if cp == nil {
 		return
 	}
 
@@ -80,112 +84,61 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	// check src exists
-	ref := &provider.Reference{Path: src}
-	srcStatReq := &provider.StatRequest{Ref: ref}
-	srcStatRes, err := client.Stat(ctx, srcStatReq)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending grpc stat request")
+	if err := s.executePathCopy(ctx, client, w, r, cp); err != nil {
+		sublog.Error().Err(err).Str("depth", cp.depth).Msg("error executing path copy")
 		w.WriteHeader(http.StatusInternalServerError)
-		return
 	}
-
-	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, srcStatRes.Status)
-		return
-	}
-
-	// check dst exists
-	ref = &provider.Reference{Path: dst}
-	dstStatReq := &provider.StatRequest{Ref: ref}
-	dstStatRes, err := client.Stat(ctx, dstStatReq)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&sublog, w, srcStatRes.Status)
-		return
-	}
-
-	successCode := http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.8.5
-	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
-		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.8.5
-
-		if overwrite == "F" {
-			sublog.Warn().Str("overwrite", overwrite).Msg("dst already exists")
-			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
-			return
-		}
-
-	} else {
-		// check if an intermediate path / the parent exists
-		intermediateDir := path.Dir(dst)
-		ref = &provider.Reference{Path: intermediateDir}
-		intStatReq := &provider.StatRequest{Ref: ref}
-		intStatRes, err := client.Stat(ctx, intStatReq)
-		if err != nil {
-			sublog.Error().Err(err).Msg("error sending grpc stat request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		if intStatRes.Status.Code != rpc.Code_CODE_OK {
-			if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-				// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
-				sublog.Debug().Str("parent", intermediateDir).Interface("status", intStatRes.Status).Msg("conflict")
-				w.WriteHeader(http.StatusConflict)
-			} else {
-				HandleErrorStatus(&sublog, w, srcStatRes.Status)
-			}
-			return
-		}
-		// TODO what if intermediate is a file?
-	}
-
-	err = s.descend(ctx, client, srcStatRes.Info, dst, depth == "infinity")
-	if err != nil {
-		sublog.Error().Err(err).Str("depth", depth).Msg("error descending directory")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(successCode)
+	w.WriteHeader(cp.successCode)
 }
 
-func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider.ResourceInfo, dst string, recurse bool) error {
+func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClient, w http.ResponseWriter, r *http.Request, cp *copy) error {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Str("src", src.Path).Str("dst", dst).Msg("descending")
-	if src.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+	log.Debug().Str("src", cp.sourceInfo.Path).Str("dst", cp.destination.Path).Msg("descending")
+	if cp.sourceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// create dir
 		createReq := &provider.CreateContainerRequest{
-			Ref: &provider.Reference{Path: dst},
+			Ref: cp.destination,
 		}
 		createRes, err := client.CreateContainer(ctx, createReq)
-		if err != nil || createRes.Status.Code != rpc.Code_CODE_OK {
+		if err != nil {
+			log.Error().Err(err).Msg("error performing create container grpc request")
 			return err
+		}
+		if createRes.Status.Code != rpc.Code_CODE_OK {
+			if createRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+				w.WriteHeader(http.StatusForbidden)
+				m := fmt.Sprintf("Permission denied to create %v", createReq.Ref.Path)
+				b, err := Marshal(exception{
+					code:    SabredavPermissionDenied,
+					message: m,
+				})
+				HandleWebdavError(log, w, b, err)
+			}
+			return nil
 		}
 
 		// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
 
-		if !recurse {
+		if cp.depth != "infinity" {
 			return nil
 		}
 
 		// descend for children
 		listReq := &provider.ListContainerRequest{
-			Ref: &provider.Reference{Path: src.Path},
+			Ref: &provider.Reference{Path: cp.sourceInfo.Path},
 		}
 		res, err := client.ListContainer(ctx, listReq)
 		if err != nil {
 			return err
 		}
 		if res.Status.Code != rpc.Code_CODE_OK {
-			return fmt.Errorf("status code %d", res.Status.Code)
+			w.WriteHeader(http.StatusInternalServerError)
+			return nil
 		}
 
 		for i := range res.Infos {
-			childDst := path.Join(dst, path.Base(res.Infos[i].Path))
-			err := s.descend(ctx, client, res.Infos[i], childDst, recurse)
+			childDst := &provider.Reference{Path: path.Join(cp.destination.Path, path.Base(res.Infos[i].Path))}
+			err := s.executePathCopy(ctx, client, w, r, &copy{sourceInfo: res.Infos[i], destination: childDst, depth: cp.depth, successCode: cp.successCode})
 			if err != nil {
 				return err
 			}
@@ -197,7 +150,7 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 		// 1. get download url
 
 		dReq := &provider.InitiateFileDownloadRequest{
-			Ref: &provider.Reference{Path: src.Path},
+			Ref: &provider.Reference{Path: cp.sourceInfo.Path},
 		}
 
 		dRes, err := client.InitiateFileDownload(ctx, dReq)
@@ -219,13 +172,13 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 		// 2. get upload url
 
 		uReq := &provider.InitiateFileUploadRequest{
-			Ref: &provider.Reference{Path: dst},
+			Ref: cp.destination,
 			Opaque: &typespb.Opaque{
 				Map: map[string]*typespb.OpaqueEntry{
 					"Upload-Length": {
 						Decoder: "plain",
 						// TODO: handle case where size is not known in advance
-						Value: []byte(fmt.Sprintf("%d", src.GetSize())),
+						Value: []byte(strconv.FormatUint(cp.sourceInfo.GetSize(), 10)),
 					},
 				},
 			},
@@ -237,7 +190,18 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 		}
 
 		if uRes.Status.Code != rpc.Code_CODE_OK {
-			return fmt.Errorf("status code %d", uRes.Status.Code)
+			if uRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+				w.WriteHeader(http.StatusForbidden)
+				m := fmt.Sprintf("Permissions denied to create %v", uReq.Ref.Path)
+				b, err := Marshal(exception{
+					code:    SabredavPermissionDenied,
+					message: m,
+				})
+				HandleWebdavError(log, w, b, err)
+				return nil
+			}
+			HandleErrorStatus(log, w, uRes.Status)
+			return nil
 		}
 
 		var uploadEP, uploadToken string
@@ -266,7 +230,7 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 
 		// 4. do upload
 
-		if src.GetSize() > 0 {
+		if cp.sourceInfo.GetSize() > 0 {
 			httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, httpDownloadRes.Body)
 			if err != nil {
 				return err
@@ -284,4 +248,148 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 		}
 	}
 	return nil
+}
+
+func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, intermediateDirRef intermediateDirRefFunc, log *zerolog.Logger) *copy {
+	overwrite, err := extractOverwrite(w, r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		m := fmt.Sprintf("Overwrite header is set to incorrect value %v", overwrite)
+		b, err := Marshal(exception{
+			code:    SabredavBadRequest,
+			message: m,
+		})
+		HandleWebdavError(log, w, b, err)
+		return nil
+	}
+	depth, err := extractDepth(w, r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		m := fmt.Sprintf("Depth header is set to incorrect value %v", depth)
+		b, err := Marshal(exception{
+			code:    SabredavBadRequest,
+			message: m,
+		})
+		HandleWebdavError(log, w, b, err)
+		return nil
+	}
+
+	log.Debug().Str("overwrite", overwrite).Str("depth", depth).Msg("copy")
+
+	client, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil
+	}
+
+	srcStatReq := &provider.StatRequest{Ref: srcRef}
+	srcStatRes, err := client.Stat(ctx, srcStatReq)
+	if err != nil {
+		log.Error().Err(err).Msg("error sending grpc stat request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil
+	}
+
+	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
+		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: m,
+			})
+			HandleWebdavError(log, w, b, err)
+		}
+		HandleErrorStatus(log, w, srcStatRes.Status)
+		return nil
+	}
+
+	dstStatReq := &provider.StatRequest{Ref: dstRef}
+	dstStatRes, err := client.Stat(ctx, dstStatReq)
+	if err != nil {
+		log.Error().Err(err).Msg("error sending grpc stat request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil
+	}
+	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+		HandleErrorStatus(log, w, srcStatRes.Status)
+		return nil
+	}
+
+	successCode := http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
+		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+
+		if overwrite == "F" {
+			log.Warn().Str("overwrite", overwrite).Msg("dst already exists")
+			w.WriteHeader(http.StatusPreconditionFailed)
+			m := fmt.Sprintf("Could not overwrite Resource %v", dstRef.Path)
+			b, err := Marshal(exception{
+				code:    SabredavPreconditionFailed,
+				message: m,
+			})
+			HandleWebdavError(log, w, b, err) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+			return nil
+		}
+
+	} else {
+		// check if an intermediate path / the parent exists
+		intermediateRef, status, err := intermediateDirRef()
+		if err != nil {
+			log.Error().Err(err).Msg("error sending a grpc request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return nil
+		}
+
+		if status.Code != rpc.Code_CODE_OK {
+			HandleErrorStatus(log, w, status)
+			return nil
+		}
+		intStatReq := &provider.StatRequest{Ref: intermediateRef}
+		intStatRes, err := client.Stat(ctx, intStatReq)
+		if err != nil {
+			log.Error().Err(err).Msg("error sending grpc stat request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return nil
+		}
+		if intStatRes.Status.Code != rpc.Code_CODE_OK {
+			if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+				log.Debug().Interface("parent", intermediateRef).Interface("status", intStatRes.Status).Msg("conflict")
+				w.WriteHeader(http.StatusConflict)
+			} else {
+				HandleErrorStatus(log, w, srcStatRes.Status)
+			}
+			return nil
+		}
+		// TODO what if intermediate is a file?
+	}
+
+	return &copy{sourceInfo: srcStatRes.Info, depth: depth, successCode: successCode, destination: dstRef}
+}
+
+func extractOverwrite(w http.ResponseWriter, r *http.Request) (string, error) {
+	overwrite := r.Header.Get(HeaderOverwrite)
+	overwrite = strings.ToUpper(overwrite)
+	if overwrite == "" {
+		overwrite = "T"
+	}
+
+	if overwrite != "T" && overwrite != "F" {
+		return "", errInvalidValue
+	}
+
+	return overwrite, nil
+}
+
+func extractDepth(w http.ResponseWriter, r *http.Request) (string, error) {
+	depth := r.Header.Get(HeaderDepth)
+	if depth == "" {
+		depth = "infinity"
+	}
+	if depth != "infinity" && depth != "0" {
+		return "", errInvalidValue
+	}
+	return depth, nil
 }

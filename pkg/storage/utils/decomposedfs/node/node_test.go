@@ -85,6 +85,7 @@ var _ = Describe("Node", func() {
 			owner := &userpb.UserId{
 				Idp:      "testidp",
 				OpaqueId: "testuserid",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			}
 
 			err = n.WriteMetadata(owner)

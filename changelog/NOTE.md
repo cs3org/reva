@@ -1,103 +1,44 @@
-Changelog for reva 1.9.0 (2021-06-23)
+Changelog for reva 1.10.0 (2021-07-13)
 =======================================
 
-The following sections list the changes in reva 1.9.0 relevant to
+The following sections list the changes in reva 1.10.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Fix #1815: Drone CI - patch the 'store-dev-release' job to fix malformed requests
- * Fix #1765: 'golang:alpine' as base image & CGO_ENABLED just for the CLI
- * Chg #1721: Absolute and relative references
- * Enh #1810: Add arbitrary metadata support to EOS
- * Enh #1774: Add user ID cache warmup to EOS storage driver
- * Enh #1471: EOEGrpc progress. Logging discipline and error handling
- * Enh #1811: Harden public shares signing
- * Enh #1793: Remove the user id from the trashbin key
- * Enh #1795: Increase trashbin restore API compatibility
- * Enh #1516: Use UidNumber and GidNumber fields in User objects
- * Enh #1820: Tag v1.9.0
+ * Fix #1883: Pass directories with trailing slashes to eosclient.GenerateToken
+ * Fix #1878: Improve the webdav error handling in the trashbin
+ * Fix #1884: Do not send body on failed range request
+ * Enh #1744: Add support for lightweight user types
 
 Details
 -------
 
- * Bugfix #1815: Drone CI - patch the 'store-dev-release' job to fix malformed requests
+ * Bugfix #1883: Pass directories with trailing slashes to eosclient.GenerateToken
 
-   Replace the backquotes that were used for the date component of the URL with the
-   POSIX-confirmant command substitution '$()'.
+   https://github.com/cs3org/reva/pull/1883
 
-   https://github.com/cs3org/reva/pull/1815
+ * Bugfix #1878: Improve the webdav error handling in the trashbin
 
- * Bugfix #1765: 'golang:alpine' as base image & CGO_ENABLED just for the CLI
+   The trashbin handles errors better now on the webdav endpoint.
 
-   Some of the dependencies used by revad need CGO to be enabled in order to work. We also need to
-   install the 'mime-types' in alpine to correctly detect them on the storage-providers.
+   https://github.com/cs3org/reva/pull/1878
 
-   The CGO_ENABLED=0 flag was added to the docker build flags so that it will produce a static
-   build. This allows usage of the 'scratch' image for reduction of the docker image size (e.g. the
-   reva cli).
+ * Bugfix #1884: Do not send body on failed range request
 
-   https://github.com/cs3org/reva/issues/1765
-   https://github.com/cs3org/reva/pull/1766
-   https://github.com/cs3org/reva/pull/1797
+   Instead of send the error in the body of a 416 response we log it. This prevents the go reverse
+   proxy from choking on it and turning it into a 502 Bad Gateway response.
 
- * Change #1721: Absolute and relative references
+   https://github.com/cs3org/reva/pull/1884
 
-   We unified the `Reference_Id` end `Reference_Path` types to a combined `Reference` that
-   contains both: - a `resource_id` property that can identify a node using a `storage_id` and an
-   `opaque_id` - a `path` property that can be used to represent absolute paths as well as paths
-   relative to the id based properties. While this is a breaking change it allows passing both:
-   absolute as well as relative references.
+ * Enhancement #1744: Add support for lightweight user types
 
-   https://github.com/cs3org/reva/pull/1721
+   This PR adds support for assigning and consuming user type when setting/reading users. On top
+   of that, support for lightweight users is added. These users have to be restricted to accessing
+   only shares received by them, which is accomplished by expanding the existing RBAC scope.
 
- * Enhancement #1810: Add arbitrary metadata support to EOS
-
-   https://github.com/cs3org/reva/pull/1810
-
- * Enhancement #1774: Add user ID cache warmup to EOS storage driver
-
-   https://github.com/cs3org/reva/pull/1774
-
- * Enhancement #1471: EOEGrpc progress. Logging discipline and error handling
-
-   https://github.com/cs3org/reva/pull/1471
-
- * Enhancement #1811: Harden public shares signing
-
-   Makes golangci-lint happy as well
-
-   https://github.com/cs3org/reva/pull/1811
-
- * Enhancement #1793: Remove the user id from the trashbin key
-
-   We don't want to use the users uuid outside of the backend so I removed the id from the trashbin
-   file key.
-
-   https://github.com/cs3org/reva/pull/1793
-
- * Enhancement #1795: Increase trashbin restore API compatibility
-
-   * The precondition were not checked before doing a trashbin restore in the ownCloud dav API.
-   Without the checks the API would behave differently compared to the oC10 API. * The restore
-   response was missing HTTP headers like `ETag` * Update the name when restoring the file from
-   trashbin to a new target name
-
-   https://github.com/cs3org/reva/pull/1795
-
- * Enhancement #1516: Use UidNumber and GidNumber fields in User objects
-
-   Update instances where CS3API's `User` objects are created and used to use `GidNumber`, and
-   `UidNumber` fields instead of storing them in `Opaque` map.
-
-   https://github.com/cs3org/reva/issues/1516
-
- * Enhancement #1820: Tag v1.9.0
-
-   Bump release number to v1.9.0 as it contains breaking changes related to changing the
-   reference type.
-
-   https://github.com/cs3org/reva/pull/1820
+   https://github.com/cs3org/reva/pull/1744
+   https://github.com/cs3org/cs3apis/pull/120
 
 

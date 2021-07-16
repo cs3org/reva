@@ -105,6 +105,7 @@ func getUsers() map[string]*userpb.User {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "einstein",
 			Groups:      []string{"sailing-lovers", "violin-haters", "physics-lovers"},
@@ -117,6 +118,7 @@ func getUsers() map[string]*userpb.User {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "marie",
 			Groups:      []string{"radium-lovers", "polonium-lovers", "physics-lovers"},
@@ -129,6 +131,7 @@ func getUsers() map[string]*userpb.User {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "932b4540-8d16-481e-8ef4-588e4b6b151c",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "richard",
 			Groups:      []string{"quantum-lovers", "philosophy-haters", "physics-lovers"},

@@ -28,23 +28,19 @@ import (
 	"strconv"
 	"strings"
 
-	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 
 	// link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	grouputils "github.com/cs3org/reva/pkg/group/utils"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/utils/grants"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -439,9 +435,48 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	}, nil
 }
 
+func hasNodeID(s *provider.StorageSpace) bool {
+	return s != nil && s.Root != nil && s.Root.OpaqueId != ""
+}
+
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+	log := appctx.GetLogger(ctx)
+	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters)
+	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "not found when listing spaces")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.NotSupported:
+			st = status.NewUnimplemented(ctx, err, "not implemented")
+		default:
+			st = status.NewInternal(ctx, err, "error listing spaces")
+		}
+		return &provider.ListStorageSpacesResponse{
+			Status: st,
+		}, nil
+	}
+
+	for i := range spaces {
+		if hasNodeID(spaces[i]) {
+			// fill in storagespace id if it is not set
+			if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
+				spaces[i].Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "!" + spaces[i].Root.OpaqueId}
+			}
+			// fill in storage id if it is not set
+			if spaces[i].Root.StorageId == "" {
+				spaces[i].Root.StorageId = s.mountID
+			}
+		} else if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
+			log.Warn().Str("service", "storageprovider").Str("driver", s.conf.Driver).Interface("space", spaces[i]).Msg("space is missing space id and root id")
+		}
+	}
+
 	return &provider.ListStorageSpacesResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("ListStorageSpaces not implemented"), "ListStorageSpaces not implemented"),
+		Status:        status.NewOK(ctx),
+		StorageSpaces: spaces,
 	}, nil
 }
 
@@ -765,7 +800,12 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 	ctx := ss.Context()
 	log := appctx.GetLogger(ctx)
 
-	items, err := s.storage.ListRecycle(ctx)
+	ref, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return err
+	}
+
+	items, err := s.storage.ListRecycle(ctx, ref.ResourceId.OpaqueId, ref.Path)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -801,7 +841,12 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 }
 
 func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	items, err := s.storage.ListRecycle(ctx)
+	ref, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
+	key, itemPath := router.ShiftPath(ref.Path)
+	items, err := s.storage.ListRecycle(ctx, key, itemPath)
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err != nil {
 		var st *rpc.Status
@@ -827,7 +872,11 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 
 func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
-	if err := s.storage.RestoreRecycleItem(ctx, req.Key, req.RestoreRef); err != nil {
+	ref, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.storage.RestoreRecycleItem(ctx, req.Key, ref.Path, req.RestoreRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -851,7 +900,7 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
 	// if a key was sent as opaque id purge only that item
 	if req.GetRef().GetResourceId() != nil && req.GetRef().GetResourceId().OpaqueId != "" {
-		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetResourceId().OpaqueId); err != nil {
+		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetResourceId().OpaqueId, req.GetRef().Path); err != nil {
 			var st *rpc.Status
 			switch err.(type) {
 			case errtypes.IsNotFound:
@@ -968,43 +1017,6 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 		return &provider.AddGrantResponse{
 			Status: status.NewInvalid(ctx, "grantee type is invalid"),
 		}, nil
-	}
-
-	// if the grant is a denial, check if the current user is an owner of the reference
-	if grants.IsDenial(req.Grant) {
-		user, ok := user.ContextGetUser(ctx)
-		if !ok {
-			return nil, errtypes.InternalError("user not found in context")
-		}
-
-		client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
-		if err != nil {
-			return nil, err
-		}
-
-		// get owner of the reference
-		owners, err := s.storage.GetOwners(ctx, req.Ref)
-		if err != nil {
-			return nil, err
-		}
-
-		// check if the group is empty
-		if grouputils.IsEmptyGroup(owners) {
-			return nil, errtypes.PermissionDenied("user is not an owner")
-		}
-
-		// check if the user is in the owner list
-		hasMemberResp, err := client.HasMember(ctx, &groupv1beta1.HasMemberRequest{
-			GroupId: owners.Id,
-			UserId:  user.Id,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		if !hasMemberResp.Ok {
-			return nil, errtypes.PermissionDenied("user is not an owner")
-		}
 	}
 
 	err = s.storage.AddGrant(ctx, newRef, req.Grant)

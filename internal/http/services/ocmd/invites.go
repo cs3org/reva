@@ -227,6 +227,7 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		Id: &userpb.UserId{
 			OpaqueId: userID,
 			Idp:      recipientProvider,
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		},
 		Mail:        email,
 		DisplayName: name,

@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -262,6 +263,7 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
+		"UserType": utils.UserTypeToString(usr.Id.Type),
 		"UserName": usr.Username,
 
 		"OwnerIdp": owner.Idp,
@@ -332,6 +334,7 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 		Id: &userpb.UserId{
 			Idp:      info.Storage["Idp"],
 			OpaqueId: info.Storage["UserId"],
+			Type:     utils.UserTypeMap(info.Storage["UserType"]),
 		},
 		Username: info.Storage["UserName"],
 	}
@@ -587,13 +590,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		}
 	}
 	// use set arbitrary metadata?
-	/*if upload.info.MetaData["mtime"] != "" {
-		err := upload.fs.SetMtime(ctx, np, upload.info.MetaData["mtime"])
+	if upload.info.MetaData["mtime"] != "" {
+		err := n.SetMtime(ctx, upload.info.MetaData["mtime"])
 		if err != nil {
-			log.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
+			sublog.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
 		}
-	}*/
+	}
 
 	n.Exists = true
 

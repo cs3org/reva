@@ -42,6 +42,8 @@ const (
 
 	// TypeUser indicates the qualifier identifies a user
 	TypeUser = "u"
+	// TypeLightweight indicates the qualifier identifies a lightweight user
+	TypeLightweight = "lw"
 	// TypeGroup indicates the qualifier identifies a group
 	TypeGroup = "egroup"
 )
@@ -77,7 +79,7 @@ func isComment(line string) bool {
 func (m *ACLs) Serialize() string {
 	sysACL := []string{}
 	for _, e := range m.Entries {
-		sysACL = append(sysACL, e.serialize())
+		sysACL = append(sysACL, e.CitrineSerialize())
 	}
 	return strings.Join(sysACL, ShortTextForm)
 }
@@ -134,8 +136,4 @@ func ParseEntry(singleSysACL string) (*Entry, error) {
 // CitrineSerialize serializes an ACL entry for citrine EOS ACLs
 func (a *Entry) CitrineSerialize() string {
 	return fmt.Sprintf("%s:%s=%s", a.Type, a.Qualifier, a.Permissions)
-}
-
-func (a *Entry) serialize() string {
-	return strings.Join([]string{a.Type, a.Qualifier, a.Permissions}, ":")
 }

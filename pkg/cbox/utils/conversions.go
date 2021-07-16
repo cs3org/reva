@@ -19,6 +19,7 @@
 package utils
 
 import (
+	"strings"
 	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -165,7 +166,11 @@ func FormatUserID(u *userpb.UserId) string {
 
 // ExtractUserID retrieves a CS3API user ID from a string
 func ExtractUserID(u string) *userpb.UserId {
-	return &userpb.UserId{OpaqueId: u}
+	t := userpb.UserType_USER_TYPE_PRIMARY
+	if strings.HasPrefix(u, "guest:") {
+		t = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+	}
+	return &userpb.UserId{OpaqueId: u, Type: t}
 }
 
 // FormatGroupID formats a CS3API group ID to a string

@@ -570,6 +570,7 @@ def localIntegrationTestsOwncloud():
           "TEST_REVA": "true",
           "BEHAT_FILTER_TAGS": "~@skipOnOcis-OC-Storage",
           "PATH_TO_CORE": "/drone/src/tmp/testrunner",
+          "UPLOAD_DELETE_WAIT_TIME": "1",
         }
       }
     ],
@@ -773,6 +774,7 @@ def owncloudIntegrationTests(parallelRuns, skipExceptParts = []):
               "DIVIDE_INTO_NUM_PARTS": parallelRuns,
               "RUN_PART": runPart,
               "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.md",
+              "UPLOAD_DELETE_WAIT_TIME": "1",
             },
           },
         ],
@@ -847,6 +849,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
               "DIVIDE_INTO_NUM_PARTS": parallelRuns,
               "RUN_PART": runPart,
               "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-S3NG-storage.md",
+
             },
           },
         ],

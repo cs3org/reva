@@ -67,7 +67,7 @@ func TestUserManager(t *testing.T) {
 	os.Remove(file.Name())
 
 	// json object with user meta data
-	userJSON = `[{"id":{"idp":"localhost","opaque_id":"einstein"},"username":"einstein","mail":"einstein@example.org","display_name":"Albert Einstein","groups":["sailing-lovers","violin-haters","physics-lovers"]}]`
+	userJSON = `[{"id":{"idp":"localhost","opaque_id":"einstein","type":1},"username":"einstein","mail":"einstein@example.org","display_name":"Albert Einstein","groups":["sailing-lovers","violin-haters","physics-lovers"]}]`
 
 	// get file handler for temporary file
 	file, err = ioutil.TempFile(tempdir, "json_test")
@@ -89,7 +89,7 @@ func TestUserManager(t *testing.T) {
 	manager, _ := New(input)
 
 	// setup test data
-	uidEinstein := &userpb.UserId{Idp: "localhost", OpaqueId: "einstein"}
+	uidEinstein := &userpb.UserId{Idp: "localhost", OpaqueId: "einstein", Type: userpb.UserType_USER_TYPE_PRIMARY}
 	userEinstein := &userpb.User{
 		Id:          uidEinstein,
 		Username:    "einstein",
@@ -97,7 +97,7 @@ func TestUserManager(t *testing.T) {
 		Mail:        "einstein@example.org",
 		DisplayName: "Albert Einstein",
 	}
-	userFake := &userpb.UserId{Idp: "localhost", OpaqueId: "fakeUser"}
+	userFake := &userpb.UserId{Idp: "localhost", OpaqueId: "fakeUser", Type: userpb.UserType_USER_TYPE_PRIMARY}
 	groupsEinstein := []string{"sailing-lovers", "violin-haters", "physics-lovers"}
 
 	// positive test GetUserGroups

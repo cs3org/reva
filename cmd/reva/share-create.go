@@ -28,6 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
@@ -40,9 +41,10 @@ func shareCreateCommand() *command {
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
+	userType := cmd.String("user-type", "primary", "the type of user account, defaults to primary")
 
 	cmd.ResetFlags = func() {
-		*grantType, *grantee, *idp, *rol = "user", "", "", "viewer"
+		*grantType, *grantee, *idp, *rol, *userType = "user", "", "", "viewer", "primary"
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -94,6 +96,7 @@ func shareCreateCommand() *command {
 			grant.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{
 				Idp:      *idp,
 				OpaqueId: *grantee,
+				Type:     utils.UserTypeMap(*userType),
 			}}
 		case "group":
 			grant.Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{

@@ -136,52 +136,42 @@ func appTokensCreateCommand() *command {
 }
 
 func getScope(ctx context.Context, client gateway.GatewayAPIClient, opts *appTokenCreateOpts) (map[string]*authpb.Scope, error) {
-	var scopeList []map[string]*authpb.Scope
-	switch {
-	case opts.Unlimited:
-		return scope.GetOwnerScope()
-	case len(opts.Share) != 0:
+	if opts.Unlimited {
+		return scope.AddOwnerScope(nil)
+	}
+
+	var scopes map[string]*authpb.Scope
+	var err error
+	if len(opts.Share) != 0 {
 		// TODO(gmgigi96): verify format
 		for _, entry := range opts.Share {
 			// share = xxxx:[r|w]
 			shareIDPerm := strings.Split(entry, ":")
 			shareID, perm := shareIDPerm[0], shareIDPerm[1]
-			scope, err := getPublicShareScope(ctx, client, shareID, perm)
+			scopes, err = getPublicShareScope(ctx, client, shareID, perm, scopes)
 			if err != nil {
 				return nil, err
 			}
-			scopeList = append(scopeList, scope)
 		}
-		fallthrough
-	case len(opts.Path) != 0:
+	}
+
+	if len(opts.Path) != 0 {
 		// TODO(gmgigi96): verify format
 		for _, entry := range opts.Path {
 			// path = /home/a/b:[r|w]
 			pathPerm := strings.Split(entry, ":")
 			path, perm := pathPerm[0], pathPerm[1]
-			scope, err := getPathScope(ctx, client, path, perm)
+			scopes, err = getPathScope(ctx, client, path, perm, scopes)
 			if err != nil {
 				return nil, err
 			}
-			scopeList = append(scopeList, scope)
-		}
-		fallthrough
-	default:
-		return mergeListScopeIntoMap(scopeList), nil
-	}
-}
-
-func mergeListScopeIntoMap(scopeList []map[string]*authpb.Scope) map[string]*authpb.Scope {
-	merged := make(map[string]*authpb.Scope)
-	for _, scope := range scopeList {
-		for k, v := range scope {
-			merged[k] = v
 		}
 	}
-	return merged
+
+	return scopes, nil
 }
 
-func getPublicShareScope(ctx context.Context, client gateway.GatewayAPIClient, shareID, perm string) (map[string]*authpb.Scope, error) {
+func getPublicShareScope(ctx context.Context, client gateway.GatewayAPIClient, shareID, perm string, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
 	role, err := parsePermission(perm)
 	if err != nil {
 		return nil, err
@@ -204,10 +194,10 @@ func getPublicShareScope(ctx context.Context, client gateway.GatewayAPIClient, s
 		return nil, formatError(publicShareResponse.Status)
 	}
 
-	return scope.GetPublicShareScope(publicShareResponse.GetShare(), role)
+	return scope.AddPublicShareScope(publicShareResponse.GetShare(), role, scopes)
 }
 
-func getPathScope(ctx context.Context, client gateway.GatewayAPIClient, path, perm string) (map[string]*authpb.Scope, error) {
+func getPathScope(ctx context.Context, client gateway.GatewayAPIClient, path, perm string, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
 	role, err := parsePermission(perm)
 	if err != nil {
 		return nil, err
@@ -222,7 +212,7 @@ func getPathScope(ctx context.Context, client gateway.GatewayAPIClient, path, pe
 		return nil, formatError(statResponse.Status)
 	}
 
-	return scope.GetResourceInfoScope(statResponse.GetInfo(), role)
+	return scope.AddResourceInfoScope(statResponse.GetInfo(), role, scopes)
 }
 
 // parse permission string in the form of "rw" to create a role

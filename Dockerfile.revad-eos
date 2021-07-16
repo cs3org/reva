@@ -36,7 +36,7 @@ RUN make build-revad-docker && \
 
 RUN mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
 
-FROM gitlab-registry.cern.ch/dss/eos/slim:4.8.43
+FROM gitlab-registry.cern.ch/dss/eos/eos-all:4.8.57
 
 RUN mkdir -p /usr/local/bin
 

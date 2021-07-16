@@ -19,17 +19,19 @@
 package ocdav
 
 import (
-	"io"
+	"context"
+	"fmt"
 	"net/http"
 	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/rs/zerolog"
 	"go.opencensus.io/trace"
 )
 
-func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "mkcol")
 	defer span.End()
@@ -38,27 +40,29 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
-	buf := make([]byte, 1)
-	_, err := r.Body.Read(buf)
-	if err != io.EOF {
-		sublog.Error().Err(err).Msg("error reading request body")
+	ref := &provider.Reference{Path: fn}
+
+	s.handleMkcol(ctx, w, r, ref, sublog)
+}
+
+func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
+	if r.Body != http.NoBody {
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
 
 	client, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	// check fn exists
-	ref := &provider.Reference{Path: fn}
 	statReq := &provider.StatRequest{Ref: ref}
 	statRes, err := client.Stat(ctx, statReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc stat request")
+		log.Error().Err(err).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -67,7 +71,7 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 		if statRes.Status.Code == rpc.Code_CODE_OK {
 			w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
 		} else {
-			HandleErrorStatus(&sublog, w, statRes.Status)
+			HandleErrorStatus(&log, w, statRes.Status)
 		}
 		return
 	}
@@ -75,7 +79,7 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	req := &provider.CreateContainerRequest{Ref: ref}
 	res, err := client.CreateContainer(ctx, req)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending create container grpc request")
+		log.Error().Err(err).Msg("error sending create container grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -83,9 +87,17 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	case rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusCreated)
 	case rpc.Code_CODE_NOT_FOUND:
-		sublog.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("conflict")
+		log.Debug().Str("path", ref.Path).Interface("status", statRes.Status).Msg("conflict")
 		w.WriteHeader(http.StatusConflict)
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		w.WriteHeader(http.StatusForbidden)
+		m := fmt.Sprintf("Permission denied to create %v", ref.Path)
+		b, err := Marshal(exception{
+			code:    SabredavPermissionDenied,
+			message: m,
+		})
+		HandleWebdavError(&log, w, b, err)
 	default:
-		HandleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(&log, w, res.Status)
 	}
 }

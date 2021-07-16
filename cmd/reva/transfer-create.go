@@ -32,6 +32,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
@@ -43,6 +44,7 @@ func transferCreateCommand() *command {
 	grantee := cmd.String("grantee", "", "the grantee, receiver of the transfer")
 	granteeType := cmd.String("granteeType", "user", "the grantee type, one of: user, group")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
+	userType := cmd.String("user-type", "primary", "the type of user account, defaults to primary")
 
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
@@ -65,9 +67,11 @@ func transferCreateCommand() *command {
 			return err
 		}
 
+		u := &userpb.UserId{OpaqueId: *grantee, Idp: *idp, Type: utils.UserTypeMap(*userType)}
+
 		// check if invitation has been accepted
 		acceptedUserRes, err := client.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
-			RemoteUserId: &userpb.UserId{OpaqueId: *grantee, Idp: *idp},
+			RemoteUserId: u,
 		})
 		if err != nil {
 			return err
@@ -127,10 +131,7 @@ func transferCreateCommand() *command {
 				Grantee: &provider.Grantee{
 					Type: gt,
 					Id: &provider.Grantee_UserId{
-						UserId: &userpb.UserId{
-							Idp:      *idp,
-							OpaqueId: *grantee,
-						},
+						UserId: u,
 					},
 				},
 				Permissions: resourcePermissions,

@@ -41,22 +41,15 @@ func initRedisPool(address, username, password string) *redis.Pool {
 		IdleTimeout: 240 * time.Second,
 
 		Dial: func() (redis.Conn, error) {
-			var c redis.Conn
-			var err error
-			switch {
-			case username != "":
-				c, err = redis.Dial("tcp", address,
-					redis.DialUsername(username),
-					redis.DialPassword(password),
-				)
-			case password != "":
-				c, err = redis.Dial("tcp", address,
-					redis.DialPassword(password),
-				)
-			default:
-				c, err = redis.Dial("tcp", address)
+			var opts []redis.DialOption
+			if username != "" {
+				opts = append(opts, redis.DialUsername(username))
+			}
+			if password != "" {
+				opts = append(opts, redis.DialPassword(password))
 			}
 
+			c, err := redis.Dial("tcp", address, opts...)
 			if err != nil {
 				return nil, err
 			}
@@ -132,19 +125,11 @@ func (m *manager) cacheUserDetails(u *userpb.User) error {
 	}
 
 	uid, err := extractUID(u)
-	if err != nil {
-		return err
+	if err == nil {
+		_ = m.setVal(userPrefix+"uid:"+uid, u.Id.OpaqueId, -1)
 	}
-
-	if err = m.setVal(userPrefix+"uid:"+uid, u.Id.OpaqueId, -1); err != nil {
-		return err
-	}
-	if err = m.setVal(userPrefix+"mail:"+u.Mail, u.Id.OpaqueId, -1); err != nil {
-		return err
-	}
-	if err = m.setVal(userPrefix+"username:"+u.Username, u.Id.OpaqueId, -1); err != nil {
-		return err
-	}
+	_ = m.setVal(userPrefix+"mail:"+u.Mail, u.Id.OpaqueId, -1)
+	_ = m.setVal(userPrefix+"username:"+u.Username, u.Id.OpaqueId, -1)
 	return nil
 }
 

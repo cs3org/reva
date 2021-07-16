@@ -31,20 +31,22 @@ func userScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 	return true, nil
 }
 
-// GetOwnerScope returns the default owner scope with access to all resources.
-func GetOwnerScope() (map[string]*authpb.Scope, error) {
+// AddOwnerScope adds the default owner scope with access to all resources.
+func AddOwnerScope(scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
 	ref := &provider.Reference{Path: "/"}
 	val, err := utils.MarshalProtoV1ToJSON(ref)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]*authpb.Scope{
-		"user": &authpb.Scope{
-			Resource: &types.OpaqueEntry{
-				Decoder: "json",
-				Value:   val,
-			},
-			Role: authpb.Role_ROLE_OWNER,
+	if scopes == nil {
+		scopes = make(map[string]*authpb.Scope)
+	}
+	scopes["user"] = &authpb.Scope{
+		Resource: &types.OpaqueEntry{
+			Decoder: "json",
+			Value:   val,
 		},
-	}, nil
+		Role: authpb.Role_ROLE_OWNER,
+	}
+	return scopes, nil
 }
