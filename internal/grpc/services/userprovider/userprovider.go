@@ -21,12 +21,15 @@ package userprovider
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -49,6 +52,14 @@ func (c *config) init() {
 	}
 }
 
+func (c *config) load() (*plugin.RevaPlugin, error) {
+	plug, err := plugin.Load(c.Driver, "userprovider")
+	if err != nil {
+		return nil, err
+	}
+	return plug, nil
+}
+
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
@@ -59,12 +70,40 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func getDriver(c *config) (user.Manager, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+// getDriverPlugin fetches the runtime driver from the plugins package
+func getDriverPlugin(c *config) (*plugin.RevaPlugin, error) {
+	plugin, err := c.load()
+	if err != nil {
+		return nil, err
 	}
+	return plugin, nil
+}
 
-	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
+func getDriver(c *config, pluginFlag bool) (user.Manager, *plugin.RevaPlugin, error) {
+	// if plugin flag is set, we fetch the driver from the plugin package via hashicorp go-plugin system
+	if pluginFlag {
+		plugin, err := getDriverPlugin(c)
+		if err != nil {
+			return nil, nil, err
+		}
+		// assert the loaded plugin into required interface
+		manager, ok := plugin.Plugin.(user.Manager)
+		if !ok {
+			return nil, nil, fmt.Errorf("could not assert the loaded plugin")
+		}
+		pluginConfig := filepath.Base(c.Driver)
+		err = manager.Configure(c.Drivers[pluginConfig])
+		if err != nil {
+			return nil, nil, err
+		}
+		return manager, plugin, nil
+	}
+	// fetch drivers from the in-memory registry
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		mgr, err := f(c.Drivers[c.Driver])
+		return mgr, nil, err
+	}
+	return nil, nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
 }
 
 // New returns a new UserProviderServiceServer.
@@ -73,22 +112,28 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	userManager, err := getDriver(c)
+	pluginFlag := sharedconf.GetPluginFlag()
+	userManager, plug, err := getDriver(c, pluginFlag)
 	if err != nil {
 		return nil, err
 	}
-
-	svc := &service{usermgr: userManager}
+	svc := &service{
+		usermgr: userManager,
+		plugin:  plug,
+	}
 
 	return svc, nil
 }
 
 type service struct {
 	usermgr user.Manager
+	plugin  *plugin.RevaPlugin
 }
 
 func (s *service) Close() error {
+	if pluginFlag := sharedconf.GetPluginFlag(); pluginFlag {
+		s.plugin.Kill()
+	}
 	return nil
 }
 
