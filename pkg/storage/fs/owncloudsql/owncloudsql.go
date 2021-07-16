@@ -1851,6 +1851,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 		owner := fs.getOwner(leafPath)
 		root = filepath.Clean(fs.toInternalPath(ctx, owner))
 	}
+	versionsRoot := filepath.Join(filepath.Dir(root), "files_versions")
 	if !strings.HasPrefix(leafPath, root) {
 		err := errors.New("internal path outside root")
 		appctx.GetLogger(ctx).Error().
@@ -1877,7 +1878,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 	}
 
 	currentPath := filepath.Clean(leafPath)
-	for currentPath != root {
+	for currentPath != root && currentPath != versionsRoot {
 		appctx.GetLogger(ctx).Debug().
 			Str("leafPath", leafPath).
 			Str("currentPath", currentPath).
