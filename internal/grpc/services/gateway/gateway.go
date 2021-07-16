@@ -42,27 +42,28 @@ func init() {
 }
 
 type config struct {
-	AuthRegistryEndpoint          string `mapstructure:"authregistrysvc"`
-	ApplicationAuthEndpoint       string `mapstructure:"applicationauthsvc"`
-	StorageRegistryEndpoint       string `mapstructure:"storageregistrysvc"`
-	AppRegistryEndpoint           string `mapstructure:"appregistrysvc"`
-	PreferencesEndpoint           string `mapstructure:"preferencessvc"`
-	UserShareProviderEndpoint     string `mapstructure:"usershareprovidersvc"`
-	PublicShareProviderEndpoint   string `mapstructure:"publicshareprovidersvc"`
-	OCMShareProviderEndpoint      string `mapstructure:"ocmshareprovidersvc"`
-	OCMInviteManagerEndpoint      string `mapstructure:"ocminvitemanagersvc"`
-	OCMProviderAuthorizerEndpoint string `mapstructure:"ocmproviderauthorizersvc"`
-	OCMCoreEndpoint               string `mapstructure:"ocmcoresvc"`
-	UserProviderEndpoint          string `mapstructure:"userprovidersvc"`
-	GroupProviderEndpoint         string `mapstructure:"groupprovidersvc"`
-	DataTxEndpoint                string `mapstructure:"datatx"`
-	DataGatewayEndpoint           string `mapstructure:"datagateway"`
-	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
-	DisableHomeCreationOnLogin    bool   `mapstructure:"disable_home_creation_on_login"`
-	TransferSharedSecret          string `mapstructure:"transfer_shared_secret"`
-	TransferExpires               int64  `mapstructure:"transfer_expires"`
-	TokenManager                  string `mapstructure:"token_manager"`
+	StorageRules                  map[string]map[string]interface{} `mapstructure:"storage_rules"`
+	AuthRegistryEndpoint          string                            `mapstructure:"authregistrysvc"`
+	ApplicationAuthEndpoint       string                            `mapstructure:"applicationauthsvc"`
+	StorageRegistryEndpoint       string                            `mapstructure:"storageregistrysvc"`
+	AppRegistryEndpoint           string                            `mapstructure:"appregistrysvc"`
+	PreferencesEndpoint           string                            `mapstructure:"preferencessvc"`
+	UserShareProviderEndpoint     string                            `mapstructure:"usershareprovidersvc"`
+	PublicShareProviderEndpoint   string                            `mapstructure:"publicshareprovidersvc"`
+	OCMShareProviderEndpoint      string                            `mapstructure:"ocmshareprovidersvc"`
+	OCMInviteManagerEndpoint      string                            `mapstructure:"ocminvitemanagersvc"`
+	OCMProviderAuthorizerEndpoint string                            `mapstructure:"ocmproviderauthorizersvc"`
+	OCMCoreEndpoint               string                            `mapstructure:"ocmcoresvc"`
+	UserProviderEndpoint          string                            `mapstructure:"userprovidersvc"`
+	GroupProviderEndpoint         string                            `mapstructure:"groupprovidersvc"`
+	DataTxEndpoint                string                            `mapstructure:"datatx"`
+	DataGatewayEndpoint           string                            `mapstructure:"datagateway"`
+	CommitShareToStorageGrant     bool                              `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef       bool                              `mapstructure:"commit_share_to_storage_ref"`
+	DisableHomeCreationOnLogin    bool                              `mapstructure:"disable_home_creation_on_login"`
+	TransferSharedSecret          string                            `mapstructure:"transfer_shared_secret"`
+	TransferExpires               int64                             `mapstructure:"transfer_expires"`
+	TokenManager                  string                            `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
 	ShareFolder         string                            `mapstructure:"share_folder"`
 	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
