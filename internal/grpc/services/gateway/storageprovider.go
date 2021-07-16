@@ -27,6 +27,9 @@ import (
 	"sync"
 	"time"
 
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -849,6 +852,62 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 
 	if s.isShareName(ctx, p) {
 		log.Debug().Msgf("path:%s points to share name", p)
+
+		sRes, err := s.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+		if err != nil {
+			return nil, err
+		}
+
+		statRes, err := s.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				Path: p,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// the following will check that:
+		// - the resource to delete is a share the current user received
+		// - signal the storage the delete must not land in the trashbin
+		// - delete the resource and update the share status to pending
+		for _, share := range sRes.Shares {
+			if statRes != nil && (share.Share.ResourceId.OpaqueId == statRes.Info.Id.OpaqueId) && (share.Share.ResourceId.StorageId == statRes.Info.Id.StorageId) {
+				// this opaque needs explanation. It signals the storage the resource we're about to delete does not
+				// belong to the current user because it was share to her, thus delete the "node" and don't send it to
+				// the trash bin, since the share can be mounted as many times as desired.
+				req.Opaque = &types.Opaque{
+					Map: map[string]*types.OpaqueEntry{
+						"deleting_shared_resource": {
+							Value:   []byte("true"),
+							Decoder: "plain",
+						},
+					},
+				}
+
+				// the following block takes care of updating the state of the share to "pending". This will ensure the user
+				// can "Accept" the share once again.
+				r := &collaboration.UpdateReceivedShareRequest{
+					Ref: &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: &collaboration.ShareId{
+								OpaqueId: share.Share.Id.OpaqueId,
+							},
+						},
+					},
+					Field: &collaboration.UpdateReceivedShareRequest_UpdateField{
+						Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
+							State: collaboration.ShareState_SHARE_STATE_REJECTED,
+						},
+					},
+				}
+
+				_, err := s.UpdateReceivedShare(ctx, r)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
 
 		ref := &provider.Reference{Path: p}
 
