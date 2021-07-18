@@ -162,7 +162,9 @@ func (s *svc) Handler() http.Handler {
 
 			// yet, add it to baseURI
 			base = path.Join(base, "remote.php")
-
+		case "f":
+			s.doPrivatelink(w, r)
+			return
 		}
 		switch head {
 		// the old `/webdav` endpoint uses remote.php/webdav/$path
