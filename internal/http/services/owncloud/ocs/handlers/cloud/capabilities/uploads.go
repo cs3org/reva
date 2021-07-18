@@ -71,8 +71,8 @@ func setCapabilitiesForChunkProtocol(cp chunkProtocol, c *data.CapabilitiesData)
 			Version:            "1.0.0",
 			Resumable:          "1.0.0",
 			Extension:          "creation,creation-with-upload",
-			MaxChunkSize:       0,
-			HTTPMethodOverride: "",
+			MaxChunkSize:       c.Capabilities.Files.TusSupport.MaxChunkSize,
+			HTTPMethodOverride: c.Capabilities.Files.TusSupport.HTTPMethodOverride,
 		}
 	}
 }
