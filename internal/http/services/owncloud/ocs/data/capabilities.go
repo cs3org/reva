@@ -55,7 +55,7 @@ type Capabilities struct {
 	Files         *CapabilitiesFiles         `json:"files" xml:"files" mapstructure:"files"`
 	Dav           *CapabilitiesDav           `json:"dav" xml:"dav"`
 	FilesSharing  *CapabilitiesFilesSharing  `json:"files_sharing" xml:"files_sharing" mapstructure:"files_sharing"`
-	Notifications *CapabilitiesNotifications `json:"notifications" xml:"notifications"`
+	Notifications *CapabilitiesNotifications `json:"notifications,omitempty" xml:"notifications,omitempty"`
 }
 
 // CapabilitiesCore holds webdav config
@@ -178,7 +178,7 @@ type CapabilitiesFilesSharingFederation struct {
 
 // CapabilitiesNotifications holds a list of notification endpoints
 type CapabilitiesNotifications struct {
-	Endpoints []string `json:"ocs-endpoints" xml:"ocs-endpoints>element" mapstructure:"endpoints"`
+	Endpoints []string `json:"ocs-endpoints,omitempty" xml:"ocs-endpoints>element,omitempty" mapstructure:"endpoints"`
 }
 
 // Version holds version information
