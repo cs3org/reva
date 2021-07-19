@@ -401,7 +401,7 @@ var _ = Describe("Filecache", func() {
 			}
 			trashPathBase      = "Portugal.jpg"
 			trashPathTimestamp = 1619007109
-			trashPath          = "files_trashbin/files/Photos/" + trashPathBase + ".d" + strconv.Itoa(trashPathTimestamp)
+			trashPath          = "files_trashbin/files/" + trashPathBase + ".d" + strconv.Itoa(trashPathTimestamp)
 		)
 
 		BeforeEach(func() {
@@ -416,7 +416,7 @@ var _ = Describe("Filecache", func() {
 
 				_, err = cache.Get(1, "files/Photos/Portugal.jpg")
 				Expect(err).To(HaveOccurred())
-				_, err = cache.Get(1, "files_trashbin/files/Photos/Portugal.jpg.d1619007109")
+				_, err = cache.Get(1, "files_trashbin/files/Portugal.jpg.d1619007109")
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -469,7 +469,7 @@ var _ = Describe("Filecache", func() {
 				_, err = cache.GetRecycleItem("admin", trashPathBase, trashPathTimestamp)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = cache.PurgeRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				err = cache.PurgeRecycleItem("admin", trashPathBase, trashPathTimestamp, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = cache.GetRecycleItem("admin", trashPathBase, trashPathTimestamp)
@@ -480,7 +480,7 @@ var _ = Describe("Filecache", func() {
 				err := cache.Delete(1, "admin", filePath, trashPath)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = cache.PurgeRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				err = cache.PurgeRecycleItem("admin", trashPathBase, trashPathTimestamp, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = cache.Get(1, trashPath)
@@ -494,7 +494,7 @@ var _ = Describe("Filecache", func() {
 				_, err = cache.Get(1, "files_trashbin/files/Photos.d1619007109/Portugal.jpg")
 				Expect(err).ToNot(HaveOccurred())
 
-				err = cache.PurgeRecycleItem("admin", "Photos", 1619007109)
+				err = cache.PurgeRecycleItem("admin", "Photos", 1619007109, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = cache.Get(1, "files_trashbin/files/Photos.d1619007109/Portugal.jpg")

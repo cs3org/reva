@@ -1661,6 +1661,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 
 func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
 	rp, err := fs.getRecyclePath(ctx)
+	vp := filepath.Join(filepath.Dir(rp), "versions")
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
@@ -1685,19 +1686,33 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error deleting recycle item")
 	}
-	err = os.RemoveAll(filepath.Join(filepath.Dir(rp), "versions", filepath.Clean(key)))
-	if err != nil {
-		return errors.Wrap(err, "owncloudsql: error deleting recycle item versions")
-	}
-
 	base, ttime, err := splitTrashKey(key)
 	if err != nil {
 		return err
 	}
-	err = fs.filecache.PurgeRecycleItem(user.ContextMustGetUser(ctx).Username, base, ttime)
+	err = fs.filecache.PurgeRecycleItem(user.ContextMustGetUser(ctx).Username, base, ttime, false)
 	if err != nil {
 		return err
 	}
+
+	versionsGlob := filepath.Join(vp, base+".v*.d*")
+	versionFiles, err := filepath.Glob(versionsGlob)
+	if err != nil {
+		return errors.Wrap(err, "owncloudsql: error listing recycle item versions")
+	}
+	for _, versionFile := range versionFiles {
+		err = os.Remove(versionFile)
+		if err != nil {
+			return errors.Wrap(err, "owncloudsql: error deleting recycle item versions")
+		}
+
+		base, ttime, err := splitTrashKey(versionFile)
+		if err != nil {
+			return err
+		}
+		err = fs.filecache.PurgeRecycleItem(user.ContextMustGetUser(ctx).Username, base, ttime, true)
+	}
+
 	// TODO delete keyfiles, keys, share-keys
 	return nil
 }

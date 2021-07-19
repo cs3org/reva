@@ -575,7 +575,7 @@ func (c *Cache) DeleteRecycleItem(user, path string, timestamp int) error {
 }
 
 // PurgeRecycleItem deletes the specified item from the filecache and the trash
-func (c *Cache) PurgeRecycleItem(user, path string, timestamp int) error {
+func (c *Cache) PurgeRecycleItem(user, path string, timestamp int, isVersionFile bool) error {
 	row := c.db.QueryRow("SELECT auto_id, location FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
 	var autoID int
 	var location string
@@ -593,7 +593,11 @@ func (c *Cache) PurgeRecycleItem(user, path string, timestamp int) error {
 	if err != nil {
 		return err
 	}
-	item, err := c.Get(storage, filepath.Join("files_trashbin", "files", location, path+".d"+strconv.Itoa(timestamp)))
+	trashType := "files"
+	if isVersionFile {
+		trashType = "versions"
+	}
+	item, err := c.Get(storage, filepath.Join("files_trashbin", trashType, path+".d"+strconv.Itoa(timestamp)))
 	if err != nil {
 		return err
 	}
