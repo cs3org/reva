@@ -37,7 +37,12 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
-
+	for _, r := range nameRules {
+		if !r.Test(fn) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
 	ref := &provider.Reference{Path: fn}

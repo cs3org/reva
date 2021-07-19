@@ -44,6 +44,14 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	for _, r := range nameRules {
+		if !r.Test(dstPath) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
+
 	dstPath = path.Join(ns, dstPath)
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", srcPath).Str("dst", dstPath).Logger()
