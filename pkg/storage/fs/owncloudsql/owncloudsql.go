@@ -1731,6 +1731,12 @@ func (fs *ocfs) EmptyRecycle(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error deleting recycle files versions")
 	}
+
+	err = fs.filecache.EmptyRecycle()
+	if err != nil {
+		return errors.Wrap(err, "owncloudsql: error deleting recycle items from the database")
+	}
+
 	// TODO delete keyfiles, keys, share-keys ... or just everything?
 	return nil
 }

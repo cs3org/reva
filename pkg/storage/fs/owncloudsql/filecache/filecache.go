@@ -568,6 +568,22 @@ func (c *Cache) GetRecycleItem(user, path string, timestamp int) (*TrashItem, er
 	}, nil
 }
 
+// EmptyRecycle clears the recycle bin for the given user
+func (c *Cache) EmptyRecycle(user string) error {
+	_, err := c.db.Exec("DELETE FROM oc_files_trash WHERE user = ?", user)
+	if err != nil {
+		return err
+	}
+
+	storage, err := c.GetNumericStorageID("home::" + user)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.db.Exec("DELETE FROM oc_filecache WHERE storage = ? AND PATH LIKE ?", storage, "files_trashbin/%")
+	return err
+}
+
 // DeleteRecycleItem deletes the specified item from the trash
 func (c *Cache) DeleteRecycleItem(user, path string, timestamp int) error {
 	_, err := c.db.Exec("DELETE FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
