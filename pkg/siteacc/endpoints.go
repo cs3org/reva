@@ -81,6 +81,8 @@ func getEndpoints() []endpoint {
 		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
 		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), true},
 		{config.EndpointResetPassword, callMethodEndpoint, createMethodCallbacks(nil, handleResetPassword), true},
+		// Authentication endpoints
+		{config.EndpointVerifyUserToken, callMethodEndpoint, createMethodCallbacks(nil, handleVerifyUserToken), true},
 		// Authorization endpoints
 		{config.EndpointAuthorize, callMethodEndpoint, createMethodCallbacks(nil, handleAuthorize), false},
 		{config.EndpointIsAuthorized, callMethodEndpoint, createMethodCallbacks(handleIsAuthorized, nil), false},
@@ -319,11 +321,12 @@ func handleLogin(siteacc *SiteAccounts, values url.Values, body []byte, session 
 	}
 
 	// Login the user through the users manager
-	if err := siteacc.UsersManager().LoginUser(account.Email, account.Password.Value, session); err != nil {
+	token, err := siteacc.UsersManager().LoginUser(account.Email, account.Password.Value, session)
+	if err != nil {
 		return nil, errors.Wrap(err, "unable to login user")
 	}
 
-	return nil, nil
+	return token, nil
 }
 
 func handleLogout(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
@@ -341,6 +344,20 @@ func handleResetPassword(siteacc *SiteAccounts, values url.Values, body []byte, 
 	// Reset the password through the users manager
 	if err := siteacc.AccountsManager().ResetPassword(account.Email); err != nil {
 		return nil, errors.Wrap(err, "unable to reset password")
+	}
+
+	return nil, nil
+}
+
+func handleVerifyUserToken(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	token := values.Get("token")
+	if token == "" {
+		return nil, errors.Errorf("no token specified")
+	}
+
+	// Verify the user token using the users manager
+	if err := siteacc.UsersManager().VerifyUserToken(token, session); err != nil {
+		return nil, errors.Wrap(err, "token verification failed")
 	}
 
 	return nil, nil

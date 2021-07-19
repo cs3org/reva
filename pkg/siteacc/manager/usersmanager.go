@@ -56,27 +56,56 @@ func (mngr *UsersManager) initialize(conf *config.Configuration, log *zerolog.Lo
 	return nil
 }
 
-// LoginUser tries to login a given username/password pair. On success, the corresponding user account is stored in the session.
-func (mngr *UsersManager) LoginUser(name, password string, session *html.Session) error {
+// LoginUser tries to login a given username/password pair. On success, the corresponding user account is stored in the session and a user token is returned.
+func (mngr *UsersManager) LoginUser(name, password string, session *html.Session) (string, error) {
 	account, err := mngr.accountsManager.FindAccountEx(FindByEmail, name, false)
 	if err != nil {
-		return errors.Wrap(err, "no account with the specified email exists")
+		return "", errors.Wrap(err, "no account with the specified email exists")
 	}
 
 	// Verify the provided password
 	if !account.Password.Compare(password) {
-		return errors.Errorf("invalid password")
+		return "", errors.Errorf("invalid password")
 	}
 
 	// Store the user account in the session
 	session.LoggedInUser = account
-	return nil
+
+	// Encapsulate all necessary authentication information in a token
+	token, err := generateUserToken(session)
+	if err != nil {
+		return "", errors.Wrap(err, "unable to generate user token")
+	}
+
+	return token, nil
 }
 
 // LogoutUser logs the current user out.
 func (mngr *UsersManager) LogoutUser(session *html.Session) {
 	// Just unset the user account stored in the session
 	session.LoggedInUser = nil
+}
+
+// VerifyUserToken is used to verify a user token against the current session.
+func (mngr *UsersManager) VerifyUserToken(token string, session *html.Session) error {
+	if session.LoggedInUser == nil {
+		return errors.Errorf("no user logged in")
+	}
+
+	utoken, err := extractUserToken(token, session)
+	if err != nil {
+		return errors.Wrap(err, "unable to verify user authentication")
+	}
+
+	// Check the token values against the session
+	if utoken.SessionID != session.ID {
+		return errors.Errorf("session ID mismatch")
+	}
+	if utoken.User != session.LoggedInUser.Email {
+		return errors.Errorf("session user mismatch")
+	}
+
+	return nil
 }
 
 // NewUsersManager creates a new users manager instance.

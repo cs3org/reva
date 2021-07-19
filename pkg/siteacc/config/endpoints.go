@@ -50,6 +50,9 @@ const (
 	// EndpointResetPassword is the endpoint path for resetting user passwords
 	EndpointResetPassword = "/reset-password"
 
+	// EndpointVerifyUserToken is the endpoint path for user token validation.
+	EndpointVerifyUserToken = "/verify-user-token"
+
 	// EndpointAuthorize is the endpoint path for account authorization.
 	EndpointAuthorize = "/authorize"
 	// EndpointIsAuthorized is the endpoint path used to check the authorization status of an account.
