@@ -1637,6 +1637,7 @@ func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermi
 	l.RestoreRecycleItem = l.RestoreRecycleItem || r.RestoreRecycleItem
 	l.Stat = l.Stat || r.Stat
 	l.UpdateGrant = l.UpdateGrant || r.UpdateGrant
+	l.DenyGrant = l.DenyGrant || r.DenyGrant
 }
 
 func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
