@@ -57,7 +57,7 @@ func (mngr *UsersManager) initialize(conf *config.Configuration, log *zerolog.Lo
 }
 
 // LoginUser tries to login a given username/password pair. On success, the corresponding user account is stored in the session and a user token is returned.
-func (mngr *UsersManager) LoginUser(name, password string, session *html.Session) (string, error) {
+func (mngr *UsersManager) LoginUser(name, password string, scope string, session *html.Session) (string, error) {
 	account, err := mngr.accountsManager.FindAccountEx(FindByEmail, name, false)
 	if err != nil {
 		return "", errors.Wrap(err, "no account with the specified email exists")
@@ -66,6 +66,11 @@ func (mngr *UsersManager) LoginUser(name, password string, session *html.Session
 	// Verify the provided password
 	if !account.Password.Compare(password) {
 		return "", errors.Errorf("invalid password")
+	}
+
+	// Check if the user has access to the specified scope
+	if !account.CheckScopeAccess(scope) {
+		return "", errors.Errorf("no access to the specified scope granted")
 	}
 
 	// Store the user account in the session

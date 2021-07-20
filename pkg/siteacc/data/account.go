@@ -19,6 +19,7 @@
 package data
 
 import (
+	"strings"
 	"time"
 
 	"github.com/cs3org/reva/pkg/siteacc/password"
@@ -110,6 +111,21 @@ func (acc *Account) Clone(erasePassword bool) *Account {
 	}
 
 	return &clone
+}
+
+// CheckScopeAccess checks whether the user can access the specified scope.
+func (acc *Account) CheckScopeAccess(scope string) bool {
+	hasAccess := false
+
+	switch strings.ToLower(scope) {
+	case ScopeDefault:
+		hasAccess = true
+
+	case ScopeGOCDB:
+		hasAccess = acc.Data.GOCDBAccess
+	}
+
+	return hasAccess
 }
 
 func (acc *Account) verify(verifyPassword bool) error {

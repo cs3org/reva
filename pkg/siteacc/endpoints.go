@@ -321,7 +321,7 @@ func handleLogin(siteacc *SiteAccounts, values url.Values, body []byte, session 
 	}
 
 	// Login the user through the users manager
-	token, err := siteacc.UsersManager().LoginUser(account.Email, account.Password.Value, session)
+	token, err := siteacc.UsersManager().LoginUser(account.Email, account.Password.Value, values.Get("scope"), session)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to login user")
 	}
