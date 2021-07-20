@@ -641,18 +641,26 @@ func (c *Cache) SetEtag(storage interface{}, path, etag string) error {
 }
 
 func (c *Cache) insertMimetype(tx *sql.Tx, mimetype string) error {
-	stmt, err := tx.Prepare("INSERT INTO oc_mimetypes(mimetype) VALUES(?)")
-	if err != nil {
-		return err
-	}
-	_, err = stmt.Exec(mimetype)
-	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "Error 1062") {
-			return nil // Already exists
+	insertPart := func(v string) error {
+		stmt, err := tx.Prepare("INSERT INTO oc_mimetypes(mimetype) VALUES(?)")
+		if err != nil {
+			return err
 		}
+		_, err = stmt.Exec(v)
+		if err != nil {
+			if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "Error 1062") {
+				return nil // Already exists
+			}
+			return err
+		}
+		return nil
+	}
+	parts := strings.Split(mimetype, "/")
+	err := insertPart(parts[0])
+	if err != nil {
 		return err
 	}
-	return nil
+	return insertPart(mimetype)
 }
 
 func toIntID(rid interface{}) (int, error) {
