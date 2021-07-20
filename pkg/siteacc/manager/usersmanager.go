@@ -87,25 +87,31 @@ func (mngr *UsersManager) LogoutUser(session *html.Session) {
 }
 
 // VerifyUserToken is used to verify a user token against the current session.
-func (mngr *UsersManager) VerifyUserToken(token string, session *html.Session) error {
+func (mngr *UsersManager) VerifyUserToken(token string, session *html.Session) (string, error) {
 	if session.LoggedInUser == nil {
-		return errors.Errorf("no user logged in")
+		return "", errors.Errorf("no user logged in")
 	}
 
 	utoken, err := extractUserToken(token, session)
 	if err != nil {
-		return errors.Wrap(err, "unable to verify user authentication")
+		return "", errors.Wrap(err, "unable to verify user authentication")
 	}
 
 	// Check the token values against the session
-	if utoken.SessionID != session.ID {
-		return errors.Errorf("session ID mismatch")
+	if utoken.SessionID != session.ID && utoken.SessionID != session.MigrationID {
+		return "", errors.Errorf("session ID mismatch")
 	}
 	if utoken.User != session.LoggedInUser.Email {
-		return errors.Errorf("session user mismatch")
+		return "", errors.Errorf("session user mismatch")
 	}
 
-	return nil
+	// Refresh the user token, as the session ID might have changed due to migration
+	newToken, err := generateUserToken(session)
+	if err != nil {
+		return "", errors.Wrap(err, "unable to generate user token")
+	}
+
+	return newToken, nil
 }
 
 // NewUsersManager creates a new users manager instance.

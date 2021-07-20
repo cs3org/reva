@@ -156,6 +156,7 @@ func (mngr *SessionManager) migrateSession(session *Session, r *http.Request) (*
 	sessionNew := mngr.createSession(r)
 
 	// Carry over the old session information, thus preserving the existing session
+	sessionNew.MigrationID = session.ID
 	sessionNew.LoggedInUser = session.LoggedInUser
 	sessionNew.Data = session.Data
 

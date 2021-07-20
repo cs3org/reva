@@ -356,11 +356,12 @@ func handleVerifyUserToken(siteacc *SiteAccounts, values url.Values, body []byte
 	}
 
 	// Verify the user token using the users manager
-	if err := siteacc.UsersManager().VerifyUserToken(token, session); err != nil {
+	newToken, err := siteacc.UsersManager().VerifyUserToken(token, session)
+	if err != nil {
 		return nil, errors.Wrap(err, "token verification failed")
 	}
 
-	return nil, nil
+	return newToken, nil
 }
 
 func handleAuthorize(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {

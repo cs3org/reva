@@ -31,6 +31,7 @@ import (
 // Session stores all data associated with an HTML session.
 type Session struct {
 	ID            string
+	MigrationID   string
 	RemoteAddress string
 	CreationTime  time.Time
 	Timeout       time.Duration
@@ -96,6 +97,7 @@ func (sess *Session) HasExpired() bool {
 func NewSession(name string, timeout time.Duration, r *http.Request) *Session {
 	session := &Session{
 		ID:                uuid.NewString(),
+		MigrationID:       "",
 		RemoteAddress:     getRemoteAddress(r),
 		CreationTime:      time.Now(),
 		Timeout:           timeout,
