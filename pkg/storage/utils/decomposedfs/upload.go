@@ -128,10 +128,12 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, err
 	}
 
+	uploader := user.ContextMustGetUser(ctx)
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
 			"filename": filepath.Base(relative),
 			"dir":      filepath.Dir(relative),
+			"uploader": uploader.Id.OpaqueId,
 		},
 		Size: uploadLength,
 	}

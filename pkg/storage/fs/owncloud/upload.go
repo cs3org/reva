@@ -115,10 +115,12 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 
 	p := fs.toStoragePath(ctx, ip)
 
+	uploader := user.ContextMustGetUser(ctx)
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
 			"filename": filepath.Base(p),
 			"dir":      filepath.Dir(p),
+			"uploader": uploader.Id.OpaqueId,
 		},
 		Size: uploadLength,
 	}

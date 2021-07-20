@@ -67,10 +67,6 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiWebdavUploadTUS/uploadFile.feature:149](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L149)
 -   [apiWebdavUploadTUS/uploadFile.feature:150](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L150)
 
-#### [upload a file using TUS resource URL as an other user should not work](https://github.com/owncloud/ocis/issues/1141)
--   [apiWebdavUploadTUS/uploadFile.feature:165](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L165)
--   [apiWebdavUploadTUS/uploadFile.feature:166](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L166)
-
 #### [renaming to banned name works](https://github.com/owncloud/ocis/issues/1295)
 -   [apiWebdavMove1/moveFolder.feature:21](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolder.feature#L21)
 -   [apiWebdavMove1/moveFolder.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolder.feature#L22)

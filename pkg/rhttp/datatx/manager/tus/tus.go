@@ -19,7 +19,9 @@
 package tus
 
 import (
+	"context"
 	"net/http"
+	"regexp"
 
 	"github.com/pkg/errors"
 
@@ -28,8 +30,13 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	tusd "github.com/tus/tusd/pkg/handler"
+)
+
+var (
+	reExtractFileID = regexp.MustCompile(`([^/]+)\/?$`)
 )
 
 func init() {
@@ -93,6 +100,27 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			method = r.Header.Get("X-HTTP-Method-Override")
 		}
 
+		id, err := extractIDFromPath(r.URL.Path)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		upload, err := composer.Core.GetUpload(context.Background(), id)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		info, err := upload.GetInfo(context.Background())
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		uploader := user.ContextMustGetUser(r.Context())
+		if info.MetaData["uploader"] != uploader.Id.OpaqueId {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+
 		switch method {
 		case "POST":
 			handler.PostFile(w, r)
@@ -116,4 +144,13 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 // to be composable, so that it can support the TUS methods
 type composable interface {
 	UseIn(composer *tusd.StoreComposer)
+}
+
+// extractIDFromPath pulls the last segment from the url provided
+func extractIDFromPath(url string) (string, error) {
+	result := reExtractFileID.FindStringSubmatch(url)
+	if len(result) != 2 {
+		return "", tusd.ErrNotFound
+	}
+	return result[1], nil
 }
