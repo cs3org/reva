@@ -301,14 +301,14 @@ func (c *Cache) Permissions(storage interface{}, p string) (*provider.ResourcePe
 }
 
 // InsertOrUpdate creates or updates a cache entry
-func (c *Cache) InsertOrUpdate(storage interface{}, data map[string]interface{}) (int, error) {
+func (c *Cache) InsertOrUpdate(storage interface{}, data map[string]interface{}, allowEmptyParent bool) (int, error) {
 	tx, err := c.db.Begin()
 	if err != nil {
 		return -1, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	id, err := c.doInsertOrUpdate(tx, storage, data, false)
+	id, err := c.doInsertOrUpdate(tx, storage, data, allowEmptyParent)
 	if err != nil {
 		return -1, err
 	}
@@ -455,7 +455,7 @@ func (c *Cache) Copy(storage interface{}, sourcePath, targetPath string) (int, e
 		"encrypted":        source.Encrypted,
 		"unencrypted_size": source.UnencryptedSize,
 	}
-	return c.InsertOrUpdate(storage, data)
+	return c.InsertOrUpdate(storage, data, false)
 }
 
 // Move moves the specified entry to the target path

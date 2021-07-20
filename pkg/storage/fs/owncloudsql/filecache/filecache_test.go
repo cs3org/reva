@@ -167,21 +167,21 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "httpd/unix-directory",
 					"etag":     "abcdefg",
 				}
-				_, err := cache.InsertOrUpdate(3, data)
+				_, err := cache.InsertOrUpdate(3, data, false)
 				Expect(err).To(MatchError("missing required data"))
 
 				data = map[string]interface{}{
 					"path": "files/Photos/foo.jpg",
 					"etag": "abcdefg",
 				}
-				_, err = cache.InsertOrUpdate(3, data)
+				_, err = cache.InsertOrUpdate(3, data, false)
 				Expect(err).To(MatchError("missing required data"))
 
 				data = map[string]interface{}{
 					"path":     "files/Photos/foo.jpg",
 					"mimetype": "httpd/unix-directory",
 				}
-				_, err = cache.InsertOrUpdate(3, data)
+				_, err = cache.InsertOrUpdate(3, data, false)
 				Expect(err).To(MatchError("missing required data"))
 			})
 
@@ -191,7 +191,7 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "httpd/unix-directory",
 					"etag":     "abcdefg",
 				}
-				id, err := cache.InsertOrUpdate(1, data)
+				id, err := cache.InsertOrUpdate(1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(id).To(Equal(18))
 
@@ -216,7 +216,7 @@ var _ = Describe("Filecache", func() {
 					"encrypted":        true,
 					"unencrypted_size": 2000,
 				}
-				_, err := cache.InsertOrUpdate(1, data)
+				_, err := cache.InsertOrUpdate(1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				entry, err := cache.Get(1, "files/Photos/foo.jpg")
@@ -241,7 +241,7 @@ var _ = Describe("Filecache", func() {
 					"etag":     "abcdefg",
 				}
 
-				_, err := cache.InsertOrUpdate(1, data)
+				_, err := cache.InsertOrUpdate(1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				entry, err := cache.Get(1, "files/Photos/foo.jpg")
@@ -257,7 +257,7 @@ var _ = Describe("Filecache", func() {
 					"storage_mtime": 1617702483,
 				}
 
-				_, err := cache.InsertOrUpdate(1, data)
+				_, err := cache.InsertOrUpdate(1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				entry, err := cache.Get(1, "files/Photos/foo.jpg")
@@ -273,7 +273,7 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "image/jpeg",
 				}
 
-				_, err := cache.InsertOrUpdate(1, data)
+				_, err := cache.InsertOrUpdate(1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				entry, err := cache.Get(1, "files/Photos/foo.jpg")
@@ -290,7 +290,7 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "image/tiff",
 				}
 
-				_, err := cache.InsertOrUpdate(1, data)
+				_, err := cache.InsertOrUpdate(1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				entry, err := cache.Get(1, "files/Photos/foo.tiff")
@@ -311,7 +311,7 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "httpd/unix-directory",
 					"etag":     "abcdefg",
 				}
-				_, err := cache.InsertOrUpdate(1, data)
+				_, err := cache.InsertOrUpdate(1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -320,7 +320,7 @@ var _ = Describe("Filecache", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				data["etag"] = "12345"
-				id, err := cache.InsertOrUpdate(1, data)
+				id, err := cache.InsertOrUpdate(1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(id).To(Equal(recordBefore.ID))
 
@@ -405,7 +405,7 @@ var _ = Describe("Filecache", func() {
 		)
 
 		BeforeEach(func() {
-			_, err := cache.InsertOrUpdate(1, data)
+			_, err := cache.InsertOrUpdate(1, data, false)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -525,7 +525,7 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "httpd/unix-directory",
 					"etag":     "abcdefg",
 				}
-				_, err := cache.InsertOrUpdate(1, parentData)
+				_, err := cache.InsertOrUpdate(1, parentData, false)
 				Expect(err).ToNot(HaveOccurred())
 			}
 

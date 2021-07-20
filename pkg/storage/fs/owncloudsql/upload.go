@@ -422,7 +422,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		"mtime":         upload.info.MetaData["mtime"],
 		"storage_mtime": upload.info.MetaData["mtime"],
 	}
-	_, err = upload.fs.filecache.InsertOrUpdate(upload.info.Storage["StorageId"], data)
+	_, err = upload.fs.filecache.InsertOrUpdate(upload.info.Storage["StorageId"], data, false)
 	if err != nil {
 		return err
 	}
