@@ -162,6 +162,16 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		w.WriteHeader(http.StatusInternalServerError)
 		return nil, nil, false
 	} else if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			m := fmt.Sprintf("Resource %v not found", ref.Path)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: m,
+			})
+			HandleWebdavError(&log, w, b, err)
+			return nil, nil, false
+		}
 		HandleErrorStatus(&log, w, res.Status)
 		return nil, nil, false
 	}
