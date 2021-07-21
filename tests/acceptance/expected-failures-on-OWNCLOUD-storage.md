@@ -145,14 +145,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiWebdavProperties1/copyFile.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L170)
 -   [apiWebdavProperties1/copyFile.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L171)
 
-#### [creating a folder that already exists returns an empty body](https://github.com/owncloud/ocis/issues/1283)
-Scenario Outline: try to create a folder that already exists
--   [apiWebdavProperties1/createFolder.feature:85](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L85)
--   [apiWebdavProperties1/createFolder.feature:86](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L86)
-    Scenario Outline: try to create a folder with a name of an existing file
--   [apiWebdavProperties1/createFolder.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L99)
--   [apiWebdavProperties1/createFolder.feature:100](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L100)
-
 ### [Different webdav properties from core](https://github.com/owncloud/ocis/issues/1302)
 Scenario Outline: Propfind the content type of a file using webdav api `Property "d:getcontenttype" found with value "text/plain; charset=utf-8", expected "#^text/plain$#" or "#^text/plain$#"`
 -   [apiWebdavProperties2/getFileProperties.feature:327](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L327)

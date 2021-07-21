@@ -70,6 +70,11 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if statRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
 		if statRes.Status.Code == rpc.Code_CODE_OK {
 			w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
+			b, err := Marshal(exception{
+				code:    SabredavMethodNotAllowed,
+				message: "The resource you tried to create already exists",
+			})
+			HandleWebdavError(&log, w, b, err)
 		} else {
 			HandleErrorStatus(&log, w, statRes.Status)
 		}

@@ -101,14 +101,6 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiWebdavProperties1/copyFile.feature:340](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L340)
 -   [apiWebdavProperties1/copyFile.feature:341](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L341)
 
-#### [creating a folder that already exists returns an empty body](https://github.com/owncloud/ocis/issues/1283)
-Scenario Outline: try to create a folder that already exists
--   [apiWebdavProperties1/createFolder.feature:85](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L85)
--   [apiWebdavProperties1/createFolder.feature:86](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L86)
-Scenario Outline: try to create a folder with a name of an existing file
--   [apiWebdavProperties1/createFolder.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L99)
--   [apiWebdavProperties1/createFolder.feature:100](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L100)
-
 ### [Different webdav properties from core](https://github.com/owncloud/ocis/issues/1302)
 -   [apiWebdavProperties2/getFileProperties.feature:327](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L327)
 -   [apiWebdavProperties2/getFileProperties.feature:328](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L328)
