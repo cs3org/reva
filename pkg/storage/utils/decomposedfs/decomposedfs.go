@@ -68,7 +68,7 @@ type Tree interface {
 	// CreateReference(ctx context.Context, node *node.Node, targetURI *url.URL) error
 	Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error)
 	Delete(ctx context.Context, node *node.Node) (err error)
-	RestoreRecycleItemFunc(ctx context.Context, key, trashPath, restorePath string) (*node.Node, func() error, error) // FIXME REFERENCE use ref instead of path
+	RestoreRecycleItemFunc(ctx context.Context, key, trashPath, restorePath string) (*node.Node, *node.Node, func() error, error) // FIXME REFERENCE use ref instead of path
 	PurgeRecycleItemFunc(ctx context.Context, key, purgePath string) (*node.Node, func() error, error)
 
 	WriteBlob(key string, reader io.Reader) error
@@ -189,7 +189,7 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	if n, err = fs.lu.RootNode(ctx); err != nil {
 		return
 	}
-	h, err = fs.lu.WalkPath(ctx, n, fs.lu.mustGetUserLayout(ctx), func(ctx context.Context, n *node.Node) error {
+	h, err = fs.lu.WalkPath(ctx, n, fs.lu.mustGetUserLayout(ctx), false, func(ctx context.Context, n *node.Node) error {
 		if !n.Exists {
 			if err := fs.tp.CreateDir(ctx, n); err != nil {
 				return err
@@ -264,7 +264,7 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 // CreateDir creates the specified directory
 func (fs *Decomposedfs) CreateDir(ctx context.Context, fn string) (err error) {
 	var n *node.Node
-	if n, err = fs.lu.NodeFromPath(ctx, fn); err != nil {
+	if n, err = fs.lu.NodeFromPath(ctx, fn, false); err != nil {
 		return
 	}
 
@@ -318,7 +318,7 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 
 	// create Shares folder if it does not exist
 	var n *node.Node
-	if n, err = fs.lu.NodeFromPath(ctx, fs.o.ShareFolder); err != nil {
+	if n, err = fs.lu.NodeFromPath(ctx, fs.o.ShareFolder, false); err != nil {
 		return errtypes.InternalError(err.Error())
 	} else if !n.Exists {
 		if err = fs.tp.CreateDir(ctx, n); err != nil {

@@ -61,7 +61,7 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, originalPath)
+			n, err = env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -144,7 +144,7 @@ var _ = Describe("Tree", func() {
 
 					Expect(restoreFunc()).To(Succeed())
 
-					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath)
+					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(originalNode.Exists).To(BeTrue())
 				})
@@ -155,11 +155,11 @@ var _ = Describe("Tree", func() {
 
 					Expect(restoreFunc()).To(Succeed())
 
-					newNode, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/newLocation")
+					newNode, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/newLocation", false)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(newNode.Exists).To(BeTrue())
 
-					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath)
+					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(originalNode.Exists).To(BeFalse())
 				})
@@ -184,7 +184,7 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, "emptydir")
+			n, err = env.Lookup.NodeFromPath(env.Ctx, "emptydir", false)
 			Expect(err).ToNot(HaveOccurred())
 		})
 

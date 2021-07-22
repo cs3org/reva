@@ -143,6 +143,15 @@ func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 	}
 }
 
+// NewConflict returns a Status with Code_CODE_ABORTED and logs the msg.
+func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_ABORTED,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 // NewStatusFromErrType returns a status that corresponds to the given errtype
 func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Status {
 	switch e := err.(type) {

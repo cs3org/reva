@@ -18,6 +18,14 @@
 
 package xattrs
 
+import (
+	"fmt"
+	"regexp"
+	"strings"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+)
+
 // Declare a list of xattr keys
 // TODO the below comment is currently copied from the owncloud driver, revisit
 // Currently,extended file attributes have four separated
@@ -74,3 +82,30 @@ const (
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"
 )
+
+// TODO this does not belong here
+var uuidRegexp = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+
+// ReferenceFromAttr returns a CS3 reference from xattr of a node.
+// Supported formats are: "cs3:storageid/nodeid"
+func ReferenceFromAttr(b []byte) (*provider.Reference, error) {
+	CS3 := regexp.MustCompile(fmt.Sprintf("^%s:%s/%s", "cs3", uuidRegexp, uuidRegexp))
+
+	if CS3.Match(b) {
+		return refFromCS3(b)
+	}
+
+	return nil, fmt.Errorf("invalid reference")
+}
+
+// refFromCS3 creates a CS3 reference from a set of bytes. This method should remain private
+// and only be called after validation because it can potentially panic.
+func refFromCS3(b []byte) (*provider.Reference, error) {
+	parts := string(b[4:])
+	return &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: strings.Split(parts, "/")[0],
+			OpaqueId:  strings.Split(parts, "/")[1],
+		},
+	}, nil
+}

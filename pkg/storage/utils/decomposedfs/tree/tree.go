@@ -53,7 +53,7 @@ type Blobstore interface {
 
 // PathLookup defines the interface for the lookup component
 type PathLookup interface {
-	NodeFromPath(ctx context.Context, fn string) (*node.Node, error)
+	NodeFromPath(ctx context.Context, fn string, followReferences bool) (*node.Node, error)
 	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error)
 	RootNode(ctx context.Context) (node *node.Node, err error)
 	HomeOrRootNode(ctx context.Context) (node *node.Node, err error)
@@ -148,7 +148,7 @@ func (t *Tree) Setup(owner string) error {
 				// we can reuse the node id as the space id
 				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/personal", nodes[i].Name()))
 				if err != nil {
-					fmt.Printf("could not create symlink for personal space %s, %s\n", nodes[i].Name(), err)
+					//fmt.Printf("could not create symlink for personal space %s, %s\n", nodes[i].Name(), err)
 				}
 			}
 
@@ -156,7 +156,7 @@ func (t *Tree) Setup(owner string) error {
 			if isSharedNode(nodePath) {
 				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/share", nodes[i].Name()))
 				if err != nil {
-					fmt.Printf("could not create symlink for shared space %s, %s\n", nodes[i].Name(), err)
+					//fmt.Printf("could not create symlink for shared space %s, %s\n", nodes[i].Name(), err)
 				}
 			}
 		}
@@ -415,25 +415,35 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	return t.Propagate(ctx, p)
 }
 
-// RestoreRecycleItemFunc returns a node and a function to restore it from the trash
-func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, restorePath string) (*node.Node, func() error, error) {
+// RestoreRecycleItemFunc returns a node and a function to restore it from the trash.
+func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, restorePath string) (*node.Node, *node.Node, func() error, error) {
 	rn, trashItem, deletedNodePath, origin, err := t.readRecycleItem(ctx, key, trashPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if restorePath == "" {
 		restorePath = origin
 	}
 
+	var target *node.Node
+	target, err = t.lookup.NodeFromPath(ctx, restorePath, true)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	p, err := target.Parent()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	fn := func() error {
 		// link to origin
 		var n *node.Node
-		n, err = t.lookup.NodeFromPath(ctx, restorePath)
+		n, err = t.lookup.NodeFromPath(ctx, restorePath, true)
 		if err != nil {
 			return err
 		}
-
 		if n.Exists {
 			return errtypes.AlreadyExists("origin already exists")
 		}
@@ -450,6 +460,19 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 		if err != nil {
 			return err
 		}
+
+		// the new node will inherit the permissions of its parent
+		p, err := n.Parent()
+		if err != nil {
+			return err
+		}
+
+		po, err := p.Owner()
+		if err != nil {
+			return err
+		}
+
+		rn.ChangeOwner(po)
 
 		n.Exists = true
 		// update name attribute
@@ -469,7 +492,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 		}
 		return t.Propagate(ctx, n)
 	}
-	return rn, fn, nil
+	return rn, p, fn, nil
 }
 
 // PurgeRecycleItemFunc returns a node and a function to purge it from the trash

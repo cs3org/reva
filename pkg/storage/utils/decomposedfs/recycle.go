@@ -262,7 +262,7 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key, path string
 	if restoreRef == nil {
 		restoreRef = &provider.Reference{}
 	}
-	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, path, restoreRef.Path)
+	rn, p, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, path, restoreRef.Path)
 	if err != nil {
 		return err
 	}
@@ -275,6 +275,16 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key, path string
 	case err != nil:
 		return errtypes.InternalError(err.Error())
 	case !ok:
+		return errtypes.PermissionDenied(key)
+	}
+
+	ps, err := fs.p.AssemblePermissions(ctx, p)
+	if err != nil {
+		return errtypes.InternalError(err.Error())
+	}
+
+	// share receiver cannot restore to a shared resource to which she does not have write permissions.
+	if !ps.InitiateFileUpload {
 		return errtypes.PermissionDenied(key)
 	}
 
