@@ -44,9 +44,11 @@ func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns strin
 
 	// read filename from metadata
 	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
-	if meta["filename"] == "" {
-		w.WriteHeader(http.StatusPreconditionFailed)
-		return
+	for _, r := range nameRules {
+		if !r.Test(meta["filename"]) {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return
+		}
 	}
 
 	// append filename to current dir

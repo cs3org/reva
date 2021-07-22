@@ -54,7 +54,30 @@ const (
 
 var (
 	errInvalidValue = errors.New("invalid value")
+
+	nameRules = [...]nameRule{
+		nameNotEmpty{},
+		nameDoesNotContain{chars: "\f\r\n\\"},
+	}
 )
+
+type nameRule interface {
+	Test(name string) bool
+}
+
+type nameNotEmpty struct{}
+
+func (r nameNotEmpty) Test(name string) bool {
+	return len(strings.TrimSpace(name)) > 0
+}
+
+type nameDoesNotContain struct {
+	chars string
+}
+
+func (r nameDoesNotContain) Test(name string) bool {
+	return !strings.ContainsAny(name, r.chars)
+}
 
 func init() {
 	global.Register("ocdav", New)
