@@ -743,13 +743,6 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiTrashbin/trashbinSharingToShares.feature:63](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L63)
 -   [apiTrashbin/trashbinSharingToShares.feature:64](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L64)
 
-#### [Restoring a file to read-only received folder returns incorrect status code](https://github.com/owncloud/ocis/issues/2143)
-
--   [apiTrashbin/trashbinSharingToShares.feature:82](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L82)
--   [apiTrashbin/trashbinSharingToShares.feature:83](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L83)
--   [apiTrashbin/trashbinSharingToShares.feature:102](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L102)
--   [apiTrashbin/trashbinSharingToShares.feature:103](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L103)
-
 #### [remote.php/dav/uploads endpoint does not exist](https://github.com/owncloud/ocis/issues/1321)
 -   [apiShareOperationsToShares2/uploadToShare.feature:256](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L256)
 
