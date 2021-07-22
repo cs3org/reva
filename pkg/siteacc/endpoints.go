@@ -355,8 +355,13 @@ func handleVerifyUserToken(siteacc *SiteAccounts, values url.Values, body []byte
 		return nil, errors.Errorf("no token specified")
 	}
 
+	user := values.Get("user")
+	if user == "" {
+		return nil, errors.Errorf("no user specified")
+	}
+
 	// Verify the user token using the users manager
-	newToken, err := siteacc.UsersManager().VerifyUserToken(token, session)
+	newToken, err := siteacc.UsersManager().VerifyUserToken(token, user, values.Get("scope"))
 	if err != nil {
 		return nil, errors.Wrap(err, "token verification failed")
 	}

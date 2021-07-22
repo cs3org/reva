@@ -19,6 +19,8 @@
 package manager
 
 import (
+	"strings"
+
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/html"
 	"github.com/pkg/errors"
@@ -76,8 +78,8 @@ func (mngr *UsersManager) LoginUser(name, password string, scope string, session
 	// Store the user account in the session
 	session.LoggedInUser = account
 
-	// Encapsulate all necessary authentication information in a token
-	token, err := generateUserToken(session)
+	// Generate a token that can be used as a "ticket"
+	token, err := generateUserToken(session.LoggedInUser.Email, scope, mngr.conf.Webserver.SessionTimeout)
 	if err != nil {
 		return "", errors.Wrap(err, "unable to generate user token")
 	}
@@ -92,28 +94,35 @@ func (mngr *UsersManager) LogoutUser(session *html.Session) {
 }
 
 // VerifyUserToken is used to verify a user token against the current session.
-func (mngr *UsersManager) VerifyUserToken(token string, session *html.Session) (string, error) {
-	if session.LoggedInUser == nil {
-		return "", errors.Errorf("no user logged in")
-	}
-
-	utoken, err := extractUserToken(token, session)
+func (mngr *UsersManager) VerifyUserToken(token string, user string, scope string) (string, error) {
+	// Verify the token by trying to extract it
+	utoken, err := extractUserToken(token)
 	if err != nil {
-		return "", errors.Wrap(err, "unable to verify user authentication")
+		return "", errors.Wrap(err, "unable to verify user token")
 	}
 
-	// Check the token values against the session
-	if utoken.SessionID != session.ID && utoken.SessionID != session.MigrationID {
-		return "", errors.Errorf("session ID mismatch")
-	}
-	if utoken.User != session.LoggedInUser.Email {
-		return "", errors.Errorf("session user mismatch")
+	// Check the provided email against the stored one
+	if !strings.EqualFold(utoken.User, user) {
+		return "", errors.Errorf("mismatching user")
 	}
 
-	// Refresh the user token, as the session ID might have changed due to migration
-	newToken, err := generateUserToken(session)
+	// Check if the user account actually exists and has proper scope access
+	if strings.EqualFold(scope, utoken.Scope) {
+		if acc, err := mngr.accountsManager.FindAccount(FindByEmail, utoken.User); err == nil {
+			if !acc.CheckScopeAccess(scope) {
+				return "", errors.Errorf("no scope access")
+			}
+		} else {
+			return "", errors.Errorf("invalid email")
+		}
+	} else {
+		return "", errors.Errorf("invalid scope")
+	}
+
+	// Refresh the user token (as a form of keep-alive, since tokens expire quickly)
+	newToken, err := generateUserToken(utoken.User, utoken.Scope, mngr.conf.Webserver.SessionTimeout)
 	if err != nil {
-		return "", errors.Wrap(err, "unable to generate user token")
+		return "", errors.Wrap(err, "unable to refresh user token")
 	}
 
 	return newToken, nil

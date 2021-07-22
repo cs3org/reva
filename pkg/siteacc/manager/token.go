@@ -19,91 +19,69 @@
 package manager
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
+	"time"
 
-	"github.com/cs3org/reva/pkg/siteacc/html"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
 	"github.com/sethvargo/go-password/password"
 )
 
 type userToken struct {
-	SessionID string
-	User      string
+	jwt.StandardClaims
+
+	User  string `json:"user"`
+	Scope string `json:"scope"`
 }
 
 const (
 	tokenKeyLength = 16
-
-	tokenNonceName = "usertoken_nonce"
+	tokenIssuer    = "sciencemesh_siteacc"
 )
 
 var (
-	tokenKey string
+	tokenSecret string
 )
 
-func generateUserToken(session *html.Session) (string, error) {
-	// The token consists of the session ID and the logged in user's email address
-	token := userToken{
-		SessionID: session.ID,
-		User:      session.LoggedInUser.Email,
+func generateUserToken(user string, scope string, timeout int) (string, error) {
+	// Create a JWT as the user token
+	claims := userToken{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Duration(timeout) * time.Second).Unix(),
+			Issuer:    tokenIssuer,
+			IssuedAt:  time.Now().Unix(),
+		},
+		User:  user,
+		Scope: scope,
 	}
 
-	data, err := json.Marshal(&token)
+	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
+	signedToken, err := token.SignedString([]byte(tokenSecret))
 	if err != nil {
-		return "", errors.Wrap(err, "unable to marshal the token")
+		return "", errors.Wrapf(err, "error signing token with claims %+v", claims)
 	}
 
-	// Encrypt the data using AES
-	block, _ := aes.NewCipher([]byte(tokenKey))
-	aesgcm, _ := cipher.NewGCM(block)
-
-	// Generate a nonce and store it in the session
-	nonce := make([]byte, aesgcm.NonceSize())
-	_, _ = io.ReadFull(rand.Reader, nonce)
-	session.Data[tokenNonceName] = nonce
-
-	cipherText := fmt.Sprintf("%x", aesgcm.Seal(nil, nonce, data, nil))
-
-	return cipherText, nil
+	return signedToken, nil
 }
 
-func extractUserToken(token string, session *html.Session) (*userToken, error) {
-	// Get the nonce from the session
-	var nonce []byte
-	if nonceData, ok := session.Data[tokenNonceName]; ok {
-		nonce, ok = nonceData.([]byte)
-		if !ok {
-			return nil, errors.Errorf("invalid nonce stored in the current session")
-		}
-	} else {
-		return nil, errors.Errorf("no nonce found in the current session")
-	}
-
-	// Decrypt the data using AES
-	cipherText, _ := hex.DecodeString(token)
-
-	block, _ := aes.NewCipher([]byte(tokenKey))
-	aesgcm, _ := cipher.NewGCM(block)
-
-	plainText, err := aesgcm.Open(nil, nonce, cipherText, nil)
+func extractUserToken(token string) (*userToken, error) {
+	// Parse the token and try to extract the claims
+	parsedToken, err := jwt.ParseWithClaims(token, &userToken{}, func(token *jwt.Token) (interface{}, error) { return []byte(tokenSecret), nil })
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to decrypt the token")
+		return nil, errors.Wrap(err, "error parsing token")
 	}
 
-	var utoken userToken
-	if err := json.Unmarshal(plainText, &utoken); err != nil {
-		return nil, errors.Wrap(err, "unable to unmarshal the token")
+	if claims, ok := parsedToken.Claims.(*userToken); ok && parsedToken.Valid {
+		if claims.Issuer != tokenIssuer {
+			return nil, errors.Errorf("invalid token issuer")
+		}
+
+		return claims, nil
 	}
-	return &utoken, nil
+
+	return nil, errors.Errorf("invalid token")
 }
 
 func init() {
-	// Generate the key used for AES encryption
-	tokenKey = password.MustGenerate(tokenKeyLength, tokenKeyLength/4, tokenKeyLength/4, false, true)
+	// Generate the token secret randomly
+	tokenSecret = password.MustGenerate(tokenKeyLength, tokenKeyLength/4, tokenKeyLength/4, false, true)
 }
