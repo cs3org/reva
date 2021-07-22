@@ -520,6 +520,18 @@ func (c *Cache) Move(storage interface{}, sourcePath, targetPath string) error {
 	return tx.Commit()
 }
 
+// Purge removes the specified storage/path from the cache without putting it into the trash
+func (c *Cache) Purge(storage interface{}, path string) error {
+	storageID, err := toIntID(storage)
+	if err != nil {
+		return err
+	}
+	phashBytes := md5.Sum([]byte(path))
+	phash := hex.EncodeToString(phashBytes[:])
+	_, err = c.db.Exec("DELETE FROM oc_filecache WHERE storage = ? and path_hash = ?", storageID, phash)
+	return err
+}
+
 // Delete removes the specified storage/path from the cache
 func (c *Cache) Delete(storage interface{}, user, path, trashPath string) error {
 	err := c.Move(storage, path, trashPath)

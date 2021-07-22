@@ -1069,15 +1069,10 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 	if err != nil {
 		return errors.Wrapf(err, "owncloudsql: error deleting file %s", ip)
 	}
-	err = fs.trashVersions(ctx, ip, origin)
-	if err != nil {
-		return errors.Wrapf(err, "owncloudsql: error deleting versions of file %s", ip)
-	}
 	return nil
 }
 
 func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) error {
-
 	// move to trash location
 	dtime := time.Now().Unix()
 	tgt := filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
@@ -1112,10 +1107,15 @@ func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) 
 		}
 	}
 
+	err = fs.trashVersions(ctx, ip, origin, dtime)
+	if err != nil {
+		return errors.Wrapf(err, "owncloudsql: error deleting versions of file %s", ip)
+	}
+
 	return fs.propagate(ctx, filepath.Dir(ip))
 }
 
-func (fs *ocfs) trashVersions(ctx context.Context, ip string, origin string) error {
+func (fs *ocfs) trashVersions(ctx context.Context, ip string, origin string, dtime int64) error {
 	vp := fs.getVersionsPath(ctx, ip)
 	vrp, err := fs.getVersionRecyclePath(ctx)
 	if err != nil {
@@ -1128,8 +1128,26 @@ func (fs *ocfs) trashVersions(ctx context.Context, ip string, origin string) err
 
 	// Ignore error since the only possible error is malformed pattern.
 	versions, _ := filepath.Glob(vp + ".v*")
+	storage, err := fs.getStorage(ip)
+	if err != nil {
+		return err
+	}
 	for _, v := range versions {
-		err := fs.trash(ctx, v, vrp, origin)
+		tgt := filepath.Join(vrp, fmt.Sprintf("%s.d%d", filepath.Base(v), dtime))
+		if err := os.Rename(v, tgt); err != nil {
+			if os.IsExist(err) {
+				// timestamp collision, try again with higher value:
+				dtime++
+				tgt := filepath.Join(vrp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
+				if err := os.Rename(ip, tgt); err != nil {
+					return errors.Wrap(err, "owncloudsql: could not move item to trash")
+				}
+			}
+		}
+		if err != nil {
+			return errors.Wrap(err, "owncloudsql: error deleting file "+v)
+		}
+		err = fs.filecache.Move(storage, fs.toDatabasePath(v), fs.toDatabasePath(tgt))
 		if err != nil {
 			return errors.Wrap(err, "owncloudsql: error deleting file "+v)
 		}
@@ -1660,10 +1678,10 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 
 func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
 	rp, err := fs.getRecyclePath(ctx)
-	vp := filepath.Join(filepath.Dir(rp), "versions")
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
+	vp := filepath.Join(filepath.Dir(rp), "versions")
 	ip := filepath.Join(rp, filepath.Clean(key))
 	// TODO check permission?
 
@@ -1694,22 +1712,24 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
 		return err
 	}
 
-	versionsGlob := filepath.Join(vp, base+".v*.d*")
+	versionsGlob := filepath.Join(vp, base+".v*.d"+strconv.Itoa(ttime))
 	versionFiles, err := filepath.Glob(versionsGlob)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error listing recycle item versions")
+	}
+	storageID, err := fs.getStorage(ip)
+	if err != nil {
+		return err
 	}
 	for _, versionFile := range versionFiles {
 		err = os.Remove(versionFile)
 		if err != nil {
 			return errors.Wrap(err, "owncloudsql: error deleting recycle item versions")
 		}
-
-		base, ttime, err := splitTrashKey(versionFile)
+		err = fs.filecache.Purge(storageID, fs.toDatabasePath(versionFile))
 		if err != nil {
 			return err
 		}
-		err = fs.filecache.PurgeRecycleItem(user.ContextMustGetUser(ctx).Username, base, ttime, true)
 	}
 
 	// TODO delete keyfiles, keys, share-keys
@@ -1824,11 +1844,11 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restor
 		return fmt.Errorf("invalid trash item suffix")
 	}
 
-	rp, err := fs.getRecyclePath(ctx)
+	recyclePath, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
-	src := filepath.Join(rp, filepath.Clean(key))
+	src := filepath.Join(recyclePath, filepath.Clean(key))
 
 	if restoreRef.Path == "" {
 		u := user.ContextMustGetUser(ctx)
@@ -1860,8 +1880,51 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restor
 	if err != nil {
 		return err
 	}
+	err = fs.RestoreRecycleItemVersions(ctx, key, tgt)
+	if err != nil {
+		return err
+	}
 
 	return fs.propagate(ctx, tgt)
+}
+
+func (fs *ocfs) RestoreRecycleItemVersions(ctx context.Context, key, target string) error {
+	base, ttime, err := splitTrashKey(key)
+	if err != nil {
+		return fmt.Errorf("invalid trash item suffix")
+	}
+	storage, err := fs.getStorage(target)
+	if err != nil {
+		return err
+	}
+
+	recyclePath, err := fs.getRecyclePath(ctx)
+	if err != nil {
+		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
+	}
+	versionsRecyclePath := filepath.Join(filepath.Dir(recyclePath), "versions")
+
+	// Restore versions
+	deleteSuffix := ".d" + strconv.Itoa(ttime)
+	versionsGlob := filepath.Join(versionsRecyclePath, base+".v*"+deleteSuffix)
+	versionFiles, err := filepath.Glob(versionsGlob)
+	versionsRoot := filepath.Dir(fs.getVersionsPath(ctx, target))
+
+	if err != nil {
+		return errors.Wrap(err, "owncloudsql: error listing recycle item versions")
+	}
+	for _, versionFile := range versionFiles {
+		versionBase := strings.TrimSuffix(filepath.Base(versionFile), deleteSuffix)
+		versionsRestorePath := filepath.Join(versionsRoot, versionBase)
+		if err = os.Rename(versionFile, versionsRestorePath); err != nil {
+			return errors.Wrap(err, "owncloudsql: could not restore version file")
+		}
+		err = fs.filecache.Move(storage, fs.toDatabasePath(versionFile), fs.toDatabasePath(versionsRestorePath))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
