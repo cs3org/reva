@@ -56,18 +56,12 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:169](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L169)
 -   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L170)
 
-#### [PUT request with missing parent must return status code 409](https://github.com/owncloud/ocis/issues/824)
--   [apiWebdavUpload1/uploadFile.feature:112](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L112)
--   [apiWebdavUpload1/uploadFile.feature:113](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L113)
-
 #### [invalid file-names should not be created using the TUS protocol](https://github.com/owncloud/ocis/issues/1001)
 -   [apiWebdavUploadTUS/uploadFile.feature:143](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L135)
 -   [apiWebdavUploadTUS/uploadFile.feature:144](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L136)
--   [apiWebdavUploadTUS/uploadFile.feature:145](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L137)
 -   [apiWebdavUploadTUS/uploadFile.feature:146](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L138)
 -   [apiWebdavUploadTUS/uploadFile.feature:147](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L139)
 -   [apiWebdavUploadTUS/uploadFile.feature:148](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L140)
--   [apiWebdavUploadTUS/uploadFile.feature:149](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L141)
 -   [apiWebdavUploadTUS/uploadFile.feature:150](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadFile.feature#L142)
 
 #### [upload a file using TUS resource URL as an other user should not work](https://github.com/owncloud/ocis/issues/1141)
@@ -1218,10 +1212,6 @@ _ocdav: api compatibility, return correct status code_
 #### [send POST requests to another user's webDav endpoints as normal user](https://github.com/owncloud/ocis/issues/1287)
 _ocdav: api compatibility, return correct status code_
 -   [apiAuthWebDav/webDavPOSTAuth.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPOSTAuth.feature#L40)  Scenario: send POST requests to another user's webDav endpoints as normal user
-
-#### [PUT request with missing parent must return status code 409](https://github.com/owncloud/ocis/issues/824)
-_ocdav: api compatibility, return correct status code_
--   [apiAuthWebDav/webDavPUTAuth.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPUTAuth.feature#L40) Scenario: send PUT requests to another user's webDav endpoints as normal user
 
 #### [Using double slash in URL to access a folder gives 501 and other status codes](https://github.com/owncloud/ocis/issues/1667)
 -   [apiAuthWebDav/webDavSpecialURLs.feature:24](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavSpecialURLs.feature#L24)

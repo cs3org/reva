@@ -155,6 +155,10 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
+		if uRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return
+		}
 		HandleErrorStatus(&log, w, uRes.Status)
 		return
 	}

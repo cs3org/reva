@@ -224,15 +224,19 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
-		if uRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+		switch uRes.Status.Code {
+		case rpc.Code_CODE_PERMISSION_DENIED:
 			w.WriteHeader(http.StatusForbidden)
 			b, err := Marshal(exception{
 				code:    SabredavPermissionDenied,
 				message: "permission denied: you have no permission to upload content",
 			})
 			HandleWebdavError(&log, w, b, err)
+		case rpc.Code_CODE_NOT_FOUND:
+			w.WriteHeader(http.StatusConflict)
+		default:
+			HandleErrorStatus(&log, w, uRes.Status)
 		}
-		HandleErrorStatus(&log, w, uRes.Status)
 		return
 	}
 
