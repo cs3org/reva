@@ -122,12 +122,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiWebdavMove1/moveFolder.feature:48](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolder.feature#L48)
 
 #### [Getting information about a folder overwritten by a file gives 500 error instead of 404](https://github.com/owncloud/ocis/issues/1239)
--   [apiWebdavProperties1/copyFile.feature:134](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L134)
--   [apiWebdavProperties1/copyFile.feature:135](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L135)
--   [apiWebdavProperties1/copyFile.feature:151](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L151)
--   [apiWebdavProperties1/copyFile.feature:152](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L152)
--   [apiWebdavProperties1/copyFile.feature:207](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L207)
--   [apiWebdavProperties1/copyFile.feature:208](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L208)
 -   [apiWebdavProperties1/copyFile.feature:226](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L226)
 -   [apiWebdavProperties1/copyFile.feature:227](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L227)
 -   [apiWebdavProperties1/copyFile.feature:244](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L244)
