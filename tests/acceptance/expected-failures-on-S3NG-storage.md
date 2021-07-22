@@ -20,9 +20,6 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiTrashbinRestore/trashbinRestore.feature:309](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L309)
 -   [apiTrashbinRestore/trashbinRestore.feature:310](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L310)
 
-#### [Version count is 1 more than on oC10](https://github.com/owncloud/ocis/issues/1633)
--   [apiVersions/fileVersionsSharingToShares.feature:178](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L178)
-
 #### [downloading an old version of a file returns 501](https://github.com/owncloud/ocis/issues/2261)
 -    [apiVersions/fileVersions.feature:420](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L420)
 -    [apiVersions/fileVersions.feature:438](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L438)
@@ -38,7 +35,6 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiVersions/fileVersions.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L36)
 -   [apiVersions/fileVersions.feature:45](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L45)
 -   [apiVersions/fileVersions.feature:88](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L88)
--   [apiVersions/fileVersions.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L89)
 -   [apiVersions/fileVersions.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L93)
 -   [apiVersions/fileVersions.feature:276](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L276)
 -   [apiVersions/fileVersions.feature:347](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L347)
@@ -916,9 +912,6 @@ Scenario Outline: Renaming a file to a path with extension .part should not be p
 -   [apiVersions/fileVersionsSharingToShares.feature:162](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L162)
 -   [apiVersions/fileVersionsSharingToShares.feature:249](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L249)
 -   [apiVersions/fileVersionsSharingToShares.feature:250](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L250)
-
-#### [Version count is 1 more than on oC10](https://github.com/owncloud/ocis/issues/1633)
--   [apiVersions/fileVersionsSharingToShares.feature:178](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L178)
 
 ####[not possible to move file into a received folder](https://github.com/owncloud/ocis/issues/764)
 -   [apiVersions/fileVersionsSharingToShares.feature:221](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L221)

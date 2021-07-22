@@ -42,9 +42,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiTrashbinRestore/trashbinRestore.feature:330](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbinRestore/trashbinRestore.feature#L330)
 -   [apiWebdavOperations/listFiles.feature:182](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L182)
 
-#### [Version count is 1 more than on oC10](https://github.com/owncloud/ocis/issues/1633)
--   [apiVersions/fileVersionsSharingToShares.feature:178](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L178)
-
 #### [downloading an old version of a file returns 501](https://github.com/owncloud/ocis/issues/2261)
 -    [apiVersions/fileVersions.feature:420](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L420)
 -    [apiVersions/fileVersions.feature:438](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L438)
@@ -57,7 +54,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiVersions/fileVersions.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L36)
 -   [apiVersions/fileVersions.feature:45](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L45)
 -   [apiVersions/fileVersions.feature:88](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L88)
--   [apiVersions/fileVersions.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L89)
 -   [apiVersions/fileVersions.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L93)
 -   [apiVersions/fileVersions.feature:276](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L276)
 -   [apiVersions/fileVersions.feature:347](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L347)

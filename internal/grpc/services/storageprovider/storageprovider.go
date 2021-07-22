@@ -20,6 +20,8 @@ package storageprovider
 
 import (
 	"context"
+	"sort"
+
 	// "encoding/json"
 	"fmt"
 	"net/url"
@@ -763,6 +765,8 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 		}, nil
 	}
 
+	sort.Sort(descendingMtime(revs))
+
 	res := &provider.ListFileVersionsResponse{
 		Status:   status.NewOK(ctx),
 		Versions: revs,
@@ -1192,4 +1196,18 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
 	}
 	ri.Path = path.Join(s.mountPath, ri.Path)
 	return nil
+}
+
+type descendingMtime []*provider.FileVersion
+
+func (v descendingMtime) Len() int {
+	return len(v)
+}
+
+func (v descendingMtime) Less(i, j int) bool {
+	return v[i].Mtime >= v[j].Mtime
+}
+
+func (v descendingMtime) Swap(i, j int) {
+	v[i], v[j] = v[j], v[i]
 }
