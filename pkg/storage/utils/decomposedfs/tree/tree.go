@@ -148,7 +148,7 @@ func (t *Tree) Setup(owner string) error {
 				// we can reuse the node id as the space id
 				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/personal", nodes[i].Name()))
 				if err != nil {
-					//fmt.Printf("could not create symlink for personal space %s, %s\n", nodes[i].Name(), err)
+					log.Error().Err(err).Str("setup location", nodes[i].Name()).Msg("could not create symlink for personal space")
 				}
 			}
 
@@ -156,7 +156,7 @@ func (t *Tree) Setup(owner string) error {
 			if isSharedNode(nodePath) {
 				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/share", nodes[i].Name()))
 				if err != nil {
-					//fmt.Printf("could not create symlink for shared space %s, %s\n", nodes[i].Name(), err)
+					log.Error().Err(err).Str("setup location", nodes[i].Name()).Msg("could not create symlink for personal space")
 				}
 			}
 		}
@@ -472,7 +472,9 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 			return err
 		}
 
-		rn.ChangeOwner(po)
+		if err := rn.ChangeOwner(po); err != nil {
+			return err
+		}
 
 		n.Exists = true
 		// update name attribute
