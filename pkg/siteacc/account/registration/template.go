@@ -165,7 +165,7 @@ const tplBody = `
 		</div>
 		<div style="grid-row: 13; grid-column: 2; text-align: right;">
 			<button type="reset">Reset</button>
-			<button type="button" style="font-weight: bold;" onClick="handleAction('create');">Register</button>
+			<button type="submit" style="font-weight: bold;" onClick="handleAction('create');">Register</button>
 		</div>
 	</form>	
 </div>

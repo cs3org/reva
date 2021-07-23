@@ -132,7 +132,7 @@ const tplBody = `
 		</div>
 		<div style="grid-row: 4; grid-column: 2; text-align: right;">
 			<button type="reset">Reset</button>
-			<button type="button" style="font-weight: bold;" onClick="handleAction('login');">Login</button>
+			<button type="submit" style="font-weight: bold;" onClick="handleAction('login');">Login</button>
 		</div>	
 	</form>	
 </div>
