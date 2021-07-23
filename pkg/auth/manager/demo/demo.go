@@ -74,7 +74,7 @@ func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret strin
 
 func getCredentials() map[string]Credentials {
 	return map[string]Credentials{
-		"einstein": Credentials{
+		"einstein": {
 			Secret: "relativity",
 			User: &user.User{
 				Id: &user.UserId{
@@ -88,7 +88,7 @@ func getCredentials() map[string]Credentials {
 				DisplayName: "Albert Einstein",
 			},
 		},
-		"marie": Credentials{
+		"marie": {
 			Secret: "radioactivity",
 			User: &user.User{
 				Id: &user.UserId{
@@ -102,7 +102,7 @@ func getCredentials() map[string]Credentials {
 				DisplayName: "Marie Curie",
 			},
 		},
-		"richard": Credentials{
+		"richard": {
 			Secret: "superfluidity",
 			User: &user.User{
 				Id: &user.UserId{

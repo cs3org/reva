@@ -60,10 +60,10 @@ func (c *config) init() {
 
 	if len(c.Rules) == 0 {
 		c.Rules = map[string]rule{
-			"/": rule{
+			"/": {
 				Address: sharedconf.GetGatewaySVC(""),
 			},
-			"00000000-0000-0000-0000-000000000000": rule{
+			"00000000-0000-0000-0000-000000000000": {
 				Address: sharedconf.GetGatewaySVC(""),
 			},
 		}

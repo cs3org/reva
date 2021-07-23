@@ -280,7 +280,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	log.Info().Str("data-server", u.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
 	res := &provider.InitiateFileDownloadResponse{
 		Protocols: []*provider.FileDownloadProtocol{
-			&provider.FileDownloadProtocol{
+			{
 				Protocol:         "simple",
 				DownloadEndpoint: u.String(),
 				Expose:           s.conf.ExposeDataServer,
