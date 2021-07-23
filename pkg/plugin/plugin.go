@@ -46,14 +46,11 @@ var handshake = plugin.HandshakeConfig{
 }
 
 func compile(pluginType string, path string) (string, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("could not find current directory: %v", err)
-	}
-	binaryPath := filepath.Join(wd, "bin", pluginType, filepath.Base(path))
-	command := fmt.Sprintf("GO111MODULE=off go build -o %s %s", binaryPath, path)
+	dirname := "/var/tmp/reva"
+	binaryPath := filepath.Join(dirname, "bin", pluginType, filepath.Base(path))
+	command := fmt.Sprintf("go build -o %s %s", binaryPath, path)
 	cmd := exec.Command("bash", "-c", command)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		return "", err
 	}
