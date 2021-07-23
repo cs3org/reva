@@ -18,7 +18,7 @@
 
 package plugin
 
-// Config is the interface used to configure plugins
-type Config interface {
+// Plugin is the interface used to configure plugins
+type Plugin interface {
 	Configure(m map[string]interface{}) error
 }

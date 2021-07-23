@@ -2,17 +2,6 @@
 gatewaysvc = "localhost:19000"
 plugin = true
 
-# [registry]
-# driver = "static"
-#
-# [registry.static]
-# services = ["authprovider","userprovider"]
-#
-# [registry.static.authprovider]
-# bearer = ["localhost:0123"]
-# basic = ["localhost:1234"]
-# publiclink = ["localhost:9876"]
-
 [grpc]
 address = "0.0.0.0:19000"
 
@@ -21,7 +10,6 @@ userprovidersvc = "localhost:19000"
 
 
 [grpc.services.userprovider]
-# replace the driver with the plugin binary file
 driver = "./json"
 
 [grpc.services.userprovider.drivers.json]

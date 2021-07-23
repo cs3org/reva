@@ -65,7 +65,7 @@ func ContextSetUserID(ctx context.Context, id *userpb.UserId) context.Context {
 
 // Manager is the interface to implement to manipulate users.
 type Manager interface {
-	plugin.Config
+	plugin.Plugin
 	GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error)
 	GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error)
 	GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error)

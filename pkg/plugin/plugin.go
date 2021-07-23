@@ -24,7 +24,6 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/cs3org/reva/pkg/pluginregistry"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 )
@@ -46,34 +45,43 @@ var handshake = plugin.HandshakeConfig{
 	MagicCookieValue: "hello",
 }
 
-func compile(path string, pluginType string) (string, error) {
+func compile(pluginType string, path string) (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("could not find current directory: %v", err)
 	}
-	pluginsDir := filepath.Join(wd, "bin", pluginType, filepath.Base(path))
-	command := fmt.Sprintf("GO111MODULE=off go build -o %s %s", pluginsDir, path)
+	binaryPath := filepath.Join(wd, "bin", pluginType, filepath.Base(path))
+	command := fmt.Sprintf("GO111MODULE=off go build -o %s %s", binaryPath, path)
 	cmd := exec.Command("bash", "-c", command)
 	err = cmd.Run()
 	if err != nil {
 		return "", err
 	}
-	return pluginsDir, nil
+	return binaryPath, nil
+}
+
+// checkDir checks and compiles plugin if the configuration points to a directory.
+func checkDirAndCompile(pluginType, driver string) (string, error) {
+	bin := driver
+	file, err := os.Stat(driver)
+	if err != nil {
+		return "", err
+	}
+	// compile if we point to a package
+	if file.IsDir() {
+		bin, err = compile(pluginType, driver)
+		if err != nil {
+			return "", err
+		}
+	}
+	return bin, nil
 }
 
 // Load loads the plugin using the hashicorp go-plugin system
 func Load(driver string, pluginType string) (*RevaPlugin, error) {
-	bin := driver
-	file, err := os.Stat(driver)
+	bin, err := checkDirAndCompile(pluginType, driver)
 	if err != nil {
 		return nil, err
-	}
-	// compile if we point to a package.
-	if file.IsDir() {
-		bin, err = compile(driver, pluginType)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	logger := hclog.New(&hclog.LoggerOptions{
@@ -84,7 +92,7 @@ func Load(driver string, pluginType string) (*RevaPlugin, error) {
 
 	client := plugin.NewClient(&plugin.ClientConfig{
 		HandshakeConfig: handshake,
-		Plugins:         pluginregistry.PluginMap,
+		Plugins:         PluginMap,
 		Cmd:             exec.Command(bin),
 		AllowedProtocols: []plugin.Protocol{
 			plugin.ProtocolNetRPC,

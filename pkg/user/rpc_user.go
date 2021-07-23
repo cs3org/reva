@@ -23,26 +23,26 @@ import (
 	"net/rpc"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/pluginregistry"
-	"github.com/hashicorp/go-plugin"
+	"github.com/cs3org/reva/pkg/plugin"
+	hcplugin "github.com/hashicorp/go-plugin"
 )
 
 func init() {
-	pluginregistry.Register("userprovider", &ProviderPlugin{})
+	plugin.Register("userprovider", &ProviderPlugin{})
 }
 
-// ProviderPlugin is the implemenation of plugin.Plugin so we can serve/consume this.
+// ProviderPlugin is the implementation of plugin.Plugin so we can serve/consume this.
 type ProviderPlugin struct {
 	Impl Manager
 }
 
 // Server returns the RPC Server which serves the methods that the Client calls over net/rpc
-func (p *ProviderPlugin) Server(*plugin.MuxBroker) (interface{}, error) {
+func (p *ProviderPlugin) Server(*hcplugin.MuxBroker) (interface{}, error) {
 	return &RPCServer{Impl: p.Impl}, nil
 }
 
 // Client returns interface implementation for the plugin that communicates to the server end of the plugin
-func (p *ProviderPlugin) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
+func (p *ProviderPlugin) Client(b *hcplugin.MuxBroker, c *rpc.Client) (interface{}, error) {
 	return &RPCClient{Client: c}, nil
 }
 
