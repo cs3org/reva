@@ -37,11 +37,11 @@ func Test_parseConfig(t *testing.T) {
 			name: "all configurations set for demo driver",
 			m: map[string]interface{}{
 				"Driver":  "demo",
-				"Drivers": map[string]map[string]interface{}{"demo": map[string]interface{}{"a": "b", "c": "d"}},
+				"Drivers": map[string]map[string]interface{}{"demo": {"a": "b", "c": "d"}},
 			},
 			want: &config{
 				Driver:  "demo",
-				Drivers: map[string]map[string]interface{}{"demo": map[string]interface{}{"a": "b", "c": "d"}},
+				Drivers: map[string]map[string]interface{}{"demo": {"a": "b", "c": "d"}},
 			},
 			wantErr: nil,
 		},
@@ -49,11 +49,11 @@ func Test_parseConfig(t *testing.T) {
 			name: "all configurations set for wopi driver",
 			m: map[string]interface{}{
 				"Driver":  "wopi",
-				"Drivers": map[string]map[string]interface{}{"wopi": map[string]interface{}{"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
+				"Drivers": map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
 			},
 			want: &config{
 				Driver:  "wopi",
-				Drivers: map[string]map[string]interface{}{"wopi": map[string]interface{}{"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
+				Drivers: map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
 			},
 			wantErr: nil,
 		},

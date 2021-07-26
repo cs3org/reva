@@ -41,7 +41,7 @@ type config struct {
 func (c *config) init() {
 	if len(c.Providers) == 0 {
 		c.Providers = map[string]*registrypb.ProviderInfo{
-			sharedconf.GetGatewaySVC(""): &registrypb.ProviderInfo{
+			sharedconf.GetGatewaySVC(""): {
 				Address:   sharedconf.GetGatewaySVC(""),
 				MimeTypes: []string{"text/plain"},
 			},
