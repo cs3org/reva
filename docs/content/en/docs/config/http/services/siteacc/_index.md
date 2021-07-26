@@ -19,28 +19,36 @@ prefix = "/siteacc"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="enable_registration_form" type="string" default="false" %}}
-If set to true, the service will expose a simple form for account registration.
-
-{{< highlight toml >}}
-[http.services.siteacc]
-enable_registration_form = true
-{{< /highlight >}}
-{{% /dir %}}
-
+## Email settings
 {{% dir name="notifications_mail" type="string" default="" %}}
 An email address where all notifications are sent to.
 {{< highlight toml >}}
-[http.services.siteacc]
+[http.services.siteacc.email]
 notifications_mail = "notify@example.com"
 {{< /highlight >}}
 {{% /dir %}}
 
-## SMTP settings
+{{% dir name="accounts_address" type="string" default="" %}}
+The URL for the site accounts user panel which will be used in emails.
+{{< highlight toml >}}
+[http.services.siteacc.email]
+accounts_address = "https://www.sciencemesh.eu/accounts/"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="gocdb_address" type="string" default="" %}}
+The URL for the GOCDB which will be used in emails.
+{{< highlight toml >}}
+[http.services.siteacc.email]
+gocdb_address = "https://www.sciencemesh.eu/gocdb/"
+{{< /highlight >}}
+{{% /dir %}}
+
+### SMTP settings
 {{% dir name="sender_mail" type="string" default="" %}}
 An email address from which all emails are sent.
 {{< highlight toml >}}
-[http.services.siteacc.smtp]
+[http.services.siteacc.email.smtp]
 sender_mail = "notify@example.com"
 {{< /highlight >}}
 {{% /dir %}}
@@ -48,7 +56,7 @@ sender_mail = "notify@example.com"
 {{% dir name="sender_login" type="string" default="" %}}
 The login name.
 {{< highlight toml >}}
-[http.services.siteacc.smtp]
+[http.services.siteacc.email.smtp]
 sender_login = "hans"
 {{< /highlight >}}
 {{% /dir %}}
@@ -56,7 +64,7 @@ sender_login = "hans"
 {{% dir name="sender_password" type="string" default="" %}}
 The password for the login.
 {{< highlight toml >}}
-[http.services.siteacc.smtp]
+[http.services.siteacc.email.smtp]
 password = "secret"
 {{< /highlight >}}
 {{% /dir %}}
@@ -64,7 +72,7 @@ password = "secret"
 {{% dir name="smtp_server" type="string" default="" %}}
 The SMTP server to use.
 {{< highlight toml >}}
-[http.services.siteacc.smtp]
+[http.services.siteacc.email.smtp]
 smtp_server = "smtp.example.com"
 {{< /highlight >}}
 {{% /dir %}}
@@ -72,7 +80,7 @@ smtp_server = "smtp.example.com"
 {{% dir name="smtp_port" type="int" default="25" %}}
 The SMTP server port to use.
 {{< highlight toml >}}
-[http.services.siteacc.smtp]
+[http.services.siteacc.email.smtp]
 smtp_port = 25
 {{< /highlight >}}
 {{% /dir %}}
@@ -80,7 +88,7 @@ smtp_port = 25
 {{% dir name="disable_auth" type="bool" default="false" %}}
 Whether to disable authentication.
 {{< highlight toml >}}
-[http.services.siteacc.smtp]
+[http.services.siteacc.email.smtp]
 disable_auth = true
 {{< /highlight >}}
 {{% /dir %}}

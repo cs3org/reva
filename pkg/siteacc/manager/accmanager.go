@@ -78,8 +78,8 @@ func (mngr *AccountsManager) initialize(conf *config.Configuration, log *zerolog
 	}
 
 	// Create the SMTP client
-	if conf.SMTP != nil {
-		mngr.smtp = smtpclient.NewSMTPCredentials(conf.SMTP)
+	if conf.Email.SMTP != nil {
+		mngr.smtp = smtpclient.NewSMTPCredentials(conf.Email.SMTP)
 	}
 
 	return nil
@@ -366,7 +366,7 @@ func (mngr *AccountsManager) CloneAccounts(erasePasswords bool) data.Accounts {
 }
 
 func (mngr *AccountsManager) sendEmail(account *data.Account, sendFunc email.SendFunction) {
-	_ = sendFunc(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
+	_ = sendFunc(account, []string{account.Email, mngr.conf.Email.NotificationsMail}, *mngr.conf)
 }
 
 // NewAccountsManager creates a new accounts manager instance.

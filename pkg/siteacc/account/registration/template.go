@@ -116,12 +116,7 @@ html * {
 
 const tplBody = `
 <div>
-	<p>Fill out the form below to register for a ScienceMesh account. A confirmation email will be sent to you shortly after registration.</p>
-	<p>
-		After inspection by a ScienceMesh administrator, you will also receive an API key which can then be used in the
-		<a href="https://github.com/sciencemesh/oc-sciencemesh" target="_blank">ownCloud</a> or
-		<a href="https://github.com/sciencemesh/nc-sciencemesh" target="_blank">Nextcloud</a> web application.
-	</p>
+	<p>Fill out the form below to register for a ScienceMesh account. A confirmation email will be sent to you shortly after registration.</p>	
 </div>
 <div>&nbsp;</div>
 <div>
@@ -165,7 +160,7 @@ const tplBody = `
 		</div>
 		<div style="grid-row: 13; grid-column: 2; text-align: right;">
 			<button type="reset">Reset</button>
-			<button type="submit" style="font-weight: bold;" onClick="handleAction('create');">Register</button>
+			<button type="button" style="font-weight: bold;" onClick="handleAction('create');">Register</button>
 		</div>
 	</form>	
 </div>

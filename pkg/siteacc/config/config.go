@@ -32,8 +32,13 @@ type Configuration struct {
 		} `mapstructure:"file"`
 	} `mapstructure:"storage"`
 
-	SMTP              *smtpclient.SMTPCredentials `mapstructure:"smtp"`
-	NotificationsMail string                      `mapstructure:"notifications_mail"`
+	Email struct {
+		SMTP              *smtpclient.SMTPCredentials `mapstructure:"smtp"`
+		NotificationsMail string                      `mapstructure:"notifications_mail"`
+
+		AccountsAddress string `mapstructure:"accounts_address"`
+		GOCDBAddress    string `mapstructure:"gocdb_address"`
+	} `mapstructure:"email"`
 
 	SiteRegistration struct {
 		URL string `mapstructure:"url"`

@@ -19,30 +19,35 @@
 package email
 
 const accountCreatedTemplate = `
-Dear {{.FirstName}} {{.LastName}},
+Dear {{.Account.FirstName}} {{.Account.LastName}},
 
 Your ScienceMesh account has been successfully created!
 
-An administrator will soon create an API key for your account; you will receive a separate email containing the key.
+Log in to your account by visiting the user account panel:
+{{.AccountsAddress}}
+
+Using this panel, you can modify your information, request an API key or access to the GOCDB, and more. 
 
 Kind regards,
 The ScienceMesh Team
 `
 
 const apiKeyAssignedTemplate = `
-Dear {{.FirstName}} {{.LastName}},
+Dear {{.Account.FirstName}} {{.Account.LastName}},
 
-An API key has been created for your account:
-{{.Data.APIKey}}
+An API key has been created for your account!
 
-Keep this key in a safe and secret place!
+To view your new API key, log in to your user account panel:
+{{.AccountsAddress}}
+
+Your key will appear on the front page once logged in.
 
 Kind regards,
 The ScienceMesh Team
 `
 
 const accountAuthorizedTemplate = `
-Dear {{.FirstName}} {{.LastName}},
+Dear {{.Account.FirstName}} {{.Account.LastName}},
 
 Congratulations - your site registration has been authorized!
 
@@ -51,22 +56,22 @@ The ScienceMesh Team
 `
 
 const gocdbAccessGrantedTemplate = `
-Dear {{.FirstName}} {{.LastName}},
+Dear {{.Account.FirstName}} {{.Account.LastName}},
 
 You have been granted access to the ScienceMesh GOCDB instance:
-https://gocdb.sciencemesh.uni-muenster.de
+{{.GOCDBAddress}}
 
-Simply use your regular ScienceMesh account credentials to log in. 
+Simply use your regular ScienceMesh account credentials to log in to the GOCDB. 
 
 Kind regards,
 The ScienceMesh Team
 `
 
 const passwordResetTemplate = `
-Dear {{.FirstName}} {{.LastName}},
+Dear {{.Account.FirstName}} {{.Account.LastName}},
 
 Your password has been successfully reset!
-Your new password is: {{.Password.Value}}
+Your new password is: {{.Account.Password.Value}}
 
 We recommend to change this password immediately after logging in.
 

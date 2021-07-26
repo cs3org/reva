@@ -1,20 +1,20 @@
 [http]
 address = "0.0.0.0:9600"
 
-[http.services.siteacc]
-# If this is set to true, the service will expose a simple form for account registration
-enable_registration_form = true
-# All notification emails are sent to this email
-notifications_mail = "science.mesh@example.com"
-
 # Set up the storage driver
 [http.services.siteacc.storage]
 driver = "file"
 [http.services.siteacc.storage.file]
 file = "/var/revad/accounts.json"
 
+# Email related settings
+[http.services.siteacc.email]
+notifications_mail = "science.mesh@example.com"
+accounts_address = "https://sciencemesh-test.uni-muenster.de/api/accounts/"
+gocdb_address = "https://sciencemesh-test.uni-muenster.de/gocdb/"
+
 # The SMTP server used for sending emails
-[http.services.siteacc.smtp]
+[http.services.siteacc.email.smtp]
 sender_mail = "science.mesh@example.com"
 smtp_server = "mail.example.com"
 smtp_port = 25
@@ -23,4 +23,3 @@ disable_auth = true
 # The webserver section defines various webserver-related settings
 [http.services.siteacc.webserver]
 session_timeout = 60
-
