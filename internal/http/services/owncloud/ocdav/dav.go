@@ -244,6 +244,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 		default:
 			w.WriteHeader(http.StatusNotFound)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: "File not found in root",
+			})
+			HandleWebdavError(log, w, b, err)
 		}
 	})
 }

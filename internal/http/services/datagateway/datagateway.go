@@ -198,6 +198,8 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	copyHeader(w.Header(), httpRes.Header)
 
 	if httpRes.StatusCode != http.StatusOK {
+		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
+		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(httpRes.StatusCode)
 		return
 	}
@@ -237,11 +239,17 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	defer httpRes.Body.Close()
 
 	copyHeader(w.Header(), httpRes.Header)
-	// TODO why do we swallow the body?
 	w.WriteHeader(httpRes.StatusCode)
-	if httpRes.StatusCode != http.StatusOK && httpRes.StatusCode != http.StatusPartialContent {
+	switch httpRes.StatusCode {
+	case http.StatusOK:
+	case http.StatusPartialContent:
+	default:
+		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
+		w.Header().Set("Content-Length", "0")
+		w.WriteHeader(httpRes.StatusCode)
 		return
 	}
+	w.WriteHeader(httpRes.StatusCode)
 
 	var c int64
 	c, err = io.Copy(w, httpRes.Body)
@@ -304,6 +312,8 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	copyHeader(w.Header(), httpRes.Header)
 	if httpRes.StatusCode != http.StatusOK {
+		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
+		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(httpRes.StatusCode)
 		return
 	}
@@ -362,6 +372,8 @@ func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
 	copyHeader(w.Header(), httpRes.Header)
 
 	if httpRes.StatusCode != http.StatusOK {
+		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
+		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(httpRes.StatusCode)
 		return
 	}

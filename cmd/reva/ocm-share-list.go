@@ -61,7 +61,7 @@ func ocmShareListCommand() *command {
 				OpaqueId:  tokens[1],
 			}
 			shareRequest.Filters = []*ocm.ListOCMSharesRequest_Filter{
-				&ocm.ListOCMSharesRequest_Filter{
+				{
 					Type: ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID,
 					Term: &ocm.ListOCMSharesRequest_Filter_ResourceId{
 						ResourceId: id,

@@ -114,16 +114,14 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	log := appctx.GetLogger(ctx)
 
-	var relative string // the internal path of the file node
-
-	n, err := fs.lu.NodeFromResource(ctx, ref)
+	n, err := fs.lookupNode(ctx, ref.Path)
 	if err != nil {
 		return nil, err
 	}
 
 	// permissions are checked in NewUpload below
 
-	relative, err = fs.lu.Path(ctx, n)
+	relative, err := fs.lu.Path(ctx, n)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +205,7 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	n, err := fs.lu.NodeFromPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	n, err := fs.lookupNode(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error wrapping filename")
 	}
@@ -358,6 +356,33 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 		fs:       fs,
 		ctx:      ctx,
 	}, nil
+}
+
+// lookupNode looks up nodes by path.
+// This method can also handle lookups for paths which contain chunking information.
+func (fs *Decomposedfs) lookupNode(ctx context.Context, path string) (*node.Node, error) {
+	p := path
+	isChunked, err := chunking.IsChunked(path)
+	if err != nil {
+		return nil, err
+	}
+	if isChunked {
+		chunkInfo, err := chunking.GetChunkBLOBInfo(path)
+		if err != nil {
+			return nil, err
+		}
+		p = chunkInfo.Path
+	}
+
+	n, err := fs.lu.NodeFromPath(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	if isChunked {
+		n.Name = filepath.Base(path)
+	}
+	return n, nil
 }
 
 type fileUpload struct {

@@ -20,6 +20,8 @@ package storageprovider
 
 import (
 	"context"
+	"sort"
+
 	// "encoding/json"
 	"fmt"
 	"net/url"
@@ -278,7 +280,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	log.Info().Str("data-server", u.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
 	res := &provider.InitiateFileDownloadResponse{
 		Protocols: []*provider.FileDownloadProtocol{
-			&provider.FileDownloadProtocol{
+			{
 				Protocol:         "simple",
 				DownloadEndpoint: u.String(),
 				Expose:           s.conf.ExposeDataServer,
@@ -530,6 +532,15 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		}, nil
 	}
 
+	// check DeleteRequest for any known opaque properties.
+	if req.Opaque != nil {
+		_, ok := req.Opaque.Map["deleting_shared_resource"]
+		if ok {
+			// it is a binary key; its existence signals true. Although, do not assume.
+			ctx = context.WithValue(ctx, appctx.DeletingSharedResource, true)
+		}
+	}
+
 	if err := s.storage.Delete(ctx, newRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -753,6 +764,8 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 			Status: st,
 		}, nil
 	}
+
+	sort.Sort(descendingMtime(revs))
 
 	res := &provider.ListFileVersionsResponse{
 		Status:   status.NewOK(ctx),
@@ -1183,4 +1196,18 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
 	}
 	ri.Path = path.Join(s.mountPath, ri.Path)
 	return nil
+}
+
+type descendingMtime []*provider.FileVersion
+
+func (v descendingMtime) Len() int {
+	return len(v)
+}
+
+func (v descendingMtime) Less(i, j int) bool {
+	return v[i].Mtime >= v[j].Mtime
+}
+
+func (v descendingMtime) Swap(i, j int) {
+	v[i], v[j] = v[j], v[i]
 }

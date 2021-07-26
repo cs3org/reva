@@ -400,7 +400,7 @@ func WriteUsers(p string, users []*userpb.User) {
 
 	if users == nil {
 		uservars = []*UserVars{
-			&UserVars{
+			{
 				Sub:         "c6e5995d6c7fa1986b830b78b478e6c2",
 				Iss:         "localhost:9998",
 				Username:    "einstein",
@@ -408,7 +408,7 @@ func WriteUsers(p string, users []*userpb.User) {
 				Mail:        "einstein@example.org",
 				Displayname: "Albert Einstein",
 			},
-			&UserVars{
+			{
 				Sub:         "9fb5f8d212cbf3fc55f1bf67d97ed05d",
 				Iss:         "localhost:9998",
 				Username:    "marie",
@@ -416,7 +416,7 @@ func WriteUsers(p string, users []*userpb.User) {
 				Mail:        "marie@example.org",
 				Displayname: "Marie Curie",
 			},
-			&UserVars{
+			{
 				Sub:         "a84075b398fe6a0aee1155f8ead13331",
 				Iss:         "localhost:9998",
 				Username:    "richard",
