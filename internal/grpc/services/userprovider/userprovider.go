@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -29,7 +30,6 @@ import (
 	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -79,9 +79,9 @@ func getDriverPlugin(c *config) (*plugin.RevaPlugin, error) {
 	return plugin, nil
 }
 
-func getDriver(c *config, pluginFlag bool) (user.Manager, *plugin.RevaPlugin, error) {
-	// if plugin flag is set, we fetch the driver from the plugin package via hashicorp go-plugin system
-	if pluginFlag {
+func getDriver(c *config) (user.Manager, *plugin.RevaPlugin, error) {
+	isAlphaNum := regexp.MustCompile(`^[A-Za-z0-9]+$`).MatchString
+	if !isAlphaNum(c.Driver) {
 		plugin, err := getDriverPlugin(c)
 		if err != nil {
 			return nil, nil, err
@@ -112,8 +112,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	pluginFlag := sharedconf.GetPluginFlag()
-	userManager, plug, err := getDriver(c, pluginFlag)
+	userManager, plug, err := getDriver(c)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +130,7 @@ type service struct {
 }
 
 func (s *service) Close() error {
-	if pluginFlag := sharedconf.GetPluginFlag(); pluginFlag {
+	if s.plugin != nil {
 		s.plugin.Kill()
 	}
 	return nil
