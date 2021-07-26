@@ -8,7 +8,6 @@ address = "0.0.0.0:19000"
 [grpc.services.gateway]
 userprovidersvc = "localhost:19000"
 
-
 [grpc.services.userprovider]
 driver = "./json"
 

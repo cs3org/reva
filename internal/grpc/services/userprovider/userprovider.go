@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -52,14 +51,6 @@ func (c *config) init() {
 	}
 }
 
-func (c *config) load() (*plugin.RevaPlugin, error) {
-	plug, err := plugin.Load(c.Driver, "userprovider")
-	if err != nil {
-		return nil, err
-	}
-	return plug, nil
-}
-
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
@@ -70,24 +61,10 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// getDriverPlugin fetches the runtime driver from the plugins package
-func getDriverPlugin(c *config) (*plugin.RevaPlugin, error) {
-	plugin, err := c.load()
-	if err != nil {
-		return nil, err
-	}
-	return plugin, nil
-}
-
 func getDriver(c *config) (user.Manager, *plugin.RevaPlugin, error) {
-	isAlphaNum := regexp.MustCompile(`^[A-Za-z0-9]+$`).MatchString
-	if !isAlphaNum(c.Driver) {
-		plugin, err := getDriverPlugin(c)
-		if err != nil {
-			return nil, nil, err
-		}
-		// assert the loaded plugin into required interface
-		manager, ok := plugin.Plugin.(user.Manager)
+	p, err := plugin.Load("userprovider", c.Driver)
+	if err == nil {
+		manager, ok := p.Plugin.(user.Manager)
 		if !ok {
 			return nil, nil, fmt.Errorf("could not assert the loaded plugin")
 		}
@@ -96,12 +73,17 @@ func getDriver(c *config) (user.Manager, *plugin.RevaPlugin, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		return manager, plugin, nil
-	}
-	// fetch drivers from the in-memory registry
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		mgr, err := f(c.Drivers[c.Driver])
-		return mgr, nil, err
+		return manager, p, nil
+	} else {
+		if _, ok := err.(errtypes.NotFound); ok {
+			// plugin not found, fetch the driver from the in-memory registry
+			if f, ok := registry.NewFuncs[c.Driver]; ok {
+				mgr, err := f(c.Drivers[c.Driver])
+				return mgr, nil, err
+			}
+		} else {
+			return nil, nil, err
+		}
 	}
 	return nil, nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
 }
