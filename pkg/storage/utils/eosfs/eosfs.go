@@ -1076,22 +1076,22 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 	}
 
 	attrs := []*eosclient.Attribute{
-		&eosclient.Attribute{
+		{
 			Type: SystemAttr,
 			Key:  "mask",
 			Val:  "700",
 		},
-		&eosclient.Attribute{
+		{
 			Type: SystemAttr,
 			Key:  "allow.oc.sync",
 			Val:  "1",
 		},
-		&eosclient.Attribute{
+		{
 			Type: SystemAttr,
 			Key:  "mtime.propagation",
 			Val:  "1",
 		},
-		&eosclient.Attribute{
+		{
 			Type: SystemAttr,
 			Key:  "forced.atomic",
 			Val:  "1",

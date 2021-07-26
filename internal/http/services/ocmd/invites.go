@@ -205,7 +205,7 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	providerInfo := ocmprovider.ProviderInfo{
 		Domain: recipientProvider,
 		Services: []*ocmprovider.Service{
-			&ocmprovider.Service{
+			{
 				Host: clientIP,
 			},
 		},

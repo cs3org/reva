@@ -114,11 +114,11 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 			},
 			Opaque: &types.Opaque{
 				Map: map[string]*types.OpaqueEntry{
-					"uid": &types.OpaqueEntry{
+					"uid": {
 						Decoder: "plain",
 						Value:   []byte("0"),
 					},
-					"gid": &types.OpaqueEntry{
+					"gid": {
 						Decoder: "plain",
 						Value:   []byte("0"),
 					},
