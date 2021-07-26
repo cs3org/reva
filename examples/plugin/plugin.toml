@@ -9,7 +9,7 @@ address = "0.0.0.0:19000"
 userprovidersvc = "localhost:19000"
 
 [grpc.services.userprovider]
-driver = "./json"
+driver = "/home/jimil/Desktop/json/json"
 
 [grpc.services.userprovider.drivers.json]
 users = "users.demo.json"

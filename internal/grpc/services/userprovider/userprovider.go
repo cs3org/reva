@@ -74,16 +74,14 @@ func getDriver(c *config) (user.Manager, *plugin.RevaPlugin, error) {
 			return nil, nil, err
 		}
 		return manager, p, nil
-	} else {
-		if _, ok := err.(errtypes.NotFound); ok {
-			// plugin not found, fetch the driver from the in-memory registry
-			if f, ok := registry.NewFuncs[c.Driver]; ok {
-				mgr, err := f(c.Drivers[c.Driver])
-				return mgr, nil, err
-			}
-		} else {
-			return nil, nil, err
+	} else if _, ok := err.(errtypes.NotFound); ok {
+		// plugin not found, fetch the driver from the in-memory registry
+		if f, ok := registry.NewFuncs[c.Driver]; ok {
+			mgr, err := f(c.Drivers[c.Driver])
+			return mgr, nil, err
 		}
+	} else {
+		return nil, nil, err
 	}
 	return nil, nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
 }
