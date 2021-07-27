@@ -49,6 +49,8 @@ const (
 	EndpointLogout = "/logout"
 	// EndpointResetPassword is the endpoint path for resetting user passwords
 	EndpointResetPassword = "/reset-password"
+	// EndpointContact is the endpoint path for sending contact emails
+	EndpointContact = "/contact"
 
 	// EndpointVerifyUserToken is the endpoint path for user token validation.
 	EndpointVerifyUserToken = "/verify-user-token"

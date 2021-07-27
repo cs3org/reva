@@ -160,7 +160,7 @@ func (mngr *AccountsManager) CreateAccount(accountData *data.Account) error {
 		mngr.storage.AccountAdded(account)
 		mngr.writeAllAccounts()
 
-		mngr.sendEmail(account, email.SendAccountCreated)
+		mngr.sendEmail(account, nil, email.SendAccountCreated)
 	} else {
 		return errors.Wrap(err, "error while creating account")
 	}
@@ -201,7 +201,7 @@ func (mngr *AccountsManager) ResetPassword(name string) error {
 
 	err = mngr.UpdateAccount(accountUpd, true, false)
 	if err == nil {
-		mngr.sendEmail(accountUpd, email.SendPasswordReset)
+		mngr.sendEmail(accountUpd, nil, email.SendPasswordReset)
 	}
 
 	return err
@@ -246,7 +246,7 @@ func (mngr *AccountsManager) AuthorizeAccount(accountData *data.Account, authori
 	mngr.writeAllAccounts()
 
 	if account.Data.Authorized && account.Data.Authorized != authorizedOld {
-		mngr.sendEmail(account, email.SendAccountAuthorized)
+		mngr.sendEmail(account, nil, email.SendAccountAuthorized)
 	}
 
 	return nil
@@ -269,7 +269,7 @@ func (mngr *AccountsManager) GrantGOCDBAccess(accountData *data.Account, grantAc
 	mngr.writeAllAccounts()
 
 	if account.Data.GOCDBAccess && account.Data.GOCDBAccess != accessOld {
-		mngr.sendEmail(account, email.SendGOCDBAccessGranted)
+		mngr.sendEmail(account, nil, email.SendGOCDBAccessGranted)
 	}
 
 	return nil
@@ -307,7 +307,7 @@ func (mngr *AccountsManager) AssignAPIKeyToAccount(accountData *data.Account, fl
 	mngr.storage.AccountUpdated(account)
 	mngr.writeAllAccounts()
 
-	mngr.sendEmail(account, email.SendAPIKeyAssigned)
+	mngr.sendEmail(account, nil, email.SendAPIKeyAssigned)
 
 	return nil
 }
@@ -352,6 +352,11 @@ func (mngr *AccountsManager) RemoveAccount(accountData *data.Account) error {
 	return errors.Errorf("no account with the specified email exists")
 }
 
+// SendContactForm sends a generic email to the ScienceMesh admins.
+func (mngr *AccountsManager) SendContactForm(account *data.Account, subject, message string) {
+	mngr.sendEmail(account, map[string]string{"Subject": subject, "Message": message}, email.SendContactForm)
+}
+
 // CloneAccounts retrieves all accounts currently stored by cloning the data, thus avoiding race conflicts and making outside modifications impossible.
 func (mngr *AccountsManager) CloneAccounts(erasePasswords bool) data.Accounts {
 	mngr.mutex.RLock()
@@ -365,8 +370,8 @@ func (mngr *AccountsManager) CloneAccounts(erasePasswords bool) data.Accounts {
 	return clones
 }
 
-func (mngr *AccountsManager) sendEmail(account *data.Account, sendFunc email.SendFunction) {
-	_ = sendFunc(account, []string{account.Email, mngr.conf.Email.NotificationsMail}, *mngr.conf)
+func (mngr *AccountsManager) sendEmail(account *data.Account, params map[string]string, sendFunc email.SendFunction) {
+	_ = sendFunc(account, []string{account.Email, mngr.conf.Email.NotificationsMail}, params, *mngr.conf)
 }
 
 // NewAccountsManager creates a new accounts manager instance.

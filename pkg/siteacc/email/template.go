@@ -78,3 +78,12 @@ We recommend to change this password immediately after logging in.
 Kind regards,
 The ScienceMesh Team
 `
+
+const contactFormTemplate = `
+{{.Account.FirstName}} {{.Account.LastName}} ({{.Account.Email}}) has sent the following message:
+
+{{.Params.Subject}}
+---------------------------------------------------------------------------------------------------
+
+{{.Params.Message}}
+`

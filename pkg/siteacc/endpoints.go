@@ -81,6 +81,7 @@ func getEndpoints() []endpoint {
 		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
 		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), true},
 		{config.EndpointResetPassword, callMethodEndpoint, createMethodCallbacks(nil, handleResetPassword), true},
+		{config.EndpointContact, callMethodEndpoint, createMethodCallbacks(nil, handleContact), true},
 		// Authentication endpoints
 		{config.EndpointVerifyUserToken, callMethodEndpoint, createMethodCallbacks(handleVerifyUserToken, nil), true},
 		// Authorization endpoints
@@ -346,6 +347,25 @@ func handleResetPassword(siteacc *SiteAccounts, values url.Values, body []byte, 
 		return nil, errors.Wrap(err, "unable to reset password")
 	}
 
+	return nil, nil
+}
+
+func handleContact(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	if session.LoggedInUser == nil {
+		return nil, errors.Errorf("no user is currently logged in")
+	}
+
+	type jsonData struct {
+		Subject string `json:"subject"`
+		Message string `json:"message"`
+	}
+	contactData := &jsonData{}
+	if err := json.Unmarshal(body, contactData); err != nil {
+		return nil, errors.Wrap(err, "invalid form data")
+	}
+
+	// Send an email through the accounts manager
+	siteacc.AccountsManager().SendContactForm(session.LoggedInUser, contactData.Subject, contactData.Message)
 	return nil, nil
 }
 

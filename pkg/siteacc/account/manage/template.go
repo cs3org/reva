@@ -25,11 +25,13 @@ function handleEditAccount() {
 }
 
 function handleRequestAccess() {
-	setState(STATE_STATUS, "No one has implemented this function yet :(");
+	setState(STATE_STATUS, "Redirecting to the contact form...");		
+	window.location.replace("?path=contact&subject=" + encodeURIComponent("Request GOCDB access"));
 }
 
 function handleRequestKey() {
-	setState(STATE_STATUS, "No one has implemented this function yet :(");
+	setState(STATE_STATUS, "Redirecting to the contact form...");
+	window.location.replace("?path=contact&subject=" + encodeURIComponent("Request API key"));
 }
 
 function handleLogout() {
@@ -70,7 +72,7 @@ html * {
 const tplBody = `
 <div>
 	<p><strong>Hello {{.Account.FirstName}} {{.Account.LastName}},</strong></p>
-	<p>On this page, you can manage your ScienceMesh user account. This includes editing your personal information, requesting access to the GOCDB and more.</p>
+	<p>On this page, you can manage your ScienceMesh user account. This includes editing your personal information, requesting an API key or access to the GOCDB and more.</p>
 </div>
 <div>&nbsp;</div>
 <div>
@@ -96,8 +98,8 @@ const tplBody = `
 	<form id="form" method="POST" class="box" style="width: 100%;">
 		<button type="button" onClick="handleEditAccount();">Edit account</button>
 		<span style="width: 25px;">&nbsp;</span>
-		<button type="button" onClick="handleRequestKey();" disabled>Request API Key</button>
-		<button type="button" onClick="handleRequestAccess();" disabled>Request GOCDB access</button>
+		<button type="button" onClick="handleRequestKey();">Request API Key</button>
+		<button type="button" onClick="handleRequestAccess();">Request GOCDB access</button>
 		
 		<button type="button" onClick="handleLogout();" style="float: right;">Logout</button>
 	</form>

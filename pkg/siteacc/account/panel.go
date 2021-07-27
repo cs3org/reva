@@ -21,7 +21,9 @@ package account
 import (
 	"net/http"
 	"net/url"
+	"strings"
 
+	"github.com/cs3org/reva/pkg/siteacc/account/contact"
 	"github.com/cs3org/reva/pkg/siteacc/account/edit"
 	"github.com/cs3org/reva/pkg/siteacc/account/login"
 	"github.com/cs3org/reva/pkg/siteacc/account/manage"
@@ -44,6 +46,7 @@ const (
 	templateLogin        = "login"
 	templateManage       = "manage"
 	templateEdit         = "edit"
+	templateContact      = "contact"
 	templateRegistration = "register"
 )
 
@@ -68,6 +71,10 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 		return errors.Wrap(err, "unable to create the account editing template")
 	}
 
+	if err := panel.htmlPanel.AddTemplate(templateContact, &contact.PanelTemplate{}); err != nil {
+		return errors.Wrap(err, "unable to create the contact template")
+	}
+
 	if err := panel.htmlPanel.AddTemplate(templateRegistration, &registration.PanelTemplate{}); err != nil {
 		return errors.Wrap(err, "unable to create the registration template")
 	}
@@ -77,7 +84,7 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 
 // GetActiveTemplate returns the name of the active template.
 func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string {
-	validPaths := []string{templateLogin, templateManage, templateEdit, templateRegistration}
+	validPaths := []string{templateLogin, templateManage, templateEdit, templateContact, templateRegistration}
 	template := templateLogin
 
 	// Only allow valid template paths; redirect to the login page otherwise
@@ -93,7 +100,7 @@ func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string
 
 // PreExecute is called before the actual template is being executed.
 func (panel *Panel) PreExecute(session *html.Session, path string, w http.ResponseWriter, r *http.Request) (html.ExecutionResult, error) {
-	protectedPaths := []string{templateManage, templateEdit}
+	protectedPaths := []string{templateManage, templateEdit, templateContact}
 
 	if session.LoggedInUser == nil {
 		// If no user is logged in, redirect protected paths to the login page
@@ -115,12 +122,19 @@ func (panel *Panel) PreExecute(session *html.Session, path string, w http.Respon
 // Execute generates the HTTP output of the form and writes it to the response writer.
 func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *html.Session) error {
 	dataProvider := func(*html.Session) interface{} {
+		flatValues := make(map[string]string, len(r.URL.Query()))
+		for k, v := range r.URL.Query() {
+			flatValues[strings.Title(k)] = v[0]
+		}
+
 		type TemplateData struct {
 			Account *data.Account
+			Params  map[string]string
 		}
 
 		return TemplateData{
 			Account: session.LoggedInUser,
+			Params:  flatValues,
 		}
 	}
 	return panel.htmlPanel.Execute(w, r, session, dataProvider)

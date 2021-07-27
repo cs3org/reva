@@ -33,42 +33,50 @@ type emailData struct {
 
 	AccountsAddress string
 	GOCDBAddress    string
+
+	Params map[string]string
 }
 
 // SendFunction is the definition of email send functions.
-type SendFunction = func(*data.Account, []string, config.Configuration) error
+type SendFunction = func(*data.Account, []string, map[string]string, config.Configuration) error
 
-func getEmailData(account *data.Account, conf config.Configuration) *emailData {
+func getEmailData(account *data.Account, conf config.Configuration, params map[string]string) *emailData {
 	return &emailData{
 		Account:         account,
 		AccountsAddress: conf.Email.AccountsAddress,
 		GOCDBAddress:    conf.Email.GOCDBAddress,
+		Params:          params,
 	}
 }
 
 // SendAccountCreated sends an email about account creation.
-func SendAccountCreated(account *data.Account, recipients []string, conf config.Configuration) error {
-	return send(recipients, "ScienceMesh: Site account created", accountCreatedTemplate, getEmailData(account, conf), conf.Email.SMTP)
+func SendAccountCreated(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
+	return send(recipients, "ScienceMesh: Site account created", accountCreatedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
 }
 
 // SendAPIKeyAssigned sends an email about API key assignment.
-func SendAPIKeyAssigned(account *data.Account, recipients []string, conf config.Configuration) error {
-	return send(recipients, "ScienceMesh: Your API key", apiKeyAssignedTemplate, getEmailData(account, conf), conf.Email.SMTP)
+func SendAPIKeyAssigned(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
+	return send(recipients, "ScienceMesh: Your API key", apiKeyAssignedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
 }
 
 // SendAccountAuthorized sends an email about account authorization.
-func SendAccountAuthorized(account *data.Account, recipients []string, conf config.Configuration) error {
-	return send(recipients, "ScienceMesh: Site registration authorized", accountAuthorizedTemplate, getEmailData(account, conf), conf.Email.SMTP)
+func SendAccountAuthorized(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
+	return send(recipients, "ScienceMesh: Site registration authorized", accountAuthorizedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
 }
 
 // SendGOCDBAccessGranted sends an email about granted GOCDB access.
-func SendGOCDBAccessGranted(account *data.Account, recipients []string, conf config.Configuration) error {
-	return send(recipients, "ScienceMesh: GOCDB access granted", gocdbAccessGrantedTemplate, getEmailData(account, conf), conf.Email.SMTP)
+func SendGOCDBAccessGranted(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
+	return send(recipients, "ScienceMesh: GOCDB access granted", gocdbAccessGrantedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
 }
 
 // SendPasswordReset sends an email containing the user's new password.
-func SendPasswordReset(account *data.Account, recipients []string, conf config.Configuration) error {
-	return send(recipients, "ScienceMesh: Password reset", passwordResetTemplate, getEmailData(account, conf), conf.Email.SMTP)
+func SendPasswordReset(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
+	return send(recipients, "ScienceMesh: Password reset", passwordResetTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
+}
+
+// SendContactForm sends a generic contact form to the ScienceMesh admins.
+func SendContactForm(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
+	return send(recipients, "ScienceMesh: Contact form", contactFormTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
 }
 
 func send(recipients []string, subject string, bodyTemplate string, data interface{}, smtp *smtpclient.SMTPCredentials) error {
