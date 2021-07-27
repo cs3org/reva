@@ -1386,13 +1386,13 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 		return err
 	}
 
-	msg := new(erpc.NSRequest_RecycleRequest)
-	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["RESTORE"])
-	msg.Key = version
-	msg.Restoreflag = new(erpc.NSRequest_RecycleRequest_RestoreFlags)
-	msg.Restoreflag.Versions = true
+	msg := new(erpc.NSRequest_VersionRequest)
+	msg.Cmd = erpc.NSRequest_VersionRequest_VERSION_CMD(erpc.NSRequest_VersionRequest_VERSION_CMD_value["GRAB"])
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+	msg.Grabversion = version
 
-	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
+	rq.Command = &erpc.NSRequest_Version{Version: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
