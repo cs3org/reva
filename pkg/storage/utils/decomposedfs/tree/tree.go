@@ -446,9 +446,13 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 
 		// rename to node only name, so it is picked up by id
 		nodePath := rn.InternalPath()
-		err = os.Rename(deletedNodePath, nodePath)
-		if err != nil {
-			return err
+
+		// attempt to rename only if we're not in a subfolder
+		if deletedNodePath != nodePath {
+			err = os.Rename(deletedNodePath, nodePath)
+			if err != nil {
+				return err
+			}
 		}
 
 		n.Exists = true
@@ -457,6 +461,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
+		// set ParentidAttr to restorePath's node parent id
 		if trashPath != "" {
 			if err := xattr.Set(nodePath, xattrs.ParentidAttr, []byte(n.ParentID)); err != nil {
 				return errors.Wrap(err, "Decomposedfs: could not set name attribute")

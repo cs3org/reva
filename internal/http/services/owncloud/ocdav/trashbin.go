@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -411,7 +412,6 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 	return &response, nil
 }
 
-// restore has a destination and a key
 func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst, key, itemPath string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "restore")
@@ -467,6 +467,26 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
 		HandleErrorStatus(&sublog, w, dstStatRes.Status)
 		return
+	}
+
+	// Restoring to a non-existent location is not supported by the WebDAV spec. The following block ensures the target
+	// restore location exists, and if it doesn't returns a conflict error code.
+	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && strings.HasSuffix(dst, itemPath) && isNested(dst) {
+		parentStatReq := &provider.StatRequest{
+			Ref: &provider.Reference{Path: path.Join(getHomeRes.Path, filepath.Dir(dst))},
+		}
+
+		parentStatResponse, err := client.Stat(ctx, parentStatReq)
+		if err != nil {
+			sublog.Error().Err(err).Msg("error sending grpc stat request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if parentStatResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			HandleErrorStatus(&sublog, w, &rpc.Status{Code: rpc.Code_CODE_ALREADY_EXISTS})
+			return
+		}
 	}
 
 	successCode := http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.9.4
@@ -634,4 +654,9 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	default:
 		HandleErrorStatus(&sublog, w, res.Status)
 	}
+}
+
+func isNested(p string) bool {
+	dir, _ := path.Split(p)
+	return dir != "/"
 }
