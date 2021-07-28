@@ -20,8 +20,10 @@ package jwt
 
 import (
 	"context"
+	"crypto/sha1"
 	"time"
 
+	"github.com/bluele/gcache"
 	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -45,7 +47,8 @@ type config struct {
 }
 
 type manager struct {
-	conf *config
+	conf       *config
+	tokenCache gcache.Cache
 }
 
 // claims are custom claims for the JWT token.
@@ -81,7 +84,10 @@ func New(value map[string]interface{}) (token.Manager, error) {
 		return nil, errors.New("jwt: secret for signing payloads is not defined in config")
 	}
 
-	m := &manager{conf: c}
+	m := &manager{
+		conf:       c,
+		tokenCache: gcache.New(1000000).LFU().Build(),
+	}
 	return m, nil
 }
 
@@ -105,11 +111,16 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 		return "", errors.Wrapf(err, "error signing token with claims %+v", claims)
 	}
 
-	return tkn, nil
+	return m.cacheAndReturnHash(tkn)
 }
 
 func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, map[string]*auth.Scope, error) {
-	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
+	cachedToken, err := m.getCachedToken(tkn)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	token, err := jwt.ParseWithClaims(cachedToken, &claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(m.conf.Secret), nil
 	})
 
@@ -122,4 +133,19 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, m
 	}
 
 	return nil, nil, errtypes.InvalidCredentials("invalid token")
+}
+
+func (m *manager) cacheAndReturnHash(token string) (string, error) {
+	h := sha1.New()
+	h.Write([]byte(token))
+	hash := string(h.Sum(nil))
+	err := m.tokenCache.SetWithExpire(hash, token, time.Second*time.Duration(m.conf.Expires))
+	return hash, err
+}
+
+func (m *manager) getCachedToken(hashedToken string) (string, error) {
+	if tknIf, err := m.tokenCache.Get(hashedToken); err == nil {
+		return tknIf.(string), nil
+	}
+	return "", errtypes.InvalidCredentials("invalid token")
 }
