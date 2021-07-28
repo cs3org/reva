@@ -20,7 +20,8 @@ package jwt
 
 import (
 	"context"
-	"crypto/sha1"
+	"crypto/sha256"
+	"encoding/hex"
 	"time"
 
 	"github.com/bluele/gcache"
@@ -37,6 +38,8 @@ import (
 
 const defaultExpiration int64 = 86400 // 1 day
 
+var tokenCache = gcache.New(1000000).LFU().Build()
+
 func init() {
 	registry.Register("jwt", New)
 }
@@ -47,8 +50,7 @@ type config struct {
 }
 
 type manager struct {
-	conf       *config
-	tokenCache gcache.Cache
+	conf *config
 }
 
 // claims are custom claims for the JWT token.
@@ -84,11 +86,7 @@ func New(value map[string]interface{}) (token.Manager, error) {
 		return nil, errors.New("jwt: secret for signing payloads is not defined in config")
 	}
 
-	m := &manager{
-		conf:       c,
-		tokenCache: gcache.New(1000000).LFU().Build(),
-	}
-	return m, nil
+	return &manager{conf: c}, nil
 }
 
 func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
@@ -136,15 +134,17 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, m
 }
 
 func (m *manager) cacheAndReturnHash(token string) (string, error) {
-	h := sha1.New()
-	h.Write([]byte(token))
-	hash := string(h.Sum(nil))
-	err := m.tokenCache.SetWithExpire(hash, token, time.Second*time.Duration(m.conf.Expires))
+	h := sha256.New()
+	if _, err := h.Write([]byte(token)); err != nil {
+		return "", err
+	}
+	hash := hex.EncodeToString(h.Sum(nil))
+	err := tokenCache.SetWithExpire(hash, token, time.Second*time.Duration(m.conf.Expires))
 	return hash, err
 }
 
 func (m *manager) getCachedToken(hashedToken string) (string, error) {
-	if tknIf, err := m.tokenCache.Get(hashedToken); err == nil {
+	if tknIf, err := tokenCache.Get(hashedToken); err == nil {
 		return tknIf.(string), nil
 	}
 	return "", errtypes.InvalidCredentials("invalid token")
