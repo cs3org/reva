@@ -81,6 +81,16 @@ const panelTemplate = `
 			}
 		}
 
+		FormData.prototype.getTrimmed = function(id) {
+			var val = this.get(id);
+
+			if (val != null) {
+				return val.trim();
+			} else {
+				return "";
+			}
+		}
+
 		$(CONTENT_JAVASCRIPT)
 	</script>
 	<style>

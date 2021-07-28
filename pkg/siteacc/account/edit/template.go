@@ -20,22 +20,22 @@ package edit
 
 const tplJavaScript = `
 function verifyForm(formData) {
-	if (formData.get("fname") == "") {
+	if (formData.getTrimmed("fname") == "") {
 		setState(STATE_ERROR, "Please specify your first name.", "form", "fname", true);
 		return false;
 	}
 
-	if (formData.get("lname") == "") {
+	if (formData.getTrimmed("lname") == "") {
 		setState(STATE_ERROR, "Please specify your last name.", "form", "lname", true);	
 		return false;
 	}
 
-	if (formData.get("organization") == "") {
+	if (formData.getTrimmed("organization") == "") {
 		setState(STATE_ERROR, "Please specify your organization/company.", "form", "organization", true);
 		return false;
 	}
 
-	if (formData.get("role") == "") {
+	if (formData.getTrimmed("role") == "") {
 		setState(STATE_ERROR, "Please specify your role within the organization/company.", "form", "role", true);
 		return false;
 	}
@@ -79,12 +79,12 @@ function handleAction(action) {
 	}
 
 	var postData = {
-		"firstName": formData.get("fname"),
-		"lastName": formData.get("lname"),
-		"organization": formData.get("organization"),
-		"website": formData.get("website"),
-		"role": formData.get("role"),
-		"phoneNumber": formData.get("phone"),
+		"firstName": formData.getTrimmed("fname"),
+		"lastName": formData.getTrimmed("lname"),
+		"organization": formData.getTrimmed("organization"),
+		"website": formData.getTrimmed("website"),
+		"role": formData.getTrimmed("role"),
+		"phoneNumber": formData.getTrimmed("phone"),
 		"password": {
 			"value": formData.get("password")
 		}

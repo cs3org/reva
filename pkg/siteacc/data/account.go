@@ -128,6 +128,17 @@ func (acc *Account) CheckScopeAccess(scope string) bool {
 	return hasAccess
 }
 
+// Cleanup trims all string entries.
+func (acc *Account) Cleanup() {
+	acc.Email = strings.TrimSpace(acc.Email)
+	acc.FirstName = strings.TrimSpace(acc.FirstName)
+	acc.LastName = strings.TrimSpace(acc.LastName)
+	acc.Organization = strings.TrimSpace(acc.Organization)
+	acc.Website = strings.TrimSpace(acc.Website)
+	acc.Role = strings.TrimSpace(acc.Role)
+	acc.PhoneNumber = strings.TrimSpace(acc.PhoneNumber)
+}
+
 func (acc *Account) verify(verifyPassword bool) error {
 	if acc.Email == "" {
 		return errors.Errorf("no email address provided")

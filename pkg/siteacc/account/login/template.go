@@ -20,7 +20,7 @@ package login
 
 const tplJavaScript = `
 function verifyForm(formData, requirePassword = true) {
-	if (formData.get("email") == "") {
+	if (formData.getTrimmed("email") == "") {
 		setState(STATE_ERROR, "Please enter your email address.", "form", "email", true);
 		return false;
 	}
@@ -60,7 +60,7 @@ function handleAction(action) {
 	}
 
 	var postData = {
-        "email": formData.get("email"),
+        "email": formData.getTrimmed("email"),
 		"password": {
 			"value": formData.get("password")
 		}

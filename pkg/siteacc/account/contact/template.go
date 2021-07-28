@@ -20,12 +20,12 @@ package contact
 
 const tplJavaScript = `
 function verifyForm(formData) {
-	if (formData.get("subject") == "") {
+	if (formData.getTrimmed("subject") == "") {
 		setState(STATE_ERROR, "Please enter a subject.", "form", "subject", true);
 		return false;
 	}
 
-	if (formData.get("message") == "") {
+	if (formData.getTrimmed("message") == "") {
 		setState(STATE_ERROR, "Please enter a message.", "form", "message", true);	
 		return false;
 	}
@@ -57,8 +57,8 @@ function handleAction(action) {
 	}
 
 	var postData = {
-		"subject": formData.get("subject"),
-		"message": formData.get("message")	
+		"subject": formData.getTrimmed("subject"),
+		"message": formData.getTrimmed("message")
     };
 
     xhr.send(JSON.stringify(postData));

@@ -365,7 +365,7 @@ func handleContact(siteacc *SiteAccounts, values url.Values, body []byte, sessio
 	}
 
 	// Send an email through the accounts manager
-	siteacc.AccountsManager().SendContactForm(session.LoggedInUser, contactData.Subject, contactData.Message)
+	siteacc.AccountsManager().SendContactForm(session.LoggedInUser, strings.TrimSpace(contactData.Subject), strings.TrimSpace(contactData.Message))
 	return nil, nil
 }
 
@@ -454,6 +454,7 @@ func unmarshalRequestData(body []byte) (*data.Account, error) {
 	if err := json.Unmarshal(body, account); err != nil {
 		return nil, errors.Wrap(err, "invalid account data")
 	}
+	account.Cleanup()
 	return account, nil
 }
 
