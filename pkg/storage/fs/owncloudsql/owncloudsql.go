@@ -68,11 +68,10 @@ const (
 	// "user.oc."
 	ocPrefix string = "user.oc."
 
-	trashOriginPrefix string = ocPrefix + "o"
-	mdPrefix          string = ocPrefix + "md."   // arbitrary metadata
-	favPrefix         string = ocPrefix + "fav."  // favorite flag, per user
-	etagPrefix        string = ocPrefix + "etag." // allow overriding a calculated etag with one from the extended attributes
-	checksumsKey      string = "http://owncloud.org/ns/checksums"
+	mdPrefix     string = ocPrefix + "md."   // arbitrary metadata
+	favPrefix    string = ocPrefix + "fav."  // favorite flag, per user
+	etagPrefix   string = ocPrefix + "etag." // allow overriding a calculated etag with one from the extended attributes
+	checksumsKey string = "http://owncloud.org/ns/checksums"
 )
 
 var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{

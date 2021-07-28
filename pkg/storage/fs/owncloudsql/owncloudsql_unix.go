@@ -64,5 +64,5 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 		log.Error().Err(err).Msg("error writing size")
 	}
 	etag := fmt.Sprintf("%x", h.Sum(nil))
-	return fmt.Sprintf("%s", strings.Trim(etag, "\""))
+	return strings.Trim(etag, "\"")
 }
