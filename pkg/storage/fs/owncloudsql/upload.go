@@ -46,7 +46,7 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
-func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (fs *owncloudsqlfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
 		// Upload corresponding to this ID was not found.
@@ -101,7 +101,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
-func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+func (fs *owncloudsqlfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
@@ -142,7 +142,7 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.
-func (fs *ocfs) UseIn(composer *tusd.StoreComposer) {
+func (fs *owncloudsqlfs) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(fs)
 	composer.UseTerminater(fs)
 	composer.UseConcater(fs)
@@ -153,7 +153,7 @@ func (fs *ocfs) UseIn(composer *tusd.StoreComposer) {
 // - the storage needs to implement NewUpload and GetUpload
 // - the upload needs to implement the tusd.Upload interface: WriteChunk, GetInfo, GetReader and FinishUpload
 
-func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
+func (fs *owncloudsqlfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("owncloudsql: NewUpload")
@@ -255,7 +255,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	return u, nil
 }
 
-func (fs *ocfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
+func (fs *owncloudsqlfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
@@ -266,7 +266,7 @@ func (fs *ocfs) getUploadPath(ctx context.Context, uploadID string) (string, err
 }
 
 // GetUpload returns the Upload for the given upload id
-func (fs *ocfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
+func (fs *owncloudsqlfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 	infoPath := filepath.Join(fs.c.UploadInfoDir, id+".info")
 
 	info := tusd.FileInfo{}
@@ -322,7 +322,7 @@ type fileUpload struct {
 	// binPath is the path to the binary file (which has no extension)
 	binPath string
 	// only fs knows how to handle metadata and versions
-	fs *ocfs
+	fs *owncloudsqlfs
 	// a context with a user
 	// TODO add logger as well?
 	ctx context.Context
@@ -443,7 +443,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the upload needs to implement Terminate
 
 // AsTerminatableUpload returns a TerminatableUpload
-func (fs *ocfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
+func (fs *owncloudsqlfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
 
@@ -467,7 +467,7 @@ func (upload *fileUpload) Terminate(ctx context.Context) error {
 // - the upload needs to implement DeclareLength
 
 // AsLengthDeclarableUpload returns a LengthDeclarableUpload
-func (fs *ocfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
+func (fs *owncloudsqlfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
 	return upload.(*fileUpload)
 }
 
@@ -483,7 +483,7 @@ func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error
 // - the upload needs to implement ConcatUploads
 
 // AsConcatableUpload returns a ConcatableUpload
-func (fs *ocfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
+func (fs *owncloudsqlfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
 	return upload.(*fileUpload)
 }
 
