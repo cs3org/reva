@@ -71,6 +71,14 @@ var _ = Describe("Filecache", func() {
 		})
 	})
 
+	Describe("GetStorageOwner", func() {
+		It("returns the owner", func() {
+			owner, err := cache.GetStorageOwner("1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(owner).To(Equal("admin"))
+		})
+	})
+
 	Describe("Get", func() {
 		It("gets existing files", func() {
 			path := "files/Photos/Portugal.jpg"
