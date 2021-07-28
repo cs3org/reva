@@ -919,7 +919,6 @@ _ocs: api compatibility, return correct status code_
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:213](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#211)
 -   [apiShareManagementBasicToShares/deleteShareFromShares.feature:214](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#212)
 
-
 ### User Management
 User and group management features
 

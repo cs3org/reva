@@ -571,9 +571,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		if stateFilter == collaboration.ShareState_SHARE_STATE_ACCEPTED || stateFilter == ocsStateUnknown {
 			// only log errors. They may happen but we can continue trying to at least list the shares
 			lcRes, err := client.ListContainer(ctx, &provider.ListContainerRequest{
-				Ref: &provider.Reference{
-					Path: path.Join(h.homeNamespace, h.sharePrefix),
-				},
+				Ref: &provider.Reference{Path: path.Join(h.homeNamespace, h.sharePrefix)},
 			})
 			if err != nil || lcRes.Status.Code != rpc.Code_CODE_OK {
 				h.logProblems(lcRes.GetStatus(), err, "could not list container, continuing without share jail path info")
