@@ -77,7 +77,7 @@ type AuthenticateArgs struct {
 	ClientSecret string
 }
 
-//  AuthenticateReply for RPC
+// AuthenticateReply for RPC
 type AuthenticateReply struct {
 	User  *user.User
 	Auth  map[string]*authpb.Scope
