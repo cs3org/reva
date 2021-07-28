@@ -742,11 +742,11 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 	}
 
 	// otherwise this is a share
-	ownerStorageId, err := fs.filecache.GetNumericStorageID("home::" + owner)
+	ownerStorageID, err := fs.filecache.GetNumericStorageID("home::" + owner)
 	if err != nil {
 		return nil, err
 	}
-	entry, err := fs.filecache.Get(ownerStorageId, fs.toDatabasePath(ctx, ip))
+	entry, err := fs.filecache.Get(ownerStorageID, fs.toDatabasePath(ctx, ip))
 	if err != nil {
 		return nil, err
 	}

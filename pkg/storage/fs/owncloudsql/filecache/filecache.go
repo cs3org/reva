@@ -98,7 +98,7 @@ func (c *Cache) CreateStorage(id string) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	insertedId, err := res.LastInsertId()
+	insertedID, err := res.LastInsertId()
 	if err != nil {
 		return -1, err
 	}
@@ -108,7 +108,7 @@ func (c *Cache) CreateStorage(id string) (int, error) {
 		"etag":     "",
 		"mimetype": "httpd/unix-directory",
 	}
-	_, err = c.doInsertOrUpdate(tx, int(insertedId), data, true)
+	_, err = c.doInsertOrUpdate(tx, int(insertedID), data, true)
 	if err != nil {
 		return -1, err
 	}
@@ -118,16 +118,16 @@ func (c *Cache) CreateStorage(id string) (int, error) {
 		return -1, err
 	}
 
-	return int(insertedId), err
+	return int(insertedID), err
 }
 
 // GetStorageOwner returns the username of the owner of the given storage
-func (c *Cache) GetStorageOwner(numericId interface{}) (string, error) {
-	numericId, err := toIntID(numericId)
+func (c *Cache) GetStorageOwner(numericID interface{}) (string, error) {
+	numericID, err := toIntID(numericID)
 	if err != nil {
 		return "", err
 	}
-	row := c.db.QueryRow("Select id from oc_storages where numeric_id = ?", numericId)
+	row := c.db.QueryRow("Select id from oc_storages where numeric_id = ?", numericID)
 	var id string
 	switch err := row.Scan(&id); err {
 	case nil:
@@ -138,12 +138,12 @@ func (c *Cache) GetStorageOwner(numericId interface{}) (string, error) {
 }
 
 // GetStorageOwnerByFileID returns the username of the owner of the given entry
-func (c *Cache) GetStorageOwnerByFileID(numericId interface{}) (string, error) {
-	numericId, err := toIntID(numericId)
+func (c *Cache) GetStorageOwnerByFileID(numericID interface{}) (string, error) {
+	numericID, err := toIntID(numericID)
 	if err != nil {
 		return "", err
 	}
-	row := c.db.QueryRow("Select id from oc_storages storages, oc_filecache cache where storages.numeric_id = cache.storage and cache.fileid = ?", numericId)
+	row := c.db.QueryRow("Select id from oc_storages storages, oc_filecache cache where storages.numeric_id = cache.storage and cache.fileid = ?", numericID)
 	var id string
 	switch err := row.Scan(&id); err {
 	case nil:
