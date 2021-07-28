@@ -79,13 +79,22 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an auth manager implementation that verifies the oidc token and obtains the user claims.
 func New(m map[string]interface{}) (auth.Manager, error) {
-	c, err := parseConfig(m)
+	manager := &mgr{}
+	err := manager.Configure(m)
 	if err != nil {
 		return nil, err
 	}
-	c.init()
+	return manager, nil
+}
 
-	return &mgr{c: c}, nil
+func (am *mgr) Configure(m map[string]interface{}) error {
+	c, err := parseConfig(m)
+	if err != nil {
+		return err
+	}
+	c.init()
+	am.c = c
+	return nil
 }
 
 // the clientID it would be empty as we only need to validate the clientSecret variable
