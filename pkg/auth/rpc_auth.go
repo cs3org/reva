@@ -29,21 +29,21 @@ import (
 )
 
 func init() {
-	plugin.Register("authprovider", &AuthProviderPlugin{})
+	plugin.Register("authprovider", &ProviderPlugin{})
 }
 
 // ProviderPlugin is the implementation of plugin.Plugin so we can serve/consume this.
-type AuthProviderPlugin struct {
+type ProviderPlugin struct {
 	Impl Manager
 }
 
 // Server returns the RPC Server which serves the methods that the Client calls over net/rpc
-func (p *AuthProviderPlugin) Server(*hcplugin.MuxBroker) (interface{}, error) {
+func (p *ProviderPlugin) Server(*hcplugin.MuxBroker) (interface{}, error) {
 	return &RPCServer{Impl: p.Impl}, nil
 }
 
 // Client returns interface implementation for the plugin that communicates to the server end of the plugin
-func (p *AuthProviderPlugin) Client(b *hcplugin.MuxBroker, c *rpc.Client) (interface{}, error) {
+func (p *ProviderPlugin) Client(b *hcplugin.MuxBroker, c *rpc.Client) (interface{}, error) {
 	return &RPCClient{Client: c}, nil
 }
 
@@ -71,17 +71,20 @@ func (m *RPCClient) Configure(ml map[string]interface{}) error {
 	return resp.Err
 }
 
+// AuthenticateArgs for RPC
 type AuthenticateArgs struct {
 	ClientID     string
 	ClientSecret string
 }
 
+//  AuthenticateReply for RPC
 type AuthenticateReply struct {
 	User  *user.User
 	Auth  map[string]*authpb.Scope
 	Error error
 }
 
+// Authenticate RPCClient Authenticate method
 func (m *RPCClient) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	args := AuthenticateArgs{ClientID: clientID, ClientSecret: clientSecret}
 	reply := AuthenticateReply{}
@@ -104,6 +107,7 @@ func (m *RPCServer) Configure(args ConfigureArg, resp *ConfigureReply) error {
 	return nil
 }
 
+// Authenticate RPCServer Authenticate method
 func (m *RPCServer) Authenticate(args AuthenticateArgs, resp *AuthenticateReply) error {
 	resp.User, resp.Auth, resp.Error = m.Impl.Authenticate(context.Background(), args.ClientID, args.ClientSecret)
 	return nil
