@@ -20,6 +20,7 @@ package html
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -56,11 +57,16 @@ func getRemoteAddress(r *http.Request) string {
 }
 
 // Save stores the session ID in a cookie using a response writer.
-func (sess *Session) Save(w http.ResponseWriter) {
+func (sess *Session) Save(cookiePath string, w http.ResponseWriter) {
+	fullURL, _ := url.Parse(cookiePath)
 	http.SetCookie(w, &http.Cookie{
-		Name:   sess.sessionCookieName,
-		Value:  sess.ID,
-		MaxAge: int(sess.Timeout / time.Second),
+		Name:     sess.sessionCookieName,
+		Secure:   !strings.EqualFold(fullURL.Hostname(), "localhost"),
+		Value:    sess.ID,
+		MaxAge:   int(sess.Timeout / time.Second),
+		Domain:   fullURL.Hostname(),
+		Path:     fullURL.Path,
+		SameSite: http.SameSiteLaxMode,
 	})
 }
 

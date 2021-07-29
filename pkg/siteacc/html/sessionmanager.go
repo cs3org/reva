@@ -117,7 +117,7 @@ func (mngr *SessionManager) HandleRequest(w http.ResponseWriter, r *http.Request
 	}
 
 	// Store the session ID on the client side
-	session.Save(w)
+	session.Save(mngr.conf.Webserver.URL, w)
 
 	return session, sessionErr
 }
