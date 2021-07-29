@@ -18,7 +18,11 @@
 
 package config
 
-import "github.com/cs3org/reva/pkg/smtpclient"
+import (
+	"strings"
+
+	"github.com/cs3org/reva/pkg/smtpclient"
+)
 
 // Configuration holds the general service configuration.
 type Configuration struct {
@@ -35,9 +39,6 @@ type Configuration struct {
 	Email struct {
 		SMTP              *smtpclient.SMTPCredentials `mapstructure:"smtp"`
 		NotificationsMail string                      `mapstructure:"notifications_mail"`
-
-		AccountsAddress string `mapstructure:"accounts_address"`
-		GOCDBAddress    string `mapstructure:"gocdb_address"`
 	} `mapstructure:"email"`
 
 	SiteRegistration struct {
@@ -45,7 +46,24 @@ type Configuration struct {
 	} `mapstructure:"sitereg"`
 
 	Webserver struct {
+		URL string `mapstructure:"url"`
+
 		SessionTimeout int  `mapstructure:"session_timeout"`
 		LogSessions    bool `mapstructure:"log_sessions"`
 	} `mapstructure:"webserver"`
+
+	GOCDBURL string `mapstructure:"gocdb_url"`
+}
+
+// Cleanup cleans up certain settings, normalizing them.
+func (cfg *Configuration) Cleanup() {
+	// Ensure the webserver URL ends with a slash
+	if cfg.Webserver.URL != "" && !strings.HasSuffix(cfg.Webserver.URL, "/") {
+		cfg.Webserver.URL = cfg.Webserver.URL + "/"
+	}
+
+	// Ensure the GOCDB URL ends with a slash
+	if cfg.GOCDBURL != "" && !strings.HasSuffix(cfg.GOCDBURL, "/") {
+		cfg.GOCDBURL = cfg.GOCDBURL + "/"
+	}
 }

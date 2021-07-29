@@ -21,22 +21,22 @@ package manage
 const tplJavaScript = `
 function handleEditAccount() {
 	setState(STATE_STATUS, "Redirecting to the account editor...");
-	window.location.replace("?path=edit");
+	window.location.replace("{{getServerAddress}}/account/?path=edit");
 }
 
 function handleRequestAccess() {
 	setState(STATE_STATUS, "Redirecting to the contact form...");		
-	window.location.replace("?path=contact&subject=" + encodeURIComponent("Request GOCDB access"));
+	window.location.replace("{{getServerAddress}}/account/?path=contact&subject=" + encodeURIComponent("Request GOCDB access"));
 }
 
 function handleRequestKey() {
 	setState(STATE_STATUS, "Redirecting to the contact form...");
-	window.location.replace("?path=contact&subject=" + encodeURIComponent("Request API key"));
+	window.location.replace("{{getServerAddress}}/account/?path=contact&subject=" + encodeURIComponent("Request API key"));
 }
 
 function handleLogout() {
 	var xhr = new XMLHttpRequest();
-    xhr.open("GET", "logout");
+    xhr.open("GET", "{{getServerAddress}}/logout");
     xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
 
 	setState(STATE_STATUS, "Logging out...");
@@ -44,7 +44,7 @@ function handleLogout() {
 	xhr.onload = function() {
 		if (this.status == 200) {
 			setState(STATE_SUCCESS, "Done! Redirecting...");
-			window.location.replace("?path=login");
+			window.location.replace("{{getServerAddress}}/account/?path=login");
 		} else {
 			setState(STATE_ERROR, "An error occurred while logging out: " + this.responseText);
 		}

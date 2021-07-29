@@ -43,8 +43,8 @@ type SendFunction = func(*data.Account, []string, map[string]string, config.Conf
 func getEmailData(account *data.Account, conf config.Configuration, params map[string]string) *emailData {
 	return &emailData{
 		Account:         account,
-		AccountsAddress: conf.Email.AccountsAddress,
-		GOCDBAddress:    conf.Email.GOCDBAddress,
+		AccountsAddress: conf.Webserver.URL,
+		GOCDBAddress:    conf.GOCDBURL,
 		Params:          params,
 	}
 }

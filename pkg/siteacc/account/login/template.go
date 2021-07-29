@@ -44,7 +44,7 @@ function handleAction(action) {
 	setState(STATE_STATUS, "Logging in... this should only take a moment.", "form", null, false);
 
 	var xhr = new XMLHttpRequest();
-    xhr.open("POST", action);
+    xhr.open("POST", "{{getServerAddress}}/" + action);
     xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
 
 	xhr.onload = function() {
@@ -76,7 +76,7 @@ function handleResetPassword() {
 	setState(STATE_STATUS, "Resetting password... this should only take a moment.", "form", null, false);
 
 	var xhr = new XMLHttpRequest();
-    xhr.open("POST", "reset-password");
+    xhr.open("POST", "{{getServerAddress}}/reset-password");
     xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
 
 	xhr.onload = function() {
@@ -107,7 +107,6 @@ html * {
 }
 `
 
-// TODO: Default values raus
 const tplBody = `
 <div>
 	<p>Login to your ScienceMesh account using the form below.</p>
@@ -133,6 +132,6 @@ const tplBody = `
 	</form>	
 </div>
 <div>
-	<p>Don't' have an account yet? Register <a href="?path=register">here</a>.</p>
+	<p>Don't' have an account yet? Register <a href="{{getServerAddress}}/account/?path=register">here</a>.</p>
 </div>
 `

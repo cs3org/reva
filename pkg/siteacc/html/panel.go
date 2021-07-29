@@ -101,6 +101,8 @@ func (panel *Panel) AddTemplate(name TemplateID, provider ContentProvider) error
 	}
 
 	tpl := template.New(name)
+	panel.prepareTemplate(tpl)
+
 	if _, err := tpl.Parse(content); err != nil {
 		return errors.Wrapf(err, "error while parsing panel template %v", name)
 	}
@@ -137,6 +139,15 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *Ses
 	}
 
 	return tpl.Execute(w, data)
+}
+
+func (panel *Panel) prepareTemplate(tpl *template.Template) {
+	// Add some custom helper functions to the template
+	tpl.Funcs(template.FuncMap{
+		"getServerAddress": func() string {
+			return strings.TrimRight(panel.conf.Webserver.URL, "/")
+		},
+	})
 }
 
 func (panel *Panel) getFullTemplateName(name string) string {

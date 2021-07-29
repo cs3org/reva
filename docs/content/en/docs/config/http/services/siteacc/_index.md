@@ -19,28 +19,20 @@ prefix = "/siteacc"
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="gocdb_url" type="string" default="" %}}
+The external URL of the central GOCDB instance.
+{{< highlight toml >}}
+[http.services.siteacc.email]
+gocdb_address = "https://www.sciencemesh.eu/gocdb/"
+{{< /highlight >}}
+{{% /dir %}}
+
 ## Email settings
 {{% dir name="notifications_mail" type="string" default="" %}}
 An email address where all notifications are sent to.
 {{< highlight toml >}}
 [http.services.siteacc.email]
 notifications_mail = "notify@example.com"
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="accounts_address" type="string" default="" %}}
-The URL for the site accounts user panel which will be used in emails.
-{{< highlight toml >}}
-[http.services.siteacc.email]
-accounts_address = "https://www.sciencemesh.eu/accounts/"
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="gocdb_address" type="string" default="" %}}
-The URL for the GOCDB which will be used in emails.
-{{< highlight toml >}}
-[http.services.siteacc.email]
-gocdb_address = "https://www.sciencemesh.eu/gocdb/"
 {{< /highlight >}}
 {{% /dir %}}
 
@@ -121,6 +113,14 @@ url = "https://iop.example.com/sitereg"
 {{% /dir %}}
 
 ## Webserver settings
+{{% dir name="url" type="string" default="" %}}
+The external URL of the site accounts service.
+{{< highlight toml >}}
+[http.services.siteacc.webserver]
+url = "https://www.sciencemesh.eu/accounts/"
+{{< /highlight >}}
+{{% /dir %}}
+
 {{% dir name="session_timeout" type="int" default="300" %}}
 The session timeout in seconds.
 {{< highlight toml >}}

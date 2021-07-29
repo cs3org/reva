@@ -21,7 +21,7 @@ package admin
 const tplJavaScript = `
 function handleAction(action, email) {
 	var xhr = new XMLHttpRequest();
-    xhr.open("POST", action);
+    xhr.open("POST", "{{getServerAddress}}/" + action);
     xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
 
 	setState(STATE_STATUS, "Performing request...");

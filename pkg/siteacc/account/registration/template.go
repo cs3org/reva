@@ -72,7 +72,7 @@ function handleAction(action) {
 	setState(STATE_STATUS, "Sending registration... this should only take a moment.", "form", null, false);
 
 	var xhr = new XMLHttpRequest();
-    xhr.open("POST", action);
+    xhr.open("POST", "{{getServerAddress}}/" + action);
     xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
 
 	xhr.onload = function() {
@@ -163,6 +163,6 @@ const tplBody = `
 	</form>	
 </div>
 <div>
-	<p>Already have an account? Login <a href="?path=login">here</a>.</p>
+	<p>Already have an account? Login <a href="{{getServerAddress}}/account/?path=login">here</a>.</p>
 </div>
 `

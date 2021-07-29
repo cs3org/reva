@@ -71,6 +71,12 @@ func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
 		return nil, errors.Wrap(err, "error decoding configuration")
 	}
 	applyDefaultConfig(conf)
+	conf.Cleanup()
+
+	if conf.Webserver.URL == "" {
+		return nil, errors.Errorf("no webserver URL specified")
+	}
+
 	return conf, nil
 }
 
