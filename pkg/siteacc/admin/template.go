@@ -69,7 +69,7 @@ const tplBody = `
 				</div>
 			</p>
 			<p>
-				<strong>API Key:</strong>{{if .Data.APIKey}}{{.Data.APIKey}}{{else}}<em>Not assigned</em>{{end}}
+				<strong>API Key:</strong> {{if .Data.APIKey}}{{.Data.APIKey}}{{else}}<em>Not assigned</em>{{end}}
 				<br>
 				<strong>Site ID:</strong> {{.GetSiteID}}
 				<br><br>
