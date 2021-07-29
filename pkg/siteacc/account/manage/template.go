@@ -41,15 +41,13 @@ function handleLogout() {
 
 	setState(STATE_STATUS, "Logging out...");
 
-	xhr.onreadystatechange = function() {
-		if (this.readyState === XMLHttpRequest.DONE) {
-			if (this.status == 200) {
-				setState(STATE_SUCCESS, "Done! Redirecting...");
-				window.location.replace("?path=login");
-			} else {
-				setState(STATE_ERROR, "An error occurred while logging out: " + this.responseText);
-			}
-        }
+	xhr.onload = function() {
+		if (this.status == 200) {
+			setState(STATE_SUCCESS, "Done! Redirecting...");
+			window.location.replace("?path=login");
+		} else {
+			setState(STATE_ERROR, "An error occurred while logging out: " + this.responseText);
+		}
 	}
     
     xhr.send();

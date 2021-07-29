@@ -26,15 +26,13 @@ function handleAction(action, email) {
 
 	setState(STATE_STATUS, "Performing request...");
 
-	xhr.onreadystatechange = function() {
-		if (this.readyState === XMLHttpRequest.DONE) {
-			if (this.status == 200) {
-				setState(STATE_SUCCESS, "Done! Reloading...");
-				location.reload();
-			} else {
-				setState(STATE_ERROR, "An error occurred while performing the request: " + this.responseText);
-			}
-        }
+	xhr.onload = function() {
+		if (this.status == 200) {
+			setState(STATE_SUCCESS, "Done! Reloading...");
+			location.reload();
+		} else {
+			setState(STATE_ERROR, "An error occurred while performing the request: " + this.responseText);
+		}
 	}
     
 	var postData = {

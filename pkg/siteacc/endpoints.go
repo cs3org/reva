@@ -149,6 +149,9 @@ func callMethodEndpoint(siteacc *SiteAccounts, ep endpoint, w http.ResponseWrite
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
+	// Responses here are always JSON
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+
 	jsonData, _ := json.MarshalIndent(&resp, "", "\t")
 	_, _ = w.Write(jsonData)
 }

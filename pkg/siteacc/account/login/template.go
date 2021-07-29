@@ -47,16 +47,14 @@ function handleAction(action) {
     xhr.open("POST", action);
     xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
 
-	xhr.onreadystatechange = function() {
-		if (this.readyState === XMLHttpRequest.DONE) {
-			if (this.status == 200) {
-				setState(STATE_SUCCESS, "Your login was successful! Redirecting...");
-				window.location.replace("?path=manage");
-			} else {
-				var resp = JSON.parse(this.responseText);
-				setState(STATE_ERROR, "An error occurred while trying to login your account:<br><em>" + resp.error + "</em>", "form", null, true);
-			}
-        }
+	xhr.onload = function() {
+		if (this.status == 200) {
+			setState(STATE_SUCCESS, "Your login was successful! Redirecting...");
+			window.location.replace("?path=manage");
+		} else {
+			var resp = JSON.parse(this.responseText);
+			setState(STATE_ERROR, "An error occurred while trying to login your account:<br><em>" + resp.error + "</em>", "form", null, true);
+		}
 	}
 
 	var postData = {
@@ -81,15 +79,13 @@ function handleResetPassword() {
     xhr.open("POST", "reset-password");
     xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
 
-	xhr.onreadystatechange = function() {
-		if (this.readyState === XMLHttpRequest.DONE) {
-			if (this.status == 200) {
-				setState(STATE_SUCCESS, "Your password was successfully reset! Please check your inbox for your new password.", "form", null, true);
-			} else {
-				var resp = JSON.parse(this.responseText);
-				setState(STATE_ERROR, "An error occurred while trying to reset your password:<br><em>" + resp.error + "</em>", "form", null, true);
-			}
-        }
+	xhr.onload = function() {
+		if (this.status == 200) {
+			setState(STATE_SUCCESS, "Your password was successfully reset! Please check your inbox for your new password.", "form", null, true);
+		} else {
+			var resp = JSON.parse(this.responseText);
+			setState(STATE_ERROR, "An error occurred while trying to reset your password:<br><em>" + resp.error + "</em>", "form", null, true);
+		}
 	}
 
 	var postData = {

@@ -67,15 +67,13 @@ function handleAction(action) {
     xhr.open("POST", action);
     xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
 
-	xhr.onreadystatechange = function() {
-		if (this.readyState === XMLHttpRequest.DONE) {
-			if (this.status == 200) {
-				setState(STATE_SUCCESS, "Your account was successfully updated!", "form", null, true);
-			} else {
-				var resp = JSON.parse(this.responseText);
-				setState(STATE_ERROR, "An error occurred while trying to update your account:<br><em>" + resp.error + "</em>", "form", null, true);
-			}
-        }
+	xhr.onload = function() {
+		if (this.status == 200) {
+			setState(STATE_SUCCESS, "Your account was successfully updated!", "form", null, true);
+		} else {
+			var resp = JSON.parse(this.responseText);
+			setState(STATE_ERROR, "An error occurred while trying to update your account:<br><em>" + resp.error + "</em>", "form", null, true);
+		}
 	}
 
 	var postData = {
