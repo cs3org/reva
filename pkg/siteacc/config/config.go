@@ -48,8 +48,9 @@ type Configuration struct {
 	Webserver struct {
 		URL string `mapstructure:"url"`
 
-		SessionTimeout int  `mapstructure:"session_timeout"`
-		LogSessions    bool `mapstructure:"log_sessions"`
+		SessionTimeout      int  `mapstructure:"session_timeout"`
+		VerifyRemoteAddress bool `mapstructure:"verify_remote_address"`
+		LogSessions         bool `mapstructure:"log_sessions"`
 	} `mapstructure:"webserver"`
 
 	GOCDBURL string `mapstructure:"gocdb_url"`

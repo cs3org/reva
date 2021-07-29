@@ -77,7 +77,10 @@ function handleAction(action) {
 
 	xhr.onload = function() {
 		if (this.status == 200) {
-			setState(STATE_SUCCESS, "Your registration was successful! Please check your inbox for a confirmation email.");
+			setState(STATE_SUCCESS, "Your registration was successful! Please check your inbox for a confirmation email. You will be redirected to the login page in a few seconds (if not, click <a href='{{getServerAddress}}/account/?path=login'>here</a>).");
+			window.setTimeout(function() {
+                window.location.replace("{{getServerAddress}}/account/?path=login");
+			}, 3000);
 		} else {
 			var resp = JSON.parse(this.responseText);
 			setState(STATE_ERROR, "An error occurred while trying to register your account:<br><em>" + resp.error + "</em>", "form", null, true);

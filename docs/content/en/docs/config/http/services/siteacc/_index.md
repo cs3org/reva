@@ -129,6 +129,14 @@ session_timeout = 600
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="verify_remote_address" type="bool" default="false" %}}
+If true, sessions are only valid if they belong to the same IP. This can cause problems behind proxy servers.
+{{< highlight toml >}}
+[http.services.siteacc.webserver]
+verify_remote_address = true
+{{< /highlight >}}
+{{% /dir %}}
+
 {{% dir name="log_sessions" type="bool" default="false" %}}
 If enabled, debug information about sessions will be printed.
 {{< highlight toml >}}

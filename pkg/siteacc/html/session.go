@@ -65,7 +65,7 @@ func (sess *Session) Save(w http.ResponseWriter) {
 }
 
 // VerifyRequest checks whether the provided request matches the stored session.
-func (sess *Session) VerifyRequest(r *http.Request) error {
+func (sess *Session) VerifyRequest(r *http.Request, verifyRemoteAddress bool) error {
 	cookie, err := r.Cookie(sess.sessionCookieName)
 	if err != nil {
 		return errors.Wrap(err, "unable to retrieve client session ID")
@@ -74,7 +74,7 @@ func (sess *Session) VerifyRequest(r *http.Request) error {
 		return errors.Errorf("the session ID doesn't match")
 	}
 
-	if sess.RemoteAddress != "" {
+	if verifyRemoteAddress && sess.RemoteAddress != "" {
 		if !strings.EqualFold(getRemoteAddress(r), sess.RemoteAddress) {
 			return errors.Errorf("remote address has changed (%v != %v)", r.RemoteAddr, sess.RemoteAddress)
 		}

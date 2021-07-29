@@ -78,7 +78,7 @@ func (mngr *SessionManager) HandleRequest(w http.ResponseWriter, r *http.Request
 			mngr.logSessionInfo(session, r, "existing session found")
 
 			// Verify the request against the session: If it is invalid, set an error; if the session has expired, create a new one; if it has already passed its halftime, migrate to a new one
-			if err := session.VerifyRequest(r); err == nil {
+			if err := session.VerifyRequest(r, mngr.conf.Webserver.VerifyRemoteAddress); err == nil {
 				if session.HasExpired() {
 					// The session has expired, so a new one needs to be created
 					session = nil
