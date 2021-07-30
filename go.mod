@@ -33,6 +33,7 @@ require (
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
+	github.com/hashicorp/go-getter v1.5.8
 	github.com/hashicorp/go-hclog v0.16.2
 	github.com/hashicorp/go-plugin v1.4.3
 	github.com/huandu/xstrings v1.3.2 // indirect
@@ -59,6 +60,7 @@ require (
 	github.com/thanhpk/randstr v1.0.4
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tus/tusd v1.6.0
+	github.com/xujiajun/nutsdb v0.6.0
 	go.mongodb.org/mongo-driver v1.7.2 // indirect
 	go.opencensus.io v0.23.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.23.0

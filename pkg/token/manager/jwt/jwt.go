@@ -24,7 +24,6 @@ import (
 	"encoding/hex"
 	"time"
 
-	"github.com/bluele/gcache"
 	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -34,11 +33,10 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/xujiajun/nutsdb"
 )
 
 const defaultExpiration int64 = 86400 // 1 day
-
-var tokenCache = gcache.New(1000000).LFU().Build()
 
 func init() {
 	registry.Register("jwt", New)
@@ -133,19 +131,53 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, m
 	return nil, nil, errtypes.InvalidCredentials("invalid token")
 }
 
+func (m *manager) getDBHandler() (*nutsdb.DB, error) {
+	opt := nutsdb.DefaultOptions
+	opt.Dir = "/var/tmp/reva/jwt"
+	return nutsdb.Open(opt)
+}
+
 func (m *manager) cacheAndReturnHash(token string) (string, error) {
 	h := sha256.New()
 	if _, err := h.Write([]byte(token)); err != nil {
 		return "", err
 	}
 	hash := hex.EncodeToString(h.Sum(nil))
-	err := tokenCache.SetWithExpire(hash, token, time.Second*time.Duration(m.conf.Expires))
-	return hash, err
+
+	db, err := m.getDBHandler()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+
+	if err := db.Update(
+		func(tx *nutsdb.Tx) error {
+			return tx.Put("jwt-tokens", []byte(hash), []byte(token), uint32(m.conf.Expires))
+		}); err != nil {
+		return "", err
+	}
+
+	return hash, nil
 }
 
 func (m *manager) getCachedToken(hashedToken string) (string, error) {
-	if tknIf, err := tokenCache.Get(hashedToken); err == nil {
-		return tknIf.(string), nil
+	db, err := m.getDBHandler()
+	if err != nil {
+		return "", err
 	}
-	return "", errtypes.InvalidCredentials("invalid token")
+	defer db.Close()
+
+	var token string
+	if err := db.View(
+		func(tx *nutsdb.Tx) error {
+			e, err := tx.Get("jwt-tokens", []byte(hashedToken))
+			if err != nil {
+				return err
+			}
+			token = string(e.Value)
+			return nil
+		}); err != nil {
+		return "", err
+	}
+	return token, nil
 }
