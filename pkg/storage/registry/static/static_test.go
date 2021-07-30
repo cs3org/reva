@@ -104,23 +104,26 @@ var _ = Describe("Static", func() {
 		})
 	})
 
+	home00 := &registrypb.ProviderInfo{
+		ProviderPath: "/home",
+		Address:      "home-00-home",
+	}
+	home01 := &registrypb.ProviderInfo{
+		ProviderPath: "/home",
+		Address:      "home-01-home",
+	}
+
 	Describe("GetHome", func() {
 		It("get the home provider for user alice", func() {
 			home, err := handler.GetHome(ctxAlice)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(home).To(Equal(&registrypb.ProviderInfo{
-				ProviderPath: "/home",
-				Address:      "home-00-home",
-			}))
+			Expect(home).To(Equal(home00))
 		})
 
 		It("get the home provider for user robert", func() {
 			home, err := handler.GetHome(ctxRobert)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(home).To(Equal(&registrypb.ProviderInfo{
-				ProviderPath: "/home",
-				Address:      "home-01-home",
-			}))
+			Expect(home).To(Equal(home01))
 		})
 	})
 
@@ -130,96 +133,80 @@ var _ = Describe("Static", func() {
 		It("finds all providers for user alice for a home ref", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
-				&registrypb.ProviderInfo{
-					ProviderPath: "/home",
-					Address:      "home-00-home",
-				}}))
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{home00}))
 		})
 
 		It("finds all providers for user robert for a home ref", func() {
 			providers, err := handler.FindProviders(ctxRobert, ref)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
-				&registrypb.ProviderInfo{
-					ProviderPath: "/home",
-					Address:      "home-01-home",
-				}}))
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{home01}))
 		})
 	})
 
 	Describe("FindProviders for eos reference", func() {
 		ref := &provider.Reference{Path: "/eos/user/b/bob/xyz"}
+		eosUserB := &registrypb.ProviderInfo{
+			ProviderPath: "/eos/user/b",
+			Address:      "home-00-eos",
+		}
 
 		It("finds all providers for user alice for an eos ref", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
-				&registrypb.ProviderInfo{
-					ProviderPath: "/eos/user/b",
-					Address:      "home-00-eos",
-				}}))
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{eosUserB}))
 		})
 
 		It("finds all providers for user robert for an eos ref", func() {
 			providers, err := handler.FindProviders(ctxRobert, ref)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
-				&registrypb.ProviderInfo{
-					ProviderPath: "/eos/user/b",
-					Address:      "home-00-eos",
-				}}))
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{eosUserB}))
 		})
 	})
 
 	Describe("FindProviders for project reference", func() {
 		ref := &provider.Reference{Path: "/eos/project/pqr"}
+		eosProject := &registrypb.ProviderInfo{
+			ProviderPath: "/eos/project",
+			Address:      "project-00",
+		}
 
 		It("finds all providers for user alice for a project ref", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
-				&registrypb.ProviderInfo{
-					ProviderPath: "/eos/project",
-					Address:      "project-00",
-				}}))
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{eosProject}))
 		})
 
 		It("finds all providers for user robert for a project ref", func() {
 			providers, err := handler.FindProviders(ctxRobert, ref)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
-				&registrypb.ProviderInfo{
-					ProviderPath: "/eos/project",
-					Address:      "project-00",
-				}}))
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{eosProject}))
 		})
 	})
 
 	Describe("FindProviders for virtual references", func() {
-		ref1 := &provider.Reference{Path: "/eos"}
-		ref2 := &provider.Reference{Path: "/"}
+		refEos := &provider.Reference{Path: "/eos"}
+		refRoot := &provider.Reference{Path: "/"}
 
 		It("finds all providers for user alice for a virtual eos ref", func() {
-			providers, err := handler.FindProviders(ctxAlice, ref1)
+			providers, err := handler.FindProviders(ctxAlice, refEos)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(providers)).To(Equal(eosProviders))
 		})
 
 		It("finds all providers for user robert for a virtual eos ref", func() {
-			providers, err := handler.FindProviders(ctxRobert, ref1)
+			providers, err := handler.FindProviders(ctxRobert, refEos)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(providers)).To(Equal(eosProviders))
 		})
 
 		It("finds all providers for user alice for a virtual root ref", func() {
-			providers, err := handler.FindProviders(ctxAlice, ref2)
+			providers, err := handler.FindProviders(ctxAlice, refRoot)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(providers)).To(Equal(rootProviders))
 		})
 
 		It("finds all providers for user robert for a virtual root ref", func() {
-			providers, err := handler.FindProviders(ctxRobert, ref2)
+			providers, err := handler.FindProviders(ctxRobert, refRoot)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(providers)).To(Equal(rootProviders))
 		})
@@ -231,25 +218,21 @@ var _ = Describe("Static", func() {
 				StorageId: "123e4567-e89b-12d3-a456-426655440000",
 			},
 		}
+		home00ID := &registrypb.ProviderInfo{
+			ProviderId: "123e4567-e89b-12d3-a456-426655440000",
+			Address:    "home-00-home",
+		}
 
 		It("finds all providers for user alice for ref containing ID", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
-				&registrypb.ProviderInfo{
-					ProviderId: "123e4567-e89b-12d3-a456-426655440000",
-					Address:    "home-00-home",
-				}}))
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{home00ID}))
 		})
 
 		It("finds all providers for user robert for ref containing ID", func() {
 			providers, err := handler.FindProviders(ctxRobert, ref)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
-				&registrypb.ProviderInfo{
-					ProviderId: "123e4567-e89b-12d3-a456-426655440000",
-					Address:    "home-00-home",
-				}}))
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{home00ID}))
 		})
 	})
 })

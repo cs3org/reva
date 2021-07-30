@@ -20,17 +20,11 @@ package auth
 
 import (
 	"context"
-	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
@@ -119,7 +113,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
-			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
+			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
 
 		// store user and core access token in context.
@@ -190,7 +184,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
-			return status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
+			return status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
 
 		// store user and core access token in context.
@@ -215,7 +209,6 @@ func (ss *wrappedServerStream) Context() context.Context {
 }
 
 func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string) (*userpb.User, error) {
-	log := appctx.GetLogger(ctx)
 	u, tokenScope, err := mgr.DismantleToken(ctx, tkn)
 	if err != nil {
 		return nil, err
@@ -230,77 +223,9 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		return u, nil
 	}
 
-	// Check if req is of type *provider.Reference_Path
-	// If yes, the request might be coming from a share where the accessor is
-	// trying to impersonate the owner, since the share manager doesn't know the
-	// share path.
-	if ref, ok := extractRef(req); ok {
-		if ref.GetPath() != "" {
-
-			// Try to extract the resource ID from the scope resource.
-			// Currently, we only check for public shares, but this will be extended
-			// for OCM shares, guest accounts, etc.
-			log.Info().Msgf("resolving path reference to ID to check token scope %+v", ref.GetPath())
-			var share link.PublicShare
-			var publicShareScope []byte
-			for k := range tokenScope {
-				if strings.HasPrefix(k, "publicshare") {
-					publicShareScope = tokenScope[k].Resource.Value
-					break
-				}
-			}
-			err = utils.UnmarshalJSONToProtoV1(publicShareScope, &share)
-			if err != nil {
-				return nil, err
-			}
-
-			client, err := pool.GetGatewayServiceClient(gatewayAddr)
-			if err != nil {
-				return nil, err
-			}
-
-			// Since the public share is obtained from the scope, the current token
-			// has access to it.
-			statReq := &provider.StatRequest{
-				Ref: &provider.Reference{
-					ResourceId: share.ResourceId,
-				},
-			}
-
-			statResponse, err := client.Stat(ctx, statReq)
-			if err != nil || statResponse.Status.Code != rpc.Code_CODE_OK {
-				return nil, err
-			}
-
-			if strings.HasPrefix(ref.GetPath(), statResponse.Info.Path) {
-				// The path corresponds to the resource to which the token has access.
-				// We allow access to it.
-				return u, nil
-			}
-		}
+	if err = expandAndVerifyScope(ctx, req, tokenScope, gatewayAddr); err != nil {
+		return nil, err
 	}
 
-	return nil, errtypes.PermissionDenied("access token has invalid scope")
-}
-
-func extractRef(req interface{}) (*provider.Reference, bool) {
-	switch v := req.(type) {
-	case *registry.GetStorageProvidersRequest:
-		return v.GetRef(), true
-	case *provider.StatRequest:
-		return v.GetRef(), true
-	case *provider.ListContainerRequest:
-		return v.GetRef(), true
-	case *provider.CreateContainerRequest:
-		return v.GetRef(), true
-	case *provider.DeleteRequest:
-		return v.GetRef(), true
-	case *provider.MoveRequest:
-		return v.GetSource(), true
-	case *provider.InitiateFileDownloadRequest:
-		return v.GetRef(), true
-	case *provider.InitiateFileUploadRequest:
-		return v.GetRef(), true
-	}
-	return nil, false
+	return u, nil
 }

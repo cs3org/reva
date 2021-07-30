@@ -31,6 +31,7 @@ imports: off
 	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
 
 build: imports test-go-version
+	gofmt -s -w .
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 

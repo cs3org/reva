@@ -61,6 +61,7 @@ type config struct {
 	BindPassword    string     `mapstructure:"bind_password"`
 	Idp             string     `mapstructure:"idp"`
 	Schema          attributes `mapstructure:"schema"`
+	Nobody          int64      `mapstructure:"nobody"`
 }
 
 type attributes struct {
@@ -173,9 +174,13 @@ func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.
 	if err != nil {
 		return nil, err
 	}
-	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
-	if err != nil {
-		return nil, err
+	gidNumber := m.c.Nobody
+	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
+	if gidValue != "" {
+		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	g := &grouppb.Group{
@@ -348,6 +353,7 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		users = append(users, &userpb.UserId{
 			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.CN),
 			Idp:      m.c.Idp,
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		})
 	}
 

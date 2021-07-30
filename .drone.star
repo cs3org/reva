@@ -174,7 +174,7 @@ def buildAndPublishDocker():
         "settings": {
           "repo": "cs3org/reva",
           "tags": "latest",
-          "dockerfile": "Dockerfile.revad",
+          "dockerfile": "Dockerfile.reva",
           "username":{
             "from_secret": "dockerhub_username",
           },
@@ -568,8 +568,10 @@ def localIntegrationTestsOwncloud():
           "TEST_WITH_LDAP": "true",
           "REVA_LDAP_HOSTNAME": "ldap",
           "TEST_REVA": "true",
+          "SEND_SCENARIO_LINE_REFERENCES": "true",
           "BEHAT_FILTER_TAGS": "~@skipOnOcis-OC-Storage",
           "PATH_TO_CORE": "/drone/src/tmp/testrunner",
+          "UPLOAD_DELETE_WAIT_TIME": "1",
         }
       }
     ],
@@ -629,6 +631,7 @@ def localIntegrationTestsOcis():
           "TEST_WITH_LDAP": "true",
           "REVA_LDAP_HOSTNAME": "ldap",
           "TEST_REVA": "true",
+          "SEND_SCENARIO_LINE_REFERENCES": "true",
           "BEHAT_FILTER_TAGS": "~@skipOnOcis-OCIS-Storage",
           "PATH_TO_CORE": "/drone/src/tmp/testrunner",
         }
@@ -697,6 +700,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
               "TEST_WITH_LDAP": "true",
               "REVA_LDAP_HOSTNAME": "ldap",
               "TEST_REVA": "true",
+              "SEND_SCENARIO_LINE_REFERENCES": "true",
               "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage",
               "DIVIDE_INTO_NUM_PARTS": parallelRuns,
               "RUN_PART": runPart,
@@ -769,10 +773,12 @@ def owncloudIntegrationTests(parallelRuns, skipExceptParts = []):
               "TEST_WITH_LDAP": "true",
               "REVA_LDAP_HOSTNAME": "ldap",
               "TEST_REVA": "true",
+              "SEND_SCENARIO_LINE_REFERENCES": "true",
               "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage",
               "DIVIDE_INTO_NUM_PARTS": parallelRuns,
               "RUN_PART": runPart,
               "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.md",
+              "UPLOAD_DELETE_WAIT_TIME": "1",
             },
           },
         ],
@@ -843,10 +849,12 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
               "TEST_WITH_LDAP": "true",
               "REVA_LDAP_HOSTNAME": "ldap",
               "TEST_REVA": "true",
+              "SEND_SCENARIO_LINE_REFERENCES": "true",
               "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage",
               "DIVIDE_INTO_NUM_PARTS": parallelRuns,
               "RUN_PART": runPart,
               "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-S3NG-storage.md",
+
             },
           },
         ],

@@ -39,6 +39,12 @@ const (
 	SabredavNotAuthenticated
 	// SabredavPreconditionFailed maps to HTTP 412
 	SabredavPreconditionFailed
+	// SabredavPermissionDenied maps to HTTP 403
+	SabredavPermissionDenied
+	// SabredavNotFound maps to HTTP 404
+	SabredavNotFound
+	// SabredavConflict maps to HTTP 409
+	SabredavConflict
 )
 
 var (
@@ -47,6 +53,9 @@ var (
 		"Sabre\\DAV\\Exception\\MethodNotAllowed",
 		"Sabre\\DAV\\Exception\\NotAuthenticated",
 		"Sabre\\DAV\\Exception\\PreconditionFailed",
+		"Sabre\\DAV\\Exception\\PermissionDenied",
+		"Sabre\\DAV\\Exception\\NotFound",
+		"Sabre\\DAV\\Exception\\Conflict",
 	}
 )
 
@@ -58,13 +67,17 @@ type exception struct {
 
 // Marshal just calls the xml marshaller for a given exception.
 func Marshal(e exception) ([]byte, error) {
-	return xml.Marshal(&errorXML{
+	xmlstring, err := xml.Marshal(&errorXML{
 		Xmlnsd:    "DAV",
 		Xmlnss:    "http://sabredav.org/ns",
 		Exception: codesEnum[e.code],
 		Message:   e.message,
 		Header:    e.header,
 	})
+	if err != nil {
+		return []byte(""), err
+	}
+	return []byte(xml.Header + string(xmlstring)), err
 }
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
@@ -75,7 +88,8 @@ type errorXML struct {
 	Exception string   `xml:"s:exception"`
 	Message   string   `xml:"s:message"`
 	InnerXML  []byte   `xml:",innerxml"`
-	Header    string   `xml:"s:header"`
+	// Header is used to indicate the conflicting request header
+	Header string `xml:"s:header,omitempty"`
 }
 
 var errInvalidPropfind = errors.New("webdav: invalid propfind")
@@ -93,6 +107,9 @@ func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		log.Debug().Interface("status", s).Msg("permission denied")
 		w.WriteHeader(http.StatusForbidden)
+	case rpc.Code_CODE_UNAUTHENTICATED:
+		log.Debug().Interface("status", s).Msg("unauthenticated")
+		w.WriteHeader(http.StatusUnauthorized)
 	case rpc.Code_CODE_INVALID_ARGUMENT:
 		log.Debug().Interface("status", s).Msg("bad request")
 		w.WriteHeader(http.StatusBadRequest)
@@ -105,5 +122,19 @@ func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status
 	default:
 		log.Error().Interface("status", s).Msg("grpc request failed")
 		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+// HandleWebdavError checks the status code, logs an error and creates a webdav response body
+// if needed
+func HandleWebdavError(log *zerolog.Logger, w http.ResponseWriter, b []byte, err error) {
+	if err != nil {
+		log.Error().Msgf("error marshaling xml response: %s", b)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	_, err = w.Write(b)
+	if err != nil {
+		log.Err(err).Msg("error writing response")
 	}
 }

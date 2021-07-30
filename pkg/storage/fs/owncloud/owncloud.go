@@ -1526,15 +1526,19 @@ func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) 
 	// move to trash location
 	dtime := time.Now().Unix()
 	tgt := filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
+
+	// The condition reads: "if the file exists"
+	// I know this check is hard to read because of the double negation
+	// but this way we avoid to duplicate the code following the if block.
+	// If two deletes happen fast consecutively they will have the same `dtime`,
+	// therefore we have to increase the 'dtime' to avoid collisions.
+	if _, err := os.Stat(tgt); !errors.Is(err, os.ErrNotExist) {
+		// timestamp collision, try again with higher value:
+		dtime++
+		tgt = filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
+	}
 	if err := os.Rename(ip, tgt); err != nil {
-		if os.IsExist(err) {
-			// timestamp collision, try again with higher value:
-			dtime++
-			tgt := filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
-			if err := os.Rename(ip, tgt); err != nil {
-				return errors.Wrap(err, "ocfs: could not move item to trash")
-			}
-		}
+		return errors.Wrap(err, "ocfs: could not move item to trash")
 	}
 
 	return fs.propagate(ctx, filepath.Dir(ip))
@@ -2056,7 +2060,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
@@ -2149,7 +2153,7 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 	}
 }
 
-func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (fs *ocfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -2157,7 +2161,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 	}
 
 	// list files folder
-	mds, err := ioutil.ReadDir(rp)
+	mds, err := ioutil.ReadDir(filepath.Join(rp, key))
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")
@@ -2176,7 +2180,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 	return items, nil
 }
 
-func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
+func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
@@ -2215,6 +2219,10 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *
 	// TODO(jfd) restore versions
 
 	return fs.propagate(ctx, tgt)
+}
+
+func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	return nil, errtypes.NotSupported("list storage spaces")
 }
 
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {

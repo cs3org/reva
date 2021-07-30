@@ -132,7 +132,7 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 	if share.Permissions.Permissions.InitiateFileUpload {
 		role = authpb.Role_ROLE_EDITOR
 	}
-	scope, err := scope.GetPublicShareScope(share, role)
+	scope, err := scope.AddPublicShareScope(share, role, nil)
 	if err != nil {
 		return nil, nil, err
 	}

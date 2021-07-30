@@ -59,7 +59,7 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 	}
 
 	remoteUserRes, err := c.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
-		RemoteUserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider},
+		RemoteUserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider, Type: userpb.UserType_USER_TYPE_PRIMARY},
 	})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)

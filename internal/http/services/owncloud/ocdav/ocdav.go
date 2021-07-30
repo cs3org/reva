@@ -52,6 +52,33 @@ const (
 	ctxKeyBaseURI ctxKey = iota
 )
 
+var (
+	errInvalidValue = errors.New("invalid value")
+
+	nameRules = [...]nameRule{
+		nameNotEmpty{},
+		nameDoesNotContain{chars: "\f\r\n\\"},
+	}
+)
+
+type nameRule interface {
+	Test(name string) bool
+}
+
+type nameNotEmpty struct{}
+
+func (r nameNotEmpty) Test(name string) bool {
+	return len(strings.TrimSpace(name)) > 0
+}
+
+type nameDoesNotContain struct {
+	chars string
+}
+
+func (r nameDoesNotContain) Test(name string) bool {
+	return !strings.ContainsAny(name, r.chars)
+}
+
 func init() {
 	global.Register("ocdav", New)
 }
@@ -263,20 +290,22 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func extractDestination(dstHeader, baseURI string) (string, error) {
+func extractDestination(r *http.Request) (string, error) {
+	dstHeader := r.Header.Get(HeaderDestination)
 	if dstHeader == "" {
-		return "", errors.New("destination header is empty")
+		return "", errors.Wrap(errInvalidValue, "destination header is empty")
 	}
 	dstURL, err := url.ParseRequestURI(dstHeader)
 	if err != nil {
 		return "", err
 	}
 
+	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
 	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 	// Strip the base URI from the destination. The destination might contain redirection prefixes which need to be handled
 	urlSplit := strings.Split(dstURL.Path, baseURI)
 	if len(urlSplit) != 2 {
-		return "", errors.New("destination path does not contain base URI")
+		return "", errors.Wrap(errInvalidValue, "destination path does not contain base URI")
 	}
 
 	return urlSplit[1], nil

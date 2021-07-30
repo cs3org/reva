@@ -42,9 +42,9 @@ type FS interface {
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
 	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
-	ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error)
-	RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error
-	PurgeRecycleItem(ctx context.Context, key string) error
+	ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error)
+	RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error
+	PurgeRecycleItem(ctx context.Context, key, path string) error
 	EmptyRecycle(ctx context.Context) error
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
@@ -56,6 +56,7 @@ type FS interface {
 	Shutdown(ctx context.Context) error
 	SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
 	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
+	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
 }
 
 // Registry is the interface that storage registries implement

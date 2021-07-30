@@ -55,7 +55,7 @@ func TestParseConfig(t *testing.T) {
 	}{
 		{name: "parse config", args: args{map[string]interface{}{
 			"services": map[string]map[string]interface{}{
-				"authprovider": map[string]interface{}{
+				"authprovider": {
 					"basic": map[string]interface{}{
 						"name": "auth-basic",
 						"nodes": []map[string]interface{}{
@@ -78,15 +78,15 @@ func TestParseConfig(t *testing.T) {
 			},
 		}}, want: &Config{
 			Services: map[string]map[string]*service{
-				"authprovider": map[string]*service{
-					"basic": &service{
+				"authprovider": {
+					"basic": {
 						Name: "auth-basic",
 						Nodes: []node{{
 							Address:  "0.0.0.0:1234",
 							Metadata: map[string]string{"version": "v0.1.0"},
 						}},
 					},
-					"bearer": &service{
+					"bearer": {
 						Name: "auth-bearer",
 						Nodes: []node{{
 							Address:  "0.0.0.0:5678",

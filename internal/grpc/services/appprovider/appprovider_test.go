@@ -34,29 +34,36 @@ func Test_parseConfig(t *testing.T) {
 		wantErr interface{}
 	}{
 		{
-			name: "all configurations set",
+			name: "all configurations set for demo driver",
 			m: map[string]interface{}{
-				"Driver":    "demo",
-				"Demo":      map[string]interface{}{"a": "b", "c": "d"},
-				"IopSecret": "very-secret",
-				"WopiURL":   "https://my.wopi:9871",
+				"Driver":  "demo",
+				"Drivers": map[string]map[string]interface{}{"demo": {"a": "b", "c": "d"}},
 			},
 			want: &config{
-				Driver:    "demo",
-				Demo:      map[string]interface{}{"a": "b", "c": "d"},
-				IopSecret: "very-secret",
-				WopiURL:   "https://my.wopi:9871",
+				Driver:  "demo",
+				Drivers: map[string]map[string]interface{}{"demo": {"a": "b", "c": "d"}},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "all configurations set for wopi driver",
+			m: map[string]interface{}{
+				"Driver":  "wopi",
+				"Drivers": map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
+			},
+			want: &config{
+				Driver:  "wopi",
+				Drivers: map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
 			},
 			wantErr: nil,
 		},
 		{
 			name: "wrong type of setting",
-			m:    map[string]interface{}{"Driver": 123, "IopSecret": 456},
+			m:    map[string]interface{}{"Driver": 123, "NonExistentField": 456},
 			want: nil,
 			wantErr: &mapstructure.Error{
 				Errors: []string{
 					"'driver' expected type 'string', got unconvertible type 'int', value: '123'",
-					"'iopsecret' expected type 'string', got unconvertible type 'int', value: '456'",
 				},
 			},
 		},
@@ -64,10 +71,8 @@ func Test_parseConfig(t *testing.T) {
 			name: "undefined settings type",
 			m:    map[string]interface{}{"Not-Defined": 123},
 			want: &config{
-				Driver:    "",
-				Demo:      map[string]interface{}(nil),
-				IopSecret: "",
-				WopiURL:   "",
+				Driver:  "demo",
+				Drivers: map[string]map[string]interface{}(nil),
 			},
 			wantErr: nil,
 		},

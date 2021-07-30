@@ -19,42 +19,72 @@
 package ocdav
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/rs/zerolog"
 	"go.opencensus.io/trace"
 )
 
-func (s *svc) handleDelete(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "head")
+	ctx, span := trace.StartSpan(ctx, "delete")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	ref := &provider.Reference{Path: fn}
+	s.handleDelete(ctx, w, r, ref, sublog)
+}
 
+func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
 	client, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	ref := &provider.Reference{Path: fn}
 	req := &provider.DeleteRequest{Ref: ref}
 	res, err := client.Delete(ctx, req)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error performing delete grpc request")
+		log.Error().Err(err).Msg("error performing delete grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
-	}
-
-	if res.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, res.Status)
+	} else if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			m := fmt.Sprintf("Resource %v not found", ref.Path)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: m,
+			})
+			HandleWebdavError(&log, w, b, err)
+		}
+		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			w.WriteHeader(http.StatusForbidden)
+			m := fmt.Sprintf("Permission denied to delete %v", ref.Path)
+			b, err := Marshal(exception{
+				code:    SabredavPermissionDenied,
+				message: m,
+			})
+			HandleWebdavError(&log, w, b, err)
+		}
+		if res.Status.Code == rpc.Code_CODE_INTERNAL && res.Status.Message == "can't delete mount path" {
+			w.WriteHeader(http.StatusForbidden)
+			b, err := Marshal(exception{
+				code:    SabredavPermissionDenied,
+				message: res.Status.Message,
+			})
+			HandleWebdavError(&log, w, b, err)
+		}
+		HandleErrorStatus(&log, w, res.Status)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

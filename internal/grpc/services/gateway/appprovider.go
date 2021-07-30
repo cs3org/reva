@@ -183,7 +183,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		}, nil
 	}
 
-	provider, err := s.findAppProvider(ctx, ri)
+	provider, err := s.findAppProvider(ctx, ri, app)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling findAppProvider")
 		var st *rpc.Status
@@ -208,7 +208,6 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 	appProviderReq := &providerpb.OpenInAppRequest{
 		ResourceInfo: ri,
 		ViewMode:     providerpb.OpenInAppRequest_ViewMode(vm),
-		App:          app,
 		AccessToken:  accessToken,
 	}
 
@@ -220,32 +219,49 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 	return res, nil
 }
 
-func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo) (*registry.ProviderInfo, error) {
+func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo, app string) (*registry.ProviderInfo, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting appregistry client")
 		return nil, err
 	}
+
+	if app == "" {
+		// We need to get the default provider in case app is not set
+		// If the default isn't set as well, we'll return the first provider which matches the mimetype
+		res, err := c.GetDefaultAppProviderForMimeType(ctx, &registry.GetDefaultAppProviderForMimeTypeRequest{
+			MimeType: ri.MimeType,
+		})
+		if err == nil && res.Status.Code == rpc.Code_CODE_OK && res.Provider != nil {
+			return res.Provider, nil
+		}
+	}
+
 	res, err := c.GetAppProviders(ctx, &registry.GetAppProvidersRequest{
 		ResourceInfo: ri,
 	})
-
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppProviders")
 		return nil, err
 	}
-
-	// TODO(labkode): when sending an Open to the proxy we need to choose one
-	// provider from the list of available as the client
-	if res.Status.Code == rpc.Code_CODE_OK {
-		return res.Providers[0], nil
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return nil, errtypes.NotFound("gateway: app provider not found for resource: " + ri.String())
+		}
+		return nil, errtypes.InternalError("gateway: error finding app providers")
 	}
 
-	if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-		return nil, errtypes.NotFound("gateway: app provider not found for resource: " + ri.String())
+	if app != "" {
+		for _, p := range res.Providers {
+			if p.Name == app {
+				return p, nil
+			}
+		}
+		return nil, errtypes.NotFound("gateway: app provider not found: " + app)
 	}
 
-	return nil, errtypes.InternalError("gateway: error finding a storage provider")
+	// As a fallback, return the first provider in the list
+	return res.Providers[0], nil
 }
 
 func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {

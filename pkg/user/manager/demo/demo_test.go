@@ -34,7 +34,7 @@ func TestUserManager(t *testing.T) {
 	manager, _ := New(nil)
 
 	// setup test data
-	uidEinstein := &userpb.UserId{Idp: "http://localhost:9998", OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51"}
+	uidEinstein := &userpb.UserId{Idp: "http://localhost:9998", OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51", Type: userpb.UserType_USER_TYPE_PRIMARY}
 	userEinstein := &userpb.User{
 		Id:          uidEinstein,
 		Username:    "einstein",

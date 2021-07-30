@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -181,6 +182,7 @@ func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tu
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
 		"UserName": usr.Username,
+		"UserType": utils.UserTypeToString(usr.Id.Type),
 
 		"LogLevel": log.GetLevel().String(),
 	}
@@ -249,6 +251,7 @@ func (fs *localfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error
 		Id: &userpb.UserId{
 			Idp:      info.Storage["Idp"],
 			OpaqueId: info.Storage["UserId"],
+			Type:     utils.UserTypeMap(info.Storage["UserType"]),
 		},
 		Username: info.Storage["UserName"],
 	}

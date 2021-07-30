@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -107,11 +106,11 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		//	return
 		//}
 
-		if key == "" && r.Method == "PROPFIND" {
-			h.listTrashbin(w, r, s, u)
+		if r.Method == MethodPropfind {
+			h.listTrashbin(w, r, s, u, key, r.URL.Path)
 			return
 		}
-		if key != "" && r.Method == "MOVE" {
+		if key != "" && r.Method == MethodMove {
 			// find path in url relative to trash base
 			trashBase := ctx.Value(ctxKeyBaseURI).(string)
 			baseURI := path.Join(path.Dir(trashBase), "files", username)
@@ -119,8 +118,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			r = r.WithContext(ctx)
 
 			// TODO make request.php optional in destination header
-			dstHeader := r.Header.Get("Destination")
-			dst, err := extractDestination(dstHeader, baseURI)
+			dst, err := extractDestination(r)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
@@ -129,12 +127,12 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 			log.Debug().Str("key", key).Str("dst", dst).Msg("restore")
 
-			h.restore(w, r, s, u, dst, key)
+			h.restore(w, r, s, u, dst, key, r.URL.Path)
 			return
 		}
 
-		if r.Method == "DELETE" {
-			h.delete(w, r, s, u, key)
+		if r.Method == http.MethodDelete {
+			h.delete(w, r, s, u, key, r.URL.Path)
 			return
 		}
 
@@ -142,12 +140,24 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User) {
+func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key, itemPath string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "listTrashbin")
 	defer span.End()
 
+	depth := r.Header.Get(HeaderDepth)
+	if depth == "" {
+		depth = "1"
+	}
+
 	sublog := appctx.GetLogger(ctx).With().Logger()
+
+	// see https://tools.ietf.org/html/rfc4918#section-9.1
+	if depth != "0" && depth != "1" && depth != "infinity" {
+		sublog.Debug().Str("depth", depth).Msgf("invalid Depth header value")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	pf, status, err := readPropfind(r.Body)
 	if err != nil {
@@ -178,8 +188,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	// ask gateway for recycle items
-	// TODO(labkode): add Reference to ListRecycleRequest
-	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
+	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: &provider.Reference{Path: path.Join(getHomeRes.Path, key, itemPath)}})
 
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
@@ -192,14 +201,54 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, getRecycleRes.RecycleItems)
+	items := getRecycleRes.RecycleItems
+
+	if depth == "infinity" {
+		var stack []string
+		// check sub-containers in reverse order and add them to the stack
+		// the reversed order here will produce a more logical sorting of results
+		for i := len(items) - 1; i >= 0; i-- {
+			// for i := range res.Infos {
+			if items[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				stack = append(stack, items[i].Key)
+			}
+		}
+
+		for len(stack) > 0 {
+			key := stack[len(stack)-1]
+			getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: &provider.Reference{Path: path.Join(getHomeRes.Path, key)}})
+			if err != nil {
+				sublog.Error().Err(err).Msg("error calling ListRecycle")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
+				HandleErrorStatus(&sublog, w, getRecycleRes.Status)
+				return
+			}
+			items = append(items, getRecycleRes.RecycleItems...)
+
+			stack = stack[:len(stack)-1]
+			// check sub-containers in reverse order and add them to the stack
+			// the reversed order here will produce a more logical sorting of results
+			for i := len(getRecycleRes.RecycleItems) - 1; i >= 0; i-- {
+				// for i := range res.Infos {
+				if getRecycleRes.RecycleItems[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+					stack = append(stack, getRecycleRes.RecycleItems[i].Key)
+				}
+			}
+		}
+	}
+
+	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, items)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("DAV", "1, 3, extended-mkcol")
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	_, err = w.Write([]byte(propRes))
 	if err != nil {
@@ -279,7 +328,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 			Prop:   []*propertyXML{},
 		})
 		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", filepath.Base(item.Ref.Path)))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
@@ -316,7 +365,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 					}
 				case "trashbin-original-filename":
 					// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", filepath.Base(item.Ref.Path)))
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
 				case "trashbin-original-location":
 					// TODO (jfd) double check and clarify the cs3 spec what the Key is about and if Path is only the folder that contains the file or if it includes the filename
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
@@ -363,14 +412,14 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 }
 
 // restore has a destination and a key
-func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst string, key string) {
+func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst, key, itemPath string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "restore")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
 
-	overwrite := r.Header.Get("Overwrite")
+	overwrite := r.Header.Get(HeaderOverwrite)
 
 	overwrite = strings.ToUpper(overwrite)
 	if overwrite == "" {
@@ -401,7 +450,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	}
 
 	dstRef := &provider.Reference{
-		Path: filepath.Join(getHomeRes.Path, dst),
+		Path: path.Join(getHomeRes.Path, dst),
 	}
 
 	dstStatReq := &provider.StatRequest{
@@ -430,17 +479,9 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 			b, err := Marshal(exception{
 				code:    SabredavPreconditionFailed,
 				message: "The destination node already exists, and the overwrite header is set to false",
-				header:  "Overwrite",
+				header:  HeaderOverwrite,
 			})
-			if err != nil {
-				sublog.Error().Msgf("error marshaling xml response: %s", b)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			_, err = w.Write(b)
-			if err != nil {
-				sublog.Err(err).Msg("error writing response")
-			}
+			HandleWebdavError(&sublog, w, b, err)
 			return
 		}
 		// delete existing tree
@@ -464,7 +505,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
 		// TODO currently limited to the home storage
 		Ref: &provider.Reference{
-			Path: getHomeRes.Path,
+			Path: path.Join(getHomeRes.Path, itemPath),
 		},
 		Key:        key,
 		RestoreRef: &provider.Reference{Path: dst},
@@ -478,6 +519,14 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			w.WriteHeader(http.StatusForbidden)
+			b, err := Marshal(exception{
+				code:    SabredavPermissionDenied,
+				message: "Permission denied to restore",
+			})
+			HandleWebdavError(&sublog, w, b, err)
+		}
 		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
@@ -494,16 +543,16 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	}
 
 	info := dstStatRes.Info
-	w.Header().Set("Content-Type", info.MimeType)
-	w.Header().Set("ETag", info.Etag)
-	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
-	w.Header().Set("OC-ETag", info.Etag)
+	w.Header().Set(HeaderContentType, info.MimeType)
+	w.Header().Set(HeaderETag, info.Etag)
+	w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
+	w.Header().Set(HeaderOCETag, info.Etag)
 
 	w.WriteHeader(successCode)
 }
 
 // delete has only a key
-func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key string) {
+func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key, itemPath string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "erase")
 	defer span.End()
@@ -547,6 +596,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 				StorageId: sRes.Info.Id.StorageId,
 				OpaqueId:  key,
 			},
+			Path: utils.MakeRelativePath(itemPath),
 		},
 	}
 
@@ -562,6 +612,25 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	case rpc.Code_CODE_NOT_FOUND:
 		sublog.Debug().Str("storageid", sRes.Info.Id.StorageId).Str("key", key).Interface("status", res.Status).Msg("resource not found")
 		w.WriteHeader(http.StatusConflict)
+		m := fmt.Sprintf("storageid %v not found", sRes.Info.Id.StorageId)
+		b, err := Marshal(exception{
+			code:    SabredavConflict,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		w.WriteHeader(http.StatusForbidden)
+		var m string
+		if key == "" {
+			m = "Permission denied to purge recycle"
+		} else {
+			m = "Permission denied to delete"
+		}
+		b, err := Marshal(exception{
+			code:    SabredavPermissionDenied,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
 	default:
 		HandleErrorStatus(&sublog, w, res.Status)
 	}

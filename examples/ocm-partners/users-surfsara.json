@@ -2,7 +2,8 @@
 	{
 		"id": {
 			"opaque_id": "ron1234",
-			"idp": "surfsara.nl"
+			"idp": "surfsara.nl",
+			"type": 1
 		},
 		"username": "ron",
 		"secret": "ronpass",
@@ -13,7 +14,8 @@
 	{
 		"id": {
 			"opaque_id": "antoon5678",
-			"idp": "surfsara.nl"
+			"idp": "surfsara.nl",
+			"type": 1
 		},
 		"username": "antoon",
 		"secret": "antoonpass",
@@ -24,7 +26,8 @@
 	{
 		"id": {
 			"opaque_id": "test4242",
-			"idp": "surfsara.nl"
+			"idp": "surfsara.nl",
+			"type": 1
 		},
 		"username": "test",
 		"secret": "testpass",

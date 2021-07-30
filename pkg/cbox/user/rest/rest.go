@@ -128,19 +128,26 @@ func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[st
 	if err != nil {
 		return nil, err
 	}
-	if len(responseData) != 1 {
-		return nil, errors.New("rest: user not found")
+
+	var users []map[string]interface{}
+	for _, usr := range responseData {
+		userData, ok := usr.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		t, _ := userData["type"].(string)
+		userType := getUserType(t, userData["upn"].(string))
+		if userType != userpb.UserType_USER_TYPE_APPLICATION && userType != userpb.UserType_USER_TYPE_FEDERATED {
+			users = append(users, userData)
+		}
 	}
 
-	userData, ok := responseData[0].(map[string]interface{})
-	if !ok {
-		return nil, errors.New("rest: error in type assertion")
+	if len(users) != 1 {
+		return nil, errors.New("rest: user not found: " + param + ": " + val)
 	}
 
-	if userData["type"].(string) == "Application" || strings.HasPrefix(userData["upn"].(string), "guest") {
-		return nil, errors.New("rest: guest and application accounts not supported")
-	}
-	return userData, nil
+	return users[0], nil
 }
 
 func (m *manager) getInternalUserID(ctx context.Context, uid *userpb.UserId) (string, error) {
@@ -171,10 +178,13 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 	name, _ := userData["displayName"].(string)
 	uidNumber, _ := userData["uid"].(float64)
 	gidNumber, _ := userData["gid"].(float64)
+	t, _ := userData["type"].(string)
+	userType := getUserType(t, upn)
 
 	userID := &userpb.UserId{
 		OpaqueId: upn,
 		Idp:      m.conf.IDProvider,
+		Type:     userType,
 	}
 	u := &userpb.User{
 		Id:          userID,
@@ -230,7 +240,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	case "username":
 		claim = "upn"
 	default:
-		return nil, errors.New("rest: invalid field")
+		return nil, errors.New("rest: invalid field: " + claim)
 	}
 
 	userData, err := m.getUserByParam(ctx, claim, value)
@@ -258,7 +268,7 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 
 	for _, usr := range userData {
 		usrInfo, ok := usr.(map[string]interface{})
-		if !ok || usrInfo["type"].(string) == "Application" || strings.HasPrefix(usrInfo["upn"].(string), "guest") {
+		if !ok {
 			continue
 		}
 
@@ -267,10 +277,17 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 		name, _ := usrInfo["displayName"].(string)
 		uidNumber, _ := usrInfo["uid"].(float64)
 		gidNumber, _ := usrInfo["gid"].(float64)
+		t, _ := usrInfo["type"].(string)
+		userType := getUserType(t, upn)
+
+		if userType == userpb.UserType_USER_TYPE_APPLICATION || userType == userpb.UserType_USER_TYPE_FEDERATED {
+			continue
+		}
 
 		uid := &userpb.UserId{
 			OpaqueId: upn,
 			Idp:      m.conf.IDProvider,
+			Type:     userType,
 		}
 		users[uid.OpaqueId] = &userpb.User{
 			Id:          uid,
@@ -287,6 +304,19 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 
+	// Look at namespaces filters. If the query starts with:
+	// "a" => look into primary/secondary/service accounts
+	// "l" => look into lightweight accounts
+	// none => look into primary
+
+	parts := strings.SplitN(query, ":", 2)
+
+	var namespace string
+	if len(parts) == 2 {
+		// the query contains a namespace filter
+		namespace, query = parts[0], parts[1]
+	}
+
 	var filters []string
 	switch {
 	case usernameRegex.MatchString(query):
@@ -294,7 +324,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	case emailRegex.MatchString(query):
 		filters = []string{"primaryAccountEmail"}
 	default:
-		return nil, errors.New("rest: illegal characters present in query")
+		return nil, errors.New("rest: illegal characters present in query: " + query)
 	}
 
 	users := make(map[string]*userpb.User)
@@ -309,11 +339,34 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	}
 
 	userSlice := []*userpb.User{}
-	for _, v := range users {
-		userSlice = append(userSlice, v)
+
+	var accountsFilters []userpb.UserType
+	switch namespace {
+	case "":
+		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_PRIMARY}
+	case "a":
+		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_PRIMARY, userpb.UserType_USER_TYPE_SECONDARY, userpb.UserType_USER_TYPE_SERVICE}
+	case "l":
+		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_LIGHTWEIGHT}
+	}
+
+	for _, u := range users {
+		if isUserAnyType(u, accountsFilters) {
+			userSlice = append(userSlice, u)
+		}
 	}
 
 	return userSlice, nil
+}
+
+// isUserAnyType returns true if the user's type is one of types list
+func isUserAnyType(user *userpb.User, types []userpb.UserType) bool {
+	for _, t := range types {
+		if user.GetId().Type == t {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
@@ -327,7 +380,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	if err != nil {
 		return nil, err
 	}
-	url := fmt.Sprintf("%s/Identity/%s/groups", m.conf.APIBaseURL, internalID)
+	url := fmt.Sprintf("%s/Identity/%s/groups?recursive=true", m.conf.APIBaseURL, internalID)
 	groupData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
@@ -373,4 +426,29 @@ func extractUID(u *userpb.User) (string, error) {
 		return "", errors.New("rest: could not retrieve UID from user")
 	}
 	return strconv.FormatInt(u.UidNumber, 10), nil
+}
+
+func getUserType(userType, upn string) userpb.UserType {
+	var t userpb.UserType
+	switch userType {
+	case "Application":
+		t = userpb.UserType_USER_TYPE_APPLICATION
+	case "Service":
+		t = userpb.UserType_USER_TYPE_SERVICE
+	case "Secondary":
+		t = userpb.UserType_USER_TYPE_SECONDARY
+	case "Person":
+		switch {
+		case strings.HasPrefix(upn, "guest"):
+			t = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+		case strings.Contains(upn, "@"):
+			t = userpb.UserType_USER_TYPE_FEDERATED
+		default:
+			t = userpb.UserType_USER_TYPE_PRIMARY
+		}
+	default:
+		t = userpb.UserType_USER_TYPE_INVALID
+	}
+	return t
+
 }
