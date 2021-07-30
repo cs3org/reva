@@ -33,7 +33,7 @@ import (
 
 var _ = Describe("Static", func() {
 
-	totalProviders, rootProviders, eosProviders := 32, 30, 28
+	totalProviders, rootProviders, eosProviders := 33, 31, 29
 
 	handler, err := static.New(map[string]interface{}{
 		"home_provider": "/home",
@@ -74,6 +74,9 @@ var _ = Describe("Static", func() {
 			},
 			"123e4567-e89b-12d3-a456-426655440001": map[string]interface{}{
 				"address": "home-01-home",
+			},
+			"/eos/": map[string]interface{}{
+				"address": "unspecific-rule-that-should-never-been-hit",
 			},
 		},
 	})

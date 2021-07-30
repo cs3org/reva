@@ -179,6 +179,10 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 				continue
 			}
 			if m := r.FindString(fn); m != "" {
+				if match != nil && len(match.ProviderPath) > len(m) {
+					// Do not overwrite existing longer match
+					continue
+				}
 				match = &registrypb.ProviderInfo{
 					ProviderPath: m,
 					Address:      addr,
