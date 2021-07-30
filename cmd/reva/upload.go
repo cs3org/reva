@@ -176,9 +176,6 @@ func uploadCommand() *command {
 			if err != nil {
 				return err
 			}
-			if token, ok := ctxpkg.ContextGetToken(ctx); ok {
-				c.Header.Add(ctxpkg.TokenHeader, token)
-			}
 			c.Header.Add(datagateway.TokenTransportHeader, p.Token)
 			tusc, err := tus.NewClient(dataServerURL, c)
 			if err != nil {

@@ -109,7 +109,9 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{}
+	return []string{
+		"/",
+	}
 }
 
 func (s *svc) setHandler() {
