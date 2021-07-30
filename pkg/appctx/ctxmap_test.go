@@ -22,8 +22,12 @@ import (
 	"context"
 	"testing"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/stretchr/testify/assert"
 )
+
+type ctxStringKey string
+type ctxIntKey int
 
 func TestGetKeyValues(t *testing.T) {
 	tests := []struct {
@@ -38,24 +42,32 @@ func TestGetKeyValues(t *testing.T) {
 		},
 		{
 			"Context with Values",
-			context.WithValue(context.Background(), "key", "value"), //nolint
+			context.WithValue(context.Background(), ctxStringKey("key"), "value"),
 			map[interface{}]interface{}{
-				"key": "value",
+				ctxStringKey("key"): "value",
 			},
 		},
 		{
-			"Nested Context with Values",
-			context.WithValue(context.WithValue(context.Background(), "key", "value"), "key2", "value2"), //nolint
+			"Context with user object",
+			context.WithValue(context.WithValue(context.Background(), ctxStringKey("key"), "value"), ctxStringKey("user"), &userpb.User{Username: "einstein"}),
 			map[interface{}]interface{}{
-				"key":  "value",
-				"key2": "value2",
+				ctxStringKey("key"):  "value",
+				ctxStringKey("user"): &userpb.User{Username: "einstein"},
+			},
+		},
+		{
+			"Nested Context with Values of different types",
+			context.WithValue(context.WithValue(context.Background(), ctxStringKey("key"), "value"), ctxIntKey(123), "value2"),
+			map[interface{}]interface{}{
+				ctxStringKey("key"): "value",
+				ctxIntKey(123):      "value2",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			kvMap := GetKeyValues(tt.ctx)
+			kvMap := GetKeyValuesFromCtx(tt.ctx)
 			assert.Equal(t, tt.m, kvMap)
 		})
 	}
@@ -75,15 +87,15 @@ func TestPutKeyValues(t *testing.T) {
 		{
 			"single kv pair",
 			map[interface{}]interface{}{
-				"key": "value",
+				ctxStringKey("key"): "value",
 			},
-			context.WithValue(context.Background(), "key", "value"), //nolint
+			context.WithValue(context.Background(), ctxStringKey("key"), "value"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := PutKeyValues(tt.m)
+			ctx := PutKeyValuesToCtx(tt.m)
 			assert.Equal(t, tt.ctx, ctx)
 		})
 	}

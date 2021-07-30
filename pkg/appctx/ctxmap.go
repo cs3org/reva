@@ -20,29 +20,12 @@ package appctx
 
 import (
 	"context"
+	"reflect"
 	"unsafe"
 )
 
-type emptyCtx int
-
-type valueCtx struct {
-	context.Context
-	key, val interface{}
-}
-
-type iface struct {
-	itab, data uintptr //nolint
-}
-
-// GetKeyValues retrieves all the key-value pairs from the provided context.
-func GetKeyValues(ctx context.Context) map[interface{}]interface{} {
-	m := make(map[interface{}]interface{})
-	getKeyValue(ctx, m)
-	return m
-}
-
-// PutKeyValues puts
-func PutKeyValues(m map[interface{}]interface{}) context.Context {
+// PutKeyValuesToCtx puts all the key-value pairs from the provided map to a background context.
+func PutKeyValuesToCtx(m map[interface{}]interface{}) context.Context {
 	ctx := context.Background()
 	for key, value := range m {
 		ctx = context.WithValue(ctx, key, value)
@@ -50,14 +33,37 @@ func PutKeyValues(m map[interface{}]interface{}) context.Context {
 	return ctx
 }
 
-func getKeyValue(ctx context.Context, m map[interface{}]interface{}) {
-	ictx := *(*iface)(unsafe.Pointer(&ctx))
-	if ictx.data == 0 || int(*(*emptyCtx)(unsafe.Pointer(ictx.data))) == 0 {
-		return
+// GetKeyValuesFromCtx retrieves all the key-value pairs from the provided context.
+func GetKeyValuesFromCtx(ctx context.Context) map[interface{}]interface{} {
+	m := make(map[interface{}]interface{})
+	getKeyValue(ctx, m)
+	return m
+}
+
+func getKeyValue(ctx interface{}, m map[interface{}]interface{}) {
+	ctxVals := reflect.ValueOf(ctx).Elem()
+	ctxType := reflect.TypeOf(ctx).Elem()
+
+	if ctxType.Kind() == reflect.Struct {
+		for i := 0; i < ctxVals.NumField(); i++ {
+			currField, currIf := extractField(ctxVals, ctxType, i)
+			switch currField {
+			case "Context":
+				getKeyValue(currIf, m)
+			case "key":
+				nextField, nextIf := extractField(ctxVals, ctxType, i+1)
+				if nextField == "val" {
+					m[currIf] = nextIf
+					i++
+				}
+			}
+		}
 	}
-	valCtx := (*valueCtx)(unsafe.Pointer(ictx.data))
-	if valCtx != nil && valCtx.key != nil {
-		m[valCtx.key] = valCtx.val
-	}
-	getKeyValue(valCtx.Context, m)
+}
+
+func extractField(vals reflect.Value, fieldType reflect.Type, pos int) (string, interface{}) {
+	currVal := vals.Field(pos)
+	currVal = reflect.NewAt(currVal.Type(), unsafe.Pointer(currVal.UnsafeAddr())).Elem()
+	currField := fieldType.Field(pos)
+	return currField.Name, currVal.Interface()
 }
