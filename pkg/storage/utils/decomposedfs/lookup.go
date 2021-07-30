@@ -168,3 +168,8 @@ func (lu *Lookup) mustGetUserLayout(ctx context.Context) string {
 	u := user.ContextMustGetUser(ctx)
 	return templates.WithUser(u, lu.Options.UserLayout)
 }
+
+// ShareFolder returns the internal storage root directory
+func (lu *Lookup) ShareFolder() string {
+	return lu.Options.ShareFolder
+}

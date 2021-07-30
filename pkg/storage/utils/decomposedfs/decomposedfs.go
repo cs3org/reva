@@ -53,7 +53,7 @@ import (
 
 // PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
-	AssemblePermissions(ctx context.Context, n *node.Node) (ap *provider.ResourcePermissions, err error)
+	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
 	HasPermission(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
@@ -148,7 +148,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context) (total uint64, inUse uint6
 		return 0, 0, errtypes.PermissionDenied(n.ID)
 	}
 
-	ri, err := n.AsResourceInfo(ctx, rp, []string{"treesize", "quota"})
+	ri, err := n.AsResourceInfo(ctx, &rp, []string{"treesize", "quota"})
 	if err != nil {
 		return 0, 0, err
 	}
@@ -399,7 +399,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx, rp, mdKeys)
+	return node.AsResourceInfo(ctx, &rp, mdKeys)
 }
 
 // ListFolder returns a list of resources in the specified folder
@@ -431,8 +431,9 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	for i := range children {
 		np := rp
 		// add this childs permissions
-		node.AddPermissions(np, n.PermissionSet(ctx))
-		if ri, err := children[i].AsResourceInfo(ctx, np, mdKeys); err == nil {
+		pset := n.PermissionSet(ctx)
+		node.AddPermissions(&np, &pset)
+		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}

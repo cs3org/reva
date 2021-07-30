@@ -1031,10 +1031,6 @@ _ocs: api compatibility, return correct status code_
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:741](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L741)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:742](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L742)
 
-#### [No way to set default folder for received shares](https://github.com/owncloud/ocis/issues/1327)
--   [apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature#L22)
--   [apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature:23](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature#L23)
-
 #### [Group shares support ](https://github.com/owncloud/ocis/issues/1289)
 -   [apiShareOperationsToShares1/gettingShares.feature:188](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L188)
 
