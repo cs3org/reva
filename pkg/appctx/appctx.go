@@ -20,12 +20,52 @@ package appctx
 
 import (
 	"context"
+	"unsafe"
 
 	"github.com/rs/zerolog"
 )
 
 // DeletingSharedResource flags to a storage a shared resource is being deleted not by the owner.
 var DeletingSharedResource struct{}
+
+type emptyCtx int
+
+type valueCtx struct {
+	context.Context
+	key, val interface{}
+}
+
+type iface struct {
+	itab, data uintptr
+}
+
+// GetKeyValues retrieves all the key-value pairs from the provided context.
+func GetKeyValues(ctx context.Context) map[interface{}]interface{} {
+	m := make(map[interface{}]interface{})
+	getKeyValue(ctx, m)
+	return m
+}
+
+// PutKeyValues puts
+func PutKeyValues(m map[interface{}]interface{}) context.Context {
+	ctx := context.Background()
+	for key, value := range m {
+		ctx = context.WithValue(ctx, key, value)
+	}
+	return ctx
+}
+
+func getKeyValue(ctx context.Context, m map[interface{}]interface{}) {
+	ictx := *(*iface)(unsafe.Pointer(&ctx))
+	if ictx.data == 0 || int(*(*emptyCtx)(unsafe.Pointer(ictx.data))) == 0 {
+		return
+	}
+	valCtx := (*valueCtx)(unsafe.Pointer(ictx.data))
+	if valCtx != nil && valCtx.key != nil {
+		m[valCtx.key] = valCtx.val
+	}
+	getKeyValue(valCtx.Context, m)
+}
 
 // WithLogger returns a context with an associated logger.
 func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
