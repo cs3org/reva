@@ -1336,7 +1336,7 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 
 	r, err := c.Stat(ctx, req)
 	if err != nil {
-		*e = errors.Wrap(err, fmt.Sprintf("gateway: error calling Stat %s on %+v", newPath, p))
+		*e = errors.Wrap(err, fmt.Sprintf("gateway: error calling Stat %s on %+v", req.Ref, p))
 		return
 	}
 	if res == nil {

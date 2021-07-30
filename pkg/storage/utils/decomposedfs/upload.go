@@ -114,7 +114,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	log := appctx.GetLogger(ctx)
 
-	n, err := fs.lookupNode(ctx, ref.Path)
+	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
