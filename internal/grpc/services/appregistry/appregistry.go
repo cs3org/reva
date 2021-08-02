@@ -143,6 +143,21 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvi
 	return res, nil
 }
 
+func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registrypb.ListSupportedMimeTypesRequest) (*registrypb.ListSupportedMimeTypesResponse, error) {
+	mimeTypes, err := s.reg.ListSupportedMimeTypes(ctx)
+	if err != nil {
+		return &registrypb.ListSupportedMimeTypesResponse{
+			Status: status.NewInternal(ctx, err, "error listing the supported mime types"),
+		}, nil
+	}
+
+	res := &registrypb.ListSupportedMimeTypesResponse{
+		Status:    status.NewOK(ctx),
+		MimeTypes: mimeTypes,
+	}
+	return res, nil
+}
+
 func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registrypb.GetDefaultAppProviderForMimeTypeRequest) (*registrypb.GetDefaultAppProviderForMimeTypeResponse, error) {
 	provider, err := s.reg.GetDefaultProviderForMimeType(ctx, req.MimeType)
 	if err != nil {

@@ -31,6 +31,7 @@ import (
 type Registry interface {
 	FindProviders(ctx context.Context, mimeType string) ([]*registry.ProviderInfo, error)
 	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
+	ListSupportedMimeTypes(ctx context.Context) (map[string]*registry.AppProviderNameList, error)
 	AddProvider(ctx context.Context, p *registry.ProviderInfo) error
 	GetDefaultProviderForMimeType(ctx context.Context, mimeType string) (*registry.ProviderInfo, error)
 	SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registry.ProviderInfo) error
