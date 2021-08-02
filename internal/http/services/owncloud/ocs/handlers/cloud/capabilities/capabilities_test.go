@@ -21,7 +21,6 @@ package capabilities
 import (
 	"encoding/json"
 	"encoding/xml"
-	"fmt"
 	"testing"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
@@ -44,7 +43,6 @@ func TestMarshal(t *testing.T) {
 		t.Fail()
 	}
 
-	fmt.Println(string(jsonData))
 	if string(jsonData) != jsonExpect {
 		t.Fail()
 	}
