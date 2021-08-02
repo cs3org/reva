@@ -57,14 +57,17 @@ function handleAction(action) {
 		}
 	}
 
-	var postData = {
-        "email": formData.getTrimmed("email"),
-		"password": {
-			"value": formData.get("password")
-		}
-    };
-
-    xhr.send(JSON.stringify(postData));
+	var pwd = formData.get("password");
+	pwd.hashCode().then(function(pwdHash) {
+		var postData = {
+	        "email": formData.getTrimmed("email"),
+			"password": {
+				"value": pwdHash
+			}
+	    };
+	
+	    xhr.send(JSON.stringify(postData));
+	});
 }
 
 function handleResetPassword() {
