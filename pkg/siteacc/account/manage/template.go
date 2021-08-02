@@ -96,8 +96,8 @@ const tplBody = `
 	<form id="form" method="POST" class="box" style="width: 100%;">
 		<button type="button" onClick="handleEditAccount();">Edit account</button>
 		<span style="width: 25px;">&nbsp;</span>
-		<button type="button" onClick="handleRequestKey();">Request API Key</button>
-		<button type="button" onClick="handleRequestAccess();">Request GOCDB access</button>
+		<button type="button" onClick="handleRequestKey();" {{if .Account.Data.APIKey}}disabled{{end}}>Request API Key</button>
+		<button type="button" onClick="handleRequestAccess();" {{if .Account.Data.GOCDBAccess}}disabled{{end}}>Request GOCDB access</button>
 		
 		<button type="button" onClick="handleLogout();" style="float: right;">Logout</button>
 	</form>
