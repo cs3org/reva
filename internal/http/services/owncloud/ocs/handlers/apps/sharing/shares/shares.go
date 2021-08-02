@@ -452,6 +452,24 @@ func (h *Handler) extractPermissions(reqRole string, reqPermissions string, ri *
 			Error:   errors.New("cannot set the requested share permissions"),
 		}
 	}
+	// add a deny permission only if the user has the grant to deny (ResourcePermissions.DenyGrant == true)
+	if permissions == conversions.PermissionNone {
+		if !ri.PermissionSet.DenyGrant {
+			return nil, nil, &ocsError{
+				Code:    http.StatusNotFound,
+				Message: "Cannot set the requested share permissions: no deny grant on resource",
+				Error:   errors.New("Cannot set the requested share permissions: no deny grant on resource"),
+			}
+		}
+		existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
+		if permissions == conversions.PermissionInvalid || !existingPermissions.Contain(permissions) {
+			return nil, nil, &ocsError{
+				Code:    http.StatusNotFound,
+				Message: "Cannot set the requested share permissions",
+				Error:   errors.New("cannot set the requested share permissions"),
+			}
+		}
+	}
 
 	roleMap := map[string]string{"name": role.Name}
 	val, err := json.Marshal(roleMap)
