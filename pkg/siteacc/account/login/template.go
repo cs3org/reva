@@ -113,7 +113,7 @@ const tplBody = `
 </div>
 <div>&nbsp;</div>
 <div>
-	<form id="form" method="POST" class="box container-inline" style="width: 100%;">
+	<form id="form" method="POST" class="box container-inline" style="width: 100%;" onSubmit="handleAction('login'); return false;">
 		<div style="grid-row: 1;"><label for="email">Email address: <span class="mandatory">*</span></label></div>
 		<div style="grid-row: 2;"><input type="text" id="email" name="email" placeholder="me@example.com"/></div>
 		<div style="grid-row: 1;"><label for="password">Password: <span class="mandatory">*</span></label></div>
@@ -127,7 +127,7 @@ const tplBody = `
 		</div>
 		<div style="grid-row: 4; grid-column: 2; text-align: right;">
 			<button type="reset">Reset</button>
-			<button type="button" style="font-weight: bold;" onClick="handleAction('login');">Login</button>
+			<button type="submit" style="font-weight: bold;">Login</button>
 		</div>	
 	</form>	
 </div>

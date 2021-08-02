@@ -87,7 +87,7 @@ const tplBody = `
 </div>
 <div>&nbsp;</div>
 <div>
-	<form id="form" method="POST" class="box container-inline" style="width: 100%;">
+	<form id="form" method="POST" class="box container-inline" style="width: 100%;" onSubmit="handleAction('contact'); return false;">
 		<div style="grid-row: 1;"><label for="subject">Subject: <span class="mandatory">*</span></label></div>
 		<div style="grid-row: 2; grid-column: 1 / span 2;"><input type="text" id="subject" name="subject" {{if .Params.Subject}}value="{{.Params.Subject}}" readonly{{end}}/></div>
 
@@ -101,7 +101,7 @@ const tplBody = `
 		</div>
 		<div style="grid-row: 5; grid-column: 2; text-align: right;">
 			<button type="reset">Reset</button>
-			<button type="button" style="font-weight: bold;" onClick="handleAction('contact');">Send</button>
+			<button type="submit" style="font-weight: bold;">Send</button>
 		</div>
 	</form>
 </div>
