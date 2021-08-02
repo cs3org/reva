@@ -78,6 +78,23 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registry.ListAppProvide
 	return res, nil
 }
 
+func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registry.ListSupportedMimeTypesRequest) (*registry.ListSupportedMimeTypesResponse, error) {
+	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
+		return &registry.ListSupportedMimeTypesResponse{
+			Status: status.NewInternal(ctx, err, "error getting app registry client"),
+		}, nil
+	}
+
+	res, err := c.ListSupportedMimeTypes(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling ListSupportedMimeTypes")
+	}
+
+	return res, nil
+}
+
 func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registry.GetDefaultAppProviderForMimeTypeRequest) (*registry.GetDefaultAppProviderForMimeTypeResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {

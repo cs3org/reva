@@ -120,8 +120,7 @@ func (b *reg) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error
 	b.providers[p.Address] = p
 
 	for _, m := range p.MimeTypes {
-		_, ok := b.mimetypes[m]
-		if ok {
+		if _, ok := b.mimetypes[m]; ok {
 			b.mimetypes[m].apps = append(b.mimetypes[m].apps, p.Address)
 		} else {
 			b.mimetypes[m] = &mimeTypeIndex{apps: []string{p.Address}}
@@ -131,11 +130,25 @@ func (b *reg) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error
 }
 
 func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
-	var providers = make([]*registrypb.ProviderInfo, 0, len(b.providers))
+	providers := make([]*registrypb.ProviderInfo, 0, len(b.providers))
 	for _, p := range b.providers {
 		providers = append(providers, p)
 	}
 	return providers, nil
+}
+
+func (b *reg) ListSupportedMimeTypes(ctx context.Context) (map[string]*registrypb.AppProviderNameList, error) {
+	mimeTypes := make(map[string]*registrypb.AppProviderNameList)
+	for _, p := range b.providers {
+		for _, m := range p.MimeTypes {
+			if _, ok := mimeTypes[m]; ok {
+				mimeTypes[m].AppProviderName = append(mimeTypes[m].AppProviderName, p.Name)
+			} else {
+				mimeTypes[m] = &registrypb.AppProviderNameList{AppProviderName: []string{p.Name}}
+			}
+		}
+	}
+	return mimeTypes, nil
 }
 
 func (b *reg) SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registrypb.ProviderInfo) error {

@@ -158,7 +158,3 @@ func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppReques
 	return res, nil
 
 }
-
-func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
-	return nil, errtypes.NotSupported("Deprecated")
-}

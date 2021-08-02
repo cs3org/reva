@@ -115,11 +115,6 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 	return s.openLocalResources(ctx, fileInfo, req.ViewMode, req.App)
 }
 
-func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
-	// TODO to be removed in a future PR
-	return nil, errtypes.NotSupported("Deprecated")
-}
-
 func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenInAppRequest_ViewMode, app string,
 	insecure, skipVerify bool, nameQueries ...string) (*providerpb.OpenInAppResponse, error) {
 	log := appctx.GetLogger(ctx)
