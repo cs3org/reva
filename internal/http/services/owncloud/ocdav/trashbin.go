@@ -484,7 +484,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		}
 
 		if parentStatResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			HandleErrorStatus(&sublog, w, &rpc.Status{Code: rpc.Code_CODE_ALREADY_EXISTS})
+			HandleErrorStatus(&sublog, w, &rpc.Status{Code: rpc.Code_CODE_FAILED_PRECONDITION})
 			return
 		}
 	}

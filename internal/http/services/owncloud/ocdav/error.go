@@ -119,8 +119,8 @@ func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status
 	case rpc.Code_CODE_INSUFFICIENT_STORAGE:
 		log.Debug().Interface("status", s).Msg("insufficient storage")
 		w.WriteHeader(http.StatusInsufficientStorage)
-	case rpc.Code_CODE_ALREADY_EXISTS:
-		log.Debug().Interface("status", s).Msg("conflict")
+	case rpc.Code_CODE_FAILED_PRECONDITION:
+		log.Debug().Interface("status", s).Msg("destination does not exist")
 		w.WriteHeader(http.StatusConflict)
 	default:
 		log.Error().Interface("status", s).Msg("grpc request failed")
