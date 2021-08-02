@@ -471,7 +471,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 	// Restoring to a non-existent location is not supported by the WebDAV spec. The following block ensures the target
 	// restore location exists, and if it doesn't returns a conflict error code.
-	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && strings.HasSuffix(dst, itemPath) && isNested(dst) {
+	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst) {
 		parentStatReq := &provider.StatRequest{
 			Ref: &provider.Reference{Path: path.Join(getHomeRes.Path, filepath.Dir(dst))},
 		}
