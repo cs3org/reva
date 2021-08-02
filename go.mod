@@ -24,7 +24,7 @@ require (
 	github.com/go-openapi/errors v0.20.0 // indirect
 	github.com/go-openapi/strfmt v0.19.5 // indirect
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/golang-jwt/jwt v3.2.1+incompatible
+	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang/mock v1.4.4 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/gomodule/redigo v1.8.5
