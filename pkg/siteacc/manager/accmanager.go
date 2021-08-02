@@ -19,6 +19,8 @@
 package manager
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -203,6 +205,10 @@ func (mngr *AccountsManager) ResetPassword(name string) error {
 	if err == nil {
 		mngr.sendEmail(accountUpd, nil, email.SendPasswordReset)
 	}
+
+	// Passwords are transferred as lower-case SHA256 hashes, so update the password accordingly
+	accountUpd.Password.Value = fmt.Sprintf("%x", sha256.Sum256([]byte(accountUpd.Password.Value)))
+	err = mngr.UpdateAccount(accountUpd, true, false)
 
 	return err
 }
