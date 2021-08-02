@@ -101,7 +101,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 
 func getUsers() map[string]*userpb.User {
 	return map[string]*userpb.User{
-		"4c510ada-c86b-4815-8820-42cdf82c3d51": &userpb.User{
+		"4c510ada-c86b-4815-8820-42cdf82c3d51": {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
@@ -114,7 +114,7 @@ func getUsers() map[string]*userpb.User {
 			UidNumber:   123,
 			GidNumber:   987,
 		},
-		"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c": &userpb.User{
+		"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c": {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
@@ -127,7 +127,7 @@ func getUsers() map[string]*userpb.User {
 			UidNumber:   456,
 			GidNumber:   987,
 		},
-		"932b4540-8d16-481e-8ef4-588e4b6b151c": &userpb.User{
+		"932b4540-8d16-481e-8ef4-588e4b6b151c": {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "932b4540-8d16-481e-8ef4-588e4b6b151c",

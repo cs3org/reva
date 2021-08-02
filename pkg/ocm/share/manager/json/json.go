@@ -225,7 +225,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		userID = owner
 		g.Grantee.Opaque = &typespb.Opaque{
 			Map: map[string]*typespb.OpaqueEntry{
-				"token": &typespb.OpaqueEntry{
+				"token": {
 					Decoder: "plain",
 					Value:   []byte(token),
 				},

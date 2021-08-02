@@ -162,6 +162,16 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		w.WriteHeader(http.StatusInternalServerError)
 		return nil, nil, false
 	} else if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			m := fmt.Sprintf("Resource %v not found", ref.Path)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: m,
+			})
+			HandleWebdavError(&log, w, b, err)
+			return nil, nil, false
+		}
 		HandleErrorStatus(&log, w, res.Status)
 		return nil, nil, false
 	}
@@ -419,7 +429,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			// etags must be enclosed in double quotes and cannot contain them.
 			// See https://tools.ietf.org/html/rfc7232#section-2.3 for details
 			// TODO(jfd) handle weak tags that start with 'W/'
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", md.Etag))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", quoteEtag(md.Etag)))
 		}
 
 		if md.PermissionSet != nil {
@@ -712,7 +722,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				switch pf.Prop[i].Local {
 				case "getetag": // both
 					if md.Etag != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", md.Etag))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", quoteEtag(md.Etag)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getetag", ""))
 					}
@@ -814,6 +824,14 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	return &response, nil
+}
+
+// be defensive about wrong encoded etags
+func quoteEtag(etag string) string {
+	if strings.HasPrefix(etag, "W/") {
+		return `W/"` + strings.Trim(etag[2:], `"`) + `"`
+	}
+	return `"` + strings.Trim(etag, `"`) + `"`
 }
 
 // a file is only yours if you are the owner

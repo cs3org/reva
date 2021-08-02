@@ -380,7 +380,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	if err != nil {
 		return nil, err
 	}
-	url := fmt.Sprintf("%s/Identity/%s/groups", m.conf.APIBaseURL, internalID)
+	url := fmt.Sprintf("%s/Identity/%s/groups?recursive=true", m.conf.APIBaseURL, internalID)
 	groupData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err

@@ -112,15 +112,15 @@ func transferCreateCommand() *command {
 		createShareReq := &ocm.CreateOCMShareRequest{
 			Opaque: &types.Opaque{
 				Map: map[string]*types.OpaqueEntry{
-					"permissions": &types.OpaqueEntry{
+					"permissions": {
 						Decoder: "plain",
 						Value:   []byte(strconv.Itoa(pint)),
 					},
-					"name": &types.OpaqueEntry{
+					"name": {
 						Decoder: "plain",
 						Value:   []byte(statRes.Info.Path),
 					},
-					"protocol": &types.OpaqueEntry{
+					"protocol": {
 						Decoder: "plain",
 						Value:   []byte("datatx"),
 					},

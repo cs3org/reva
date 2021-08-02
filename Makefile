@@ -31,6 +31,7 @@ imports: off
 	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
 
 build: imports test-go-version
+	gofmt -s -w .
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
@@ -104,7 +105,7 @@ ci: build-ci test  lint-ci
 build-revad-docker: off
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 build-reva-docker: off
-	env CGO_ENABLED=0 go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 clean:
 	rm -rf dist
 

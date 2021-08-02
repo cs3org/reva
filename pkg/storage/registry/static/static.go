@@ -60,10 +60,10 @@ func (c *config) init() {
 
 	if len(c.Rules) == 0 {
 		c.Rules = map[string]rule{
-			"/": rule{
+			"/": {
 				Address: sharedconf.GetGatewaySVC(""),
 			},
-			"00000000-0000-0000-0000-000000000000": rule{
+			"00000000-0000-0000-0000-000000000000": {
 				Address: sharedconf.GetGatewaySVC(""),
 			},
 		}
@@ -179,6 +179,10 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 				continue
 			}
 			if m := r.FindString(fn); m != "" {
+				if match != nil && len(match.ProviderPath) > len(m) {
+					// Do not overwrite existing longer match
+					continue
+				}
 				match = &registrypb.ProviderInfo{
 					ProviderPath: m,
 					Address:      addr,

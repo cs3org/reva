@@ -57,6 +57,12 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	for _, r := range nameRules {
+		if !r.Test(dst) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
 	dst = path.Join(ns, dst)
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
@@ -333,6 +339,19 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 			return nil
 		}
 
+		// delete existing tree
+		delReq := &provider.DeleteRequest{Ref: dstRef}
+		delRes, err := client.Delete(ctx, delReq)
+		if err != nil {
+			log.Error().Err(err).Msg("error sending grpc delete request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return nil
+		}
+
+		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+			HandleErrorStatus(log, w, delRes.Status)
+			return nil
+		}
 	} else {
 		// check if an intermediate path / the parent exists
 		intermediateRef, status, err := intermediateDirRef()

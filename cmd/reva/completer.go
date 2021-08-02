@@ -168,22 +168,22 @@ func (c *Completer) completeOptionArguments(d prompt.Document) ([]prompt.Suggest
 	var match bool
 	switch option {
 	case "-cs":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "basic"}, prompt.Suggest{Text: "oidc"}}
+		suggests = []prompt.Suggest{{Text: "basic"}, {Text: "oidc"}}
 		match = true
 	case "-dd":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "local"}, prompt.Suggest{Text: "owncloud"}}
+		suggests = []prompt.Suggest{{Text: "local"}, {Text: "owncloud"}}
 		match = true
 	case "-type":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "user"}, prompt.Suggest{Text: "group"}}
+		suggests = []prompt.Suggest{{Text: "user"}, {Text: "group"}}
 		match = true
 	case "-rol":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "viewer"}, prompt.Suggest{Text: "editor"}}
+		suggests = []prompt.Suggest{{Text: "viewer"}, {Text: "editor"}}
 		match = true
 	case "-state":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "pending"}, prompt.Suggest{Text: "accepted"}, prompt.Suggest{Text: "rejected"}}
+		suggests = []prompt.Suggest{{Text: "pending"}, {Text: "accepted"}, {Text: "rejected"}}
 		match = true
 	case "-viewmode":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "view"}, prompt.Suggest{Text: "read"}, prompt.Suggest{Text: "write"}}
+		suggests = []prompt.Suggest{{Text: "view"}, {Text: "read"}, {Text: "write"}}
 		match = true
 	case "-c", "-grantee", "-idp", "-by-resource-id", "-xs", "-token":
 		match = true

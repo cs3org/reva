@@ -44,9 +44,11 @@ func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns strin
 
 	// read filename from metadata
 	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
-	if meta["filename"] == "" {
-		w.WriteHeader(http.StatusPreconditionFailed)
-		return
+	for _, r := range nameRules {
+		if !r.Test(meta["filename"]) {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return
+		}
 	}
 
 	// append filename to current dir
@@ -155,6 +157,10 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
+		if uRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return
+		}
 		HandleErrorStatus(&log, w, uRes.Status)
 		return
 	}
