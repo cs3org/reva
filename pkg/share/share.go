@@ -24,7 +24,6 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/utils"
 	"google.golang.org/genproto/protobuf/field_mask"
 )
@@ -118,9 +117,7 @@ func MatchesFilter(share *collaboration.Share, filter *collaboration.Filter) boo
 	case collaboration.Filter_TYPE_GRANTEE_TYPE:
 		return share.Grantee.Type == filter.GetGranteeType()
 	case collaboration.Filter_TYPE_EXCLUDE_DENIALS:
-		// This filter type is used to filter out "denial shares". These are currently implemented by having the permission "0".
-		// I.e. if the permission is 0 we don't want to show it.
-		return int(conversions.RoleFromResourcePermissions(share.Permissions.Permissions).OCSPermissions()) != 0
+		return share.Permissions.Permissions.DenyGrant
 	default:
 		return false
 	}
