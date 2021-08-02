@@ -19,8 +19,6 @@
 package xattrs
 
 import (
-	"fmt"
-	"regexp"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -83,19 +81,10 @@ const (
 	GroupAcePrefix string = "g:"
 )
 
-// TODO this does not belong here
-var uuidRegexp = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-
 // ReferenceFromAttr returns a CS3 reference from xattr of a node.
 // Supported formats are: "cs3:storageid/nodeid"
 func ReferenceFromAttr(b []byte) (*provider.Reference, error) {
-	CS3 := regexp.MustCompile(fmt.Sprintf("^%s:%s/%s", "cs3", uuidRegexp, uuidRegexp))
-
-	if CS3.Match(b) {
-		return refFromCS3(b)
-	}
-
-	return nil, fmt.Errorf("invalid reference")
+	return refFromCS3(b)
 }
 
 // refFromCS3 creates a CS3 reference from a set of bytes. This method should remain private
