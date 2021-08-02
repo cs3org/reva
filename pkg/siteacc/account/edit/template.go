@@ -76,22 +76,19 @@ function handleAction(action) {
 		}
 	}
 
-	var pwd = formData.get("password");
-	pwd.hashCode().then(function(pwdHash) {
-		var postData = {
-			"firstName": formData.getTrimmed("fname"),
-			"lastName": formData.getTrimmed("lname"),
-			"organization": formData.getTrimmed("organization"),
-			"website": formData.getTrimmed("website"),
-			"role": formData.getTrimmed("role"),
-			"phoneNumber": formData.getTrimmed("phone"),
-			"password": {
-				"value": pwdHash
-			}
-	    };
-	
-	    xhr.send(JSON.stringify(postData));
-	});	
+	var postData = {
+		"firstName": formData.getTrimmed("fname"),
+		"lastName": formData.getTrimmed("lname"),
+		"organization": formData.getTrimmed("organization"),
+		"website": formData.getTrimmed("website"),
+		"role": formData.getTrimmed("role"),
+		"phoneNumber": formData.getTrimmed("phone"),
+		"password": {
+			"value": formData.get("password")
+		}
+    };
+
+    xhr.send(JSON.stringify(postData));
 }
 `
 
