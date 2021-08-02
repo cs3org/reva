@@ -38,14 +38,18 @@ const (
 	RoleUnknown string = "unknown"
 	// RoleLegacy provides backwards compatibility
 	RoleLegacy string = "legacy"
-	// RoleViewer grants non-editor role on a resource
+	// RoleDenied grants no permission at all on a resource
+	RoleDenied string = "denied"
+	// RoleViewer grants a view-only role (no download) on a resource
 	RoleViewer string = "viewer"
+	// RoleReader grants non-editor role on a resource
+	RoleReader string = "reader"
 	// RoleEditor grants editor permission on a resource, including folders
 	RoleEditor string = "editor"
 	// RoleFileEditor grants editor permission on a single file
 	RoleFileEditor string = "file-editor"
-	// RoleCoowner grants owner permissions on a resource
-	RoleCoowner string = "coowner"
+	// RoleCollaborator rgrants editor+resharing permissions on a resource
+	RoleCollaborator string = "collaborator"
 	// RoleUploader FIXME: uploader role with only write permission can use InitiateFileUpload, not anything else
 	RoleUploader string = "uploader"
 )
@@ -89,6 +93,7 @@ func (r *Role) OCSPermissions() Permissions {
 // S = Shared
 // R = Shareable
 // M = Mounted
+// Z = Deniable (NEW)
 func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) string {
 	var b strings.Builder
 	// b.Grow(7)
@@ -113,20 +118,29 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 	if isDir && r.ocsPermissions.Contain(PermissionCreate) {
 		fmt.Fprintf(&b, "CK")
 	}
+
+	if r.ocsPermissions.Contain(PermissionDeny) {
+		fmt.Fprintf(&b, "Z")
+	}
+
 	return b.String()
 }
 
 // RoleFromName creates a role from the name
 func RoleFromName(name string) *Role {
 	switch name {
+	case RoleDenied:
+		return NewDeniedRole()
 	case RoleViewer:
 		return NewViewerRole()
+	case RoleReader:
+		return NewReaderRole()
 	case RoleEditor:
 		return NewEditorRole()
 	case RoleFileEditor:
 		return NewFileEditorRole()
-	case RoleCoowner:
-		return NewCoownerRole()
+	case RoleCollaborator:
+		return NewCollaboratorRole()
 	case RoleUploader:
 		return NewUploaderRole()
 	}
@@ -142,8 +156,36 @@ func NewUnknownRole() *Role {
 	}
 }
 
+// NewDeniedRole creates a fully denied role
+func NewDeniedRole() *Role {
+	return &Role{
+		Name:                   RoleDenied,
+		cS3ResourcePermissions: &provider.ResourcePermissions{},
+		ocsPermissions:         PermissionNone,
+	}
+}
+
 // NewViewerRole creates a viewer role
 func NewViewerRole() *Role {
+	return &Role{
+		Name: RoleViewer,
+		cS3ResourcePermissions: &provider.ResourcePermissions{
+			// read
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			ListGrants:           true,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListRecycle:          true,
+			Stat:                 true,
+		},
+		ocsPermissions: PermissionRead,
+	}
+}
+
+// NewReaderRole creates a reader role
+func NewReaderRole() *Role {
 	return &Role{
 		Name: RoleViewer,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
@@ -219,10 +261,10 @@ func NewFileEditorRole() *Role {
 	}
 }
 
-// NewCoownerRole creates a coowner role
-func NewCoownerRole() *Role {
+// NewCollaboratorRole creates a collaborator role
+func NewCollaboratorRole() *Role {
 	return &Role{
-		Name: RoleCoowner,
+		Name: RoleCollaborator,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			// read
 			GetPath:              true,
@@ -283,7 +325,7 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 	if p.Contain(PermissionRead) {
 		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) {
 			if p.Contain(PermissionShare) {
-				return NewCoownerRole()
+				return NewCollaboratorRole()
 			}
 			return NewEditorRole()
 		}
@@ -293,6 +335,9 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 	}
 	if p == PermissionCreate {
 		return NewUploaderRole()
+	}
+	if p == PermissionNone {
+		return NewDeniedRole()
 	}
 	// legacy
 	return NewLegacyRoleFromOCSPermissions(p)
@@ -384,13 +429,17 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		rp.UpdateGrant {
 		r.ocsPermissions |= PermissionShare
 	}
+	if rp.DenyGrant {
+		r.ocsPermissions |= PermissionDeny
+	}
+
 	if r.ocsPermissions.Contain(PermissionRead) {
 		if r.ocsPermissions.Contain(PermissionWrite) && r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) {
 			r.Name = RoleEditor
 			if r.ocsPermissions.Contain(PermissionShare) {
-				r.Name = RoleCoowner
+				r.Name = RoleCollaborator
 			}
-			return r // editor or coowner
+			return r // editor or collaborator
 		}
 		if r.ocsPermissions == PermissionRead {
 			r.Name = RoleViewer
@@ -399,6 +448,10 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 	}
 	if r.ocsPermissions == PermissionCreate {
 		r.Name = RoleUploader
+		return r
+	}
+	if r.ocsPermissions == PermissionNone {
+		r.Name = RoleDenied
 		return r
 	}
 	r.Name = RoleLegacy
