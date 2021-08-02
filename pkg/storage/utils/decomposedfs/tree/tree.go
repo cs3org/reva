@@ -61,6 +61,7 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(ID string) string
 	Path(ctx context.Context, n *node.Node) (path string, err error)
+	ShareFolder() string
 }
 
 // Tree manages a hierarchical tree

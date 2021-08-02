@@ -237,13 +237,14 @@ var _ = Describe("Tree", func() {
 				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
 				Expect(err).ToNot(HaveOccurred())
 
-				riBefore, err := dir.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				perms := node.OwnerPermissions()
+				riBefore, err := dir.AsResourceInfo(env.Ctx, &perms, []string{})
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Tree.Propagate(env.Ctx, file)
 				Expect(err).ToNot(HaveOccurred())
 
-				riAfter, err := dir.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				riAfter, err := dir.AsResourceInfo(env.Ctx, &perms, []string{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(riAfter.Etag).ToNot(Equal(riBefore.Etag))
 			})

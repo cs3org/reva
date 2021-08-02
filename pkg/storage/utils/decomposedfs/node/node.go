@@ -84,6 +84,7 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(ID string) string
 	Path(ctx context.Context, n *Node) (path string, err error)
+	ShareFolder() string
 }
 
 // New returns a new instance of Node
@@ -313,20 +314,20 @@ func (n *Node) Owner() (o *userpb.UserId, err error) {
 
 // PermissionSet returns the permission set for the current user
 // the parent nodes are not taken into account
-func (n *Node) PermissionSet(ctx context.Context) *provider.ResourcePermissions {
+func (n *Node) PermissionSet(ctx context.Context) provider.ResourcePermissions {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return NoPermissions
+		return NoPermissions()
 	}
 	if o, _ := n.Owner(); isSameUserID(u.Id, o) {
-		return OwnerPermissions
+		return OwnerPermissions()
 	}
 	// read the permissions for the current user from the acls of the current node
 	if np, err := n.ReadUserPermissions(ctx, u); err == nil {
 		return np
 	}
-	return NoPermissions
+	return NoPermissions()
 }
 
 // InternalPath returns the internal path of the Node
@@ -733,25 +734,25 @@ func (n *Node) UnsetTempEtag() (err error) {
 }
 
 // ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
-func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *provider.ResourcePermissions, err error) {
+func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap provider.ResourcePermissions, err error) {
 	// check if the current user is the owner
 	o, err := n.Owner()
 	if err != nil {
 		// TODO check if a parent folder has the owner set?
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
-		return NoPermissions, err
+		return NoPermissions(), err
 	}
 	if o.OpaqueId == "" {
 		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// TODO what if no owner is set but grants are present?
-		return NoOwnerPermissions, nil
+		return NoOwnerPermissions(), nil
 	}
 	if isSameUserID(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
-		return OwnerPermissions, nil
+		return OwnerPermissions(), nil
 	}
 
-	ap = &provider.ResourcePermissions{}
+	ap = provider.ResourcePermissions{}
 
 	// for an efficient group lookup convert the list of groups to a map
 	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
@@ -766,7 +767,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *pro
 	var grantees []string
 	if grantees, err = n.ListGrantees(ctx); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("error listing grantees")
-		return nil, err
+		return NoPermissions(), err
 	}
 
 	// instead of making n getxattr syscalls we are going to list the acls and filter them here
@@ -796,7 +797,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *pro
 
 		switch {
 		case err == nil:
-			AddPermissions(ap, g.GetPermissions())
+			AddPermissions(&ap, g.GetPermissions())
 		case isNoData(err):
 			err = nil
 			appctx.GetLogger(ctx).Error().Interface("node", n).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")

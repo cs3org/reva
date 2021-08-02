@@ -54,12 +54,12 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, key, path string) ([]*p
 	// TODO how do we check if the storage allows listing the recycle for the current user? check owner of the root of the storage?
 	// use permissions ReadUserPermissions?
 	if fs.o.EnableHome {
-		if !node.OwnerPermissions.ListContainer {
+		if !node.OwnerPermissions().ListContainer {
 			log.Debug().Msg("owner not allowed to list trash")
 			return items, errtypes.PermissionDenied("owner not allowed to list trash")
 		}
 	} else {
-		if !node.NoPermissions.ListContainer {
+		if !node.NoPermissions().ListContainer {
 			log.Debug().Msg("default permissions prevent listing trash")
 			return items, errtypes.PermissionDenied("default permissions prevent listing trash")
 		}
