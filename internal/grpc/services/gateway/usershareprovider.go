@@ -435,7 +435,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 
 	grantRes, err := c.DenyGrant(ctx, grantReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling AddGrant")
+		return nil, errors.Wrap(err, "gateway: error calling DenyGrant")
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
 		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),

@@ -571,7 +571,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 }
 
 // GetAttr returns the attribute specified by key
-func (c *Client) GetAttr(ctx context.Context, uid, gid, name, path string) (*eosclient.Attribute, error) {
+func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, name, path string) (*eosclient.Attribute, error) {
 	return nil, errtypes.NotSupported("GetAttr function not yet implemented")
 }
 

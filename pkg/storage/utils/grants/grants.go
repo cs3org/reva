@@ -142,38 +142,3 @@ func PermissionsEqual(p1, p2 *provider.ResourcePermissions) bool {
 func GranteeEqual(g1, g2 *provider.Grantee) bool {
 	return g1 != nil && g2 != nil && cmp.Equal(*g1, *g2)
 }
-
-// IsDenial return true if the grant is a denial grant
-func IsDenial(grant *provider.Grant) bool {
-	return PermissionsEqual(grant.Permissions, &provider.ResourcePermissions{})
-}
-
-// AddGrant adds the newGrant into the list of grants
-func AddGrant(grants *[]*provider.Grant, newGrant *provider.Grant) {
-	if IsDenial(newGrant) {
-		// a denial is appended to the list
-		RemoveGrant(grants, newGrant.Grantee)
-		*grants = append(*grants, newGrant)
-	} else {
-		// check if the grant is already in the list
-		for _, g := range *grants {
-			if GranteeEqual(g.Grantee, newGrant.Grantee) {
-				// update the permissions
-				g.Permissions = newGrant.Permissions
-				return
-			}
-		}
-		// add the grant in head
-		*grants = append([]*provider.Grant{newGrant}, *grants...)
-	}
-}
-
-// RemoveGrant remove the grantee's grant from the grants list
-func RemoveGrant(grants *[]*provider.Grant, grantee *provider.Grantee) {
-	for i, grant := range *grants {
-		if GranteeEqual(grant.Grantee, grantee) {
-			*grants = append((*grants)[:i], (*grants)[i+1:]...)
-			return
-		}
-	}
-}
