@@ -42,7 +42,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-//go:generate mockery -name GatewayClient
+//go:generate mockery -name GatewayClient -name ReceivedSharesLister
 
 // GatewayClient describe the interface of a gateway client
 type GatewayClient interface {
@@ -55,6 +55,13 @@ type GatewayClient interface {
 	RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest, opts ...grpc.CallOption) (*provider.RestoreFileVersionResponse, error)
 	InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileDownloadResponse, error)
 	InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileUploadResponse, error)
+	SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest, opts ...grpc.CallOption) (*provider.SetArbitraryMetadataResponse, error)
+	UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest, opts ...grpc.CallOption) (*provider.UnsetArbitraryMetadataResponse, error)
+}
+
+// ReceivedSharesLister lists received shares
+type ReceivedSharesLister interface {
+	ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest, opts ...grpc.CallOption) (*collaboration.ListReceivedSharesResponse, error)
 }
 
 func init() {
@@ -68,9 +75,9 @@ type config struct {
 }
 
 type service struct {
-	mountPath                 string
-	gateway                   GatewayClient
-	UserShareProviderEndpoint string
+	mountPath            string
+	gateway              GatewayClient
+	receivedSharesLister ReceivedSharesLister
 }
 
 func (s *service) Close() error {
@@ -98,25 +105,104 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error)
 		return nil, err
 	}
 
-	return New(c.MountPath, gateway, c.UserShareProviderEndpoint)
+	client, err := pool.GetUserShareProviderClient(c.UserShareProviderEndpoint)
+	if err != nil {
+		return nil, errors.Wrap(err, "sharesstorageprovider: error getting UserShareProvider client")
+	}
+
+	return New(c.MountPath, gateway, client)
 }
 
 // New returns a new instance of the SharesStorageProvider service
-func New(mountpath string, gateway GatewayClient, UserShareProviderEndpoint string) (rgrpc.Service, error) {
+func New(mountpath string, gateway GatewayClient, l ReceivedSharesLister) (rgrpc.Service, error) {
 	s := &service{
-		mountPath:                 mountpath,
-		gateway:                   gateway,
-		UserShareProviderEndpoint: UserShareProviderEndpoint,
+		mountPath:            mountpath,
+		gateway:              gateway,
+		receivedSharesLister: l,
 	}
 	return s, nil
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	appctx.GetLogger(ctx).Debug().
+		Interface("reqPath", reqPath).
+		Interface("reqShare", reqShare).
+		Msg("sharesstorageprovider: Got SetArbitraryMetadata request")
+
+	if reqShare == "" {
+		return &provider.SetArbitraryMetadataResponse{
+			Status: status.NewNotFound(ctx, "sharesstorageprovider: file not found"),
+		}, nil
+	}
+
+	statRes, err := s.statShare(ctx, reqShare)
+	if err != nil {
+		if statRes != nil {
+			return &provider.SetArbitraryMetadataResponse{
+				Status: statRes.Status,
+			}, err
+		}
+		return &provider.SetArbitraryMetadataResponse{
+			Status: status.NewInternal(ctx, err, "sharesstorageprovider: error stating the requested share"),
+		}, nil
+	}
+
+	gwres, err := s.gateway.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{
+		Ref: &provider.Reference{
+			Path: filepath.Join(statRes.Info.Path, reqPath),
+		},
+		ArbitraryMetadata: req.ArbitraryMetadata,
+	})
+
+	if err != nil {
+		return &provider.SetArbitraryMetadataResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling SetArbitraryMetadata"),
+		}, nil
+	}
+
+	return gwres, nil
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	appctx.GetLogger(ctx).Debug().
+		Interface("reqPath", reqPath).
+		Interface("reqShare", reqShare).
+		Msg("sharesstorageprovider: Got UnsetArbitraryMetadata request")
+
+	if reqShare == "" {
+		return &provider.UnsetArbitraryMetadataResponse{
+			Status: status.NewNotFound(ctx, "sharesstorageprovider: file not found"),
+		}, nil
+	}
+
+	statRes, err := s.statShare(ctx, reqShare)
+	if err != nil {
+		if statRes != nil {
+			return &provider.UnsetArbitraryMetadataResponse{
+				Status: statRes.Status,
+			}, err
+		}
+		return &provider.UnsetArbitraryMetadataResponse{
+			Status: status.NewInternal(ctx, err, "sharesstorageprovider: error stating the requested share"),
+		}, nil
+	}
+
+	gwres, err := s.gateway.UnsetArbitraryMetadata(ctx, &provider.UnsetArbitraryMetadataRequest{
+		Ref: &provider.Reference{
+			Path: filepath.Join(statRes.Info.Path, reqPath),
+		},
+		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+	})
+
+	if err != nil {
+		return &provider.UnsetArbitraryMetadataResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling UnsetArbitraryMetadata"),
+		}, nil
+	}
+
+	return gwres, nil
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
@@ -733,11 +819,7 @@ func (s *service) statShare(ctx context.Context, share string) (*provider.StatRe
 }
 
 func (s *service) getReceivedShares(ctx context.Context) ([]*collaboration.ReceivedShare, error) {
-	c, err := pool.GetUserShareProviderClient(s.UserShareProviderEndpoint)
-	if err != nil {
-		return nil, errors.Wrap(err, "sharesstorageprovider: error getting UserShareProvider client")
-	}
-	lsRes, err := c.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+	lsRes, err := s.receivedSharesLister.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 	if err != nil {
 		return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
 	}

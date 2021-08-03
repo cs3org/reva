@@ -33,7 +33,6 @@ import (
 	mocks "github.com/cs3org/reva/internal/grpc/services/sharesstorageprovider/mocks"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	_ "github.com/cs3org/reva/pkg/share/manager/loader"
-	sharemocks "github.com/cs3org/reva/pkg/share/mocks"
 	"github.com/cs3org/reva/pkg/user"
 	"google.golang.org/grpc"
 
@@ -70,15 +69,14 @@ var _ = Describe("Sharesstorageprovider", func() {
 			},
 		}
 
-		s  sprovider.ProviderAPIServer
-		sm *sharemocks.Manager
-		gw *mocks.GatewayClient
+		s                    sprovider.ProviderAPIServer
+		gw                   *mocks.GatewayClient
+		receivedSharesLister *mocks.ReceivedSharesLister
 	)
 
 	BeforeEach(func() {
-		sm = &sharemocks.Manager{}
+		receivedSharesLister = &mocks.ReceivedSharesLister{}
 		gw = &mocks.GatewayClient{}
-
 		gw.On("ListContainer", mock.Anything, &sprovider.ListContainerRequest{
 			Ref: &sprovider.Reference{
 				Path: "/share1-shareddir",
@@ -167,7 +165,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 	})
 
 	JustBeforeEach(func() {
-		p, err := provider.New("/shares", gw, sm)
+		p, err := provider.New("/shares", gw, receivedSharesLister)
 		Expect(err).ToNot(HaveOccurred())
 		s = p.(sprovider.ProviderAPIServer)
 		Expect(s).ToNot(BeNil())
@@ -192,15 +190,18 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 	Describe("ListContainer", func() {
 		It("only considers accepted shares", func() {
-			sm.On("ListReceivedShares", mock.Anything).Return([]*collaboration.ReceivedShare{
-				&collaboration.ReceivedShare{
-					State: collaboration.ShareState_SHARE_STATE_INVALID,
-				},
-				&collaboration.ReceivedShare{
-					State: collaboration.ShareState_SHARE_STATE_PENDING,
-				},
-				&collaboration.ReceivedShare{
-					State: collaboration.ShareState_SHARE_STATE_REJECTED,
+			receivedSharesLister.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+				Status: status.NewOK(context.Background()),
+				Shares: []*collaboration.ReceivedShare{
+					&collaboration.ReceivedShare{
+						State: collaboration.ShareState_SHARE_STATE_INVALID,
+					},
+					&collaboration.ReceivedShare{
+						State: collaboration.ShareState_SHARE_STATE_PENDING,
+					},
+					&collaboration.ReceivedShare{
+						State: collaboration.ShareState_SHARE_STATE_REJECTED,
+					},
 				},
 			}, nil)
 			res, err := s.ListContainer(ctx, rootListContainerReq)
@@ -212,17 +213,20 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 	Context("with an accepted share", func() {
 		BeforeEach(func() {
-			sm.On("ListReceivedShares", mock.Anything).Return([]*collaboration.ReceivedShare{
-				&collaboration.ReceivedShare{
-					State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
-					Share: &collaboration.Share{
-						ResourceId: &sprovider.ResourceId{
-							StorageId: "share1-storageid",
-							OpaqueId:  "shareddir",
-						},
-						Permissions: &collaboration.SharePermissions{
-							Permissions: &sprovider.ResourcePermissions{
-								Stat: true,
+			receivedSharesLister.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+				Status: status.NewOK(context.Background()),
+				Shares: []*collaboration.ReceivedShare{
+					&collaboration.ReceivedShare{
+						State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+						Share: &collaboration.Share{
+							ResourceId: &sprovider.ResourceId{
+								StorageId: "share1-storageid",
+								OpaqueId:  "shareddir",
+							},
+							Permissions: &collaboration.SharePermissions{
+								Permissions: &sprovider.ResourcePermissions{
+									Stat: true,
+								},
 							},
 						},
 					},
@@ -613,6 +617,32 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(len(res.Protocols)).To(Equal(1))
 				Expect(res.Protocols[0].Protocol).To(Equal("simple"))
 				Expect(res.Protocols[0].UploadEndpoint).To(Equal("https://localhost:9200/data/thetoken"))
+			})
+		})
+
+		Describe("SetArbitraryMetadata", func() {
+			BeforeEach(func() {
+				gw.On("SetArbitraryMetadata", mock.Anything, mock.Anything).Return(&sprovider.SetArbitraryMetadataResponse{
+					Status: status.NewOK(ctx),
+				}, nil)
+			})
+
+			It("sets the metadata", func() {
+				req := &sprovider.SetArbitraryMetadataRequest{
+					Ref: &sprovider.Reference{
+						Path: "/shares/share1-shareddir/share1-subdir/share1-subdir-file",
+					},
+					ArbitraryMetadata: &sprovider.ArbitraryMetadata{
+						Metadata: map[string]string{
+							"foo": "bar",
+						},
+					},
+				}
+				res, err := s.SetArbitraryMetadata(ctx, req)
+				gw.AssertCalled(GinkgoT(), "SetArbitraryMetadata", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			})
 		})
 	})

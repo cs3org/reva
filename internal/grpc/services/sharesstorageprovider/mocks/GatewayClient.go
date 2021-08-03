@@ -276,6 +276,36 @@ func (_m *GatewayClient) RestoreFileVersion(ctx context.Context, req *providerv1
 	return r0, r1
 }
 
+// SetArbitraryMetadata provides a mock function with given fields: ctx, req, opts
+func (_m *GatewayClient) SetArbitraryMetadata(ctx context.Context, req *providerv1beta1.SetArbitraryMetadataRequest, opts ...grpc.CallOption) (*providerv1beta1.SetArbitraryMetadataResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, req)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *providerv1beta1.SetArbitraryMetadataResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.SetArbitraryMetadataRequest, ...grpc.CallOption) *providerv1beta1.SetArbitraryMetadataResponse); ok {
+		r0 = rf(ctx, req, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*providerv1beta1.SetArbitraryMetadataResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.SetArbitraryMetadataRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, req, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Stat provides a mock function with given fields: ctx, in, opts
 func (_m *GatewayClient) Stat(ctx context.Context, in *providerv1beta1.StatRequest, opts ...grpc.CallOption) (*providerv1beta1.StatResponse, error) {
 	_va := make([]interface{}, len(opts))
@@ -299,6 +329,36 @@ func (_m *GatewayClient) Stat(ctx context.Context, in *providerv1beta1.StatReque
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.StatRequest, ...grpc.CallOption) error); ok {
 		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// UnsetArbitraryMetadata provides a mock function with given fields: ctx, req, opts
+func (_m *GatewayClient) UnsetArbitraryMetadata(ctx context.Context, req *providerv1beta1.UnsetArbitraryMetadataRequest, opts ...grpc.CallOption) (*providerv1beta1.UnsetArbitraryMetadataResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, req)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *providerv1beta1.UnsetArbitraryMetadataResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.UnsetArbitraryMetadataRequest, ...grpc.CallOption) *providerv1beta1.UnsetArbitraryMetadataResponse); ok {
+		r0 = rf(ctx, req, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*providerv1beta1.UnsetArbitraryMetadataResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.UnsetArbitraryMetadataRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, req, opts...)
 	} else {
 		r1 = ret.Error(1)
 	}
