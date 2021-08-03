@@ -102,9 +102,8 @@ def main(ctx):
     release(),
     litmusOcisOldWebdav(),
     litmusOcisNewWebdav(),
-    localIntegrationTestsOwncloud(),
     localIntegrationTestsOcis(),
-  ] + ocisIntegrationTests(6) + owncloudIntegrationTests(6) + s3ngIntegrationTests(12)
+  ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
 
 
 def buildAndPublishDocker():
@@ -418,7 +417,7 @@ def litmusOcisOldWebdav():
   return {
     "kind": "pipeline",
     "type": "docker",
-    "name": "litmus-owncloud-old-webdav",
+    "name": "litmus-ocis-old-webdav",
     "platform": {
       "os": "linux",
       "arch": "amd64",
@@ -441,8 +440,8 @@ def litmusOcisOldWebdav():
           "cd /drone/src/tests/oc-integration-tests/drone/",
           "/drone/src/cmd/revad/revad -c frontend.toml &",
           "/drone/src/cmd/revad/revad -c gateway.toml &",
-          "/drone/src/cmd/revad/revad -c storage-home-owncloud.toml &",
-          "/drone/src/cmd/revad/revad -c storage-oc-owncloud.toml &",
+          "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
+          "/drone/src/cmd/revad/revad -c storage-oc-ocis.toml &",
           "/drone/src/cmd/revad/revad -c users.toml",
         ],
       },
@@ -454,7 +453,7 @@ def litmusOcisOldWebdav():
         ],
       },
       {
-        "name": "litmus-owncloud-old-webdav",
+        "name": "litmus-ocis-old-webdav",
         "image": "registry.cern.ch/docker.io/owncloud/litmus:latest",
         "environment": {
           "LITMUS_URL": "http://revad-services:20080/remote.php/webdav",
@@ -470,7 +469,7 @@ def litmusOcisNewWebdav():
   return {
     "kind": "pipeline",
     "type": "docker",
-    "name": "litmus-owncloud-new-webdav",
+    "name": "litmus-ocis-new-webdav",
     "platform": {
       "os": "linux",
       "arch": "amd64",
@@ -493,8 +492,8 @@ def litmusOcisNewWebdav():
           "cd /drone/src/tests/oc-integration-tests/drone/",
           "/drone/src/cmd/revad/revad -c frontend.toml &",
           "/drone/src/cmd/revad/revad -c gateway.toml &",
-          "/drone/src/cmd/revad/revad -c storage-home-owncloud.toml &",
-          "/drone/src/cmd/revad/revad -c storage-oc-owncloud.toml &",
+          "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
+          "/drone/src/cmd/revad/revad -c storage-oc-ocis.toml &",
           "/drone/src/cmd/revad/revad -c users.toml",
         ]
       },
@@ -506,7 +505,7 @@ def litmusOcisNewWebdav():
         ],
       },
       {
-        "name": "litmus-owncloud-new-webdav",
+        "name": "litmus-ocis-new-webdav",
         "image": "registry.cern.ch/docker.io/owncloud/litmus:latest",
         "environment": {
           # UUID is einstein user, see https://github.com/owncloud/ocis-accounts/blob/8de0530f31ed5ffb0bbb7f7f3471f87f429cb2ea/pkg/service/v0/service.go#L45
@@ -516,68 +515,6 @@ def litmusOcisNewWebdav():
           "TESTS": "basic http copymove props",
         }
       },
-    ],
-  }
-
-def localIntegrationTestsOwncloud():
-  return {
-    "kind": "pipeline",
-    "type": "docker",
-    "name": "local-integration-tests-owncloud",
-    "platform": {
-      "os": "linux",
-      "arch": "amd64",
-    },
-    "trigger": {
-      "event": {
-        "include": [
-          "pull_request",
-          "tag",
-        ],
-      },
-    },
-    "steps": [
-      makeStep("build-ci"),
-      {
-        "name": "revad-services",
-        "image": "registry.cern.ch/docker.io/library/golang:1.16",
-        "detach": True,
-        "commands": [
-          "cd /drone/src/tests/oc-integration-tests/drone/",
-          "/drone/src/cmd/revad/revad -c frontend.toml &",
-          "/drone/src/cmd/revad/revad -c gateway.toml &",
-          "/drone/src/cmd/revad/revad -c shares.toml &",
-          "/drone/src/cmd/revad/revad -c storage-home-owncloud.toml &",
-          "/drone/src/cmd/revad/revad -c storage-oc-owncloud.toml &",
-          "/drone/src/cmd/revad/revad -c storage-publiclink-owncloud.toml &",
-          "/drone/src/cmd/revad/revad -c ldap-users.toml",
-        ],
-      },
-      cloneOc10TestReposStep(),
-      {
-        "name": "localAPIAcceptanceTestsOwncloudStorage",
-        "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
-        "commands": [
-          "make test-acceptance-api",
-        ],
-        "environment": {
-          "TEST_SERVER_URL": "http://revad-services:20080",
-          "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-          "STORAGE_DRIVER": "OWNCLOUD",
-          "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
-          "TEST_WITH_LDAP": "true",
-          "REVA_LDAP_HOSTNAME": "ldap",
-          "TEST_REVA": "true",
-          "SEND_SCENARIO_LINE_REFERENCES": "true",
-          "BEHAT_FILTER_TAGS": "~@skipOnOcis-OC-Storage",
-          "PATH_TO_CORE": "/drone/src/tmp/testrunner",
-          "UPLOAD_DELETE_WAIT_TIME": "1",
-        }
-      }
-    ],
-    "services": [
-      ldapService(),
-      redisService(),
     ],
   }
 
@@ -710,81 +647,6 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
         ],
         "services": [
           ldapService(),
-        ],
-      }
-    )
-
-  return pipelines
-
-def owncloudIntegrationTests(parallelRuns, skipExceptParts = []):
-  pipelines = []
-  debugPartsEnabled = (len(skipExceptParts) != 0)
-  for runPart in range(1, parallelRuns + 1):
-    if debugPartsEnabled and runPart not in skipExceptParts:
-      continue
-
-    pipelines.append(
-      {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "owncloud-integration-tests-%s" % runPart,
-        "platform": {
-          "os": "linux",
-          "arch": "amd64",
-        },
-        "trigger": {
-          "event": {
-            "include": [
-              "pull_request",
-              "tag",
-            ],
-          },
-        },
-        "steps": [
-          makeStep("build-ci"),
-          {
-            "name": "revad-services",
-            "image": "registry.cern.ch/docker.io/library/golang:1.16",
-            "detach": True,
-            "commands": [
-              "cd /drone/src/tests/oc-integration-tests/drone/",
-              "/drone/src/cmd/revad/revad -c frontend.toml &",
-              "/drone/src/cmd/revad/revad -c gateway.toml &",
-              "/drone/src/cmd/revad/revad -c shares.toml &",
-              "/drone/src/cmd/revad/revad -c storage-home-owncloud.toml &",
-              "/drone/src/cmd/revad/revad -c storage-oc-owncloud.toml &",
-              "/drone/src/cmd/revad/revad -c storage-publiclink-owncloud.toml &",
-              "/drone/src/cmd/revad/revad -c ldap-users.toml",
-            ],
-          },
-          cloneOc10TestReposStep(),
-          {
-            "name": "oC10APIAcceptanceTestsOwncloudStorage",
-            "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
-            "commands": [
-              "cd /drone/src/tmp/testrunner",
-              "make test-acceptance-api",
-            ],
-            "environment": {
-              "TEST_SERVER_URL": "http://revad-services:20080",
-              "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-              "STORAGE_DRIVER": "OWNCLOUD",
-              "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
-              "TEST_WITH_LDAP": "true",
-              "REVA_LDAP_HOSTNAME": "ldap",
-              "TEST_REVA": "true",
-              "SEND_SCENARIO_LINE_REFERENCES": "true",
-              "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage",
-              "DIVIDE_INTO_NUM_PARTS": parallelRuns,
-              "RUN_PART": runPart,
-              "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.md",
-              "UPLOAD_DELETE_WAIT_TIME": "1",
-            },
-          },
-        ],
-        "services": [
-          ldapService(),
-          redisService(),
         ],
       }
     )
