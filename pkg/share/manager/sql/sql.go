@@ -216,7 +216,7 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 			return err
 		}
 		owner := formatUserID(key.Owner)
-		query = "DELETE FROM oc_share WHERE uid_owner=? AND item_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
+		query = "DELETE FROM oc_share WHERE uid_owner=? AND file_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
 		params = append(params, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid)
 	default:
 		return errtypes.NotFound(ref.String())
@@ -258,7 +258,7 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 			return nil, err
 		}
 		owner := formatUserID(key.Owner)
-		query = "update oc_share set permissions=?,stime=? where (uid_owner=? or uid_initiator=?) AND item_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
+		query = "update oc_share set permissions=?,stime=? where (uid_owner=? or uid_initiator=?) AND file_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
 		params = append(params, permissions, time.Now().Unix(), owner, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid)
 	default:
 		return nil, errtypes.NotFound(ref.String())
@@ -277,22 +277,18 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	uid := ctxpkg.ContextMustGetUser(ctx).Username
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_source, '') as item_source, id, stime, permissions, share_type FROM oc_share WHERE (uid_owner=? or uid_initiator=?)"
-	params := []interface{}{uid, uid}
-
-	var (
-		filterQuery  string
-		filterParams []interface{}
-		err          error
-	)
-	if len(filters) == 0 {
-		filterQuery += "(share_type=? OR share_type=?)"
-		params = append(params, shareTypeUser)
-		params = append(params, shareTypeGroup)
-	} else {
-		filterQuery, filterParams, err = translateFilters(filters)
-		if err != nil {
-			return nil, err
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with,  id, stime, permissions, share_type FROM oc_share WHERE (uid_owner=? or uid_initiator=?) AND (share_type=? OR share_type=?)"
+	var filterQuery string
+	params := []interface{}{uid, uid, 0, 1}
+	for i, f := range filters {
+		if f.Type == collaboration.Filter_TYPE_RESOURCE_ID {
+			filterQuery += "(file_source=?)"
+			if i != len(filters)-1 {
+				filterQuery += " AND "
+			}
+			params = append(params, f.GetResourceId().OpaqueId)
+		} else {
+			return nil, fmt.Errorf("filter type is not supported")
 		}
 		params = append(params, filterParams...)
 	}
@@ -310,7 +306,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 	var s DBShare
 	shares := []*collaboration.Share{}
 	for rows.Next() {
-		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
 			continue
 		}
 		share, err := m.convertToCS3Share(ctx, s, m.storageMountID)
@@ -337,17 +333,27 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 	}
 
 	homeConcat := ""
-	if m.driver == "mysql" { // mysql upsert
-		homeConcat = "storages.id = CONCAT('home::', ts.uid_owner)"
-	} else { // sqlite3 upsert
-		homeConcat = "storages.id = 'home::' || ts.uid_owner"
+	if m.driver == "mysql" { // mysql concat
+		homeConcat = "storages.id = CONCAT('home::', s.uid_owner)"
+	} else { // sqlite3 concat
+		homeConcat = "storages.id = 'home::' || s.uid_owner"
 	}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_source, '') as item_source, ts.id, stime, permissions, share_type, accepted, storages.numeric_id FROM oc_share ts LEFT JOIN oc_storages storages ON " + homeConcat + " WHERE (uid_owner != ? AND uid_initiator != ?) "
+	userSelect := ""
 	if len(user.Groups) > 0 {
-		query += "AND (share_with=? OR share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + "))"
+		userSelect = "AND ((share_type != 1 AND share_with=?) OR (share_type = 1 AND share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + ")))"
 	} else {
-		query += "AND (share_with=?)"
+		userSelect = "AND (share_type != 1 AND share_with=?)"
 	}
+	query := `
+	WITH results AS
+		(
+			SELECT s.*, storages.numeric_id FROM oc_share s
+			LEFT JOIN oc_storages storages ON ` + homeConcat + `
+			WHERE (uid_owner != ? AND uid_initiator != ?) ` + userSelect + `
+		)
+	SELECT COALESCE(r.uid_owner, '') AS uid_owner, COALESCE(r.uid_initiator, '') AS uid_initiator, COALESCE(r.share_with, '')
+	AS share_with, COALESCE(r.file_source, '') AS file_source, COALESCE(r2.file_target, r.file_target), r.id, r.stime, r.permissions, r.share_type, COALESCE(r2.accepted, r.accepted),
+	r.numeric_id, COALESCE(r.parent, -1) AS parent FROM results r LEFT JOIN results r2 ON r.id = r2.parent WHERE r.parent IS NULL;`
 
 	filterQuery, filterParams, err := translateFilters(filters)
 	if err != nil {
@@ -368,7 +374,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 	var s DBShare
 	shares := []*collaboration.ReceivedShare{}
 	for rows.Next() {
-		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.ItemStorage); err != nil {
+		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.ItemStorage, &s.Parent); err != nil {
 			continue
 		}
 		share, err := m.convertToCS3ReceivedShare(ctx, s, m.storageMountID)
@@ -404,39 +410,67 @@ func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareRefe
 
 }
 
-func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
-	rs, err := m.GetReceivedShare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Share.Id}})
+func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
+	rs, err := m.GetReceivedShare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: receivedShare.Share.Id}})
 	if err != nil {
 		return nil, err
 	}
 
+	fields := []string{}
+	params := []interface{}{}
 	for i := range fieldMask.Paths {
 		switch fieldMask.Paths[i] {
 		case "state":
-			rs.State = share.State
-		// TODO case "mount_point":
+			rs.State = receivedShare.State
+			fields = append(fields, "accepted=?")
+			switch rs.State {
+			case collaboration.ShareState_SHARE_STATE_REJECTED:
+				params = append(params, 2)
+			case collaboration.ShareState_SHARE_STATE_ACCEPTED:
+				params = append(params, 0)
+			}
+		case "mount_point":
+			fields = append(fields, "file_target=?")
+			rs.MountPoint = receivedShare.MountPoint
+			params = append(params, rs.MountPoint.Path)
 		default:
 			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
 		}
 	}
 
-	var queryAccept string
-	switch rs.GetState() {
-	case collaboration.ShareState_SHARE_STATE_REJECTED:
-		queryAccept = "update oc_share set accepted=2 where id=?"
-	case collaboration.ShareState_SHARE_STATE_ACCEPTED:
-		queryAccept = "update oc_share set accepted=0 where id=?"
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("no valid field provided in the fieldmask")
 	}
 
-	if queryAccept != "" {
-		stmt, err := m.db.Prepare(queryAccept)
+	updateReceivedShare := func(column string) error {
+		query := "update oc_share set "
+		query += strings.Join(fields, ",")
+		query += fmt.Sprintf(" where %s=?", column)
+		queryParams := append(params, rs.Share.Id.OpaqueId)
+
+		stmt, err := m.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		_, err = stmt.Exec(rs.Share.Id.OpaqueId)
+		res, err := stmt.Exec(queryParams...)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected < 1 {
+			return fmt.Errorf("No rows updated")
+		}
+		return nil
+	}
+	err = updateReceivedShare("parent") // Try to update the child state in case of group shares first
+	if err != nil {
+		err = updateReceivedShare("id")
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return rs, nil
@@ -445,8 +479,8 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.Rece
 func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
 	uid := ctxpkg.ContextMustGetUser(ctx).Username
 	s := DBShare{ID: id.OpaqueId}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_source, '') as item_source, stime, permissions, share_type FROM oc_share WHERE id=? AND (uid_owner=? or uid_initiator=?)"
-	if err := m.db.QueryRow(query, id.OpaqueId, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source, file_target, stime, permissions, share_type FROM oc_share WHERE id=? AND (uid_owner=? or uid_initiator=?)"
+	if err := m.db.QueryRow(query, id.OpaqueId, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.STime, &s.Permissions, &s.ShareType); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(id.OpaqueId)
 		}
@@ -467,8 +501,8 @@ func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*colla
 	if err != nil {
 		return nil, err
 	}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_source, '') as item_source, id, stime, permissions, share_type FROM oc_share WHERE uid_owner=? AND item_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
-	if err = m.db.QueryRow(query, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source, file_target, id, stime, permissions, share_type FROM oc_share WHERE uid_owner=? AND file_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
+	if err = m.db.QueryRow(query, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(key.String())
 		}
@@ -481,19 +515,42 @@ func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*
 	user := ctxpkg.ContextMustGetUser(ctx)
 	uid := user.Username
 
-	params := []interface{}{id.OpaqueId, uid}
+	params := []interface{}{id.OpaqueId, id.OpaqueId, uid}
 	for _, v := range user.Groups {
 		params = append(params, v)
 	}
 
-	s := DBShare{ID: id.OpaqueId}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_source, '') as item_source, stime, permissions, share_type, accepted FROM oc_share ts WHERE ts.id=? "
-	if len(user.Groups) > 0 {
-		query += "AND (share_with=? OR share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + "))"
-	} else {
-		query += "AND (share_with=?)"
+	homeConcat := ""
+	if m.driver == "mysql" { // mysql concat
+		homeConcat = "storages.id = CONCAT('home::', s.uid_owner)"
+	} else { // sqlite3 concat
+		homeConcat = "storages.id = 'home::' || s.uid_owner"
 	}
-	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
+	userSelect := ""
+	if len(user.Groups) > 0 {
+		userSelect = "AND ((share_type != 1 AND share_with=?) OR (share_type = 1 AND share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + ")))"
+	} else {
+		userSelect = "AND (share_type != 1 AND share_with=?)"
+	}
+
+	query := `
+	WITH results AS
+	(
+		SELECT s.*, storages.numeric_id 
+		FROM oc_share s
+		LEFT JOIN oc_storages storages ON ` + homeConcat + `
+		WHERE s.id=? OR s.parent=?` + userSelect + `
+	)
+	SELECT COALESCE(r.uid_owner, '') AS uid_owner, COALESCE(r.uid_initiator, '') AS uid_initiator, COALESCE(r.share_with, '')
+		AS share_with, COALESCE(r.file_source, '') AS file_source, COALESCE(r2.file_target, r.file_target), r.id, r.stime, r.permissions, r.share_type, COALESCE(r2.accepted, r.accepted),
+		r.numeric_id, COALESCE(r.parent, -1) AS parent 
+	FROM results r 
+	LEFT JOIN results r2 ON r.id = r2.parent 
+	WHERE r.parent IS NULL;
+	`
+
+	s := DBShare{}
+	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.ItemStorage, &s.Parent); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(id.OpaqueId)
 		}
@@ -516,14 +573,14 @@ func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey)
 	}
 
 	s := DBShare{}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_source, '') as item_source, ts.id, stime, permissions, share_type, accepted FROM oc_share ts WHERE uid_owner=? AND item_source=? AND share_type=? AND share_with=? "
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source, file_target, ts.id, stime, permissions, share_type, accepted FROM oc_share ts WHERE uid_owner=? AND file_source=? AND share_type=? AND share_with=? "
 	if len(user.Groups) > 0 {
 		query += "AND (share_with=? OR share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + "))"
 	} else {
 		query += "AND (share_with=?)"
 	}
 
-	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
+	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(key.String())
 		}

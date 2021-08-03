@@ -99,6 +99,7 @@ type Config struct {
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
+	SharesNamespace string `mapstructure:"shares_namespace"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
 	Timeout         int64  `mapstructure:"timeout"`
 	Insecure        bool   `mapstructure:"insecure"`

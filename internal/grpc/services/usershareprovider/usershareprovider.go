@@ -231,7 +231,29 @@ func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetRe
 }
 
 func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
-	share, err := s.sm.UpdateReceivedShare(ctx, req.Share, req.UpdateMask) // TODO(labkode): check what to update
+
+	if req.Share == nil {
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewInvalidArg(ctx, "updating requires a received share object"),
+		}, nil
+	}
+	if req.Share.Share == nil {
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewInvalidArg(ctx, "share missing"),
+		}, nil
+	}
+	if req.Share.Share.Id == nil {
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewInvalidArg(ctx, "share id missing"),
+		}, nil
+	}
+	if req.Share.Share.Id.OpaqueId == "" {
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewInvalidArg(ctx, "share id empty"),
+		}, nil
+	}
+
+	share, err := s.sm.UpdateReceivedShare(ctx, req.Share, req.UpdateMask)
 	if err != nil {
 		return &collaboration.UpdateReceivedShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating received share"),

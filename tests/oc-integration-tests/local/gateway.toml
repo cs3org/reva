@@ -65,6 +65,14 @@ home_provider = "/home"
 # another mount point might be "/projects/"
 
 "/public" = {"address" = "localhost:13000"}
+"/home/Shares" = {"address" = "localhost:14000"}
+
+[grpc.services.gateway.storage_rules]
+"/home" = {"address" = "localhost:12000"}
+"/oc" = {"address" = "localhost:11000"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:11000"}
+"/public" = {"address" = "localhost:13000"}
+"/home/Shares" = {"address" = "localhost:14000"}
 
 [http]
 address = "0.0.0.0:19001"

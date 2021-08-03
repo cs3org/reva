@@ -56,17 +56,7 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		}, nil
 	}
 
-	if s.isSharedFolder(ctx, p) {
-		return &providerpb.OpenInAppResponse{
-			Status: status.NewInvalid(ctx, "gateway: can't open shares folder"),
-		}, nil
-	}
-
 	resName, resChild := p, ""
-	if s.isShareChild(ctx, p) {
-		resName, resChild = s.splitShare(ctx, p)
-	}
-
 	statRes, err := s.stat(ctx, &storageprovider.StatRequest{
 		Ref: &storageprovider.Reference{Path: resName},
 	})

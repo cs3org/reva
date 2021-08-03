@@ -48,6 +48,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // PermissionsChecker defines an interface for checking permissions on a Node
@@ -313,28 +314,36 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 // CreateReference creates a reference as a node folder with the target stored in extended attributes
 // There is no difference between the /Shares folder and normal nodes because the storage is not supposed to be accessible without the storage provider.
 // In effect everything is a shadow namespace.
-// To mimic the eos end owncloud driver we only allow references as children of the "/Shares" folder
-// TODO when home support is enabled should the "/Shares" folder still be listed?
+// To mimic the eos and owncloud driver we only allow references as children of the "/Shares" folder
 func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) (err error) {
+	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "CreateReference")
+	defer span.End()
 
 	p = strings.Trim(p, "/")
 	parts := strings.Split(p, "/")
 
 	if len(parts) != 2 {
-		return errtypes.PermissionDenied("Decomposedfs: references must be a child of the share folder: share_folder=" + fs.o.ShareFolder + " path=" + p)
+		err := errtypes.PermissionDenied("Decomposedfs: references must be a child of the share folder: share_folder=" + fs.o.ShareFolder + " path=" + p)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
 
 	if parts[0] != strings.Trim(fs.o.ShareFolder, "/") {
-		return errtypes.PermissionDenied("Decomposedfs: cannot create references outside the share folder: share_folder=" + fs.o.ShareFolder + " path=" + p)
+		err := errtypes.PermissionDenied("Decomposedfs: cannot create references outside the share folder: share_folder=" + fs.o.ShareFolder + " path=" + p)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
 
 	// create Shares folder if it does not exist
 	var n *node.Node
 	if n, err = fs.lu.NodeFromPath(ctx, fs.o.ShareFolder, false); err != nil {
-		return errtypes.InternalError(err.Error())
+		err := errtypes.InternalError(err.Error())
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	} else if !n.Exists {
 		if err = fs.tp.CreateDir(ctx, n); err != nil {
-			return
+			span.SetStatus(codes.Error, err.Error())
+			return err
 		}
 	}
 
@@ -344,16 +353,24 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 
 	if n.Exists {
 		// TODO append increasing number to mountpoint name
-		return errtypes.AlreadyExists(p)
+		err := errtypes.AlreadyExists(p)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
 
-	if err = fs.tp.CreateDir(ctx, n); err != nil {
-		return
+	if err := fs.tp.CreateDir(ctx, n); err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
 
 	internal := n.InternalPath()
-	if err = xattr.Set(internal, xattrs.ReferenceAttr, []byte(targetURI.String())); err != nil {
-		return errors.Wrapf(err, "Decomposedfs: error setting the target %s on the reference file %s", targetURI.String(), internal)
+	if err := xattr.Set(internal, xattrs.ReferenceAttr, []byte(targetURI.String())); err != nil {
+		err := errors.Wrapf(err, "Decomposedfs: error setting the target %s on the reference file %s",
+			targetURI.String(),
+			internal,
+		)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
 	return nil
 }

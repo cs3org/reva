@@ -96,7 +96,7 @@ func loadOrCreate(file string) (*shareModel, error) {
 		return nil, err
 	}
 
-	m := &shareModel{State: j.State}
+	m := &shareModel{State: j.State, MountPoint: j.MountPoint}
 	for _, s := range j.Shares {
 		var decShare collaboration.Share
 		if err = utils.UnmarshalJSONToProtoV1([]byte(s), &decShare); err != nil {
@@ -108,24 +108,29 @@ func loadOrCreate(file string) (*shareModel, error) {
 	if m.State == nil {
 		m.State = map[string]map[string]collaboration.ShareState{}
 	}
+	if m.MountPoint == nil {
+		m.MountPoint = map[string]map[string]*provider.Reference{}
+	}
 
 	m.file = file
 	return m, nil
 }
 
 type shareModel struct {
-	file   string
-	State  map[string]map[string]collaboration.ShareState `json:"state"` // map[username]map[share_id]ShareState
-	Shares []*collaboration.Share                         `json:"shares"`
+	file       string
+	State      map[string]map[string]collaboration.ShareState `json:"state"`       // map[username]map[share_id]ShareState
+	MountPoint map[string]map[string]*provider.Reference      `json:"mount_point"` // map[username]map[share_id]MountPoint
+	Shares     []*collaboration.Share                         `json:"shares"`
 }
 
 type jsonEncoding struct {
-	State  map[string]map[string]collaboration.ShareState `json:"state"` // map[username]map[share_id]ShareState
-	Shares []string                                       `json:"shares"`
+	State      map[string]map[string]collaboration.ShareState `json:"state"`       // map[username]map[share_id]ShareState
+	MountPoint map[string]map[string]*provider.Reference      `json:"mount_point"` // map[username]map[share_id]MountPoint
+	Shares     []string                                       `json:"shares"`
 }
 
 func (m *shareModel) Save() error {
-	j := &jsonEncoding{State: m.State}
+	j := &jsonEncoding{State: m.State, MountPoint: m.MountPoint}
 	for _, s := range m.Shares {
 		encShare, err := utils.MarshalProtoV1ToJSON(s)
 		if err != nil {
@@ -393,7 +398,32 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 			rss = append(rss, rs)
 		}
 	}
-	return rss, nil
+
+	// if there is a mix-up of shares of type group and shares of type user we need to deduplicate them, since it points
+	// to the same resource. Leave the more explicit and hide the more explicit. In this case we hide the group shares
+	// and return the user share to the user.
+	filtered := make([]*collaboration.ReceivedShare, 0)
+
+	for _, s := range rss {
+		filtered = append(filtered, s)
+	}
+
+	for i := range rss {
+		for j := range rss {
+			if rss[i].Share.ResourceId.GetOpaqueId() == rss[j].Share.ResourceId.GetOpaqueId() {
+				if rss[i].Share.GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_GROUP && rss[j].Share.GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER {
+					if rss[i].State == rss[j].State {
+						// remove the group share from the results
+						filtered[i] = filtered[len(filtered)-1]
+						filtered[len(filtered)-1] = nil
+						filtered = filtered[:len(filtered)-1]
+					}
+				}
+			}
+		}
+	}
+
+	return filtered, nil
 }
 
 // convert must be called in a lock-controlled block.
@@ -406,6 +436,11 @@ func (m *mgr) convert(ctx context.Context, s *collaboration.Share) *collaboratio
 	if v, ok := m.model.State[user.Id.String()]; ok {
 		if state, ok := v[s.Id.String()]; ok {
 			rs.State = state
+		}
+	}
+	if v, ok := m.model.MountPoint[user.Id.String()]; ok {
+		if mp, ok := v[s.Id.String()]; ok {
+			rs.MountPoint = mp
 		}
 	}
 	return rs
@@ -444,20 +479,33 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaborat
 		switch fieldMask.Paths[i] {
 		case "state":
 			rs.State = receivedShare.State
-		// TODO case "mount_point":
+		case "mount_point":
+			rs.MountPoint = receivedShare.MountPoint
 		default:
 			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
 		}
 	}
 
+	// Persist state
 	if v, ok := m.model.State[user.Id.String()]; ok {
-		v[rs.Share.Id.String()] = rs.GetState()
+		v[rs.Share.Id.String()] = rs.State
 		m.model.State[user.Id.String()] = v
 	} else {
 		a := map[string]collaboration.ShareState{
-			rs.Share.Id.String(): rs.GetState(),
+			rs.Share.Id.String(): rs.State,
 		}
 		m.model.State[user.Id.String()] = a
+	}
+
+	// Persist mount point
+	if v, ok := m.model.MountPoint[user.Id.String()]; ok {
+		v[rs.Share.Id.String()] = rs.MountPoint
+		m.model.MountPoint[user.Id.String()] = v
+	} else {
+		a := map[string]*provider.Reference{
+			rs.Share.Id.String(): rs.MountPoint,
+		}
+		m.model.MountPoint[user.Id.String()] = a
 	}
 
 	if err := m.model.Save(); err != nil {
