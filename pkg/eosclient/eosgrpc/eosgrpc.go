@@ -347,8 +347,8 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
-	return c.AddACL(ctx, auth, rootAuth, path, eosclient.EndPosition, a)
+func (c *Client) UpdateACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
+	return c.AddACL(ctx, auth, rootAuth, path, position, a)
 }
 
 // GetACL for a file
