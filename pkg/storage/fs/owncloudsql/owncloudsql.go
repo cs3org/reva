@@ -98,6 +98,7 @@ var ownerPermissions *provider.ResourcePermissions = &provider.ResourcePermissio
 	RestoreRecycleItem:   true,
 	Stat:                 true,
 	UpdateGrant:          true,
+	DenyGrant:            true,
 }
 
 func init() {
@@ -586,6 +587,14 @@ func (fs *owncloudsqlfs) resolve(ctx context.Context, ref *provider.Reference) (
 	return "", fmt.Errorf("invalid reference %+v", ref)
 }
 
+func (fs *owncloudsqlfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	return errtypes.NotSupported("owncloudsqlfs: deny grant not supported")
+}
+
+func (fs *owncloudsqlfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	return errtypes.NotSupported("owncloudsqlfs: add grant not supported")
+}
+
 func (fs *owncloudsqlfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
@@ -628,10 +637,6 @@ func isNotFound(err error) bool {
 
 func (fs *owncloudsqlfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
 	return []*provider.Grant{}, nil // nop
-}
-
-func (fs *owncloudsqlfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	return nil // nop
 }
 
 func (fs *owncloudsqlfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {

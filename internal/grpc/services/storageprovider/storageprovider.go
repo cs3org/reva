@@ -31,6 +31,7 @@ import (
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+
 	// link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -93,6 +94,7 @@ func (c *config) init() {
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
+
 }
 
 type service struct {
@@ -970,6 +972,43 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 	res := &provider.ListGrantsResponse{
 		Status: status.NewOK(ctx),
 		Grants: grants,
+	}
+	return res, nil
+}
+
+func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.DenyGrantResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+
+	// check grantee type is valid
+	if req.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
+		return &provider.DenyGrantResponse{
+			Status: status.NewInvalid(ctx, "grantee type is invalid"),
+		}, nil
+	}
+
+	err = s.storage.DenyGrant(ctx, newRef, req.Grantee)
+	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when setting grants")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error setting grants")
+		}
+		return &provider.DenyGrantResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.DenyGrantResponse{
+		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }

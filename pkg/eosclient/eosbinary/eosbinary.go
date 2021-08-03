@@ -69,6 +69,17 @@ func attrTypeToString(at eosclient.AttrType) string {
 	}
 }
 
+func attrStringToType(t string) (eosclient.AttrType, error) {
+	switch t {
+	case "sys":
+		return SystemAttr, nil
+	case "user":
+		return UserAttr, nil
+	default:
+		return 0, errtypes.InternalError("attr type not existing")
+	}
+}
+
 func isValidAttribute(a *eosclient.Attribute) bool {
 	// validate that an attribute is correct.
 	if (a.Type != SystemAttr && a.Type != UserAttr) || a.Key == "" {
@@ -277,7 +288,7 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
+func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
 	finfo, err := c.GetFileInfoByPath(ctx, auth, path)
 	if err != nil {
 		return err
@@ -326,6 +337,13 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 			return err
 		}
 	}
+
+	// set position of ACLs to add. The default is to append to the end, so no arguments will be added in this case
+	// the first position starts at 1 = eosclient.StartPosition
+	if pos != eosclient.EndPosition {
+		args = append(args, "--position", fmt.Sprint(pos))
+	}
+
 	args = append(args, sysACL, path)
 
 	_, _, err = c.executeEOS(ctx, args, rootAuth)
@@ -381,8 +399,8 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
-	return c.AddACL(ctx, auth, rootAuth, path, a)
+func (c *Client) UpdateACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
+	return c.AddACL(ctx, auth, rootAuth, path, position, a)
 }
 
 // GetACL for a file
@@ -509,6 +527,39 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 		return err
 	}
 	return nil
+}
+
+// GetAttr returns the attribute specified by key
+func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key, path string) (*eosclient.Attribute, error) {
+	args := []string{"attr", "get", key, path}
+	attrOut, _, err := c.executeEOS(ctx, args, auth)
+	if err != nil {
+		return nil, err
+	}
+	attr, err := deserializeAttribute(attrOut)
+	if err != nil {
+		return nil, err
+	}
+	return attr, nil
+}
+
+func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
+	// the string is in the form sys.forced.checksum="adler"
+	keyValue := strings.Split(strings.TrimSpace(attrStr), "=") // keyValue = ["sys.forced.checksum", "\"adler\""]
+	if len(keyValue) != 2 {
+		return nil, errtypes.InternalError("wrong attr format to deserialize")
+	}
+	type2key := strings.SplitN(keyValue[0], ".", 2) // type2key = ["sys", "forced.checksum"]
+	if len(type2key) != 2 {
+		return nil, errtypes.InternalError("wrong attr format to deserialize")
+	}
+	t, err := attrStringToType(type2key[0])
+	if err != nil {
+		return nil, err
+	}
+	// trim \" from value
+	value := strings.Trim(keyValue[1], "\"")
+	return &eosclient.Attribute{Type: t, Key: type2key[1], Val: value}, nil
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path

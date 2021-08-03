@@ -520,22 +520,18 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 }
 
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
 	fn := fs.wrap(ctx, p)
 
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
 	auth, err := fs.getUserAuth(ctx, u, fn)
-	if err != nil {
-		return err
-	}
-
-	eosACL, err := fs.getEosACL(ctx, g)
 	if err != nil {
 		return err
 	}
@@ -545,11 +541,74 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, auth, rootAuth, fn, eosACL)
+	// position where put the ACL
+	position := eosclient.StartPosition
+
+	eosACL, err := fs.getEosACL(ctx, g)
+	if err != nil {
+		return err
+	}
+
+	err = fs.c.AddACL(ctx, auth, rootAuth, fn, position, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error adding acl")
 	}
+	return nil
 
+}
+
+func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	p, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error resolving reference")
+	}
+
+	fn := fs.wrap(ctx, p)
+
+	// eos does not offer a permission bit to specify if the
+	// user can deny or not. We need to take care of that in Reva
+	// by checking context user has permission to deny
+	finfo, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return errors.Wrapf(err, "eosfs: error getting metadata for file ref: %+v", ref)
+	}
+
+	if !finfo.PermissionSet.DenyGrant {
+		return errtypes.PermissionDenied(fmt.Sprintf("eosfs: context user cannot deny access to ref: %+v", ref))
+	}
+
+	position := eosclient.EndPosition
+
+	rootAuth, err := fs.getRootAuth(ctx)
+	if err != nil {
+		return err
+	}
+
+	// empty permissions => deny
+	grant := &provider.Grant{
+		Grantee:     g,
+		Permissions: &provider.ResourcePermissions{},
+	}
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+
+	auth, err := fs.getUserAuth(ctx, u, fn)
+	if err != nil {
+		return err
+	}
+
+	eosACL, err := fs.getEosACL(ctx, grant)
+	if err != nil {
+		return err
+	}
+
+	err = fs.c.AddACL(ctx, auth, rootAuth, fn, position, eosACL)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error adding acl")
+	}
 	return nil
 }
 
@@ -1526,6 +1585,7 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 			RestoreRecycleItem:   true,
 			Stat:                 true,
 			UpdateGrant:          true,
+			DenyGrant:            true,
 		}
 	}
 
@@ -1575,6 +1635,7 @@ func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermi
 	l.RestoreRecycleItem = l.RestoreRecycleItem || r.RestoreRecycleItem
 	l.Stat = l.Stat || r.Stat
 	l.UpdateGrant = l.UpdateGrant || r.UpdateGrant
+	l.DenyGrant = l.DenyGrant || r.DenyGrant
 }
 
 func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {

@@ -631,6 +631,10 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
+func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
 func (s *service) CreateReference(ctx context.Context, req *provider.CreateReferenceRequest) (*provider.CreateReferenceResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
