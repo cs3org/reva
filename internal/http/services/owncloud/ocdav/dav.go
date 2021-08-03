@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path"
 	"strings"
@@ -48,6 +49,7 @@ type DavHandler struct {
 	SpacesHandler       *SpacesHandler
 	PublicFolderHandler *WebDavHandler
 	PublicFileHandler   *PublicFileHandler
+	SharesHandler       *WebDavHandler
 }
 
 func (h *DavHandler) init(c *Config) error {
@@ -96,6 +98,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
+		log.Info().Str("request", fmt.Sprintf("%#v", r)).Msg("Got webdav request")
 
 		// if there is no file in the request url we assume the request url is: "/remote.php/dav/files"
 		// https://github.com/owncloud/core/blob/18475dac812064b21dabcc50f25ef3ffe55691a5/tests/acceptance/features/apiWebdavOperations/propfind.feature

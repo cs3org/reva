@@ -72,7 +72,7 @@ home_provider = "/home"
 # another mount point might be "/projects/"
 
 "/public" = {"address" = "localhost:13000"}
-
+"/home/Shares" = {"address" = "localhost:14000"}
 [http]
 address = "0.0.0.0:19001"
 
