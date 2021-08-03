@@ -14,6 +14,7 @@ issues:
         - scopelint
 linters:
   enable:
+    - maligned
     - bodyclose
     - deadcode
     - errcheck
