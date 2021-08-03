@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"google.golang.org/genproto/protobuf/field_mask"
 
 	// Provides mysql drivers
 	_ "github.com/go-sql-driver/mysql"
@@ -435,17 +436,26 @@ func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareRefe
 
 }
 
-func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareReference, f *collaboration.UpdateReceivedShareRequest_UpdateField) (*collaboration.ReceivedShare, error) {
+func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 
-	rs, err := m.GetReceivedShare(ctx, ref)
+	rs, err := m.GetReceivedShare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Share.Id}})
 	if err != nil {
 		return nil, err
 	}
 
+	for i := range fieldMask.Paths {
+		switch fieldMask.Paths[i] {
+		case "state":
+			rs.State = share.State
+		default:
+			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
+		}
+	}
+
 	var query, queryAccept string
 	params := []interface{}{rs.Share.Id.OpaqueId, conversions.FormatUserID(user.Id)}
-	switch f.GetState() {
+	switch rs.GetState() {
 	case collaboration.ShareState_SHARE_STATE_REJECTED:
 		query = "insert into oc_share_acl(id, rejected_by) values(?, ?)"
 	case collaboration.ShareState_SHARE_STATE_ACCEPTED:
@@ -473,6 +483,5 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareR
 		}
 	}
 
-	rs.State = f.GetState()
 	return rs, nil
 }

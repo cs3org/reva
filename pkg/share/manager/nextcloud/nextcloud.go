@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/share/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"google.golang.org/genproto/protobuf/field_mask"
 )
 
 func init() {
@@ -403,14 +404,15 @@ func (sm *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareRef
 }
 
 // UpdateReceivedShare updates the received share with share state.
-func (sm *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareReference, f *collaboration.UpdateReceivedShareRequest_UpdateField) (*collaboration.ReceivedShare, error) {
+func (sm *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
 	type paramsObj struct {
-		Ref *collaboration.ShareReference                         `json:"ref"`
-		F   *collaboration.UpdateReceivedShareRequest_UpdateField `json:"f"`
+		ReceivedShare *collaboration.ReceivedShare `json:"received_share"`
+		FieldMask     *field_mask.FieldMask        `json:"field_mask"`
 	}
+
 	bodyObj := &paramsObj{
-		Ref: ref,
-		F:   f,
+		ReceivedShare: receivedShare,
+		FieldMask:     fieldMask,
 	}
 	bodyStr, err := json.Marshal(bodyObj)
 	if err != nil {

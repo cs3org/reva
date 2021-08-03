@@ -35,6 +35,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"google.golang.org/genproto/protobuf/field_mask"
 
 	"github.com/cs3org/reva/pkg/share/manager/registry"
 	"github.com/cs3org/reva/pkg/utils"
@@ -448,8 +449,8 @@ func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareReference, f *collaboration.UpdateReceivedShareRequest_UpdateField) (*collaboration.ReceivedShare, error) {
-	rs, err := m.getReceived(ctx, ref)
+func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
+	rs, err := m.getReceived(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: receivedShare.Share.Id}})
 	if err != nil {
 		return nil, err
 	}
@@ -458,12 +459,22 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareR
 	m.Lock()
 	defer m.Unlock()
 
+	for i := range fieldMask.Paths {
+		switch fieldMask.Paths[i] {
+		case "state":
+			rs.State = receivedShare.State
+		// TODO case "mount_point":
+		default:
+			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
+		}
+	}
+
 	if v, ok := m.model.State[user.Id.String()]; ok {
-		v[rs.Share.Id.String()] = f.GetState()
+		v[rs.Share.Id.String()] = rs.GetState()
 		m.model.State[user.Id.String()] = v
 	} else {
 		a := map[string]collaboration.ShareState{
-			rs.Share.Id.String(): f.GetState(),
+			rs.Share.Id.String(): rs.GetState(),
 		}
 		m.model.State[user.Id.String()] = a
 	}
@@ -473,6 +484,5 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareR
 		return nil, err
 	}
 
-	rs.State = f.GetState()
 	return rs, nil
 }

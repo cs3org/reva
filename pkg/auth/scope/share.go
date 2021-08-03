@@ -90,6 +90,12 @@ func checkShareRef(s *collaboration.Share, ref *collaboration.ShareReference) bo
 	}
 	return false
 }
+func checkShare(s1 *collaboration.Share, s2 *collaboration.Share) bool {
+	if s2.GetId() != nil {
+		return s2.GetId().OpaqueId == s1.Id.OpaqueId
+	}
+	return false
+}
 
 func checkSharePath(path string) bool {
 	paths := []string{
