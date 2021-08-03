@@ -52,9 +52,11 @@ type config struct {
 	IOPSecret           string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
 	WopiURL             string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
 	AppName             string `mapstructure:"app_name" docs:";The App user-friendly name."`
+	AppIconURI          string `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
 	AppURL              string `mapstructure:"app_url" docs:";The App URL."`
 	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
 	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
+	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:";Whether the app can be opened only on desktop."`
 	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
 
@@ -107,19 +109,19 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}, nil
 }
 
-func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string) (string, error) {
+func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string) (*appprovider.OpenInAppURL, error) {
 	log := appctx.GetLogger(ctx)
 
 	ext := path.Ext(resource.Path)
 	wopiurl, err := url.Parse(p.conf.WopiURL)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/iop/openinapp")
 
 	httpReq, err := rhttp.NewRequest(ctx, "GET", wopiurl.String(), nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	q := httpReq.URL.Query()
@@ -156,17 +158,20 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 	openRes, err := p.wopiClient.Do(httpReq)
 	if err != nil {
-		return "", errors.Wrap(err, "wopi: error performing open request to WOPI server")
+		return nil, errors.Wrap(err, "wopi: error performing open request to WOPI server")
 	}
 	defer openRes.Body.Close()
 
 	if openRes.StatusCode != http.StatusFound {
-		return "", errors.Wrap(err, "wopi: unexpected status from WOPI server: "+openRes.Status)
+		return nil, errors.Wrap(err, "wopi: unexpected status from WOPI server: "+openRes.Status)
 	}
 	appFullURL := openRes.Header.Get("Location")
 
 	log.Info().Msg(fmt.Sprintf("wopi: returning app URL %s", appFullURL))
-	return appFullURL, nil
+	return &appprovider.OpenInAppURL{
+		AppUrl: appFullURL,
+		Method: "GET",
+	}, nil
 }
 
 func (p *wopiProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.ProviderInfo, error) {
@@ -185,8 +190,10 @@ func (p *wopiProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.Pro
 	}
 
 	return &appregistry.ProviderInfo{
-		Name:      p.conf.AppName,
-		MimeTypes: mimeTypes,
+		Name:        p.conf.AppName,
+		Icon:        p.conf.AppIconURI,
+		DesktopOnly: p.conf.AppDesktopOnly,
+		MimeTypes:   mimeTypes,
 	}, nil
 }
 

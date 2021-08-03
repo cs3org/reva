@@ -137,14 +137,14 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 	return providers, nil
 }
 
-func (b *reg) ListSupportedMimeTypes(ctx context.Context) (map[string]*registrypb.AppProviderNameList, error) {
-	mimeTypes := make(map[string]*registrypb.AppProviderNameList)
+func (b *reg) ListSupportedMimeTypes(ctx context.Context) (map[string]*registrypb.AppProviderList, error) {
+	mimeTypes := make(map[string]*registrypb.AppProviderList)
 	for _, p := range b.providers {
 		for _, m := range p.MimeTypes {
 			if _, ok := mimeTypes[m]; ok {
-				mimeTypes[m].AppProviderName = append(mimeTypes[m].AppProviderName, p.Name)
+				mimeTypes[m].AppProviders = append(mimeTypes[m].AppProviders, p)
 			} else {
-				mimeTypes[m] = &registrypb.AppProviderNameList{AppProviderName: []string{p.Name}}
+				mimeTypes[m] = &registrypb.AppProviderList{AppProviders: []*registrypb.ProviderInfo{p}}
 			}
 		}
 	}

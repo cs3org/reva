@@ -86,7 +86,7 @@ func openInAppCommand() *command {
 			return formatError(openRes.Status)
 		}
 
-		fmt.Println("App URL: " + openRes.AppUrl)
+		fmt.Printf("App URL: %+v\n", openRes.AppUrl)
 
 		return nil
 	}

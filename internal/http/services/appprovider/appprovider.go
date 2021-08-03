@@ -28,14 +28,18 @@ import (
 	"time"
 	"unicode/utf8"
 
+	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/ocmd"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -54,7 +58,7 @@ type Config struct {
 
 func (c *Config) init() {
 	if c.Prefix == "" {
-		c.Prefix = "api/v0/wopi/open"
+		c.Prefix = "app"
 	}
 	if c.AccessTokenTTL == 0 {
 		c.AccessTokenTTL = 86400
@@ -91,17 +95,20 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{}
+	return []string{"/list"}
 }
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			ocmd.WriteError(w, r, ocmd.APIErrorUnimplemented, "only GET requests are supported", errors.New("only GET requests are supported"))
-			return
-		}
+		var head string
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-		s.handleWopiOpen(w, r)
+		switch head {
+		case "list":
+			s.handleList(w, r)
+		case "open":
+			s.handleOpen(w, r)
+		}
 	})
 }
 
@@ -112,7 +119,61 @@ type WopiResponse struct {
 	AccessTokenTTL int64  `json:"accesstokenttl"`
 }
 
-func (s *svc) handleWopiOpen(w http.ResponseWriter, r *http.Request) {
+func filterAppsByUserAgent(mimeTypes map[string]*appregistry.AppProviderList, userAgent string) {
+	ua := ua.Parse(userAgent)
+	if ua.Desktop {
+		return
+	}
+
+	for m, providers := range mimeTypes {
+		apps := []*appregistry.ProviderInfo{}
+		for _, p := range providers.AppProviders {
+			if !p.DesktopOnly {
+				apps = append(apps, p)
+			}
+		}
+		mimeTypes[m] = &appregistry.AppProviderList{AppProviders: apps}
+	}
+}
+
+func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("user agent %+v", r.UserAgent())
+
+	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
+	if err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error getting grpc gateway client", err)
+		return
+	}
+
+	listRes, err := client.ListSupportedMimeTypes(ctx, &appregistry.ListSupportedMimeTypesRequest{})
+	if err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error listing supported mime types", err)
+		return
+	}
+	if listRes.Status.Code != rpc.Code_CODE_OK {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error listing supported mime types", status.NewErrorFromCode(listRes.Status.Code, "appprovider"))
+		return
+	}
+
+	mimeTypes := listRes.MimeTypes
+	filterAppsByUserAgent(mimeTypes, r.UserAgent())
+
+	js, err := json.Marshal(map[string]interface{}{"mime-types": mimeTypes})
+	if err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if _, err = w.Write(js); err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error writing JSON response", err)
+		return
+	}
+}
+
+func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
@@ -141,7 +202,7 @@ func (s *svc) handleWopiOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := url.Parse(openRes.AppUrl)
+	u, err := url.Parse(openRes.AppUrl.AppUrl)
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error parsing app URL", err)
 		return
