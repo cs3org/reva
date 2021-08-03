@@ -32,7 +32,7 @@ import (
 func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 	// resource permission is denied
 	if cmp.Equal(provider.ResourcePermissions{}, *set) {
-		return "!r!w!x!m!u!d!c", nil
+		return "!r!w!x!m!u!d", nil
 	}
 
 	var b strings.Builder

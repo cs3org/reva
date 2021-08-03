@@ -132,7 +132,7 @@ func TestAddGrant(t *testing.T) {
 		},
 		{
 			description: "all-negative",
-			initial:     "u:1:!r!w!x!m!u!d!c,u:2:!r!w!x!m!u!d!c,u:3:!r!w!x!m!u!d!c",
+			initial:     "u:1:!r!w!x!m!u!d,u:2:!r!w!x!m!u!d,u:3:!r!w!x!m!u!d",
 			grant: &provider.Grant{
 				Grantee:     &provider.Grantee{Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: "9"}}},
 				Permissions: &provider.ResourcePermissions{},
@@ -158,7 +158,7 @@ func TestAddGrant(t *testing.T) {
 		},
 		{
 			description: "user-not-in-grant-list-add-positive",
-			initial:     "u:1:rw,u:2:r,u:3:!r!w!x!m!u!d!c",
+			initial:     "u:1:rw,u:2:r,u:3:!r!w!x!m!u!d",
 			grant: &provider.Grant{
 				Grantee:     &provider.Grantee{Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: "9"}}},
 				Permissions: &provider.ResourcePermissions{Stat: true, InitiateFileDownload: true},
@@ -184,7 +184,7 @@ func TestAddGrant(t *testing.T) {
 		},
 		{
 			description: "user-not-in-grant-list-add-negative",
-			initial:     "u:1:rw,u:2:r,u:3:!r!w!x!m!u!d!c",
+			initial:     "u:1:rw,u:2:r,u:3:!r!w!x!m!u!d",
 			grant: &provider.Grant{
 				Grantee:     &provider.Grantee{Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: "9"}}},
 				Permissions: &provider.ResourcePermissions{},
@@ -210,7 +210,7 @@ func TestAddGrant(t *testing.T) {
 		},
 		{
 			description: "user-in-grant-list-add-positive",
-			initial:     "u:1:r,u:2:r,u:3:!r!w!x!m!u!d!c",
+			initial:     "u:1:r,u:2:r,u:3:!r!w!x!m!u!d",
 			grant: &provider.Grant{
 				Grantee:     &provider.Grantee{Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: "2"}}},
 				Permissions: &provider.ResourcePermissions{Stat: true, InitiateFileDownload: true, CreateContainer: true, InitiateFileUpload: true, Delete: true, Move: true},
@@ -232,7 +232,7 @@ func TestAddGrant(t *testing.T) {
 		},
 		{
 			description: "user-in-grant-list-add-negative",
-			initial:     "u:1:r,u:2:r,u:3:!r!w!x!m!u!d!c",
+			initial:     "u:1:r,u:2:r,u:3:!r!w!x!m!u!d",
 			grant: &provider.Grant{
 				Grantee:     &provider.Grantee{Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: "1"}}},
 				Permissions: &provider.ResourcePermissions{},
