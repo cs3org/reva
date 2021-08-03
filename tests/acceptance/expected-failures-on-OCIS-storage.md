@@ -1088,12 +1088,6 @@ And other missing implementation of favorites
 -   [apiFavorites/favorites.feature:177](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L177)
 -   [apiFavorites/favorites.feature:217](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L217)
 -   [apiFavorites/favorites.feature:218](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L218)
--   [apiFavorites/favoritesSharingToShares.feature:21](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L21)
--   [apiFavorites/favoritesSharingToShares.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L22)
--   [apiFavorites/favoritesSharingToShares.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L35)
--   [apiFavorites/favoritesSharingToShares.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L36)
--   [apiFavorites/favoritesSharingToShares.feature:48](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L48)
--   [apiFavorites/favoritesSharingToShares.feature:49](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L49)
 -   [apiFavorites/favoritesSharingToShares.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L62)
 -   [apiFavorites/favoritesSharingToShares.feature:63](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L63)
 

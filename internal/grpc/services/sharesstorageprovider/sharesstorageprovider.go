@@ -551,7 +551,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			}, nil
 		}
 
-		if reqShare != "" && filepath.Base(gwres.Info.Path) == reqShare {
+		if reqShare != "" && gwres.Info != nil && filepath.Base(gwres.Info.Path) == reqShare {
 			if reqPath != "" {
 				gwres, err = s.gateway.Stat(ctx, &provider.StatRequest{
 					Ref: &provider.Reference{
@@ -808,7 +808,7 @@ func (s *service) statShare(ctx context.Context, share string) (*provider.StatRe
 			}, err
 		}
 
-		if share != "" && filepath.Base(statRes.Info.Path) == share {
+		if share != "" && statRes.Info != nil && filepath.Base(statRes.Info.Path) == share {
 			return statRes, nil
 		}
 	}
