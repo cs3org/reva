@@ -59,9 +59,8 @@ func compile(pluginType string, path string) (string, error) {
 	cmd := exec.Command("bash", "-c", command)
 	cmd.Stderr = &errb
 	err := cmd.Run()
-	fmt.Println(errb.String())
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%v: %w", errb.String(), err)
 	}
 	return binaryPath, nil
 }
