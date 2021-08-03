@@ -24,6 +24,7 @@ import (
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/plugin"
 	hcplugin "github.com/hashicorp/go-plugin"
 )
@@ -73,6 +74,7 @@ func (m *RPCClient) Configure(ml map[string]interface{}) error {
 
 // AuthenticateArgs for RPC
 type AuthenticateArgs struct {
+	Ctx          map[interface{}]interface{}
 	ClientID     string
 	ClientSecret string
 }
@@ -86,7 +88,8 @@ type AuthenticateReply struct {
 
 // Authenticate RPCClient Authenticate method
 func (m *RPCClient) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
-	args := AuthenticateArgs{ClientID: clientID, ClientSecret: clientSecret}
+	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
+	args := AuthenticateArgs{Ctx: ctxVal, ClientID: clientID, ClientSecret: clientSecret}
 	reply := AuthenticateReply{}
 	err := m.Client.Call("Plugin.Authenticate", args, &reply)
 	if err != nil {
@@ -109,6 +112,7 @@ func (m *RPCServer) Configure(args ConfigureArg, resp *ConfigureReply) error {
 
 // Authenticate RPCServer Authenticate method
 func (m *RPCServer) Authenticate(args AuthenticateArgs, resp *AuthenticateReply) error {
-	resp.User, resp.Auth, resp.Error = m.Impl.Authenticate(context.Background(), args.ClientID, args.ClientSecret)
+	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
+	resp.User, resp.Auth, resp.Error = m.Impl.Authenticate(ctx, args.ClientID, args.ClientSecret)
 	return nil
 }
