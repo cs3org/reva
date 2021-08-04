@@ -133,9 +133,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		case "GET":
 			if h.isListSharesWithMe(w, r) {
-				h.listSharesWithMe(w, r)
+				h.ListSharesWithMe(w, r)
 			} else {
-				h.listSharesWithOthers(w, r)
+				h.ListSharesWithOthers(w, r)
 			}
 		case "POST":
 			h.createShare(w, r)
@@ -556,7 +556,7 @@ const (
 	ocsStateRejected = 2
 )
 
-func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
 	stateFilter := getStateFilter(r.FormValue("state"))
 
@@ -660,7 +660,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSSuccess(w, r, shares)
 }
 
-func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 
 	filters := []*collaboration.ListSharesRequest_Filter{}

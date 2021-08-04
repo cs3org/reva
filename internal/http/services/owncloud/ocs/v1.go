@@ -20,7 +20,9 @@ package ocs
 
 import (
 	"net/http"
+	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud"
@@ -34,6 +36,7 @@ type V1Handler struct {
 	AppsHandler   *apps.Handler
 	CloudHandler  *cloud.Handler
 	ConfigHandler *configHandler.Handler
+	WarmupCache   *ttlcache.Cache
 }
 
 func (h *V1Handler) init(c *config.Config) error {
@@ -44,12 +47,19 @@ func (h *V1Handler) init(c *config.Config) error {
 		return err
 	}
 	h.CloudHandler = new(cloud.Handler)
+	if c.CacheWarmupDriver == "first-request" && c.ResourceInfoCacheTTL > 0 {
+		h.WarmupCache = ttlcache.NewCache()
+		_ = h.WarmupCache.SetTTL(time.Second * time.Duration(c.ResourceInfoCacheTTL))
+	}
 	return h.CloudHandler.Init(c)
 }
 
 // Handler handles requests
 func (h *V1Handler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Warmup the share cache for the user
+		h.cacheWarmup(w, r)
+
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		switch head {
