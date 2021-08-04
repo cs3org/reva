@@ -147,7 +147,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
     TEST_WITH_LDAP='true' \
     REVA_LDAP_HOSTNAME='localhost' \
     TEST_REVA='true' \
-    BEHAT_FILTER_TAGS='~@skipOnOcis&&~@skipOnOcis-OC-Storage' \
+    BEHAT_FILTER_TAGS='~@skipOnOcis&&~@skipOnOcis-OCIS-Storage&&~@notToImplementOnOCIS' \
     make test-acceptance-api
     ```
 
