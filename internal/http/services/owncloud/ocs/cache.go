@@ -19,19 +19,32 @@
 package ocs
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 
+	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/user"
+	"google.golang.org/grpc/metadata"
 )
 
 func (h *V1Handler) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 	if h.WarmupCache != nil {
-		id := user.ContextMustGetUser(r.Context()).Id.OpaqueId
+		u := user.ContextMustGetUser(r.Context())
+		tkn := token.ContextMustGetToken(r.Context())
+
+		ctx := context.Background()
+		ctx = user.ContextSetUser(ctx, u)
+		ctx = token.ContextSetToken(ctx, tkn)
+		ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, tkn)
+		req := r.Clone(ctx)
+
+		id := u.Id.OpaqueId
 		if _, err := h.WarmupCache.Get(id); err != nil {
-			var p http.ResponseWriter
+			p := httptest.NewRecorder()
 			_ = h.WarmupCache.Set(id, true)
-			go h.AppsHandler.SharingHandler.SharesHandler.ListSharesWithOthers(p, r)
-			go h.AppsHandler.SharingHandler.SharesHandler.ListSharesWithMe(p, r)
+			go h.AppsHandler.SharingHandler.SharesHandler.ListSharesWithOthers(p, req)
+			go h.AppsHandler.SharingHandler.SharesHandler.ListSharesWithMe(p, req)
 		}
 	}
 }

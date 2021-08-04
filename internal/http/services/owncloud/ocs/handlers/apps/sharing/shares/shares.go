@@ -556,6 +556,7 @@ const (
 	ocsStateRejected = 2
 )
 
+// ListSharesWithMe returns the shares receieved by the user present in the context
 func (h *Handler) ListSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
 	stateFilter := getStateFilter(r.FormValue("state"))
@@ -660,6 +661,8 @@ func (h *Handler) ListSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSSuccess(w, r, shares)
 }
 
+// ListSharesWithOthers returns the public, user, group and federated shares
+// created by the user present in the context
 func (h *Handler) ListSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 
