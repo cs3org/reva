@@ -550,6 +550,15 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 				Status: status.NewInternal(ctx, err, "sharesstorageprovider: error getting stat from gateway"),
 			}, nil
 		}
+		if gwres.Status.Code != rpc.Code_CODE_OK {
+			appctx.GetLogger(ctx).Debug().
+				Interface("reqPath", reqPath).
+				Interface("reqShare", reqShare).
+				Interface("rs.Share", rs.Share).
+				Interface("gwres", gwres).
+				Msg("sharesstorageprovider: Got non-ok Stat response")
+			continue
+		}
 
 		if reqShare != "" && gwres.Info != nil && filepath.Base(gwres.Info.Path) == reqShare {
 			if reqPath != "" {
@@ -572,10 +581,16 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			gwres.Info.Path = filepath.Join(s.mountPath, reqShare, relPath)
 			gwres.Info.PermissionSet = rs.Share.Permissions.Permissions
 			return gwres, nil
-		} else if reqShare == "" {
+		} else if reqShare == "" && gwres.Info != nil {
 			childInfos = append(childInfos, gwres.Info)
 			res.Info.Size += gwres.Info.Size
 		}
+	}
+
+	if reqShare != "" {
+		return &provider.StatResponse{
+			Status: status.NewNotFound(ctx, "sharesstorageprovider: could not find requested share"),
+		}, nil
 	}
 
 	res.Status = status.NewOK(ctx)
@@ -613,6 +628,15 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			return &provider.ListContainerResponse{
 				Status: status.NewInternal(ctx, err, "sharesstorageprovider: error getting stats from gateway"),
 			}, nil
+		}
+		if gwres.Status.Code != rpc.Code_CODE_OK {
+			appctx.GetLogger(ctx).Debug().
+				Interface("reqPath", reqPath).
+				Interface("reqShare", reqShare).
+				Interface("rs.Share", rs.Share).
+				Interface("gwres", gwres).
+				Msg("sharesstorageprovider: Got non-ok ListContainerResponse response")
+			continue
 		}
 
 		if reqShare != "" && filepath.Base(gwres.Info.Path) == reqShare {
@@ -812,7 +836,16 @@ func (s *service) statShare(ctx context.Context, share string) (*provider.StatRe
 			}, err
 		}
 
-		if share != "" && statRes.Info != nil && filepath.Base(statRes.Info.Path) == share {
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			appctx.GetLogger(ctx).Debug().
+				Interface("share", share).
+				Interface("rs.Share", rs.Share).
+				Interface("statRes", statRes).
+				Msg("sharesstorageprovider: Got non-ok Stat response")
+			continue
+		}
+
+		if filepath.Base(statRes.Info.Path) == share {
 			return statRes, nil
 		}
 	}
