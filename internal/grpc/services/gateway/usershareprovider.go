@@ -386,7 +386,7 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 		TargetUri: fmt.Sprintf("cs3:%s/%s", resourceID.GetStorageId(), resourceID.GetOpaqueId()),
 	}
 
-	c, err = s.findByPath(ctx, refPath)
+	c, err = s.findByPath(ctx, homeRes.Path)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
