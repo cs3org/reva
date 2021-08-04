@@ -107,13 +107,14 @@ func (h *Handler) Init(c *config.Config) error {
 }
 
 func (h *Handler) startCacheWarmup(c cache.Warmup) {
+	time.Sleep(2 * time.Second)
 	infos, err := c.GetResourceInfos()
 	if err != nil {
 		return
 	}
 	for _, r := range infos {
 		key := wrapResourceID(r.Id)
-		_ = h.resourceInfoCache.SetWithExpire(key, r, time.Second*h.resourceInfoCacheTTL)
+		_ = h.resourceInfoCache.SetWithExpire(key, r, h.resourceInfoCacheTTL)
 	}
 }
 
