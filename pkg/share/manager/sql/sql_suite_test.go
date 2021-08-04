@@ -16,12 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package sql_test
 
 import (
-	// Load core share manager drivers.
-	_ "github.com/cs3org/reva/pkg/share/manager/json"
-	_ "github.com/cs3org/reva/pkg/share/manager/memory"
-	_ "github.com/cs3org/reva/pkg/share/manager/sql"
-	// Add your own here
+	"testing"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
+
+func TestSql(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Sql Suite")
+}
