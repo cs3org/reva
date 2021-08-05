@@ -146,21 +146,21 @@ type ShareData struct {
 // ShareeData holds share recipient search results
 type ShareeData struct {
 	Exact   *ExactMatchesData `json:"exact" xml:"exact"`
-	Users   []*MatchData      `json:"users" xml:"users"`
-	Groups  []*MatchData      `json:"groups" xml:"groups"`
-	Remotes []*MatchData      `json:"remotes" xml:"remotes"`
+	Users   []*MatchData      `json:"users" xml:"users>element"`
+	Groups  []*MatchData      `json:"groups" xml:"groups>element"`
+	Remotes []*MatchData      `json:"remotes" xml:"remotes>element"`
 }
 
 // ExactMatchesData hold exact matches
 type ExactMatchesData struct {
-	Users   []*MatchData `json:"users" xml:"users"`
-	Groups  []*MatchData `json:"groups" xml:"groups"`
-	Remotes []*MatchData `json:"remotes" xml:"remotes"`
+	Users   []*MatchData `json:"users" xml:"users>element"`
+	Groups  []*MatchData `json:"groups" xml:"groups>element"`
+	Remotes []*MatchData `json:"remotes" xml:"remotes>element"`
 }
 
 // MatchData describes a single match
 type MatchData struct {
-	Label string          `json:"label" xml:"label"`
+	Label string          `json:"label" xml:"label,omitempty"`
 	Value *MatchValueData `json:"value" xml:"value"`
 }
 
