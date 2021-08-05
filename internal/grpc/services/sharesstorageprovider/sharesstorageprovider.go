@@ -467,11 +467,6 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 			Status: status.NewInvalid(ctx, "sharesstorageprovider: can not move top-level share"),
 		}, nil
 	}
-	if reqShare != destinationShare {
-		return &provider.MoveResponse{
-			Status: status.NewInvalid(ctx, "sharesstorageprovider: can not move between shares"),
-		}, nil
-	}
 
 	statRes, err := s.statShare(ctx, reqShare)
 	if err != nil {
@@ -485,12 +480,30 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		}, nil
 	}
 
+	dstStatRes, err := s.statShare(ctx, destinationShare)
+	if err != nil {
+		if dstStatRes != nil {
+			return &provider.MoveResponse{
+				Status: dstStatRes.Status,
+			}, err
+		}
+		return &provider.MoveResponse{
+			Status: status.NewInternal(ctx, err, "sharesstorageprovider: error stating the destination share"),
+		}, nil
+	}
+
+	if statRes.Info.Id.StorageId != dstStatRes.Info.Id.StorageId {
+		return &provider.MoveResponse{
+			Status: status.NewInvalid(ctx, "sharesstorageprovider: can not move between shares on different storages"),
+		}, nil
+	}
+
 	gwres, err := s.gateway.Move(ctx, &provider.MoveRequest{
 		Source: &provider.Reference{
 			Path: filepath.Join(statRes.Info.Path, reqPath),
 		},
 		Destination: &provider.Reference{
-			Path: filepath.Join(statRes.Info.Path, destinationPath),
+			Path: filepath.Join(dstStatRes.Info.Path, destinationPath),
 		},
 	})
 
