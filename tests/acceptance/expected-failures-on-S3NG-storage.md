@@ -11,9 +11,6 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiTrashbin/trashbinFilesFolders.feature:230](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L230)
 -   [apiTrashbin/trashbinFilesFolders.feature:231](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L231)
 
-#### [PROPFIND on trashbin with Depth: infinity only shows the first level](https://github.com/owncloud/ocis/issues/1116)
--   [apiWebdavOperations/listFiles.feature:182](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L182)
-
 #### [downloading an old version of a file returns 501](https://github.com/owncloud/ocis/issues/2261)
 -    [apiVersions/fileVersions.feature:437](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L437)
 -    [apiVersions/fileVersions.feature:455](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L455)
