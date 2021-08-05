@@ -160,6 +160,24 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
+	if depth == "0" {
+		propRes, err := h.formatTrashPropfind(ctx, s, u, nil, nil)
+		if err != nil {
+			sublog.Error().Err(err).Msg("error formatting propfind")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+		w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+		w.WriteHeader(http.StatusMultiStatus)
+		_, err = w.Write([]byte(propRes))
+		if err != nil {
+			sublog.Error().Err(err).Msg("error writing body")
+			return
+		}
+		return
+	}
+
 	pf, status, err := readPropfind(r.Body)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading propfind request")
