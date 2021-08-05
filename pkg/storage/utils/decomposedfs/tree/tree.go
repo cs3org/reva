@@ -409,11 +409,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 
-	p, err := n.Parent()
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error getting parent "+n.ParentID)
-	}
-	return t.Propagate(ctx, p)
+	return t.Propagate(ctx, n)
 }
 
 // RestoreRecycleItemFunc returns a node and a function to restore it from the trash
