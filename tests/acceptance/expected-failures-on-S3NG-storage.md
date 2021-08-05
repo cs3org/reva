@@ -51,17 +51,6 @@ _ocdav: double check the webdav property parsing when custom namespaces are used
 ### Sync
 Synchronization features like etag propagation, setting mtime and locking files
 
-#### [deleting an item updates etags of grandparent but not on parent](https://github.com/owncloud/product/issues/241)
-_etag propagation_
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L26)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L27)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:45](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L45)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L46)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:65](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L65)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L66)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:193](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L193)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:207](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L207)
-
 #### [Uploading an old method chunked file with checksum should fail using new DAV path](https://github.com/owncloud/ocis/issues/2323)
 -   [apiMain/checksums.feature:263](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L263)
 
@@ -323,16 +312,6 @@ _etag propagation_
 
 ### Share
 File and sync features in a shared scenario
-
-#### [etags don't change for a share receiver](https://github.com/owncloud/product/issues/243)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:95](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L95)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:96](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L96)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:125](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L125)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:126](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L126)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:157](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L157)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:158](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L158)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:189](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L189)
--   [apiWebdavEtagPropagation1/deleteFileFolder.feature:190](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/deleteFileFolder.feature#L190)
 
 #### [etags don't change for a share receiver](https://github.com/owncloud/product/issues/243)
 -   [apiWebdavEtagPropagation1/moveFileFolder.feature:244](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/moveFileFolder.feature#L244)
