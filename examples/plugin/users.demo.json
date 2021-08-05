@@ -1,0 +1,102 @@
+[
+	{
+		"id": {
+			"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
+			"idp": "cernbox.cern.ch"
+		},
+		"username": "einstein",
+		"secret": "relativity",
+		"mail": "einstein@cern.ch",
+		"display_name": "Albert Einstein",
+		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"],
+		"opaque": {
+			"map": {
+				"gid": {
+					"_comment": "decodes to 987",
+					"decoder":"plain",
+					"value":"OTg3"
+					},
+				"uid":{
+					"_comment": "decodes to 123",
+					"decoder":"plain",
+					"value":"MTIz"
+				}
+			}
+		}
+	},
+	{
+		"id": {
+			"opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+			"idp": "cesnet.cz"
+		},
+		"username": "marie",
+		"secret": "radioactivity",
+		"mail": "marie@cesnet.cz",
+		"display_name": "Marie Curie",
+		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"],
+		"opaque": {
+			"map": {
+				"gid": {
+					"_comment": "decodes to 987",
+					"decoder":"plain",
+					"value":"OTg3"
+					},
+				"uid":{
+					"_comment": "decodes to 456",
+					"decoder":"plain",
+					"value":"NDU2"
+				}
+			}
+		}
+	},
+	{
+		"id": {
+			"opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
+			"idp": "example.org"
+		},
+		"username": "richard",
+		"secret": "superfluidity",
+		"mail": "richard@example.org",
+		"display_name": "Richard Feynman",
+		"groups": ["quantum-lovers", "philosophy-haters", "physics-lovers"],
+		"opaque": {
+			"map": {
+				"gid": {
+					"_comment": "decodes to 135",
+					"decoder":"plain",
+					"value":"MTM1"
+					},
+				"uid":{
+					"_comment": "decodes to 246",
+					"decoder":"plain",
+					"value":"MjQ2"
+				}
+			}
+		}
+	},
+	{
+		"id": {
+			"opaque_id": "932b4522-139b-4815-8ef4-42cdf82c3d51",
+			"idp": "example.com"
+		},
+		"username": "test",
+		"secret": "test",
+		"mail": "test@example.com",
+		"display_name": "Test Testman",
+		"groups": ["quantum-lovers", "philosophy-haters", "physics-lovers"],
+		"opaque": {
+			"map": {
+				"gid": {
+					"_comment": "decodes to 135",
+					"decoder":"plain",
+					"value":"MTM1"
+					},
+				"uid":{
+					"_comment": "decodes to 468",
+					"decoder":"plain",
+					"value":"NDY4"
+				}
+			}
+		}
+	}
+]

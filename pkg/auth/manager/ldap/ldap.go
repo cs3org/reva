@@ -104,9 +104,18 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an auth manager implementation that connects to a LDAP server to validate the user.
 func New(m map[string]interface{}) (auth.Manager, error) {
-	c, err := parseConfig(m)
+	manager := &mgr{}
+	err := manager.Configure(m)
 	if err != nil {
 		return nil, err
+	}
+	return manager, nil
+}
+
+func (am *mgr) Configure(m map[string]interface{}) error {
+	c, err := parseConfig(m)
+	if err != nil {
+		return err
 	}
 
 	// backwards compatibility
@@ -122,10 +131,8 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-
-	return &mgr{
-		c: c,
-	}, nil
+	am.c = c
+	return nil
 }
 
 func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {

@@ -22,6 +22,7 @@ import (
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/plugin"
 )
 
 type key int
@@ -64,6 +65,7 @@ func ContextSetUserID(ctx context.Context, id *userpb.UserId) context.Context {
 
 // Manager is the interface to implement to manipulate users.
 type Manager interface {
+	plugin.Plugin
 	GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error)
 	GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error)
 	GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error)

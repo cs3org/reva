@@ -40,6 +40,10 @@ func New(c map[string]interface{}) (auth.Manager, error) {
 	return &mgr{}, nil
 }
 
+func (m *mgr) Configure(ml map[string]interface{}) error {
+	return nil
+}
+
 func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	// allow passing in uid as <opaqueid>@<idp>
 	at := strings.LastIndex(clientID, "@")
