@@ -94,7 +94,7 @@ def cephService():
 def main(ctx):
   # In order to run specific parts only, specify the parts as
   # ocisIntegrationTests(6, [1, 4])     - this will only run 1st and 4th parts
-  # implemented for: ocisIntegrationTests, owncloudIntegrationTests and s3ngIntegrationTests
+  # implemented for: ocisIntegrationTests and s3ngIntegrationTests
   return [
     buildAndPublishDocker(),
     buildOnly(),
@@ -102,7 +102,6 @@ def main(ctx):
     release(),
     litmusOcisOldWebdav(),
     litmusOcisNewWebdav(),
-    localIntegrationTestsOcis(),
   ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
 
 
@@ -515,67 +514,6 @@ def litmusOcisNewWebdav():
           "TESTS": "basic http copymove props",
         }
       },
-    ],
-  }
-
-def localIntegrationTestsOcis():
-  return {
-    "kind": "pipeline",
-    "type": "docker",
-    "name": "local-integration-tests-ocis",
-    "platform": {
-      "os": "linux",
-      "arch": "amd64",
-    },
-    "trigger": {
-      "event": {
-        "include": [
-          "pull_request",
-          "tag",
-        ],
-      },
-    },
-    "steps": [
-      makeStep("build-ci"),
-      {
-        "name": "revad-services",
-        "image": "registry.cern.ch/docker.io/library/golang:1.16",
-        "detach": True,
-        "commands": [
-          "cd /drone/src/tests/oc-integration-tests/drone/",
-          "/drone/src/cmd/revad/revad -c frontend.toml &",
-          "/drone/src/cmd/revad/revad -c gateway.toml &",
-          "/drone/src/cmd/revad/revad -c shares.toml &",
-          "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
-          "/drone/src/cmd/revad/revad -c storage-oc-ocis.toml &",
-          "/drone/src/cmd/revad/revad -c storage-publiclink-ocis.toml &",
-          "/drone/src/cmd/revad/revad -c ldap-users.toml",
-        ],
-      },
-      cloneOc10TestReposStep(),
-      {
-        "name": "localAPIAcceptanceTestsOcisStorage",
-        "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
-        "commands": [
-          "make test-acceptance-api",
-        ],
-        "environment": {
-          "TEST_SERVER_URL": "http://revad-services:20080",
-          "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-          "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-*",
-          "STORAGE_DRIVER": "OCIS",
-          "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
-          "TEST_WITH_LDAP": "true",
-          "REVA_LDAP_HOSTNAME": "ldap",
-          "TEST_REVA": "true",
-          "SEND_SCENARIO_LINE_REFERENCES": "true",
-          "BEHAT_FILTER_TAGS": "~@skipOnOcis-OCIS-Storage",
-          "PATH_TO_CORE": "/drone/src/tmp/testrunner",
-        }
-      },
-    ],
-    "services": [
-      ldapService(),
     ],
   }
 
