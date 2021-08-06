@@ -64,22 +64,95 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var head string
-	head, r.URL.Path = router.ShiftPath(r.URL.Path)
-	switch head {
+	// TODO quite a bit to implement, but the CS3 api now has the admin api that we can use.
+	var userid string
+	userid, r.URL.Path = router.ShiftPath(r.URL.Path)
+	switch userid {
 	case "":
-		h.handleUsers(w, r, u)
-		return
-	case "groups":
-		response.WriteOCSSuccess(w, r, &Groups{})
+		switch r.Method {
+		case "GET":
+			// FIXME require admin
+			// FIXME listusers
+			h.handleGetUser(w, r, u)
+		case "POST":
+			// FIXME require admin
+			// FIXME adduser
+			response.WriteOCSError(w, r, response.MetaUnknownError.StatusCode, "Not implemented", nil)
+		default:
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET and POST are allowed", nil)
+		}
 		return
 	default:
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
-		return
+		var head string
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
+		switch head {
+		case "":
+			switch r.Method {
+			case "GET":
+				// FIXME getuser
+				response.WriteOCSError(w, r, response.MetaUnknownError.StatusCode, "Not implemented", nil)
+			case "PUT":
+				// FIXME require self or admin
+				// FIXME edituser
+				response.WriteOCSError(w, r, response.MetaUnknownError.StatusCode, "Not implemented", nil)
+			case "DELETE":
+				// FIXME require admin
+				// FIXME deleteuser
+				response.WriteOCSError(w, r, response.MetaUnknownError.StatusCode, "Not implemented", nil)
+			default:
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, PUT and DELETE are allowed", nil)
+			}
+		case "enable", "disable":
+			switch r.Method {
+			case "PUT":
+				// FIXME require admin
+				// FIXME enable user, disable user
+				response.WriteOCSError(w, r, response.MetaUnknownError.StatusCode, "Not implemented", nil)
+			default:
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only PUT is allowed", nil)
+			}
+		case "groups":
+			switch r.Method {
+			case "GET":
+				// FIXME require self or admin
+				// FIXME list user groups
+				response.WriteOCSError(w, r, response.MetaUnknownError.StatusCode, "Not implemented", nil)
+			case "POST":
+				// FIXME require admin
+				// FIXME add to group
+				response.WriteOCSError(w, r, response.MetaUnknownError.StatusCode, "Not implemented", nil)
+			case "DELETE":
+				// FIXME require admin
+				// FIXME remove from group
+				response.WriteOCSError(w, r, response.MetaUnknownError.StatusCode, "Not implemented", nil)
+			default:
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and DELETE are allowed", nil)
+			}
+		case "subadmins":
+			// leale as stub?
+			switch r.Method {
+			case "GET":
+				// FIXME require self or admin
+				// FIXME list user groups
+				response.WriteOCSError(w, r, response.MetaUnknownError.StatusCode, "Not implemented", nil)
+			case "POST":
+				// FIXME require admin
+				// FIXME add to group
+				response.WriteOCSError(w, r, response.MetaUnknownError.StatusCode, "Not implemented", nil)
+			case "DELETE":
+				// FIXME require admin
+				// FIXME remove from group
+				response.WriteOCSError(w, r, response.MetaUnknownError.StatusCode, "Not implemented", nil)
+			default:
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and DELETE are allowed", nil)
+			}
+		default:
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
+		}
 	}
-
 }
 
+// TODO move this to the data package and align with the user package
 // Quota holds quota information
 type Quota struct {
 	Free       int64   `json:"free" xml:"free"`
@@ -89,22 +162,29 @@ type Quota struct {
 	Definition string  `json:"definition" xml:"definition"`
 }
 
-// Users holds users data
-type Users struct {
-	Quota       *Quota `json:"quota" xml:"quota"`
-	Email       string `json:"email" xml:"email"`
-	DisplayName string `json:"displayname" xml:"displayname"`
+// TODO move this to the data package and align with the user package
+// User holds user data
+type User struct {
+	Enabled           string `json:"enabled" xml:"enabled"`
+	UserID            string `json:"id" xml:"id"` // UserID is mapped to the preferred_name attribute in accounts
+	DisplayName       string `json:"display-name" xml:"display-name"`
+	LegacyDisplayName string `json:"displayname" xml:"displayname"`
+	Email             string `json:"email" xml:"email"`
+	Quota             *Quota `json:"quota" xml:"quota"`
+	UIDNumber         int64  `json:"uidnumber" xml:"uidnumber"`
+	GIDNumber         int64  `json:"gidnumber" xml:"gidnumber"`
 	// FIXME home should never be exposed ... even in oc 10
 	// home
 	TwoFactorAuthEnabled bool `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
 }
 
+// TODO move this to the data package and align with the user package
 // Groups holds group data
 type Groups struct {
 	Groups []string `json:"groups" xml:"groups>element"`
 }
 
-func (h *Handler) handleUsers(w http.ResponseWriter, r *http.Request, u *userpb.User) {
+func (h *Handler) handleGetUser(w http.ResponseWriter, r *http.Request, u *userpb.User) {
 	ctx := r.Context()
 	sublog := appctx.GetLogger(r.Context())
 
@@ -145,7 +225,9 @@ func (h *Handler) handleUsers(w http.ResponseWriter, r *http.Request, u *userpb.
 		relative = float32(float64(used) / float64(total))
 	}
 
-	response.WriteOCSSuccess(w, r, &Users{
+	response.WriteOCSSuccess(w, r, &User{
+		//Enabled: u.Enabled, FIXME
+		UserID: u.Username,
 		// ocs can only return the home storage quota
 		Quota: &Quota{
 			Free: int64(total - used),
@@ -156,7 +238,10 @@ func (h *Handler) handleUsers(w http.ResponseWriter, r *http.Request, u *userpb.
 			Relative:   relative,
 			Definition: "default",
 		},
-		DisplayName: u.DisplayName,
-		Email:       u.Mail,
+		DisplayName:       u.DisplayName,
+		LegacyDisplayName: u.DisplayName,
+		Email:             u.Mail,
+		UIDNumber:         u.UidNumber,
+		GIDNumber:         u.GidNumber,
 	})
 }
