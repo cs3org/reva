@@ -61,7 +61,10 @@ var _ = Describe("Nextcloud", func() {
 	})
 	Describe("CreateHome", func() {
 		It("calls the CreateHome endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{})
+			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
+				EndPoint: "http://mock.com",
+				MockHTTP: true,
+			})
 
 			const (
 				okResponse = `{
