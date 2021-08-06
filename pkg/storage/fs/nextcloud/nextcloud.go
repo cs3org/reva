@@ -543,7 +543,7 @@ func (nc *StorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provid
 	return err
 }
 
-// UnsetArbitraryMetadata as defined in the storage.FS interface
+// ListStorageSpaces :as defined in the storage.FS interface
 func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	_, _, err := nc.do(Action{"ListStorageSpaces", ""}, nc.endPoint)
 	return nil, err
