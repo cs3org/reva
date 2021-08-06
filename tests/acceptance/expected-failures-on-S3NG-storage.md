@@ -307,12 +307,6 @@ Synchronization features like etag propagation, setting mtime and locking files
 ### Share
 File and sync features in a shared scenario
 
-#### [etags don't change for a share receiver](https://github.com/owncloud/product/issues/243)
--   [apiWebdavEtagPropagation1/moveFileFolder.feature:244](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/moveFileFolder.feature#L244)
--   [apiWebdavEtagPropagation1/moveFileFolder.feature:245](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/moveFileFolder.feature#L245)
--   [apiWebdavEtagPropagation1/moveFileFolder.feature:314](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/moveFileFolder.feature#L314)
--   [apiWebdavEtagPropagation1/moveFileFolder.feature:315](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/moveFileFolder.feature#L315)
-
 #### [Searching sharee with displayname](https://github.com/owncloud/ocis/issues/547)
 These tests fail because they contain some configuration steps for oc10 specific configuration.
 -   [apiSharees/sharees.feature:74](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L74)
