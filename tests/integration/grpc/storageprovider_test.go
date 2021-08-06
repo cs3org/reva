@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"os"
 
-	// "os"
 	"google.golang.org/grpc/metadata"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -42,7 +41,6 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// "github.com/cs3org/reva/pkg/storage/fs/owncloud"
 // This test suite tests the gprc storageprovider interface using different
 // storage backends
 //
