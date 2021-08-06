@@ -357,7 +357,7 @@ func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Refe
 }
 
 // ListRecycle as defined in the storage.FS interface
-func (nc *StorageDriver) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path string) ([]*provider.RecycleItem, error) {
 	_, respBody, err := nc.do(Action{"ListRecycle", ""}, nc.endPoint)
 	if err != nil {
 		return nil, err
@@ -391,14 +391,14 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context) ([]*provider.RecycleIt
 }
 
 // RestoreRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
+func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, key string, path string, restoreRef *provider.Reference) error {
 	bodyStr, _ := json.Marshal(restoreRef)
 	_, _, err := nc.do(Action{"RestoreRecycleItem", string(bodyStr)}, nc.endPoint)
 	return err
 }
 
 // PurgeRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, key string) error {
+func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, key string, path string) error {
 	bodyStr, _ := json.Marshal(key)
 	_, _, err := nc.do(Action{"PurgeRecycleItem", string(bodyStr)}, nc.endPoint)
 	return err
@@ -428,6 +428,13 @@ func (nc *StorageDriver) AddGrant(ctx context.Context, ref *provider.Reference, 
 func (nc *StorageDriver) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"RemoveGrant", string(bodyStr)}, nc.endPoint)
+	return err
+}
+
+// DenyGrant as defined in the storage.FS interface
+func (nc *StorageDriver) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	bodyStr, _ := json.Marshal(ref)
+	_, _, err := nc.do(Action{"DenyGrant", string(bodyStr)}, nc.endPoint)
 	return err
 }
 
@@ -534,4 +541,10 @@ func (nc *StorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provid
 	bodyStr, _ := json.Marshal(ref)
 	_, _, err := nc.do(Action{"UnsetArbitraryMetadata", string(bodyStr)}, nc.endPoint)
 	return err
+}
+
+// UnsetArbitraryMetadata as defined in the storage.FS interface
+func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	_, _, err := nc.do(Action{"ListStorageSpaces", ""}, nc.endPoint)
+	return nil, err
 }
