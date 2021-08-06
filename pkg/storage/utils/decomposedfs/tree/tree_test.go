@@ -115,7 +115,7 @@ var _ = Describe("Tree", func() {
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.ID)
+					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.ID, "")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(purgeFunc()).To(Succeed())
 				})
@@ -139,7 +139,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("restores the file to its original location if the targetPath is empty", func() {
-					_, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "")
+					_, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "")
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -150,7 +150,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("restores files to different locations", func() {
-					_, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "dir1/newLocation")
+					_, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "dir1/newLocation")
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -165,7 +165,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("removes the file from the trash", func() {
-					_, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "")
+					_, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "")
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -203,7 +203,7 @@ var _ = Describe("Tree", func() {
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.ID)
+					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.ID, "")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(purgeFunc()).To(Succeed())
 				})
@@ -237,13 +237,14 @@ var _ = Describe("Tree", func() {
 				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
 				Expect(err).ToNot(HaveOccurred())
 
-				riBefore, err := dir.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				perms := node.OwnerPermissions()
+				riBefore, err := dir.AsResourceInfo(env.Ctx, &perms, []string{})
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Tree.Propagate(env.Ctx, file)
 				Expect(err).ToNot(HaveOccurred())
 
-				riAfter, err := dir.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				riAfter, err := dir.AsResourceInfo(env.Ctx, &perms, []string{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(riAfter.Etag).ToNot(Equal(riBefore.Etag))
 			})

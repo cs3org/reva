@@ -61,14 +61,21 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns a new auth Manager.
 func New(m map[string]interface{}) (auth.Manager, error) {
-	conf, err := parseConfig(m)
+	mgr := &manager{}
+	err := mgr.Configure(m)
 	if err != nil {
 		return nil, err
 	}
+	return mgr, nil
+}
 
-	return &manager{
-		c: conf,
-	}, nil
+func (m *manager) Configure(ml map[string]interface{}) error {
+	conf, err := parseConfig(ml)
+	if err != nil {
+		return err
+	}
+	m.c = conf
+	return nil
 }
 
 func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user.User, map[string]*authpb.Scope, error) {
@@ -132,7 +139,7 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 	if share.Permissions.Permissions.InitiateFileUpload {
 		role = authpb.Role_ROLE_EDITOR
 	}
-	scope, err := scope.GetPublicShareScope(share, role)
+	scope, err := scope.AddPublicShareScope(share, role, nil)
 	if err != nil {
 		return nil, nil, err
 	}

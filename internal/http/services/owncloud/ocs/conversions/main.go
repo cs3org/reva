@@ -146,21 +146,21 @@ type ShareData struct {
 // ShareeData holds share recipient search results
 type ShareeData struct {
 	Exact   *ExactMatchesData `json:"exact" xml:"exact"`
-	Users   []*MatchData      `json:"users" xml:"users"`
-	Groups  []*MatchData      `json:"groups" xml:"groups"`
-	Remotes []*MatchData      `json:"remotes" xml:"remotes"`
+	Users   []*MatchData      `json:"users" xml:"users>element"`
+	Groups  []*MatchData      `json:"groups" xml:"groups>element"`
+	Remotes []*MatchData      `json:"remotes" xml:"remotes>element"`
 }
 
 // ExactMatchesData hold exact matches
 type ExactMatchesData struct {
-	Users   []*MatchData `json:"users" xml:"users"`
-	Groups  []*MatchData `json:"groups" xml:"groups"`
-	Remotes []*MatchData `json:"remotes" xml:"remotes"`
+	Users   []*MatchData `json:"users" xml:"users>element"`
+	Groups  []*MatchData `json:"groups" xml:"groups>element"`
+	Remotes []*MatchData `json:"remotes" xml:"remotes>element"`
 }
 
 // MatchData describes a single match
 type MatchData struct {
-	Label string          `json:"label" xml:"label"`
+	Label string          `json:"label" xml:"label,omitempty"`
 	Value *MatchValueData `json:"value" xml:"value"`
 }
 
@@ -250,19 +250,6 @@ func LocalGroupIDToString(groupID *grouppb.GroupId) string {
 		return ""
 	}
 	return groupID.OpaqueId
-}
-
-// UserIDToString transforms a cs3api user id into an ocs data model
-// TODO This should be used instead of LocalUserIDToString bit it requires interpreting an @ on the client side
-// TODO An alternative would be to send the idp / iss as an additional attribute. might be less intrusive
-func UserIDToString(userID *userpb.UserId) string {
-	if userID == nil || userID.OpaqueId == "" {
-		return ""
-	}
-	if userID.Idp == "" {
-		return userID.OpaqueId
-	}
-	return userID.OpaqueId + "@" + userID.Idp
 }
 
 // GetUserManager returns a connection to a user share manager

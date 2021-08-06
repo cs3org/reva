@@ -328,5 +328,7 @@ func (m *manager) UpdateReceivedShare(ctx context.Context, ref *collaboration.Sh
 		}
 		m.shareState[user.Id.String()] = a
 	}
+
+	rs.State = f.GetState()
 	return rs, nil
 }

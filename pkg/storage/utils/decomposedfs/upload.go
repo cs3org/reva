@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -113,16 +114,14 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	log := appctx.GetLogger(ctx)
 
-	var relative string // the internal path of the file node
-
-	n, err := fs.lu.NodeFromResource(ctx, ref)
+	n, err := fs.lookupNode(ctx, ref.Path)
 	if err != nil {
 		return nil, err
 	}
 
 	// permissions are checked in NewUpload below
 
-	relative, err = fs.lu.Path(ctx, n)
+	relative, err := fs.lu.Path(ctx, n)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +205,7 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	n, err := fs.lu.NodeFromPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	n, err := fs.lookupNode(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error wrapping filename")
 	}
@@ -262,6 +261,7 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
+		"UserType": utils.UserTypeToString(usr.Id.Type),
 		"UserName": usr.Username,
 
 		"OwnerIdp": owner.Idp,
@@ -332,6 +332,7 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 		Id: &userpb.UserId{
 			Idp:      info.Storage["Idp"],
 			OpaqueId: info.Storage["UserId"],
+			Type:     utils.UserTypeMap(info.Storage["UserType"]),
 		},
 		Username: info.Storage["UserName"],
 	}
@@ -355,6 +356,33 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 		fs:       fs,
 		ctx:      ctx,
 	}, nil
+}
+
+// lookupNode looks up nodes by path.
+// This method can also handle lookups for paths which contain chunking information.
+func (fs *Decomposedfs) lookupNode(ctx context.Context, path string) (*node.Node, error) {
+	p := path
+	isChunked, err := chunking.IsChunked(path)
+	if err != nil {
+		return nil, err
+	}
+	if isChunked {
+		chunkInfo, err := chunking.GetChunkBLOBInfo(path)
+		if err != nil {
+			return nil, err
+		}
+		p = chunkInfo.Path
+	}
+
+	n, err := fs.lu.NodeFromPath(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	if isChunked {
+		n.Name = filepath.Base(path)
+	}
+	return n, nil
 }
 
 type fileUpload struct {
@@ -587,13 +615,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		}
 	}
 	// use set arbitrary metadata?
-	/*if upload.info.MetaData["mtime"] != "" {
-		err := upload.fs.SetMtime(ctx, np, upload.info.MetaData["mtime"])
+	if upload.info.MetaData["mtime"] != "" {
+		err := n.SetMtime(ctx, upload.info.MetaData["mtime"])
 		if err != nil {
-			log.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
+			sublog.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
 		}
-	}*/
+	}
 
 	n.Exists = true
 

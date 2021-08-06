@@ -30,6 +30,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
@@ -45,7 +46,7 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
-func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (fs *owncloudsqlfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
 		// Upload corresponding to this ID was not found.
@@ -58,7 +59,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 			return err
 		}
 		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
-			return errors.Wrap(err, "ocfs: error retrieving upload")
+			return errors.Wrap(err, "owncloudsql: error retrieving upload")
 		}
 	}
 
@@ -67,7 +68,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 	p := uploadInfo.info.Storage["InternalDestination"]
 	ok, err := chunking.IsChunked(p)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error checking path")
+		return errors.Wrap(err, "owncloudsql: error checking path")
 	}
 	if ok {
 		var assembledFile string
@@ -77,14 +78,14 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 		}
 		if p == "" {
 			if err = uploadInfo.Terminate(ctx); err != nil {
-				return errors.Wrap(err, "ocfs: error removing auxiliary files")
+				return errors.Wrap(err, "owncloudsql: error removing auxiliary files")
 			}
 			return errtypes.PartialContent(ref.String())
 		}
 		uploadInfo.info.Storage["InternalDestination"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "ocfs: error opening assembled file")
+			return errors.Wrap(err, "owncloudsql: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -92,7 +93,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
-		return errors.Wrap(err, "ocfs: error writing to binary file")
+		return errors.Wrap(err, "owncloudsql: error writing to binary file")
 	}
 
 	return uploadInfo.FinishUpload(ctx)
@@ -100,10 +101,10 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
-func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+func (fs *owncloudsqlfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error resolving reference")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// permissions are checked in NewUpload below
@@ -141,7 +142,7 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.
-func (fs *ocfs) UseIn(composer *tusd.StoreComposer) {
+func (fs *owncloudsqlfs) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(fs)
 	composer.UseTerminater(fs)
 	composer.UseConcater(fs)
@@ -152,19 +153,19 @@ func (fs *ocfs) UseIn(composer *tusd.StoreComposer) {
 // - the storage needs to implement NewUpload and GetUpload
 // - the upload needs to implement the tusd.Upload interface: WriteChunk, GetInfo, GetReader and FinishUpload
 
-func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
+func (fs *owncloudsqlfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("info", info).Msg("ocfs: NewUpload")
+	log.Debug().Interface("info", info).Msg("owncloudsql: NewUpload")
 
 	if info.MetaData["filename"] == "" {
-		return nil, errors.New("ocfs: missing filename in metadata")
+		return nil, errors.New("owncloudsql: missing filename in metadata")
 	}
 	info.MetaData["filename"] = filepath.Clean(info.MetaData["filename"])
 
 	dir := info.MetaData["dir"]
 	if dir == "" {
-		return nil, errors.New("ocfs: missing dir in metadata")
+		return nil, errors.New("owncloudsql: missing dir in metadata")
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
@@ -189,19 +190,19 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
-	log.Debug().Interface("info", info).Msg("ocfs: resolved filename")
+	log.Debug().Interface("info", info).Msg("owncloudsql: resolved filename")
 
 	info.ID = uuid.New().String()
 
 	binPath, err := fs.getUploadPath(ctx, info.ID)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error resolving upload path")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving upload path")
 	}
 	usr := user.ContextMustGetUser(ctx)
-	storageID, err := fs.getUserStorage(ctx)
+	storageID, err := fs.getStorage(ip)
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +210,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		"Type":                "OwnCloudStore",
 		"BinPath":             binPath,
 		"InternalDestination": ip,
+		"Permissions":         strconv.Itoa((int)(conversions.RoleFromResourcePermissions(perm).OCSPermissions())),
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
@@ -219,7 +221,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		"StorageId": strconv.Itoa(storageID),
 	}
 	// Create binary file in the upload folder with no content
-	log.Debug().Interface("info", info).Msg("ocfs: built storage info")
+	log.Debug().Interface("info", info).Msg("owncloudsql: built storage info")
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
 	if err != nil {
 		return nil, err
@@ -235,7 +237,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	}
 
 	if !info.SizeIsDeferred && info.Size == 0 {
-		log.Debug().Interface("info", info).Msg("ocfs: finishing upload for empty file")
+		log.Debug().Interface("info", info).Msg("owncloudsql: finishing upload for empty file")
 		// no need to create info file and finish directly
 		err := u.FinishUpload(ctx)
 		if err != nil {
@@ -253,7 +255,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	return u, nil
 }
 
-func (fs *ocfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
+func (fs *owncloudsqlfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
@@ -264,7 +266,7 @@ func (fs *ocfs) getUploadPath(ctx context.Context, uploadID string) (string, err
 }
 
 // GetUpload returns the Upload for the given upload id
-func (fs *ocfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
+func (fs *owncloudsqlfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 	infoPath := filepath.Join(fs.c.UploadInfoDir, id+".info")
 
 	info := tusd.FileInfo{}
@@ -320,7 +322,7 @@ type fileUpload struct {
 	// binPath is the path to the binary file (which has no extension)
 	binPath string
 	// only fs knows how to handle metadata and versions
-	fs *ocfs
+	fs *owncloudsqlfs
 	// a context with a user
 	// TODO add logger as well?
 	ctx context.Context
@@ -375,27 +377,11 @@ func (upload *fileUpload) writeInfo() error {
 // FinishUpload finishes an upload and moves the file to the internal destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
-	/*
-		checksum := upload.info.MetaData["checksum"]
-		if checksum != "" {
-			// TODO check checksum
-			s := strings.SplitN(checksum, " ", 2)
-			if len(s) == 2 {
-				alg, hash := s[0], s[1]
-
-			}
-		}
-	*/
-
 	ip := upload.info.Storage["InternalDestination"]
 
 	// if destination exists
 	// TODO check etag with If-Match header
 	if _, err := os.Stat(ip); err == nil {
-		// copy attributes of existing file to tmp file
-		if err := upload.fs.copyMD(ip, upload.binPath); err != nil {
-			return errors.Wrap(err, "ocfs: error copying metadata from "+ip+" to "+upload.binPath)
-		}
 		// create revision
 		if err := upload.fs.archiveRevision(upload.ctx, upload.fs.getVersionsPath(upload.ctx, ip), ip); err != nil {
 			return err
@@ -412,7 +398,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		log.Err(err).Interface("info", upload.info).
 			Str("binPath", upload.binPath).
 			Str("ipath", ip).
-			Msg("ocfs: could not rename")
+			Msg("owncloudsql: could not rename")
 		return err
 	}
 
@@ -422,17 +408,21 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		return err
 	}
 
+	perms, err := strconv.Atoi(upload.info.Storage["Permissions"])
+	if err != nil {
+		return err
+	}
 	data := map[string]interface{}{
-		"path":          upload.fs.toDatabasePath(upload.ctx, ip),
+		"path":          upload.fs.toDatabasePath(ip),
 		"checksum":      fmt.Sprintf("SHA1:%032x MD5:%032x ADLER32:%032x", sha1h, md5h, adler32h),
 		"etag":          calcEtag(upload.ctx, fi),
 		"size":          upload.info.Size,
 		"mimetype":      mime.Detect(false, ip),
-		"permissions":   27, // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
+		"permissions":   perms,
 		"mtime":         upload.info.MetaData["mtime"],
 		"storage_mtime": upload.info.MetaData["mtime"],
 	}
-	_, err = upload.fs.filecache.InsertOrUpdate(upload.info.Storage["StorageId"], data)
+	_, err = upload.fs.filecache.InsertOrUpdate(upload.info.Storage["StorageId"], data, false)
 	if err != nil {
 		return err
 	}
@@ -440,7 +430,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// only delete the upload if it was successfully written to the storage
 	if err := os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
-			log.Err(err).Interface("info", upload.info).Msg("ocfs: could not delete upload info")
+			log.Err(err).Interface("info", upload.info).Msg("owncloudsql: could not delete upload info")
 			return err
 		}
 	}
@@ -453,7 +443,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the upload needs to implement Terminate
 
 // AsTerminatableUpload returns a TerminatableUpload
-func (fs *ocfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
+func (fs *owncloudsqlfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
 
@@ -477,7 +467,7 @@ func (upload *fileUpload) Terminate(ctx context.Context) error {
 // - the upload needs to implement DeclareLength
 
 // AsLengthDeclarableUpload returns a LengthDeclarableUpload
-func (fs *ocfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
+func (fs *owncloudsqlfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
 	return upload.(*fileUpload)
 }
 
@@ -493,7 +483,7 @@ func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error
 // - the upload needs to implement ConcatUploads
 
 // AsConcatableUpload returns a ConcatableUpload
-func (fs *ocfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
+func (fs *owncloudsqlfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
 	return upload.(*fileUpload)
 }
 

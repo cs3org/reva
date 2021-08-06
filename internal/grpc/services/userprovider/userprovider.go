@@ -21,10 +21,12 @@ package userprovider
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"
@@ -59,12 +61,29 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func getDriver(c *config) (user.Manager, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+func getDriver(c *config) (user.Manager, *plugin.RevaPlugin, error) {
+	p, err := plugin.Load("userprovider", c.Driver)
+	if err == nil {
+		manager, ok := p.Plugin.(user.Manager)
+		if !ok {
+			return nil, nil, fmt.Errorf("could not assert the loaded plugin")
+		}
+		pluginConfig := filepath.Base(c.Driver)
+		err = manager.Configure(c.Drivers[pluginConfig])
+		if err != nil {
+			return nil, nil, err
+		}
+		return manager, p, nil
+	} else if _, ok := err.(errtypes.NotFound); ok {
+		// plugin not found, fetch the driver from the in-memory registry
+		if f, ok := registry.NewFuncs[c.Driver]; ok {
+			mgr, err := f(c.Drivers[c.Driver])
+			return mgr, nil, err
+		}
+	} else {
+		return nil, nil, err
 	}
-
-	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
+	return nil, nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
 }
 
 // New returns a new UserProviderServiceServer.
@@ -73,22 +92,27 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	userManager, err := getDriver(c)
+	userManager, plug, err := getDriver(c)
 	if err != nil {
 		return nil, err
 	}
-
-	svc := &service{usermgr: userManager}
+	svc := &service{
+		usermgr: userManager,
+		plugin:  plug,
+	}
 
 	return svc, nil
 }
 
 type service struct {
 	usermgr user.Manager
+	plugin  *plugin.RevaPlugin
 }
 
 func (s *service) Close() error {
+	if s.plugin != nil {
+		s.plugin.Kill()
+	}
 	return nil
 }
 

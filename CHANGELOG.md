@@ -1,3 +1,424 @@
+Changelog for reva 1.11.0 (2021-08-03)
+=======================================
+
+The following sections list the changes in reva 1.11.0 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+ * Fix #1899: Fix chunked uploads for new versions
+ * Fix #1906: Fix copy over existing resource
+ * Fix #1891: Delete Shared Resources as Receiver
+ * Fix #1907: Error when creating folder with existing name
+ * Fix #1937: Do not overwrite more specific matches when finding storage providers
+ * Fix #1939: Fix the share jail permissions in the decomposedfs
+ * Fix #1932: Numerous fixes to the owncloudsql storage driver
+ * Fix #1912: Fix response when listing versions of another user
+ * Fix #1910: Get user groups recursively in the cbox rest user driver
+ * Fix #1904: Set Content-Length to 0 when swallowing body in the datagateway
+ * Fix #1911: Fix version order in propfind responses
+ * Fix #1926: Trash Bin in oCIS Storage Operations
+ * Fix #1901: Fix response code when folder doesnt exist on upload
+ * Enh #1785: Extend app registry with AddProvider method and mimetype filters
+ * Enh #1938: Add methods to get and put context values
+ * Enh #1798: Add support for a deny-all permission on references
+ * Enh #1916: Generate updated protobuf bindings for EOS GRPC
+ * Enh #1887: Add "a" and "l" filter for grappa queries
+ * Enh #1919: Run gofmt before building
+ * Enh #1927: Implement RollbackToVersion for eosgrpc (needs a newer EOS MGM)
+ * Enh #1944: Implement listing supported mime types in app registry
+ * Enh #1870: Be defensive about wrongly quoted etags
+ * Enh #1940: Reduce memory usage when uploading with S3ng storage
+ * Enh #1888: Refactoring of the webdav code
+ * Enh #1900: Check for illegal names while uploading or moving files
+ * Enh #1925: Refactor listing and statting across providers for virtual views
+
+Details
+-------
+
+ * Bugfix #1899: Fix chunked uploads for new versions
+
+   Chunked uploads didn't create a new version, when the file to upload already existed.
+
+   https://github.com/cs3org/reva/pull/1899
+
+ * Bugfix #1906: Fix copy over existing resource
+
+   When the target of a copy already exists, the existing resource will be moved to the trashbin
+   before executing the copy.
+
+   https://github.com/cs3org/reva/pull/1906
+
+ * Bugfix #1891: Delete Shared Resources as Receiver
+
+   It is now possible to delete a shared resource as a receiver and not having the data ending up in
+   the receiver's trash bin, causing a possible leak.
+
+   https://github.com/cs3org/reva/pull/1891
+
+ * Bugfix #1907: Error when creating folder with existing name
+
+   When a user tried to create a folder with the name of an existing file or folder the service didn't
+   return a response body containing the error.
+
+   https://github.com/cs3org/reva/pull/1907
+
+ * Bugfix #1937: Do not overwrite more specific matches when finding storage providers
+
+   Depending on the order of rules in the registry it could happend that more specific matches
+   (e.g. /home/Shares) were overwritten by more general ones (e.g. /home). This PR makes sure
+   that the registry always returns the most specific match.
+
+   https://github.com/cs3org/reva/pull/1937
+
+ * Bugfix #1939: Fix the share jail permissions in the decomposedfs
+
+   The share jail should be not writable
+
+   https://github.com/cs3org/reva/pull/1939
+
+ * Bugfix #1932: Numerous fixes to the owncloudsql storage driver
+
+   The owncloudsql storage driver received numerous bugfixes and cleanups.
+
+   https://github.com/cs3org/reva/pull/1932
+
+ * Bugfix #1912: Fix response when listing versions of another user
+
+   The OCS API returned the wrong response when a user tried to list the versions of another user's
+   file.
+
+   https://github.com/cs3org/reva/pull/1912
+
+ * Bugfix #1910: Get user groups recursively in the cbox rest user driver
+
+   https://github.com/cs3org/reva/pull/1910
+
+ * Bugfix #1904: Set Content-Length to 0 when swallowing body in the datagateway
+
+   When swallowing the body the Content-Lenght needs to be set to 0 to prevent proxies from reading
+   the body.
+
+   https://github.com/cs3org/reva/pull/1904
+
+ * Bugfix #1911: Fix version order in propfind responses
+
+   The order of the file versions in propfind responses was incorrect.
+
+   https://github.com/cs3org/reva/pull/1911
+
+ * Bugfix #1926: Trash Bin in oCIS Storage Operations
+
+   Support for restoring a target folder nested deep inside the trash bin in oCIS storage. The use
+   case is:
+
+   ```console curl 'https://localhost:9200/remote.php/dav/trash-bin/einstein/f1/f2' -X
+   MOVE -H 'Destination:
+   https://localhost:9200/remote.php/dav/files/einstein/destination' ```
+
+   The previous command creates the `destination` folder and moves the contents of
+   `/trash-bin/einstein/f1/f2` onto it.
+
+   Retro-compatibility in the response code with ownCloud 10. Restoring a collection to a
+   non-existent nested target is not supported and MUST return `409`. The use case is:
+
+   ```console curl 'https://localhost:9200/remote.php/dav/trash-bin/einstein/f1/f2' -X
+   MOVE -H 'Destination:
+   https://localhost:9200/remote.php/dav/files/einstein/this/does/not/exist' ```
+
+   The previous command used to return `404` instead of the expected `409` by the clients.
+
+   https://github.com/cs3org/reva/pull/1926
+
+ * Bugfix #1901: Fix response code when folder doesnt exist on upload
+
+   When a new file was uploaded to a non existent folder the response code was incorrect.
+
+   https://github.com/cs3org/reva/pull/1901
+
+ * Enhancement #1785: Extend app registry with AddProvider method and mimetype filters
+
+   https://github.com/cs3org/reva/issues/1779
+   https://github.com/cs3org/reva/pull/1785
+   https://github.com/cs3org/cs3apis/pull/131
+
+ * Enhancement #1938: Add methods to get and put context values
+
+   Added `GetKeyValues` and `PutKeyValues` methods to fetch/put values from/to context.
+
+   https://github.com/cs3org/reva/pull/1938
+
+ * Enhancement #1798: Add support for a deny-all permission on references
+
+   And implement it on the EOS storage
+
+   http://github.com/cs3org/reva/pull/1798
+
+ * Enhancement #1916: Generate updated protobuf bindings for EOS GRPC
+
+   https://github.com/cs3org/reva/pull/1916
+
+ * Enhancement #1887: Add "a" and "l" filter for grappa queries
+
+   This PR adds the namespace filters "a" and "l" for grappa queries. With no filter will look into
+   primary and e-groups, with "a" will look into primary/secondary/service/e-groups and with
+   "l" will look into lightweight accounts.
+
+   https://github.com/cs3org/reva/issues/1773
+   https://github.com/cs3org/reva/pull/1887
+
+ * Enhancement #1919: Run gofmt before building
+
+   https://github.com/cs3org/reva/pull/1919
+
+ * Enhancement #1927: Implement RollbackToVersion for eosgrpc (needs a newer EOS MGM)
+
+   https://github.com/cs3org/reva/pull/1927
+
+ * Enhancement #1944: Implement listing supported mime types in app registry
+
+   https://github.com/cs3org/reva/pull/1944
+
+ * Enhancement #1870: Be defensive about wrongly quoted etags
+
+   When ocdav renders etags it will now try to correct them to the definition as *quoted strings*
+   which do not contain `"`. This prevents double or triple quoted etags on the webdav api.
+
+   https://github.com/cs3org/reva/pull/1870
+
+ * Enhancement #1940: Reduce memory usage when uploading with S3ng storage
+
+   The memory usage could be high when uploading files using the S3ng storage. By providing the
+   actual file size when triggering `PutObject`, the overall memory usage is reduced.
+
+   https://github.com/cs3org/reva/pull/1940
+
+ * Enhancement #1888: Refactoring of the webdav code
+
+   Refactored the webdav code to make it reusable.
+
+   https://github.com/cs3org/reva/pull/1888
+
+ * Enhancement #1900: Check for illegal names while uploading or moving files
+
+   The code was not checking for invalid file names during uploads and moves.
+
+   https://github.com/cs3org/reva/pull/1900
+
+ * Enhancement #1925: Refactor listing and statting across providers for virtual views
+
+   https://github.com/cs3org/reva/pull/1925
+
+
+Changelog for reva 1.10.0 (2021-07-13)
+=======================================
+
+The following sections list the changes in reva 1.10.0 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+ * Fix #1883: Pass directories with trailing slashes to eosclient.GenerateToken
+ * Fix #1878: Improve the webdav error handling in the trashbin
+ * Fix #1884: Do not send body on failed range request
+ * Enh #1744: Add support for lightweight user types
+
+Details
+-------
+
+ * Bugfix #1883: Pass directories with trailing slashes to eosclient.GenerateToken
+
+   https://github.com/cs3org/reva/pull/1883
+
+ * Bugfix #1878: Improve the webdav error handling in the trashbin
+
+   The trashbin handles errors better now on the webdav endpoint.
+
+   https://github.com/cs3org/reva/pull/1878
+
+ * Bugfix #1884: Do not send body on failed range request
+
+   Instead of send the error in the body of a 416 response we log it. This prevents the go reverse
+   proxy from choking on it and turning it into a 502 Bad Gateway response.
+
+   https://github.com/cs3org/reva/pull/1884
+
+ * Enhancement #1744: Add support for lightweight user types
+
+   This PR adds support for assigning and consuming user type when setting/reading users. On top
+   of that, support for lightweight users is added. These users have to be restricted to accessing
+   only shares received by them, which is accomplished by expanding the existing RBAC scope.
+
+   https://github.com/cs3org/reva/pull/1744
+   https://github.com/cs3org/cs3apis/pull/120
+
+
+Changelog for reva 1.9.1 (2021-07-09)
+=======================================
+
+The following sections list the changes in reva 1.9.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+ * Fix #1843: Correct Dockerfile path for the reva CLI and alpine3.13 as builder
+ * Fix #1835: Cleanup owncloudsql driver
+ * Fix #1868: Minor fixes to the grpc/http plugin: checksum, url escaping
+ * Fix #1885: Fix template in eoshomewrapper to use context user rather than resource
+ * Fix #1833: Properly handle name collisions for deletes in the owncloud driver
+ * Fix #1874: Use the original file mtime during upload
+ * Fix #1854: Add the uid/gid to the url for eos
+ * Fix #1848: Fill in missing gid/uid number with nobody
+ * Fix #1831: Make the ocm-provider endpoint in the ocmd service unprotected
+ * Fix #1808: Use empty array in OCS Notifications endpoints
+ * Fix #1825: Raise max grpc message size
+ * Fix #1828: Send a proper XML header with error messages
+ * Chg #1828: Remove the oidc provider in order to upgrad mattn/go-sqlite3 to v1.14.7
+ * Enh #1834: Add API key to Mentix GOCDB connector
+ * Enh #1855: Minor optimization in parsing EOS ACLs
+ * Enh #1873: Update the EOS image tag to be for revad-eos image
+ * Enh #1802: Introduce list spaces
+ * Enh #1849: Add readonly interceptor
+ * Enh #1875: Simplify resource comparison
+ * Enh #1827: Support trashbin sub paths in the recycle API
+
+Details
+-------
+
+ * Bugfix #1843: Correct Dockerfile path for the reva CLI and alpine3.13 as builder
+
+   This was introduced on https://github.com/cs3org/reva/commit/117adad while porting the
+   configuration on .drone.yml to starlark.
+
+   Force golang:alpine3.13 as base image to prevent errors from Make when running on Docker
+   <20.10 as it happens on Drone
+   ref.https://gitlab.alpinelinux.org/alpine/aports/-/issues/12396
+
+   https://github.com/cs3org/reva/pull/1843
+   https://github.com/cs3org/reva/pull/1844
+   https://github.com/cs3org/reva/pull/1847
+
+ * Bugfix #1835: Cleanup owncloudsql driver
+
+   Use `owncloudsql` string when returning errors and removed copyMD as it does not need to copy
+   metadata from files.
+
+   https://github.com/cs3org/reva/pull/1835
+
+ * Bugfix #1868: Minor fixes to the grpc/http plugin: checksum, url escaping
+
+   https://github.com/cs3org/reva/pull/1868
+
+ * Bugfix #1885: Fix template in eoshomewrapper to use context user rather than resource
+
+   https://github.com/cs3org/reva/pull/1885
+
+ * Bugfix #1833: Properly handle name collisions for deletes in the owncloud driver
+
+   In the owncloud storage driver when we delete a file we append the deletion time to the file name.
+   If two fast consecutive deletes happened, the deletion time would be the same and if the two
+   files had the same name we ended up with only one file in the trashbin.
+
+   https://github.com/cs3org/reva/pull/1833
+
+ * Bugfix #1874: Use the original file mtime during upload
+
+   The decomposedfs was not using the original file mtime during uploads.
+
+   https://github.com/cs3org/reva/pull/1874
+
+ * Bugfix #1854: Add the uid/gid to the url for eos
+
+   https://github.com/cs3org/reva/pull/1854
+
+ * Bugfix #1848: Fill in missing gid/uid number with nobody
+
+   When an LDAP server does not provide numeric uid or gid properties for a user we now fall back to a
+   configurable `nobody` id (default 99).
+
+   https://github.com/cs3org/reva/pull/1848
+
+ * Bugfix #1831: Make the ocm-provider endpoint in the ocmd service unprotected
+
+   https://github.com/cs3org/reva/issues/1751
+   https://github.com/cs3org/reva/pull/1831
+
+ * Bugfix #1808: Use empty array in OCS Notifications endpoints
+
+   https://github.com/cs3org/reva/pull/1808
+
+ * Bugfix #1825: Raise max grpc message size
+
+   As a workaround for listing larger folder we raised the `MaxCallRecvMsgSize` to 10MB. This
+   should be enough for ~15k files. The proper fix is implementing ListContainerStream in the
+   gateway, but we needed a way to test the web ui with larger collections.
+
+   https://github.com/cs3org/reva/pull/1825
+
+ * Bugfix #1828: Send a proper XML header with error messages
+
+   https://github.com/cs3org/reva/pull/1828
+
+ * Change #1828: Remove the oidc provider in order to upgrad mattn/go-sqlite3 to v1.14.7
+
+   In order to upgrade mattn/go-sqlite3 to v1.14.7, the odic provider service is removed, which
+   is possible because it is not used anymore
+
+   https://github.com/cs3org/reva/pull/1828
+   https://github.com/owncloud/ocis/pull/2209
+
+ * Enhancement #1834: Add API key to Mentix GOCDB connector
+
+   The PI (programmatic interface) of the GOCDB will soon require an API key; this PR adds the
+   ability to configure this key in Mentix.
+
+   https://github.com/cs3org/reva/pull/1834
+
+ * Enhancement #1855: Minor optimization in parsing EOS ACLs
+
+   https://github.com/cs3org/reva/pull/1855
+
+ * Enhancement #1873: Update the EOS image tag to be for revad-eos image
+
+   https://github.com/cs3org/reva/pull/1873
+
+ * Enhancement #1802: Introduce list spaces
+
+   The ListStorageSpaces call now allows listing all user homes and shared resources using a
+   storage space id. The gateway will forward requests to a specific storage provider when a
+   filter by id is given. Otherwise it will query all storage providers. Results will be
+   deduplicated. Currently, only the decomposed fs storage driver implements the necessary
+   logic to demonstrate the implmentation. A new `/dav/spaces` WebDAV endpoint to directly
+   access a storage space is introduced in a separate PR.
+
+   https://github.com/cs3org/reva/pull/1802
+   https://github.com/cs3org/reva/pull/1803
+
+ * Enhancement #1849: Add readonly interceptor
+
+   The readonly interceptor could be used to configure a storageprovider in readonly mode. This
+   could be handy in some migration scenarios.
+
+   https://github.com/cs3org/reva/pull/1849
+
+ * Enhancement #1875: Simplify resource comparison
+
+   We replaced ResourceEqual with ResourceIDEqual where possible.
+
+   https://github.com/cs3org/reva/pull/1875
+
+ * Enhancement #1827: Support trashbin sub paths in the recycle API
+
+   The recycle API could only act on the root items of the trashbin. Meaning if you delete a deep
+   tree, you couldn't restore just one file from that tree but you had to restore the whole tree. Now
+   listing, restoring and purging work also for sub paths in the trashbin.
+
+   https://github.com/cs3org/reva/pull/1827
+
+
 Changelog for reva 1.9.0 (2021-06-23)
 =======================================
 

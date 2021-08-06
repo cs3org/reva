@@ -27,7 +27,7 @@ option java_multiple_files = true;
 option java_package = "io.grpc.eos.rpc";
 option java_outer_classname = "EosProto";
 option objc_class_prefix = "EOS";
-option go_package = ".;eos_grpc";
+option go_package = "github.com/cern-eos/grpc-proto/protobuf;eos_grpc";
 
 
 service Eos {
@@ -295,10 +295,12 @@ message NSRequest {
      CREATE= 0;
      PURGE = 1;
      LIST = 2;
+     GRAB = 3;
    }
    MDId id = 1;
    VERSION_CMD cmd = 2;
    int32 maxversion = 3;
+   string grabversion = 4;
   }
 
   message RecycleRequest {
@@ -360,6 +362,7 @@ message NSRequest {
     bool recursive = 3;
     ACL_TYPE type = 4;
     string rule    = 5;
+    uint32 position = 6;
   }
 
   message TokenRequest {

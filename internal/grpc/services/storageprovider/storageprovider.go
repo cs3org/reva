@@ -20,6 +20,8 @@ package storageprovider
 
 import (
 	"context"
+	"sort"
+
 	// "encoding/json"
 	"fmt"
 	"net/url"
@@ -29,6 +31,7 @@ import (
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+
 	// link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -36,6 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -90,6 +94,7 @@ func (c *config) init() {
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
+
 }
 
 type service struct {
@@ -277,7 +282,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	log.Info().Str("data-server", u.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
 	res := &provider.InitiateFileDownloadResponse{
 		Protocols: []*provider.FileDownloadProtocol{
-			&provider.FileDownloadProtocol{
+			{
 				Protocol:         "simple",
 				DownloadEndpoint: u.String(),
 				Expose:           s.conf.ExposeDataServer,
@@ -428,9 +433,48 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	}, nil
 }
 
+func hasNodeID(s *provider.StorageSpace) bool {
+	return s != nil && s.Root != nil && s.Root.OpaqueId != ""
+}
+
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+	log := appctx.GetLogger(ctx)
+	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters)
+	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "not found when listing spaces")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.NotSupported:
+			st = status.NewUnimplemented(ctx, err, "not implemented")
+		default:
+			st = status.NewInternal(ctx, err, "error listing spaces")
+		}
+		return &provider.ListStorageSpacesResponse{
+			Status: st,
+		}, nil
+	}
+
+	for i := range spaces {
+		if hasNodeID(spaces[i]) {
+			// fill in storagespace id if it is not set
+			if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
+				spaces[i].Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "!" + spaces[i].Root.OpaqueId}
+			}
+			// fill in storage id if it is not set
+			if spaces[i].Root.StorageId == "" {
+				spaces[i].Root.StorageId = s.mountID
+			}
+		} else if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
+			log.Warn().Str("service", "storageprovider").Str("driver", s.conf.Driver).Interface("space", spaces[i]).Msg("space is missing space id and root id")
+		}
+	}
+
 	return &provider.ListStorageSpacesResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("ListStorageSpaces not implemented"), "ListStorageSpaces not implemented"),
+		Status:        status.NewOK(ctx),
+		StorageSpaces: spaces,
 	}, nil
 }
 
@@ -488,6 +532,15 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		return &provider.DeleteResponse{
 			Status: status.NewInternal(ctx, errtypes.BadRequest("can't delete mount path"), "can't delete mount path"),
 		}, nil
+	}
+
+	// check DeleteRequest for any known opaque properties.
+	if req.Opaque != nil {
+		_, ok := req.Opaque.Map["deleting_shared_resource"]
+		if ok {
+			// it is a binary key; its existence signals true. Although, do not assume.
+			ctx = context.WithValue(ctx, appctx.DeletingSharedResource, true)
+		}
 	}
 
 	if err := s.storage.Delete(ctx, newRef); err != nil {
@@ -714,6 +767,8 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 		}, nil
 	}
 
+	sort.Sort(descendingMtime(revs))
+
 	res := &provider.ListFileVersionsResponse{
 		Status:   status.NewOK(ctx),
 		Versions: revs,
@@ -754,7 +809,12 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 	ctx := ss.Context()
 	log := appctx.GetLogger(ctx)
 
-	items, err := s.storage.ListRecycle(ctx)
+	ref, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return err
+	}
+
+	items, err := s.storage.ListRecycle(ctx, ref.ResourceId.OpaqueId, ref.Path)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -790,7 +850,12 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 }
 
 func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	items, err := s.storage.ListRecycle(ctx)
+	ref, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
+	key, itemPath := router.ShiftPath(ref.Path)
+	items, err := s.storage.ListRecycle(ctx, key, itemPath)
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err != nil {
 		var st *rpc.Status
@@ -816,7 +881,11 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 
 func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
-	if err := s.storage.RestoreRecycleItem(ctx, req.Key, req.RestoreRef); err != nil {
+	ref, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.storage.RestoreRecycleItem(ctx, req.Key, ref.Path, req.RestoreRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -840,7 +909,7 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
 	// if a key was sent as opaque id purge only that item
 	if req.GetRef().GetResourceId() != nil && req.GetRef().GetResourceId().OpaqueId != "" {
-		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetResourceId().OpaqueId); err != nil {
+		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetResourceId().OpaqueId, req.GetRef().Path); err != nil {
 			var st *rpc.Status
 			switch err.(type) {
 			case errtypes.IsNotFound:
@@ -903,6 +972,43 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 	res := &provider.ListGrantsResponse{
 		Status: status.NewOK(ctx),
 		Grants: grants,
+	}
+	return res, nil
+}
+
+func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.DenyGrantResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+
+	// check grantee type is valid
+	if req.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
+		return &provider.DenyGrantResponse{
+			Status: status.NewInvalid(ctx, "grantee type is invalid"),
+		}, nil
+	}
+
+	err = s.storage.DenyGrant(ctx, newRef, req.Grantee)
+	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when setting grants")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error setting grants")
+		}
+		return &provider.DenyGrantResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.DenyGrantResponse{
+		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
@@ -1129,4 +1235,18 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
 	}
 	ri.Path = path.Join(s.mountPath, ri.Path)
 	return nil
+}
+
+type descendingMtime []*provider.FileVersion
+
+func (v descendingMtime) Len() int {
+	return len(v)
+}
+
+func (v descendingMtime) Less(i, j int) bool {
+	return v[i].Mtime >= v[j].Mtime
+}
+
+func (v descendingMtime) Swap(i, j int) {
+	v[i], v[j] = v[j], v[i]
 }

@@ -40,8 +40,18 @@ type manager struct {
 
 // New returns a new user manager.
 func New(m map[string]interface{}) (user.Manager, error) {
+	mgr := &manager{}
+	err := mgr.Configure(m)
+	if err != nil {
+		return nil, err
+	}
+	return mgr, err
+}
+
+func (m *manager) Configure(ml map[string]interface{}) error {
 	cat := getUsers()
-	return &manager{catalog: cat}, nil
+	m.catalog = cat
+	return nil
 }
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
@@ -101,10 +111,11 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 
 func getUsers() map[string]*userpb.User {
 	return map[string]*userpb.User{
-		"4c510ada-c86b-4815-8820-42cdf82c3d51": &userpb.User{
+		"4c510ada-c86b-4815-8820-42cdf82c3d51": {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "einstein",
 			Groups:      []string{"sailing-lovers", "violin-haters", "physics-lovers"},
@@ -113,10 +124,11 @@ func getUsers() map[string]*userpb.User {
 			UidNumber:   123,
 			GidNumber:   987,
 		},
-		"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c": &userpb.User{
+		"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c": {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "marie",
 			Groups:      []string{"radium-lovers", "polonium-lovers", "physics-lovers"},
@@ -125,10 +137,11 @@ func getUsers() map[string]*userpb.User {
 			UidNumber:   456,
 			GidNumber:   987,
 		},
-		"932b4540-8d16-481e-8ef4-588e4b6b151c": &userpb.User{
+		"932b4540-8d16-481e-8ef4-588e4b6b151c": {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "932b4540-8d16-481e-8ef4-588e4b6b151c",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "richard",
 			Groups:      []string{"quantum-lovers", "philosophy-haters", "physics-lovers"},

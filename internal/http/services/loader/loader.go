@@ -27,7 +27,6 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/meshdirectory"
 	_ "github.com/cs3org/reva/internal/http/services/metrics"
 	_ "github.com/cs3org/reva/internal/http/services/ocmd"
-	_ "github.com/cs3org/reva/internal/http/services/oidcprovider"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
 	_ "github.com/cs3org/reva/internal/http/services/prometheus"

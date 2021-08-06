@@ -1,0 +1,5 @@
+Bugfix: fix the share jail permissions in the decomposedfs
+
+The share jail should be not writable
+
+https://github.com/cs3org/reva/pull/1939

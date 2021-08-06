@@ -353,6 +353,7 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		users = append(users, &userpb.UserId{
 			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.CN),
 			Idp:      m.c.Idp,
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		})
 	}
 

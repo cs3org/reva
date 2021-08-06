@@ -105,9 +105,18 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns a user manager implementation that connects to a LDAP server to provide user metadata.
 func New(m map[string]interface{}) (user.Manager, error) {
-	c, err := parseConfig(m)
+	mgr := &manager{}
+	err := mgr.Configure(m)
 	if err != nil {
 		return nil, err
+	}
+	return mgr, nil
+}
+
+func (m *manager) Configure(ml map[string]interface{}) error {
+	c, err := parseConfig(ml)
+	if err != nil {
+		return err
 	}
 
 	// backwards compatibility
@@ -121,22 +130,18 @@ func New(m map[string]interface{}) (user.Manager, error) {
 		c.Nobody = 99
 	}
 
-	mgr := &manager{
-		c: c,
-	}
-
-	mgr.userfilter, err = template.New("uf").Funcs(sprig.TxtFuncMap()).Parse(c.UserFilter)
+	m.c = c
+	m.userfilter, err = template.New("uf").Funcs(sprig.TxtFuncMap()).Parse(c.UserFilter)
 	if err != nil {
 		err := errors.Wrap(err, fmt.Sprintf("error parsing userfilter tpl:%s", c.UserFilter))
 		panic(err)
 	}
-	mgr.groupfilter, err = template.New("gf").Funcs(sprig.TxtFuncMap()).Parse(c.GroupFilter)
+	m.groupfilter, err = template.New("gf").Funcs(sprig.TxtFuncMap()).Parse(c.GroupFilter)
 	if err != nil {
 		err := errors.Wrap(err, fmt.Sprintf("error parsing groupfilter tpl:%s", c.GroupFilter))
 		panic(err)
 	}
-
-	return mgr, nil
+	return nil
 }
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
@@ -176,6 +181,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	id := &userpb.UserId{
 		Idp:      m.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
 	groups, err := m.GetUserGroups(ctx, id)
 	if err != nil {
@@ -263,6 +269,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	id := &userpb.UserId{
 		Idp:      m.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
 	groups, err := m.GetUserGroups(ctx, id)
 	if err != nil {
@@ -331,6 +338,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		id := &userpb.UserId{
 			Idp:      m.c.Idp,
 			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.UID),
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		}
 		groups, err := m.GetUserGroups(ctx, id)
 		if err != nil {
