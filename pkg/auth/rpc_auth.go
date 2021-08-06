@@ -23,9 +23,10 @@ import (
 	"net/rpc"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/plugin"
+	"github.com/cs3org/reva/pkg/token"
+	user "github.com/cs3org/reva/pkg/user"
 	hcplugin "github.com/hashicorp/go-plugin"
 )
 
@@ -74,21 +75,21 @@ func (m *RPCClient) Configure(ml map[string]interface{}) error {
 
 // AuthenticateArgs for RPC
 type AuthenticateArgs struct {
-	Ctx          map[interface{}]interface{}
+	Ctx          *plugin.Ctx
 	ClientID     string
 	ClientSecret string
 }
 
 // AuthenticateReply for RPC
 type AuthenticateReply struct {
-	User  *user.User
+	User  *userpb.User
 	Auth  map[string]*authpb.Scope
 	Error error
 }
 
 // Authenticate RPCClient Authenticate method
-func (m *RPCClient) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
-	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
+func (m *RPCClient) Authenticate(ctx context.Context, clientID, clientSecret string) (*userpb.User, map[string]*authpb.Scope, error) {
+	ctxVal := plugin.GetContextKV(ctx)
 	args := AuthenticateArgs{Ctx: ctxVal, ClientID: clientID, ClientSecret: clientSecret}
 	reply := AuthenticateReply{}
 	err := m.Client.Call("Plugin.Authenticate", args, &reply)
@@ -112,7 +113,18 @@ func (m *RPCServer) Configure(args ConfigureArg, resp *ConfigureReply) error {
 
 // Authenticate RPCServer Authenticate method
 func (m *RPCServer) Authenticate(args AuthenticateArgs, resp *AuthenticateReply) error {
-	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
+	ctx := setContext(args.Ctx.Token, args.Ctx.User)
 	resp.User, resp.Auth, resp.Error = m.Impl.Authenticate(ctx, args.ClientID, args.ClientSecret)
 	return nil
+}
+
+func setContext(ctxToken []string, userCtx []*userpb.User) context.Context {
+	ctx := context.Background()
+	for _, u := range userCtx {
+		ctx = user.ContextSetUser(ctx, u)
+	}
+	for _, tkn := range ctxToken {
+		ctx = token.ContextSetToken(ctx, tkn)
+	}
+	return ctx
 }

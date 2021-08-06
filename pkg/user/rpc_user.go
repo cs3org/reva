@@ -20,17 +20,15 @@ package user
 
 import (
 	"context"
-	"encoding/gob"
 	"net/rpc"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/plugin"
+	"github.com/cs3org/reva/pkg/token"
 	hcplugin "github.com/hashicorp/go-plugin"
 )
 
 func init() {
-	gob.Register(&userpb.User{})
 	plugin.Register("userprovider", &ProviderPlugin{})
 }
 
@@ -75,7 +73,7 @@ func (m *RPCClient) Configure(ml map[string]interface{}) error {
 
 // GetUserArg for RPC
 type GetUserArg struct {
-	Ctx map[interface{}]interface{}
+	Ctx *plugin.Ctx
 	UID *userpb.UserId
 }
 
@@ -87,7 +85,7 @@ type GetUserReply struct {
 
 // GetUser RPCClient GetUser method
 func (m *RPCClient) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
-	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
+	ctxVal := plugin.GetContextKV(ctx)
 	args := GetUserArg{Ctx: ctxVal, UID: uid}
 	resp := GetUserReply{}
 	err := m.Client.Call("Plugin.GetUser", args, &resp)
@@ -99,7 +97,7 @@ func (m *RPCClient) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.Us
 
 // GetUserByClaimArg for RPC
 type GetUserByClaimArg struct {
-	Ctx   map[interface{}]interface{}
+	Ctx   *plugin.Ctx
 	Claim string
 	Value string
 }
@@ -112,7 +110,7 @@ type GetUserByClaimReply struct {
 
 // GetUserByClaim RPCClient GetUserByClaim method
 func (m *RPCClient) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
-	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
+	ctxVal := plugin.GetContextKV(ctx)
 	args := GetUserByClaimArg{Ctx: ctxVal, Claim: claim, Value: value}
 	resp := GetUserByClaimReply{}
 	err := m.Client.Call("Plugin.GetUserByClaim", args, &resp)
@@ -124,7 +122,7 @@ func (m *RPCClient) GetUserByClaim(ctx context.Context, claim, value string) (*u
 
 // GetUserGroupsArg for RPC
 type GetUserGroupsArg struct {
-	Ctx  map[interface{}]interface{}
+	Ctx  *plugin.Ctx
 	User *userpb.UserId
 }
 
@@ -136,7 +134,7 @@ type GetUserGroupsReply struct {
 
 // GetUserGroups RPCClient GetUserGroups method
 func (m *RPCClient) GetUserGroups(ctx context.Context, user *userpb.UserId) ([]string, error) {
-	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
+	ctxVal := plugin.GetContextKV(ctx)
 	args := GetUserGroupsArg{Ctx: ctxVal, User: user}
 	resp := GetUserGroupsReply{}
 	err := m.Client.Call("Plugin.GetUserGroups", args, &resp)
@@ -148,7 +146,7 @@ func (m *RPCClient) GetUserGroups(ctx context.Context, user *userpb.UserId) ([]s
 
 // FindUsersArg for RPC
 type FindUsersArg struct {
-	Ctx   map[interface{}]interface{}
+	Ctx   *plugin.Ctx
 	Query string
 }
 
@@ -160,7 +158,7 @@ type FindUsersReply struct {
 
 // FindUsers RPCClient FindUsers method
 func (m *RPCClient) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
-	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
+	ctxVal := plugin.GetContextKV(ctx)
 	args := FindUsersArg{Ctx: ctxVal, Query: query}
 	resp := FindUsersReply{}
 	err := m.Client.Call("Plugin.FindUsers", args, &resp)
@@ -184,28 +182,39 @@ func (m *RPCServer) Configure(args ConfigureArg, resp *ConfigureReply) error {
 
 // GetUser RPCServer GetUser method
 func (m *RPCServer) GetUser(args GetUserArg, resp *GetUserReply) error {
-	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
+	ctx := setContext(args.Ctx.Token, args.Ctx.User)
 	resp.User, resp.Err = m.Impl.GetUser(ctx, args.UID)
 	return nil
 }
 
 // GetUserByClaim RPCServer GetUserByClaim method
 func (m *RPCServer) GetUserByClaim(args GetUserByClaimArg, resp *GetUserByClaimReply) error {
-	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
+	ctx := setContext(args.Ctx.Token, args.Ctx.User)
 	resp.User, resp.Err = m.Impl.GetUserByClaim(ctx, args.Claim, args.Value)
 	return nil
 }
 
 // GetUserGroups RPCServer GetUserGroups method
 func (m *RPCServer) GetUserGroups(args GetUserGroupsArg, resp *GetUserGroupsReply) error {
-	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
+	ctx := setContext(args.Ctx.Token, args.Ctx.User)
 	resp.Group, resp.Err = m.Impl.GetUserGroups(ctx, args.User)
 	return nil
 }
 
 // FindUsers RPCServer FindUsers method
 func (m *RPCServer) FindUsers(args FindUsersArg, resp *FindUsersReply) error {
-	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
+	ctx := setContext(args.Ctx.Token, args.Ctx.User)
 	resp.User, resp.Err = m.Impl.FindUsers(ctx, args.Query)
 	return nil
+}
+
+func setContext(ctxToken []string, user []*userpb.User) context.Context {
+	ctx := context.Background()
+	for _, u := range user {
+		ctx = ContextSetUser(ctx, u)
+	}
+	for _, tkn := range ctxToken {
+		ctx = token.ContextSetToken(ctx, tkn)
+	}
+	return ctx
 }

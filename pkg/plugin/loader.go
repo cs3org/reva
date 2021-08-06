@@ -20,6 +20,7 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,6 +28,7 @@ import (
 	"regexp"
 
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/hashicorp/go-getter"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 )
@@ -40,6 +42,8 @@ type RevaPlugin struct {
 const dirname = "/var/tmp/reva"
 
 var isAlphaNum = regexp.MustCompile(`^[A-Za-z0-9]+$`).MatchString
+
+var isURL = regexp.MustCompile(`^(www\.)?[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$`).MatchString
 
 // Kill kills the plugin process
 func (plug *RevaPlugin) Kill() {
@@ -57,6 +61,7 @@ func compile(pluginType string, path string) (string, error) {
 	binaryPath := filepath.Join(dirname, "bin", pluginType, filepath.Base(path))
 	command := fmt.Sprintf("go build -o %s %s", binaryPath, path)
 	cmd := exec.Command("bash", "-c", command)
+	cmd.Dir = path
 	cmd.Stderr = &errb
 	err := cmd.Run()
 	if err != nil {
@@ -82,14 +87,48 @@ func checkDirAndCompile(pluginType, driver string) (string, error) {
 	return bin, nil
 }
 
+// downloadPlugin downloads the plugin and stores it into local filesystem
+func downloadAndCompilePlugin(pluginType, driver string) (string, error) {
+	destination := fmt.Sprintf("%s/ext/%s/%s", dirname, pluginType, filepath.Base(driver))
+	client := &getter.Client{
+		Ctx:  context.Background(),
+		Dst:  destination,
+		Src:  driver,
+		Mode: getter.ClientModeDir,
+	}
+	if err := client.Get(); err != nil {
+		return "", err
+	}
+	bin, err := compile(pluginType, destination)
+	if err != nil {
+		return "", nil
+	}
+	return bin, nil
+}
+
+// isValidURL tests a string to determine if it is a well-structure URL
+func isValidURL(driver string) bool {
+	return isURL(driver)
+}
+
 // Load loads the plugin using the hashicorp go-plugin system
 func Load(pluginType, driver string) (*RevaPlugin, error) {
+	var bin string
+	var err error
 	if isAlphaNum(driver) {
 		return nil, errtypes.NotFound(driver)
 	}
-	bin, err := checkDirAndCompile(pluginType, driver)
-	if err != nil {
-		return nil, err
+
+	if isValidURL(driver) {
+		bin, err = downloadAndCompilePlugin(pluginType, driver)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		bin, err = checkDirAndCompile(pluginType, driver)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	logger := hclog.New(&hclog.LoggerOptions{
