@@ -274,62 +274,62 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		Interface("reqShare", reqShare).
 		Msg("sharesstorageprovider: Got InitiateFileUpload request")
 
-	if reqShare != "" {
-		statRes, err := s.statShare(ctx, reqShare)
-		if err != nil {
-			if statRes != nil {
-				return &provider.InitiateFileUploadResponse{
-					Status: statRes.Status,
-				}, err
-			}
-			return &provider.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "sharesstorageprovider: error stating the requested share"),
-			}, nil
-		}
-		gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
-			Ref: &provider.Reference{
-				Path: filepath.Join(statRes.Info.Path, reqPath),
-			},
-			Opaque: req.Opaque,
-		})
-		if err != nil {
-			return &provider.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileDownload"),
-			}, nil
-		}
-
-		if gwres.Status.Code != rpc.Code_CODE_OK {
-			return &provider.InitiateFileUploadResponse{
-				Status: gwres.Status,
-			}, nil
-		}
-
-		protocols := []*provider.FileUploadProtocol{}
-		for p := range gwres.Protocols {
-			if !strings.HasSuffix(gwres.Protocols[p].UploadEndpoint, "/") {
-				gwres.Protocols[p].UploadEndpoint += "/"
-			}
-			gwres.Protocols[p].UploadEndpoint += gwres.Protocols[p].Token
-
-			protocols = append(protocols, &provider.FileUploadProtocol{
-				Opaque:             gwres.Protocols[p].Opaque,
-				Protocol:           gwres.Protocols[p].Protocol,
-				UploadEndpoint:     gwres.Protocols[p].UploadEndpoint,
-				AvailableChecksums: gwres.Protocols[p].AvailableChecksums,
-				Expose:             true, // the gateway already has encoded the upload endpoint
-			})
-		}
-
+	if reqShare == "" {
 		return &provider.InitiateFileUploadResponse{
-			Status:    gwres.Status,
-			Protocols: protocols,
+			Status: status.NewInvalidArg(ctx, "sharesstorageprovider: can not upload directly to the shares folder"),
 		}, nil
 	}
 
-	return &provider.InitiateFileUploadResponse{
-		Status: status.NewInvalidArg(ctx, "sharesstorageprovider: can not upload directly to the shares folder"),
-	}, nil
+	statRes, err := s.statShare(ctx, reqShare)
+	if err != nil {
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "sharesstorageprovider: error stating the requested share"),
+		}, nil
+	}
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		return &provider.InitiateFileUploadResponse{
+			Status: statRes.Status,
+		}, nil
+	}
 
+	gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
+		Ref: &provider.Reference{
+			Path: filepath.Join(statRes.Info.Path, reqPath),
+		},
+		Opaque: req.Opaque,
+	})
+	if err != nil {
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileDownload"),
+		}, nil
+	}
+
+	if gwres.Status.Code != rpc.Code_CODE_OK {
+		return &provider.InitiateFileUploadResponse{
+			Status: gwres.Status,
+		}, nil
+	}
+
+	protocols := []*provider.FileUploadProtocol{}
+	for p := range gwres.Protocols {
+		if !strings.HasSuffix(gwres.Protocols[p].UploadEndpoint, "/") {
+			gwres.Protocols[p].UploadEndpoint += "/"
+		}
+		gwres.Protocols[p].UploadEndpoint += gwres.Protocols[p].Token
+
+		protocols = append(protocols, &provider.FileUploadProtocol{
+			Opaque:             gwres.Protocols[p].Opaque,
+			Protocol:           gwres.Protocols[p].Protocol,
+			UploadEndpoint:     gwres.Protocols[p].UploadEndpoint,
+			AvailableChecksums: gwres.Protocols[p].AvailableChecksums,
+			Expose:             true, // the gateway already has encoded the upload endpoint
+		})
+	}
+
+	return &provider.InitiateFileUploadResponse{
+		Status:    gwres.Status,
+		Protocols: protocols,
+	}, nil
 }
 
 func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
