@@ -7,11 +7,13 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
+// Ctx represents context to be passed to the plugins
 type Ctx struct {
 	User  []*userpb.User
 	Token []string
 }
 
+// GetContextKV retrieves context KV pairs and stores it into Ctx
 func GetContextKV(ctx context.Context) *Ctx {
 	ctxVal := &Ctx{}
 	m := appctx.GetKeyValuesFromCtx(ctx)
