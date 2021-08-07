@@ -9,7 +9,7 @@ address = "0.0.0.0:19000"
 userprovidersvc = "localhost:19000"
 
 [grpc.services.userprovider]
-driver = "github.com/jimil749/json"
+driver = "https://github.com/jimil749/json"
 
 [grpc.services.userprovider.drivers.json]
 users = "users.demo.json"

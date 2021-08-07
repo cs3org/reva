@@ -22,10 +22,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/hashicorp/go-getter"
@@ -42,8 +44,6 @@ type RevaPlugin struct {
 const dirname = "/var/tmp/reva"
 
 var isAlphaNum = regexp.MustCompile(`^[A-Za-z0-9]+$`).MatchString
-
-var isURL = regexp.MustCompile(`^(www\.)?[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$`).MatchString
 
 // Kill kills the plugin process
 func (plug *RevaPlugin) Kill() {
@@ -89,11 +89,12 @@ func checkDirAndCompile(pluginType, driver string) (string, error) {
 
 // downloadPlugin downloads the plugin and stores it into local filesystem
 func downloadAndCompilePlugin(pluginType, driver string) (string, error) {
+	driverURL := strings.TrimPrefix(driver, "https://")
 	destination := fmt.Sprintf("%s/ext/%s/%s", dirname, pluginType, filepath.Base(driver))
 	client := &getter.Client{
 		Ctx:  context.Background(),
 		Dst:  destination,
-		Src:  driver,
+		Src:  driverURL,
 		Mode: getter.ClientModeDir,
 	}
 	if err := client.Get(); err != nil {
@@ -108,7 +109,17 @@ func downloadAndCompilePlugin(pluginType, driver string) (string, error) {
 
 // isValidURL tests a string to determine if it is a well-structure URL
 func isValidURL(driver string) bool {
-	return isURL(driver)
+	_, err := url.ParseRequestURI(driver)
+	if err != nil {
+		return false
+	}
+
+	u, err := url.Parse(driver)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return false
+	}
+
+	return true
 }
 
 // Load loads the plugin using the hashicorp go-plugin system
