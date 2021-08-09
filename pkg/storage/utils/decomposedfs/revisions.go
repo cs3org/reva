@@ -197,7 +197,12 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 			return
 		}
 
-		return fs.copyMD(revisionPath, nodePath)
+		err = fs.copyMD(revisionPath, nodePath)
+		if err != nil {
+			return
+		}
+
+		return fs.tp.Propagate(ctx, n)
 	}
 
 	log.Error().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("original node does not exist")

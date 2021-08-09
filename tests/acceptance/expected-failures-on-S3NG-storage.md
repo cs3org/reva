@@ -16,9 +16,6 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -    [apiVersions/fileVersions.feature:455](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L455)
 -    [apiVersions/fileVersionsSharingToShares.feature:301](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L301)
 
-#### [Implement Versions Feature for ocis storage](https://github.com/owncloud/product/issues/210)
--   [apiWebdavEtagPropagation2/restoreVersion.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreVersion.feature#L10)
-
 #### [Getting information about a folder overwritten by a file gives 500 error instead of 404](https://github.com/owncloud/ocis/issues/1239)
 -   [apiWebdavProperties1/copyFile.feature:226](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L226)
 -   [apiWebdavProperties1/copyFile.feature:227](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L227)
