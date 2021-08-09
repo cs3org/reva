@@ -47,9 +47,9 @@ type Config struct {
 func (c *Config) init() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 
-	if c.Prefix == "" {
-		c.Prefix = "ocm"
-	}
+	// if c.Prefix == "" {
+	// 	c.Prefix = "ocm"
+	// }
 }
 
 type svc struct {
