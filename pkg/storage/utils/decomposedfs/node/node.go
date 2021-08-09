@@ -270,10 +270,12 @@ func (n *Node) Parent() (p *Node, err error) {
 
 // Owner returns the cached owner id or reads it from the extended attributes
 // TODO can be private as only the AsResourceInfo uses it
-func (n *Node) Owner() (o *userpb.UserId, err error) {
+func (n *Node) Owner() (*userpb.UserId, error) {
 	if n.owner != nil {
 		return n.owner, nil
 	}
+
+	owner := &userpb.UserId{}
 
 	// FIXME ... do we return the owner of the reference or the owner of the target?
 	// we don't really know the owner of the target ... and as the reference may point anywhere we cannot really find out
@@ -282,33 +284,42 @@ func (n *Node) Owner() (o *userpb.UserId, err error) {
 	nodePath := n.InternalPath()
 	// lookup parent id in extended attributes
 	var attrBytes []byte
+	var err error
 	// lookup ID in extended attributes
-	if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDAttr); err == nil {
-		if n.owner == nil {
-			n.owner = &userpb.UserId{}
-		}
-		n.owner.OpaqueId = string(attrBytes)
-	} else {
-		return
+	attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDAttr)
+	switch {
+	case err == nil:
+		owner.OpaqueId = string(attrBytes)
+	case isNoData(err), isNotFound(err):
+		fallthrough
+	default:
+		return nil, err
 	}
+
 	// lookup IDP in extended attributes
-	if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDPAttr); err == nil {
-		if n.owner == nil {
-			n.owner = &userpb.UserId{}
-		}
-		n.owner.Idp = string(attrBytes)
-	} else {
-		return
+	attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDPAttr)
+	switch {
+	case err == nil:
+		owner.Idp = string(attrBytes)
+	case isNoData(err), isNotFound(err):
+		fallthrough
+	default:
+		return nil, err
 	}
+
 	// lookup type in extended attributes
-	if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerTypeAttr); err == nil {
-		if n.owner == nil {
-			n.owner = &userpb.UserId{}
-		}
-		n.owner.Type = utils.UserTypeMap(string(attrBytes))
-	} else {
-		return
+	attrBytes, err = xattr.Get(nodePath, xattrs.OwnerTypeAttr)
+	switch {
+	case err == nil:
+		owner.Type = utils.UserTypeMap(string(attrBytes))
+	case isNoData(err), isNotFound(err):
+		fallthrough
+	default:
+		// TODO the user type defaults to invalid, which is the case
+		err = nil
 	}
+
+	n.owner = owner
 	return n.owner, err
 }
 
