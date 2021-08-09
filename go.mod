@@ -28,7 +28,7 @@ require (
 	github.com/golang/mock v1.4.4 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/gomodule/redigo v1.8.5
-	github.com/google/go-cmp v0.5.5
+	github.com/google/go-cmp v0.5.6
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/google/uuid v1.3.0
@@ -42,7 +42,6 @@ require (
 	github.com/minio/minio-go/v7 v7.0.12
 	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.1
-	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.14.0
 	github.com/pkg/errors v0.9.1
