@@ -4,6 +4,7 @@
 Basic file management like up and download, move, copy, properties, quota, trash, versions and chunking.
 
 #### [invalid webdav responses for unauthorized requests.](https://github.com/owncloud/product/issues/273)
+These tests succeed when running against ocis because there we handle the relevant authentication in the proxy.
 -   [apiTrashbin/trashbinFilesFolders.feature:200](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L200)
 -   [apiTrashbin/trashbinFilesFolders.feature:201](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L201)
 -   [apiTrashbin/trashbinFilesFolders.feature:215](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L215)
@@ -15,6 +16,7 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiWebdavEtagPropagation2/restoreVersion.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreVersion.feature#L10)
 
 #### [Getting information about a folder overwritten by a file gives 500 error instead of 404](https://github.com/owncloud/ocis/issues/1239)
+These tests are about overwriting files or folders in the `Shares` folder of a user.
 -   [apiWebdavProperties1/copyFile.feature:226](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L226)
 -   [apiWebdavProperties1/copyFile.feature:227](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L227)
 -   [apiWebdavProperties1/copyFile.feature:244](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L244)
@@ -375,6 +377,7 @@ These tests fail because we currently can't differentiate between exact matches 
 -   [apiShareManagementToShares/acceptShares.feature:261](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L261)
 
 #### [sharing with group not available](https://github.com/owncloud/product/issues/293)
+The first two tests work against ocis. There must be something wrong in the CI setup.
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:467](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L467)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:468](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L468)
 -   [apiShareManagementToShares/mergeShare.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L89)
