@@ -78,6 +78,8 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	s.InvitesHandler = new(invitesHandler)
 	s.SharesHandler.init(s.Conf)
 	s.NotificationsHandler.init(s.Conf)
+	log.Debug().Str("initializing ConfigHandler Host", s.Conf.Host)
+
 	s.ConfigHandler.init(s.Conf)
 	s.InvitesHandler.init(s.Conf)
 
