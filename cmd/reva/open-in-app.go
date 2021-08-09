@@ -26,6 +26,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -54,7 +55,7 @@ func openInAppCommand() *command {
 		}
 		path := cmd.Args()[0]
 
-		vm := getViewMode(*viewMode)
+		vm := utils.GetViewMode(*viewMode)
 
 		client, err := getClient()
 		if err != nil {
@@ -91,17 +92,4 @@ func openInAppCommand() *command {
 		return nil
 	}
 	return cmd
-}
-
-func getViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
-	switch viewMode {
-	case "view":
-		return gateway.OpenInAppRequest_VIEW_MODE_VIEW_ONLY
-	case "read":
-		return gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
-	case "write":
-		return gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
-	default:
-		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
-	}
 }

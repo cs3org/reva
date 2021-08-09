@@ -23,9 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -39,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -112,30 +111,6 @@ func (s *svc) Handler() http.Handler {
 	})
 }
 
-// WopiResponse holds the various fields to be returned for a wopi open call
-type WopiResponse struct {
-	WopiClientURL  string `json:"wopiclienturl"`
-	AccessToken    string `json:"accesstoken"`
-	AccessTokenTTL int64  `json:"accesstokenttl"`
-}
-
-func filterAppsByUserAgent(mimeTypes map[string]*appregistry.AppProviderList, userAgent string) {
-	ua := ua.Parse(userAgent)
-	if ua.Desktop {
-		return
-	}
-
-	for m, providers := range mimeTypes {
-		apps := []*appregistry.ProviderInfo{}
-		for _, p := range providers.AppProviders {
-			if !p.DesktopOnly {
-				apps = append(apps, p)
-			}
-		}
-		mimeTypes[m] = &appregistry.AppProviderList{AppProviders: apps}
-	}
-}
-
 func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -182,15 +157,16 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, errCode, err := s.getStatInfo(ctx, r.URL.Query().Get("fileId"), client)
+	info, errCode, err := s.getStatInfo(ctx, r.URL.Query().Get("file_id"), client)
 	if err != nil {
 		ocmd.WriteError(w, r, errCode, "error statting file", err)
+		return
 	}
 
 	openReq := gateway.OpenInAppRequest{
 		Ref:      &provider.Reference{ResourceId: info.Id},
-		ViewMode: getViewMode(info),
-		App:      r.URL.Query().Get("app"),
+		ViewMode: getViewMode(info, r.URL.Query().Get("view_mode")),
+		App:      r.URL.Query().Get("app_name"),
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)
 	if err != nil {
@@ -202,32 +178,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := url.Parse(openRes.AppUrl.AppUrl)
-	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error parsing app URL", err)
-		return
-	}
-	q := u.Query()
-
-	// remove access token from query parameters
-	accessToken := q.Get("access_token")
-	q.Del("access_token")
-
-	// more options used by oC 10:
-	// &lang=en-GB
-	// &closebutton=1
-	// &revisionhistory=1
-	// &title=Hello.odt
-	u.RawQuery = q.Encode()
-
-	js, err := json.Marshal(
-		WopiResponse{
-			WopiClientURL: u.String(),
-			AccessToken:   accessToken,
-			// https://wopi.readthedocs.io/projects/wopirest/en/latest/concepts.html#term-access-token-ttl
-			AccessTokenTTL: time.Now().Add(time.Second*time.Duration(s.conf.AccessTokenTTL)).UnixNano() / 1e6,
-		},
-	)
+	js, err := json.Marshal(openRes.AppUrl)
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
 		return
@@ -237,6 +188,23 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	if _, err = w.Write(js); err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error writing JSON response", err)
 		return
+	}
+}
+
+func filterAppsByUserAgent(mimeTypes map[string]*appregistry.AppProviderList, userAgent string) {
+	ua := ua.Parse(userAgent)
+	if ua.Desktop {
+		return
+	}
+
+	for m, providers := range mimeTypes {
+		apps := []*appregistry.ProviderInfo{}
+		for _, p := range providers.AppProviders {
+			if !p.DesktopOnly {
+				apps = append(apps, p)
+			}
+		}
+		mimeTypes[m] = &appregistry.AppProviderList{AppProviders: apps}
 	}
 }
 
@@ -276,7 +244,11 @@ func (s *svc) getStatInfo(ctx context.Context, fileID string, client gateway.Gat
 	return statRes.Info, ocmd.APIErrorCode(""), nil
 }
 
-func getViewMode(res *provider.ResourceInfo) gateway.OpenInAppRequest_ViewMode {
+func getViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
+	if vm != "" {
+		return utils.GetViewMode(vm)
+	}
+
 	var viewMode gateway.OpenInAppRequest_ViewMode
 	canEdit := res.PermissionSet.InitiateFileUpload
 	canView := res.PermissionSet.InitiateFileDownload
