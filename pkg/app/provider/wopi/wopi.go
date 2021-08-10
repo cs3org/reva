@@ -170,8 +170,8 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	defer openRes.Body.Close()
 
-	if openRes.StatusCode != http.StatusFound {
-		return nil, errors.Wrap(err, "wopi: unexpected status from WOPI server: "+openRes.Status)
+	if openRes.StatusCode != http.StatusOK {
+		return nil, errtypes.InternalError("wopi: unexpected status from WOPI server: " + openRes.Status)
 	}
 
 	body, err := ioutil.ReadAll(openRes.Body)
@@ -191,13 +191,25 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 
 	appFullURL := result["app-url"].(string)
-	formParams := result["form-parameters"].(map[string]string)
-	formParams["access_token_ttl"] = tokenTTL
+
+	// Depending on whether wopi server returned any form parameters or not,
+	// we decide whether the request method is POST or GET
+	var formParams map[string]string
+	method := "GET"
+	if form, ok := result["form-parameters"].(map[string]interface{}); ok {
+		if tkn, ok := form["access_token"].(string); ok {
+			formParams = map[string]string{
+				"access_token":     tkn,
+				"access_token_ttl": tokenTTL,
+			}
+			method = "POST"
+		}
+	}
 
 	log.Info().Msg(fmt.Sprintf("wopi: returning app URL %s", appFullURL))
 	return &appprovider.OpenInAppURL{
 		AppUrl:         appFullURL,
-		Method:         "POST",
+		Method:         method,
 		FormParameters: formParams,
 	}, nil
 }

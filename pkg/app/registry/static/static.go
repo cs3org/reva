@@ -154,11 +154,13 @@ func (b *reg) ListSupportedMimeTypes(ctx context.Context) (map[string]*registryp
 
 	mimeTypes := make(map[string]*registrypb.AppProviderList)
 	for _, p := range b.providers {
+		t := *p
+		t.MimeTypes = nil
 		for _, m := range p.MimeTypes {
 			if _, ok := mimeTypes[m]; ok {
-				mimeTypes[m].AppProviders = append(mimeTypes[m].AppProviders, p)
+				mimeTypes[m].AppProviders = append(mimeTypes[m].AppProviders, &t)
 			} else {
-				mimeTypes[m] = &registrypb.AppProviderList{AppProviders: []*registrypb.ProviderInfo{p}}
+				mimeTypes[m] = &registrypb.AppProviderList{AppProviders: []*registrypb.ProviderInfo{&t}}
 			}
 		}
 	}
