@@ -21,6 +21,7 @@ package static
 import (
 	"context"
 	"strings"
+	"sync"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
@@ -65,6 +66,7 @@ type mimeTypeIndex struct {
 type reg struct {
 	providers map[string]*registrypb.ProviderInfo
 	mimetypes map[string]*mimeTypeIndex // map the mime type to the addresses of the corresponding providers
+	sync.RWMutex
 }
 
 // New returns an implementation of the app.Registry interface.
@@ -99,6 +101,9 @@ func (b *reg) FindProviders(ctx context.Context, mimeType string) ([]*registrypb
 	// find longest match
 	var match string
 
+	b.RLock()
+	defer b.RUnlock()
+
 	for prefix := range b.mimetypes {
 		if strings.HasPrefix(mimeType, prefix) && len(prefix) > len(match) {
 			match = prefix
@@ -117,6 +122,9 @@ func (b *reg) FindProviders(ctx context.Context, mimeType string) ([]*registrypb
 }
 
 func (b *reg) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error {
+	b.Lock()
+	defer b.Unlock()
+
 	b.providers[p.Address] = p
 
 	for _, m := range p.MimeTypes {
@@ -130,6 +138,9 @@ func (b *reg) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error
 }
 
 func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+	b.RLock()
+	defer b.RUnlock()
+
 	providers := make([]*registrypb.ProviderInfo, 0, len(b.providers))
 	for _, p := range b.providers {
 		providers = append(providers, p)
@@ -138,6 +149,9 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 }
 
 func (b *reg) ListSupportedMimeTypes(ctx context.Context) (map[string]*registrypb.AppProviderList, error) {
+	b.RLock()
+	defer b.RUnlock()
+
 	mimeTypes := make(map[string]*registrypb.AppProviderList)
 	for _, p := range b.providers {
 		for _, m := range p.MimeTypes {
@@ -152,6 +166,9 @@ func (b *reg) ListSupportedMimeTypes(ctx context.Context) (map[string]*registryp
 }
 
 func (b *reg) SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registrypb.ProviderInfo) error {
+	b.Lock()
+	defer b.Unlock()
+
 	_, ok := b.mimetypes[mimeType]
 	if ok {
 		b.mimetypes[mimeType].defaultApp = p.Address
@@ -173,6 +190,9 @@ func (b *reg) SetDefaultProviderForMimeType(ctx context.Context, mimeType string
 }
 
 func (b *reg) GetDefaultProviderForMimeType(ctx context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
+	b.RLock()
+	defer b.RUnlock()
+
 	_, ok := b.mimetypes[mimeType]
 	if ok {
 		p, ok := b.providers[b.mimetypes[mimeType].defaultApp]
