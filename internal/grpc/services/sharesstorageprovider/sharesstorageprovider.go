@@ -42,7 +42,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-//go:generate mockery -name GatewayClient -name ReceivedSharesLister
+//go:generate mockery -name GatewayClient -name SharesProviderClient
 
 // GatewayClient describe the interface of a gateway client
 type GatewayClient interface {
@@ -59,9 +59,10 @@ type GatewayClient interface {
 	UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest, opts ...grpc.CallOption) (*provider.UnsetArbitraryMetadataResponse, error)
 }
 
-// ReceivedSharesLister lists received shares
-type ReceivedSharesLister interface {
+// SharesProviderClient provides methods for listing and modifying received shares
+type SharesProviderClient interface {
 	ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest, opts ...grpc.CallOption) (*collaboration.ListReceivedSharesResponse, error)
+	UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest, opts ...grpc.CallOption) (*collaboration.UpdateReceivedShareResponse, error)
 }
 
 func init() {
@@ -77,7 +78,7 @@ type config struct {
 type service struct {
 	mountPath            string
 	gateway              GatewayClient
-	receivedSharesLister ReceivedSharesLister
+	sharesProviderClient SharesProviderClient
 }
 
 func (s *service) Close() error {
@@ -114,11 +115,11 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error)
 }
 
 // New returns a new instance of the SharesStorageProvider service
-func New(mountpath string, gateway GatewayClient, l ReceivedSharesLister) (rgrpc.Service, error) {
+func New(mountpath string, gateway GatewayClient, c SharesProviderClient) (rgrpc.Service, error) {
 	s := &service{
 		mountPath:            mountpath,
 		gateway:              gateway,
-		receivedSharesLister: l,
+		sharesProviderClient: c,
 	}
 	return s, nil
 }
@@ -413,9 +414,21 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		Interface("reqShare", reqShare).
 		Msg("sharesstorageprovider: Got Delete request")
 
-	if reqShare == "" || reqPath == "" {
+	if reqShare == "" {
 		return &provider.DeleteResponse{
 			Status: status.NewInvalid(ctx, "sharesstorageprovider: can not delete top-level container"),
+		}, nil
+	}
+
+	if reqPath == "" {
+		err := s.rejectReceivedShare(ctx, reqShare)
+		if err != nil {
+			return &provider.DeleteResponse{
+				Status: status.NewInternal(ctx, err, "sharesstorageprovider: error rejecting share"),
+			}, nil
+		}
+		return &provider.DeleteResponse{
+			Status: status.NewOK(ctx),
 		}, nil
 	}
 
@@ -869,7 +882,7 @@ func (s *service) statShare(ctx context.Context, share string) (*provider.StatRe
 }
 
 func (s *service) getReceivedShares(ctx context.Context) ([]*collaboration.ReceivedShare, error) {
-	lsRes, err := s.receivedSharesLister.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+	lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 	if err != nil {
 		return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
 	}
@@ -877,4 +890,57 @@ func (s *service) getReceivedShares(ctx context.Context) ([]*collaboration.Recei
 		return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
 	}
 	return lsRes.Shares, nil
+}
+
+func (s *service) getReceivedShareByName(ctx context.Context, share string) (*collaboration.ReceivedShare, error) {
+	shares, err := s.getReceivedShares(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, rs := range shares {
+		statRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				ResourceId: rs.Share.ResourceId,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			appctx.GetLogger(ctx).Debug().
+				Interface("rs", s).
+				Interface("statRes", statRes).
+				Msg("sharesstorageprovider: Got non-ok Stat response")
+			continue
+		}
+
+		if filepath.Base(statRes.Info.Path) == share {
+			return rs, nil
+		}
+	}
+	return nil, fmt.Errorf("sharesstorageprovider: received share '%s' not found", share)
+}
+
+func (s *service) rejectReceivedShare(ctx context.Context, share string) error {
+	rs, err := s.getReceivedShareByName(ctx, share)
+	if err != nil {
+		return err
+	}
+
+	ref := &collaboration.ShareReference{
+		Spec: &collaboration.ShareReference_Id{
+			Id: rs.Share.Id,
+		},
+	}
+	_, err = s.sharesProviderClient.UpdateReceivedShare(ctx, &collaboration.UpdateReceivedShareRequest{
+		Ref: ref,
+		Field: &collaboration.UpdateReceivedShareRequest_UpdateField{
+			Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
+				State: collaboration.ShareState_SHARE_STATE_REJECTED,
+			},
+		},
+	})
+	return err
 }

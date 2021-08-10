@@ -71,11 +71,11 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		s                    sprovider.ProviderAPIServer
 		gw                   *mocks.GatewayClient
-		receivedSharesLister *mocks.ReceivedSharesLister
+		sharesProviderClient *mocks.SharesProviderClient
 	)
 
 	BeforeEach(func() {
-		receivedSharesLister = &mocks.ReceivedSharesLister{}
+		sharesProviderClient = &mocks.SharesProviderClient{}
 		gw = &mocks.GatewayClient{}
 		gw.On("ListContainer", mock.Anything, &sprovider.ListContainerRequest{
 			Ref: &sprovider.Reference{
@@ -165,7 +165,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 	})
 
 	JustBeforeEach(func() {
-		p, err := provider.New("/shares", gw, receivedSharesLister)
+		p, err := provider.New("/shares", gw, sharesProviderClient)
 		Expect(err).ToNot(HaveOccurred())
 		s = p.(sprovider.ProviderAPIServer)
 		Expect(s).ToNot(BeNil())
@@ -190,7 +190,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 	Describe("ListContainer", func() {
 		It("only considers accepted shares", func() {
-			receivedSharesLister.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+			sharesProviderClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
 				Status: status.NewOK(context.Background()),
 				Shares: []*collaboration.ReceivedShare{
 					&collaboration.ReceivedShare{
@@ -213,7 +213,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 	Context("with an accepted share", func() {
 		BeforeEach(func() {
-			receivedSharesLister.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+			sharesProviderClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
 				Status: status.NewOK(context.Background()),
 				Shares: []*collaboration.ReceivedShare{
 					&collaboration.ReceivedShare{
@@ -415,7 +415,8 @@ var _ = Describe("Sharesstorageprovider", func() {
 				}, nil)
 			})
 
-			It("refuses to delete a share", func() {
+			It("rejects the share when deleting a share", func() {
+				sharesProviderClient.On("UpdateReceivedShare", mock.Anything, mock.Anything).Return(nil, nil)
 				req := &sprovider.DeleteRequest{
 					Ref: &sprovider.Reference{
 						Path: "/shares/share1-shareddir",
@@ -425,7 +426,9 @@ var _ = Describe("Sharesstorageprovider", func() {
 				gw.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
-				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+
+				sharesProviderClient.AssertCalled(GinkgoT(), "UpdateReceivedShare", mock.Anything, mock.Anything)
 			})
 
 			It("deletes a file", func() {
