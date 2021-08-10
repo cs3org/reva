@@ -23,7 +23,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 )
 
 // The Handler renders the user endpoint
@@ -34,7 +34,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// TODO move user to handler parameter?
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if !ok {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
 		return

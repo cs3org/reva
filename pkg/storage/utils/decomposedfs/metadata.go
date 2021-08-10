@@ -28,7 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -84,7 +84,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		}
 		if val, ok := md.Metadata[node.FavoriteKey]; ok {
 			delete(md.Metadata, node.FavoriteKey)
-			if u, ok := user.ContextGetUser(ctx); ok {
+			if u, ok := userctx.ContextGetUser(ctx); ok {
 				if uid := u.GetId(); uid != nil {
 					if err := n.SetFavorite(uid, val); err != nil {
 						sublog.Error().Err(err).
@@ -151,7 +151,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 	for _, k := range keys {
 		switch k {
 		case node.FavoriteKey:
-			if u, ok := user.ContextGetUser(ctx); ok {
+			if u, ok := userctx.ContextGetUser(ctx); ok {
 				// the favorite flag is specific to the user, so we need to incorporate the userid
 				if uid := u.GetId(); uid != nil {
 					fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())

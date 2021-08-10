@@ -31,7 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -69,7 +69,7 @@ var _ = Describe("Decomposed", func() {
 				"physics-lovers",
 			},
 		}
-		ctx = user.ContextSetUser(context.Background(), u)
+		ctx = userctx.ContextSetUser(context.Background(), u)
 
 		bs := &treemocks.Blobstore{}
 		fs, err = decomposedfs.NewDefault(options, bs)

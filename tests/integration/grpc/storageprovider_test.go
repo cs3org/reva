@@ -35,7 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	"github.com/cs3org/reva/pkg/token"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-	ruser "github.com/cs3org/reva/pkg/user"
+	ruser "github.com/cs3org/reva/pkg/userctx"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -715,7 +715,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 		return nil, "", "", "", errtypes.InternalError("key is empty")
 	}
 
-	u := user.ContextMustGetUser(ctx)
+	u := userctx.ContextMustGetUser(ctx)
 	trashItem = filepath.Join(t.lookup.InternalRoot(), "trash", u.Id.OpaqueId, key, path)
 
 	var link string

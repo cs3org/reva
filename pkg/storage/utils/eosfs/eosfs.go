@@ -50,7 +50,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/pkg/errors"
 )
 
@@ -240,7 +240,7 @@ func (fs *eosfs) Shutdown(ctx context.Context) error {
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "eosfs: error getting user from ctx")
 		return nil, err
@@ -1557,7 +1557,7 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 
 // permissionSet returns the permission set for the current user
 func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileInfo, owner *userpb.UserId) *provider.ResourcePermissions {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if !ok || u.Id == nil {
 		return &provider.ResourcePermissions{
 			// no permissions

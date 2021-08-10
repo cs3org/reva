@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
-	ruser "github.com/cs3org/reva/pkg/user"
+	ruser "github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/tests/helpers"
 )
 

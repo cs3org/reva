@@ -27,7 +27,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -96,7 +96,7 @@ func NewPermissions(lu PathLookup) *Permissions {
 
 // AssemblePermissions will assemble the permissions for the current user on the given node, taking into account all parent nodes
 func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap provider.ResourcePermissions, err error) {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
 		return NoPermissions(), nil
@@ -257,7 +257,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 }
 
 func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*userv1beta1.User, *provider.ResourcePermissions) {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
 		perms := NoPermissions()

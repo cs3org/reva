@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -110,7 +110,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "create").Msg("create public share")
 
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
 	}
@@ -131,7 +131,7 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "remove").Msg("remove public share")
 
-	user := user.ContextMustGetUser(ctx)
+	user := userctx.ContextMustGetUser(ctx)
 	err := s.sm.RevokePublicShare(ctx, user, req.Ref)
 	if err != nil {
 		return &link.RemovePublicShareResponse{
@@ -174,7 +174,7 @@ func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRe
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "get").Msg("get public share")
 
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
 	}
@@ -193,7 +193,7 @@ func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRe
 func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "list").Msg("list public share")
-	user, _ := user.ContextGetUser(ctx)
+	user, _ := userctx.ContextGetUser(ctx)
 
 	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, &provider.ResourceInfo{}, req.GetSign())
 	if err != nil {
@@ -214,7 +214,7 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "update").Msg("update public share")
 
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
 	}

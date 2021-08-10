@@ -45,7 +45,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -202,7 +202,7 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	}
 
 	// update the owner
-	u := user.ContextMustGetUser(ctx)
+	u := userctx.ContextMustGetUser(ctx)
 	if err = h.WriteMetadata(u.Id); err != nil {
 		return
 	}
@@ -246,7 +246,7 @@ func (fs *Decomposedfs) GetHome(ctx context.Context) (string, error) {
 	if !fs.o.EnableHome || fs.o.UserLayout == "" {
 		return "", errtypes.NotSupported("Decomposedfs: GetHome() home supported disabled")
 	}
-	u := user.ContextMustGetUser(ctx)
+	u := userctx.ContextMustGetUser(ctx)
 	layout := templates.WithUser(u, fs.o.UserLayout)
 	return filepath.Join(fs.o.Root, layout), nil // TODO use a namespace?
 }
@@ -535,7 +535,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	spaces := make([]*provider.StorageSpace, 0, len(matches))
 
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Msg("expected user in context")
 		return spaces, nil

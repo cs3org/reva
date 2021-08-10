@@ -41,7 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -244,7 +244,7 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error resolving upload path")
 	}
-	usr := user.ContextMustGetUser(ctx)
+	usr := userctx.ContextMustGetUser(ctx)
 
 	owner, err := p.Owner()
 	if err != nil {
@@ -337,7 +337,7 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 		Username: info.Storage["UserName"],
 	}
 
-	ctx = user.ContextSetUser(ctx, u)
+	ctx = userctx.ContextSetUser(ctx, u)
 	// TODO configure the logger the same way ... store and add traceid in file info
 
 	var opts []logger.Option

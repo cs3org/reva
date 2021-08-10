@@ -38,7 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
-	userpkg "github.com/cs3org/reva/pkg/user"
+	userpkg "github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"

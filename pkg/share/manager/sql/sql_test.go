@@ -31,7 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/share"
 	sqlmanager "github.com/cs3org/reva/pkg/share/manager/sql"
 	mocks "github.com/cs3org/reva/pkg/share/manager/sql/mocks"
-	ruser "github.com/cs3org/reva/pkg/user"
+	ruser "github.com/cs3org/reva/pkg/userctx"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/mock"

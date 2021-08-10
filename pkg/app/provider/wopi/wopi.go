@@ -39,7 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -129,7 +129,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	// TODO the folder URL should be resolved as e.g. `'https://cernbox.cern.ch/index.php/apps/files/?dir=' + filepath.Dir(req.Ref.GetPath())`
 	// or should be deprecated/removed altogether, needs discussion and decision.
 	// q.Add("folderurl", "...")
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if ok { // else defaults to "Anonymous Guest"
 		q.Add("username", u.Username)
 	}

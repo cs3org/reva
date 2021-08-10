@@ -32,7 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	ctxuser "github.com/cs3org/reva/pkg/user"
+	ctxuser "github.com/cs3org/reva/pkg/userctx"
 )
 
 // Handler renders user data for the user id given in the url path

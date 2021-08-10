@@ -30,7 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 )
 
 // Lookup implements transformations from filepath to node and back
@@ -165,7 +165,7 @@ func (lu *Lookup) InternalPath(id string) string {
 }
 
 func (lu *Lookup) mustGetUserLayout(ctx context.Context) string {
-	u := user.ContextMustGetUser(ctx)
+	u := userctx.ContextMustGetUser(ctx)
 	return templates.WithUser(u, lu.Options.UserLayout)
 }
 

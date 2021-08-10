@@ -33,8 +33,8 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
-	"github.com/cs3org/reva/pkg/user"
-	ctxuser "github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
+	ctxuser "github.com/cs3org/reva/pkg/userctx"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -205,7 +205,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			}
 
 			ctx = tokenpkg.ContextSetToken(ctx, res.Token)
-			ctx = user.ContextSetUser(ctx, res.User)
+			ctx = userctx.ContextSetUser(ctx, res.User)
 			ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, res.Token)
 
 			r = r.WithContext(ctx)

@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/registry"
 	"github.com/cs3org/reva/pkg/storage/fs/eos"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
@@ -108,7 +108,7 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 			return nil, err
 		}
 
-		ctx := user.ContextSetUser(context.Background(), &userpb.User{
+		ctx := userctx.ContextSetUser(context.Background(), &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "root",
 			},

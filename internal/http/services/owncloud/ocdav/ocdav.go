@@ -40,7 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	ctxuser "github.com/cs3org/reva/pkg/user"
+	ctxuser "github.com/cs3org/reva/pkg/userctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"

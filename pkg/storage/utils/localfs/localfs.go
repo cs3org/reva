@@ -42,7 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -153,7 +153,7 @@ func (fs *localfs) resolve(ctx context.Context, ref *provider.Reference) (p stri
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "local: error getting user from ctx")
 		return nil, err
@@ -273,7 +273,7 @@ func (fs *localfs) isShareFolderChild(ctx context.Context, p string) bool {
 
 // permissionSet returns the permission set for the current user
 func (fs *localfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provider.ResourcePermissions {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := userctx.ContextGetUser(ctx)
 	if !ok {
 		return &provider.ResourcePermissions{
 			// no permissions

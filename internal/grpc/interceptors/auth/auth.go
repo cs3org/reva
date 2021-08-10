@@ -28,7 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -94,7 +94,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			if ok {
 				u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr)
 				if err == nil {
-					ctx = user.ContextSetUser(ctx, u)
+					ctx = userctx.ContextSetUser(ctx, u)
 				}
 			}
 			return handler(ctx, req)
@@ -124,7 +124,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			trace.StringAttribute("token", tkn))
 		span.AddAttributes(trace.StringAttribute("user", u.String()), trace.StringAttribute("token", tkn))
 
-		ctx = user.ContextSetUser(ctx, u)
+		ctx = userctx.ContextSetUser(ctx, u)
 		return handler(ctx, req)
 	}
 	return interceptor, nil
@@ -165,7 +165,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			if ok {
 				u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr)
 				if err == nil {
-					ctx = user.ContextSetUser(ctx, u)
+					ctx = userctx.ContextSetUser(ctx, u)
 					ss = newWrappedServerStream(ctx, ss)
 				}
 			}
@@ -188,7 +188,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		}
 
 		// store user and core access token in context.
-		ctx = user.ContextSetUser(ctx, u)
+		ctx = userctx.ContextSetUser(ctx, u)
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}

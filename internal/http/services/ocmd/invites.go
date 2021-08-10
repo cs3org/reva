@@ -32,7 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/smtpclient"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -88,7 +88,7 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 
 	if r.FormValue("recipient") != "" && h.smtpCredentials != nil {
 
-		usr := user.ContextMustGetUser(ctx)
+		usr := userctx.ContextMustGetUser(ctx)
 
 		// TODO: the message body needs to point to the meshdirectory service
 		subject := fmt.Sprintf("ScienceMesh: %s wants to collaborate with you", usr.DisplayName)

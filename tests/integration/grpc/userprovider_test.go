@@ -27,7 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/token"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-	ruser "github.com/cs3org/reva/pkg/user"
+	ruser "github.com/cs3org/reva/pkg/userctx"
 	"google.golang.org/grpc/metadata"
 
 	. "github.com/onsi/ginkgo"

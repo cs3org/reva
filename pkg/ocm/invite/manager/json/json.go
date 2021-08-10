@@ -39,7 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -178,7 +178,7 @@ func (model *inviteModel) Save() error {
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
 
-	contexUser := user.ContextMustGetUser(ctx)
+	contexUser := userctx.ContextMustGetUser(ctx)
 	inviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
 	if err != nil {
 		return nil, err
@@ -199,7 +199,7 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error {
 
-	contextUser := user.ContextMustGetUser(ctx)
+	contextUser := userctx.ContextMustGetUser(ctx)
 	requestBody := url.Values{
 		"token":             {invite.GetToken()},
 		"userID":            {contextUser.GetId().GetOpaqueId()},
@@ -275,7 +275,7 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 
 func (m *manager) GetAcceptedUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
 
-	userKey := user.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	userKey := userctx.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
 		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
 			return acceptedUser, nil
@@ -286,7 +286,7 @@ func (m *manager) GetAcceptedUser(ctx context.Context, remoteUserID *userpb.User
 
 func (m *manager) FindAcceptedUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 	users := []*userpb.User{}
-	userKey := user.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	userKey := userctx.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
 		if query == "" || userContains(acceptedUser, query) {
 			users = append(users, acceptedUser)
