@@ -21,12 +21,15 @@ package demo
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,8 +41,11 @@ import (
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -56,6 +62,7 @@ type config struct {
 	AppURL              string `mapstructure:"app_url" docs:";The App URL."`
 	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
 	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
+	JWTSecret           string `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
 	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:";Whether the app can be opened only on desktop."`
 	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
@@ -88,6 +95,7 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	if c.IOPSecret == "" {
 		c.IOPSecret = os.Getenv("REVA_APPPROVIDER_IOPSECRET")
 	}
+	c.JWTSecret = sharedconf.GetJWTSecret(c.JWTSecret)
 
 	appURLs, err := getAppURLs(c)
 	if err != nil {
@@ -165,12 +173,32 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	if openRes.StatusCode != http.StatusFound {
 		return nil, errors.Wrap(err, "wopi: unexpected status from WOPI server: "+openRes.Status)
 	}
-	appFullURL := openRes.Header.Get("Location")
+
+	body, err := ioutil.ReadAll(openRes.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result map[string]interface{}
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenTTL, err := p.getAccessTokenTTL(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	appFullURL := result["app-url"].(string)
+	formParams := result["form-parameters"].(map[string]string)
+	formParams["access_token_ttl"] = tokenTTL
 
 	log.Info().Msg(fmt.Sprintf("wopi: returning app URL %s", appFullURL))
 	return &appprovider.OpenInAppURL{
-		AppUrl: appFullURL,
-		Method: "GET",
+		AppUrl:         appFullURL,
+		Method:         "POST",
+		FormParameters: formParams,
 	}, nil
 }
 
@@ -260,6 +288,22 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 
 	}
 	return appURLs, nil
+}
+
+func (p *wopiProvider) getAccessTokenTTL(ctx context.Context) (string, error) {
+	tkn := ctxpkg.ContextMustGetToken(ctx)
+	token, err := jwt.ParseWithClaims(tkn, &jwt.StandardClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(p.conf.JWTSecret), nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if claims, ok := token.Claims.(*jwt.StandardClaims); ok && token.Valid {
+		return strconv.FormatInt(claims.ExpiresAt, 10), nil
+	}
+
+	return "", errtypes.InvalidCredentials("wopi: invalid token present in ctx")
 }
 
 func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
