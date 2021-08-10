@@ -34,9 +34,9 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	ctxuser "github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"go.opencensus.io/trace"
 )
@@ -71,7 +71,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		u, ok := ctxuser.ContextGetUser(ctx)
+		u, ok := ctxpkg.ContextGetUser(ctx)
 		if !ok {
 			w.WriteHeader(http.StatusBadRequest)
 			return

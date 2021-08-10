@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
@@ -53,7 +54,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -205,7 +205,7 @@ func (fs *owncloudsqlfs) Shutdown(ctx context.Context) error {
 // TODO the path handed to a storage provider should not contain the username
 func (fs *owncloudsqlfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 	if fs.c.EnableHome {
-		u := userctx.ContextMustGetUser(ctx)
+		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
 		ip = filepath.Join(fs.c.DataDirectory, layout, "files", sp)
 	} else {
@@ -278,7 +278,7 @@ func (fs *owncloudsqlfs) getVersionsPath(ctx context.Context, ip string) string 
 
 // owncloudsql stores trashed items in the files_trashbin subfolder of a users home
 func (fs *owncloudsqlfs) getRecyclePath(ctx context.Context) (string, error) {
-	u, ok := userctx.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return "", err
@@ -292,7 +292,7 @@ func (fs *owncloudsqlfs) getRecyclePathForUser(user string) (string, error) {
 }
 
 func (fs *owncloudsqlfs) getVersionRecyclePath(ctx context.Context) (string, error) {
-	u, ok := userctx.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return "", err
@@ -311,7 +311,7 @@ func (fs *owncloudsqlfs) toDatabasePath(ip string) string {
 
 func (fs *owncloudsqlfs) toStoragePath(ctx context.Context, ip string) (sp string) {
 	if fs.c.EnableHome {
-		u := userctx.ContextMustGetUser(ctx)
+		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
 		trim := filepath.Join(fs.c.DataDirectory, layout, "files")
 		sp = strings.TrimPrefix(ip, trim)
@@ -358,7 +358,7 @@ func (fs *owncloudsqlfs) getOwner(ip string) string {
 
 // TODO cache user lookup
 func (fs *owncloudsqlfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.User, err error) {
-	u := userctx.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	// check if username matches and id is set
 	if u.Username == usernameOrID && u.Id != nil && u.Id.OpaqueId != "" {
 		return u, nil
@@ -420,7 +420,7 @@ func (fs *owncloudsqlfs) permissionSet(ctx context.Context, owner *userpb.UserId
 			Stat: true,
 		}
 	}
-	u, ok := userctx.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return &provider.ResourcePermissions{
 			// no permissions
@@ -596,7 +596,7 @@ func (fs *owncloudsqlfs) AddGrant(ctx context.Context, ref *provider.Reference, 
 }
 
 func (fs *owncloudsqlfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
-	u, ok := userctx.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("no user in context, returning default permissions")
 		return defaultPermissions, nil
@@ -652,7 +652,7 @@ func (fs *owncloudsqlfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 }
 
 func (fs *owncloudsqlfs) CreateHome(ctx context.Context) error {
-	u, ok := userctx.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return err
@@ -866,7 +866,7 @@ func (fs *owncloudsqlfs) SetArbitraryMetadata(ctx context.Context, ref *provider
 			// 5. app? = a:<aid>: for apps?
 			// obviously this only is secure when the u/s/g/a namespaces are not accessible by users in the filesystem
 			// public tags can be mapped to extended attributes
-			if u, ok := userctx.ContextGetUser(ctx); ok {
+			if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 				// the favorite flag is specific to the user, so we need to incorporate the userid
 				if uid := u.GetId(); uid != nil {
 					fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
@@ -960,7 +960,7 @@ func (fs *owncloudsqlfs) UnsetArbitraryMetadata(ctx context.Context, ref *provid
 	for _, k := range keys {
 		switch k {
 		case "http://owncloud.org/ns/favorite":
-			if u, ok := userctx.ContextGetUser(ctx); ok {
+			if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 				// the favorite flag is specific to the user, so we need to incorporate the userid
 				if uid := u.GetId(); uid != nil {
 					fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
@@ -1605,7 +1605,7 @@ func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, key, path string)
 	if err != nil {
 		return err
 	}
-	err = fs.filecache.PurgeRecycleItem(userctx.ContextMustGetUser(ctx).Username, base, ttime, false)
+	err = fs.filecache.PurgeRecycleItem(ctxpkg.ContextMustGetUser(ctx).Username, base, ttime, false)
 	if err != nil {
 		return err
 	}
@@ -1649,7 +1649,7 @@ func (fs *owncloudsqlfs) EmptyRecycle(ctx context.Context) error {
 		return errors.Wrap(err, "owncloudsql: error deleting recycle files versions")
 	}
 
-	u := userctx.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	err = fs.filecache.EmptyRecycle(u.Username)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error deleting recycle items from the database")
@@ -1680,7 +1680,7 @@ func (fs *owncloudsqlfs) convertToRecycleItem(ctx context.Context, md os.FileInf
 		log.Error().Str("path", md.Name()).Msg("invalid trash item key")
 	}
 
-	u := userctx.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	item, err := fs.filecache.GetRecycleItem(u.Username, base, ttime)
 	if err != nil {
 		log := appctx.GetLogger(ctx)
@@ -1749,7 +1749,7 @@ func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, key, path strin
 	src := filepath.Join(recyclePath, filepath.Clean(key))
 
 	if restoreRef.Path == "" {
-		u := userctx.ContextMustGetUser(ctx)
+		u := ctxpkg.ContextMustGetUser(ctx)
 		item, err := fs.filecache.GetRecycleItem(u.Username, base, ttime)
 		if err != nil {
 			log := appctx.GetLogger(ctx)
@@ -1774,7 +1774,7 @@ func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, key, path strin
 	if err != nil {
 		return err
 	}
-	err = fs.filecache.DeleteRecycleItem(userctx.ContextMustGetUser(ctx).Username, base, ttime)
+	err = fs.filecache.DeleteRecycleItem(ctxpkg.ContextMustGetUser(ctx).Username, base, ttime)
 	if err != nil {
 		return err
 	}

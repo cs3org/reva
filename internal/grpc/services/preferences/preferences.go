@@ -26,9 +26,9 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/pkg/errors"
 )
 
@@ -67,7 +67,7 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := userctx.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(contextUserRequiredErr("userrequired"), "preferences: error getting user from ctx")
 		return nil, err

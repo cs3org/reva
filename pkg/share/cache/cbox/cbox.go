@@ -26,10 +26,10 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/registry"
 	"github.com/cs3org/reva/pkg/storage/fs/eos"
-	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
@@ -108,7 +108,7 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 			return nil, err
 		}
 
-		ctx := userctx.ContextSetUser(context.Background(), &userpb.User{
+		ctx := ctxpkg.ContextSetUser(context.Background(), &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "root",
 			},

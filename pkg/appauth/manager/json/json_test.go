@@ -32,7 +32,7 @@ import (
 	apppb "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/userctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/gdexlab/go-render/render"
 	"github.com/sethvargo/go-password/password"
 	"golang.org/x/crypto/bcrypt"
@@ -141,7 +141,7 @@ func TestNewManager(t *testing.T) {
 
 func TestGenerateAppPassword(t *testing.T) {
 	userTest := &userpb.User{Id: &userpb.UserId{Idp: "0"}, Username: "Test User"}
-	ctx := userctx.ContextSetUser(context.Background(), userTest)
+	ctx := ctxpkg.ContextSetUser(context.Background(), userTest)
 	tempDir := createTempDir(t, "jsonappauth_test")
 	defer os.RemoveAll(tempDir)
 
@@ -293,7 +293,7 @@ func TestGenerateAppPassword(t *testing.T) {
 func TestListAppPasswords(t *testing.T) {
 	user0Test := &userpb.User{Id: &userpb.UserId{Idp: "0"}}
 	user1Test := &userpb.User{Id: &userpb.UserId{Idp: "1"}}
-	ctx := userctx.ContextSetUser(context.Background(), user0Test)
+	ctx := ctxpkg.ContextSetUser(context.Background(), user0Test)
 	tempDir := createTempDir(t, "jsonappauth_test")
 	defer os.RemoveAll(tempDir)
 
@@ -420,7 +420,7 @@ func TestListAppPasswords(t *testing.T) {
 
 func TestInvalidateAppPassword(t *testing.T) {
 	userTest := &userpb.User{Id: &userpb.UserId{Idp: "0"}}
-	ctx := userctx.ContextSetUser(context.Background(), userTest)
+	ctx := ctxpkg.ContextSetUser(context.Background(), userTest)
 	tempDir := createTempDir(t, "jsonappauth_test")
 	defer os.RemoveAll(tempDir)
 
@@ -546,7 +546,7 @@ func TestInvalidateAppPassword(t *testing.T) {
 
 func TestGetAppPassword(t *testing.T) {
 	userTest := &userpb.User{Id: &userpb.UserId{Idp: "0"}}
-	ctx := userctx.ContextSetUser(context.Background(), userTest)
+	ctx := ctxpkg.ContextSetUser(context.Background(), userTest)
 	tempDir := createTempDir(t, "jsonappauth_test")
 	defer os.RemoveAll(tempDir)
 

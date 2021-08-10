@@ -34,11 +34,10 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
-	userpkg "github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
@@ -113,9 +112,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
-	ctx = tokenpkg.ContextSetToken(ctx, token)
-	ctx = userpkg.ContextSetUser(ctx, res.User)
-	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token)
+	ctx = ctxpkg.ContextSetToken(ctx, token)
+	ctx = ctxpkg.ContextSetUser(ctx, res.User)
+	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token)
 	scope, err := s.expandScopes(ctx, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error expanding token scope")
@@ -144,9 +143,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	// we need to pass the token to authenticate the CreateHome request.
 	// TODO(labkode): appending to existing context will not pass the token.
-	ctx = tokenpkg.ContextSetToken(ctx, token)
-	ctx = userpkg.ContextSetUser(ctx, res.User)
-	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+	ctx = ctxpkg.ContextSetToken(ctx, token)
+	ctx = ctxpkg.ContextSetUser(ctx, res.User)
+	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
 	createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})

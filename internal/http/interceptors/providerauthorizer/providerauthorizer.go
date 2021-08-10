@@ -24,11 +24,11 @@ import (
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/userctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 )
@@ -84,7 +84,7 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 			}
 
 			err = authorizer.IsProviderAllowed(ctx, &ocmprovider.ProviderInfo{
-				Domain: userctx.ContextMustGetUser(ctx).Id.Idp,
+				Domain: ctxpkg.ContextMustGetUser(ctx).Id.Idp,
 			})
 			if err != nil {
 				log.Error().Err(err).Msg("provider not registered in OCM")
