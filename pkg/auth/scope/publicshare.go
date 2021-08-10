@@ -71,7 +71,6 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 }
 
 func checkStorageRef(s *link.PublicShare, r *provider.Reference) bool {
-	// TODO @ishank011 con you explain how this is used?
 	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> path:$path > >
 	if r.ResourceId != nil && r.Path == "" { // path must be empty
 		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId())

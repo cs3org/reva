@@ -500,7 +500,6 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	var err error
 	var parentRef *provider.Reference
 	var name string
 	switch {
@@ -519,20 +518,6 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	default:
 		return &provider.CreateContainerResponse{
 			Status: status.NewInvalidArg(ctx, "invalid reference, name required"),
-		}, nil
-	}
-	var st *rpc.Status
-	if err != nil {
-		switch err.(type) {
-		case errtypes.IsNotFound:
-			st = status.NewNotFound(ctx, "path not found when unwrapping")
-		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
-		default:
-			st = status.NewInternal(ctx, err, "error unwrapping: "+req.String())
-		}
-		return &provider.CreateContainerResponse{
-			Status: st,
 		}, nil
 	}
 	if err := s.storage.CreateDir(ctx, parentRef, name); err != nil {
@@ -605,19 +590,14 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	sourceRef, err := s.unwrap(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping source path"),
+			Status: status.NewInvalid(ctx, err.Error()),
 		}, nil
 	}
 	targetRef, err := s.unwrap(ctx, req.Destination)
 	if err != nil {
-		switch err.(type) {
-		case errtypes.IsNotFound:
-			targetRef = req.Destination
-		default:
-			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "error unwrapping destination path"),
-			}, nil
-		}
+		return &provider.MoveResponse{
+			Status: status.NewInvalid(ctx, err.Error()),
+		}, nil
 	}
 
 	if err := s.storage.Move(ctx, sourceRef, targetRef); err != nil {
