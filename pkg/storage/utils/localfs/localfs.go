@@ -751,13 +751,12 @@ func (fs *localfs) createHomeInternal(ctx context.Context, fn string) error {
 	return nil
 }
 
-func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference, name string) error {
+func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 
-	dir, err := fs.resolve(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil
 	}
-	fn := path.Join(dir, name)
 
 	if fs.isShareFolder(ctx, fn) {
 		return errtypes.PermissionDenied("localfs: cannot create folder under the share folder")

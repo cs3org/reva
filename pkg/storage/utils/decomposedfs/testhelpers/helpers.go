@@ -21,7 +21,6 @@ package helpers
 import (
 	"context"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/google/uuid"
@@ -114,7 +113,7 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	// Create dir1
-	dir1, err := env.CreateTestDir("dir1")
+	dir1, err := env.CreateTestDir("/dir1")
 	if err != nil {
 		return nil, err
 	}
@@ -126,13 +125,13 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	// Create subdir1 in dir1
-	err = fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "dir1"}, "subdir1")
+	err = fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "/dir1/subdir1"})
 	if err != nil {
 		return nil, err
 	}
 
 	// Create emptydir
-	err = fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "."}, "emptydir")
+	err = fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "/emptydir"})
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +146,7 @@ func (t *TestEnv) Cleanup() {
 
 // CreateTestDir create a directory and returns a corresponding Node
 func (t *TestEnv) CreateTestDir(name string) (*node.Node, error) {
-	err := t.Fs.CreateDir(t.Ctx, &providerv1beta1.Reference{Path: path.Dir(name)}, path.Base(name))
+	err := t.Fs.CreateDir(t.Ctx, &providerv1beta1.Reference{Path: name})
 	if err != nil {
 		return nil, err
 	}

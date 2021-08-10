@@ -27,6 +27,7 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -278,7 +279,12 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 }
 
 // CreateDir creates the specified directory
-func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference, name string) (err error) {
+func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
+	name := path.Base(ref.Path)
+	if name == "" || name == "." || name == "/" {
+		return errtypes.BadRequest("Invalid path")
+	}
+	ref.Path = path.Dir(ref.Path)
 	var n *node.Node
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
@@ -288,7 +294,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference, 
 	}
 
 	if n.Exists {
-		return errtypes.AlreadyExists(name)
+		return errtypes.AlreadyExists(ref.Path)
 	}
 	pn, err := n.Parent()
 	if err != nil {

@@ -40,7 +40,6 @@ type Lookup struct {
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
 func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error) {
-
 	if ref.ResourceId != nil {
 		// check if a storage space reference is used
 		// currently, the decomposed fs uses the root node id as the space id

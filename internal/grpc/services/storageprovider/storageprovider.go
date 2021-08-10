@@ -500,27 +500,13 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	var parentRef *provider.Reference
-	var name string
-	switch {
-	case utils.IsRelativeReference(req.Ref):
-		req.Ref.Path, name = path.Split(req.Ref.Path)
-		parentRef = req.Ref
-	case utils.IsAbsoluteReference(req.Ref):
-		ref, err := s.unwrap(ctx, req.Ref)
-		if err != nil {
-			return &provider.CreateContainerResponse{
-				Status: status.NewInternal(ctx, err, "error unwrapping path"),
-			}, nil
-		}
-		parentRef = &provider.Reference{Path: path.Dir(ref.GetPath())}
-		name = path.Base(ref.GetPath())
-	default:
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
 		return &provider.CreateContainerResponse{
-			Status: status.NewInvalidArg(ctx, "invalid reference, name required"),
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
-	if err := s.storage.CreateDir(ctx, parentRef, name); err != nil {
+	if err := s.storage.CreateDir(ctx, newRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -590,13 +576,13 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	sourceRef, err := s.unwrap(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInvalid(ctx, err.Error()),
+			Status: status.NewInternal(ctx, err, "error unwrapping source path"),
 		}, nil
 	}
 	targetRef, err := s.unwrap(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInvalid(ctx, err.Error()),
+			Status: status.NewInternal(ctx, err, "error unwrapping destination path"),
 		}, nil
 	}
 
@@ -630,23 +616,15 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	)
 
 	newRef, err := s.unwrap(ctx, req.Ref)
-	var st *rpc.Status
 	if err != nil {
-		switch err.(type) {
-		case errtypes.IsNotFound:
-			st = status.NewNotFound(ctx, "path not found when unwrapping")
-		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
-		default:
-			st = status.NewInternal(ctx, err, "error unwrapping: "+req.String())
-		}
 		return &provider.StatResponse{
-			Status: st,
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
 
 	md, err := s.storage.GetMD(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
+		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when stating")
@@ -1237,13 +1215,12 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 	// there are two cases:
 	// 1. absolute id references (resource_id is set, path is empty)
 	// 2. relative references (resource_id is set, path starts with a `.`)
-	if ref.ResourceId != nil {
+	if ref.GetResourceId() != nil {
 		return ref, nil
 	}
 
-	// if the
 	if !strings.HasPrefix(ref.GetPath(), "/") {
-		// abort, absolute path references must start with a `/``
+		// abort, absolute path references must start with a `/`
 		return nil, errtypes.BadRequest("ref is invalid: " + ref.String())
 	}
 
@@ -1254,7 +1231,9 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, err
 	}
 
-	return &provider.Reference{Path: fsfn}, nil
+	pathRef := &provider.Reference{Path: fsfn}
+
+	return pathRef, nil
 }
 
 func (s *service) trimMountPrefix(fn string) (string, error) {

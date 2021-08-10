@@ -293,14 +293,13 @@ func (fs *s3FS) CreateHome(ctx context.Context) error {
 	return errtypes.NotSupported("s3fs: not supported")
 }
 
-func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference, name string) error {
+func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 
-	dir, err := fs.resolve(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil
 	}
-	fn := path.Join(dir, name)
 
 	fn = fs.addRoot(fn) + "/" // append / to indicate folder // TODO only if fn does not end in /
 
@@ -316,11 +315,11 @@ func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference, name str
 		log.Error().Err(err)
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == s3.ErrCodeNoSuchBucket {
-				return errtypes.NotFound(fn)
+				return errtypes.NotFound(ref.Path)
 			}
 		}
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
-		return errors.Wrap(err, "s3fs: error creating dir "+fn)
+		return errors.Wrap(err, "s3fs: error creating dir "+ref.Path)
 	}
 
 	log.Debug().Interface("result", result) // todo cache etag?

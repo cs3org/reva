@@ -139,9 +139,9 @@ var _ = Describe("Decomposed", func() {
 				for i := 0; i < 10; i++ {
 					go func() {
 						defer GinkgoRecover()
-						err := fs.CreateDir(ctx, &provider.Reference{Path: "."}, "fightforit")
+						err := fs.CreateDir(ctx, &provider.Reference{Path: "/fightforit"})
 						if err != nil {
-							rinfo, err := fs.GetMD(ctx, &provider.Reference{Path: "fightforit"}, nil)
+							rinfo, err := fs.GetMD(ctx, &provider.Reference{Path: "/fightforit"}, nil)
 							Expect(err).ToNot(HaveOccurred())
 							Expect(rinfo).ToNot(BeNil())
 						}
