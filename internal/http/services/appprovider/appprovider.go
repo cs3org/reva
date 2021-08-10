@@ -49,17 +49,13 @@ func init() {
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix         string `mapstructure:"prefix"`
-	GatewaySvc     string `mapstructure:"gatewaysvc"`
-	AccessTokenTTL int    `mapstructure:"access_token_ttl"`
+	Prefix     string `mapstructure:"prefix"`
+	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
 func (c *Config) init() {
 	if c.Prefix == "" {
 		c.Prefix = "app"
-	}
-	if c.AccessTokenTTL == 0 {
-		c.AccessTokenTTL = 86400
 	}
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
