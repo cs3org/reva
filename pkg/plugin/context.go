@@ -29,6 +29,7 @@ func GetContextStruct(ctx context.Context) (*Ctx, error) {
 	return ctxVal, nil
 }
 
+// SetContext sets the context
 func SetContext(ctxStruct *Ctx) context.Context {
 	ctx := context.Background()
 	ctx = ctxpkg.ContextSetUser(ctx, ctxStruct.User)
