@@ -354,6 +354,9 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 }
 
 func getCodimdExtensions(appURL string) map[string]map[string]string {
+	// Register custom mime types
+	mime.RegisterMime(".zmd", "application/compressed-markdown")
+
 	appURLs := make(map[string]map[string]string)
 	appURLs["edit"] = map[string]string{
 		".txt": appURL,
