@@ -32,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/propagation"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -41,9 +41,11 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -63,9 +65,11 @@ const (
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "propfind")
+	ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
+
+	span.SetAttributes(attribute.String("component", "ocdav"))
 
 	fn := path.Join(ns, r.URL.Path)
 

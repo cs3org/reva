@@ -30,11 +30,12 @@ import (
 	"github.com/cs3org/reva/internal/grpc/interceptors/recovery"
 	"github.com/cs3org/reva/internal/grpc/interceptors/token"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/plugin/ocgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -195,7 +196,7 @@ func (s *Server) registerServices() error {
 	if err != nil {
 		return err
 	}
-	opts = append(opts, grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+	opts = append(opts)
 	grpcServer := grpc.NewServer(opts...)
 
 	for _, svc := range s.services {
@@ -280,6 +281,12 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
 		s.log.Info().Msgf("rgrpc: chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
 	}
+
+	unaryInterceptors = append(unaryInterceptors,
+		otelgrpc.UnaryServerInterceptor(
+			otelgrpc.WithTracerProvider(rtrace.Provider),
+			otelgrpc.WithPropagators(rtrace.Propagator)),
+	)
 
 	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
 		appctx.NewUnary(s.log),

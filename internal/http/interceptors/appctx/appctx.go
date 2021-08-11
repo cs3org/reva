@@ -26,7 +26,6 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/trace"
 )
 
 // New returns a new HTTP middleware that stores the log
@@ -41,13 +40,7 @@ func New(log zerolog.Logger) func(http.Handler) http.Handler {
 func handler(log zerolog.Logger, h http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		// trace is set on the httpserver.go file as the outermost wrapper handler.
-		span := trace.FromContext(ctx)
-		sub := log.With().Str("traceid", span.SpanContext().TraceID.String()).Logger()
-		ctx = appctx.WithLogger(ctx, &sub)
-
+		ctx := appctx.WithLogger(r.Context(), &log)
 		r = r.WithContext(ctx)
 		h.ServeHTTP(w, r)
 	})

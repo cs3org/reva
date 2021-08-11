@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -80,12 +79,9 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	}
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		ctx, span := trace.StartSpan(ctx, "auth")
-		defer span.End()
 		log := appctx.GetLogger(ctx)
 
 		if utils.Skip(info.FullMethod, unprotected) {
-			span.AddAttributes(trace.BoolAttribute("auth_enabled", false))
 			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 
 			// If a token is present, set it anyway, as we might need the user info
@@ -100,8 +96,6 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			return handler(ctx, req)
 		}
 
-		span.AddAttributes(trace.BoolAttribute("auth_enabled", true))
-
 		tkn, ok := token.ContextGetToken(ctx)
 
 		if !ok || tkn == "" {
@@ -115,14 +109,6 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			log.Warn().Err(err).Msg("access token is invalid")
 			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
-
-		// store user and core access token in context.
-		span.AddAttributes(
-			trace.StringAttribute("id.idp", u.Id.Idp),
-			trace.StringAttribute("id.opaque_id", u.Id.OpaqueId),
-			trace.StringAttribute("username", u.Username),
-			trace.StringAttribute("token", tkn))
-		span.AddAttributes(trace.StringAttribute("user", u.String()), trace.StringAttribute("token", tkn))
 
 		ctx = user.ContextSetUser(ctx, u)
 		return handler(ctx, req)

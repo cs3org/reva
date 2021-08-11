@@ -21,6 +21,8 @@ package pool
 import (
 	"sync"
 
+	"go.opentelemetry.io/otel/propagation"
+
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	applicationauth "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
@@ -39,7 +41,9 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"go.opencensus.io/plugin/ocgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 )
 
@@ -90,7 +94,19 @@ func NewConn(endpoint string) (*grpc.ClientConn, error) {
 		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize),
-		))
+		),
+		// TODO(refs) add this DialOption only if tracing is enabled. Unaware of the drawbacks.
+		grpc.WithUnaryInterceptor(
+			otelgrpc.UnaryClientInterceptor(
+				otelgrpc.WithTracerProvider(
+					rtrace.Provider,
+				),
+				otelgrpc.WithPropagators(
+					propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}),
+				),
+			),
+		),
+	)
 	if err != nil {
 		return nil, err
 	}

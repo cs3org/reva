@@ -34,8 +34,8 @@ import (
 // NewOK returns a Status with CODE_OK.
 func NewOK(ctx context.Context) *rpc.Status {
 	return &rpc.Status{
-		Code:  rpc.Code_CODE_OK,
-		Trace: getTrace(ctx),
+		Code: rpc.Code_CODE_OK,
+		//Trace: getTrace(ctx),
 	}
 }
 
@@ -46,7 +46,7 @@ func NewNotFound(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_NOT_FOUND,
 		Message: msg,
-		Trace:   getTrace(ctx),
+		//Trace:   getTrace(ctx),
 	}
 }
 
@@ -57,7 +57,7 @@ func NewInvalid(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INVALID_ARGUMENT,
 		Message: msg,
-		Trace:   getTrace(ctx),
+		//Trace:   getTrace(ctx),
 	}
 }
 
@@ -74,7 +74,7 @@ func NewInternal(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INTERNAL,
 		Message: msg,
-		Trace:   getTrace(ctx),
+		//Trace:   getTrace(ctx),
 	}
 }
 
@@ -85,7 +85,7 @@ func NewUnauthenticated(ctx context.Context, err error, msg string) *rpc.Status 
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_UNAUTHENTICATED,
 		Message: msg,
-		Trace:   getTrace(ctx),
+		//Trace:   getTrace(ctx),
 	}
 }
 
@@ -97,7 +97,7 @@ func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_PERMISSION_DENIED,
 		Message: msg,
-		Trace:   getTrace(ctx),
+		//Trace:   getTrace(ctx),
 	}
 }
 
@@ -109,7 +109,7 @@ func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Sta
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INSUFFICIENT_STORAGE,
 		Message: msg,
-		Trace:   getTrace(ctx),
+		//Trace:   getTrace(ctx),
 	}
 }
 
@@ -120,7 +120,7 @@ func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_UNIMPLEMENTED,
 		Message: msg,
-		Trace:   getTrace(ctx),
+		//Trace:   getTrace(ctx),
 	}
 }
 
@@ -131,7 +131,7 @@ func NewAlreadyExists(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ALREADY_EXISTS,
 		Message: msg,
-		Trace:   getTrace(ctx),
+		//Trace:   getTrace(ctx),
 	}
 }
 
@@ -139,7 +139,7 @@ func NewAlreadyExists(ctx context.Context, err error, msg string) *rpc.Status {
 func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{Code: rpc.Code_CODE_INVALID_ARGUMENT,
 		Message: msg,
-		Trace:   getTrace(ctx),
+		//Trace:   getTrace(ctx),
 	}
 }
 

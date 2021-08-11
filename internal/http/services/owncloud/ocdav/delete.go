@@ -24,23 +24,20 @@ import (
 	"net/http"
 	"path"
 
+	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/trace"
 )
 
 func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "delete")
-	defer span.End()
-
 	fn := path.Join(ns, r.URL.Path)
 
-	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	sublog := appctx.GetLogger(r.Context()).With().Str("path", fn).Logger()
 	ref := &provider.Reference{Path: fn}
-	s.handleDelete(ctx, w, r, ref, sublog)
+	s.handleDelete(r.Context(), w, r, ref, sublog)
 }
 
 func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
@@ -51,9 +48,13 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
+	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "delete")
+	defer span.End()
+
 	req := &provider.DeleteRequest{Ref: ref}
 	res, err := client.Delete(ctx, req)
 	if err != nil {
+		span.RecordError(err)
 		log.Error().Err(err).Msg("error performing delete grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -84,8 +85,10 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			})
 			HandleWebdavError(&log, w, b, err)
 		}
+
 		HandleErrorStatus(&log, w, res.Status)
 		return
 	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
