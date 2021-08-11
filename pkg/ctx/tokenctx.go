@@ -26,8 +26,6 @@ import (
 // to forward the access token.
 const TokenHeader = "x-access-token"
 
-const tokenKey key = iota
-
 // ContextGetToken returns the token if set in the given context.
 func ContextGetToken(ctx context.Context) (string, bool) {
 	u, ok := ctx.Value(tokenKey).(string)

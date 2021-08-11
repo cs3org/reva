@@ -28,6 +28,7 @@ type key int
 
 const (
 	userKey key = iota
+	tokenKey
 	idKey
 )
 
