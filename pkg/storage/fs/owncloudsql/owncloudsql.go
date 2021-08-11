@@ -647,10 +647,6 @@ func (fs *owncloudsqlfs) UpdateGrant(ctx context.Context, ref *provider.Referenc
 	return nil // nop
 }
 
-func (fs *owncloudsqlfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
-	return 0, 0, nil
-}
-
 func (fs *owncloudsqlfs) CreateHome(ctx context.Context) error {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
