@@ -17,6 +17,7 @@ var (
 	Provider = trace.NewNoopTracerProvider()
 )
 
+// SetTraceProvider sets the TracerProvider at a package level.
 func SetTraceProvider(url string) {
 	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(url)))
 	if err != nil {
