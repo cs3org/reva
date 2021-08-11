@@ -77,6 +77,7 @@ function handleAction(action) {
 	}
 
 	var postData = {
+		"title": formData.getTrimmed("title"),
 		"firstName": formData.getTrimmed("fname"),
 		"lastName": formData.getTrimmed("lname"),
 		"organization": formData.getTrimmed("organization"),
@@ -111,30 +112,40 @@ const tplBody = `
 <div>&nbsp;</div>
 <div>
 	<form id="form" method="POST" class="box container-inline" style="width: 100%;"  onSubmit="handleAction('update?invoker=user'); return false;">
-		<div style="grid-row: 1;"><label for="fname">First name: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 2;"><input type="text" id="fname" name="fname" value="{{.Account.FirstName}}"/></div>
-		<div style="grid-row: 1;"><label for="lname">Last name: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 2;"><input type="text" id="lname" name="lname" value="{{.Account.LastName}}"/></div>
+		<div style="grid-row: 1;"><label for="title">Title: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 2;">
+			<select id="title" name="title">
+			{{$title := .Account.Title}}
+			{{range .Titles}}
+			<option value="{{.}}" {{if eq . $title}}selected{{end}}>{{.}}.</option>
+			{{end}}
+			</select>
+		</div>
 
-		<div style="grid-row: 3;"><label for="organization">Organization/Company: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 4;"><input type="text" id="organization" name="organization" value="{{.Account.Organization}}"/></div>
-		<div style="grid-row: 3;"><label for="website">Website:</label></div>
-		<div style="grid-row: 4;"><input type="text" id="website" name="website" placeholder="https://www.example.com" value="{{.Account.Website}}"/></div>
+		<div style="grid-row: 3;"><label for="fname">First name: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 4;"><input type="text" id="fname" name="fname" value="{{.Account.FirstName}}"/></div>
+		<div style="grid-row: 3;"><label for="lname">Last name: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 4;"><input type="text" id="lname" name="lname" value="{{.Account.LastName}}"/></div>
 
-		<div style="grid-row: 5;"><label for="role">Role: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 6;"><input type="text" id="role" name="role" placeholder="Site administrator" value="{{.Account.Role}}"/></div>
-		<div style="grid-row: 5;"><label for="phone">Phone number:</label></div>
-		<div style="grid-row: 6;"><input type="text" id="phone" name="phone" placeholder="+49 030 123456" value="{{.Account.PhoneNumber}}"/></div>
+		<div style="grid-row: 5;"><label for="organization">Organization/Company: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 6;"><input type="text" id="organization" name="organization" value="{{.Account.Organization}}"/></div>
+		<div style="grid-row: 5;"><label for="website">Website:</label></div>
+		<div style="grid-row: 6;"><input type="text" id="website" name="website" placeholder="https://www.example.com" value="{{.Account.Website}}"/></div>
 
-		<div style="grid-row: 7;">&nbsp;</div>
+		<div style="grid-row: 7;"><label for="role">Role: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 8;"><input type="text" id="role" name="role" placeholder="Site administrator" value="{{.Account.Role}}"/></div>
+		<div style="grid-row: 7;"><label for="phone">Phone number:</label></div>
+		<div style="grid-row: 8;"><input type="text" id="phone" name="phone" placeholder="+49 030 123456" value="{{.Account.PhoneNumber}}"/></div>
 
-		<div style="grid-row: 8; grid-column: 1 / span 2;">If you want to change your password, fill out the fields below. Otherwise, leave them empty to keep your current one.</div>
-		<div style="grid-row: 9;"><label for="password">New password:</label></div>
-		<div style="grid-row: 10;"><input type="password" id="password" name="password" autocomplete="new-password"/></div>
-		<div style="grid-row: 9"><label for="password2">Confirm new password:</label></div>
-		<div style="grid-row: 10;"><input type="password" id="password2" name="password2" autocomplete="new-password"/></div>
+		<div style="grid-row: 9;">&nbsp;</div>
 
-		<div style="grid-row: 11; font-style: italic; font-size: 0.8em;">
+		<div style="grid-row: 10; grid-column: 1 / span 2;">If you want to change your password, fill out the fields below. Otherwise, leave them empty to keep your current one.</div>
+		<div style="grid-row: 11;"><label for="password">New password:</label></div>
+		<div style="grid-row: 12;"><input type="password" id="password" name="password" autocomplete="new-password"/></div>
+		<div style="grid-row: 11"><label for="password2">Confirm new password:</label></div>
+		<div style="grid-row: 12;"><input type="password" id="password2" name="password2" autocomplete="new-password"/></div>
+
+		<div style="grid-row: 13; font-style: italic; font-size: 0.8em;">
 			The password must fulfil the following criteria:
 			<ul style="margin-top: 0em;">
 				<li>Must be at least 8 characters long</li>
@@ -144,10 +155,10 @@ const tplBody = `
 			</ul>
 		</div>
 
-		<div style="grid-row: 12; align-self: center;">
+		<div style="grid-row: 14; align-self: center;">
 			Fields marked with <span class="mandatory">*</span> are mandatory.
 		</div>
-		<div style="grid-row: 12; grid-column: 2; text-align: right;">
+		<div style="grid-row: 14; grid-column: 2; text-align: right;">
 			<button type="reset">Reset</button>
 			<button type="submit" style="font-weight: bold;">Save</button>
 		</div>

@@ -155,7 +155,7 @@ func (mngr *AccountsManager) CreateAccount(accountData *data.Account) error {
 		return errors.Errorf("an account with the specified email address already exists")
 	}
 
-	if account, err := data.NewAccount(accountData.Email, accountData.FirstName, accountData.LastName, accountData.Organization, accountData.Website, accountData.Role, accountData.PhoneNumber, accountData.Password.Value); err == nil {
+	if account, err := data.NewAccount(accountData.Email, accountData.Title, accountData.FirstName, accountData.LastName, accountData.Organization, accountData.Website, accountData.Role, accountData.PhoneNumber, accountData.Password.Value); err == nil {
 		mngr.accounts = append(mngr.accounts, account)
 		mngr.storage.AccountAdded(account)
 		mngr.writeAllAccounts()

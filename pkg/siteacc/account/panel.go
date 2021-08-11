@@ -130,11 +130,14 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 		type TemplateData struct {
 			Account *data.Account
 			Params  map[string]string
+
+			Titles []string
 		}
 
 		return TemplateData{
 			Account: session.LoggedInUser,
 			Params:  flatValues,
+			Titles:  []string{"Mr", "Mrs", "Ms", "Prof", "Dr"},
 		}
 	}
 	return panel.htmlPanel.Execute(w, r, session, dataProvider)

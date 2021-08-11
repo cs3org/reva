@@ -76,7 +76,7 @@ const tplBody = `
 <div>
 	<strong>Personal information:</strong>
 	<ul style="margin-top: 0em;">
-		<li>Name: <em>{{.Account.FirstName}} {{.Account.LastName}}</em></li>
+		<li>Name: <em>{{.Account.Title}}. {{.Account.FirstName}} {{.Account.LastName}}</em></li>
 		<li>Email: <em><a href="mailto:{{.Account.Email}}">{{.Account.Email}}</a></em></li>
 		<li>Organization/company: <em>{{.Account.Organization}} {{if .Account.Website}}(<a href="{{.Account.Website}}">{{.Account.Website}}</a>){{end}}</em></li>
 		<li>Role: <em>{{.Account.Role}}</em></li>

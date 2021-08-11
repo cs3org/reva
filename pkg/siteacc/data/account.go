@@ -32,6 +32,7 @@ import (
 // Account represents a single site account.
 type Account struct {
 	Email        string `json:"email"`
+	Title        string `json:"title"`
 	FirstName    string `json:"firstName"`
 	LastName     string `json:"lastName"`
 	Organization string `json:"organization"`
@@ -73,6 +74,7 @@ func (acc *Account) Update(other *Account, setPassword bool, copyData bool) erro
 	}
 
 	// Manually update fields
+	acc.Title = other.Title
 	acc.FirstName = other.FirstName
 	acc.LastName = other.LastName
 	acc.Organization = other.Organization
@@ -131,6 +133,7 @@ func (acc *Account) CheckScopeAccess(scope string) bool {
 // Cleanup trims all string entries.
 func (acc *Account) Cleanup() {
 	acc.Email = strings.TrimSpace(acc.Email)
+	acc.Title = strings.TrimSpace(acc.Title)
 	acc.FirstName = strings.TrimSpace(acc.FirstName)
 	acc.LastName = strings.TrimSpace(acc.LastName)
 	acc.Organization = strings.TrimSpace(acc.Organization)
@@ -171,11 +174,12 @@ func (acc *Account) verify(verifyPassword bool) error {
 }
 
 // NewAccount creates a new site account.
-func NewAccount(email string, firstName, lastName string, organization, website string, role string, phoneNumber string, password string) (*Account, error) {
+func NewAccount(email string, title, firstName, lastName string, organization, website string, role string, phoneNumber string, password string) (*Account, error) {
 	t := time.Now()
 
 	acc := &Account{
 		Email:        email,
+		Title:        title,
 		FirstName:    firstName,
 		LastName:     lastName,
 		Organization: organization,

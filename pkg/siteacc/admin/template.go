@@ -57,7 +57,7 @@ const tplBody = `
 			<p>
 				<div>
 					<strong>{{.Email}}</strong><br>
-					{{.FirstName}} {{.LastName}} <em>(Joined: {{.DateCreated.Format "Jan 02, 2006 15:04"}}; Last modified: {{.DateModified.Format "Jan 02, 2006 15:04"}})</em>
+					{{.Title}}. {{.FirstName}} {{.LastName}} <em>(Joined: {{.DateCreated.Format "Jan 02, 2006 15:04"}}; Last modified: {{.DateModified.Format "Jan 02, 2006 15:04"}})</em>
 				</div>
 				<div>
 					<ul style="padding-left: 1em;">
