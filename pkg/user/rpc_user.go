@@ -113,6 +113,9 @@ type GetUserByClaimReply struct {
 // GetUserByClaim RPCClient GetUserByClaim method
 func (m *RPCClient) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
 	ctxVal, err := plugin.GetContextStruct(ctx)
+	if err != nil {
+		return nil, err
+	}
 	args := GetUserByClaimArg{Ctx: ctxVal, Claim: claim, Value: value}
 	resp := GetUserByClaimReply{}
 	err = m.Client.Call("Plugin.GetUserByClaim", args, &resp)
@@ -137,6 +140,9 @@ type GetUserGroupsReply struct {
 // GetUserGroups RPCClient GetUserGroups method
 func (m *RPCClient) GetUserGroups(ctx context.Context, user *userpb.UserId) ([]string, error) {
 	ctxVal, err := plugin.GetContextStruct(ctx)
+	if err != nil {
+		return nil, err
+	}
 	args := GetUserGroupsArg{Ctx: ctxVal, User: user}
 	resp := GetUserGroupsReply{}
 	err = m.Client.Call("Plugin.GetUserGroups", args, &resp)
@@ -161,6 +167,9 @@ type FindUsersReply struct {
 // FindUsers RPCClient FindUsers method
 func (m *RPCClient) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 	ctxVal, err := plugin.GetContextStruct(ctx)
+	if err != nil {
+		return nil, err
+	}
 	args := FindUsersArg{Ctx: ctxVal, Query: query}
 	resp := FindUsersReply{}
 	err = m.Client.Call("Plugin.FindUsers", args, &resp)
