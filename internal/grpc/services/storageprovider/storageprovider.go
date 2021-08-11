@@ -20,19 +20,15 @@ package storageprovider
 
 import (
 	"context"
-	"sort"
-
-	// "encoding/json"
 	"fmt"
 	"net/url"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-
-	// link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -94,6 +90,9 @@ func (c *config) init() {
 	// set sane defaults
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
+	}
+	if c.MimeTypes == nil || len(c.MimeTypes) == 0 {
+		c.MimeTypes = map[string]string{".zmd": "application/compressed-markdown"}
 	}
 
 }
