@@ -129,6 +129,9 @@ var _ = Describe("Sharesstorageprovider", func() {
 								StorageId: "share1-storageid",
 								OpaqueId:  "subdir",
 							},
+							PermissionSet: &sprovider.ResourcePermissions{
+								Stat: true,
+							},
 							Size: 10,
 						},
 					}
@@ -142,6 +145,9 @@ var _ = Describe("Sharesstorageprovider", func() {
 								StorageId: "share1-storageid",
 								OpaqueId:  "file",
 							},
+							PermissionSet: &sprovider.ResourcePermissions{
+								Stat: true,
+							},
 							Size: 20,
 						},
 					}
@@ -154,6 +160,9 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
 								OpaqueId:  "shareddir",
+							},
+							PermissionSet: &sprovider.ResourcePermissions{
+								Stat: true,
 							},
 							Size: 1234,
 						},
@@ -230,6 +239,20 @@ var _ = Describe("Sharesstorageprovider", func() {
 							},
 						},
 					},
+					&collaboration.ReceivedShare{
+						State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+						Share: &collaboration.Share{
+							ResourceId: &sprovider.ResourceId{
+								StorageId: "share1-storageid",
+								OpaqueId:  "shareddir",
+							},
+							Permissions: &collaboration.SharePermissions{
+								Permissions: &sprovider.ResourcePermissions{
+									ListContainer: true,
+								},
+							},
+						},
+					},
 				},
 			}, nil)
 		})
@@ -256,6 +279,54 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
 				Expect(res.Info.Path).To(Equal("/shares/share1-shareddir"))
 				Expect(res.Info.Size).To(Equal(uint64(1234)))
+			})
+
+			It("merges permissions from multiple shares", func() {
+				sharesProviderClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+					Status: status.NewOK(context.Background()),
+					Shares: []*collaboration.ReceivedShare{
+						&collaboration.ReceivedShare{
+							State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+							Share: &collaboration.Share{
+								ResourceId: &sprovider.ResourceId{
+									StorageId: "share1-storageid",
+									OpaqueId:  "shareddir",
+								},
+								Permissions: &collaboration.SharePermissions{
+									Permissions: &sprovider.ResourcePermissions{
+										Stat: true,
+									},
+								},
+							},
+						},
+						&collaboration.ReceivedShare{
+							State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+							Share: &collaboration.Share{
+								ResourceId: &sprovider.ResourceId{
+									StorageId: "share1-storageid",
+									OpaqueId:  "shareddir",
+								},
+								Permissions: &collaboration.SharePermissions{
+									Permissions: &sprovider.ResourcePermissions{
+										ListContainer: true,
+									},
+								},
+							},
+						},
+					},
+				}, nil)
+				statReq := &sprovider.StatRequest{
+					Ref: &sprovider.Reference{
+						Path: "/shares/share1-shareddir",
+					},
+				}
+				res, err := s.Stat(ctx, statReq)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				Expect(res.Info.Path).To(Equal("/shares/share1-shareddir"))
+				Expect(res.Info.PermissionSet.Stat).To(BeTrue())
+				Expect(res.Info.PermissionSet.ListContainer).To(BeTrue())
 			})
 
 			It("stats a subfolder in a share", func() {
