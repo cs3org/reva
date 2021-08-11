@@ -16,29 +16,32 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package header
+package ctx
 
 import (
-	"net/http"
-
-	"github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
-	"github.com/cs3org/reva/pkg/auth"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"context"
 )
 
-func init() {
-	registry.Register("header", New)
+// TokenHeader is the header to be used across grpc and http services
+// to forward the access token.
+const TokenHeader = "x-access-token"
+
+// ContextGetToken returns the token if set in the given context.
+func ContextGetToken(ctx context.Context) (string, bool) {
+	u, ok := ctx.Value(tokenKey).(string)
+	return u, ok
 }
 
-type strategy struct {
-	header string
+// ContextMustGetToken panics if token is not in context.
+func ContextMustGetToken(ctx context.Context) string {
+	u, ok := ContextGetToken(ctx)
+	if !ok {
+		panic("token not found in context")
+	}
+	return u
 }
 
-// New returns a new auth strategy that checks for basic auth.
-func New(m map[string]interface{}) (auth.TokenStrategy, error) {
-	return &strategy{header: ctxpkg.TokenHeader}, nil
-}
-
-func (s *strategy) GetToken(r *http.Request) string {
-	return r.Header.Get(s.header)
+// ContextSetToken stores the token in the context.
+func ContextSetToken(ctx context.Context, t string) context.Context {
+	return context.WithValue(ctx, tokenKey, t)
 }

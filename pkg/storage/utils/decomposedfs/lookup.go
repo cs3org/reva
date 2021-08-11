@@ -26,11 +26,11 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
 )
 
 // Lookup implements transformations from filepath to node and back
@@ -165,7 +165,7 @@ func (lu *Lookup) InternalPath(id string) string {
 }
 
 func (lu *Lookup) mustGetUserLayout(ctx context.Context) string {
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	return templates.WithUser(u, lu.Options.UserLayout)
 }
 
