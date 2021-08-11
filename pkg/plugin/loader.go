@@ -27,7 +27,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/hashicorp/go-getter"
@@ -43,7 +42,8 @@ type RevaPlugin struct {
 
 const dirname = "/var/tmp/reva"
 
-var isAlphaNum = regexp.MustCompile(`^[A-Za-z0-9]+$`).MatchString
+var isAlphaNum = regexp.MustCompile(`^[A-Za-z0-9_-]+$`).MatchString
+var forcedRegexp = regexp.MustCompile(`^([A-Za-z0-9]+)::(.+)$`)
 
 // Kill kills the plugin process
 func (plug *RevaPlugin) Kill() {
@@ -70,7 +70,7 @@ func compile(pluginType string, path string) (string, error) {
 	return binaryPath, nil
 }
 
-// checkDir checks and compiles plugin if the configuration points to a directory.
+// checkDirAndCompile checks and compiles plugin if the configuration points to a directory.
 func checkDirAndCompile(pluginType, driver string) (string, error) {
 	bin := driver
 	file, err := os.Stat(driver)
@@ -89,12 +89,11 @@ func checkDirAndCompile(pluginType, driver string) (string, error) {
 
 // downloadPlugin downloads the plugin and stores it into local filesystem
 func downloadAndCompilePlugin(pluginType, driver string) (string, error) {
-	driverURL := strings.TrimPrefix(driver, "https://")
 	destination := fmt.Sprintf("%s/ext/%s/%s", dirname, pluginType, filepath.Base(driver))
 	client := &getter.Client{
 		Ctx:  context.Background(),
 		Dst:  destination,
-		Src:  driverURL,
+		Src:  driver,
 		Mode: getter.ClientModeDir,
 	}
 	if err := client.Get(); err != nil {
@@ -109,6 +108,9 @@ func downloadAndCompilePlugin(pluginType, driver string) (string, error) {
 
 // isValidURL tests a string to determine if it is a well-structure URL
 func isValidURL(driver string) bool {
+	if driverURL := forcedRegexp.FindStringSubmatch(driver); driverURL != nil {
+		driver = driverURL[2]
+	}
 	_, err := url.ParseRequestURI(driver)
 	if err != nil {
 		return false
@@ -122,26 +124,33 @@ func isValidURL(driver string) bool {
 	return true
 }
 
-// Load loads the plugin using the hashicorp go-plugin system
-func Load(pluginType, driver string) (*RevaPlugin, error) {
+func fetchBinary(pluginType, driver string) (string, error) {
 	var bin string
 	var err error
 	if isAlphaNum(driver) {
-		return nil, errtypes.NotFound(driver)
+		return "", errtypes.NotFound(driver)
 	}
 
 	if isValidURL(driver) {
 		bin, err = downloadAndCompilePlugin(pluginType, driver)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	} else {
 		bin, err = checkDirAndCompile(pluginType, driver)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	}
+	return bin, nil
+}
 
+// Load loads the plugin using the hashicorp go-plugin system
+func Load(pluginType, driver string) (*RevaPlugin, error) {
+	bin, err := fetchBinary(pluginType, driver)
+	if err != nil {
+		return nil, err
+	}
 	logger := hclog.New(&hclog.LoggerOptions{
 		Name:   "plugin",
 		Output: os.Stdout,

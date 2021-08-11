@@ -25,8 +25,6 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/plugin"
-	"github.com/cs3org/reva/pkg/token"
-	user "github.com/cs3org/reva/pkg/user"
 	hcplugin "github.com/hashicorp/go-plugin"
 )
 
@@ -89,10 +87,13 @@ type AuthenticateReply struct {
 
 // Authenticate RPCClient Authenticate method
 func (m *RPCClient) Authenticate(ctx context.Context, clientID, clientSecret string) (*userpb.User, map[string]*authpb.Scope, error) {
-	ctxVal := plugin.GetContextKV(ctx)
+	ctxVal, err := plugin.GetContextStruct(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 	args := AuthenticateArgs{Ctx: ctxVal, ClientID: clientID, ClientSecret: clientSecret}
 	reply := AuthenticateReply{}
-	err := m.Client.Call("Plugin.Authenticate", args, &reply)
+	err = m.Client.Call("Plugin.Authenticate", args, &reply)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -113,18 +114,7 @@ func (m *RPCServer) Configure(args ConfigureArg, resp *ConfigureReply) error {
 
 // Authenticate RPCServer Authenticate method
 func (m *RPCServer) Authenticate(args AuthenticateArgs, resp *AuthenticateReply) error {
-	ctx := setContext(args.Ctx.Token, args.Ctx.User)
+	ctx := plugin.SetContext(args.Ctx)
 	resp.User, resp.Auth, resp.Error = m.Impl.Authenticate(ctx, args.ClientID, args.ClientSecret)
 	return nil
-}
-
-func setContext(ctxToken []string, userCtx []*userpb.User) context.Context {
-	ctx := context.Background()
-	for _, u := range userCtx {
-		ctx = user.ContextSetUser(ctx, u)
-	}
-	for _, tkn := range ctxToken {
-		ctx = token.ContextSetToken(ctx, tkn)
-	}
-	return ctx
 }
