@@ -239,6 +239,9 @@ def coverage():
       "arch": "amd64",
     },
     "trigger":{
+      "branch":[
+        "master"
+      ],
       "event": {
         "include": [
           "pull_request",
