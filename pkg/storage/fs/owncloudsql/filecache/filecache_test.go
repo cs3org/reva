@@ -298,6 +298,23 @@ var _ = Describe("Filecache", func() {
 				Expect(entry.MimeType).To(Equal(9))
 				Expect(entry.MimePart).To(Equal(5))
 			})
+
+			It("does not add a . as the name for root entries", func() {
+				data := map[string]interface{}{
+					"path":     "",
+					"checksum": "SHA1: abcdefg",
+					"etag":     "abcdefg",
+					"mimetype": "image/tiff",
+				}
+
+				_, err := cache.InsertOrUpdate(1, data, false)
+				Expect(err).ToNot(HaveOccurred())
+
+				file, err := cache.Get(1, "")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(file).ToNot(BeNil())
+				Expect(file.Name).To(Equal(""))
+			})
 		})
 
 		Context("when updating an existing record", func() {
