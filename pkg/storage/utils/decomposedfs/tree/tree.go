@@ -31,10 +31,10 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -61,6 +61,7 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(ID string) string
 	Path(ctx context.Context, n *node.Node) (path string, err error)
+	ShareFolder() string
 }
 
 // Tree manages a hierarchical tree
@@ -408,11 +409,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 
-	p, err := n.Parent()
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error getting parent "+n.ParentID)
-	}
-	return t.Propagate(ctx, p)
+	return t.Propagate(ctx, n)
 }
 
 // RestoreRecycleItemFunc returns a node and a function to restore it from the trash.
@@ -456,9 +453,13 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 
 		// rename to node only name, so it is picked up by id
 		nodePath := rn.InternalPath()
-		err = os.Rename(deletedNodePath, nodePath)
-		if err != nil {
-			return err
+
+		// attempt to rename only if we're not in a subfolder
+		if deletedNodePath != nodePath {
+			err = os.Rename(deletedNodePath, nodePath)
+			if err != nil {
+				return err
+			}
 		}
 
 		// the new node will inherit the permissions of its parent
@@ -482,6 +483,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
+		// set ParentidAttr to restorePath's node parent id
 		if trashPath != "" {
 			if err := xattr.Set(nodePath, xattrs.ParentidAttr, []byte(n.ParentID)); err != nil {
 				return errors.Wrap(err, "Decomposedfs: could not set name attribute")
@@ -738,7 +740,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 		return nil, "", "", "", errtypes.InternalError("key is empty")
 	}
 
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	trashItem = filepath.Join(t.lookup.InternalRoot(), "trash", u.Id.OpaqueId, key, path)
 
 	var link string

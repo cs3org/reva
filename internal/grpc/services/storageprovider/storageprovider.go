@@ -20,6 +20,8 @@ package storageprovider
 
 import (
 	"context"
+	"sort"
+
 	// "encoding/json"
 	"fmt"
 	"net/url"
@@ -29,6 +31,7 @@ import (
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+
 	// link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -91,6 +94,7 @@ func (c *config) init() {
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
+
 }
 
 type service struct {
@@ -278,7 +282,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	log.Info().Str("data-server", u.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
 	res := &provider.InitiateFileDownloadResponse{
 		Protocols: []*provider.FileDownloadProtocol{
-			&provider.FileDownloadProtocol{
+			{
 				Protocol:         "simple",
 				DownloadEndpoint: u.String(),
 				Expose:           s.conf.ExposeDataServer,
@@ -763,6 +767,8 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 		}, nil
 	}
 
+	sort.Sort(descendingMtime(revs))
+
 	res := &provider.ListFileVersionsResponse{
 		Status:   status.NewOK(ctx),
 		Versions: revs,
@@ -966,6 +972,43 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 	res := &provider.ListGrantsResponse{
 		Status: status.NewOK(ctx),
 		Grants: grants,
+	}
+	return res, nil
+}
+
+func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.DenyGrantResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+
+	// check grantee type is valid
+	if req.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
+		return &provider.DenyGrantResponse{
+			Status: status.NewInvalid(ctx, "grantee type is invalid"),
+		}, nil
+	}
+
+	err = s.storage.DenyGrant(ctx, newRef, req.Grantee)
+	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when setting grants")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error setting grants")
+		}
+		return &provider.DenyGrantResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.DenyGrantResponse{
+		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
@@ -1192,4 +1235,18 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
 	}
 	ri.Path = path.Join(s.mountPath, ri.Path)
 	return nil
+}
+
+type descendingMtime []*provider.FileVersion
+
+func (v descendingMtime) Len() int {
+	return len(v)
+}
+
+func (v descendingMtime) Less(i, j int) bool {
+	return v[i].Mtime >= v[j].Mtime
+}
+
+func (v descendingMtime) Swap(i, j int) {
+	v[i], v[j] = v[j], v[i]
 }

@@ -61,7 +61,7 @@ func shareListCommand() *command {
 				OpaqueId:  tokens[1],
 			}
 			shareRequest.Filters = []*collaboration.ListSharesRequest_Filter{
-				&collaboration.ListSharesRequest_Filter{
+				{
 					Type: collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID,
 					Term: &collaboration.ListSharesRequest_Filter_ResourceId{
 						ResourceId: id,

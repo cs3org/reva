@@ -246,7 +246,7 @@ func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
+func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
@@ -347,8 +347,8 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
-	return c.AddACL(ctx, auth, rootAuth, path, a)
+func (c *Client) UpdateACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
+	return c.AddACL(ctx, auth, rootAuth, path, position, a)
 }
 
 // GetACL for a file
@@ -568,6 +568,11 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	}
 	return err
 
+}
+
+// GetAttr returns the attribute specified by key
+func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, name, path string) (*eosclient.Attribute, error) {
+	return nil, errtypes.NotSupported("GetAttr function not yet implemented")
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path
@@ -1376,13 +1381,40 @@ func (c *Client) ListVersions(ctx context.Context, auth eosclient.Authorization,
 
 // RollbackToVersion rollbacks a file to a previous version.
 func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authorization, path, version string) error {
-	// TODO(ffurano):
-	/*
-		cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "versions", path, version)
-		_, _, err = c.executeEOS(ctx, cmd)
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("func", "RollbackToVersion").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("version", version).Msg("")
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(ctx, auth)
+	if err != nil {
 		return err
-	*/
-	return errtypes.NotSupported("TODO")
+	}
+
+	msg := new(erpc.NSRequest_VersionRequest)
+	msg.Cmd = erpc.NSRequest_VersionRequest_VERSION_CMD(erpc.NSRequest_VersionRequest_VERSION_CMD_value["GRAB"])
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+	msg.Grabversion = version
+
+	rq.Command = &erpc.NSRequest_Version{Version: msg}
+
+	// Now send the req and see what happens
+	resp, err := c.cl.Exec(context.Background(), rq)
+	e := c.getRespError(resp, err)
+	if e != nil {
+		log.Error().Str("func", "RollbackToVersion").Str("err", e.Error()).Msg("")
+		return e
+	}
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' ", auth.Role.UID))
+	}
+
+	log.Info().Str("func", "RollbackToVersion").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
+	return err
+
 }
 
 // ReadVersion reads the version for the given file.

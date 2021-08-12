@@ -29,10 +29,10 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/smtpclient"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -88,7 +88,7 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 
 	if r.FormValue("recipient") != "" && h.smtpCredentials != nil {
 
-		usr := user.ContextMustGetUser(ctx)
+		usr := ctxpkg.ContextMustGetUser(ctx)
 
 		// TODO: the message body needs to point to the meshdirectory service
 		subject := fmt.Sprintf("ScienceMesh: %s wants to collaborate with you", usr.DisplayName)
@@ -205,7 +205,7 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	providerInfo := ocmprovider.ProviderInfo{
 		Domain: recipientProvider,
 		Services: []*ocmprovider.Service{
-			&ocmprovider.Service{
+			{
 				Host: clientIP,
 			},
 		},

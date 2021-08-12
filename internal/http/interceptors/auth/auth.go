@@ -30,13 +30,12 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -253,9 +252,9 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			}
 
 			// store user and core access token in context.
-			ctx = user.ContextSetUser(ctx, u)
-			ctx = token.ContextSetToken(ctx, tkn)
-			ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+			ctx = ctxpkg.ContextSetUser(ctx, u)
+			ctx = ctxpkg.ContextSetToken(ctx, tkn)
+			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 			r = r.WithContext(ctx)
 			h.ServeHTTP(w, r)

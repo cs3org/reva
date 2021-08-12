@@ -32,10 +32,10 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -115,11 +115,6 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 	return s.openLocalResources(ctx, fileInfo, req.ViewMode, req.App)
 }
 
-func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
-	// TODO to be removed in a future PR
-	return nil, errtypes.NotSupported("Deprecated")
-}
-
 func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenInAppRequest_ViewMode, app string,
 	insecure, skipVerify bool, nameQueries ...string) (*providerpb.OpenInAppResponse, error) {
 	log := appctx.GetLogger(ctx)
@@ -162,8 +157,8 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 	}
 
 	gatewayClient := gateway.NewGatewayAPIClient(conn)
-	remoteCtx := token.ContextSetToken(context.Background(), ep.token)
-	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, token.TokenHeader, ep.token)
+	remoteCtx := ctxpkg.ContextSetToken(context.Background(), ep.token)
+	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, ctxpkg.TokenHeader, ep.token)
 
 	res, err := gatewayClient.OpenInApp(remoteCtx, appProviderReq)
 	if err != nil {
@@ -176,14 +171,14 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo,
 	vm gateway.OpenInAppRequest_ViewMode, app string) (*providerpb.OpenInAppResponse, error) {
 
-	accessToken, ok := token.ContextGetToken(ctx)
+	accessToken, ok := ctxpkg.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
 		return &providerpb.OpenInAppResponse{
 			Status: status.NewUnauthenticated(ctx, errtypes.InvalidCredentials("Access token is invalid or empty"), ""),
 		}, nil
 	}
 
-	provider, err := s.findAppProvider(ctx, ri)
+	provider, err := s.findAppProvider(ctx, ri, app)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling findAppProvider")
 		var st *rpc.Status
@@ -208,7 +203,6 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 	appProviderReq := &providerpb.OpenInAppRequest{
 		ResourceInfo: ri,
 		ViewMode:     providerpb.OpenInAppRequest_ViewMode(vm),
-		App:          app,
 		AccessToken:  accessToken,
 	}
 
@@ -220,32 +214,49 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 	return res, nil
 }
 
-func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo) (*registry.ProviderInfo, error) {
+func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo, app string) (*registry.ProviderInfo, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting appregistry client")
 		return nil, err
 	}
+
+	if app == "" {
+		// We need to get the default provider in case app is not set
+		// If the default isn't set as well, we'll return the first provider which matches the mimetype
+		res, err := c.GetDefaultAppProviderForMimeType(ctx, &registry.GetDefaultAppProviderForMimeTypeRequest{
+			MimeType: ri.MimeType,
+		})
+		if err == nil && res.Status.Code == rpc.Code_CODE_OK && res.Provider != nil {
+			return res.Provider, nil
+		}
+	}
+
 	res, err := c.GetAppProviders(ctx, &registry.GetAppProvidersRequest{
 		ResourceInfo: ri,
 	})
-
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppProviders")
 		return nil, err
 	}
-
-	// TODO(labkode): when sending an Open to the proxy we need to choose one
-	// provider from the list of available as the client
-	if res.Status.Code == rpc.Code_CODE_OK {
-		return res.Providers[0], nil
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return nil, errtypes.NotFound("gateway: app provider not found for resource: " + ri.String())
+		}
+		return nil, errtypes.InternalError("gateway: error finding app providers")
 	}
 
-	if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-		return nil, errtypes.NotFound("gateway: app provider not found for resource: " + ri.String())
+	if app != "" {
+		for _, p := range res.Providers {
+			if p.Name == app {
+				return p, nil
+			}
+		}
+		return nil, errtypes.NotFound("gateway: app provider not found: " + app)
 	}
 
-	return nil, errtypes.InternalError("gateway: error finding a storage provider")
+	// As a fallback, return the first provider in the list
+	return res.Providers[0], nil
 }
 
 func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {

@@ -22,6 +22,7 @@ import (
 	"context"
 	"io"
 	"net/url"
+	"os"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -60,7 +61,16 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 
 // Upload stores some data in the blobstore under the given key
 func (bs *Blobstore) Upload(key string, reader io.Reader) error {
-	_, err := bs.client.PutObject(context.Background(), bs.bucket, key, reader, -1, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+	size := int64(-1)
+	if file, ok := reader.(*os.File); ok {
+		info, err := file.Stat()
+		if err != nil {
+			return errors.Wrapf(err, "could not determine file size for object '%s'", key)
+		}
+		size = info.Size()
+	}
+
+	_, err := bs.client.PutObject(context.Background(), bs.bucket, key, reader, size, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 
 	if err != nil {
 		return errors.Wrapf(err, "could not store object '%s' into bucket '%s'", key, bs.bucket)

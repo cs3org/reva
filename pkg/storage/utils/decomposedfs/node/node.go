@@ -42,11 +42,11 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -84,6 +84,7 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(ID string) string
 	Path(ctx context.Context, n *Node) (path string, err error)
+	ShareFolder() string
 }
 
 // New returns a new instance of Node
@@ -286,10 +287,12 @@ func (n *Node) Parent() (p *Node, err error) {
 
 // Owner returns the cached owner id or reads it from the extended attributes
 // TODO can be private as only the AsResourceInfo uses it
-func (n *Node) Owner() (o *userpb.UserId, err error) {
+func (n *Node) Owner() (*userpb.UserId, error) {
 	if n.owner != nil {
 		return n.owner, nil
 	}
+
+	owner := &userpb.UserId{}
 
 	// FIXME ... do we return the owner of the reference or the owner of the target?
 	// we don't really know the owner of the target ... and as the reference may point anywhere we cannot really find out
@@ -298,52 +301,61 @@ func (n *Node) Owner() (o *userpb.UserId, err error) {
 	nodePath := n.InternalPath()
 	// lookup parent id in extended attributes
 	var attrBytes []byte
+	var err error
 	// lookup ID in extended attributes
-	if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDAttr); err == nil {
-		if n.owner == nil {
-			n.owner = &userpb.UserId{}
-		}
-		n.owner.OpaqueId = string(attrBytes)
-	} else {
-		return
+	attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDAttr)
+	switch {
+	case err == nil:
+		owner.OpaqueId = string(attrBytes)
+	case isNoData(err), isNotFound(err):
+		fallthrough
+	default:
+		return nil, err
 	}
+
 	// lookup IDP in extended attributes
-	if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDPAttr); err == nil {
-		if n.owner == nil {
-			n.owner = &userpb.UserId{}
-		}
-		n.owner.Idp = string(attrBytes)
-	} else {
-		return
+	attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDPAttr)
+	switch {
+	case err == nil:
+		owner.Idp = string(attrBytes)
+	case isNoData(err), isNotFound(err):
+		fallthrough
+	default:
+		return nil, err
 	}
+
 	// lookup type in extended attributes
-	if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerTypeAttr); err == nil {
-		if n.owner == nil {
-			n.owner = &userpb.UserId{}
-		}
-		n.owner.Type = utils.UserTypeMap(string(attrBytes))
-	} else {
-		return
+	attrBytes, err = xattr.Get(nodePath, xattrs.OwnerTypeAttr)
+	switch {
+	case err == nil:
+		owner.Type = utils.UserTypeMap(string(attrBytes))
+	case isNoData(err), isNotFound(err):
+		fallthrough
+	default:
+		// TODO the user type defaults to invalid, which is the case
+		err = nil
 	}
+
+	n.owner = owner
 	return n.owner, err
 }
 
 // PermissionSet returns the permission set for the current user
 // the parent nodes are not taken into account
-func (n *Node) PermissionSet(ctx context.Context) *provider.ResourcePermissions {
-	u, ok := user.ContextGetUser(ctx)
+func (n *Node) PermissionSet(ctx context.Context) provider.ResourcePermissions {
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return NoPermissions
+		return NoPermissions()
 	}
 	if o, _ := n.Owner(); isSameUserID(u.Id, o) {
-		return OwnerPermissions
+		return OwnerPermissions()
 	}
 	// read the permissions for the current user from the acls of the current node
 	if np, err := n.ReadUserPermissions(ctx, u); err == nil {
 		return np
 	}
-	return NoPermissions
+	return NoPermissions()
 }
 
 // InternalPath returns the internal path of the Node
@@ -546,7 +558,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// read favorite flag for the current user
 	if _, ok := mdKeysMap[FavoriteKey]; returnAllKeys || ok {
 		favorite := ""
-		if u, ok := user.ContextGetUser(ctx); ok {
+		if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 			// the favorite flag is specific to the user, so we need to incorporate the userid
 			if uid := u.GetId(); uid != nil {
 				fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
@@ -750,25 +762,25 @@ func (n *Node) UnsetTempEtag() (err error) {
 }
 
 // ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
-func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *provider.ResourcePermissions, err error) {
+func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap provider.ResourcePermissions, err error) {
 	// check if the current user is the owner
 	o, err := n.Owner()
 	if err != nil {
 		// TODO check if a parent folder has the owner set?
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
-		return NoPermissions, err
+		return NoPermissions(), err
 	}
 	if o.OpaqueId == "" {
 		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// TODO what if no owner is set but grants are present?
-		return NoOwnerPermissions, nil
+		return NoOwnerPermissions(), nil
 	}
 	if isSameUserID(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
-		return OwnerPermissions, nil
+		return OwnerPermissions(), nil
 	}
 
-	ap = &provider.ResourcePermissions{}
+	ap = provider.ResourcePermissions{}
 
 	// for an efficient group lookup convert the list of groups to a map
 	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
@@ -783,7 +795,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *pro
 	var grantees []string
 	if grantees, err = n.ListGrantees(ctx); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("error listing grantees")
-		return nil, err
+		return NoPermissions(), err
 	}
 
 	// instead of making n getxattr syscalls we are going to list the acls and filter them here
@@ -813,7 +825,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *pro
 
 		switch {
 		case err == nil:
-			AddPermissions(ap, g.GetPermissions())
+			AddPermissions(&ap, g.GetPermissions())
 		case isNoData(err):
 			err = nil
 			appctx.GetLogger(ctx).Error().Interface("node", n).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -33,9 +34,9 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"go.opencensus.io/trace"
 )
@@ -70,7 +71,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		u, ok := ctxuser.ContextGetUser(ctx)
+		u, ok := ctxpkg.ContextGetUser(ctx)
 		if !ok {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -156,6 +157,24 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	if depth != "0" && depth != "1" && depth != "infinity" {
 		sublog.Debug().Str("depth", depth).Msgf("invalid Depth header value")
 		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if depth == "0" {
+		propRes, err := h.formatTrashPropfind(ctx, s, u, nil, nil)
+		if err != nil {
+			sublog.Error().Err(err).Msg("error formatting propfind")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+		w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+		w.WriteHeader(http.StatusMultiStatus)
+		_, err = w.Write([]byte(propRes))
+		if err != nil {
+			sublog.Error().Err(err).Msg("error writing body")
+			return
+		}
 		return
 	}
 
@@ -411,7 +430,6 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 	return &response, nil
 }
 
-// restore has a destination and a key
 func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst, key, itemPath string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "restore")
@@ -467,6 +485,26 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
 		HandleErrorStatus(&sublog, w, dstStatRes.Status)
 		return
+	}
+
+	// Restoring to a non-existent location is not supported by the WebDAV spec. The following block ensures the target
+	// restore location exists, and if it doesn't returns a conflict error code.
+	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst) {
+		parentStatReq := &provider.StatRequest{
+			Ref: &provider.Reference{Path: path.Join(getHomeRes.Path, filepath.Dir(dst))},
+		}
+
+		parentStatResponse, err := client.Stat(ctx, parentStatReq)
+		if err != nil {
+			sublog.Error().Err(err).Msg("error sending grpc stat request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if parentStatResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			HandleErrorStatus(&sublog, w, &rpc.Status{Code: rpc.Code_CODE_FAILED_PRECONDITION})
+			return
+		}
 	}
 
 	successCode := http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.9.4
@@ -634,4 +672,9 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	default:
 		HandleErrorStatus(&sublog, w, res.Status)
 	}
+}
+
+func isNested(p string) bool {
+	dir, _ := path.Split(p)
+	return dir != "/"
 }

@@ -41,7 +41,7 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxuser "github.com/cs3org/reva/pkg/user"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
@@ -429,7 +429,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			// etags must be enclosed in double quotes and cannot contain them.
 			// See https://tools.ietf.org/html/rfc7232#section-2.3 for details
 			// TODO(jfd) handle weak tags that start with 'W/'
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", md.Etag))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", quoteEtag(md.Etag)))
 		}
 
 		if md.PermissionSet != nil {
@@ -568,10 +568,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "public-link-share-owner":
 					if ls != nil && ls.Owner != nil {
 						if isCurrentUserOwner(ctx, ls.Owner) {
-							u := ctxuser.ContextMustGetUser(ctx)
+							u := ctxpkg.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-owner", u.Username))
 						} else {
-							u, _ := ctxuser.ContextGetUser(ctx)
+							u, _ := ctxpkg.ContextGetUser(ctx)
 							sublog.Error().Interface("share", ls).Interface("user", u).Msg("the current user in the context should be the owner of a public link share")
 							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-owner", ""))
 						}
@@ -600,7 +600,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "owner-id": // phoenix only
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
-							u := ctxuser.ContextMustGetUser(ctx)
+							u := ctxpkg.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", u.Username))
 						} else {
 							sublog.Debug().Msg("TODO fetch user username")
@@ -673,7 +673,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "owner-display-name": // phoenix only
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
-							u := ctxuser.ContextMustGetUser(ctx)
+							u := ctxpkg.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", u.DisplayName))
 						} else {
 							sublog.Debug().Msg("TODO fetch user displayname")
@@ -722,7 +722,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				switch pf.Prop[i].Local {
 				case "getetag": // both
 					if md.Etag != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", md.Etag))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", quoteEtag(md.Etag)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getetag", ""))
 					}
@@ -826,9 +826,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	return &response, nil
 }
 
+// be defensive about wrong encoded etags
+func quoteEtag(etag string) string {
+	if strings.HasPrefix(etag, "W/") {
+		return `W/"` + strings.Trim(etag[2:], `"`) + `"`
+	}
+	return `"` + strings.Trim(etag, `"`) + `"`
+}
+
 // a file is only yours if you are the owner
 func isCurrentUserOwner(ctx context.Context, owner *userv1beta1.UserId) bool {
-	contextUser, ok := ctxuser.ContextGetUser(ctx)
+	contextUser, ok := ctxpkg.ContextGetUser(ctx)
 	if ok && contextUser.Id != nil && owner != nil &&
 		contextUser.Id.Idp == owner.Idp &&
 		contextUser.Id.OpaqueId == owner.OpaqueId {

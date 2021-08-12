@@ -38,6 +38,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
 	"github.com/cs3org/reva/pkg/eosclient/eosgrpc"
@@ -50,7 +51,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 )
 
@@ -240,12 +240,38 @@ func (fs *eosfs) Shutdown(ctx context.Context) error {
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "eosfs: error getting user from ctx")
 		return nil, err
 	}
 	return u, nil
+}
+
+func (fs *eosfs) getLayout(ctx context.Context) (layout string) {
+	if fs.conf.EnableHome {
+		u, err := getUser(ctx)
+		if err != nil {
+			panic(err)
+		}
+		layout = templates.WithUser(u, fs.conf.UserLayout)
+	}
+	return
+}
+
+func (fs *eosfs) getInternalHome(ctx context.Context) (string, error) {
+	if !fs.conf.EnableHome {
+		return "", errtypes.NotSupported("eos: get home not supported")
+	}
+
+	u, err := getUser(ctx)
+	if err != nil {
+		err = errors.Wrap(err, "eosfs: wrap: no user in ctx and home is enabled")
+		return "", err
+	}
+
+	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
+	return relativeHome, nil
 }
 
 func (fs *eosfs) wrapShadow(ctx context.Context, fn string) (internal string) {
@@ -291,17 +317,6 @@ func (fs *eosfs) unwrap(ctx context.Context, internal string) (string, error) {
 	return external, nil
 }
 
-func (fs *eosfs) getLayout(ctx context.Context) (layout string) {
-	if fs.conf.EnableHome {
-		u, err := getUser(ctx)
-		if err != nil {
-			panic(err)
-		}
-		layout = templates.WithUser(u, fs.conf.UserLayout)
-	}
-	return
-}
-
 func (fs *eosfs) getNsMatch(internal string, nss []string) (string, error) {
 	var match string
 
@@ -319,7 +334,6 @@ func (fs *eosfs) getNsMatch(internal string, nss []string) (string, error) {
 }
 
 func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (string, error) {
-	log := appctx.GetLogger(ctx)
 	trim := path.Join(ns, layout)
 
 	if !strings.HasPrefix(np, trim) {
@@ -332,12 +346,10 @@ func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (str
 		external = "/"
 	}
 
-	log.Debug().Msgf("eosfs: unwrapInternal: trim=%s external=%s ns=%s np=%s", trim, external, ns, np)
-
 	return external, nil
 }
 
-// resolve takes in a request path or request id and returns the unwrappedNominal path.
+// resolve takes in a request path or request id and returns the unwrapped path.
 func (fs *eosfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
 	if ref.ResourceId != nil {
 		p, err := fs.getPath(ctx, ref.ResourceId)
@@ -508,22 +520,18 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 }
 
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
 	fn := fs.wrap(ctx, p)
 
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
 	auth, err := fs.getUserAuth(ctx, u, fn)
-	if err != nil {
-		return err
-	}
-
-	eosACL, err := fs.getEosACL(ctx, g)
 	if err != nil {
 		return err
 	}
@@ -533,11 +541,74 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, auth, rootAuth, fn, eosACL)
+	// position where put the ACL
+	position := eosclient.StartPosition
+
+	eosACL, err := fs.getEosACL(ctx, g)
+	if err != nil {
+		return err
+	}
+
+	err = fs.c.AddACL(ctx, auth, rootAuth, fn, position, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error adding acl")
 	}
+	return nil
 
+}
+
+func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	p, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error resolving reference")
+	}
+
+	fn := fs.wrap(ctx, p)
+
+	// eos does not offer a permission bit to specify if the
+	// user can deny or not. We need to take care of that in Reva
+	// by checking context user has permission to deny
+	finfo, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return errors.Wrapf(err, "eosfs: error getting metadata for file ref: %+v", ref)
+	}
+
+	if !finfo.PermissionSet.DenyGrant {
+		return errtypes.PermissionDenied(fmt.Sprintf("eosfs: context user cannot deny access to ref: %+v", ref))
+	}
+
+	position := eosclient.EndPosition
+
+	rootAuth, err := fs.getRootAuth(ctx)
+	if err != nil {
+		return err
+	}
+
+	// empty permissions => deny
+	grant := &provider.Grant{
+		Grantee:     g,
+		Permissions: &provider.ResourcePermissions{},
+	}
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+
+	auth, err := fs.getUserAuth(ctx, u, fn)
+	if err != nil {
+		return err
+	}
+
+	eosACL, err := fs.getEosACL(ctx, grant)
+	if err != nil {
+		return err
+	}
+
+	err = fs.c.AddACL(ctx, auth, rootAuth, fn, position, eosACL)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error adding acl")
+	}
 	return nil
 }
 
@@ -749,7 +820,6 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string
 	if err != nil {
 		return nil, err
 	}
-	// TODO(labkode): diff between root (dir) and children (ref)
 
 	if fs.isShareFolderRoot(ctx, p) {
 		return fs.convertToResourceInfo(ctx, eosFileInfo)
@@ -758,8 +828,6 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string
 }
 
 func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
-	log := appctx.GetLogger(ctx)
-
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error resolving reference")
@@ -767,10 +835,7 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 
 	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
-		log.Debug().Msg("home enabled")
-		if strings.HasPrefix(p, "/") {
-			return fs.listWithHome(ctx, "/", p)
-		}
+		return fs.listWithHome(ctx, p)
 	}
 
 	return fs.listWithNominalHome(ctx, p)
@@ -813,9 +878,9 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 	return finfos, nil
 }
 
-func (fs *eosfs) listWithHome(ctx context.Context, home, p string) ([]*provider.ResourceInfo, error) {
-	if p == home {
-		return fs.listHome(ctx, home)
+func (fs *eosfs) listWithHome(ctx context.Context, p string) ([]*provider.ResourceInfo, error) {
+	if p == "/" {
+		return fs.listHome(ctx)
 	}
 
 	if fs.isShareFolderRoot(ctx, p) {
@@ -830,8 +895,8 @@ func (fs *eosfs) listWithHome(ctx context.Context, home, p string) ([]*provider.
 	return fs.listWithNominalHome(ctx, p)
 }
 
-func (fs *eosfs) listHome(ctx context.Context, home string) ([]*provider.ResourceInfo, error) {
-	fns := []string{fs.wrap(ctx, home), fs.wrapShadow(ctx, home)}
+func (fs *eosfs) listHome(ctx context.Context) ([]*provider.ResourceInfo, error) {
+	fns := []string{fs.wrap(ctx, "/"), fs.wrapShadow(ctx, "/")}
 
 	u, err := getUser(ctx)
 	if err != nil {
@@ -926,21 +991,6 @@ func (fs *eosfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	}
 
 	return qi.AvailableBytes, qi.UsedBytes, nil
-}
-
-func (fs *eosfs) getInternalHome(ctx context.Context) (string, error) {
-	if !fs.conf.EnableHome {
-		return "", errtypes.NotSupported("eosfs: get home not supported")
-	}
-
-	u, err := getUser(ctx)
-	if err != nil {
-		err = errors.Wrap(err, "local: wrap: no user in ctx and home is enabled")
-		return "", err
-	}
-
-	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
-	return relativeHome, nil
 }
 
 func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
@@ -1076,22 +1126,22 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 	}
 
 	attrs := []*eosclient.Attribute{
-		&eosclient.Attribute{
+		{
 			Type: SystemAttr,
 			Key:  "mask",
 			Val:  "700",
 		},
-		&eosclient.Attribute{
+		{
 			Type: SystemAttr,
 			Key:  "allow.oc.sync",
 			Val:  "1",
 		},
-		&eosclient.Attribute{
+		{
 			Type: SystemAttr,
 			Key:  "mtime.propagation",
 			Val:  "1",
 		},
-		&eosclient.Attribute{
+		{
 			Type: SystemAttr,
 			Key:  "forced.atomic",
 			Val:  "1",
@@ -1130,8 +1180,8 @@ func (fs *eosfs) CreateDir(ctx context.Context, p string) error {
 }
 
 func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
-	// TODO(labkode): for the time being we only allow to create references
-	// on the virtual share folder to not pollute the nominal user tree.
+	// TODO(labkode): for the time being we only allow creating references
+	// in the virtual share folder to not pollute the nominal user tree.
 	if !fs.isShareFolder(ctx, p) {
 		return errtypes.PermissionDenied("eosfs: cannot create references outside the share folder: share_folder=" + fs.conf.ShareFolder + " path=" + p)
 	}
@@ -1142,7 +1192,7 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 
 	fn := fs.wrapShadow(ctx, p)
 
-	// TODO(labkode): with grpc we can create a file touching with xattrs.
+	// TODO(labkode): with the grpc plugin we can create a file touching with xattrs.
 	// Current mechanism is: touch to hidden dir, set xattr, rename.
 	dir, base := path.Split(fn)
 	tmp := path.Join(dir, fmt.Sprintf(".sys.reva#.%s", base))
@@ -1507,7 +1557,7 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 
 // permissionSet returns the permission set for the current user
 func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileInfo, owner *userpb.UserId) *provider.ResourcePermissions {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok || u.Id == nil {
 		return &provider.ResourcePermissions{
 			// no permissions
@@ -1535,6 +1585,7 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 			RestoreRecycleItem:   true,
 			Stat:                 true,
 			UpdateGrant:          true,
+			DenyGrant:            true,
 		}
 	}
 
@@ -1584,6 +1635,7 @@ func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermi
 	l.RestoreRecycleItem = l.RestoreRecycleItem || r.RestoreRecycleItem
 	l.Stat = l.Stat || r.Stat
 	l.UpdateGrant = l.UpdateGrant || r.UpdateGrant
+	l.DenyGrant = l.DenyGrant || r.DenyGrant
 }
 
 func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {

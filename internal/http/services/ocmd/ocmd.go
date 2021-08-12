@@ -30,6 +30,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+func init() {
+	global.Register("ocmd", New)
+}
+
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
 	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
@@ -54,10 +58,6 @@ type svc struct {
 	NotificationsHandler *notificationsHandler
 	ConfigHandler        *configHandler
 	InvitesHandler       *invitesHandler
-}
-
-func init() {
-	global.Register("ocmd", New)
 }
 
 // New returns a new ocmd object

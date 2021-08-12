@@ -118,11 +118,11 @@ func ocmShareCreateCommand() *command {
 
 		opaqueObj := &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
-				"permissions": &types.OpaqueEntry{
+				"permissions": {
 					Decoder: "plain",
 					Value:   []byte(strconv.Itoa(pint)),
 				},
-				"name": &types.OpaqueEntry{
+				"name": {
 					Decoder: "plain",
 					Value:   []byte(res.Info.Path),
 				},

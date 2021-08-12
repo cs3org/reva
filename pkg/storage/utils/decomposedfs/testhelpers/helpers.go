@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ruser "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
@@ -34,7 +35,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
-	ruser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/tests/helpers"
 )
 

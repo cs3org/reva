@@ -24,8 +24,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/registry/static"
-	"github.com/cs3org/reva/pkg/user"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -33,7 +33,7 @@ import (
 
 var _ = Describe("Static", func() {
 
-	totalProviders, rootProviders, eosProviders := 32, 30, 28
+	totalProviders, rootProviders, eosProviders := 33, 31, 29
 
 	handler, err := static.New(map[string]interface{}{
 		"home_provider": "/home",
@@ -75,16 +75,19 @@ var _ = Describe("Static", func() {
 			"123e4567-e89b-12d3-a456-426655440001": map[string]interface{}{
 				"address": "home-01-home",
 			},
+			"/eos/": map[string]interface{}{
+				"address": "unspecific-rule-that-should-never-been-hit",
+			},
 		},
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	ctxAlice := user.ContextSetUser(context.Background(), &userpb.User{
+	ctxAlice := ctxpkg.ContextSetUser(context.Background(), &userpb.User{
 		Id: &userpb.UserId{
 			OpaqueId: "alice",
 		},
 	})
-	ctxRobert := user.ContextSetUser(context.Background(), &userpb.User{
+	ctxRobert := ctxpkg.ContextSetUser(context.Background(), &userpb.User{
 		Id: &userpb.UserId{
 			OpaqueId: "robert",
 		},

@@ -109,9 +109,9 @@ func (c *config) init() {
 	// use shared secret if not set
 	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
 
-	// if the transfer does not start in the next 10 seconds the session is expired.
+	// lifetime for the transfer token (TUS upload)
 	if c.TransferExpires == 0 {
-		c.TransferExpires = 10
+		c.TransferExpires = 100 * 60 // seconds
 	}
 }
 

@@ -46,8 +46,15 @@ type Credentials struct {
 // New returns a new auth Manager.
 func New(m map[string]interface{}) (auth.Manager, error) {
 	// m not used
+	mgr := &manager{}
+	err := mgr.Configure(m)
+	return mgr, err
+}
+
+func (m *manager) Configure(ml map[string]interface{}) error {
 	creds := getCredentials()
-	return &manager{credentials: creds}, nil
+	m.credentials = creds
+	return nil
 }
 
 func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
@@ -74,7 +81,7 @@ func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret strin
 
 func getCredentials() map[string]Credentials {
 	return map[string]Credentials{
-		"einstein": Credentials{
+		"einstein": {
 			Secret: "relativity",
 			User: &user.User{
 				Id: &user.UserId{
@@ -88,7 +95,7 @@ func getCredentials() map[string]Credentials {
 				DisplayName: "Albert Einstein",
 			},
 		},
-		"marie": Credentials{
+		"marie": {
 			Secret: "radioactivity",
 			User: &user.User{
 				Id: &user.UserId{
@@ -102,7 +109,7 @@ func getCredentials() map[string]Credentials {
 				DisplayName: "Marie Curie",
 			},
 		},
-		"richard": Credentials{
+		"richard": {
 			Secret: "superfluidity",
 			User: &user.User{
 				Id: &user.UserId{

@@ -36,6 +36,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage"
@@ -45,7 +46,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -53,7 +53,7 @@ import (
 
 // PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
-	AssemblePermissions(ctx context.Context, n *node.Node) (ap *provider.ResourcePermissions, err error)
+	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
 	HasPermission(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
@@ -148,7 +148,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context) (total uint64, inUse uint6
 		return 0, 0, errtypes.PermissionDenied(n.ID)
 	}
 
-	ri, err := n.AsResourceInfo(ctx, rp, []string{"treesize", "quota"})
+	ri, err := n.AsResourceInfo(ctx, &rp, []string{"treesize", "quota"})
 	if err != nil {
 		return 0, 0, err
 	}
@@ -202,7 +202,7 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	}
 
 	// update the owner
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	if err = h.WriteMetadata(u.Id); err != nil {
 		return
 	}
@@ -246,7 +246,7 @@ func (fs *Decomposedfs) GetHome(ctx context.Context) (string, error) {
 	if !fs.o.EnableHome || fs.o.UserLayout == "" {
 		return "", errtypes.NotSupported("Decomposedfs: GetHome() home supported disabled")
 	}
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	layout := templates.WithUser(u, fs.o.UserLayout)
 	return filepath.Join(fs.o.Root, layout), nil // TODO use a namespace?
 }
@@ -399,7 +399,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx, rp, mdKeys)
+	return node.AsResourceInfo(ctx, &rp, mdKeys)
 }
 
 // ListFolder returns a list of resources in the specified folder
@@ -431,8 +431,9 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	for i := range children {
 		np := rp
 		// add this childs permissions
-		node.AddPermissions(np, n.PermissionSet(ctx))
-		if ri, err := children[i].AsResourceInfo(ctx, np, mdKeys); err == nil {
+		pset := n.PermissionSet(ctx)
+		node.AddPermissions(&np, &pset)
+		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}
@@ -534,7 +535,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	spaces := make([]*provider.StorageSpace, 0, len(matches))
 
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Msg("expected user in context")
 		return spaces, nil
