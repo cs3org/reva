@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"golang.org/x/sys/windows"
 )
 
 // calcEtag will create an etag based on the md5 of
