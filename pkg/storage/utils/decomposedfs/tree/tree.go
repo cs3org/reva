@@ -147,18 +147,18 @@ func (t *Tree) Setup(owner string) error {
 			if isRootNode(nodePath) {
 				// create personal space
 				// we can reuse the node id as the space id
-				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/personal", nodes[i].Name()))
-				if err != nil {
-					fmt.Printf("could not create symlink for personal space %s, %s\n", nodes[i].Name(), err)
-				}
+				_ = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/personal", nodes[i].Name()))
+				//if err != nil {
+				//	fmt.Printf("could not create symlink for personal space %s, %s\n", nodes[i].Name(), err)
+				//}
 			}
 
 			// is it a shared node? -> create shared space
 			if isSharedNode(nodePath) {
-				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/share", nodes[i].Name()))
-				if err != nil {
-					fmt.Printf("could not create symlink for shared space %s, %s\n", nodes[i].Name(), err)
-				}
+				_ = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/share", nodes[i].Name()))
+				//if err != nil {
+				//	fmt.Printf("could not create symlink for shared space %s, %s\n", nodes[i].Name(), err)
+				//}
 			}
 		}
 	} else if !fi.IsDir() {

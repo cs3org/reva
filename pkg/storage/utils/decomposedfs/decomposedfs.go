@@ -23,7 +23,6 @@ package decomposedfs
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math"
 	"net/url"
@@ -232,10 +231,10 @@ func (fs *Decomposedfs) createStorageSpace(spaceType, nodeID string) error {
 	}
 
 	// we can reuse the node id as the space id
-	err := os.Symlink("../../nodes/"+nodeID, filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
-	if err != nil {
-		fmt.Printf("could not create symlink for '%s' space %s, %s\n", spaceType, nodeID, err)
-	}
+	_ = os.Symlink("../../nodes/"+nodeID, filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
+	//if err != nil {
+	//	fmt.Printf("could not create symlink for '%s' space %s, %s\n", spaceType, nodeID, err)
+	//}
 
 	return nil
 }
