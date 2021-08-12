@@ -90,7 +90,7 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 
 func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "propfind")
+	ctx, span := trace.StartSpan(ctx, "spaces_propfind")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()

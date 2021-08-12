@@ -50,7 +50,7 @@ type intermediateDirRefFunc func() (*provider.Reference, *rpc.Status, error)
 
 func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "head")
+	ctx, span := trace.StartSpan(ctx, "copy")
 	defer span.End()
 
 	src := path.Join(ns, r.URL.Path)
@@ -260,7 +260,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "head")
+	ctx, span := trace.StartSpan(ctx, "spaces_copy")
 	defer span.End()
 
 	dst, err := extractDestination(r)

@@ -302,14 +302,9 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	log := appctx.GetLogger(ctx)
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		switch err.(type) {
-		case errtypes.IsNotFound:
-			newRef = req.Ref
-		default:
-			return &provider.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "error unwrapping path"),
-			}, nil
-		}
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
 	}
 	if newRef.GetPath() == "/" {
 		return &provider.InitiateFileUploadResponse{
@@ -346,7 +341,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			st = status.NewNotFound(ctx, "path not found when initiating upload")
 		case errtypes.IsBadRequest, errtypes.IsChecksumMismatch:
 			st = status.NewInvalidArg(ctx, err.Error())
-			// TODO TUS uses a custom ChecksumMismatch 460 http status which is in an unnasigned range in
+			// TODO TUS uses a custom ChecksumMismatch 460 http status which is in an unassigned range in
 			// https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
 			// maybe 409 conflict is good enough
 			// someone is proposing `419 Checksum Error`, see https://stackoverflow.com/a/35665694

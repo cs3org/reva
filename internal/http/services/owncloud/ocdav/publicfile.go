@@ -131,7 +131,7 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns string, onContainer bool) {
 	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "propfind")
+	ctx, span := trace.StartSpan(ctx, "token_propfind")
 	defer span.End()
 
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
