@@ -348,7 +348,7 @@ func (n *Node) PermissionSet(ctx context.Context) provider.ResourcePermissions {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
 		return NoPermissions()
 	}
-	if o, _ := n.Owner(); isSameUserID(u.Id, o) {
+	if o, _ := n.Owner(); utils.UserEqual(u.Id, o) {
 		return OwnerPermissions()
 	}
 	// read the permissions for the current user from the acls of the current node
@@ -460,7 +460,7 @@ func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 }
 
 // AsResourceInfo return the node as CS3 ResourceInfo
-func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 
 	var fn string
@@ -491,9 +491,13 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	id := &provider.ResourceId{OpaqueId: n.ID}
 
-	fn, err = n.lu.Path(ctx, n)
-	if err != nil {
-		return nil, err
+	if returnBasename {
+		fn = n.Name
+	} else {
+		fn, err = n.lu.Path(ctx, n)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ri = &provider.ResourceInfo{
@@ -775,7 +779,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 		// TODO what if no owner is set but grants are present?
 		return NoOwnerPermissions(), nil
 	}
-	if isSameUserID(u.Id, o) {
+	if utils.UserEqual(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
 		return OwnerPermissions(), nil
 	}
@@ -896,17 +900,6 @@ func (n *Node) hasUserShares(ctx context.Context) bool {
 		}
 	}
 	return false
-}
-
-func isSameUserID(i *userpb.UserId, j *userpb.UserId) bool {
-	switch {
-	case i == nil, j == nil:
-		return false
-	case i.OpaqueId == j.OpaqueId && i.Idp == j.Idp:
-		return true
-	default:
-		return false
-	}
 }
 
 func parseMTime(v string) (t time.Time, err error) {

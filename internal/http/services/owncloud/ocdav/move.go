@@ -28,6 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/rs/zerolog"
 	"go.opencensus.io/trace"
 )
@@ -38,7 +39,6 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	defer span.End()
 
 	srcPath := path.Join(ns, r.URL.Path)
-
 	dstPath, err := extractDestination(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -64,6 +64,53 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 		return ref, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
 	}
 	s.handleMove(ctx, w, r, src, dst, intermediateDirRefFunc, sublog)
+}
+
+func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
+	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "spaces_move")
+	defer span.End()
+
+	dst, err := extractDestination(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", srcSpaceID).Str("path", r.URL.Path).Logger()
+	// retrieve a specific storage space
+	srcRef, status, err := s.lookUpStorageSpaceReference(ctx, srcSpaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	dstSpaceID, dstRelPath := router.ShiftPath(dst)
+
+	// retrieve a specific storage space
+	dstRef, status, err := s.lookUpStorageSpaceReference(ctx, dstSpaceID, dstRelPath)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
+		intermediateDir := path.Dir(dstRelPath)
+		return s.lookUpStorageSpaceReference(ctx, dstSpaceID, intermediateDir)
+	}
+	s.handleMove(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, sublog)
 }
 
 func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, intermediateDirRef intermediateDirRefFunc, log zerolog.Logger) {

@@ -60,6 +60,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 	} else if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
+			// TODO path might be empty or relative...
 			m := fmt.Sprintf("Resource %v not found", ref.Path)
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,
@@ -69,6 +70,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		}
 		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 			w.WriteHeader(http.StatusForbidden)
+			// TODO path might be empty or relative...
 			m := fmt.Sprintf("Permission denied to delete %v", ref.Path)
 			b, err := Marshal(exception{
 				code:    SabredavPermissionDenied,
@@ -88,4 +90,26 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "spaces_delete")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Logger()
+	// retrieve a specific storage space
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
+
+	s.handleDelete(ctx, w, r, ref, sublog)
 }

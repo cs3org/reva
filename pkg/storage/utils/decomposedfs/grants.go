@@ -68,7 +68,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return err
 	}
 
-	if err := fs.createStorageSpace("share", node.ID); err != nil {
+	if err := fs.createStorageSpace(ctx, "share", node.ID); err != nil {
 		return err
 	}
 

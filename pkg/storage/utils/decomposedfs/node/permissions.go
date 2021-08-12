@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -113,7 +114,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		// TODO what if no owner is set but grants are present?
 		return NoOwnerPermissions(), nil
 	}
-	if isSameUserID(u.Id, o) {
+	if utils.UserEqual(u.Id, o) {
 		lp, err := n.lu.Path(ctx, n)
 		if err == nil && lp == n.lu.ShareFolder() {
 			return ShareFolderPermissions(), nil
@@ -276,7 +277,7 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 		perms := NoOwnerPermissions()
 		return nil, &perms
 	}
-	if isSameUserID(u.Id, o) {
+	if utils.UserEqual(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
 		perms := OwnerPermissions()
 		return u, &perms
