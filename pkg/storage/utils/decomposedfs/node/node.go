@@ -42,11 +42,11 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -326,12 +326,12 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 // PermissionSet returns the permission set for the current user
 // the parent nodes are not taken into account
 func (n *Node) PermissionSet(ctx context.Context) provider.ResourcePermissions {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
 		return NoPermissions()
 	}
-	if o, _ := n.Owner(); isSameUserID(u.Id, o) {
+	if o, _ := n.Owner(); utils.UserEqual(u.Id, o) {
 		return OwnerPermissions()
 	}
 	// read the permissions for the current user from the acls of the current node
@@ -443,7 +443,7 @@ func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 }
 
 // AsResourceInfo return the node as CS3 ResourceInfo
-func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 
 	var fn string
@@ -474,9 +474,13 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	id := &provider.ResourceId{OpaqueId: n.ID}
 
-	fn, err = n.lu.Path(ctx, n)
-	if err != nil {
-		return nil, err
+	if returnBasename {
+		fn = n.Name
+	} else {
+		fn, err = n.lu.Path(ctx, n)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ri = &provider.ResourceInfo{
@@ -541,7 +545,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// read favorite flag for the current user
 	if _, ok := mdKeysMap[FavoriteKey]; returnAllKeys || ok {
 		favorite := ""
-		if u, ok := user.ContextGetUser(ctx); ok {
+		if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 			// the favorite flag is specific to the user, so we need to incorporate the userid
 			if uid := u.GetId(); uid != nil {
 				fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
@@ -758,7 +762,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 		// TODO what if no owner is set but grants are present?
 		return NoOwnerPermissions(), nil
 	}
-	if isSameUserID(u.Id, o) {
+	if utils.UserEqual(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
 		return OwnerPermissions(), nil
 	}
@@ -879,17 +883,6 @@ func (n *Node) hasUserShares(ctx context.Context) bool {
 		}
 	}
 	return false
-}
-
-func isSameUserID(i *userpb.UserId, j *userpb.UserId) bool {
-	switch {
-	case i == nil, j == nil:
-		return false
-	case i.OpaqueId == j.OpaqueId && i.Idp == j.Idp:
-		return true
-	default:
-		return false
-	}
 }
 
 func parseMTime(v string) (t time.Time, err error) {

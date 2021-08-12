@@ -34,13 +34,13 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -223,7 +223,7 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 	// is not the same as the logged in user. In that case, we'll treat fileOwner
 	// as the username whose files are to be accessed and use that in the
 	// namespace template.
-	u, ok := ctxuser.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok || !useLoggedInUserNS {
 		requestUserID, _ := router.ShiftPath(requestPath)
 		u = &userpb.User{
@@ -327,7 +327,7 @@ func replaceAllStringSubmatchFunc(re *regexp.Regexp, str string, repl func([]str
 	return result + str[lastIndex:]
 }
 
-var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@])`)
+var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@!$])`)
 
 // encodePath encodes the path of a url.
 //

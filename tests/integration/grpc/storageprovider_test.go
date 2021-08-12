@@ -30,12 +30,11 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
-	"github.com/cs3org/reva/pkg/token"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-	ruser "github.com/cs3org/reva/pkg/user"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -86,9 +85,9 @@ var _ = Describe("storage providers", func() {
 		Expect(err).ToNot(HaveOccurred())
 		t, err := tokenManager.MintToken(ctx, user, scope)
 		Expect(err).ToNot(HaveOccurred())
-		ctx = token.ContextSetToken(ctx, t)
-		ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)
-		ctx = ruser.ContextSetUser(ctx, user)
+		ctx = ctxpkg.ContextSetToken(ctx, t)
+		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, t)
+		ctx = ctxpkg.ContextSetUser(ctx, user)
 
 		revads, err = startRevads(dependencies, variables)
 		Expect(err).ToNot(HaveOccurred())
@@ -510,7 +509,7 @@ var _ = Describe("storage providers", func() {
 				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
 				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
 
-				ctx := ruser.ContextSetUser(context.Background(), user)
+				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
@@ -578,7 +577,7 @@ var _ = Describe("storage providers", func() {
 				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
 				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
 
-				ctx := ruser.ContextSetUser(context.Background(), user)
+				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())

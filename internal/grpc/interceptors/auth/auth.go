@@ -24,11 +24,11 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -86,17 +86,17 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 
 			// If a token is present, set it anyway, as we might need the user info
 			// to decide the storage provider.
-			tkn, ok := token.ContextGetToken(ctx)
+			tkn, ok := ctxpkg.ContextGetToken(ctx)
 			if ok {
 				u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr)
 				if err == nil {
-					ctx = user.ContextSetUser(ctx, u)
+					ctx = ctxpkg.ContextSetUser(ctx, u)
 				}
 			}
 			return handler(ctx, req)
 		}
 
-		tkn, ok := token.ContextGetToken(ctx)
+		tkn, ok := ctxpkg.ContextGetToken(ctx)
 
 		if !ok || tkn == "" {
 			log.Warn().Msg("access token not found or empty")
@@ -110,7 +110,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
 
-		ctx = user.ContextSetUser(ctx, u)
+		ctx = ctxpkg.ContextSetUser(ctx, u)
 		return handler(ctx, req)
 	}
 	return interceptor, nil
@@ -147,11 +147,11 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 
 			// If a token is present, set it anyway, as we might need the user info
 			// to decide the storage provider.
-			tkn, ok := token.ContextGetToken(ctx)
+			tkn, ok := ctxpkg.ContextGetToken(ctx)
 			if ok {
 				u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr)
 				if err == nil {
-					ctx = user.ContextSetUser(ctx, u)
+					ctx = ctxpkg.ContextSetUser(ctx, u)
 					ss = newWrappedServerStream(ctx, ss)
 				}
 			}
@@ -159,7 +159,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			return handler(srv, ss)
 		}
 
-		tkn, ok := token.ContextGetToken(ctx)
+		tkn, ok := ctxpkg.ContextGetToken(ctx)
 
 		if !ok || tkn == "" {
 			log.Warn().Msg("access token not found")
@@ -174,7 +174,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		}
 
 		// store user and core access token in context.
-		ctx = user.ContextSetUser(ctx, u)
+		ctx = ctxpkg.ContextSetUser(ctx, u)
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}
