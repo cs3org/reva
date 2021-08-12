@@ -679,9 +679,10 @@ func (fs *owncloudsqlfs) createHomeForUser(ctx context.Context, user string) err
 			return err
 		}
 		data := map[string]interface{}{
-			"path":     fs.toDatabasePath(v),
-			"etag":     calcEtag(ctx, fi),
-			"mimetype": "httpd/unix-directory",
+			"path":        fs.toDatabasePath(v),
+			"etag":        calcEtag(ctx, fi),
+			"mimetype":    "httpd/unix-directory",
+			"permissions": 31, // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
 		}
 
 		allowEmptyParent := v == filepath.Join(fs.c.DataDirectory, user) // the root doesn't have a parent
