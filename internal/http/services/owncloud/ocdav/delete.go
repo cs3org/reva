@@ -24,11 +24,10 @@ import (
 	"net/http"
 	"path"
 
-	rtrace "github.com/cs3org/reva/pkg/trace"
-
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
 )
 
@@ -97,7 +96,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 
 func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "spaces_delete")
+	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "spaces_delete")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
