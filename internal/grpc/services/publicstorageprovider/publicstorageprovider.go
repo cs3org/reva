@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -577,7 +578,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token st
 		return "", "", errtypes.BadRequest("need absolute path ref: got " + ref.String())
 	}
 
-	if ref.GetPath() == "" {
+	if !utils.IsAbsolutePathReference(ref) {
 		// abort, no valid id nor path
 		return "", "", errtypes.BadRequest("invalid ref: " + ref.String())
 	}

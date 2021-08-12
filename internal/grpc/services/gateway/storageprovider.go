@@ -136,16 +136,16 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 	if id != nil {
 		// query that specific storage provider
-		parts := strings.SplitN(id.OpaqueId, "!", 2)
-		if len(parts) != 2 {
+		storageid, opaqeid, err := utils.SplitStorageSpaceID(id.OpaqueId)
+		if err != nil {
 			return &provider.ListStorageSpacesResponse{
 				Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
 			}, nil
 		}
 		res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
 			Ref: &provider.Reference{ResourceId: &provider.ResourceId{
-				StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + an opaqueid
-				OpaqueId:  parts[1],
+				StorageId: storageid,
+				OpaqueId:  opaqeid,
 			}},
 		})
 		if err != nil {
@@ -267,15 +267,15 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	parts := strings.SplitN(req.Id.OpaqueId, "!", 2)
-	if len(parts) != 2 {
+	storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
+	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
 			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
 		}, nil
 	}
 	c, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
-		StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + a opaqueid
-		OpaqueId:  parts[1],
+		StorageId: storageid,
+		OpaqueId:  opaqeid,
 	}})
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
@@ -307,6 +307,11 @@ func (s *svc) getHome(_ context.Context) string {
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.initiateFileDownload(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileDownloadResponse{
@@ -517,6 +522,9 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
 	log := appctx.GetLogger(ctx)
+	if utils.IsRelativeReference(req.Ref) {
+		return s.initiateFileUpload(ctx, req)
+	}
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileUploadResponse{
@@ -739,6 +747,11 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.createContainer(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.CreateContainerResponse{
@@ -1248,14 +1261,18 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	}
 
 	resPath := req.Ref.GetPath()
-	if len(providers) == 1 && (resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
+	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
 		c, err := s.getStorageProviderClient(ctx, providers[0])
 		if err != nil {
 			return &provider.StatResponse{
 				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
 			}, nil
 		}
-		return c.Stat(ctx, req)
+		rsp, err := c.Stat(ctx, req)
+		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
+			return rsp, err
+		}
+		return rsp, nil
 	}
 
 	return s.statAcrossProviders(ctx, req, providers)
@@ -1308,14 +1325,18 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 		return
 	}
 
-	resPath := path.Clean(req.Ref.GetPath())
-	newPath := req.Ref.GetPath()
-	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-		newPath = p.ProviderPath
+	if utils.IsAbsoluteReference(req.Ref) {
+		resPath := path.Clean(req.Ref.GetPath())
+		newPath := req.Ref.GetPath()
+		if resPath != "." && !strings.HasPrefix(resPath, p.ProviderPath) {
+			newPath = p.ProviderPath
+		}
+		req.Ref = &provider.Reference{Path: newPath}
 	}
-	r, err := c.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: newPath}})
+
+	r, err := c.Stat(ctx, req)
 	if err != nil {
-		*e = errors.Wrap(err, fmt.Sprintf("gateway: error calling Stat %s on %+v", newPath, p))
+		*e = errors.Wrap(err, fmt.Sprintf("gateway: error calling Stat %s on %+v", req.Ref, p))
 		return
 	}
 	if res == nil {
@@ -1325,6 +1346,11 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.stat(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.StatResponse{
@@ -1639,6 +1665,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 		for _, inf := range infoFromProviders[i] {
 			if indirects[i] {
 				p := inf.Path
+				// TODO do we need to trim prefix here for relative references?
 				nestedInfos[p] = append(nestedInfos[p], inf)
 			} else {
 				infos = append(infos, inf)
@@ -1673,31 +1700,34 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 		return
 	}
 
-	resPath := path.Clean(req.Ref.GetPath())
-	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-		// The path which we're supposed to list encompasses this provider
-		// so just return the first child and mark it as indirect
-		rel, err := filepath.Rel(resPath, p.ProviderPath)
-		if err != nil {
-			*e = err
+	if utils.IsAbsoluteReference(req.Ref) {
+		resPath := path.Clean(req.Ref.GetPath())
+		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
+			// The path which we're supposed to list encompasses this provider
+			// so just return the first child and mark it as indirect
+			rel, err := filepath.Rel(resPath, p.ProviderPath)
+			if err != nil {
+				*e = err
+				return
+			}
+			parts := strings.Split(rel, "/")
+			p := path.Join(resPath, parts[0])
+			*ind = true
+			*res = []*provider.ResourceInfo{
+				{
+					Id: &provider.ResourceId{
+						StorageId: "/",
+						OpaqueId:  uuid.New().String(),
+					},
+					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Path: p,
+					Size: 0,
+				},
+			}
 			return
 		}
-		parts := strings.Split(rel, "/")
-		p := path.Join(resPath, parts[0])
-		*ind = true
-		*res = []*provider.ResourceInfo{
-			{
-				Id: &provider.ResourceId{
-					StorageId: "/",
-					OpaqueId:  uuid.New().String(),
-				},
-				Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Path: p,
-				Size: 0,
-			},
-		}
-		return
 	}
+
 	r, err := c.ListContainer(ctx, req)
 	if err != nil {
 		*e = errors.Wrap(err, "gateway: error calling ListContainer")
@@ -1708,6 +1738,11 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.listContainer(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.ListContainerResponse{
@@ -1896,7 +1931,7 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 		return res.Info.Path, res.Status
 	}
 
-	if ref.Path != "" {
+	if utils.IsAbsolutePathReference(ref) {
 		return ref.Path, &rpc.Status{Code: rpc.Code_CODE_OK}
 	}
 	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
