@@ -196,7 +196,6 @@ func (s *Server) registerServices() error {
 	if err != nil {
 		return err
 	}
-	opts = append(opts)
 	grpcServer := grpc.NewServer(opts...)
 
 	for _, svc := range s.services {
