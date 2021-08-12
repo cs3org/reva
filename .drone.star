@@ -239,11 +239,10 @@ def coverage():
       "arch": "amd64",
     },
     "trigger":{
-      "event": {
-        "include": [
-          "pull_request",
-        ],
-      },
+	"ref":[
+		"refs/heads/master",
+		"refs/pull/**",
+	],
     },
     "steps": [
       {
