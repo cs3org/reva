@@ -670,7 +670,7 @@ func (fs *owncloudsqlfs) createHomeForUser(ctx context.Context, user string) err
 		return err
 	}
 	for _, v := range homePaths {
-		if err := os.MkdirAll(v, 0700); err != nil {
+		if err := os.MkdirAll(v, 0755); err != nil {
 			return errors.Wrap(err, "owncloudsql: error creating home path: "+v)
 		}
 
