@@ -149,7 +149,7 @@ func (m *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 var Handshake = plugin.HandshakeConfig{
 	ProtocolVersion:  1,
 	MagicCookieKey:   "BASIC_PLUGIN",
-	MagicCookieValue: "hello",
+	MagicCookieValue: "reva",
 }
 
 func main() {

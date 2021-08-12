@@ -53,7 +53,7 @@ func (plug *RevaPlugin) Kill() {
 var handshake = plugin.HandshakeConfig{
 	ProtocolVersion:  1,
 	MagicCookieKey:   "BASIC_PLUGIN",
-	MagicCookieValue: "hello",
+	MagicCookieValue: "reva",
 }
 
 func compile(pluginType string, path string) (string, error) {
