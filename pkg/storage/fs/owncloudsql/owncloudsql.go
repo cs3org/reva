@@ -575,7 +575,7 @@ func (fs *owncloudsqlfs) resolve(ctx context.Context, ref *provider.Reference) (
 			}
 			p = filepath.Join(owner, p)
 		}
-		return p, nil
+		return fs.toInternalPath(ctx, p), nil
 	}
 
 	if ref.GetPath() != "" {
