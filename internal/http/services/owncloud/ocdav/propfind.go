@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"go.opencensus.io/trace"
-	"go.opentelemetry.io/otel/propagation"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -66,8 +65,7 @@ const (
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, fmt.Sprintf("%s %v", r.Method, r.URL.Path))
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
 
 	span.SetAttributes(attribute.String("component", "ocdav"))
