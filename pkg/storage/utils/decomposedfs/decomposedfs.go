@@ -51,7 +51,6 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // PermissionsChecker defines an interface for checking permissions on a Node
@@ -87,7 +86,6 @@ type Decomposedfs struct {
 	tp           Tree
 	o            *options.Options
 	p            PermissionsChecker
-	tprov        trace.TracerProvider
 	chunkHandler *chunking.ChunkHandler
 }
 
