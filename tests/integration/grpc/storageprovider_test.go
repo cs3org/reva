@@ -509,7 +509,7 @@ var _ = Describe("storage providers", func() {
 				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
 				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
 
-				ctx := ruser.ContextSetUser(context.Background(), user)
+				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
