@@ -91,6 +91,14 @@ func NewConn(endpoint string) (*grpc.ClientConn, error) {
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize),
 		),
+		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor(
+			otelgrpc.WithTracerProvider(
+				rtrace.Provider,
+			),
+			otelgrpc.WithPropagators(
+				rtrace.Propagator,
+			),
+		)),
 		grpc.WithUnaryInterceptor(
 			otelgrpc.UnaryClientInterceptor(
 				otelgrpc.WithTracerProvider(
