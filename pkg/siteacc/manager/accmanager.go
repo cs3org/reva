@@ -27,6 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/email"
+	"github.com/cs3org/reva/pkg/siteacc/manager/gocdb"
 	"github.com/cs3org/reva/pkg/siteacc/sitereg"
 	"github.com/cs3org/reva/pkg/smtpclient"
 	"github.com/pkg/errors"
@@ -48,8 +49,9 @@ type AccountsManager struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	accounts data.Accounts
-	storage  data.Storage
+	accounts          data.Accounts
+	accountsListeners []AccountsListener
+	storage           data.Storage
 
 	smtp *smtpclient.SMTPCredentials
 
@@ -75,6 +77,13 @@ func (mngr *AccountsManager) initialize(conf *config.Configuration, log *zerolog
 		mngr.readAllAccounts()
 	} else {
 		return errors.Wrap(err, "unable to create accounts storage")
+	}
+
+	// Register accounts listeners
+	if listener, err := gocdb.NewListener(mngr.conf, mngr.log); err == nil {
+		mngr.accountsListeners = append(mngr.accountsListeners, listener)
+	} else {
+		return errors.Wrap(err, "unable to create the GOCDB accounts listener")
 	}
 
 	// Create the SMTP client
@@ -161,6 +170,7 @@ func (mngr *AccountsManager) CreateAccount(accountData *data.Account) error {
 		mngr.writeAllAccounts()
 
 		mngr.sendEmail(account, nil, email.SendAccountCreated)
+		mngr.callListeners(account, AccountsListener.AccountCreated)
 	} else {
 		return errors.Wrap(err, "error while creating account")
 	}
@@ -183,6 +193,8 @@ func (mngr *AccountsManager) UpdateAccount(accountData *data.Account, setPasswor
 
 		mngr.storage.AccountUpdated(account)
 		mngr.writeAllAccounts()
+
+		mngr.callListeners(account, AccountsListener.AccountUpdated)
 	} else {
 		return errors.Wrap(err, "error while updating account")
 	}
@@ -249,6 +261,8 @@ func (mngr *AccountsManager) AuthorizeAccount(accountData *data.Account, authori
 		mngr.sendEmail(account, nil, email.SendAccountAuthorized)
 	}
 
+	mngr.callListeners(account, AccountsListener.AccountUpdated)
+
 	return nil
 }
 
@@ -271,6 +285,8 @@ func (mngr *AccountsManager) GrantGOCDBAccess(accountData *data.Account, grantAc
 	if account.Data.GOCDBAccess && account.Data.GOCDBAccess != accessOld {
 		mngr.sendEmail(account, nil, email.SendGOCDBAccessGranted)
 	}
+
+	mngr.callListeners(account, AccountsListener.AccountUpdated)
 
 	return nil
 }
@@ -308,6 +324,7 @@ func (mngr *AccountsManager) AssignAPIKeyToAccount(accountData *data.Account, fl
 	mngr.writeAllAccounts()
 
 	mngr.sendEmail(account, nil, email.SendAPIKeyAssigned)
+	mngr.callListeners(account, AccountsListener.AccountUpdated)
 
 	return nil
 }
@@ -345,6 +362,8 @@ func (mngr *AccountsManager) RemoveAccount(accountData *data.Account) error {
 			mngr.accounts = append(mngr.accounts[:i], mngr.accounts[i+1:]...)
 			mngr.storage.AccountRemoved(account)
 			mngr.writeAllAccounts()
+
+			mngr.callListeners(account, AccountsListener.AccountRemoved)
 			return nil
 		}
 	}
@@ -368,6 +387,12 @@ func (mngr *AccountsManager) CloneAccounts(erasePasswords bool) data.Accounts {
 	}
 
 	return clones
+}
+
+func (mngr *AccountsManager) callListeners(account *data.Account, cb AccountsListenerCallback) {
+	for _, listener := range mngr.accountsListeners {
+		cb(listener, account)
+	}
 }
 
 func (mngr *AccountsManager) sendEmail(account *data.Account, params map[string]string, sendFunc email.SendFunction) {

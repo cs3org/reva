@@ -194,6 +194,11 @@ func IsValidPhoneNumber(number string) bool {
 	return re.MatchString(number)
 }
 
+func IsValidName(name string) bool {
+	re := regexp.MustCompile(`^[A-Za-z\s\-]*$`)
+	return re.MatchString(name)
+}
+
 // MarshalProtoV1ToJSON marshals a proto V1 message to a JSON byte array
 // TODO: update this once we start using V2 in CS3APIs
 func MarshalProtoV1ToJSON(m proto.Message) ([]byte, error) {

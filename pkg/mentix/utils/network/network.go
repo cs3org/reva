@@ -54,11 +54,13 @@ func GenerateURL(host string, path string, params URLParams) (*url.URL, error) {
 
 	fullURL.Path = p.Join(fullURL.Path, path)
 
-	query := make(url.Values)
-	for key, value := range params {
-		query.Set(key, value)
+	if len(params) > 0 {
+		query := make(url.Values)
+		for key, value := range params {
+			query.Set(key, value)
+		}
+		fullURL.RawQuery = query.Encode()
 	}
-	fullURL.RawQuery = query.Encode()
 
 	return fullURL, nil
 }

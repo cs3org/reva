@@ -148,18 +148,35 @@ func (acc *Account) verify(verifyPassword bool) error {
 	} else if !utils.IsEmailValid(acc.Email) {
 		return errors.Errorf("invalid email address: %v", acc.Email)
 	}
-	if acc.FirstName == "" || acc.LastName == "" {
-		return errors.Errorf("no or incomplete name provided")
+
+	if acc.FirstName == "" {
+		return errors.Errorf("no first name provided")
+	} else if !utils.IsValidName(acc.FirstName) {
+		return errors.Errorf("first name contains invalid characters: %v", acc.FirstName)
 	}
+
+	if acc.LastName == "" {
+		return errors.Errorf("no last name provided")
+	} else if !utils.IsValidName(acc.LastName) {
+		return errors.Errorf("last name contains invalid characters: %v", acc.LastName)
+	}
+
 	if acc.Organization == "" {
 		return errors.Errorf("no organization provided")
+	} else if !utils.IsValidName(acc.Organization) {
+		return errors.Errorf("organization contains invalid characters: %v", acc.Organization)
 	}
+
 	if acc.Website != "" && !utils.IsValidWebAddress(acc.Website) {
 		return errors.Errorf("invalid website provided")
 	}
+
 	if acc.Role == "" {
 		return errors.Errorf("no role provided")
+	} else if !utils.IsValidName(acc.Role) {
+		return errors.Errorf("role contains invalid characters: %v", acc.Role)
 	}
+
 	if acc.PhoneNumber != "" && !utils.IsValidPhoneNumber(acc.PhoneNumber) {
 		return errors.Errorf("invalid phone number provided")
 	}

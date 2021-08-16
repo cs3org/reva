@@ -1,8 +1,10 @@
 [http]
 address = "0.0.0.0:9600"
 
-[http.services.siteacc]
-gocdb_url = "https://sciencemesh-test.uni-muenster.de/gocdb/"
+[http.services.siteacc.gocdb]
+url = "https://sciencemesh-test.uni-muenster.de/gocdb/"
+write_url = "https://sciencemesh-test.uni-muenster.de/gocdbpi/"
+apikey = "verysecret"
 
 # Set up the storage driver
 [http.services.siteacc.storage]

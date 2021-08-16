@@ -19,11 +19,28 @@ prefix = "/siteacc"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="gocdb_url" type="string" default="" %}}
+## GOCDB settings
+{{% dir name="url" type="string" default="" %}}
 The external URL of the central GOCDB instance.
 {{< highlight toml >}}
-[http.services.siteacc.email]
-gocdb_address = "https://www.sciencemesh.eu/gocdb/"
+[http.services.siteacc.gocdb]
+url = "https://www.sciencemesh.eu/gocdb/"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="write_url" type="string" default="" %}}
+The external URL of the GOCDB Write API.
+{{< highlight toml >}}
+[http.services.siteacc.gocdb]
+write_url = "https://www.sciencemesh.eu/gocdbpi/"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="apikey" type="string" default="" %}}
+The API key for the GOCDB.
+{{< highlight toml >}}
+[http.services.siteacc.gocdb]
+apikey = "verysecret"
 {{< /highlight >}}
 {{% /dir %}}
 

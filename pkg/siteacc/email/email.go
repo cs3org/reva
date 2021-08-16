@@ -44,7 +44,7 @@ func getEmailData(account *data.Account, conf config.Configuration, params map[s
 	return &emailData{
 		Account:         account,
 		AccountsAddress: conf.Webserver.URL,
-		GOCDBAddress:    conf.GOCDBURL,
+		GOCDBAddress:    conf.GOCDB.URL,
 		Params:          params,
 	}
 }

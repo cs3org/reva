@@ -53,7 +53,12 @@ type Configuration struct {
 		LogSessions         bool `mapstructure:"log_sessions"`
 	} `mapstructure:"webserver"`
 
-	GOCDBURL string `mapstructure:"gocdb_url"`
+	GOCDB struct {
+		URL      string `mapstructure:"url"`
+		WriteURL string `mapstructure:"write_url"`
+
+		APIKey string `mapstructure:"apikey"`
+	} `mapstructure:"gocdb"`
 }
 
 // Cleanup cleans up certain settings, normalizing them.
@@ -64,7 +69,12 @@ func (cfg *Configuration) Cleanup() {
 	}
 
 	// Ensure the GOCDB URL ends with a slash
-	if cfg.GOCDBURL != "" && !strings.HasSuffix(cfg.GOCDBURL, "/") {
-		cfg.GOCDBURL = cfg.GOCDBURL + "/"
+	if cfg.GOCDB.URL != "" && !strings.HasSuffix(cfg.GOCDB.URL, "/") {
+		cfg.GOCDB.URL = cfg.GOCDB.URL + "/"
+	}
+
+	// Ensure the GOCDB Write URL ends with a slash
+	if cfg.GOCDB.WriteURL != "" && !strings.HasSuffix(cfg.GOCDB.WriteURL, "/") {
+		cfg.GOCDB.WriteURL = cfg.GOCDB.WriteURL + "/"
 	}
 }
