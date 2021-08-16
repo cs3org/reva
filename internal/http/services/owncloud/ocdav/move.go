@@ -29,13 +29,12 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/trace"
 )
 
 func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "move")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "move")
 	defer span.End()
 
 	srcPath := path.Join(ns, r.URL.Path)
@@ -67,8 +66,7 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 }
 
 func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "spaces_move")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_move")
 	defer span.End()
 
 	dst, err := extractDestination(r)

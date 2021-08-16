@@ -32,8 +32,6 @@ import (
 	"strings"
 	"time"
 
-	"go.opencensus.io/trace"
-
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -92,8 +90,7 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 }
 
 func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "spaces_propfind")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_propfind")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()

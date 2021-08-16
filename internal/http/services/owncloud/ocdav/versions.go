@@ -23,12 +23,13 @@ import (
 	"net/http"
 	"path"
 
+	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"go.opencensus.io/trace"
 )
 
 // VersionsHandler handles version requests
@@ -79,8 +80,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 }
 
 func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "listVersions")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "listVersions")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Logger()
@@ -182,8 +182,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 }
 
 func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "restore")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "restore")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Str("key", key).Logger()
