@@ -1,9 +1,0 @@
-[grpc]
-address = "{{grpc_address}}"
-
-[grpc.services.storageprovider]
-driver = "nextcloud"
-
-[grpc.services.storageprovider.drivers.nextcloud]
-end_point = "http://localhost:8080/apps/sciencemesh/~alice/"
-mock_http = true
