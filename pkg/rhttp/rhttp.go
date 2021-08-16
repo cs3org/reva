@@ -37,7 +37,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/plugin/ochttp"
 	"go.opentelemetry.io/otel/propagation"
 )
 
@@ -288,13 +287,6 @@ func (s *Server) getHandler() (http.Handler, error) {
 
 	for _, triple := range coreMiddlewares {
 		handler = triple.Middleware(traceHandler(triple.Name, handler))
-	}
-
-	// use opencensus handler to trace endpoints.
-	// TODO(labkode): enable also opencensus telemetry.
-	handler = &ochttp.Handler{
-		Handler: handler,
-		//IsPublicEndpoint: true,
 	}
 
 	return handler, nil
