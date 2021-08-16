@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
@@ -43,6 +44,11 @@ import (
 )
 
 // go:generate mockery -name Blobstore
+
+const (
+	spaceTypePersonal = "personal"
+	spaceTypeShare    = "share"
+)
 
 // Blobstore defines an interface for storing blobs in a blobstore
 type Blobstore interface {
@@ -123,11 +129,11 @@ func (t *Tree) Setup(owner string) error {
 	fi, err := os.Stat(spacesPath)
 	if os.IsNotExist(err) {
 		// create personal spaces dir
-		if err := os.MkdirAll(filepath.Join(spacesPath, "personal"), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Join(spacesPath, spaceTypePersonal), 0700); err != nil {
 			return err
 		}
 		// create share spaces dir
-		if err := os.MkdirAll(filepath.Join(spacesPath, "share"), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Join(spacesPath, spaceTypeShare), 0700); err != nil {
 			return err
 		}
 
@@ -145,20 +151,14 @@ func (t *Tree) Setup(owner string) error {
 
 			// is it a user root? -> create personal space
 			if isRootNode(nodePath) {
-				// create personal space
 				// we can reuse the node id as the space id
-				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/personal", nodes[i].Name()))
-				if err != nil {
-					fmt.Printf("could not create symlink for personal space %s, %s\n", nodes[i].Name(), err)
-				}
+				t.linkSpace(spaceTypePersonal, nodes[i].Name(), nodes[i].Name())
 			}
 
-			// is it a shared node? -> create shared space
+			// is it a shared node? -> create share space
 			if isSharedNode(nodePath) {
-				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/share", nodes[i].Name()))
-				if err != nil {
-					fmt.Printf("could not create symlink for shared space %s, %s\n", nodes[i].Name(), err)
-				}
+				// we can reuse the node id as the space id
+				t.linkSpace(spaceTypeShare, nodes[i].Name(), nodes[i].Name())
 			}
 		}
 	} else if !fi.IsDir() {
@@ -167,6 +167,40 @@ func (t *Tree) Setup(owner string) error {
 	}
 
 	return nil
+}
+
+// linkSpace creates a new symbolic link for a space with the given type st, and node id
+func (t *Tree) linkSpace(spaceType, spaceID, nodeID string) {
+	spacesPath := filepath.Join(t.root, "spaces", spaceType, spaceID)
+	expectedTarget := "../../nodes/" + nodeID
+	linkTarget, err := os.Readlink(spacesPath)
+	if errors.Is(err, os.ErrNotExist) {
+		err = os.Symlink(expectedTarget, spacesPath)
+		if err != nil {
+			logger.New().Error().Err(err).
+				Str("space_type", spaceType).
+				Str("space", spaceID).
+				Str("node", nodeID).
+				Msg("could not create symlink")
+		}
+	} else {
+		if err != nil {
+			logger.New().Error().Err(err).
+				Str("space_type", spaceType).
+				Str("space", spaceID).
+				Str("node", nodeID).
+				Msg("could not read symlink")
+		}
+		if linkTarget != expectedTarget {
+			logger.New().Warn().
+				Str("space_type", spaceType).
+				Str("space", spaceID).
+				Str("node", nodeID).
+				Str("expected", expectedTarget).
+				Str("actual", linkTarget).
+				Msg("expected a different link target")
+		}
+	}
 }
 
 func isRootNode(nodePath string) bool {
