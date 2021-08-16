@@ -156,10 +156,8 @@ func (nc *StorageDriver) CreateHome(ctx context.Context) error {
 }
 
 // CreateDir as defined in the storage.FS interface
-func (nc *StorageDriver) CreateDir(ctx context.Context, fn string) error {
-	data := make(map[string]string)
-	data["path"] = fn
-	bodyStr, err := json.Marshal(data)
+func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference) error {
+	bodyStr, err := json.Marshal(ref)
 	if err != nil {
 		return err
 	}
