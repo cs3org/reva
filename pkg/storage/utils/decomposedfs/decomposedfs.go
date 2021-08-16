@@ -47,13 +47,10 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
-	"go.opentelemetry.io/otel/exporters/jaeger"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -113,7 +110,6 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 // New returns an implementation of the storage.FS interface that talks to
 // a local filesystem.
 func New(o *options.Options, lu *Lookup, p PermissionsChecker, tp Tree) (storage.FS, error) {
-	SetTraceProvider("http://localhost:14268/api/traces")
 	err := tp.Setup(o.Owner)
 	if err != nil {
 		logger.New().Error().Err(err).
@@ -126,7 +122,6 @@ func New(o *options.Options, lu *Lookup, p PermissionsChecker, tp Tree) (storage
 		lu:           lu,
 		o:            o,
 		p:            p,
-		tprov:        prov,
 		chunkHandler: chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
 	}, nil
 }
@@ -435,24 +430,6 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 	return node.AsResourceInfo(ctx, &rp, mdKeys, utils.IsRelativeReference(ref))
 }
 
-var prov = trace.NewNoopTracerProvider()
-
-// SetTraceProvider sets the TracerProvider at a package level.
-func SetTraceProvider(url string) {
-	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(url)))
-	if err != nil {
-		panic(err)
-	}
-
-	prov = sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exp),
-		sdktrace.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String("decomposedfs"),
-		)),
-	)
-}
-
 // ListFolder returns a list of resources in the specified folder
 func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
 	var n *node.Node
@@ -460,7 +437,7 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		return
 	}
 
-	ctx, span := fs.tprov.Tracer("decomposedfs").Start(ctx, "ListFolder")
+	ctx, span := rtrace.Provider.Tracer("decomposedfs").Start(ctx, "ListFolder")
 	defer span.End()
 
 	if !n.Exists {

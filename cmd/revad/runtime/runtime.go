@@ -28,7 +28,6 @@ import (
 	"strconv"
 	"strings"
 
-	"contrib.go.opencensus.io/exporter/jaeger"
 	"github.com/cs3org/reva/cmd/revad/internal/grace"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/registry/memory"
@@ -40,15 +39,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/plugin/ocgrpc"
-	"go.opencensus.io/plugin/ochttp"
-	"go.opencensus.io/stats/view"
-	"go.opencensus.io/trace"
-)
-
-const (
-	tracingOC = "opencensus"
-	tracingOT = "opentelemetry"
 )
 
 // Run runs a reva server with the given config file and pid file.
@@ -97,9 +87,8 @@ func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Lo
 	host, _ := os.Hostname()
 	logger.Info().Msgf("host info: %s", host)
 
-	// initRegistry()
 	if coreConf.TracingEnabled {
-		initTracing(coreConf, logger)
+		initTracing(coreConf)
 	}
 	initCPUCount(coreConf, logger)
 
@@ -159,53 +148,8 @@ func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[strin
 	return servers
 }
 
-func initTracing(conf *coreConf, log *zerolog.Logger) {
-	switch {
-	case conf.TracingService == tracingOC:
-		err := setupOpenCensus(conf)
-		if err != nil {
-			log.Error().Err(err).Msg("error configuring open census stats and tracing")
-			os.Exit(1)
-		}
-	case conf.TracingService == tracingOT:
-		rtrace.SetTraceProvider(conf.TracingCollector)
-	default:
-		log.Error().Msg(fmt.Sprintf("error configuring telemetry. unknown type `%s`", conf.TracingService))
-		os.Exit(1)
-	}
-}
-
-func setupOpenCensus(conf *coreConf) error {
-	if err := view.Register(ochttp.DefaultServerViews...); err != nil {
-		return err
-	}
-
-	if err := view.Register(ocgrpc.DefaultServerViews...); err != nil {
-		return err
-	}
-
-	if !conf.TracingEnabled {
-		return nil
-	}
-
-	if conf.TracingServiceName == "" {
-		conf.TracingServiceName = "revad"
-	}
-
-	je, err := jaeger.NewExporter(jaeger.Options{
-		AgentEndpoint:     conf.TracingEndpoint,
-		CollectorEndpoint: conf.TracingCollector,
-		ServiceName:       conf.TracingServiceName,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// register it as a trace exporter
-	trace.RegisterExporter(je)
-	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
-	return nil
+func initTracing(conf *coreConf) {
+	rtrace.SetTraceProvider(conf.TracingCollector)
 }
 
 func initCPUCount(conf *coreConf, log *zerolog.Logger) {
@@ -365,12 +309,6 @@ func parseCoreConfOrDie(v interface{}) *coreConf {
 	if err := mapstructure.Decode(v, c); err != nil {
 		fmt.Fprintf(os.Stderr, "error decoding core config: %s\n", err.Error())
 		os.Exit(1)
-	}
-
-	// ensure backwards compatibility, if tracing is enabled default to opencensus as there are parts of the code
-	// that rely on a configured opencensus singleton.
-	if c.TracingEnabled && c.TracingService == "" {
-		c.TracingService = tracingOC
 	}
 
 	return c
