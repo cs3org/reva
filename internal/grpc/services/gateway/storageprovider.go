@@ -304,13 +304,11 @@ func (s *svc) getHome(_ context.Context) string {
 }
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	if utils.IsRelativeReference(req.Ref) {
 		return s.initiateFileDownload(ctx, req)
 	}
 
-	p, st := s.getPath(ctx, req.Ref)
+	_, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileDownloadResponse{
 			Status: st,
@@ -385,11 +383,10 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
-	log := appctx.GetLogger(ctx)
 	if utils.IsRelativeReference(req.Ref) {
 		return s.initiateFileUpload(ctx, req)
 	}
-	p, st := s.getPath(ctx, req.Ref)
+	_, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileUploadResponse{
 			Status: st,
@@ -478,13 +475,11 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	if utils.IsRelativeReference(req.Ref) {
 		return s.createContainer(ctx, req)
 	}
 
-	p, st := s.getPath(ctx, req.Ref)
+	_, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.CreateContainerResponse{
 			Status: st,
@@ -952,8 +947,6 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	if utils.IsRelativeReference(req.Ref) {
 		return s.listContainer(ctx, req)
 	}

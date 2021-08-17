@@ -33,11 +33,11 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	revactx "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
-	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -542,7 +542,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		Interface("reqShare", reqShare).
 		Msg("sharesstorageprovider: Got Stat request")
 
-	_, ok := ctxuser.ContextGetUser(ctx)
+	_, ok := revactx.ContextGetUser(ctx)
 	if !ok {
 		return &provider.StatResponse{
 			Status: status.NewNotFound(ctx, "sharesstorageprovider: shares requested for empty user"),
@@ -833,8 +833,8 @@ func (s *service) resolvePath(path string) (string, string) {
 	return reqShare, reqPath
 }
 
-func (s *service) statShare(ctx context.Context, share string) (*provider.StatResponse, error) {
-	_, ok := ctxuser.ContextGetUser(ctx)
+func (s *service) statShare(ctx context.Context, share string) (*stattedReceivedShare, error) {
+	_, ok := revactx.ContextGetUser(ctx)
 	if !ok {
 		return &provider.StatResponse{
 			Status: status.NewNotFound(ctx, "sharesstorageprovider: shares requested for empty user"),
