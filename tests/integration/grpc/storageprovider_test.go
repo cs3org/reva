@@ -465,7 +465,7 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
-	Describe("nextcloud", func() {
+	PDescribe("nextcloud", func() {
 		BeforeEach(func() {
 			dependencies = map[string]string{
 				"storage": "storageprovider-nextcloud.toml",
