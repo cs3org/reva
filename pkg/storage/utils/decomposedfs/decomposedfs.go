@@ -47,6 +47,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -433,6 +434,9 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
+
+	ctx, span := rtrace.Provider.Tracer("decomposedfs").Start(ctx, "ListFolder")
+	defer span.End()
 
 	if !n.Exists {
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
