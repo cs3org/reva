@@ -19,6 +19,7 @@ require (
 	github.com/cs3org/go-cs3apis v0.0.0-20210802070913-970eec344e59
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/gdexlab/go-render v1.0.1
+	github.com/go-chi/chi/v5 v5.0.3
 	github.com/go-ldap/ldap/v3 v3.3.0
 	github.com/go-openapi/errors v0.20.0 // indirect
 	github.com/go-openapi/strfmt v0.19.5 // indirect

@@ -39,6 +39,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
 	"github.com/ReneKroon/ttlcache/v2"
@@ -49,7 +50,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/registry"
 	"github.com/cs3org/reva/pkg/utils"
@@ -83,7 +83,7 @@ func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
 }
 
 // Init initializes this and any contained handlers
-func (h *Handler) Init(c *config.Config) error {
+func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
@@ -102,8 +102,6 @@ func (h *Handler) Init(c *config.Config) error {
 			go h.startCacheWarmup(cwm)
 		}
 	}
-
-	return nil
 }
 
 func (h *Handler) startCacheWarmup(c cache.Warmup) {
@@ -117,89 +115,8 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 	}
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-
-	var head string
-	head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
-
-	switch head {
-	case "":
-		switch r.Method {
-		case "OPTIONS":
-			w.WriteHeader(http.StatusOK)
-		case "GET":
-			if h.isListSharesWithMe(w, r) {
-				h.listSharesWithMe(w, r)
-			} else {
-				h.listSharesWithOthers(w, r)
-			}
-		case "POST":
-			h.createShare(w, r)
-		default:
-			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
-		}
-
-	case "pending":
-		var shareID string
-		shareID, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-		log.Debug().Str("share_id", shareID).Str("tail", r.URL.Path).Msg("http routing")
-
-		switch r.Method {
-		case "POST":
-			h.updateReceivedShare(w, r, shareID, false)
-		case "DELETE":
-			h.updateReceivedShare(w, r, shareID, true)
-		default:
-			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only POST and DELETE are allowed", nil)
-		}
-
-	case "remote_shares":
-		var shareID string
-		shareID, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-		log.Debug().Str("share_id", shareID).Str("tail", r.URL.Path).Msg("http routing")
-
-		switch r.Method {
-		case "GET":
-			if shareID == "" {
-				h.listFederatedShares(w, r)
-			} else {
-				h.getFederatedShare(w, r, shareID)
-			}
-		default:
-			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET method is allowed", nil)
-		}
-
-	default:
-		switch r.Method {
-		case "GET":
-			h.getShare(w, r, head)
-		case "PUT":
-			// FIXME: isPublicShare is already doing a GetShare and GetPublicShare,
-			// we should just reuse that object when doing updates
-			if h.isPublicShare(r, strings.ReplaceAll(head, "/", "")) {
-				h.updatePublicShare(w, r, strings.ReplaceAll(head, "/", ""))
-				return
-			}
-			h.updateShare(w, r, head) // TODO PUT is used with incomplete data to update a share
-		case "DELETE":
-			shareID := strings.ReplaceAll(head, "/", "")
-			if h.isPublicShare(r, shareID) {
-				h.removePublicShare(w, r, shareID)
-				return
-			}
-			h.removeUserShare(w, r, head)
-		default:
-			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
-		}
-	}
-}
-
-func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
+// CreateShare handles POST requests on /apps/files_sharing/api/v1/shares
+func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	shareType, err := strconv.Atoi(r.FormValue("shareType"))
 	if err != nil {
@@ -329,9 +246,11 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 // PublicShareContextName represent cross boundaries context for the name of the public share
 type PublicShareContextName string
 
-func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID string) {
+// GetShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid)
+func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	var share *conversions.ShareData
 	var resourceID *provider.ResourceId
+	shareID := chi.URLParam(r, "shareid")
 	ctx := r.Context()
 	logger := appctx.GetLogger(r.Context())
 	logger.Debug().Str("shareID", shareID).Msg("get share by id")
@@ -442,6 +361,18 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{share})
 }
 
+// UpdateShare handles PUT requests on /apps/files_sharing/api/v1/shares/(shareid)
+func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
+	shareID := chi.URLParam(r, "shareid")
+	// FIXME: isPublicShare is already doing a GetShare and GetPublicShare,
+	// we should just reuse that object when doing updates
+	if h.isPublicShare(r, shareID) {
+		h.updatePublicShare(w, r, shareID)
+		return
+	}
+	h.updateShare(w, r, shareID) // TODO PUT is used with incomplete data to update a share}
+}
+
 func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
@@ -537,15 +468,30 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	response.WriteOCSSuccess(w, r, share)
 }
 
-func (h *Handler) isListSharesWithMe(w http.ResponseWriter, r *http.Request) (listSharedWithMe bool) {
+// RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid)
+func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
+	shareID := chi.URLParam(r, "shareid")
+	if h.isPublicShare(r, shareID) {
+		h.removePublicShare(w, r, shareID)
+		return
+	}
+	h.removeUserShare(w, r, shareID)
+}
+
+// ListShares handles GET requests on /apps/files_sharing/api/v1/shares
+func (h *Handler) ListShares(w http.ResponseWriter, r *http.Request) {
 	if r.FormValue("shared_with_me") != "" {
 		var err error
-		listSharedWithMe, err = strconv.ParseBool(r.FormValue("shared_with_me"))
+		listSharedWithMe, err := strconv.ParseBool(r.FormValue("shared_with_me"))
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 		}
+		if listSharedWithMe {
+			h.listSharesWithMe(w, r)
+			return
+		}
 	}
-	return
+	h.listSharesWithOthers(w, r)
 }
 
 const (
