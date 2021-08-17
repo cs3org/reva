@@ -34,9 +34,9 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/trace"
 )
 
 func sufferMacOSFinder(r *http.Request) bool {
@@ -105,8 +105,7 @@ func isContentRange(r *http.Request) bool {
 }
 
 func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "put")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "put")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -334,8 +333,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 }
 
 func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "spaces_put")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_put")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()

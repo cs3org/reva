@@ -19,7 +19,11 @@
 package helpers
 
 import (
+	"context"
 	"io/ioutil"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -43,4 +47,19 @@ func TempDir(name string) (string, error) {
 	}
 
 	return tmpRoot, nil
+}
+
+// TestingHTTPClient thanks to https://itnext.io/how-to-stub-requests-to-remote-hosts-with-go-6c2c1db32bf2
+func TestingHTTPClient(handler http.Handler) (*http.Client, func()) {
+	s := httptest.NewServer(handler)
+
+	cli := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, network, _ string) (net.Conn, error) {
+				return net.Dial(network, s.Listener.Addr().String())
+			},
+		},
+	}
+
+	return cli, s.Close
 }

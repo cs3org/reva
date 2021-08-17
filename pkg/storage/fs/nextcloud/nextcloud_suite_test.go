@@ -16,32 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package appctx creates a context with useful
-// components attached to the context like loggers and
-// token managers.
-package appctx
+package nextcloud_test
 
 import (
-	"net/http"
+	"testing"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/rs/zerolog"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
-// New returns a new HTTP middleware that stores the log
-// in the context with request ID information.
-func New(log zerolog.Logger) func(http.Handler) http.Handler {
-	chain := func(h http.Handler) http.Handler {
-		return handler(log, h)
-	}
-	return chain
-}
-
-func handler(log zerolog.Logger, h http.Handler) http.Handler {
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := appctx.WithLogger(r.Context(), &log)
-		r = r.WithContext(ctx)
-		h.ServeHTTP(w, r)
-	})
+func TestNextcloud(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Nextcloud Suite")
 }

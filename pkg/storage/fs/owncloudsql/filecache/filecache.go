@@ -338,21 +338,30 @@ func (c *Cache) doInsertOrUpdate(tx *sql.Tx, storage interface{}, data map[strin
 	}
 
 	path := data["path"].(string)
+	data["name"] = filepath.Base(path)
+	if data["name"] == "." {
+		data["name"] = ""
+	}
+
 	parentPath := strings.TrimRight(filepath.Dir(path), "/")
 	if parentPath == "." {
 		parentPath = ""
 	}
-	parent, err := c.Get(storageID, parentPath)
-	if err == nil {
-		data["parent"] = parent.ID
+	if path == "" {
+		data["parent"] = -1
 	} else {
-		if allowEmptyParent {
-			data["parent"] = -1
+		parent, err := c.Get(storageID, parentPath)
+		if err == nil {
+			data["parent"] = parent.ID
 		} else {
-			return -1, fmt.Errorf("could not find parent %s, %s, %v, %w", parentPath, path, parent, err)
+			if allowEmptyParent {
+				data["parent"] = -1
+			} else {
+				return -1, fmt.Errorf("could not find parent %s, %s, %v, %w", parentPath, path, parent, err)
+			}
 		}
 	}
-	data["name"] = filepath.Base(path)
+
 	if _, exists := data["checksum"]; !exists {
 		data["checksum"] = ""
 	}

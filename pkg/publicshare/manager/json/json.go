@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
 )
 
 func init() {
@@ -437,12 +436,6 @@ func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicSh
 
 	m.mutex.Unlock()
 	defer m.mutex.Lock()
-
-	span := trace.FromContext(ctx)
-	span.AddAttributes(
-		trace.StringAttribute("operation", "delete expired share"),
-		trace.StringAttribute("opaqueId", s.Id.OpaqueId),
-	)
 
 	err := m.RevokePublicShare(ctx, u, &link.PublicShareReference{
 		Spec: &link.PublicShareReference_Id{

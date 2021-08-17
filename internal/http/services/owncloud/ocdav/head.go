@@ -27,18 +27,18 @@ import (
 	"strings"
 	"time"
 
+	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/trace"
 )
 
 func (s *svc) handlePathHead(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "head")
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "head")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -89,8 +89,7 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 }
 
 func (s *svc) handleSpacesHead(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "spaces_head")
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_head")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
