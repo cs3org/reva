@@ -254,7 +254,7 @@ def buildOnly():
         "settings": {
           "repo": "n/a",
           "dry_run": "true",
-          "dockerfile": "Dockerfile.reva",
+          "dockerfile": "Dockerfile.revad",
         }
       },
       lintStep(),
