@@ -248,6 +248,15 @@ def buildOnly():
     "steps": [
       licenseScanStep(),
       makeStep("ci"),
+      {
+        "name": "Docker build",
+        "image": "plugins/docker",
+        "settings": {
+          "repo": "n/a",
+          "dry_run": "true",
+          "dockerfile": "Dockerfile.reva",
+        }
+      },
       lintStep(),
       {
         "name": "changelog",
