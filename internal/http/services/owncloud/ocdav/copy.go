@@ -52,18 +52,35 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "copy")
 	defer span.End()
 
+	// If is a third party copy
+	if r.Header.Get("ThirdPartyCopy") == "T" {
+
+		// Push Mode
+		if r.Header.Get("Source") == "" {
+			s.handleTPCPush(ctx, w, r, ns)
+			return
+		}
+
+		// Pull Mode
+		s.handleTPCPull(ctx, w, r, ns)
+		return
+	}
+
+	// is a local copy
 	src := path.Join(ns, r.URL.Path)
 	dst, err := extractDestination(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
 	for _, r := range nameRules {
 		if !r.Test(dst) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	}
+
 	dst = path.Join(ns, dst)
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
@@ -96,8 +113,8 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.WriteHeader(cp.successCode)
-}
 
+}
 func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClient, w http.ResponseWriter, r *http.Request, cp *copy) error {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("src", cp.sourceInfo.Path).Str("dst", cp.destination.Path).Msg("descending")
