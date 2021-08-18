@@ -61,10 +61,12 @@ var _ = Describe("Nextcloud", func() {
 	})
 	Describe("CreateHome", func() {
 		It("calls the CreateHome endpoint", func() {
+			nextcloudServerMock := nextcloud.GetNextcloudServerMock()
+			var client *http.Client
+			client, _ = helpers.TestingHTTPClient(nextcloudServerMock)
 			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
 				EndPoint: "http://mock.com",
-				MockHTTP: true,
-			})
+			}, client)
 
 			const (
 				okResponse = `{

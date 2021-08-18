@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/tests/helpers"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -72,16 +71,12 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	return NewStorageDriver(conf)
+	return NewStorageDriver(conf, nil)
 }
 
 // NewStorageDriver returns a new NextcloudStorageDriver
-func NewStorageDriver(c *StorageDriverConfig) (*StorageDriver, error) {
-	var client *http.Client
-	if c.MockHTTP {
-		nextcloudServerMock := GetNextcloudServerMock()
-		client, _ = helpers.TestingHTTPClient(nextcloudServerMock)
-	} else {
+func NewStorageDriver(c *StorageDriverConfig, client *http.Client) (*StorageDriver, error) {
+	if client == nil {
 		client = &http.Client{}
 	}
 	return &StorageDriver{
