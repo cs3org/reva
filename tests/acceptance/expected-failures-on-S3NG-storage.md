@@ -39,8 +39,8 @@ _ocdav: double check the webdav property parsing when custom namespaces are used
 -   [apiWebdavProperties1/setFileProperties.feature:64](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/setFileProperties.feature#L64)
 
 #### [Cannot set custom webDav properties](https://github.com/owncloud/product/issues/264)
--   [apiWebdavProperties2/getFileProperties.feature:246](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L246)
--   [apiWebdavProperties2/getFileProperties.feature:266](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L266)
+-   [apiWebdavProperties2/getFileProperties.feature:254](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L254)
+-   [apiWebdavProperties2/getFileProperties.feature:274](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L274)
 
 ### Sync
 Synchronization features like etag propagation, setting mtime and locking files
