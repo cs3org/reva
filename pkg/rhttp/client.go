@@ -26,7 +26,7 @@ import (
 
 	"go.opencensus.io/plugin/ochttp"
 
-	"github.com/cs3org/reva/pkg/token"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/pkg/errors"
 )
 
@@ -60,9 +60,9 @@ func NewRequest(ctx context.Context, method, url string, body io.Reader) (*http.
 	}
 
 	// TODO(labkode): make header / auth configurable
-	tkn, ok := token.ContextGetToken(ctx)
+	tkn, ok := ctxpkg.ContextGetToken(ctx)
 	if ok {
-		httpReq.Header.Set(token.TokenHeader, tkn)
+		httpReq.Header.Set(ctxpkg.TokenHeader, tkn)
 	}
 
 	httpReq = httpReq.WithContext(ctx)

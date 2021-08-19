@@ -28,7 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // NewOK returns a Status with CODE_OK.
@@ -170,6 +170,6 @@ func NewErrorFromCode(code rpc.Code, pkgname string) error {
 
 // internal function to attach the trace to a context
 func getTrace(ctx context.Context) string {
-	span := trace.FromContext(ctx)
-	return span.SpanContext().TraceID.String()
+	span := trace.SpanFromContext(ctx)
+	return span.SpanContext().TraceID().String()
 }

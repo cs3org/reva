@@ -32,6 +32,11 @@ import (
 	"github.com/pkg/xattr"
 )
 
+// DenyGrant denies access to a resource.
+func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	return errtypes.NotSupported("decomposedfs: not supported")
+}
+
 // AddGrant adds a grant to a resource
 func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	log := appctx.GetLogger(ctx)
@@ -63,7 +68,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return err
 	}
 
-	if err := fs.createStorageSpace("share", node.ID); err != nil {
+	if err := fs.createStorageSpace(ctx, "share", node.ID); err != nil {
 		return err
 	}
 

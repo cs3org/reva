@@ -27,13 +27,12 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/trace"
 )
 
 func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "mkcol")
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "mkcol")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -50,6 +49,28 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 	s.handleMkcol(ctx, w, r, ref, sublog)
 }
 
+func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_mkcol")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()
+
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
+
+	s.handleMkcol(ctx, w, r, ref, sublog)
+
+}
+
 func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
 	if r.Body != http.NoBody {
 		w.WriteHeader(http.StatusUnsupportedMediaType)
@@ -63,7 +84,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// check fn exists
+	// check if ref exists
 	statReq := &provider.StatRequest{Ref: ref}
 	statRes, err := client.Stat(ctx, statReq)
 	if err != nil {
@@ -101,6 +122,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusConflict)
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		w.WriteHeader(http.StatusForbidden)
+		// TODO path could be empty or relative...
 		m := fmt.Sprintf("Permission denied to create %v", ref.Path)
 		b, err := Marshal(exception{
 			code:    SabredavPermissionDenied,

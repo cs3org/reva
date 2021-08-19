@@ -26,12 +26,12 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -96,7 +96,7 @@ type reg struct {
 func getProviderAddr(ctx context.Context, r rule) string {
 	addr := r.Address
 	if addr == "" {
-		if u, ok := user.ContextGetUser(ctx); ok {
+		if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 			layout := templates.WithUser(u, r.Mapping)
 			for k, v := range r.Aliases {
 				if match, _ := regexp.MatchString("^"+k, layout); match {
@@ -179,6 +179,10 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 				continue
 			}
 			if m := r.FindString(fn); m != "" {
+				if match != nil && len(match.ProviderPath) > len(m) {
+					// Do not overwrite existing longer match
+					continue
+				}
 				match = &registrypb.ProviderInfo{
 					ProviderPath: m,
 					Address:      addr,

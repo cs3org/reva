@@ -20,18 +20,15 @@ package storageprovider
 
 import (
 	"context"
-	"sort"
-
-	// "encoding/json"
 	"fmt"
 	"net/url"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	// link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -41,9 +38,11 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 )
 
@@ -93,6 +92,7 @@ func (c *config) init() {
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
+
 }
 
 type service struct {
@@ -266,29 +266,32 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	// or ownclouds://data-server.example.org/home/docs/myfile.txt
 	log := appctx.GetLogger(ctx)
 	u := *s.dataServerURL
-	newRef, err := s.unwrap(ctx, req.Ref)
-	if err != nil {
-		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
-		}, nil
+	log.Info().Str("data-server", u.String()).Interface("ref", req.Ref).Msg("file download")
+
+	protocol := &provider.FileDownloadProtocol{Expose: s.conf.ExposeDataServer}
+
+	if utils.IsRelativeReference(req.Ref) {
+		protocol.Protocol = "spaces"
+		u.Path = path.Join(u.Path, "spaces", req.Ref.ResourceId.StorageId+"!"+req.Ref.ResourceId.OpaqueId, req.Ref.Path)
+	} else {
+		newRef, err := s.unwrap(ctx, req.Ref)
+		if err != nil {
+			return &provider.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			}, nil
+		}
+		// Currently, we only support the simple protocol for GET requests
+		// Once we have multiple protocols, this would be moved to the fs layer
+		protocol.Protocol = "simple"
+		u.Path = path.Join(u.Path, "simple", newRef.GetPath())
 	}
 
-	// Currently, we only support the simple protocol for GET requests
-	// Once we have multiple protocols, this would be moved to the fs layer
-	u.Path = path.Join(u.Path, "simple", newRef.GetPath())
+	protocol.DownloadEndpoint = u.String()
 
-	log.Info().Str("data-server", u.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
-	res := &provider.InitiateFileDownloadResponse{
-		Protocols: []*provider.FileDownloadProtocol{
-			{
-				Protocol:         "simple",
-				DownloadEndpoint: u.String(),
-				Expose:           s.conf.ExposeDataServer,
-			},
-		},
-		Status: status.NewOK(ctx),
-	}
-	return res, nil
+	return &provider.InitiateFileDownloadResponse{
+		Protocols: []*provider.FileDownloadProtocol{protocol},
+		Status:    status.NewOK(ctx),
+	}, nil
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
@@ -335,7 +338,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			st = status.NewNotFound(ctx, "path not found when initiating upload")
 		case errtypes.IsBadRequest, errtypes.IsChecksumMismatch:
 			st = status.NewInvalidArg(ctx, err.Error())
-			// TODO TUS uses a custom ChecksumMismatch 460 http status which is in an unnasigned range in
+			// TODO TUS uses a custom ChecksumMismatch 460 http status which is in an unassigned range in
 			// https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
 			// maybe 409 conflict is good enough
 			// someone is proposing `419 Checksum Error`, see https://stackoverflow.com/a/35665694
@@ -495,8 +498,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
-
-	if err := s.storage.CreateDir(ctx, newRef.GetPath()); err != nil {
+	if err := s.storage.CreateDir(ctx, newRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -598,12 +600,13 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "Stat")
+	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "stat")
 	defer span.End()
 
-	span.AddAttributes(
-		trace.StringAttribute("ref", req.Ref.String()),
-	)
+	span.SetAttributes(attribute.KeyValue{
+		Key:   "reference",
+		Value: attribute.StringValue(req.Ref.String()),
+	})
 
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -628,7 +631,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	if err := s.wrap(ctx, md); err != nil {
+	if err := s.wrap(ctx, md, utils.IsAbsoluteReference(req.Ref)); err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "error wrapping path"),
 		}, nil
@@ -677,8 +680,9 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 		return nil
 	}
 
+	prefixMountpoint := utils.IsAbsoluteReference(req.Ref)
 	for _, md := range mds {
-		if err := s.wrap(ctx, md); err != nil {
+		if err := s.wrap(ctx, md, prefixMountpoint); err != nil {
 			res := &provider.ListContainerStreamResponse{
 				Status: status.NewInternal(ctx, err, "error wrapping path"),
 			}
@@ -726,8 +730,9 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	}
 
 	var infos = make([]*provider.ResourceInfo, 0, len(mds))
+	prefixMountpoint := utils.IsAbsoluteReference(req.Ref)
 	for _, md := range mds {
-		if err := s.wrap(ctx, md); err != nil {
+		if err := s.wrap(ctx, md, prefixMountpoint); err != nil {
 			return &provider.ListContainerResponse{
 				Status: status.NewInternal(ctx, err, "error wrapping path"),
 			}, nil
@@ -906,7 +911,7 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
 	// if a key was sent as opaque id purge only that item
-	if req.GetRef().GetResourceId() != nil && req.GetRef().GetResourceId().OpaqueId != "" {
+	if req.GetRef() != nil && req.GetRef().GetResourceId() != nil && req.GetRef().GetResourceId().OpaqueId != "" {
 		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetResourceId().OpaqueId, req.GetRef().Path); err != nil {
 			var st *rpc.Status
 			switch err.(type) {
@@ -970,6 +975,43 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 	res := &provider.ListGrantsResponse{
 		Status: status.NewOK(ctx),
 		Grants: grants,
+	}
+	return res, nil
+}
+
+func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.DenyGrantResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+
+	// check grantee type is valid
+	if req.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
+		return &provider.DenyGrantResponse{
+			Status: status.NewInvalid(ctx, "grantee type is invalid"),
+		}, nil
+	}
+
+	err = s.storage.DenyGrant(ctx, newRef, req.Grantee)
+	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when setting grants")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error setting grants")
+		}
+		return &provider.DenyGrantResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.DenyGrantResponse{
+		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
@@ -1162,15 +1204,20 @@ func getFS(c *config) (storage.FS, error) {
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {
+	// all references with an id can be passed on to the driver
+	// there are two cases:
+	// 1. absolute id references (resource_id is set, path is empty)
+	// 2. relative references (resource_id is set, path starts with a `.`)
 	if ref.GetResourceId() != nil {
 		return ref, nil
 	}
 
-	if ref.GetPath() == "" {
-		// abort, no valid id nor path
+	if !strings.HasPrefix(ref.GetPath(), "/") {
+		// abort, absolute path references must start with a `/`
 		return nil, errtypes.BadRequest("ref is invalid: " + ref.String())
 	}
 
+	// TODO move mount path trimming to the gateway
 	fn := ref.GetPath()
 	fsfn, err := s.trimMountPrefix(fn)
 	if err != nil {
@@ -1189,12 +1236,15 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 	return "", errtypes.BadRequest(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q", fn, s.mountPath))
 }
 
-func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
+func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMountpoint bool) error {
 	if ri.Id.StorageId == "" {
 		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
 		ri.Id.StorageId = s.mountID
 	}
-	ri.Path = path.Join(s.mountPath, ri.Path)
+	if prefixMountpoint {
+		// TODO move mount path prefixing to the gateway
+		ri.Path = path.Join(s.mountPath, ri.Path)
+	}
 	return nil
 }
 

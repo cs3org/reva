@@ -1,0 +1,61 @@
+[grpc]
+address = "0.0.0.0:19000"
+
+# services to enable
+[grpc.services.gateway]
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
+
+[grpc.services.storageregistry]
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = {"address" = "localhost:17000"}
+"/reva" = {"address" = "localhost:18000"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:18000"}
+
+[grpc.services.authregistry]
+[grpc.services.authregistry.drivers.static.rules]
+basic = "localhost:19000"
+
+[grpc.services.authprovider]
+[grpc.services.authprovider.auth_managers.json]
+users = "users-1.demo.json"
+
+[grpc.services.userprovider.drivers.json]
+users = "users-1.demo.json"
+
+[grpc.services.usershareprovider]
+[grpc.services.usershareprovider.drivers.json]
+file = "/var/tmp/reva/shares-server-1.json"
+
+[grpc.services.groupprovider]
+[grpc.services.publicshareprovider]
+
+[grpc.services.ocmcore]
+[grpc.services.ocmcore.drivers.json]
+file = "/var/tmp/reva/ocm-shares-server-1.json"
+
+[grpc.services.ocmshareprovider]
+[grpc.services.ocmshareprovider.drivers.json]
+file = "/var/tmp/reva/ocm-shares-server-1.json"
+
+[grpc.services.ocminvitemanager]
+[grpc.services.ocminvitemanager.drivers.json]
+file = "/var/tmp/reva/ocm-invites-server-1.json"
+
+[grpc.services.ocmproviderauthorizer]
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "providers.demo.json"
+
+[http]
+address = "0.0.0.0:19001"
+
+[http.services.datagateway]
+[http.services.prometheus]
+[http.services.ocmd]
+[http.services.ocdav]
+[http.services.ocs]
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "providers.demo.json"

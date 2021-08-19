@@ -32,8 +32,8 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appauth"
 	"github.com/cs3org/reva/pkg/appauth/manager/registry"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/sethvargo/go-password/password"
@@ -137,7 +137,7 @@ func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[strin
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating new token")
 	}
-	userID := user.ContextMustGetUser(ctx).GetId()
+	userID := ctxpkg.ContextMustGetUser(ctx).GetId()
 	ctime := now()
 
 	password := string(tokenHashed)
@@ -171,7 +171,7 @@ func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[strin
 }
 
 func (mgr *jsonManager) ListAppPasswords(ctx context.Context) ([]*apppb.AppPassword, error) {
-	userID := user.ContextMustGetUser(ctx).GetId()
+	userID := ctxpkg.ContextMustGetUser(ctx).GetId()
 	mgr.Lock()
 	defer mgr.Unlock()
 	appPasswords := []*apppb.AppPassword{}
@@ -182,7 +182,7 @@ func (mgr *jsonManager) ListAppPasswords(ctx context.Context) ([]*apppb.AppPassw
 }
 
 func (mgr *jsonManager) InvalidateAppPassword(ctx context.Context, password string) error {
-	userID := user.ContextMustGetUser(ctx).GetId()
+	userID := ctxpkg.ContextMustGetUser(ctx).GetId()
 	mgr.Lock()
 	defer mgr.Unlock()
 

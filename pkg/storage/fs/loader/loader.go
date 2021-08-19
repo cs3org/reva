@@ -26,6 +26,7 @@ import (
 	_ "github.com/cs3org/reva/pkg/storage/fs/eoshome"
 	_ "github.com/cs3org/reva/pkg/storage/fs/local"
 	_ "github.com/cs3org/reva/pkg/storage/fs/localhome"
+	_ "github.com/cs3org/reva/pkg/storage/fs/nextcloud"
 	_ "github.com/cs3org/reva/pkg/storage/fs/ocis"
 	_ "github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	_ "github.com/cs3org/reva/pkg/storage/fs/owncloudsql"

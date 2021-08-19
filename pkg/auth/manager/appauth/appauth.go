@@ -44,11 +44,19 @@ type manager struct {
 // New returns a new auth Manager.
 func New(m map[string]interface{}) (auth.Manager, error) {
 	mgr := &manager{}
-	err := mapstructure.Decode(m, mgr)
+	err := mgr.Configure(m)
 	if err != nil {
-		return nil, errors.Wrap(err, "error decoding conf")
+		return nil, err
 	}
 	return mgr, nil
+}
+
+func (m *manager) Configure(ml map[string]interface{}) error {
+	err := mapstructure.Decode(ml, m)
+	if err != nil {
+		return errors.Wrap(err, "error decoding conf")
+	}
+	return nil
 }
 
 func (m *manager) Authenticate(ctx context.Context, username, password string) (*user.User, map[string]*authpb.Scope, error) {

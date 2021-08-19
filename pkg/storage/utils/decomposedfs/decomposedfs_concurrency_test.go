@@ -28,10 +28,10 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -69,7 +69,7 @@ var _ = Describe("Decomposed", func() {
 				"physics-lovers",
 			},
 		}
-		ctx = user.ContextSetUser(context.Background(), u)
+		ctx = ctxpkg.ContextSetUser(context.Background(), u)
 
 		bs := &treemocks.Blobstore{}
 		fs, err = decomposedfs.NewDefault(options, bs)
@@ -138,9 +138,10 @@ var _ = Describe("Decomposed", func() {
 			It("handle already existing directories", func() {
 				for i := 0; i < 10; i++ {
 					go func() {
-						err := fs.CreateDir(ctx, "fightforit")
+						defer GinkgoRecover()
+						err := fs.CreateDir(ctx, &provider.Reference{Path: "/fightforit"})
 						if err != nil {
-							rinfo, err := fs.GetMD(ctx, &provider.Reference{Path: "fightforit"}, nil)
+							rinfo, err := fs.GetMD(ctx, &provider.Reference{Path: "/fightforit"}, nil)
 							Expect(err).ToNot(HaveOccurred())
 							Expect(rinfo).ToNot(BeNil())
 						}

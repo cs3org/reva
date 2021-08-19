@@ -30,13 +30,14 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -45,7 +46,7 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
-func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (fs *owncloudsqlfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
 		// Upload corresponding to this ID was not found.
@@ -100,7 +101,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
-func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+func (fs *owncloudsqlfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
@@ -141,7 +142,7 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.
-func (fs *ocfs) UseIn(composer *tusd.StoreComposer) {
+func (fs *owncloudsqlfs) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(fs)
 	composer.UseTerminater(fs)
 	composer.UseConcater(fs)
@@ -152,7 +153,7 @@ func (fs *ocfs) UseIn(composer *tusd.StoreComposer) {
 // - the storage needs to implement NewUpload and GetUpload
 // - the upload needs to implement the tusd.Upload interface: WriteChunk, GetInfo, GetReader and FinishUpload
 
-func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
+func (fs *owncloudsqlfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("owncloudsql: NewUpload")
@@ -200,8 +201,8 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	if err != nil {
 		return nil, errors.Wrap(err, "owncloudsql: error resolving upload path")
 	}
-	usr := user.ContextMustGetUser(ctx)
-	storageID, err := fs.getUserStorage(ctx)
+	usr := ctxpkg.ContextMustGetUser(ctx)
+	storageID, err := fs.getStorage(ip)
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +210,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		"Type":                "OwnCloudStore",
 		"BinPath":             binPath,
 		"InternalDestination": ip,
+		"Permissions":         strconv.Itoa((int)(conversions.RoleFromResourcePermissions(perm).OCSPermissions())),
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
@@ -253,8 +255,8 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	return u, nil
 }
 
-func (fs *ocfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
-	u, ok := user.ContextGetUser(ctx)
+func (fs *owncloudsqlfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return "", err
@@ -264,7 +266,7 @@ func (fs *ocfs) getUploadPath(ctx context.Context, uploadID string) (string, err
 }
 
 // GetUpload returns the Upload for the given upload id
-func (fs *ocfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
+func (fs *owncloudsqlfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 	infoPath := filepath.Join(fs.c.UploadInfoDir, id+".info")
 
 	info := tusd.FileInfo{}
@@ -291,7 +293,7 @@ func (fs *ocfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 		Username: info.Storage["UserName"],
 	}
 
-	ctx = user.ContextSetUser(ctx, u)
+	ctx = ctxpkg.ContextSetUser(ctx, u)
 	// TODO configure the logger the same way ... store and add traceid in file info
 
 	var opts []logger.Option
@@ -320,7 +322,7 @@ type fileUpload struct {
 	// binPath is the path to the binary file (which has no extension)
 	binPath string
 	// only fs knows how to handle metadata and versions
-	fs *ocfs
+	fs *owncloudsqlfs
 	// a context with a user
 	// TODO add logger as well?
 	ctx context.Context
@@ -406,17 +408,21 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		return err
 	}
 
+	perms, err := strconv.Atoi(upload.info.Storage["Permissions"])
+	if err != nil {
+		return err
+	}
 	data := map[string]interface{}{
-		"path":          upload.fs.toDatabasePath(upload.ctx, ip),
+		"path":          upload.fs.toDatabasePath(ip),
 		"checksum":      fmt.Sprintf("SHA1:%032x MD5:%032x ADLER32:%032x", sha1h, md5h, adler32h),
 		"etag":          calcEtag(upload.ctx, fi),
 		"size":          upload.info.Size,
 		"mimetype":      mime.Detect(false, ip),
-		"permissions":   27, // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
+		"permissions":   perms,
 		"mtime":         upload.info.MetaData["mtime"],
 		"storage_mtime": upload.info.MetaData["mtime"],
 	}
-	_, err = upload.fs.filecache.InsertOrUpdate(upload.info.Storage["StorageId"], data)
+	_, err = upload.fs.filecache.InsertOrUpdate(upload.info.Storage["StorageId"], data, false)
 	if err != nil {
 		return err
 	}
@@ -437,7 +443,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the upload needs to implement Terminate
 
 // AsTerminatableUpload returns a TerminatableUpload
-func (fs *ocfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
+func (fs *owncloudsqlfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
 
@@ -461,7 +467,7 @@ func (upload *fileUpload) Terminate(ctx context.Context) error {
 // - the upload needs to implement DeclareLength
 
 // AsLengthDeclarableUpload returns a LengthDeclarableUpload
-func (fs *ocfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
+func (fs *owncloudsqlfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
 	return upload.(*fileUpload)
 }
 
@@ -477,7 +483,7 @@ func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error
 // - the upload needs to implement ConcatUploads
 
 // AsConcatableUpload returns a ConcatableUpload
-func (fs *ocfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
+func (fs *owncloudsqlfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
 	return upload.(*fileUpload)
 }
 

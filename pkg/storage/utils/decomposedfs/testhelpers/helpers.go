@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ruser "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
@@ -34,7 +36,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
-	ruser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/tests/helpers"
 )
 
@@ -112,7 +113,7 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	// Create dir1
-	dir1, err := env.CreateTestDir("dir1")
+	dir1, err := env.CreateTestDir("/dir1")
 	if err != nil {
 		return nil, err
 	}
@@ -124,13 +125,13 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	// Create subdir1 in dir1
-	err = fs.CreateDir(ctx, "dir1/subdir1")
+	err = fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "/dir1/subdir1"})
 	if err != nil {
 		return nil, err
 	}
 
 	// Create emptydir
-	err = fs.CreateDir(ctx, "emptydir")
+	err = fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "/emptydir"})
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +146,7 @@ func (t *TestEnv) Cleanup() {
 
 // CreateTestDir create a directory and returns a corresponding Node
 func (t *TestEnv) CreateTestDir(name string) (*node.Node, error) {
-	err := t.Fs.CreateDir(t.Ctx, name)
+	err := t.Fs.CreateDir(t.Ctx, &providerv1beta1.Reference{Path: name})
 	if err != nil {
 		return nil, err
 	}

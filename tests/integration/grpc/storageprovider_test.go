@@ -30,12 +30,11 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
-	"github.com/cs3org/reva/pkg/token"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-	ruser "github.com/cs3org/reva/pkg/user"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -86,9 +85,9 @@ var _ = Describe("storage providers", func() {
 		Expect(err).ToNot(HaveOccurred())
 		t, err := tokenManager.MintToken(ctx, user, scope)
 		Expect(err).ToNot(HaveOccurred())
-		ctx = token.ContextSetToken(ctx, t)
-		ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)
-		ctx = ruser.ContextSetUser(ctx, user)
+		ctx = ctxpkg.ContextSetToken(ctx, t)
+		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, t)
+		ctx = ctxpkg.ContextSetUser(ctx, user)
 
 		revads, err = startRevads(dependencies, variables)
 		Expect(err).ToNot(HaveOccurred())
@@ -466,6 +465,64 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
+	PDescribe("nextcloud", func() {
+		BeforeEach(func() {
+			dependencies = map[string]string{
+				"storage": "storageprovider-nextcloud.toml",
+			}
+		})
+
+		assertCreateHome()
+
+		Context("with a home and a subdirectory", func() {
+			JustBeforeEach(func() {
+				res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				subdirRes, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: subdirRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(subdirRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			})
+
+			assertCreateContainer()
+			assertListContainer()
+			assertGetPath()
+			assertDelete()
+			assertMove()
+			assertGrants()
+			assertUploads()
+			assertDownloads()
+			assertRecycle()
+			assertReferences()
+			assertMetadata()
+		})
+
+		Context("with an existing file /versioned_file", func() {
+			JustBeforeEach(func() {
+				fs, err := ocis.New(map[string]interface{}{
+					"root":        revads["storage"].TmpRoot,
+					"enable_home": true,
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
+				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+
+				ctx := ctxpkg.ContextSetUser(context.Background(), user)
+
+				err = fs.CreateHome(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content1)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content2)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			assertFileVersions()
+		})
+	})
+
 	Describe("ocis", func() {
 		BeforeEach(func() {
 			dependencies = map[string]string{
@@ -510,7 +567,7 @@ var _ = Describe("storage providers", func() {
 				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
 				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
 
-				ctx := ruser.ContextSetUser(context.Background(), user)
+				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
@@ -578,7 +635,7 @@ var _ = Describe("storage providers", func() {
 				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
 				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
 
-				ctx := ruser.ContextSetUser(context.Background(), user)
+				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())

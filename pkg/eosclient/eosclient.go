@@ -27,9 +27,9 @@ import (
 
 // EOSClient is the interface which enables access to EOS instances through various interfaces.
 type EOSClient interface {
-	AddACL(ctx context.Context, auth, rootAuth Authorization, path string, a *acl.Entry) error
+	AddACL(ctx context.Context, auth, rootAuth Authorization, path string, position uint, a *acl.Entry) error
 	RemoveACL(ctx context.Context, auth, rootAuth Authorization, path string, a *acl.Entry) error
-	UpdateACL(ctx context.Context, auth, rootAuth Authorization, path string, a *acl.Entry) error
+	UpdateACL(ctx context.Context, auth, rootAuth Authorization, path string, position uint, a *acl.Entry) error
 	GetACL(ctx context.Context, auth Authorization, path, aclType, target string) (*acl.Entry, error)
 	ListACLs(ctx context.Context, auth Authorization, path string) ([]*acl.Entry, error)
 	GetFileInfoByInode(ctx context.Context, auth Authorization, inode uint64) (*FileInfo, error)
@@ -37,6 +37,7 @@ type EOSClient interface {
 	GetFileInfoByPath(ctx context.Context, auth Authorization, path string) (*FileInfo, error)
 	SetAttr(ctx context.Context, auth Authorization, attr *Attribute, recursive bool, path string) error
 	UnsetAttr(ctx context.Context, auth Authorization, attr *Attribute, path string) error
+	GetAttr(ctx context.Context, auth Authorization, key, path string) (*Attribute, error)
 	GetQuota(ctx context.Context, username string, rootAuth Authorization, path string) (*QuotaInfo, error)
 	SetQuota(ctx context.Context, rooAuth Authorization, info *SetQuotaInfo) error
 	Touch(ctx context.Context, auth Authorization, path string) error
@@ -120,6 +121,12 @@ type SetQuotaInfo struct {
 	MaxBytes  uint64
 	MaxFiles  uint64
 }
+
+// Constants for ACL position
+const (
+	EndPosition   uint = 0
+	StartPosition uint = 1
+)
 
 // Role holds the attributes required to authenticate to EOS via role-based access.
 type Role struct {

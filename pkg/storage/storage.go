@@ -31,7 +31,7 @@ import (
 type FS interface {
 	GetHome(ctx context.Context) (string, error)
 	CreateHome(ctx context.Context) error
-	CreateDir(ctx context.Context, fn string) error
+	CreateDir(ctx context.Context, ref *provider.Reference) error
 	Delete(ctx context.Context, ref *provider.Reference) error
 	Move(ctx context.Context, oldRef, newRef *provider.Reference) error
 	GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
@@ -48,6 +48,7 @@ type FS interface {
 	EmptyRecycle(ctx context.Context) error
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error
 	RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)

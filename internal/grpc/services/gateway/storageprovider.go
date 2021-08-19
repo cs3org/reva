@@ -23,9 +23,12 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	rtrace "github.com/cs3org/reva/pkg/trace"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -40,7 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
@@ -54,8 +57,7 @@ type transferClaims struct {
 func (s *svc) sign(_ context.Context, target string) (string, error) {
 	// Tus sends a separate request to the datagateway service for every chunk.
 	// For large files, this can take a long time, so we extend the expiration
-	// for 10 minutes. TODO: Make this configurable.
-	ttl := time.Duration(s.c.TransferExpires) * 10 * time.Minute
+	ttl := time.Duration(s.c.TransferExpires) * time.Second
 	claims := transferClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(ttl).Unix(),
@@ -136,16 +138,16 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 	if id != nil {
 		// query that specific storage provider
-		parts := strings.SplitN(id.OpaqueId, "!", 2)
-		if len(parts) != 2 {
+		storageid, opaqeid, err := utils.SplitStorageSpaceID(id.OpaqueId)
+		if err != nil {
 			return &provider.ListStorageSpacesResponse{
 				Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
 			}, nil
 		}
 		res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
 			Ref: &provider.Reference{ResourceId: &provider.ResourceId{
-				StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + an opaqueid
-				OpaqueId:  parts[1],
+				StorageId: storageid,
+				OpaqueId:  opaqeid,
 			}},
 		})
 		if err != nil {
@@ -267,15 +269,15 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	parts := strings.SplitN(req.Id.OpaqueId, "!", 2)
-	if len(parts) != 2 {
+	storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
+	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
 			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
 		}, nil
 	}
 	c, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
-		StorageId: parts[0], // FIXME REFERENCE the StorageSpaceId is a storageid + a opaqueid
-		OpaqueId:  parts[1],
+		StorageId: storageid,
+		OpaqueId:  opaqeid,
 	}})
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
@@ -294,9 +296,10 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 }
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	home := s.getHome(ctx)
-	homeRes := &provider.GetHomeResponse{Path: home, Status: status.NewOK(ctx)}
-	return homeRes, nil
+	return &provider.GetHomeResponse{
+		Path:   s.getHome(ctx),
+		Status: status.NewOK(ctx),
+	}, nil
 }
 
 func (s *svc) getHome(_ context.Context) string {
@@ -306,6 +309,11 @@ func (s *svc) getHome(_ context.Context) string {
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.initiateFileDownload(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileDownloadResponse{
@@ -370,7 +378,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 		if protocol == "webdav" {
 			// TODO(ishank011): pass this through the datagateway service
-			// for now, we just expose the file server to the user
+			// For now, we just expose the file server to the user
 			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
@@ -434,7 +442,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 		if protocol == "webdav" {
 			// TODO(ishank011): pass this through the datagateway service
-			// for now, we just expose the file server to the user
+			// For now, we just expose the file server to the user
 			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
@@ -516,6 +524,9 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
 	log := appctx.GetLogger(ctx)
+	if utils.IsRelativeReference(req.Ref) {
+		return s.initiateFileUpload(ctx, req)
+	}
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileUploadResponse{
@@ -569,7 +580,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 		if protocol == "webdav" {
 			// TODO(ishank011): pass this through the datagateway service
-			// for now, we just expose the file server to the user
+			// For now, we just expose the file server to the user
 			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
 			if err != nil {
 				return &gateway.InitiateFileUploadResponse{
@@ -631,7 +642,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 		if protocol == "webdav" {
 			// TODO(ishank011): pass this through the datagateway service
-			// for now, we just expose the file server to the user
+			// For now, we just expose the file server to the user
 			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
 			if err != nil {
 				return &gateway.InitiateFileUploadResponse{
@@ -738,6 +749,11 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.createContainer(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.CreateContainerResponse{
@@ -835,15 +851,17 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		}, nil
 	}
 
+	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "Delete")
+	defer span.End()
+
 	if !s.inSharedFolder(ctx, p) {
 		return s.delete(ctx, req)
 	}
 
 	if s.isSharedFolder(ctx, p) {
 		// TODO(labkode): deleting share names should be allowed, means unmounting.
-		log.Debug().Msgf("path:%s points to shared folder or share name", p)
 		err := errtypes.BadRequest("gateway: cannot delete share folder or share name: path=" + p)
-		log.Err(err).Msg("gateway: error creating container")
+		span.RecordError(err)
 		return &provider.DeleteResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
 		}, nil
@@ -988,10 +1006,10 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}, nil
 	}
 
-	dp, st2 := s.getPath(ctx, req.Destination)
-	if st2.Code != rpc.Code_CODE_OK && st2.Code != rpc.Code_CODE_NOT_FOUND {
+	dp, st := s.getPath(ctx, req.Destination)
+	if st.Code != rpc.Code_CODE_OK && st.Code != rpc.Code_CODE_NOT_FOUND {
 		return &provider.MoveResponse{
-			Status: st2,
+			Status: st,
 		}, nil
 	}
 
@@ -1084,6 +1102,15 @@ func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 			Status: status.NewStatusFromErrType(ctx, "move dst="+req.Destination.String(), err),
 		}, nil
 	}
+
+	// if providers are not the same we do not implement cross storage move yet.
+	if len(srcList) != 1 || len(dstList) != 1 {
+		res := &provider.MoveResponse{
+			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
+		}
+		return res, nil
+	}
+
 	srcP, dstP := srcList[0], dstList[0]
 
 	// if providers are not the same we do not implement cross storage copy yet.
@@ -1238,15 +1265,25 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	}
 
 	resPath := req.Ref.GetPath()
-	if len(providers) == 1 && (resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
+	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
 		c, err := s.getStorageProviderClient(ctx, providers[0])
 		if err != nil {
 			return &provider.StatResponse{
 				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
 			}, nil
 		}
-		return c.Stat(ctx, req)
+		rsp, err := c.Stat(ctx, req)
+		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
+			return rsp, err
+		}
+		return rsp, nil
 	}
+
+	return s.statAcrossProviders(ctx, req, providers)
+}
+
+func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest, providers []*registry.ProviderInfo) (*provider.StatResponse, error) {
+	log := appctx.GetLogger(ctx)
 
 	infoFromProviders := make([]*provider.ResourceInfo, len(providers))
 	errors := make([]error, len(providers))
@@ -1261,9 +1298,8 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	var totalSize uint64
 	for i := range providers {
 		if errors[i] != nil {
-			return &provider.StatResponse{
-				Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), errors[i]),
-			}, nil
+			log.Warn().Msgf("statting on provider %s returned err %+v", providers[i].ProviderPath, errors[i])
+			continue
 		}
 		if infoFromProviders[i] != nil {
 			totalSize += infoFromProviders[i].Size
@@ -1279,7 +1315,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				OpaqueId:  uuid.New().String(),
 			},
 			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			Path: resPath,
+			Path: req.Ref.GetPath(),
 			Size: totalSize,
 		},
 	}, nil
@@ -1293,14 +1329,18 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 		return
 	}
 
-	resPath := path.Clean(req.Ref.GetPath())
-	newPath := req.Ref.GetPath()
-	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-		newPath = p.ProviderPath
+	if utils.IsAbsoluteReference(req.Ref) {
+		resPath := path.Clean(req.Ref.GetPath())
+		newPath := req.Ref.GetPath()
+		if resPath != "." && !strings.HasPrefix(resPath, p.ProviderPath) {
+			newPath = p.ProviderPath
+		}
+		req.Ref = &provider.Reference{Path: newPath}
 	}
-	r, err := c.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: newPath}})
+
+	r, err := c.Stat(ctx, req)
 	if err != nil {
-		*e = errors.Wrap(err, "gateway: error calling ListContainer")
+		*e = errors.Wrap(err, fmt.Sprintf("gateway: error calling Stat %s on %+v", req.Ref, p))
 		return
 	}
 	if res == nil {
@@ -1310,6 +1350,11 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.stat(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.StatResponse{
@@ -1589,6 +1634,7 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 }
 
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	log := appctx.GetLogger(ctx)
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListContainerResponse{
@@ -1596,44 +1642,48 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 		}, nil
 	}
 
-	resPath := path.Clean(req.Ref.GetPath())
 	infoFromProviders := make([][]*provider.ResourceInfo, len(providers))
 	errors := make([]error, len(providers))
+	indirects := make([]bool, len(providers))
 	var wg sync.WaitGroup
 
 	for i, p := range providers {
 		wg.Add(1)
-		go s.listContainerOnProvider(ctx, req, &infoFromProviders[i], p, &errors[i], &wg)
+		go s.listContainerOnProvider(ctx, req, &infoFromProviders[i], p, &indirects[i], &errors[i], &wg)
 	}
 	wg.Wait()
 
 	infos := []*provider.ResourceInfo{}
-	indirects := make(map[string][]*provider.ResourceInfo)
+	nestedInfos := make(map[string][]*provider.ResourceInfo)
 	for i := range providers {
 		if errors[i] != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), errors[i]),
-			}, nil
+			// return if there's only one mount, else skip this one
+			if len(providers) == 1 {
+				return &provider.ListContainerResponse{
+					Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), errors[i]),
+				}, nil
+			}
+			log.Warn().Msgf("listing container on provider %s returned err %+v", providers[i].ProviderPath, errors[i])
+			continue
 		}
 		for _, inf := range infoFromProviders[i] {
-			if parent := path.Dir(inf.Path); resPath != "" && resPath != parent {
-				parts := strings.Split(strings.TrimPrefix(inf.Path, resPath), "/")
-				p := path.Join(resPath, parts[1])
-				indirects[p] = append(indirects[p], inf)
+			if indirects[i] {
+				p := inf.Path
+				// TODO do we need to trim prefix here for relative references?
+				nestedInfos[p] = append(nestedInfos[p], inf)
 			} else {
 				infos = append(infos, inf)
 			}
 		}
 	}
 
-	for k, v := range indirects {
+	for k := range nestedInfos {
 		inf := &provider.ResourceInfo{
 			Id: &provider.ResourceId{
 				StorageId: "/",
 				OpaqueId:  uuid.New().String(),
 			},
 			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			Etag: etag.GenerateEtagFromResources(nil, v),
 			Path: k,
 			Size: 0,
 		}
@@ -1646,7 +1696,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	}, nil
 }
 
-func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListContainerRequest, res *[]*provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
+func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListContainerRequest, res *[]*provider.ResourceInfo, p *registry.ProviderInfo, ind *bool, e *error, wg *sync.WaitGroup) {
 	defer wg.Done()
 	c, err := s.getStorageProviderClient(ctx, p)
 	if err != nil {
@@ -1654,12 +1704,35 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 		return
 	}
 
-	resPath := path.Clean(req.Ref.GetPath())
-	newPath := req.Ref.GetPath()
-	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-		newPath = p.ProviderPath
+	if utils.IsAbsoluteReference(req.Ref) {
+		resPath := path.Clean(req.Ref.GetPath())
+		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
+			// The path which we're supposed to list encompasses this provider
+			// so just return the first child and mark it as indirect
+			rel, err := filepath.Rel(resPath, p.ProviderPath)
+			if err != nil {
+				*e = err
+				return
+			}
+			parts := strings.Split(rel, "/")
+			p := path.Join(resPath, parts[0])
+			*ind = true
+			*res = []*provider.ResourceInfo{
+				{
+					Id: &provider.ResourceId{
+						StorageId: "/",
+						OpaqueId:  uuid.New().String(),
+					},
+					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Path: p,
+					Size: 0,
+				},
+			}
+			return
+		}
 	}
-	r, err := c.ListContainer(ctx, &provider.ListContainerRequest{Ref: &provider.Reference{Path: newPath}})
+
+	r, err := c.ListContainer(ctx, req)
 	if err != nil {
 		*e = errors.Wrap(err, "gateway: error calling ListContainer")
 		return
@@ -1669,6 +1742,11 @@ func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListCon
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.listContainer(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.ListContainerResponse{
@@ -1857,7 +1935,7 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 		return res.Info.Path, res.Status
 	}
 
-	if ref.Path != "" {
+	if utils.IsAbsolutePathReference(ref) {
 		return ref.Path, &rpc.Status{Code: rpc.Code_CODE_OK}
 	}
 	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
