@@ -96,6 +96,7 @@ def main(ctx):
   # ocisIntegrationTests(6, [1, 4])     - this will only run 1st and 4th parts
   # implemented for: ocisIntegrationTests and s3ngIntegrationTests
   return [
+    coverage(),
     buildAndPublishDocker(),
     buildOnly(),
     testIntegration(),
@@ -226,6 +227,42 @@ def buildAndPublishDocker():
           ]
         }
       }
+    ]
+  }
+
+def coverage():
+  return {
+    "kind": "pipeline",
+    "type": "docker",
+    "name": "unit-test-coverage",
+    "platform": {
+      "os": "linux",
+      "arch": "amd64",
+    },
+    "trigger":{
+	"ref":[
+		"refs/heads/master",
+		"refs/pull/**",
+	],
+    },
+    "steps": [
+      {
+        "name": "unit-test",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
+        "commands": [
+          "make test",
+        ],
+      },
+      {
+        "name": "codacy",
+        "image": "plugins/codacy:1",
+        "pull": "always",
+        "settings": {
+            "token": {
+                "from_secret": "codacy_token",
+            },
+        },
+      },
     ]
   }
 
