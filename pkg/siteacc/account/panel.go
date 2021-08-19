@@ -109,11 +109,9 @@ func (panel *Panel) PreExecute(session *html.Session, path string, w http.Respon
 				return panel.redirect(templateLogin, w, r), nil
 			}
 		}
-	} else {
-		if path == templateLogin || path == templateRegistration {
-			// If a user is logged in and tries to login or register again, redirect to the main account page
-			return panel.redirect(templateManage, w, r), nil
-		}
+	} else if path == templateLogin || path == templateRegistration {
+		// If a user is logged in and tries to login or register again, redirect to the main account page
+		return panel.redirect(templateManage, w, r), nil
 	}
 
 	return html.ContinueExecution, nil

@@ -65,16 +65,16 @@ type Configuration struct {
 func (cfg *Configuration) Cleanup() {
 	// Ensure the webserver URL ends with a slash
 	if cfg.Webserver.URL != "" && !strings.HasSuffix(cfg.Webserver.URL, "/") {
-		cfg.Webserver.URL = cfg.Webserver.URL + "/"
+		cfg.Webserver.URL += "/"
 	}
 
 	// Ensure the GOCDB URL ends with a slash
 	if cfg.GOCDB.URL != "" && !strings.HasSuffix(cfg.GOCDB.URL, "/") {
-		cfg.GOCDB.URL = cfg.GOCDB.URL + "/"
+		cfg.GOCDB.URL += "/"
 	}
 
 	// Ensure the GOCDB Write URL ends with a slash
 	if cfg.GOCDB.WriteURL != "" && !strings.HasSuffix(cfg.GOCDB.WriteURL, "/") {
-		cfg.GOCDB.WriteURL = cfg.GOCDB.WriteURL + "/"
+		cfg.GOCDB.WriteURL += "/"
 	}
 }
