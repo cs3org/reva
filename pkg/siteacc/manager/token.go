@@ -21,7 +21,7 @@ package manager
 import (
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
 	"github.com/sethvargo/go-password/password"
 )
