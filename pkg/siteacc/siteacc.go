@@ -144,6 +144,7 @@ func (siteacc *SiteAccounts) UsersManager() *manager.UsersManager {
 	return siteacc.usersManager
 }
 
+// GetPublicEndpoints returns a list of all public endpoints.
 func (siteacc *SiteAccounts) GetPublicEndpoints() []string {
 	// TODO: Only for local testing!
 	// return []string{"/"}

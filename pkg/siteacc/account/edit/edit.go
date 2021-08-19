@@ -20,6 +20,7 @@ package edit
 
 import "github.com/cs3org/reva/pkg/siteacc/html"
 
+// PanelTemplate is the content provider for the edit form.
 type PanelTemplate struct {
 	html.ContentProvider
 }

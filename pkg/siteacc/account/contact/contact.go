@@ -20,6 +20,7 @@ package contact
 
 import "github.com/cs3org/reva/pkg/siteacc/html"
 
+// PanelTemplate is the content provider for the contact form.
 type PanelTemplate struct {
 	html.ContentProvider
 }

@@ -20,6 +20,7 @@ package registration
 
 import "github.com/cs3org/reva/pkg/siteacc/html"
 
+// PanelTemplate is the content provider for the registration form.
 type PanelTemplate struct {
 	html.ContentProvider
 }

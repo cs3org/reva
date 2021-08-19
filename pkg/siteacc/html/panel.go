@@ -28,6 +28,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// TemplateID is the type for template identifiers.
 type TemplateID = string
 
 // Panel provides basic HTML panel functionality.

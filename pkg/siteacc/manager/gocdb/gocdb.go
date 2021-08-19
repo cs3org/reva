@@ -25,6 +25,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// AccountsListener is the GOCDB accounts listener.
 type AccountsListener struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
@@ -44,14 +45,17 @@ func (listener *AccountsListener) initialize(conf *config.Configuration, log *ze
 	return nil
 }
 
+// AccountCreated is called whenever an account was created.
 func (listener *AccountsListener) AccountCreated(account *data.Account) {
 	listener.updateGOCDB(account, false)
 }
 
+// AccountUpdated is called whenever an account was updated.
 func (listener *AccountsListener) AccountUpdated(account *data.Account) {
 	listener.updateGOCDB(account, false)
 }
 
+// AccountRemoved is called whenever an account was removed.
 func (listener *AccountsListener) AccountRemoved(account *data.Account) {
 	listener.updateGOCDB(account, true)
 }

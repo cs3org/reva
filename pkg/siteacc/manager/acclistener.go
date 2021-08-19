@@ -25,7 +25,10 @@ type AccountsListenerCallback = func(AccountsListener, *data.Account)
 
 // AccountsListener is an interface that listens to accounts events.
 type AccountsListener interface {
+	// AccountCreated is called whenever an account was created.
 	AccountCreated(account *data.Account)
+	// AccountUpdated is called whenever an account was updated.
 	AccountUpdated(account *data.Account)
+	// AccountRemoved is called whenever an account was removed.
 	AccountRemoved(account *data.Account)
 }

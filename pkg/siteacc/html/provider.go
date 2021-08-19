@@ -23,10 +23,13 @@ import (
 )
 
 const (
+	// ContinueExecution causes the execution of a panel to continue.
 	ContinueExecution = true
-	AbortExecution    = false
+	// AbortExecution causes the execution of a panel to be aborted.
+	AbortExecution = false
 )
 
+// ExecutionResult is the type returned by the PreExecute function of PanelProvider.
 type ExecutionResult = bool
 
 // PanelProvider handles general panel tasks.
@@ -38,6 +41,7 @@ type PanelProvider interface {
 	PreExecute(*Session, string, http.ResponseWriter, *http.Request) (ExecutionResult, error)
 }
 
+// PanelDataProvider is the function signature for panel data providers.
 type PanelDataProvider = func(*Session) interface{}
 
 // ContentProvider defines various methods for HTML content providers.
