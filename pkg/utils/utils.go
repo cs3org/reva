@@ -195,6 +195,7 @@ func IsValidPhoneNumber(number string) bool {
 	return re.MatchString(number)
 }
 
+// IsValidName cheks if the given name doesn't contain any non-alpha, space or dash characters.
 func IsValidName(name string) bool {
 	re := regexp.MustCompile(`^[A-Za-z\s\-]*$`)
 	return re.MatchString(name)
