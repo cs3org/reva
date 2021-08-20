@@ -16,28 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package config
+package data
 
-import "github.com/cs3org/reva/pkg/smtpclient"
-
-// Configuration holds the general service configuration.
-type Configuration struct {
-	Prefix string `mapstructure:"prefix"`
-
-	Storage struct {
-		Driver string `mapstructure:"driver"`
-
-		File struct {
-			File string `mapstructure:"file"`
-		} `mapstructure:"file"`
-	} `mapstructure:"storage"`
-
-	EnableRegistrationForm bool `mapstructure:"enable_registration_form"`
-
-	SMTP              *smtpclient.SMTPCredentials `mapstructure:"smtp"`
-	NotificationsMail string                      `mapstructure:"notifications_mail"`
-
-	SiteRegistration struct {
-		URL string `mapstructure:"url"`
-	} `mapstructure:"sitereg"`
-}
+const (
+	// ScopeDefault is the default account panel scope.
+	ScopeDefault = ""
+	// ScopeGOCDB is used to access the GOCDB.
+	ScopeGOCDB = "gocdb"
+)

@@ -19,10 +19,10 @@
 package config
 
 const (
-	// EndpointPanel is the endpoint path of the web interface panel.
-	EndpointPanel = "/panel"
-	// EndpointRegistration is the endpoint path of the web interface registration form.
-	EndpointRegistration = "/register"
+	// EndpointAdministration is the endpoint path of the web interface administration panel.
+	EndpointAdministration = "/admin"
+	// EndpointAccount is the endpoint path of the web interface account panel.
+	EndpointAccount = "/account"
 
 	// EndpointGenerateAPIKey is the endpoint path of the API key generator.
 	EndpointGenerateAPIKey = "/generate-api-key"
@@ -43,10 +43,26 @@ const (
 	// EndpointRemove is the endpoint path for account removal.
 	EndpointRemove = "/remove"
 
+	// EndpointLogin is the endpoint path for (internal) user login.
+	EndpointLogin = "/login"
+	// EndpointLogout is the endpoint path for (internal) user logout.
+	EndpointLogout = "/logout"
+	// EndpointResetPassword is the endpoint path for resetting user passwords
+	EndpointResetPassword = "/reset-password"
+	// EndpointContact is the endpoint path for sending contact emails
+	EndpointContact = "/contact"
+
+	// EndpointVerifyUserToken is the endpoint path for user token validation.
+	EndpointVerifyUserToken = "/verify-user-token"
+
 	// EndpointAuthorize is the endpoint path for account authorization.
 	EndpointAuthorize = "/authorize"
 	// EndpointIsAuthorized is the endpoint path used to check the authorization status of an account.
 	EndpointIsAuthorized = "/is-authorized"
+
+	// EndpointGrantGOCDBAccess is the endpoint path for granting or revoking GOCDB access.
+	EndpointGrantGOCDBAccess = "/grant-gocdb-access"
+
 	// EndpointUnregisterSite is the endpoint path for site unregistration.
 	EndpointUnregisterSite = "/unregister-site"
 )

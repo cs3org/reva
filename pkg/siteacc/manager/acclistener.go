@@ -16,36 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package email
+package manager
 
-const accountCreatedTemplate = `
-Dear {{.FirstName}} {{.LastName}},
+import "github.com/cs3org/reva/pkg/siteacc/data"
 
-Your ScienceMesh account has been successfully created!
+// AccountsListenerCallback is the generic function type for accounts listeners.
+type AccountsListenerCallback = func(AccountsListener, *data.Account)
 
-An administrator will soon create an API key for your account; you will receive a separate email containing the key.
-
-Kind regards,
-The ScienceMesh Team
-`
-
-const apiKeyAssignedTemplate = `
-Dear {{.FirstName}} {{.LastName}},
-
-An API key has been created for your account:
-{{.Data.APIKey}}
-
-Keep this key in a safe and secret place!
-
-Kind regards,
-The ScienceMesh Team
-`
-
-const accountAuthorizedTemplate = `
-Dear {{.FirstName}} {{.LastName}},
-
-Congratulations - your site registration has been authorized!
-
-Kind regards,
-The ScienceMesh Team
-`
+// AccountsListener is an interface that listens to accounts events.
+type AccountsListener interface {
+	// AccountCreated is called whenever an account was created.
+	AccountCreated(account *data.Account)
+	// AccountUpdated is called whenever an account was updated.
+	AccountUpdated(account *data.Account)
+	// AccountRemoved is called whenever an account was removed.
+	AccountRemoved(account *data.Account)
+}
