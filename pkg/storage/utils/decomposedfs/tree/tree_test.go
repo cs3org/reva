@@ -61,7 +61,7 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, originalPath)
+			n, err = env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -139,33 +139,33 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("restores the file to its original location if the targetPath is empty", func() {
-					_, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "")
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "")
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
 
-					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath)
+					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(originalNode.Exists).To(BeTrue())
 				})
 
 				It("restores files to different locations", func() {
-					_, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "dir1/newLocation")
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "dir1/newLocation")
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
 
-					newNode, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/newLocation")
+					newNode, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/newLocation", false)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(newNode.Exists).To(BeTrue())
 
-					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath)
+					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(originalNode.Exists).To(BeFalse())
 				})
 
 				It("removes the file from the trash", func() {
-					_, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "")
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "")
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -184,7 +184,7 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, "emptydir")
+			n, err = env.Lookup.NodeFromPath(env.Ctx, "emptydir", false)
 			Expect(err).ToNot(HaveOccurred())
 		})
 

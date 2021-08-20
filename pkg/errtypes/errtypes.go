@@ -183,7 +183,7 @@ type IsChecksumMismatch interface {
 }
 
 // IsInsufficientStorage is the interface to implement
-// to specify that a there is insufficient storage.
+// to specify that there is insufficient storage.
 type IsInsufficientStorage interface {
 	IsInsufficientStorage()
 }
