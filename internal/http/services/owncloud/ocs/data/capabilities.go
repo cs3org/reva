@@ -110,6 +110,7 @@ type CapabilitiesDav struct {
 	Trashbin                       string   `json:"trashbin" xml:"trashbin"`
 	Reports                        []string `json:"reports" xml:"reports>element" mapstructure:"reports"`
 	ChunkingParallelUploadDisabled bool     `json:"chunkingParallelUploadDisabled" xml:"chunkingParallelUploadDisabled"`
+	Spaces                         bool     `json:"spaces" xml:"spaces"`
 }
 
 // CapabilitiesFilesSharing TODO document
