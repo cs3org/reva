@@ -352,19 +352,25 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	}
 
 	log.Info().Msg("mount path will be:" + refPath)
-	createRefReq := &provider.CreateReferenceRequest{
-		Ref:       &provider.Reference{Path: refPath},
-		TargetUri: targetURI,
-	}
 
-	c, err := s.findByPath(ctx, refPath)
+	c, p, err := s.findByPath(ctx, refPath)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
 		}
 		return status.NewInternal(ctx, err, "error finding storage provider"), nil
 	}
-
+	pRef, err := unwrap(&provider.Reference{Path: refPath}, p.ProviderPath)
+	if err != nil {
+		log.Err(err).Msg("gateway: error unwrapping")
+		return &rpc.Status{
+			Code: rpc.Code_CODE_INTERNAL,
+		}, nil
+	}
+	createRefReq := &provider.CreateReferenceRequest{
+		Ref:       pRef,
+		TargetUri: targetURI,
+	}
 	createRefRes, err := c.CreateReference(ctx, createRefReq)
 	if err != nil {
 		log.Err(err).Msg("gateway: error calling GetHome")

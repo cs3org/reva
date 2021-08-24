@@ -94,7 +94,7 @@ func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Refer
 	}
 
 	// r: <path:"/public/$token" >
-	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) {
+	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) || strings.HasPrefix(r.GetPath(), "/"+s.Token) {
 		return true
 	}
 	return false

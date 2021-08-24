@@ -369,7 +369,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	log := appctx.GetLogger(ctx)
 
 	idReference := &provider.Reference{ResourceId: resourceID}
-	storageProvider, err := s.find(ctx, idReference)
+	storageProvider, _, err := s.find(ctx, idReference)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
@@ -397,12 +397,17 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	sharePath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
 	log.Debug().Str("share_path", sharePath).Msg("remove reference of share")
 
-	homeProvider, err := s.find(ctx, &provider.Reference{Path: sharePath})
+	sharePathRef := &provider.Reference{Path: sharePath}
+	homeProvider, providerInfo, err := s.find(ctx, sharePathRef)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
 		}
 		return status.NewInternal(ctx, err, "error finding storage provider")
+	}
+	ref, err := unwrap(sharePathRef, providerInfo.ProviderPath)
+	if err != nil {
+		return status.NewInternal(ctx, err, "could not unwrap share path reference")
 	}
 
 	deleteReq := &provider.DeleteRequest{
@@ -412,7 +417,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 				"deleting_shared_resource": {},
 			},
 		},
-		Ref: &provider.Reference{Path: sharePath},
+		Ref: ref,
 	}
 
 	deleteResp, err := homeProvider.Delete(ctx, deleteReq)
@@ -443,7 +448,7 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 	log := appctx.GetLogger(ctx)
 
 	// get the metadata about the share
-	c, err := s.find(ctx, ref)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
@@ -485,20 +490,25 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
 	log.Info().Msg("mount path will be:" + refPath)
 
-	createRefReq := &provider.CreateReferenceRequest{
-		Ref: &provider.Reference{Path: refPath},
-		// cs3 is the Scheme and %s/%s is the Opaque parts of a net.URL.
-		TargetUri: fmt.Sprintf("cs3:%s/%s", resourceID.GetStorageId(), resourceID.GetOpaqueId()),
-	}
-
-	c, err = s.findByPath(ctx, refPath)
+	c, p, err := s.findByPath(ctx, refPath)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
 		}
 		return status.NewInternal(ctx, err, "error finding storage provider")
 	}
-
+	pRef, err := unwrap(&provider.Reference{Path: refPath}, p.ProviderPath)
+	if err != nil {
+		log.Err(err).Msg("gateway: error unwrapping reference")
+		return &rpc.Status{
+			Code: rpc.Code_CODE_INTERNAL,
+		}
+	}
+	createRefReq := &provider.CreateReferenceRequest{
+		Ref: pRef,
+		// cs3 is the Scheme and %s/%s is the Opaque parts of a net.URL.
+		TargetUri: fmt.Sprintf("cs3:%s/%s", resourceID.GetStorageId(), resourceID.GetOpaqueId()),
+	}
 	createRefRes, err := c.CreateReference(ctx, createRefReq)
 	if err != nil {
 		log.Err(err).Msg("gateway: error calling GetHome")
@@ -525,7 +535,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 		Grantee: g,
 	}
 
-	c, err := s.find(ctx, ref)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
@@ -558,7 +568,7 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 		},
 	}
 
-	c, err := s.find(ctx, ref)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
@@ -590,7 +600,7 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		},
 	}
 
-	c, err := s.find(ctx, ref)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
@@ -623,7 +633,7 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		},
 	}
 
-	c, err := s.find(ctx, ref)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
