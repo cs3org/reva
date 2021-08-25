@@ -105,7 +105,7 @@ See [tests/acceptance](https://github.com/cs3org/reva/tree/master/tests/acceptan
 
 This will require some PHP-related tools to run, for instance on Ubuntu you will need `apt install -y php-xml php-curl composer`.
 
-1. start an LDAP server
+1.  start an LDAP server
     ```
     docker run --rm --hostname ldap.my-company.com \
         -e LDAP_TLS_VERIFY_CLIENT=never \
@@ -116,11 +116,8 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
         -p 127.0.0.1:389:389 \
         -p 636:636 -d osixia/openldap
     ```
-2. start a REDIS server
-    ```
-    docker run --rm -e REDIS_DATABASES=1 -p 6379:6379 -d webhippie/redis:latest
-    ```
-3. start the needed services
+
+2.  start the needed services
     ```
     cd tests/oc-integration-tests/local
     ../../../cmd/revad/revad -c frontend.toml &
@@ -132,13 +129,13 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
     ../../../cmd/revad/revad -c ldap-users.toml
     ```
 
-4. clone ownCloud 10
+3.  clone ownCloud 10
     `git clone https://github.com/owncloud/core.git ./testrunner`
 
-5. clone the testing app
+4.  clone the testing app
     `git clone https://github.com/owncloud/testing.git ./testrunner/apps/testing`
 
-6. run the tests
+5.  run the tests
     ```
     cd testrunner
     TEST_SERVER_URL='http://localhost:20080' \
