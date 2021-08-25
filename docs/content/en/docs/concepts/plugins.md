@@ -47,22 +47,16 @@ Basic example of serving your component is shown below. This example consists of
 import (
    	"github.com/cs3org/reva/pkg/user"
     "github.com/hashicorp/go-plugin"
+	revaPlugin "github.com/cs3org/reva/pkg/plugin"
 )
 
 // Assume this implements the user.Manager interface
 type Manager struct{}
 
-// Handshake hashicorp go-plugin handshake
-var Handshake = plugin.HandshakeConfig{
-	ProtocolVersion:  1,
-	MagicCookieKey:   "BASIC_PLUGIN",
-	MagicCookieValue: "hello",
-}
-
 func main() {
     // plugin.Serve serves the implementation over RPC to the core
 	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: Handshake,
+		HandshakeConfig: revaPlugin.Handshake,
 		Plugins: map[string]plugin.Plugin{
 			"userprovider": &user.ProviderPlugin{Impl: &Manager{}},
 		},
@@ -74,13 +68,13 @@ The `plugin.Serve` method handles all the details of communicating with Reva cor
 
 The `plugin.Serve` method takes in the plugin configuration, which you would have to define in your plugin source code:
 
-- `HandshakeConfig`: The handshake should be configured as follows:
+- `HandshakeConfig`: The handshake is defined in `github.com/cs3org/reva/pkg/plugin`
 
 ```go
 var Handshake = plugin.HandshakeConfig{
 	ProtocolVersion:  1,
 	MagicCookieKey:   "BASIC_PLUGIN",
-	MagicCookieValue: "hello",
+	MagicCookieValue: "reva",
 }
 ```
 
