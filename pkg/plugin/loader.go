@@ -49,6 +49,7 @@ func (plug *RevaPlugin) Kill() {
 	plug.Client.Kill()
 }
 
+// Handshake contains plugin Handshake configuration
 var Handshake = plugin.HandshakeConfig{
 	ProtocolVersion:  1,
 	MagicCookieKey:   "BASIC_PLUGIN",
