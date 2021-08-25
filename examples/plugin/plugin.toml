@@ -13,3 +13,9 @@ driver = "/home/jimil/Desktop/reva/examples/plugin/json"
 
 [grpc.services.userprovider.drivers.json]
 users = "users.demo.json"
+
+[grpc.services.authprovider]
+auth_manager = "github.com/cs3org/reva-auth-json-plugin"
+
+[grpc.services.autprovider.auth_managers.reva-auth-json-plugin]
+users = "users.demo.json"
