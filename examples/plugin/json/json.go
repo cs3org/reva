@@ -27,6 +27,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	revaPlugin "github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/hashicorp/go-plugin"
 	"github.com/mitchellh/mapstructure"
@@ -145,16 +146,9 @@ func (m *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	return user.Groups, nil
 }
 
-// Handshake hashicorp go-plugin handshake
-var Handshake = plugin.HandshakeConfig{
-	ProtocolVersion:  1,
-	MagicCookieKey:   "BASIC_PLUGIN",
-	MagicCookieValue: "reva",
-}
-
 func main() {
 	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: Handshake,
+		HandshakeConfig: revaPlugin.Handshake,
 		Plugins: map[string]plugin.Plugin{
 			"userprovider": &user.ProviderPlugin{Impl: &Manager{}},
 		},

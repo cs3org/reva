@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,14 +42,14 @@ type RevaPlugin struct {
 const dirname = "/var/tmp/reva"
 
 var isAlphaNum = regexp.MustCompile(`^[A-Za-z0-9_-]+$`).MatchString
-var forcedRegexp = regexp.MustCompile(`^([A-Za-z0-9]+)::(.+)$`)
+var isURL = regexp.MustCompile(`^(http:\/\/www\.|https:\/\/www\.|http:\/\/|https:\/\/)?[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$`).MatchString
 
 // Kill kills the plugin process
 func (plug *RevaPlugin) Kill() {
 	plug.Client.Kill()
 }
 
-var handshake = plugin.HandshakeConfig{
+var Handshake = plugin.HandshakeConfig{
 	ProtocolVersion:  1,
 	MagicCookieKey:   "BASIC_PLUGIN",
 	MagicCookieValue: "reva",
@@ -108,20 +107,7 @@ func downloadAndCompilePlugin(pluginType, driver string) (string, error) {
 
 // isValidURL tests a string to determine if it is a well-structure URL
 func isValidURL(driver string) bool {
-	if driverURL := forcedRegexp.FindStringSubmatch(driver); driverURL != nil {
-		driver = driverURL[2]
-	}
-	_, err := url.ParseRequestURI(driver)
-	if err != nil {
-		return false
-	}
-
-	u, err := url.Parse(driver)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return false
-	}
-
-	return true
+	return isURL(driver)
 }
 
 func fetchBinary(pluginType, driver string) (string, error) {
@@ -158,7 +144,7 @@ func Load(pluginType, driver string) (*RevaPlugin, error) {
 	})
 
 	client := plugin.NewClient(&plugin.ClientConfig{
-		HandshakeConfig: handshake,
+		HandshakeConfig: Handshake,
 		Plugins:         PluginMap,
 		Cmd:             exec.Command(bin),
 		AllowedProtocols: []plugin.Protocol{
