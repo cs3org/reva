@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// +build !windows,!freebsd
+// +build freebsd
 
 package owncloud
 
@@ -76,7 +76,7 @@ func (fs *ocfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	total := stat.Blocks * uint64(stat.Bsize)                // Total data blocks in filesystem
-	used := (stat.Blocks - stat.Bavail) * uint64(stat.Bsize) // Free blocks available to unprivileged user
+	total := stat.Blocks * uint64(stat.Bsize)                        // Total data blocks in filesystem
+	used := (stat.Blocks - uint64(stat.Bavail)) * uint64(stat.Bsize) // Free blocks available to unprivileged user
 	return total, used, nil
 }

@@ -18,15 +18,9 @@
 
 // +build !windows,!freebsd
 
-package decomposedfs
+package errtypes
 
 import "golang.org/x/sys/unix"
 
-func (fs *Decomposedfs) getAvailableSize(path string) (uint64, error) {
-	stat := unix.Statfs_t{}
-	err := unix.Statfs(path, &stat)
-	if err != nil {
-		return 0, err
-	}
-	return stat.Bavail * uint64(stat.Bsize), nil
-}
+// ENODATA has an override on FreeBSD
+const ENODATA = unix.ENODATA

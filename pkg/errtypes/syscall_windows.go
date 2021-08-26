@@ -16,17 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// +build !windows,!freebsd
+// +build windows
 
-package decomposedfs
+package errtypes
 
-import "golang.org/x/sys/unix"
+// XattrIsNoData checks if underlying error is ENODATA.
+func XattrIsNoData(err error) bool {
+	return false
+}
 
-func (fs *Decomposedfs) getAvailableSize(path string) (uint64, error) {
-	stat := unix.Statfs_t{}
-	err := unix.Statfs(path, &stat)
-	if err != nil {
-		return 0, err
-	}
-	return stat.Bavail * uint64(stat.Bsize), nil
+// XattrIsNotFound checks if underlying error is ENOENT.
+func XattrIsNotFound(err error) bool {
+	return false
 }

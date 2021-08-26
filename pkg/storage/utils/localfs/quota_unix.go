@@ -18,15 +18,24 @@
 
 // +build !windows,!freebsd
 
-package decomposedfs
+package localfs
 
-import "golang.org/x/sys/unix"
+import (
+	"context"
 
-func (fs *Decomposedfs) getAvailableSize(path string) (uint64, error) {
+	"golang.org/x/sys/unix"
+)
+
+func (fs *localfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
+	// TODO quota of which storage space?
+	// we could use the logged in user, but when a user has access to multiple storages this falls short
+	// for now return quota of root
 	stat := unix.Statfs_t{}
-	err := unix.Statfs(path, &stat)
+	err := unix.Statfs(fs.wrap(ctx, "/"), &stat)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	return stat.Bavail * uint64(stat.Bsize), nil
+	total := stat.Blocks * uint64(stat.Bsize)                // Total data blocks in filesystem
+	used := (stat.Blocks - stat.Bavail) * uint64(stat.Bsize) // Free blocks available to unprivileged user
+	return total, used, nil
 }

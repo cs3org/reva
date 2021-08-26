@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// +build !windows,!freebsd
+// +build freebsd
 
 package decomposedfs
 
@@ -28,5 +28,5 @@ func (fs *Decomposedfs) getAvailableSize(path string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return stat.Bavail * uint64(stat.Bsize), nil
+	return uint64(stat.Bavail) * uint64(stat.Bsize), nil
 }
