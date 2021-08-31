@@ -50,6 +50,8 @@ type ctxKey int
 
 const (
 	ctxKeyBaseURI ctxKey = iota
+
+	idDelimiter string = ":"
 )
 
 var (
@@ -242,7 +244,7 @@ func wrapResourceID(r *provider.ResourceId) string {
 // - url safe, because the id might be used in a url, eg. the /dav/meta nodes
 // which is why we base64 encode it
 func wrap(sid string, oid string) string {
-	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
+	return base64.URLEncoding.EncodeToString([]byte(sid + idDelimiter + oid))
 }
 
 func unwrap(rid string) *provider.ResourceId {
@@ -251,7 +253,7 @@ func unwrap(rid string) *provider.ResourceId {
 		return nil
 	}
 
-	parts := strings.SplitN(string(decodedID), ":", 2)
+	parts := strings.SplitN(string(decodedID), idDelimiter, 2)
 	if len(parts) != 2 {
 		return nil
 	}
@@ -297,7 +299,7 @@ func extractDestination(r *http.Request) (string, error) {
 	}
 	dstURL, err := url.ParseRequestURI(dstHeader)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(errInvalidValue, err.Error())
 	}
 
 	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
