@@ -65,6 +65,7 @@ func New(conf map[string]interface{}) (auth.Manager, error) {
 	return m, nil
 }
 
+// Authenticate impersonate an user if the provided secret is equal to the api-key
 func (m *manager) Authenticate(ctx context.Context, username, secret string) (*user.User, map[string]*authpb.Scope, error) {
 	if m.APIKey != secret {
 		return nil, nil, errtypes.InvalidCredentials("")
