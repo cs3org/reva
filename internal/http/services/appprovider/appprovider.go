@@ -129,6 +129,10 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 
 	filterMimeTypes(mimeTypes)
 
+	if mimeTypes == nil {
+		mimeTypes = make(map[string]*appregistry.AppProviderList) // ensure array empty object instead of null in json
+	}
+
 	js, err := json.Marshal(map[string]interface{}{"mime-types": mimeTypes})
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
