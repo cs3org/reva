@@ -127,6 +127,8 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 	mimeTypes := listRes.MimeTypes
 	filterAppsByUserAgent(mimeTypes, r.UserAgent())
 
+	filterMimeTypes(mimeTypes)
+
 	js, err := json.Marshal(map[string]interface{}{"mime-types": mimeTypes})
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
@@ -180,6 +182,24 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	if _, err = w.Write(js); err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error writing JSON response", err)
 		return
+	}
+}
+
+func filterMimeTypes(mimeTypes map[string]*appregistry.AppProviderList) {
+	for m, providers := range mimeTypes {
+		apps := []*appregistry.ProviderInfo{}
+		for _, p := range providers.AppProviders {
+			p.Address = "" // address is internal only and not needed in the client
+			// apps are called by name, so if it has no name you cannot call it. Therefore we should not advertise it.
+			if p.Name != "" {
+				apps = append(apps, p)
+			}
+		}
+		if len(apps) > 0 {
+			mimeTypes[m] = &appregistry.AppProviderList{AppProviders: apps}
+		} else {
+			delete(mimeTypes, m)
+		}
 	}
 }
 
