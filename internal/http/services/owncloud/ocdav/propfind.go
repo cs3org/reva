@@ -32,8 +32,6 @@ import (
 	"strings"
 	"time"
 
-	"go.opencensus.io/trace"
-
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -42,8 +40,10 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -63,9 +63,10 @@ const (
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "propfind")
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
+
+	span.SetAttributes(attribute.String("component", "ocdav"))
 
 	fn := path.Join(ns, r.URL.Path)
 
@@ -89,8 +90,7 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 }
 
 func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "spaces_propfind")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_propfind")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()

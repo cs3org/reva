@@ -150,7 +150,7 @@ func (t *TestEnv) CreateTestDir(name string) (*node.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	n, err := t.Lookup.NodeFromPath(t.Ctx, name)
+	n, err := t.Lookup.NodeFromPath(t.Ctx, name, false)
 	if err != nil {
 		return nil, err
 	}

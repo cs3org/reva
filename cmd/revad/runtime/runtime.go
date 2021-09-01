@@ -28,23 +28,17 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/registry/memory"
-
-	"github.com/cs3org/reva/pkg/utils"
-
-	"contrib.go.opencensus.io/exporter/jaeger"
 	"github.com/cs3org/reva/cmd/revad/internal/grace"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/registry/memory"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/plugin/ocgrpc"
-	"go.opencensus.io/plugin/ochttp"
-	"go.opencensus.io/stats/view"
-	"go.opencensus.io/trace"
 )
 
 // Run runs a reva server with the given config file and pid file.
@@ -84,14 +78,18 @@ type coreConf struct {
 	TracingEndpoint    string `mapstructure:"tracing_endpoint"`
 	TracingCollector   string `mapstructure:"tracing_collector"`
 	TracingServiceName string `mapstructure:"tracing_service_name"`
+
+	// TracingService specifies the service. i.e OpenCensus, OpenTelemetry, OpenTracing...
+	TracingService string `mapstructure:"tracing_service"`
 }
 
 func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Logger, filename string) {
 	host, _ := os.Hostname()
 	logger.Info().Msgf("host info: %s", host)
 
-	// initRegistry()
-	initTracing(coreConf, logger)
+	if coreConf.TracingEnabled {
+		initTracing(coreConf)
+	}
 	initCPUCount(coreConf, logger)
 
 	servers := initServers(mainConf, logger)
@@ -144,18 +142,14 @@ func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[strin
 	}
 
 	if len(servers) == 0 {
-		// nothing to do
 		log.Info().Msg("nothing to do, no grpc/http enabled_services declared in config")
 		os.Exit(1)
 	}
 	return servers
 }
 
-func initTracing(conf *coreConf, log *zerolog.Logger) {
-	if err := setupOpenCensus(conf); err != nil {
-		log.Error().Err(err).Msg("error configuring open census stats and tracing")
-		os.Exit(1)
-	}
+func initTracing(conf *coreConf) {
+	rtrace.SetTraceProvider(conf.TracingCollector)
 }
 
 func initCPUCount(conf *coreConf, log *zerolog.Logger) {
@@ -270,39 +264,6 @@ func getHTTPServer(conf interface{}, l *zerolog.Logger) (*rhttp.Server, error) {
 	return s, nil
 }
 
-func setupOpenCensus(conf *coreConf) error {
-	if err := view.Register(ochttp.DefaultServerViews...); err != nil {
-		return err
-	}
-
-	if err := view.Register(ocgrpc.DefaultServerViews...); err != nil {
-		return err
-	}
-
-	if !conf.TracingEnabled {
-		return nil
-	}
-
-	if conf.TracingServiceName == "" {
-		conf.TracingServiceName = "revad"
-	}
-
-	je, err := jaeger.NewExporter(jaeger.Options{
-		AgentEndpoint:     conf.TracingEndpoint,
-		CollectorEndpoint: conf.TracingCollector,
-		ServiceName:       conf.TracingServiceName,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// register it as a trace exporter
-	trace.RegisterExporter(je)
-	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
-	return nil
-}
-
 //  adjustCPU parses string cpu and sets GOMAXPROCS
 // according to its value. It accepts either
 // a number (e.g. 3) or a percent (e.g. 50%).
@@ -349,6 +310,7 @@ func parseCoreConfOrDie(v interface{}) *coreConf {
 		fmt.Fprintf(os.Stderr, "error decoding core config: %s\n", err.Error())
 		os.Exit(1)
 	}
+
 	return c
 }
 

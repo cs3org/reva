@@ -103,6 +103,23 @@ func New(id, parentID, name string, blobsize int64, blobID string, owner *userpb
 	}
 }
 
+// ChangeOwner sets the owner of n to newOwner
+func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
+	nodePath := n.InternalPath()
+	n.owner = new
+	if err = xattr.Set(nodePath, xattrs.OwnerIDAttr, []byte(new.OpaqueId)); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not reset owner id attribute")
+	}
+	if err = xattr.Set(nodePath, xattrs.OwnerIDPAttr, []byte(new.Idp)); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not reset owner idp attribute")
+	}
+	if err = xattr.Set(nodePath, xattrs.OwnerTypeAttr, []byte(utils.UserTypeToString(new.Type))); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not reset owner idp attribute")
+	}
+
+	return
+}
+
 // WriteMetadata writes the Node metadata to disk
 func (n *Node) WriteMetadata(owner *userpb.UserId) (err error) {
 	nodePath := n.InternalPath()

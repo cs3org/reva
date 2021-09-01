@@ -1,213 +1,208 @@
-Changelog for reva 1.11.0 (2021-08-03)
+Changelog for reva 1.12.0 (2021-08-24)
 =======================================
 
-The following sections list the changes in reva 1.11.0 relevant to
+The following sections list the changes in reva 1.12.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Fix #1899: Fix chunked uploads for new versions
- * Fix #1906: Fix copy over existing resource
- * Fix #1891: Delete Shared Resources as Receiver
- * Fix #1907: Error when creating folder with existing name
- * Fix #1937: Do not overwrite more specific matches when finding storage providers
- * Fix #1939: Fix the share jail permissions in the decomposedfs
- * Fix #1932: Numerous fixes to the owncloudsql storage driver
- * Fix #1912: Fix response when listing versions of another user
- * Fix #1910: Get user groups recursively in the cbox rest user driver
- * Fix #1904: Set Content-Length to 0 when swallowing body in the datagateway
- * Fix #1911: Fix version order in propfind responses
- * Fix #1926: Trash Bin in oCIS Storage Operations
- * Fix #1901: Fix response code when folder doesnt exist on upload
- * Enh #1785: Extend app registry with AddProvider method and mimetype filters
- * Enh #1938: Add methods to get and put context values
- * Enh #1798: Add support for a deny-all permission on references
- * Enh #1916: Generate updated protobuf bindings for EOS GRPC
- * Enh #1887: Add "a" and "l" filter for grappa queries
- * Enh #1919: Run gofmt before building
- * Enh #1927: Implement RollbackToVersion for eosgrpc (needs a newer EOS MGM)
- * Enh #1944: Implement listing supported mime types in app registry
- * Enh #1870: Be defensive about wrongly quoted etags
- * Enh #1940: Reduce memory usage when uploading with S3ng storage
- * Enh #1888: Refactoring of the webdav code
- * Enh #1900: Check for illegal names while uploading or moving files
- * Enh #1925: Refactor listing and statting across providers for virtual views
+ * Fix #1819: Disable notifications
+ * Fix #2000: Fix dependency on tests
+ * Fix #1957: Fix etag propagation on deletes
+ * Fix #1960: Return the updated share after updating
+ * Fix #1993: Fix owncloudsql GetMD
+ * Fix #1954: Fix response format of the sharees API
+ * Fix #1965: Fix the file target of user and group shares
+ * Fix #1956: Fix trashbin listing with depth 0
+ * Fix #1987: Fix windows build
+ * Fix #1990: Increase oc10 compatibility of owncloudsql
+ * Fix #1978: Owner type is optional
+ * Fix #1980: Propagate the etag after restoring a file version
+ * Fix #1985: Add quota stubs
+ * Fix #1992: Check if symlink exists instead of spamming the console
+ * Fix #1913: Logic to restore files to readonly nodes
+ * Chg #1982: Move user context methods into a separate `userctx` package
+ * Enh #1946: Add share manager that connects to oc10 databases
+ * Enh #1983: Add Codacy unit test coverage
+ * Enh #1803: Introduce new webdav spaces endpoint
+ * Enh #1998: Initial version of the Nextcloud storage driver
+ * Enh #1984: Replace OpenCensus with OpenTelemetry
+ * Enh #1861: Add support for runtime plugins
+ * Enh #2008: Site account extensions
 
 Details
 -------
 
- * Bugfix #1899: Fix chunked uploads for new versions
+ * Bugfix #1819: Disable notifications
 
-   Chunked uploads didn't create a new version, when the file to upload already existed.
+   The presence of the key `notifications` in the capabilities' response would cause clients to
+   attempt to poll the notifications endpoint, which is not yet supported. To prevent the
+   unnecessary bandwidth we are disabling this altogether.
 
-   https://github.com/cs3org/reva/pull/1899
+   https://github.com/cs3org/reva/pull/1819
 
- * Bugfix #1906: Fix copy over existing resource
+ * Bugfix #2000: Fix dependency on tests
 
-   When the target of a copy already exists, the existing resource will be moved to the trashbin
-   before executing the copy.
+   The Nextcloud storage driver depended on a mock http client from the tests/ folder This broke
+   the Docker build The dependency was removed A check was added to test the Docker build on each PR
 
-   https://github.com/cs3org/reva/pull/1906
+   https://github.com/cs3org/reva/pull/2000
 
- * Bugfix #1891: Delete Shared Resources as Receiver
+ * Bugfix #1957: Fix etag propagation on deletes
 
-   It is now possible to delete a shared resource as a receiver and not having the data ending up in
-   the receiver's trash bin, causing a possible leak.
+   When deleting a file the etag propagation would skip the parent of the deleted file.
 
-   https://github.com/cs3org/reva/pull/1891
+   https://github.com/cs3org/reva/pull/1957
 
- * Bugfix #1907: Error when creating folder with existing name
+ * Bugfix #1960: Return the updated share after updating
 
-   When a user tried to create a folder with the name of an existing file or folder the service didn't
-   return a response body containing the error.
+   When updating the state of a share in the in-memory share manager the old share state was
+   returned instead of the updated state.
 
-   https://github.com/cs3org/reva/pull/1907
+   https://github.com/cs3org/reva/pull/1960
 
- * Bugfix #1937: Do not overwrite more specific matches when finding storage providers
+ * Bugfix #1993: Fix owncloudsql GetMD
 
-   Depending on the order of rules in the registry it could happend that more specific matches
-   (e.g. /home/Shares) were overwritten by more general ones (e.g. /home). This PR makes sure
-   that the registry always returns the most specific match.
+   The GetMD call internally was not prefixing the path when looking up resources by id.
 
-   https://github.com/cs3org/reva/pull/1937
+   https://github.com/cs3org/reva/pull/1993
 
- * Bugfix #1939: Fix the share jail permissions in the decomposedfs
+ * Bugfix #1954: Fix response format of the sharees API
 
-   The share jail should be not writable
+   The sharees API wasn't returning the users and groups arrays correctly.
 
-   https://github.com/cs3org/reva/pull/1939
+   https://github.com/cs3org/reva/pull/1954
 
- * Bugfix #1932: Numerous fixes to the owncloudsql storage driver
+ * Bugfix #1965: Fix the file target of user and group shares
 
-   The owncloudsql storage driver received numerous bugfixes and cleanups.
+   In some cases the file target of user and group shares was not properly prefixed.
 
-   https://github.com/cs3org/reva/pull/1932
+   https://github.com/cs3org/reva/pull/1965
+   https://github.com/cs3org/reva/pull/1967
 
- * Bugfix #1912: Fix response when listing versions of another user
+ * Bugfix #1956: Fix trashbin listing with depth 0
 
-   The OCS API returned the wrong response when a user tried to list the versions of another user's
-   file.
+   The trashbin API handled requests with depth 0 the same as request with a depth of 1.
 
-   https://github.com/cs3org/reva/pull/1912
+   https://github.com/cs3org/reva/pull/1956
 
- * Bugfix #1910: Get user groups recursively in the cbox rest user driver
+ * Bugfix #1987: Fix windows build
 
-   https://github.com/cs3org/reva/pull/1910
+   Add the necessary `golang.org/x/sys/windows` package import to `owncloud` and
+   `owncloudsql` storage drivers.
 
- * Bugfix #1904: Set Content-Length to 0 when swallowing body in the datagateway
+   https://github.com/cs3org/reva/pull/1987
 
-   When swallowing the body the Content-Lenght needs to be set to 0 to prevent proxies from reading
-   the body.
+ * Bugfix #1990: Increase oc10 compatibility of owncloudsql
 
-   https://github.com/cs3org/reva/pull/1904
+   We added a few changes to the owncloudsql storage driver to behave more like oc10.
 
- * Bugfix #1911: Fix version order in propfind responses
+   https://github.com/cs3org/reva/pull/1990
 
-   The order of the file versions in propfind responses was incorrect.
+ * Bugfix #1978: Owner type is optional
 
-   https://github.com/cs3org/reva/pull/1911
+   When reading the user from the extended attributes the user type might not be set, in this case we
+   now return a user with an invalid type, which correctly reflects the state on disk.
 
- * Bugfix #1926: Trash Bin in oCIS Storage Operations
+   https://github.com/cs3org/reva/pull/1978
 
-   Support for restoring a target folder nested deep inside the trash bin in oCIS storage. The use
-   case is:
+ * Bugfix #1980: Propagate the etag after restoring a file version
 
-   ```console curl 'https://localhost:9200/remote.php/dav/trash-bin/einstein/f1/f2' -X
-   MOVE -H 'Destination:
-   https://localhost:9200/remote.php/dav/files/einstein/destination' ```
+   The decomposedfs didn't propagate after restoring a file version.
 
-   The previous command creates the `destination` folder and moves the contents of
-   `/trash-bin/einstein/f1/f2` onto it.
+   https://github.com/cs3org/reva/pull/1980
 
-   Retro-compatibility in the response code with ownCloud 10. Restoring a collection to a
-   non-existent nested target is not supported and MUST return `409`. The use case is:
+ * Bugfix #1985: Add quota stubs
 
-   ```console curl 'https://localhost:9200/remote.php/dav/trash-bin/einstein/f1/f2' -X
-   MOVE -H 'Destination:
-   https://localhost:9200/remote.php/dav/files/einstein/this/does/not/exist' ```
+   The `owncloud` and `owncloudsql` drivers now read the available quota from disk to no longer
+   always return 0, which causes the web UI to disable uploads.
 
-   The previous command used to return `404` instead of the expected `409` by the clients.
+   https://github.com/cs3org/reva/pull/1985
 
-   https://github.com/cs3org/reva/pull/1926
+ * Bugfix #1992: Check if symlink exists instead of spamming the console
 
- * Bugfix #1901: Fix response code when folder doesnt exist on upload
+   The logs have been spammed with messages like `could not create symlink for ...` when using the
+   decomposedfs, eg. with the oCIS storage. We now check if the link exists before trying to create
+   it.
 
-   When a new file was uploaded to a non existent folder the response code was incorrect.
+   https://github.com/cs3org/reva/pull/1992
 
-   https://github.com/cs3org/reva/pull/1901
+ * Bugfix #1913: Logic to restore files to readonly nodes
 
- * Enhancement #1785: Extend app registry with AddProvider method and mimetype filters
+   This impacts solely the DecomposedFS. Prior to these changes there was no validation when a
+   user tried to restore a file from the trashbin to a share location (i.e any folder under
+   `/Shares`).
 
-   https://github.com/cs3org/reva/issues/1779
-   https://github.com/cs3org/reva/pull/1785
-   https://github.com/cs3org/cs3apis/pull/131
+   With this patch if the user restoring the resource has write permissions on the share, restore
+   is possible.
 
- * Enhancement #1938: Add methods to get and put context values
+   https://github.com/cs3org/reva/pull/1913
 
-   Added `GetKeyValues` and `PutKeyValues` methods to fetch/put values from/to context.
+ * Change #1982: Move user context methods into a separate `userctx` package
 
-   https://github.com/cs3org/reva/pull/1938
+   https://github.com/cs3org/reva/pull/1982
 
- * Enhancement #1798: Add support for a deny-all permission on references
+ * Enhancement #1946: Add share manager that connects to oc10 databases
 
-   And implement it on the EOS storage
+   https://github.com/cs3org/reva/pull/1946
 
-   http://github.com/cs3org/reva/pull/1798
+ * Enhancement #1983: Add Codacy unit test coverage
 
- * Enhancement #1916: Generate updated protobuf bindings for EOS GRPC
+   This PR adds unit test coverage upload to Codacy.
 
-   https://github.com/cs3org/reva/pull/1916
+   https://github.com/cs3org/reva/pull/1983
 
- * Enhancement #1887: Add "a" and "l" filter for grappa queries
+ * Enhancement #1803: Introduce new webdav spaces endpoint
 
-   This PR adds the namespace filters "a" and "l" for grappa queries. With no filter will look into
-   primary and e-groups, with "a" will look into primary/secondary/service/e-groups and with
-   "l" will look into lightweight accounts.
+   Clients can now use a new webdav endpoint
+   `/dav/spaces/<storagespaceid>/relative/path/to/file` to directly access storage
+   spaces.
 
-   https://github.com/cs3org/reva/issues/1773
-   https://github.com/cs3org/reva/pull/1887
+   The `<storagespaceid>` can be retrieved using the ListStorageSpaces CS3 api call.
 
- * Enhancement #1919: Run gofmt before building
+   https://github.com/cs3org/reva/pull/1803
 
-   https://github.com/cs3org/reva/pull/1919
+ * Enhancement #1998: Initial version of the Nextcloud storage driver
 
- * Enhancement #1927: Implement RollbackToVersion for eosgrpc (needs a newer EOS MGM)
+   This is not usable yet in isolation, but it's a first component of
+   https://github.com/pondersource/sciencemesh-nextcloud
 
-   https://github.com/cs3org/reva/pull/1927
+   https://github.com/cs3org/reva/pull/1998
 
- * Enhancement #1944: Implement listing supported mime types in app registry
+ * Enhancement #1984: Replace OpenCensus with OpenTelemetry
 
-   https://github.com/cs3org/reva/pull/1944
+   OpenTelemetry](https://opentelemetry.io/docs/concepts/what-is-opentelemetry/) is
+   an [open standard](https://github.com/open-telemetry/opentelemetry-specification) a
+   sandbox CNCF project and it was formed through a merger of the OpenTracing and OpenCensus.
 
- * Enhancement #1870: Be defensive about wrongly quoted etags
+   > OpenCensus and OpenTracing have merged to form OpenTelemetry, which serves as the next major
+   version of OpenCensus and OpenTracing. OpenTelemetry will offer backwards compatibility
+   with existing OpenCensus integrations, and we will continue to make security patches to
+   existing OpenCensus libraries for two years.
 
-   When ocdav renders etags it will now try to correct them to the definition as *quoted strings*
-   which do not contain `"`. This prevents double or triple quoted etags on the webdav api.
+   There is a lot of outdated documentation as a result of this merger, and we will be better off
+   adopting the latest standard and libraries.
 
-   https://github.com/cs3org/reva/pull/1870
+   https://github.com/cs3org/reva/pull/1984
 
- * Enhancement #1940: Reduce memory usage when uploading with S3ng storage
+ * Enhancement #1861: Add support for runtime plugins
 
-   The memory usage could be high when uploading files using the S3ng storage. By providing the
-   actual file size when triggering `PutObject`, the overall memory usage is reduced.
+   This PR introduces a new plugin package, that allows loading external plugins into Reva at
+   runtime. The hashicorp go-plugin framework was used to facilitate the plugin loading and
+   communication.
 
-   https://github.com/cs3org/reva/pull/1940
+   https://github.com/cs3org/reva/pull/1861
 
- * Enhancement #1888: Refactoring of the webdav code
+ * Enhancement #2008: Site account extensions
 
-   Refactored the webdav code to make it reusable.
+   This PR heavily extends the site accounts service: * Extended the accounts information (not
+   just email and name) * Accounts now have a password * Users can now "log in" to their accounts and
+   edit it * Ability to grant access to the GOCDB
 
-   https://github.com/cs3org/reva/pull/1888
+   Furthermore, these accounts can now be used to authenticate for logging in to our customized
+   GOCDB. More use cases for these accounts are also planned.
 
- * Enhancement #1900: Check for illegal names while uploading or moving files
-
-   The code was not checking for invalid file names during uploads and moves.
-
-   https://github.com/cs3org/reva/pull/1900
-
- * Enhancement #1925: Refactor listing and statting across providers for virtual views
-
-   https://github.com/cs3org/reva/pull/1925
+   https://github.com/cs3org/reva/pull/2008
 
 

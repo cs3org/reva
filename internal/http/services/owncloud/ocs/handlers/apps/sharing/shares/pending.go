@@ -101,7 +101,6 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 
 	if data.State == ocsStateAccepted {
 		// Needed because received shares can be jailed in a folder in the users home
-		data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
 		data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
 	}
 

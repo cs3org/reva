@@ -374,7 +374,7 @@ func (fs *Decomposedfs) lookupNode(ctx context.Context, path string) (*node.Node
 		p = chunkInfo.Path
 	}
 
-	n, err := fs.lu.NodeFromPath(ctx, p)
+	n, err := fs.lu.NodeFromPath(ctx, p, false)
 	if err != nil {
 		return nil, err
 	}

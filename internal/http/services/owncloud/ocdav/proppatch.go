@@ -27,18 +27,16 @@ import (
 	"path"
 	"strings"
 
-	"go.opencensus.io/trace"
-
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "proppatch")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "proppatch")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -105,8 +103,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 }
 
 func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "spaces_proppatch")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_proppatch")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()

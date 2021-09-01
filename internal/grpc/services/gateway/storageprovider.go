@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
@@ -849,15 +851,17 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		}, nil
 	}
 
+	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "Delete")
+	defer span.End()
+
 	if !s.inSharedFolder(ctx, p) {
 		return s.delete(ctx, req)
 	}
 
 	if s.isSharedFolder(ctx, p) {
 		// TODO(labkode): deleting share names should be allowed, means unmounting.
-		log.Debug().Msgf("path:%s points to shared folder or share name", p)
 		err := errtypes.BadRequest("gateway: cannot delete share folder or share name: path=" + p)
-		log.Err(err).Msg("gateway: error creating container")
+		span.RecordError(err)
 		return &provider.DeleteResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
 		}, nil

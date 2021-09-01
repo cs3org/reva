@@ -38,10 +38,11 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 )
 
@@ -602,12 +603,13 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "Stat")
+	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "stat")
 	defer span.End()
 
-	span.AddAttributes(
-		trace.StringAttribute("ref", req.Ref.String()),
-	)
+	span.SetAttributes(attribute.KeyValue{
+		Key:   "reference",
+		Value: attribute.StringValue(req.Ref.String()),
+	})
 
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {

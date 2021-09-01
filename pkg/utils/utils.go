@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os/user"
 	"path"
 	"path/filepath"
@@ -181,6 +182,24 @@ func IsEmailValid(e string) bool {
 		return false
 	}
 	return matchEmail.MatchString(e)
+}
+
+// IsValidWebAddress checks whether the provided address is a valid URL.
+func IsValidWebAddress(address string) bool {
+	_, err := url.ParseRequestURI(address)
+	return err == nil
+}
+
+// IsValidPhoneNumber checks whether the provided phone number has a valid format.
+func IsValidPhoneNumber(number string) bool {
+	re := regexp.MustCompile(`^(?:(?:\(?(?:00|\+)([1-4]\d\d|[1-9]\d?)\)?)?[\-\.\ \\\/]?)?((?:\(?\d{1,}\)?[\-\.\ \\\/]?){0,})(?:[\-\.\ \\\/]?(?:#|ext\.?|extension|x)[\-\.\ \\\/]?(\d+))?$`)
+	return re.MatchString(number)
+}
+
+// IsValidName cheks if the given name doesn't contain any non-alpha, space or dash characters.
+func IsValidName(name string) bool {
+	re := regexp.MustCompile(`^[A-Za-z\s\-]*$`)
+	return re.MatchString(name)
 }
 
 // MarshalProtoV1ToJSON marshals a proto V1 message to a JSON byte array

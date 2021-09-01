@@ -465,6 +465,64 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
+	PDescribe("nextcloud", func() {
+		BeforeEach(func() {
+			dependencies = map[string]string{
+				"storage": "storageprovider-nextcloud.toml",
+			}
+		})
+
+		assertCreateHome()
+
+		Context("with a home and a subdirectory", func() {
+			JustBeforeEach(func() {
+				res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				subdirRes, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: subdirRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(subdirRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			})
+
+			assertCreateContainer()
+			assertListContainer()
+			assertGetPath()
+			assertDelete()
+			assertMove()
+			assertGrants()
+			assertUploads()
+			assertDownloads()
+			assertRecycle()
+			assertReferences()
+			assertMetadata()
+		})
+
+		Context("with an existing file /versioned_file", func() {
+			JustBeforeEach(func() {
+				fs, err := ocis.New(map[string]interface{}{
+					"root":        revads["storage"].TmpRoot,
+					"enable_home": true,
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
+				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+
+				ctx := ctxpkg.ContextSetUser(context.Background(), user)
+
+				err = fs.CreateHome(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content1)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content2)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			assertFileVersions()
+		})
+	})
+
 	Describe("ocis", func() {
 		BeforeEach(func() {
 			dependencies = map[string]string{
