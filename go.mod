@@ -16,7 +16,8 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20210802070913-970eec344e59
+	github.com/cs3org/go-cs3apis v0.0.0-20210812121411-f18cf19614e8
+	github.com/cubewise-code/go-mime v0.0.0-20200519001935-8c5762b177d8
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-ldap/ldap/v3 v3.3.0
@@ -37,6 +38,7 @@ require (
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/mattn/go-sqlite3 v1.14.8
+	github.com/mileusna/useragent v1.0.2
 	github.com/minio/minio-go/v7 v7.0.12
 	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.0.0 // indirect

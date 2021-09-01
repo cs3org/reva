@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -309,4 +310,18 @@ func SplitStorageSpaceID(ssid string) (storageid, nodeid string, err error) {
 		return "", "", fmt.Errorf("storage space id must be separated by '!'")
 	}
 	return parts[0], parts[1], nil
+}
+
+// GetViewMode converts a human-readable string to a view mode for opening a resource in an app.
+func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
+	switch viewMode {
+	case "view":
+		return gateway.OpenInAppRequest_VIEW_MODE_VIEW_ONLY
+	case "read":
+		return gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
+	case "write":
+		return gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
+	default:
+		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
+	}
 }

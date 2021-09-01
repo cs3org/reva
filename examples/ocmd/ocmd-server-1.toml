@@ -143,4 +143,6 @@ prefix = "ocs"
 
 [http.services.ocdav]
 
+[http.services.appprovider]
+
 [http.middlewares.cors]
