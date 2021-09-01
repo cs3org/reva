@@ -44,24 +44,25 @@ func New(m map[string]interface{}) (token.Manager, error) {
 type manager struct{}
 
 type claims struct {
-	User  *user.User             `json:"user"`
-	Scope map[string]*auth.Scope `json:"scope"`
+	User         *user.User             `json:"user"`
+	Scope        map[string]*auth.Scope `json:"scope"`
+	AuthProvider string                 `json:"auth_provider"` // the auth provider that provided the authentication
 }
 
-func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
-	token, err := encode(&claims{u, scope})
+func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope, authProvider string) (string, error) {
+	token, err := encode(&claims{u, scope, authProvider})
 	if err != nil {
 		return "", errors.Wrap(err, "error encoding user")
 	}
 	return token, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, token string) (*user.User, map[string]*auth.Scope, error) {
+func (m *manager) DismantleToken(ctx context.Context, token string) (*user.User, map[string]*auth.Scope, string, error) {
 	c, err := decode(token)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "error decoding claims")
+		return nil, nil, "", errors.Wrap(err, "error decoding claims")
 	}
-	return c.User, c.Scope, nil
+	return c.User, c.Scope, c.AuthProvider, nil
 }
 
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back

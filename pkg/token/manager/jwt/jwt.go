@@ -51,8 +51,9 @@ type manager struct {
 // claims are custom claims for the JWT token.
 type claims struct {
 	jwt.StandardClaims
-	User  *user.User             `json:"user"`
-	Scope map[string]*auth.Scope `json:"scope"`
+	User         *user.User             `json:"user"`
+	Scope        map[string]*auth.Scope `json:"scope"`
+	AuthProvider string                 `json:"auth_provider"` // the auth provider that provided the authentication
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -85,7 +86,7 @@ func New(value map[string]interface{}) (token.Manager, error) {
 	return m, nil
 }
 
-func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
+func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope, authProvider string) (string, error) {
 	ttl := time.Duration(m.conf.Expires) * time.Second
 	claims := claims{
 		StandardClaims: jwt.StandardClaims{
@@ -94,8 +95,9 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 			Audience:  "reva",
 			IssuedAt:  time.Now().Unix(),
 		},
-		User:  u,
-		Scope: scope,
+		User:         u,
+		Scope:        scope,
+		AuthProvider: authProvider,
 	}
 
 	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
@@ -108,18 +110,18 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 	return tkn, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, map[string]*auth.Scope, error) {
+func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, map[string]*auth.Scope, string, error) {
 	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(m.conf.Secret), nil
 	})
 
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "error parsing token")
+		return nil, nil, "", errors.Wrap(err, "error parsing token")
 	}
 
 	if claims, ok := token.Claims.(*claims); ok && token.Valid {
-		return claims.User, claims.Scope, nil
+		return claims.User, claims.Scope, claims.AuthProvider, nil
 	}
 
-	return nil, nil, errtypes.InvalidCredentials("invalid token")
+	return nil, nil, "", errtypes.InvalidCredentials("invalid token")
 }
