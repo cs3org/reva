@@ -52,12 +52,12 @@ func TestEncodeDecode(t *testing.T) {
 		},
 	}
 
-	encoded, err := m.MintToken(ctx, u, scope)
+	encoded, err := m.MintToken(ctx, u, scope, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	decodedUser, decodedScope, err := m.DismantleToken(ctx, encoded)
+	decodedUser, decodedScope, _, err := m.DismantleToken(ctx, encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
