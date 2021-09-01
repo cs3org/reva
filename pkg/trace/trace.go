@@ -59,6 +59,9 @@ func SetTraceProvider(collectorEndpoint string, agentEndpoint string) {
 				jaeger.WithAgentPort(agentPort),
 			),
 		)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	if collectorEndpoint != "" {

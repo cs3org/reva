@@ -149,9 +149,6 @@ func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[strin
 }
 
 func initTracing(conf *coreConf) {
-	if conf.TracingEndpoint != "" {
-
-	}
 	rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint)
 }
 
