@@ -30,7 +30,8 @@ import (
 type Handler struct {
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// GetSelf handles GET requests on /cloud/user
+func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// TODO move user to handler parameter?
