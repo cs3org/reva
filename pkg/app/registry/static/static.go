@@ -44,7 +44,7 @@ func (c *config) init() {
 		c.Providers = map[string]*registrypb.ProviderInfo{
 			sharedconf.GetGatewaySVC(""): {
 				Address:   sharedconf.GetGatewaySVC(""),
-				MimeTypes: []string{"text/plain"},
+				MimeTypes: []string{},
 			},
 		}
 	}

@@ -312,7 +312,8 @@ func (p *wopiProvider) getAccessTokenTTL(ctx context.Context) (string, error) {
 	}
 
 	if claims, ok := token.Claims.(*jwt.StandardClaims); ok && token.Valid {
-		return strconv.FormatInt(claims.ExpiresAt, 10), nil
+		// milliseconds since Jan 1, 1970 UTC as required in https://wopi.readthedocs.io/projects/wopirest/en/latest/concepts.html?highlight=access_token_ttl#term-access-token-ttl
+		return strconv.FormatInt(claims.ExpiresAt*1000, 10), nil
 	}
 
 	return "", errtypes.InvalidCredentials("wopi: invalid token present in ctx")

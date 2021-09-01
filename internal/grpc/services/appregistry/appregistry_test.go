@@ -85,7 +85,7 @@ func Test_ListAppProviders(t *testing.T) {
 				Providers: []*registrypb.ProviderInfo{
 					{
 						Address:   "",
-						MimeTypes: []string{"text/plain"},
+						MimeTypes: []string{},
 					},
 				},
 			},
@@ -104,7 +104,7 @@ func Test_ListAppProviders(t *testing.T) {
 				Providers: []*registrypb.ProviderInfo{
 					{
 						Address:   "",
-						MimeTypes: []string{"text/plain"},
+						MimeTypes: []string{},
 					},
 				},
 			},
