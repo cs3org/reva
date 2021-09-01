@@ -19,8 +19,9 @@
 package mime
 
 import (
-	gomime "mime"
 	"path"
+
+	gomime "github.com/cubewise-code/go-mime"
 )
 
 const defaultMimeDir = "httpd/unix-directory"
