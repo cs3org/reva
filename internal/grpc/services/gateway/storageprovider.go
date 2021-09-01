@@ -1345,8 +1345,10 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 	}
 	if res == nil {
 		res = &provider.ResourceInfo{}
+		return
 	}
 	*res = *r.Info
+	return
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
