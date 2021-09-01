@@ -233,7 +233,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			}
 
 			// validate token
-			u, tokenScope, err := tokenManager.DismantleToken(r.Context(), tkn)
+			u, tokenScope, _, err := tokenManager.DismantleToken(r.Context(), tkn)
 			if err != nil {
 				log.Error().Err(err).Msg("error dismantling token")
 				w.WriteHeader(http.StatusUnauthorized)

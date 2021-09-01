@@ -103,7 +103,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	// the resources referenced by these. Since the current scope can do that,
 	// mint a temporary token based on that and expand the scope. Then set the
 	// token obtained from the updated scope in the context.
-	token, err := s.tokenmgr.MintToken(ctx, res.User, res.TokenScope)
+	token, err := s.tokenmgr.MintToken(ctx, res.User, res.TokenScope, req.Type)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -123,7 +123,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
-	token, err = s.tokenmgr.MintToken(ctx, res.User, scope)
+	token, err = s.tokenmgr.MintToken(ctx, res.User, scope, req.Type)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -173,7 +173,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 }
 
 func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.WhoAmIResponse, error) {
-	u, _, err := s.tokenmgr.DismantleToken(ctx, req.Token)
+	u, _, _, err := s.tokenmgr.DismantleToken(ctx, req.Token)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting user from token")
 		return &gateway.WhoAmIResponse{

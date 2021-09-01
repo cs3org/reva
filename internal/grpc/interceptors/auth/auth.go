@@ -195,7 +195,7 @@ func (ss *wrappedServerStream) Context() context.Context {
 }
 
 func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string) (*userpb.User, error) {
-	u, tokenScope, err := mgr.DismantleToken(ctx, tkn)
+	u, tokenScope, _, err := mgr.DismantleToken(ctx, tkn)
 	if err != nil {
 		return nil, err
 	}

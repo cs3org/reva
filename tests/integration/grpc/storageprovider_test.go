@@ -83,7 +83,7 @@ var _ = Describe("storage providers", func() {
 		Expect(err).ToNot(HaveOccurred())
 		scope, err := scope.AddOwnerScope(nil)
 		Expect(err).ToNot(HaveOccurred())
-		t, err := tokenManager.MintToken(ctx, user, scope)
+		t, err := tokenManager.MintToken(ctx, user, scope, "test")
 		Expect(err).ToNot(HaveOccurred())
 		ctx = ctxpkg.ContextSetToken(ctx, t)
 		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, t)
