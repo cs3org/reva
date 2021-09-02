@@ -32,7 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/go-chi/chi/v5"
 )
 
 // Handler renders user data for the user id given in the url path
@@ -41,43 +41,14 @@ type Handler struct {
 }
 
 // Init initializes this and any contained handlers
-func (h *Handler) Init(c *config.Config) error {
+func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
-	return nil
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	var user string
-	user, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-	// FIXME use ldap to fetch user info
-	u, ok := ctxpkg.ContextGetUser(ctx)
-	if !ok {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
-		return
-	}
-	if user != u.Username {
-		// FIXME allow fetching other users info? only for admins
-		response.WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to access %s user info endpoint", u.Id.OpaqueId, user))
-		return
-	}
-
-	var head string
-	head, r.URL.Path = router.ShiftPath(r.URL.Path)
-	switch head {
-	case "":
-		h.handleUsers(w, r, u)
-		return
-	case "groups":
-		response.WriteOCSSuccess(w, r, &Groups{})
-		return
-	default:
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
-		return
-	}
-
+// GetGroups handles GET requests on /cloud/users/groups
+// TODO: implement
+func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request) {
+	response.WriteOCSSuccess(w, r, &Groups{})
 }
 
 // Quota holds quota information
@@ -104,9 +75,25 @@ type Groups struct {
 	Groups []string `json:"groups" xml:"groups>element"`
 }
 
-func (h *Handler) handleUsers(w http.ResponseWriter, r *http.Request, u *userpb.User) {
+// GetUsers handles GET requests on /cloud/users
+// Only allow self-read currently. TODO: List Users and Get on other users (both require
+// administrative privileges)
+func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sublog := appctx.GetLogger(r.Context())
+
+	user := chi.URLParam(r, "userid")
+	// FIXME use ldap to fetch user info
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
+		return
+	}
+	if user != u.Username {
+		// FIXME allow fetching other users info? only for admins
+		response.WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to access %s user info endpoint", u.Id.OpaqueId, user))
+		return
+	}
 
 	gc, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {

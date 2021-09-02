@@ -220,9 +220,7 @@ func (h *Handler) Init(c *config.Config) {
 }
 
 // Handler renders the capabilities
-func (h *Handler) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c := h.getCapabilitiesForUserAgent(r.UserAgent())
-		response.WriteOCSSuccess(w, r, c)
-	})
+func (h *Handler) GetCapabilities(w http.ResponseWriter, r *http.Request) {
+	c := h.getCapabilitiesForUserAgent(r.UserAgent())
+	response.WriteOCSSuccess(w, r, c)
 }

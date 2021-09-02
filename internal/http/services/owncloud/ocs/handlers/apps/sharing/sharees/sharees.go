@@ -29,7 +29,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 )
 
@@ -40,24 +39,13 @@ type Handler struct {
 }
 
 // Init initializes this and any contained handlers
-func (h *Handler) Init(c *config.Config) error {
+func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.additionalInfoAttribute = c.AdditionalInfoAttribute
-	return nil
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-
-	var head string
-	head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
-
-	h.findSharees(w, r)
-}
-
-func (h *Handler) findSharees(w http.ResponseWriter, r *http.Request) {
+// FindSharees implements the /apps/files_sharing/api/v1/sharees endpoint
+func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 	term := r.URL.Query().Get("search")
 
@@ -71,7 +59,6 @@ func (h *Handler) findSharees(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway grpc client", err)
 		return
 	}
-
 	usersRes, err := gwc.FindUsers(r.Context(), &userpb.FindUsersRequest{Filter: term})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching users", err)

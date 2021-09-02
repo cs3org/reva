@@ -92,6 +92,9 @@ func (c *config) init() {
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
+	if c.MimeTypes == nil || len(c.MimeTypes) == 0 {
+		c.MimeTypes = map[string]string{".zmd": "application/compressed-markdown"}
+	}
 
 }
 

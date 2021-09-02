@@ -35,3 +35,4 @@ appauth = "localhost:15000"
 [http.services.ocmd]
 [http.services.ocdav]
 [http.services.ocs]
+[http.services.appprovider]
