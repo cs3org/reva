@@ -130,7 +130,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		return nil, err
 	}
 
-	users := []*userpb.User{}
+	users := make([]*userpb.User, 0, len(accounts))
 	for i := range accounts {
 		u, err := m.convertToCS3User(ctx, &accounts[i])
 		if err != nil {
