@@ -209,9 +209,9 @@ func (as *Accounts) GetAccountGroups(ctx context.Context, uid string) ([]string,
 	}
 	defer rows.Close()
 
-	var group string
 	groups := []string{}
 	for rows.Next() {
+		var group string
 		if err := rows.Scan(&group); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Msg("could not scan row, skipping")
 			continue
