@@ -157,7 +157,7 @@ func (m *manager) convertToCS3User(ctx context.Context, a *accounts.Account) (*u
 	u := &userpb.User{
 		Id: &userpb.UserId{
 			Idp:      m.c.Idp,
-			OpaqueId: a.UserID, // TODO rea
+			OpaqueId: a.UserID,
 		},
 		Username:    a.Username.String,
 		Mail:        a.Email.String,
