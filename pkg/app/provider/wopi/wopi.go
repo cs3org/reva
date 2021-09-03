@@ -136,9 +136,6 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("fileid", resource.GetId().OpaqueId)
 	q.Add("endpoint", resource.GetId().StorageId)
 	q.Add("viewmode", viewMode.String())
-	// TODO the folder URL should be resolved as e.g. `'https://cernbox.cern.ch/index.php/apps/files/?dir=' + filepath.Dir(req.Ref.GetPath())`
-	// or should be deprecated/removed altogether, needs discussion and decision.
-	// q.Add("folderurl", "...")
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if ok { // else defaults to "Anonymous Guest"
 		q.Add("username", u.Username)
