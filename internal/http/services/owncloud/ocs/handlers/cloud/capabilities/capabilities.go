@@ -116,9 +116,6 @@ func (h *Handler) Init(c *config.Config) {
 		h.c.Capabilities.Dav.Reports = []string{"search-files"}
 	}
 
-	// enable spaces by default
-	h.c.Capabilities.Dav.Spaces = true
-
 	// sharing
 
 	if h.c.Capabilities.FilesSharing == nil {
