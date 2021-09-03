@@ -20,6 +20,7 @@ package archiver
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"context"
 	"io"
 	"net/http"
@@ -82,7 +83,7 @@ func (s *svc) createTar(ctx context.Context, files []string, dst io.Writer) erro
 				return err
 			}
 
-			tarHeader := tar.Header{
+			header := tar.Header{
 				Name:    path,
 				ModTime: time.Unix(int64(info.Mtime.Seconds), 0),
 			}
@@ -91,21 +92,64 @@ func (s *svc) createTar(ctx context.Context, files []string, dst io.Writer) erro
 
 			if isDir {
 				// the resource is a folder
-				tarHeader.Mode = 0755
-				tarHeader.Typeflag = tar.TypeDir
+				header.Mode = 0755
+				header.Typeflag = tar.TypeDir
 			} else {
-				tarHeader.Mode = 0644
-				tarHeader.Typeflag = tar.TypeReg
-				tarHeader.Size = int64(info.Size)
+				header.Mode = 0644
+				header.Typeflag = tar.TypeReg
+				header.Size = int64(info.Size)
 			}
 
-			err = w.WriteHeader(&tarHeader)
+			err = w.WriteHeader(&header)
 			if err != nil {
 				return err
 			}
 
 			if !isDir {
 				err = s.downloadFile(ctx, path, w)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
+}
+
+func (s *svc) createZip(ctx context.Context, files []string, dst io.Writer) error {
+	w := zip.NewWriter(dst)
+
+	for _, root := range files {
+
+		err := walk.Walk(ctx, root, s.gtwClient, func(path string, info *provider.ResourceInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			header := zip.FileHeader{
+				Name:     path,
+				Modified: time.Unix(int64(info.Mtime.Seconds), 0),
+			}
+
+			isDir := info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER
+
+			if isDir {
+				header.Name += "/"
+			}
+
+			dst, err := w.CreateHeader(&header)
+			if err != nil {
+				return err
+			}
+
+			if !isDir {
+				err = s.downloadFile(ctx, path, dst)
 				if err != nil {
 					return err
 				}
