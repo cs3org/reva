@@ -287,17 +287,18 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 
 		// scrape app's home page to find the appname
 		if !strings.Contains(buf.String(), c.AppName) {
-			// || (c.AppName != "CodiMD" && c.AppName != "Etherpad") {
 			return nil, errors.New("Application server at " + c.AppURL + " does not match this AppProvider for " + c.AppName)
 		}
 
 		// register the supported mimetypes in the AppRegistry: this is hardcoded for the time being
-		if c.AppName == "CodiMD" {
+		switch c.AppName {
+		case "CodiMD":
 			appURLs = getCodimdExtensions(c.AppURL)
-		} else if c.AppName == "Etherpad" {
+		case "Etherpad":
 			appURLs = getEtherpadExtensions(c.AppURL)
+		default:
+			return nil, errors.New("Application server " + c.AppName + " running at " + c.AppURL + " is unsupported")
 		}
-
 	}
 	return appURLs, nil
 }
@@ -370,7 +371,7 @@ func getCodimdExtensions(appURL string) map[string]map[string]string {
 func getEtherpadExtensions(appURL string) map[string]map[string]string {
 	appURLs := make(map[string]map[string]string)
 	appURLs["edit"] = map[string]string{
-		".etherpad": appURL,
+		".epd": appURL,
 	}
 	return appURLs
 }
