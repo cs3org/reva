@@ -22,8 +22,11 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
+	"path"
+	"strings"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -31,9 +34,11 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/storage/utils/walk"
+	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
 
@@ -47,6 +52,8 @@ type svc struct {
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
+	Timeout    int64  `mapstructure:"timeout"`
+	Insecure   bool   `mapstructure:"insecure"`
 }
 
 func init() {
@@ -54,11 +61,83 @@ func init() {
 }
 
 func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	return nil, nil
+	c := &Config{}
+	err := mapstructure.Decode(conf, c)
+	if err != nil {
+		return nil, err
+	}
+
+	c.init()
+
+	gtw, err := pool.GetGatewayServiceClient(c.GatewaySvc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &svc{
+		config:    c,
+		gtwClient: gtw,
+		httpClient: rhttp.GetHTTPClient(
+			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+			rhttp.Insecure(c.Insecure),
+		),
+	}, nil
+}
+
+func (c *Config) init() {
+	if c.Prefix == "" {
+		c.Prefix = "download_archive"
+	}
 }
 
 func (s *svc) Handler() http.Handler {
-	return nil
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		// get the dir and files to archive from the URL
+		ctx := r.Context()
+		v := r.URL.Query()
+		if _, ok := v["dir"]; !ok {
+			rw.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		dir := v["dir"][0]
+
+		names, ok := v["files"]
+		if !ok {
+			names = []string{}
+		}
+
+		// append to the files name the dir
+		files := []string{}
+		for _, f := range names {
+			files = append(files, path.Join(dir, f))
+		}
+
+		archiveName := "download"
+		if len(files) == 0 {
+			// we need to archive the whole dir
+			files = append(files, dir)
+			archiveName = dir
+		}
+
+		ua := r.Header.Get("User-Agent")
+		isWindows := strings.Contains(ua, "Windows")
+
+		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archiveName))
+		rw.Header().Set("Content-Transfer-Encoding", "binary")
+		rw.WriteHeader(http.StatusOK)
+
+		var err error
+		if isWindows {
+			err = s.createZip(ctx, files, rw)
+		} else {
+			err = s.createTar(ctx, files, rw)
+		}
+		if err != nil {
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+	})
 }
 
 func (s *svc) Prefix() string {
@@ -141,6 +220,8 @@ func (s *svc) createZip(ctx context.Context, files []string, dst io.Writer) erro
 
 			if isDir {
 				header.Name += "/"
+			} else {
+				header.UncompressedSize64 = info.Size
 			}
 
 			dst, err := w.CreateHeader(&header)
