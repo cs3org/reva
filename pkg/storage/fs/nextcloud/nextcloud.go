@@ -76,12 +76,12 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return NewStorageDriver(conf)
 }
 
-// Ideally, the following function would live in tests/helpers, but
+// TestingHTTPClient thanks to https://itnext.io/how-to-stub-requests-to-remote-hosts-with-go-6c2c1db32bf2
+// Ideally, this function would live in tests/helpers, but
 // if we put it there, it gets excluded by .dockerignore, and the
 // Docker build fails (see https://github.com/cs3org/reva/issues/1999)
 // So putting it here for now - open to suggestions if someone knows
 // a better way to inject this.
-// TestingHTTPClient thanks to https://itnext.io/how-to-stub-requests-to-remote-hosts-with-go-6c2c1db32bf2
 func TestingHTTPClient(handler http.Handler) (*http.Client, func()) {
 	s := httptest.NewServer(handler)
 

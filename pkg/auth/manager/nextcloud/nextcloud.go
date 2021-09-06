@@ -16,8 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package oidc  verifies an OIDC token against the configured OIDC provider
-// and obtains the necessary claims to obtain user information.
+// Package nextcloud verifies a clientID and clientSecret against a Nextcloud backend.
 package nextcloud
 
 import (
