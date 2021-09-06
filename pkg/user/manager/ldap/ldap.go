@@ -424,12 +424,12 @@ func (m *manager) getUserFilter(uid *userpb.UserId) string {
 }
 
 func (m *manager) getAttributeFilter(attribute, value string) string {
-	attr := strings.ReplaceAll(m.c.AttributeFilter, "{{attr}}", attribute)
-	return strings.ReplaceAll(attr, "{{value}}", value)
+	attr := strings.ReplaceAll(m.c.AttributeFilter, "{{attr}}", ldap.EscapeFilter(attribute))
+	return strings.ReplaceAll(attr, "{{value}}", ldap.EscapeFilter(value))
 }
 
 func (m *manager) getFindFilter(query string) string {
-	return strings.ReplaceAll(m.c.FindFilter, "{{query}}", query)
+	return strings.ReplaceAll(m.c.FindFilter, "{{query}}", ldap.EscapeFilter(query))
 }
 
 func (m *manager) getGroupFilter(uid *userpb.UserId) string {
