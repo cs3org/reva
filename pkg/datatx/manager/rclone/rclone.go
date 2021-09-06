@@ -75,6 +75,13 @@ type rclone struct {
 	pDriver *pDriver
 }
 
+type rcloneHttpErrorRes struct {
+	Error  string                 `json:"error"`
+	Input  map[string]interface{} `json:"input"`
+	Path   string                 `json:"path"`
+	Status int                    `json:"status"`
+}
+
 type transferModel struct {
 	File      string
 	Transfers map[string]*transfer `json:"transfers"`
@@ -189,12 +196,12 @@ func (m *transferModel) saveTransfer(e error) error {
 	data, err := json.Marshal(m)
 	if err != nil {
 		e = errors.Wrap(err, "error encoding transfer data to json")
-		return err
+		return e
 	}
 
 	if err := ioutil.WriteFile(m.File, data, 0644); err != nil {
 		e = errors.Wrap(err, "error writing transfer data to file: "+m.File)
-		return err
+		return e
 	}
 
 	return e
@@ -207,8 +214,6 @@ func (driver *rclone) StartTransfer(ctx context.Context, srcRemote string, srcPa
 
 // startJob starts a transfer job. Retries a previous job if transferId is specified.
 func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote string, srcPath string, srcToken string, destRemote string, destPath string, destToken string) (*datatx.TxInfo, error) {
-	fmt.Printf("rclone StartTransfer:\n   srcRemote: %v \n   srcPath: %v \n   srcToken: %v \n   destRemote: %v \n   destPath: %v \n   destToken: %v \n", srcRemote, srcPath, srcToken, destRemote, destPath, destToken)
-
 	logger := appctx.GetLogger(ctx)
 
 	driver.pDriver.Lock()
@@ -221,7 +226,7 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 		txId = uuid.New().String()
 		cTime = &typespb.Timestamp{Seconds: uint64(time.Now().Unix())}
 	} else { // restart existing transfer if transferId is specified
-		fmt.Printf("Restarting transfer (txId: %s)\n", transferId)
+		logger.Debug().Msgf("Restarting transfer (txId: %s)", transferId)
 		txId = transferId
 		transfer, err := driver.pDriver.model.getTransfer(txId)
 		if err != nil {
@@ -235,9 +240,7 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 		seconds, _ := strconv.ParseInt(transfer.Ctime, 10, 64)
 		cTime = &typespb.Timestamp{Seconds: uint64(seconds)}
 		_, endStatusFound := txEndStatuses[transfer.TransferStatus.String()]
-		fmt.Printf("retrying transfer with status (%s)\n", transfer.TransferStatus.String())
 		if !endStatusFound {
-			fmt.Println("transfer not in end status, unable to restart")
 			err := errors.New("rclone: transfer still running, unable to restart")
 			return &datatx.TxInfo{
 				Id:     &datatx.TxId{OpaqueId: txId},
@@ -270,28 +273,16 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 	}
 
 	driver.pDriver.model.Transfers[txId] = transfer
-	// if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-	// 	err = errors.Wrap(err, "rclone: error pulling transfer")
-	// 	return &datatx.TxInfo{
-	// 		Id:     &datatx.TxId{OpaqueId: txId},
-	// 		Status: datatx.Status_STATUS_INVALID,
-	// 		Ctime:  cTime,
-	// 	}, err
-	// }
 
 	type rcloneAsyncReqJSON struct {
-		SrcFs    string `json:"srcFs"`
-		SrcToken string `json:"srcToken"`
-		DstFs    string `json:"dstFs"`
-		DstToken string `json:"destToken"`
-		Async    bool   `json:"_async"`
+		SrcFs string `json:"srcFs"`
+		// SrcToken string `json:"srcToken"`
+		DstFs string `json:"dstFs"`
+		// DstToken string `json:"destToken"`
+		Async bool `json:"_async"`
 	}
-	// TODO what about the url schema?
 	srcFs := fmt.Sprintf(":webdav,headers=\"x-access-token,%v\",url=\"%v\":%v", srcToken, srcRemote, srcPath)
 	dstFs := fmt.Sprintf(":webdav,headers=\"x-access-token,%v\",url=\"%v\":%v", destToken, destRemote, destPath)
-	fmt.Printf("srcFs: %v\n", srcFs)
-	fmt.Printf("dstFs: %v\n", dstFs)
-
 	rcloneReq := &rcloneAsyncReqJSON{
 		SrcFs: srcFs,
 		DstFs: dstFs,
@@ -308,7 +299,8 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 		}, driver.pDriver.model.saveTransfer(err)
 	}
 
-	pathIsFolder, err := driver.srcPathIsFolder()
+	transferFileMethod := "/sync/copy"
+	remotePathIsFolder, err := driver.remotePathIsFolder(srcRemote, srcPath, srcToken)
 	if err != nil {
 		err = errors.Wrap(err, "rclone: error pulling transfer: error stating src path")
 		transfer.TransferStatus = datatx.Status_STATUS_INVALID
@@ -318,11 +310,15 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 			Ctime:  cTime,
 		}, driver.pDriver.model.saveTransfer(err)
 	}
-	transferFileMethod := "/operations/copyfile"
-	if pathIsFolder {
-		// TODO sync/copy will overwrite existing data; use a configurable check for this?
-		// But not necessary if unique folder per transfer
-		transferFileMethod = "/sync/copy"
+	if !remotePathIsFolder {
+		transferFileMethod = "/operations/copyfile"
+		err = errors.Wrap(err, "rclone: error pulling transfer: path is a file, only folder transfer is implemented")
+		transfer.TransferStatus = datatx.Status_STATUS_INVALID
+		return &datatx.TxInfo{
+			Id:     &datatx.TxId{OpaqueId: txId},
+			Status: datatx.Status_STATUS_INVALID,
+			Ctime:  cTime,
+		}, driver.pDriver.model.saveTransfer(err)
 	}
 
 	u, err := url.Parse(driver.config.Endpoint)
@@ -347,10 +343,9 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 			Ctime:  cTime,
 		}, driver.pDriver.model.saveTransfer(err)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
-
 	req.SetBasicAuth(driver.config.AuthUser, driver.config.AuthPass)
-
 	res, err := driver.client.Do(req)
 	if err != nil {
 		err = errors.Wrap(err, "rclone: error pulling transfer: error sending post request")
@@ -365,9 +360,9 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		resBody, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			err = errors.Wrap(err, "rclone: error reading response body")
+		var errorResData rcloneHttpErrorRes
+		if err = json.NewDecoder(res.Body).Decode(&errorResData); err != nil {
+			err = errors.Wrap(err, "rclone driver: error decoding response data")
 			transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
 			return &datatx.TxInfo{
 				Id:     &datatx.TxId{OpaqueId: txId},
@@ -375,7 +370,7 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 				Ctime:  cTime,
 			}, driver.pDriver.model.saveTransfer(err)
 		}
-		e := errors.New("rclone: rclone request responded with error: " + fmt.Sprintf("%s: %s", res.Status, string(resBody)))
+		e := errors.New("rclone: rclone request responded with error, " + fmt.Sprintf(" status: %v, error: %v", errorResData.Status, errorResData.Error))
 		transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: txId},
@@ -409,7 +404,7 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 		}, err
 	}
 
-	// start separate dedicated process to periodically check this transfer progress
+	// start separate dedicated process to periodically check the transfer progress
 	go func() {
 		// runs for as long as no end state or time out has been reached
 		startTimeMs := time.Now().Nanosecond() / 1000
@@ -420,18 +415,17 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 
 		for {
 			transfer, err := driver.pDriver.model.getTransfer(txId)
-			fmt.Printf("found transfer to check: %v\n", transfer)
 			if err != nil {
 				transfer.TransferStatus = datatx.Status_STATUS_INVALID
 				err = driver.pDriver.model.saveTransfer(err)
-				logger.Error().Err(err).Msgf("rclone driver: unable to retreive transfer with id: %v", txId)
+				logger.Error().Err(err).Msgf("rclone driver: unable to retrieve transfer with id: %v", txId)
 				break
 			}
 
 			// check for end status first
-			endStatus, endStatusFound := txEndStatuses[transfer.TransferStatus.String()]
+			_, endStatusFound := txEndStatuses[transfer.TransferStatus.String()]
 			if endStatusFound {
-				logger.Info().Msgf("rclone driver: endstatus reached: %v", endStatus)
+				logger.Info().Msgf("rclone driver: transfer endstatus reached: %v", transfer.TransferStatus)
 				break
 			}
 
@@ -444,22 +438,12 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 				// set status to EXPIRED and save
 				transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_EXPIRED
 				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-					// log this?
-					fmt.Printf("Save transfer failed: %v \n", err)
 					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
 				}
 				break
 			}
 
-			// request rclone for current job status
-			//
-			// TODO: what do we do in case calling rclone results in errors ?
-			// simply break, or log|save(status invalid)|break ?
-			// or don't break with any error and try until successful or expiration ?
-			// for now break on any error
-
 			jobID := transfer.JobID
-
 			type rcloneStatusReqJSON struct {
 				JobID int64 `json:"jobid"`
 			}
@@ -494,9 +478,7 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 				break
 			}
 			req.Header.Set("Content-Type", "application/json")
-
 			req.SetBasicAuth(driver.config.AuthUser, driver.config.AuthPass)
-
 			res, err := driver.client.Do(req)
 			if err != nil {
 				logger.Error().Err(err).Msgf("rclone driver: error sending post request: %v", err)
@@ -506,14 +488,12 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 			defer res.Body.Close()
 
 			if res.StatusCode != http.StatusOK {
-				// TODO "job not found" also gives a 500
-				// Should that return STATUS_INVALID ??
-				// at the minimum the returned error message should be the rclone error message
-				resBody, e := ioutil.ReadAll(res.Body)
-				if e != nil {
+				var errorResData rcloneHttpErrorRes
+				if err = json.NewDecoder(res.Body).Decode(&errorResData); err != nil {
+					err = errors.Wrap(err, "rclone driver: error decoding response data")
 					logger.Error().Err(err).Msgf("rclone driver: error reading response body: %v", err)
 				}
-				logger.Error().Err(err).Msgf("rclone driver: rclone request responded with error: %s: %s", res.Status, string(resBody))
+				logger.Error().Err(err).Msgf("rclone driver: rclone request responded with error, status: %v, error: %v", errorResData.Status, errorResData.Error)
 				break
 			}
 
@@ -534,8 +514,6 @@ func (driver *rclone) startJob(ctx context.Context, transferId string, srcRemote
 				logger.Error().Err(err).Msgf("rclone driver: error decoding response data: %v", err)
 				break
 			}
-
-			fmt.Printf("rclone resData: %v\n", resData)
 
 			if resData.Error != "" {
 				logger.Error().Err(err).Msgf("rclone driver: rclone responded with error: %v", resData.Error)
@@ -687,20 +665,16 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferId string) (*d
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		// TODO "job not found" also gives a 500
-		// Should that return STATUS_INVALID ??
-		// at the minimum the returned error message should be the rclone error message
-		resBody, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			err = errors.Wrap(err, "rclone driver: error reading response body")
+		var errorResData rcloneHttpErrorRes
+		if err = json.NewDecoder(res.Body).Decode(&errorResData); err != nil {
+			err = errors.Wrap(err, "rclone driver: error decoding response data")
 			return &datatx.TxInfo{
 				Id:     &datatx.TxId{OpaqueId: transferId},
 				Status: datatx.Status_STATUS_INVALID,
 				Ctime:  &typespb.Timestamp{Seconds: uint64(cTime)},
 			}, err
 		}
-		err = errors.Wrap(errors.New(fmt.Sprintf("%s: %s", res.Status, string(resBody))), "rclone driver: rclone request responded with error")
-
+		err = errors.Wrap(errors.New(fmt.Sprintf("status: %v, error: %v", errorResData.Status, errorResData.Error)), "rclone driver: rclone request responded with error")
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferId},
 			Status: datatx.Status_STATUS_INVALID,
@@ -769,7 +743,75 @@ func (m *transferModel) getTransfer(transferId string) (*transfer, error) {
 	return transfer, nil
 }
 
-func (driver *rclone) srcPathIsFolder() (bool, error) {
-	// TODO rclone stat src to determine resource type
+func (driver *rclone) remotePathIsFolder(remote string, remotePath string, remoteToken string) (bool, error) {
+	type rcloneListReqJSON struct {
+		Fs     string `json:"fs"`
+		Remote string `json:"remote"`
+	}
+	fs := fmt.Sprintf(":webdav,headers=\"x-access-token,%v\",url=\"%v\":", remoteToken, remote)
+	rcloneReq := &rcloneListReqJSON{
+		Fs:     fs,
+		Remote: remotePath,
+	}
+	data, err := json.Marshal(rcloneReq)
+	if err != nil {
+		return false, errors.Wrap(err, "rclone: error marshalling rclone req data")
+	}
+
+	listMethod := "/operations/list"
+
+	u, err := url.Parse(driver.config.Endpoint)
+	if err != nil {
+		return false, errors.Wrap(err, "rclone driver: error parsing driver endpoint")
+	}
+	u.Path = path.Join(u.Path, listMethod)
+	requestURL := u.String()
+
+	req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+	if err != nil {
+		return false, errors.Wrap(err, "rclone driver: error framing post request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	req.SetBasicAuth(driver.config.AuthUser, driver.config.AuthPass)
+
+	res, err := driver.client.Do(req)
+	if err != nil {
+		return false, errors.Wrap(err, "rclone driver: error sending post request")
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		var errorResData rcloneHttpErrorRes
+		if err = json.NewDecoder(res.Body).Decode(&errorResData); err != nil {
+			return false, errors.Wrap(err, "rclone driver: error decoding response data")
+		}
+		return false, errors.Wrap(errors.New(fmt.Sprintf("status: %v, error: %v", errorResData.Status, errorResData.Error)), "rclone driver: rclone request responded with error")
+	}
+
+	type item struct {
+		Path     string `json:"Path"`
+		Name     string `json:"Name"`
+		Size     int64  `json:"Size"`
+		MimeType string `json:"MimeType"`
+		ModTime  string `json:"ModTime"`
+		IsDir    bool   `json:"IsDir"`
+	}
+	type rcloneListResJSON struct {
+		List []*item `json:"list"`
+	}
+
+	var resData rcloneListResJSON
+	if err = json.NewDecoder(res.Body).Decode(&resData); err != nil {
+		return false, errors.Wrap(err, "rclone driver: error decoding response data")
+	}
+
+	// a file will return one single item, the file, with path being the remote path and IsDir will be false
+	if len(resData.List) == 1 && resData.List[0].Path == remotePath && !resData.List[0].IsDir {
+		return false, nil
+	}
+
+	// in all other cases the remote path is a directory
 	return true, nil
 }
