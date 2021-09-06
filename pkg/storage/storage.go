@@ -58,6 +58,7 @@ type FS interface {
 	SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
 	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
 	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
+	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 }
 
 // Registry is the interface that storage registries implement

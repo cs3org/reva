@@ -968,6 +968,11 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 	return finfos, nil
 }
 
+// CreateStorageSpace creates a storage space
+func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+}
+
 func (fs *eosfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	u, err := getUser(ctx)
 	if err != nil {

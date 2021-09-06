@@ -215,7 +215,7 @@ func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *manager) ListShares(ctx context.Context, filters []*collaboration.ListSharesRequest_Filter) ([]*collaboration.Share, error) {
+func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	var ss []*collaboration.Share
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -229,7 +229,7 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.ListS
 				// check filters
 				// TODO(labkode): add the rest of filters.
 				for _, f := range filters {
-					if f.Type == collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID {
+					if f.Type == collaboration.Filter_TYPE_RESOURCE_ID {
 						if utils.ResourceIDEqual(s.ResourceId, f.GetResourceId()) {
 							ss = append(ss, s)
 						}
@@ -242,7 +242,7 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.ListS
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
-func (m *manager) ListReceivedShares(ctx context.Context) ([]*collaboration.ReceivedShare, error) {
+func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
 	var rss []*collaboration.ReceivedShare
 	m.lock.Lock()
 	defer m.lock.Unlock()

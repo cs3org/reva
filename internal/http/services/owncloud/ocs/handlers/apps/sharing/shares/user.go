@@ -120,7 +120,7 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareI
 	response.WriteOCSSuccess(w, r, nil)
 }
 
-func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListSharesRequest_Filter) ([]*conversions.ShareData, *rpc.Status, error) {
+func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filter) ([]*conversions.ShareData, *rpc.Status, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 

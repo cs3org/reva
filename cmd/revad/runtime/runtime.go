@@ -235,7 +235,7 @@ func getWriter(out string) (io.Writer, error) {
 		return os.Stdout, nil
 	}
 
-	fd, err := os.Create(out)
+	fd, err := os.OpenFile(out, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		err = errors.Wrap(err, "error creating log file: "+out)
 		return nil, err

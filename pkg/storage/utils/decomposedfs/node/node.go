@@ -120,6 +120,16 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 	return
 }
 
+// SetMetadata populates a given key with its value.
+// Note that consumers should be aware of the metadata options on xattrs.go.
+func (n *Node) SetMetadata(key string, val string) (err error) {
+	nodePath := n.InternalPath()
+	if err := xattr.Set(nodePath, key, []byte(val)); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not set parentid attribute")
+	}
+	return nil
+}
+
 // WriteMetadata writes the Node metadata to disk
 func (n *Node) WriteMetadata(owner *userpb.UserId) (err error) {
 	nodePath := n.InternalPath()
