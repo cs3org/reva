@@ -88,8 +88,11 @@ func (c *config) init() {
 	if c.TxDriver == "" {
 		c.TxDriver = "rclone"
 	}
+	if c.TxSharesFile == "" {
+		c.TxSharesFile = "/var/tmp/reva/datatx-shares.json"
+	}
 	if c.DataTransfersFolder == "" {
-		c.DataTransfersFolder = "DataTransfers"
+		c.DataTransfersFolder = "/home/DataTransfers"
 	}
 }
 
@@ -170,32 +173,34 @@ func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequ
 	dstPath := destEp.filePath
 	dstToken := destEp.token
 
-	txInfo, err := s.txManager.StartTransfer(ctx, srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
-	if err != nil {
-		err = errors.Wrap(err, "datatx service: error starting transfer job")
-		return &datatx.PullTransferResponse{
-			Status: status.NewInvalid(ctx, "datatx service: error pulling transfer"),
-			TxInfo: txInfo,
-		}, err
-	}
+	txInfo, startTransferErr := s.txManager.StartTransfer(ctx, srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
 
+	// we always save the transfer regardless of start transfer outcome
+	// only then, if starting fails, can we try to restart it
 	txShare := &txShare{
 		TxID:          txInfo.GetId().OpaqueId,
 		SrcTargetURI:  req.SrcTargetUri,
 		DestTargetURI: req.DestTargetUri,
 		Opaque:        req.Opaque,
 	}
-
 	s.txShareDriver.Lock()
 	defer s.txShareDriver.Unlock()
 
 	s.txShareDriver.model.TxShares[txInfo.GetId().OpaqueId] = txShare
-
 	if err := s.txShareDriver.model.saveTxShare(); err != nil {
 		err = errors.Wrap(err, "datatx service: error saving transfer share: "+datatx.Status_STATUS_INVALID.String())
 		return &datatx.PullTransferResponse{
 			Status: status.NewInvalid(ctx, "error pulling transfer"),
 		}, err
+	}
+
+	// now check start transfer outcome
+	if startTransferErr != nil {
+		startTransferErr = errors.Wrap(startTransferErr, "datatx service: error starting transfer job")
+		return &datatx.PullTransferResponse{
+			Status: status.NewInvalid(ctx, "datatx service: error pulling transfer"),
+			TxInfo: txInfo,
+		}, startTransferErr
 	}
 
 	return &datatx.PullTransferResponse{
