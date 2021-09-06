@@ -25,7 +25,6 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"path"
 	"sync"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -36,7 +35,6 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/token"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -73,9 +71,10 @@ type txShareModel struct {
 }
 
 type txShare struct {
-	TxID      string
-	TargetUri string
-	Opaque    *types.Opaque `json:"opaque"`
+	TxID          string
+	SrcTargetURI  string
+	DestTargetURI string
+	Opaque        *types.Opaque `json:"opaque"`
 }
 
 type webdavEndpoint struct {
@@ -155,38 +154,21 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest) (*datatx.PullTransferResponse, error) {
-	fmt.Printf("PullTransfer reached: req: %v\n", req)
-	var srcRemote string
-	var srcPath string
-	var srcToken string
-	var dstRemote string
-	var dstPath string
-	var dstToken string
-	srcRemote = ""
-	srcPath = ""
-	srcToken = ""
-	dstRemote = ""
-	dstPath = ""
-	dstToken = ""
-
-	ep, err := s.extractEndpointInfo(ctx, req.GetTargetUri())
+	srcEp, err := s.extractEndpointInfo(ctx, req.SrcTargetUri)
 	if err != nil {
 		return nil, err
 	}
-	srcRemote = fmt.Sprintf("%s://%s", ep.endpointScheme, ep.endpoint)
-	srcPath = ep.filePath
-	srcToken = ep.token
-	// destination(grantee) webdav endpoint
-	// user := user.ContextMustGetUser(ctx) -> user.Id.Idp
-	endpoint, ok := req.Opaque.Map["endpoint"]
-	if !ok {
-		return nil, errtypes.NotSupported("endpoint not defined")
+	srcRemote := fmt.Sprintf("%s://%s", srcEp.endpointScheme, srcEp.endpoint)
+	srcPath := srcEp.filePath
+	srcToken := srcEp.token
+
+	destEp, err := s.extractEndpointInfo(ctx, req.DestTargetUri)
+	if err != nil {
+		return nil, err
 	}
-	dstRemote = string(endpoint.Value)
-	// // home dir prefix must be removed from the path
-	// dstPath = path.Join(s.conf.DataTransfersFolder, strings.TrimPrefix(ep.filePath, "/home"))
-	dstPath = path.Join(s.conf.DataTransfersFolder, ep.filePath)
-	dstToken = token.ContextMustGetToken(ctx)
+	dstRemote := fmt.Sprintf("%s://%s", destEp.endpointScheme, destEp.endpoint)
+	dstPath := destEp.filePath
+	dstToken := destEp.token
 
 	txInfo, err := s.txManager.StartTransfer(ctx, srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
 	if err != nil {
@@ -196,15 +178,12 @@ func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequ
 			TxInfo: txInfo,
 		}, err
 	}
-	fmt.Printf("err: %v\n", err)
-	fmt.Printf("txInfo Status: %v\n", txInfo.Status)
-	fmt.Printf("txInfo TxID: %v\n", txInfo.GetId().OpaqueId)
-	fmt.Printf("txInfo Ctime: %v\n", txInfo.GetCtime())
 
 	txShare := &txShare{
-		TxID:      txInfo.GetId().OpaqueId,
-		TargetUri: req.TargetUri,
-		Opaque:    req.Opaque,
+		TxID:          txInfo.GetId().OpaqueId,
+		SrcTargetURI:  req.SrcTargetUri,
+		DestTargetURI: req.DestTargetUri,
+		Opaque:        req.Opaque,
 	}
 
 	s.txShareDriver.Lock()
@@ -257,17 +236,11 @@ func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransfer
 	txInfo, err := s.txManager.CancelTransfer(ctx, req.GetTxId().OpaqueId)
 	if err != nil {
 		txInfo.ShareId = &ocm.ShareId{OpaqueId: string(txShare.Opaque.Map["shareId"].Value)}
-		txInfo.Status = datatx.Status_STATUS_TRANSFER_CANCELLED
+		err = errors.Wrap(err, "datatx service: error cancelling transfer")
 		return &datatx.CancelTransferResponse{
-			Status: status.NewOK(ctx),
+			Status: status.NewInternal(ctx, err, "error cancelling transfer"),
 			TxInfo: txInfo,
-		}, nil
-
-		// err = errors.Wrap(err, "datatx service: error cancelling transfer")
-		// return &datatx.CancelTransferResponse{
-		// 	Status: status.NewInternal(ctx, err, "error cancelling transfer"),
-		// 	TxInfo: txInfo,
-		// }, err
+		}, err
 	}
 
 	txInfo.ShareId = &ocm.ShareId{OpaqueId: string(txShare.Opaque.Map["shareId"].Value)}
@@ -339,9 +312,6 @@ func (s *service) extractEndpointInfo(ctx context.Context, targetURL string) (*w
 	if err != nil {
 		return nil, errors.Wrap(err, "datatx service: error parsing target uri: "+targetURL)
 	}
-	if uri.Scheme != "datatx" {
-		return nil, errtypes.NotSupported("datatx service: ref target does not have the datatx scheme")
-	}
 
 	m, err := url.ParseQuery(uri.RawQuery)
 	if err != nil {
@@ -351,7 +321,7 @@ func (s *service) extractEndpointInfo(ctx context.Context, targetURL string) (*w
 	return &webdavEndpoint{
 		filePath:       m["name"][0],
 		endpoint:       uri.Host + uri.Path,
-		endpointScheme: m["endpointscheme"][0],
+		endpointScheme: uri.Scheme,
 		token:          uri.User.String(),
 	}, nil
 }
