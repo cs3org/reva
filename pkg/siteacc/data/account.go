@@ -31,14 +31,14 @@ import (
 
 // Account represents a single site account.
 type Account struct {
-	Email        string `json:"email"`
-	Title        string `json:"title"`
-	FirstName    string `json:"firstName"`
-	LastName     string `json:"lastName"`
-	Organization string `json:"organization"`
-	Website      string `json:"website"`
-	Role         string `json:"role"`
-	PhoneNumber  string `json:"phoneNumber"`
+	Email       string `json:"email"`
+	Title       string `json:"title"`
+	FirstName   string `json:"firstName"`
+	LastName    string `json:"lastName"`
+	Site        string `json:"site"`
+	Website     string `json:"website"`
+	Role        string `json:"role"`
+	PhoneNumber string `json:"phoneNumber"`
 
 	Password password.Password `json:"password"`
 
@@ -77,7 +77,7 @@ func (acc *Account) Update(other *Account, setPassword bool, copyData bool) erro
 	acc.Title = other.Title
 	acc.FirstName = other.FirstName
 	acc.LastName = other.LastName
-	acc.Organization = other.Organization
+	acc.Site = other.Site
 	acc.Website = other.Website
 	acc.Role = other.Role
 	acc.PhoneNumber = other.PhoneNumber
@@ -136,7 +136,7 @@ func (acc *Account) Cleanup() {
 	acc.Title = strings.TrimSpace(acc.Title)
 	acc.FirstName = strings.TrimSpace(acc.FirstName)
 	acc.LastName = strings.TrimSpace(acc.LastName)
-	acc.Organization = strings.TrimSpace(acc.Organization)
+	acc.Site = strings.TrimSpace(acc.Site)
 	acc.Website = strings.TrimSpace(acc.Website)
 	acc.Role = strings.TrimSpace(acc.Role)
 	acc.PhoneNumber = strings.TrimSpace(acc.PhoneNumber)
@@ -161,10 +161,8 @@ func (acc *Account) verify(verifyPassword bool) error {
 		return errors.Errorf("last name contains invalid characters: %v", acc.LastName)
 	}
 
-	if acc.Organization == "" {
-		return errors.Errorf("no organization provided")
-	} else if !utils.IsValidName(acc.Organization) {
-		return errors.Errorf("organization contains invalid characters: %v", acc.Organization)
+	if acc.Site == "" {
+		return errors.Errorf("no site provided")
 	}
 
 	if acc.Website != "" && !utils.IsValidWebAddress(acc.Website) {
@@ -191,7 +189,7 @@ func (acc *Account) verify(verifyPassword bool) error {
 }
 
 // NewAccount creates a new site account.
-func NewAccount(email string, title, firstName, lastName string, organization, website string, role string, phoneNumber string, password string) (*Account, error) {
+func NewAccount(email string, title, firstName, lastName string, site, website string, role string, phoneNumber string, password string) (*Account, error) {
 	t := time.Now()
 
 	acc := &Account{
@@ -199,7 +197,7 @@ func NewAccount(email string, title, firstName, lastName string, organization, w
 		Title:        title,
 		FirstName:    firstName,
 		LastName:     lastName,
-		Organization: organization,
+		Site:         site,
 		Website:      website,
 		Role:         role,
 		PhoneNumber:  phoneNumber,

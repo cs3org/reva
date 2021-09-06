@@ -41,9 +41,11 @@ type Configuration struct {
 		NotificationsMail string                      `mapstructure:"notifications_mail"`
 	} `mapstructure:"email"`
 
-	SiteRegistration struct {
-		URL string `mapstructure:"url"`
-	} `mapstructure:"sitereg"`
+	Mentix struct {
+		URL                      string `mapstructure:"url"`
+		DataEndpoint             string `mapstructure:"data_endpoint"`
+		SiteRegistrationEndpoint string `mapstructure:"sitereg_endpoint"`
+	} `mapstructure:"mentix"`
 
 	Webserver struct {
 		URL string `mapstructure:"url"`

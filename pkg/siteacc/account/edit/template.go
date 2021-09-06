@@ -30,13 +30,13 @@ function verifyForm(formData) {
 		return false;
 	}
 
-	if (formData.getTrimmed("organization") == "") {
-		setState(STATE_ERROR, "Please specify your organization/company.", "form", "organization", true);
+	if (formData.getTrimmed("site") == "") {
+		setState(STATE_ERROR, "Please specify your ScienceMesh site.", "form", "site", true);
 		return false;
 	}
 
 	if (formData.getTrimmed("role") == "") {
-		setState(STATE_ERROR, "Please specify your role within the organization/company.", "form", "role", true);
+		setState(STATE_ERROR, "Please specify your role within your site.", "form", "role", true);
 		return false;
 	}
 
@@ -80,7 +80,7 @@ function handleAction(action) {
 		"title": formData.getTrimmed("title"),
 		"firstName": formData.getTrimmed("fname"),
 		"lastName": formData.getTrimmed("lname"),
-		"organization": formData.getTrimmed("organization"),
+		"site": formData.getTrimmed("site"),
 		"website": formData.getTrimmed("website"),
 		"role": formData.getTrimmed("role"),
 		"phoneNumber": formData.getTrimmed("phone"),
@@ -127,8 +127,15 @@ const tplBody = `
 		<div style="grid-row: 3;"><label for="lname">Last name: <span class="mandatory">*</span></label></div>
 		<div style="grid-row: 4;"><input type="text" id="lname" name="lname" value="{{.Account.LastName}}"/></div>
 
-		<div style="grid-row: 5;"><label for="organization">Organization/Company: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 6;"><input type="text" id="organization" name="organization" value="{{.Account.Organization}}"/></div>
+		<div style="grid-row: 5;"><label for="site">ScienceMesh Site: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 6;">
+			<select id="site" name="site">
+			{{$curid := .Account.Site}}
+			{{range .Sites}}
+			<option value="{{.ID}}" {{if eq .ID $curid}}selected{{end}}>{{.Name}}</option>
+			{{end}}
+			</select>
+		</div>
 		<div style="grid-row: 5;"><label for="website">Website:</label></div>
 		<div style="grid-row: 6;"><input type="text" id="website" name="website" placeholder="https://www.example.com" value="{{.Account.Website}}"/></div>
 

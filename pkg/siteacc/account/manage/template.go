@@ -78,7 +78,7 @@ const tplBody = `
 	<ul style="margin-top: 0em;">
 		<li>Name: <em>{{.Account.Title}}. {{.Account.FirstName}} {{.Account.LastName}}</em></li>
 		<li>Email: <em><a href="mailto:{{.Account.Email}}">{{.Account.Email}}</a></em></li>
-		<li>Organization/company: <em>{{.Account.Organization}} {{if .Account.Website}}(<a href="{{.Account.Website}}">{{.Account.Website}}</a>){{end}}</em></li>
+		<li>ScienceMesh Site: <em>{{getSiteName .Account.Site}} {{if .Account.Website}}(<a href="{{.Account.Website}}">{{.Account.Website}}</a>){{end}}</em></li>
 		<li>Role: <em>{{.Account.Role}}</em></li>
 		{{if .Account.PhoneNumber}}
 		<li>Phone: <em>{{.Account.PhoneNumber}}</em></li>

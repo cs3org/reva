@@ -120,12 +120,28 @@ file = "/var/reva/accounts.json"
 {{< /highlight >}}
 {{% /dir %}}
 
-## Site registration settings
+## Mentix settings
 {{% dir name="url" type="string" default="" %}}
-The registration service URL.
+The main Mentix URL.
 {{< highlight toml >}}
-[http.services.siteacc.sitereg]
-url = "https://iop.example.com/sitereg"
+[http.services.siteacc.mentix]
+url = "https://iop.example.com/mentix"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="data_endpoint" type="string" default="/sites" %}}
+The main data endpoint of Mentix.
+{{< highlight toml >}}
+[http.services.siteacc.mentix]
+data_endpoint = "/data"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="sitereg_endpoint" type="string" default="/sitereg" %}}
+The site registration endpoint of Mentix.
+{{< highlight toml >}}
+[http.services.siteacc.mentix]
+sitereg_endpoint = "/register"
 {{< /highlight >}}
 {{% /dir %}}
 
