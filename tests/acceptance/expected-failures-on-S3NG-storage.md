@@ -330,7 +330,6 @@ File and sync features in a shared scenario
 
 #### [Response is empty when accepting a share](https://github.com/owncloud/product/issues/207)
 
-- [apiShareManagementToShares/acceptShares.feature:82](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L82)
 - [apiShareManagementToShares/acceptShares.feature:207](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L207)
 - [apiShareManagementToShares/acceptShares.feature:261](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L261)
 

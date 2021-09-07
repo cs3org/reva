@@ -56,6 +56,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	storageIDPrefix string = "shared::"
+)
+
 // Handler implements the shares part of the ownCloud sharing API
 type Handler struct {
 	gatewayAddr            string
@@ -732,7 +736,6 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		}
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
-		s.StorageID = info.Id.StorageId + "!" + info.Id.OpaqueId
 		// TODO Storage: int
 		s.ItemSource = wrapResourceID(info.Id)
 		s.FileSource = s.ItemSource
@@ -742,6 +745,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 			s.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
 		}
 		s.Path = path.Join("/", path.Base(info.Path)) // TODO hm this might have to be relative to the users home ... depends on the webdav_namespace config
+		s.StorageID = storageIDPrefix + s.FileTarget
 		// TODO FileParent:
 		// item type
 		s.ItemType = conversions.ResourceType(info.GetType()).String()
