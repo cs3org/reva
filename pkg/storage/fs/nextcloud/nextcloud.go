@@ -76,26 +76,6 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return NewStorageDriver(conf)
 }
 
-// TestingHTTPClient thanks to https://itnext.io/how-to-stub-requests-to-remote-hosts-with-go-6c2c1db32bf2
-// Ideally, this function would live in tests/helpers, but
-// if we put it there, it gets excluded by .dockerignore, and the
-// Docker build fails (see https://github.com/cs3org/reva/issues/1999)
-// So putting it here for now - open to suggestions if someone knows
-// a better way to inject this.
-func TestingHTTPClient(handler http.Handler) (*http.Client, func()) {
-	s := httptest.NewServer(handler)
-
-	cli := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(_ context.Context, network, _ string) (net.Conn, error) {
-				return net.Dial(network, s.Listener.Addr().String())
-			},
-		},
-	}
-
-	return cli, s.Close
-}
-
 // NewStorageDriver returns a new NextcloudStorageDriver
 func NewStorageDriver(c *StorageDriverConfig) (*StorageDriver, error) {
 	var client *http.Client
