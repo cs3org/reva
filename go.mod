@@ -7,7 +7,7 @@ require (
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/ReneKroon/ttlcache/v2 v2.7.0
+	github.com/ReneKroon/ttlcache/v2 v2.8.0
 	github.com/asaskevich/govalidator v0.0.0-20200428143746-21a406dcc535 // indirect
 	github.com/aws/aws-sdk-go v1.40.37
 	github.com/beevik/etree v1.1.0
