@@ -27,10 +27,10 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/auth/scope"
-	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
-	"github.com/cs3org/reva/tests/helpers"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -38,10 +38,10 @@ import (
 
 var _ = Describe("Nextcloud", func() {
 	var (
-		ctx           context.Context
+		ctx     context.Context
 		options map[string]interface{}
 		tmpRoot string
-		user          = &userpb.User{
+		user    = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "0.0.0.0:19000",
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",

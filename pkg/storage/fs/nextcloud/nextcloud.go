@@ -83,7 +83,7 @@ func NewStorageDriver(c *StorageDriverConfig) (*StorageDriver, error) {
 		nextcloudServerMock := GetNextcloudServerMock()
 		client, _ = TestingHTTPClient(nextcloudServerMock)
 	} else {
-	  client = &http.Client{}
+		client = &http.Client{}
 	}
 	return &StorageDriver{
 		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
