@@ -19,11 +19,7 @@
 package helpers
 
 import (
-	"context"
 	"io/ioutil"
-	"net"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
