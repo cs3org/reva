@@ -149,8 +149,8 @@ func (panel *Panel) prepareTemplate(tpl *template.Template) {
 		"getServerAddress": func() string {
 			return strings.TrimRight(panel.conf.Webserver.URL, "/")
 		},
-		"getSiteName": func(siteID string) string {
-			siteName, _ := data.QuerySiteName(siteID, panel.conf)
+		"getSiteName": func(siteID string, fullName bool) string {
+			siteName, _ := data.QuerySiteName(siteID, fullName, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
 			return siteName
 		},
 	})

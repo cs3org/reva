@@ -21,7 +21,6 @@ package account
 import (
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 
 	"github.com/cs3org/reva/pkg/siteacc/account/contact"
@@ -133,38 +132,24 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 			flatValues[strings.Title(k)] = v[0]
 		}
 
-		type siteInfo struct {
-			ID   string
-			Name string
-		}
-		sites, err := data.QueryAvailableSites(panel.conf)
+		availSites, err := data.QueryAvailableSites(panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
 		if err != nil {
 			return errors.Wrap(err, "unable to query available sites")
 		}
-		sortedSites := make([]siteInfo, 0, len(sites))
-		for id, name := range sites {
-			sortedSites = append(sortedSites, siteInfo{
-				ID:   id,
-				Name: name,
-			})
-		}
-		sort.Slice(sortedSites, func(i, j int) bool {
-			return sortedSites[i].Name < sortedSites[j].Name
-		})
 
 		type TemplateData struct {
 			Account *data.Account
 			Params  map[string]string
 
 			Titles []string
-			Sites  []siteInfo
+			Sites  []data.SiteInformation
 		}
 
 		return TemplateData{
 			Account: session.LoggedInUser,
 			Params:  flatValues,
 			Titles:  []string{"Mr", "Mrs", "Ms", "Prof", "Dr"},
-			Sites:   sortedSites,
+			Sites:   availSites,
 		}
 	}
 	return panel.htmlPanel.Execute(w, r, session, dataProvider)

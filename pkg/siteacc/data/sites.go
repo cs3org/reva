@@ -21,15 +21,22 @@ package data
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
-	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/pkg/errors"
 )
 
+// SiteInformation holds the most basic information about a site.
+type SiteInformation struct {
+	ID       string
+	Name     string
+	FullName string
+}
+
 // QueryAvailableSites uses Mentix to query a list of all available (registered) sites.
-func QueryAvailableSites(conf *config.Configuration) (map[string]string, error) {
-	mentixURL, err := network.GenerateURL(conf.Mentix.URL, conf.Mentix.DataEndpoint, network.URLParams{})
+func QueryAvailableSites(mentixHost, dataEndpoint string) ([]SiteInformation, error) {
+	mentixURL, err := network.GenerateURL(mentixHost, dataEndpoint, network.URLParams{})
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to generate Mentix URL")
 	}
@@ -41,10 +48,7 @@ func QueryAvailableSites(conf *config.Configuration) (map[string]string, error) 
 
 	// Decode the data into a simplified, reduced data type
 	type siteData struct {
-		Sites []struct {
-			ID   string
-			Name string
-		}
+		Sites []SiteInformation
 	}
 	sites := siteData{}
 	if err := json.Unmarshal(data, &sites); err != nil {
@@ -52,22 +56,35 @@ func QueryAvailableSites(conf *config.Configuration) (map[string]string, error) 
 		return nil, errors.Wrap(err, "error while decoding the JSON data")
 	}
 
-	siteEntries := make(map[string]string, len(sites.Sites))
-	for _, site := range sites.Sites {
-		siteEntries[site.ID] = site.Name
-	}
-	return siteEntries, nil
+	// Sort the sites alphabetically by their names
+	sort.Slice(sites.Sites, func(i, j int) bool {
+		return sites.Sites[i].Name < sites.Sites[j].Name
+	})
+
+	return sites.Sites, nil
 }
 
 // QuerySiteName uses Mentix to query the name of a site given by its ID.
-func QuerySiteName(siteID string, conf *config.Configuration) (string, error) {
-	sites, err := QueryAvailableSites(conf)
+func QuerySiteName(siteID string, fullName bool, mentixHost, dataEndpoint string) (string, error) {
+	sites, err := QueryAvailableSites(mentixHost, dataEndpoint)
 	if err != nil {
 		return "", err
 	}
 
-	if name, ok := sites[siteID]; ok {
-		return name, nil
+	index := len(sites)
+	for i, site := range sites {
+		if site.ID == siteID {
+			index = i
+			break
+		}
+	}
+
+	if index != len(sites) {
+		if fullName {
+			return sites[index].FullName, nil
+		} else {
+			return sites[index].Name, nil
+		}
 	}
 
 	return "", errors.Errorf("no site with ID %v found", siteID)

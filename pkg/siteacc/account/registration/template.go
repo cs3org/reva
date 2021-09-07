@@ -93,7 +93,6 @@ function handleAction(action) {
 		"firstName": formData.getTrimmed("fname"),
 		"lastName": formData.getTrimmed("lname"),
 		"site": formData.getTrimmed("site"),
-		"website": formData.getTrimmed("website"),
 		"role": formData.getTrimmed("role"),
 		"phoneNumber": formData.getTrimmed("phone"),
 		"password": {
@@ -125,6 +124,14 @@ const tplBody = `
 	<form id="form" method="POST" class="box container-inline" style="width: 100%;" onSubmit="handleAction('create'); return false;">	
 		<div style="grid-row: 1;"><label for="email">Email address: <span class="mandatory">*</span></label></div>
 		<div style="grid-row: 2;"><input type="text" id="email" name="email" placeholder="me@example.com"/></div>
+		<div style="grid-row: 1;"><label for="site">ScienceMesh Site: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 2;">
+			<select id="site" name="site">
+			{{range .Sites}}
+			<option value="{{.ID}}">{{.Name}} | {{.FullName}}</option>
+			{{end}}
+			</select>
+		</div>
 
 		<div style="grid-row: 3;">&nbsp;</div>
 
@@ -141,31 +148,20 @@ const tplBody = `
 		<div style="grid-row: 7;"><input type="text" id="fname" name="fname"/></div>
 		<div style="grid-row: 6;"><label for="lname">Last name: <span class="mandatory">*</span></label></div>
 		<div style="grid-row: 7;"><input type="text" id="lname" name="lname"/></div>
+		
+		<div style="grid-row: 8;"><label for="role">Role: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 9;"><input type="text" id="role" name="role" placeholder="Site administrator"/></div>
+		<div style="grid-row: 8;"><label for="phone">Phone number:</label></div>
+		<div style="grid-row: 9;"><input type="text" id="phone" name="phone" placeholder="+49 030 123456"/></div>
 
-		<div style="grid-row: 8;"><label for="site">ScienceMesh Site: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 9;">
-			<select id="site" name="site">
-			{{range .Sites}}
-			<option value="{{.ID}}">{{.Name}}</option>
-			{{end}}
-			</select>
-		</div>
-		<div style="grid-row: 8;"><label for="website">Website:</label></div>
-		<div style="grid-row: 9;"><input type="text" id="website" name="website" placeholder="https://www.example.com"/></div>
+		<div style="grid-row: 10;">&nbsp;</div>
 
-		<div style="grid-row: 10;"><label for="role">Role: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 11;"><input type="text" id="role" name="role" placeholder="Site administrator"/></div>
-		<div style="grid-row: 10;"><label for="phone">Phone number:</label></div>
-		<div style="grid-row: 11;"><input type="text" id="phone" name="phone" placeholder="+49 030 123456"/></div>
+		<div style="grid-row: 11;"><label for="password">Password: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 12;"><input type="password" id="password" name="password"/></div>
+		<div style="grid-row: 11;"><label for="password2">Confirm password: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 12;"><input type="password" id="password2" name="password2"/></div>
 
-		<div style="grid-row: 12;">&nbsp;</div>
-
-		<div style="grid-row: 13;"><label for="password">Password: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 14;"><input type="password" id="password" name="password"/></div>
-		<div style="grid-row: 13;"><label for="password2">Confirm password: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 14;"><input type="password" id="password2" name="password2"/></div>
-
-		<div style="grid-row: 15; font-style: italic; font-size: 0.8em;">
+		<div style="grid-row: 13; font-style: italic; font-size: 0.8em;">
 			The password must fulfil the following criteria:
 			<ul style="margin-top: 0em;">
 				<li>Must be at least 8 characters long</li>
@@ -175,10 +171,10 @@ const tplBody = `
 			</ul>
 		</div>
 
-		<div style="grid-row: 16; align-self: center;">
+		<div style="grid-row: 14; align-self: center;">
 			Fields marked with <span class="mandatory">*</span> are mandatory.
 		</div>
-		<div style="grid-row: 16; grid-column: 2; text-align: right;">
+		<div style="grid-row: 14; grid-column: 2; text-align: right;">
 			<button type="reset">Reset</button>
 			<button type="submit" style="font-weight: bold;">Register</button>
 		</div>
