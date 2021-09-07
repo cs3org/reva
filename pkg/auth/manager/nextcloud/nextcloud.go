@@ -128,7 +128,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("Authenticate %s %s", clientID, bodyStr)
 
-	statusCode, _, err := am.do(ctx, Action{"Authenticate", string(clientID), string(bodyStr)})
+	statusCode, _, err := am.do(ctx, Action{"Authenticate", clientID, string(bodyStr)})
 
 	if err != nil {
 		return nil, nil, err
@@ -138,9 +138,9 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, errors.New("Username/password not recognized by Nextcloud backend")
 	}
 	user := &user.User{
-		Username: string(clientID),
+		Username: clientID,
 		Id: &user.UserId{
-			OpaqueId: string(clientID),
+			OpaqueId: clientID,
 			Idp:      "localhost",
 			Type:     1,
 		},
