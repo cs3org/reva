@@ -76,6 +76,7 @@ func getEndpoints() []endpoint {
 		{config.EndpointFind, callMethodEndpoint, createMethodCallbacks(handleFind, nil), false},
 		{config.EndpointCreate, callMethodEndpoint, createMethodCallbacks(nil, handleCreate), true},
 		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), true},
+		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), true},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
 		// Login endpoints
 		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
@@ -245,38 +246,35 @@ func handleUpdate(siteacc *SiteAccounts, values url.Values, body []byte, session
 		return nil, err
 	}
 
-	setPassword := false
-
-	switch strings.ToLower(values.Get("invoker")) {
-	case invokerDefault:
-		// If the endpoint was called through the API, an API key must be provided identifying the account
-		apiKey := values.Get("apikey")
-		if apiKey == "" {
-			return nil, errors.Errorf("no API key provided")
-		}
-
-		accountFound, err := findAccount(siteacc, manager.FindByAPIKey, apiKey)
-		if err != nil {
-			return nil, errors.Wrap(err, "no account for the specified API key found")
-		}
-		account.Email = accountFound.Email
-
-	case invokerUser:
-		// If this endpoint was called by the user, set the account email from the stored session
-		if session.LoggedInUser == nil {
-			return nil, errors.Errorf("no user is currently logged in")
-		}
-
-		account.Email = session.LoggedInUser.Email
-		setPassword = true
-
-	default:
-		return nil, errors.Errorf("no invoker provided")
+	email, setPassword, err := processInvoker(siteacc, values, session)
+	if err != nil {
+		return nil, err
 	}
+	account.Email = email
 
 	// Update the account through the accounts manager
 	if err := siteacc.AccountsManager().UpdateAccount(account, setPassword, false); err != nil {
 		return nil, errors.Wrap(err, "unable to update account")
+	}
+
+	return nil, nil
+}
+
+func handleConfigure(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	account, err := unmarshalRequestData(body)
+	if err != nil {
+		return nil, err
+	}
+
+	email, _, err := processInvoker(siteacc, values, session)
+	if err != nil {
+		return nil, err
+	}
+	account.Email = email
+
+	// Configure the account through the accounts manager
+	if err := siteacc.AccountsManager().ConfigureAccount(account); err != nil {
+		return nil, errors.Wrap(err, "unable to configure account")
 	}
 
 	return nil, nil
@@ -472,4 +470,39 @@ func findAccount(siteacc *SiteAccounts, by string, value string) (*data.Account,
 		return nil, errors.Wrap(err, "user not found")
 	}
 	return account, nil
+}
+
+func processInvoker(siteacc *SiteAccounts, values url.Values, session *html.Session) (string, bool, error) {
+	var email string
+	var invokedByUser bool
+
+	switch strings.ToLower(values.Get("invoker")) {
+	case invokerDefault:
+		// If the endpoint was called through the API, an API key must be provided identifying the account
+		apiKey := values.Get("apikey")
+		if apiKey == "" {
+			return "", false, errors.Errorf("no API key provided")
+		}
+
+		accountFound, err := findAccount(siteacc, manager.FindByAPIKey, apiKey)
+		if err != nil {
+			return "", false, errors.Wrap(err, "no account for the specified API key found")
+		}
+		email = accountFound.Email
+		invokedByUser = false
+
+	case invokerUser:
+		// If this endpoint was called by the user, set the account email from the stored session
+		if session.LoggedInUser == nil {
+			return "", false, errors.Errorf("no user is currently logged in")
+		}
+
+		email = session.LoggedInUser.Email
+		invokedByUser = true
+
+	default:
+		return "", false, errors.Errorf("no invoker provided")
+	}
+
+	return email, invokedByUser, nil
 }

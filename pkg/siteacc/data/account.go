@@ -44,7 +44,8 @@ type Account struct {
 	DateCreated  time.Time `json:"dateCreated"`
 	DateModified time.Time `json:"dateModified"`
 
-	Data AccountData `json:"data"`
+	Data     AccountData     `json:"data"`
+	Settings AccountSettings `json:"settings"`
 }
 
 // AccountData holds additional data for a site account.
@@ -52,6 +53,11 @@ type AccountData struct {
 	APIKey      key.APIKey `json:"apiKey"`
 	GOCDBAccess bool       `json:"gocdbAccess"`
 	Authorized  bool       `json:"authorized"`
+}
+
+// AccountSettings holds additional settings for a site account.
+type AccountSettings struct {
+	ReceiveAlerts bool `json:"receiveAlerts"`
 }
 
 // Accounts holds an array of site accounts.
@@ -89,6 +95,14 @@ func (acc *Account) Update(other *Account, setPassword bool, copyData bool) erro
 	if copyData {
 		acc.Data = other.Data
 	}
+
+	return nil
+}
+
+// Configure copies the settings of the given account to this account.
+func (acc *Account) Configure(other *Account) error {
+	// Simply copy the stored settings
+	acc.Settings = other.Settings
 
 	return nil
 }
@@ -198,6 +212,9 @@ func NewAccount(email string, title, firstName, lastName string, site, role stri
 			APIKey:      "",
 			GOCDBAccess: false,
 			Authorized:  false,
+		},
+		Settings: AccountSettings{
+			ReceiveAlerts: false,
 		},
 	}
 

@@ -19,6 +19,11 @@
 package manage
 
 const tplJavaScript = `
+function handleSettings() {
+	setState(STATE_STATUS, "Redirecting to the account settings...");
+	window.location.replace("{{getServerAddress}}/account/?path=settings");
+}
+
 function handleEditAccount() {
 	setState(STATE_STATUS, "Redirecting to the account editor...");
 	window.location.replace("{{getServerAddress}}/account/?path=edit");
@@ -94,6 +99,7 @@ const tplBody = `
 </div>
 <div>
 	<form id="form" method="POST" class="box" style="width: 100%;">
+		<button type="button" onClick="handleSettings();">Settings</button>
 		<button type="button" onClick="handleEditAccount();">Edit account</button>
 		<span style="width: 25px;">&nbsp;</span>
 		<button type="button" onClick="handleRequestKey();" {{if .Account.Data.APIKey}}disabled{{end}}>Request API Key</button>

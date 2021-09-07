@@ -203,6 +203,30 @@ func (mngr *AccountsManager) UpdateAccount(accountData *data.Account, setPasswor
 	return nil
 }
 
+// ConfigureAccount configures the account identified by the account email; if no such account exists, an error is returned.
+func (mngr *AccountsManager) ConfigureAccount(accountData *data.Account) error {
+	mngr.mutex.Lock()
+	defer mngr.mutex.Unlock()
+
+	account, err := mngr.findAccount(FindByEmail, accountData.Email)
+	if err != nil {
+		return errors.Wrap(err, "user to configure not found")
+	}
+
+	if err := account.Configure(accountData); err == nil {
+		account.DateModified = time.Now()
+
+		mngr.storage.AccountUpdated(account)
+		mngr.writeAllAccounts()
+
+		mngr.callListeners(account, AccountsListener.AccountUpdated)
+	} else {
+		return errors.Wrap(err, "error while configuring account")
+	}
+
+	return nil
+}
+
 // ResetPassword resets the password for the given user.
 func (mngr *AccountsManager) ResetPassword(name string) error {
 	account, err := mngr.findAccount(FindByEmail, name)
