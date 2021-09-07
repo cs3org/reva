@@ -49,7 +49,9 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/registry"
 	"github.com/cs3org/reva/pkg/utils"
@@ -611,7 +613,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 
-	filters := []*collaboration.ListSharesRequest_Filter{}
+	filters := []*collaboration.Filter{}
 	linkFilters := []*link.ListPublicSharesRequest_Filter{}
 	var e error
 
@@ -667,8 +669,8 @@ func (h *Handler) logProblems(s *rpc.Status, e error, msg string) {
 	}
 }
 
-func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.ListSharesRequest_Filter, []*link.ListPublicSharesRequest_Filter, error) {
-	collaborationFilters := []*collaboration.ListSharesRequest_Filter{}
+func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.Filter, []*link.ListPublicSharesRequest_Filter, error) {
+	collaborationFilters := []*collaboration.Filter{}
 	linkFilters := []*link.ListPublicSharesRequest_Filter{}
 	ctx := r.Context()
 
@@ -696,19 +698,9 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 		return nil, nil, err
 	}
 
-	collaborationFilters = append(collaborationFilters, &collaboration.ListSharesRequest_Filter{
-		Type: collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID,
-		Term: &collaboration.ListSharesRequest_Filter_ResourceId{
-			ResourceId: info.Id,
-		},
-	})
+	collaborationFilters = append(collaborationFilters, share.ResourceIDFilter(info.Id))
 
-	linkFilters = append(linkFilters, &link.ListPublicSharesRequest_Filter{
-		Type: link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID,
-		Term: &link.ListPublicSharesRequest_Filter_ResourceId{
-			ResourceId: info.Id,
-		},
-	})
+	linkFilters = append(linkFilters, publicshare.ResourceIDFilter(info.Id))
 
 	return collaborationFilters, linkFilters, nil
 }

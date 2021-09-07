@@ -83,3 +83,13 @@ func AddSignature(share *link.PublicShare, pw string) error {
 	}
 	return nil
 }
+
+// ResourceIDFilter is an abstraction for creating filter by resource id.
+func ResourceIDFilter(id *provider.ResourceId) *link.ListPublicSharesRequest_Filter {
+	return &link.ListPublicSharesRequest_Filter{
+		Type: link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID,
+		Term: &link.ListPublicSharesRequest_Filter_ResourceId{
+			ResourceId: id,
+		},
+	}
+}

@@ -41,14 +41,44 @@ type Manager interface {
 
 	// ListShares returns the shares created by the user. If md is provided is not nil,
 	// it returns only shares attached to the given resource.
-	ListShares(ctx context.Context, filters []*collaboration.ListSharesRequest_Filter) ([]*collaboration.Share, error)
+	ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error)
 
 	// ListReceivedShares returns the list of shares the user has access.
-	ListReceivedShares(ctx context.Context) ([]*collaboration.ReceivedShare, error)
+	ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error)
 
 	// GetReceivedShare returns the information for a received share the user has access.
 	GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error)
 
 	// UpdateReceivedShare updates the received share with share state.
 	UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareReference, f *collaboration.UpdateReceivedShareRequest_UpdateField) (*collaboration.ReceivedShare, error)
+}
+
+// GroupGranteeFilter is an abstraction for creating filter by grantee type group.
+func GroupGranteeFilter() *collaboration.Filter {
+	return &collaboration.Filter{
+		Type: collaboration.Filter_TYPE_GRANTEE_TYPE,
+		Term: &collaboration.Filter_GranteeType{
+			GranteeType: provider.GranteeType_GRANTEE_TYPE_GROUP,
+		},
+	}
+}
+
+// UserGranteeFilter is an abstraction for creating filter by grantee type user.
+func UserGranteeFilter() *collaboration.Filter {
+	return &collaboration.Filter{
+		Type: collaboration.Filter_TYPE_GRANTEE_TYPE,
+		Term: &collaboration.Filter_GranteeType{
+			GranteeType: provider.GranteeType_GRANTEE_TYPE_USER,
+		},
+	}
+}
+
+// ResourceIDFilter is an abstraction for creating filter by resource id.
+func ResourceIDFilter(id *provider.ResourceId) *collaboration.Filter {
+	return &collaboration.Filter{
+		Type: collaboration.Filter_TYPE_RESOURCE_ID,
+		Term: &collaboration.Filter_ResourceId{
+			ResourceId: id,
+		},
+	}
 }
