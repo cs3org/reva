@@ -23,8 +23,14 @@ import (
 	"net/http"
 	"os"
 
+	"google.golang.org/grpc/metadata"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
 	"github.com/cs3org/reva/tests/helpers"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -32,11 +38,20 @@ import (
 
 var _ = Describe("Nextcloud", func() {
 	var (
+		ctx           context.Context
 		options map[string]interface{}
 		tmpRoot string
+		user          = &userpb.User{
+			Id: &userpb.UserId{
+				Idp:      "0.0.0.0:19000",
+				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
+			},
+		}
 	)
 
 	BeforeEach(func() {
+		var err error
 		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
 
@@ -45,6 +60,19 @@ var _ = Describe("Nextcloud", func() {
 			"enable_home":  true,
 			"share_folder": "/Shares",
 		}
+
+		ctx = context.Background()
+
+		// Add auth token
+		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
+		Expect(err).ToNot(HaveOccurred())
+		scope, err := scope.AddOwnerScope(nil)
+		Expect(err).ToNot(HaveOccurred())
+		t, err := tokenManager.MintToken(ctx, user, scope)
+		Expect(err).ToNot(HaveOccurred())
+		ctx = ctxpkg.ContextSetToken(ctx, t)
+		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, t)
+		ctx = ctxpkg.ContextSetUser(ctx, user)
 	})
 
 	AfterEach(func() {
@@ -80,10 +108,10 @@ var _ = Describe("Nextcloud", func() {
 					panic(err)
 				}
 			})
-			mock, teardown := helpers.TestingHTTPClient(h)
+			mock, teardown := nextcloud.TestingHTTPClient(h)
 			defer teardown()
 			nc.SetHTTPClient(mock)
-			err2 := nc.CreateHome(context.TODO())
+			err2 := nc.CreateHome(ctx)
 			Expect(err2).ToNot(HaveOccurred())
 		})
 	})
