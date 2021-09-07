@@ -19,10 +19,12 @@
 package nextcloud
 
 import (
+	"context"
 	"fmt"
-	"httptest"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 )
 
