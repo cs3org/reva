@@ -144,8 +144,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 			Idp:      "localhost",
 			Type:     1,
 		},
-		Mail:        string(clientID),
-		DisplayName: string(clientID),
+		Mail:        clientID,
+		DisplayName: clientID,
 		Groups:      nil,
 	}
 	return user, nil, nil
