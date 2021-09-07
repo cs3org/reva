@@ -21,8 +21,10 @@ package share
 import (
 	"context"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 // Manager is the interface that manipulates shares.
@@ -80,5 +82,38 @@ func ResourceIDFilter(id *provider.ResourceId) *collaboration.Filter {
 		Term: &collaboration.Filter_ResourceId{
 			ResourceId: id,
 		},
+	}
+}
+
+// IsCreatedByUser checks if the user is the owner or creator of the share.
+func IsCreatedByUser(share *collaboration.Share, user *userv1beta1.User) bool {
+	return utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator)
+}
+
+// IsGrantedToUser checks if the user is a grantee of the share. Either by a user grant or by a group grant.
+func IsGrantedToUser(share *collaboration.Share, user *userv1beta1.User) bool {
+	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, share.Grantee.GetUserId()) {
+		return true
+	}
+	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		// check if any of the user's group is the grantee of the share
+		for _, g := range user.Groups {
+			if g == share.Grantee.GetGroupId().OpaqueId {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// MatchesFilter tests if the share passes the filter.
+func MatchesFilter(share *collaboration.Share, filter *collaboration.Filter) bool {
+	switch filter.Type {
+	case collaboration.Filter_TYPE_RESOURCE_ID:
+		return utils.ResourceIDEqual(share.ResourceId, filter.GetResourceId())
+	case collaboration.Filter_TYPE_GRANTEE_TYPE:
+		return share.Grantee.Type == filter.GetGranteeType()
+	default:
+		return false
 	}
 }

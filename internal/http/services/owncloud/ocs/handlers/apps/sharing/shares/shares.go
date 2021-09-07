@@ -545,7 +545,36 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	lrsRes, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+	filters := []*collaboration.Filter{}
+	var shareTypes []string
+	shareTypesParam := r.URL.Query().Get("share_types")
+	if shareTypesParam != "" {
+		shareTypes = strings.Split(shareTypesParam, ",")
+	}
+	for _, s := range shareTypes {
+		if s == "" {
+			continue
+		}
+		shareType, err := strconv.Atoi(strings.TrimSpace(s))
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid share type", err)
+			return
+		}
+		switch shareType {
+		case int(conversions.ShareTypeUser):
+			filters = append(filters, share.UserGranteeFilter())
+		case int(conversions.ShareTypeGroup):
+			filters = append(filters, share.GroupGranteeFilter())
+		}
+	}
+
+	if len(shareTypes) != 0 && len(filters) == 0 {
+		// If a share_types filter was set for anything other than user or group shares just return an empty response
+		response.WriteOCSSuccess(w, r, []*conversions.ShareData{})
+		return
+	}
+
+	lrsRes, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{Filters: filters})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc ListReceivedShares request", err)
 		return
@@ -693,23 +722,45 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	shareTypes := strings.Split(r.URL.Query().Get("share_types"), ",")
+	var shareTypes []string
+	shareTypesParam := r.URL.Query().Get("share_types")
+	if shareTypesParam != "" {
+		shareTypes = strings.Split(shareTypesParam, ",")
+	}
+
+	listPublicShares := len(shareTypes) == 0 // if no share_types filter was set we want to list all share by default
+	listUserShares := len(shareTypes) == 0   // if no share_types filter was set we want to list all share by default
 	for _, s := range shareTypes {
+		if s == "" {
+			continue
+		}
 		shareType, err := strconv.Atoi(strings.TrimSpace(s))
-		if err != nil && s != "" {
+		if err != nil {
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid share type", err)
 			return
 		}
-		if s == "" || shareType == int(conversions.ShareTypeUser) || shareType == int(conversions.ShareTypeGroup) {
-			userShares, status, err := h.listUserShares(r, filters)
-			h.logProblems(status, err, "could not listUserShares")
-			shares = append(shares, userShares...)
+
+		switch shareType {
+		case int(conversions.ShareTypeUser):
+			listUserShares = true
+			filters = append(filters, share.UserGranteeFilter())
+		case int(conversions.ShareTypeGroup):
+			listUserShares = true
+			filters = append(filters, share.GroupGranteeFilter())
+		case int(conversions.ShareTypePublicLink):
+			listPublicShares = true
 		}
-		if s == "" || shareType == int(conversions.ShareTypePublicLink) {
-			publicShares, status, err := h.listPublicShares(r, linkFilters)
-			h.logProblems(status, err, "could not listPublicShares")
-			shares = append(shares, publicShares...)
-		}
+	}
+
+	if listPublicShares {
+		publicShares, status, err := h.listPublicShares(r, linkFilters)
+		h.logProblems(status, err, "could not listPublicShares")
+		shares = append(shares, publicShares...)
+	}
+	if listUserShares {
+		userShares, status, err := h.listUserShares(r, filters)
+		h.logProblems(status, err, "could not listUserShares")
+		shares = append(shares, userShares...)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
