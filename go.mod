@@ -9,7 +9,7 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.7.0
 	github.com/asaskevich/govalidator v0.0.0-20200428143746-21a406dcc535 // indirect
-	github.com/aws/aws-sdk-go v1.40.17
+	github.com/aws/aws-sdk-go v1.40.37
 	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.5
@@ -20,7 +20,7 @@ require (
 	github.com/cubewise-code/go-mime v0.0.0-20200519001935-8c5762b177d8
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/gdexlab/go-render v1.0.1
-	github.com/go-chi/chi/v5 v5.0.3
+	github.com/go-chi/chi/v5 v5.0.4
 	github.com/go-ldap/ldap/v3 v3.3.0
 	github.com/go-openapi/errors v0.20.0 // indirect
 	github.com/go-openapi/strfmt v0.19.5 // indirect
@@ -61,10 +61,10 @@ require (
 	go.mongodb.org/mongo-driver v1.5.1 // indirect
 	go.opencensus.io v0.23.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.22.0
-	go.opentelemetry.io/otel v1.0.0-RC2
+	go.opentelemetry.io/otel v1.0.0-RC3
 	go.opentelemetry.io/otel/exporters/jaeger v1.0.0-RC2
 	go.opentelemetry.io/otel/sdk v1.0.0-RC2
-	go.opentelemetry.io/otel/trace v1.0.0-RC2
+	go.opentelemetry.io/otel/trace v1.0.0-RC3
 	golang.org/x/crypto v0.0.0-20201216223049-8b5274cf687f
 	golang.org/x/oauth2 v0.0.0-20210514164344-f6687ab2804c
 	golang.org/x/sys v0.0.0-20210603081109-ebe580a85c40
