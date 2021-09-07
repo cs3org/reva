@@ -61,6 +61,7 @@ var _ = Describe("storage providers", func() {
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
+			Username: "einstein",
 		}
 
 		homeRef           = &storagep.Reference{Path: "/"}

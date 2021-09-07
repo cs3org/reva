@@ -52,86 +52,86 @@ const serverStateMetadata = "METADATA"
 var serverState = serverStateEmpty
 
 var responses = map[string]Response{
-	`POST /apps/sciencemesh/~alice/AddGrant {"path":"/subdir"}`: {200, ``, serverStateGrantAdded},
+	`POST /apps/sciencemesh/~einstein/api/AddGrant {"path":"/subdir"}`: {200, ``, serverStateGrantAdded},
 
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/subdir"} EMPTY`:  {200, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/subdir"} HOME`:   {200, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/subdir"} NEWDIR`: {200, ``, serverStateSubdirNewdir},
+	`POST /apps/sciencemesh/~einstein/api/CreateDir {"path":"/subdir"} EMPTY`:  {200, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/CreateDir {"path":"/subdir"} HOME`:   {200, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/CreateDir {"path":"/subdir"} NEWDIR`: {200, ``, serverStateSubdirNewdir},
 
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/newdir"} EMPTY`:  {200, ``, serverStateNewdir},
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/newdir"} HOME`:   {200, ``, serverStateNewdir},
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/newdir"} SUBDIR`: {200, ``, serverStateSubdirNewdir},
+	`POST /apps/sciencemesh/~einstein/api/CreateDir {"path":"/newdir"} EMPTY`:  {200, ``, serverStateNewdir},
+	`POST /apps/sciencemesh/~einstein/api/CreateDir {"path":"/newdir"} HOME`:   {200, ``, serverStateNewdir},
+	`POST /apps/sciencemesh/~einstein/api/CreateDir {"path":"/newdir"} SUBDIR`: {200, ``, serverStateSubdirNewdir},
 
-	`POST /apps/sciencemesh/~alice/CreateHome `:   {200, ``, serverStateHome},
-	`POST /apps/sciencemesh/~alice/CreateHome {}`: {200, ``, serverStateHome},
+	`POST /apps/sciencemesh/~einstein/api/CreateHome `:   {200, ``, serverStateHome},
+	`POST /apps/sciencemesh/~einstein/api/CreateHome {}`: {200, ``, serverStateHome},
 
-	`POST /apps/sciencemesh/~alice/CreateReference {"path":"/Shares/reference"}`: {200, `[]`, serverStateReference},
+	`POST /apps/sciencemesh/~einstein/api/CreateReference {"path":"/Shares/reference"}`: {200, `[]`, serverStateReference},
 
-	`POST /apps/sciencemesh/~alice/Delete {"path":"/subdir"}`: {200, ``, serverStateRecycle},
+	`POST /apps/sciencemesh/~einstein/api/Delete {"path":"/subdir"}`: {200, ``, serverStateRecycle},
 
-	`POST /apps/sciencemesh/~alice/EmptyRecycle `: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/EmptyRecycle `: {200, ``, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/"} EMPTY`: {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/"} HOME`:  {200, `{ "size": 1 }`, serverStateHome},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/"} EMPTY`: {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/"} HOME`:  {200, `{ "size": 1 }`, serverStateHome},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/newdir"} EMPTY`:         {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/newdir"} HOME`:          {404, ``, serverStateHome},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/newdir"} SUBDIR`:        {404, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/newdir"} NEWDIR`:        {200, `{ "size": 1 }`, serverStateNewdir},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/newdir"} SUBDIR-NEWDIR`: {200, `{ "size": 1 }`, serverStateSubdirNewdir},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/newdir"} EMPTY`:         {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/newdir"} HOME`:          {404, ``, serverStateHome},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/newdir"} SUBDIR`:        {404, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/newdir"} NEWDIR`:        {200, `{ "size": 1 }`, serverStateNewdir},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/newdir"} SUBDIR-NEWDIR`: {200, `{ "size": 1 }`, serverStateSubdirNewdir},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/new_subdir"}`: {200, `{ "size": 1 }`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/new_subdir"}`: {200, `{ "size": 1 }`, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} EMPTY`:         {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} HOME`:          {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} NEWDIR`:        {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} RECYCLE`:       {404, ``, serverStateRecycle},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} SUBDIR`:        {200, `{ "size": 1 }`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} SUBDIR-NEWDIR`: {200, `{ "size": 1 }`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} METADATA`:      {200, `{ "size": 1, "metadata": { "foo": "bar" } }`, serverStateMetadata},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/subdir"} EMPTY`:         {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/subdir"} HOME`:          {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/subdir"} NEWDIR`:        {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/subdir"} RECYCLE`:       {404, ``, serverStateRecycle},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/subdir"} SUBDIR`:        {200, `{ "size": 1 }`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/subdir"} SUBDIR-NEWDIR`: {200, `{ "size": 1 }`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/subdir"} METADATA`:      {200, `{ "size": 1, "metadata": { "foo": "bar" } }`, serverStateMetadata},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdirRestored"} EMPTY`:         {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdirRestored"} RECYCLE`:       {404, ``, serverStateRecycle},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdirRestored"} SUBDIR`:        {404, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdirRestored"} FILE-RESTORED`: {200, `{ "size": 1 }`, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/subdirRestored"} EMPTY`:         {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/subdirRestored"} RECYCLE`:       {404, ``, serverStateRecycle},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/subdirRestored"} SUBDIR`:        {404, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/subdirRestored"} FILE-RESTORED`: {200, `{ "size": 1 }`, serverStateFileRestored},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/versionedFile"} EMPTY`:         {200, `{ "size": 2 }`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/versionedFile"} FILE-RESTORED`: {200, `{ "size": 1 }`, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/versionedFile"} EMPTY`:         {200, `{ "size": 2 }`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/GetMD {"path":"/versionedFile"} FILE-RESTORED`: {200, `{ "size": 1 }`, serverStateFileRestored},
 
-	`POST /apps/sciencemesh/~alice/GetPathByID {"storage_id":"00000000-0000-0000-0000-000000000000","opaque_id":"fileid-%2Fsubdir"}`: {200, "/subdir", serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/GetPathByID {"storage_id":"00000000-0000-0000-0000-000000000000","opaque_id":"fileid-%2Fsubdir"}`: {200, "/subdir", serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/InitiateUpload {"path":"/file"}`: {200, `{"simple": "yes","tus": "yes"}`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/InitiateUpload {"path":"/file"}`: {200, `{"simple": "yes","tus": "yes"}`, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/ListFolder {"path":"/"}`: {200, `["/subdir"]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/ListFolder {"path":"/"}`: {200, `["/subdir"]`, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/ListFolder {"path":"/Shares"} EMPTY`:     {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/ListFolder {"path":"/Shares"} SUBDIR`:    {404, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/ListFolder {"path":"/Shares"} REFERENCE`: {200, `["reference"]`, serverStateReference},
+	`POST /apps/sciencemesh/~einstein/api/ListFolder {"path":"/Shares"} EMPTY`:     {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/ListFolder {"path":"/Shares"} SUBDIR`:    {404, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/ListFolder {"path":"/Shares"} REFERENCE`: {200, `["reference"]`, serverStateReference},
 
-	`POST /apps/sciencemesh/~alice/ListGrants {"path":"/subdir"} SUBDIR`:        {200, `[]`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/ListGrants {"path":"/subdir"} GRANT-ADDED`:   {200, `[ { "stat": true, "move": true, "delete": false } ]`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/ListGrants {"path":"/subdir"} GRANT-UPDATED`: {200, `[ { "stat": true, "move": true, "delete": true } ]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/ListGrants {"path":"/subdir"} SUBDIR`:        {200, `[]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/ListGrants {"path":"/subdir"} GRANT-ADDED`:   {200, `[ { "stat": true, "move": true, "delete": false } ]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/ListGrants {"path":"/subdir"} GRANT-UPDATED`: {200, `[ { "stat": true, "move": true, "delete": true } ]`, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/ListRecycle  EMPTY`:   {200, `[]`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/ListRecycle  RECYCLE`: {200, `["/subdir"]`, serverStateRecycle},
+	`POST /apps/sciencemesh/~einstein/api/ListRecycle  EMPTY`:   {200, `[]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/ListRecycle  RECYCLE`: {200, `["/subdir"]`, serverStateRecycle},
 
-	`POST /apps/sciencemesh/~alice/ListRevisions {"path":"/versionedFile"} EMPTY`:         {500, `[1]`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/ListRevisions {"path":"/versionedFile"} FILE-RESTORED`: {500, `[1, 2]`, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/ListRevisions {"path":"/versionedFile"} EMPTY`:         {500, `[1]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/ListRevisions {"path":"/versionedFile"} FILE-RESTORED`: {500, `[1, 2]`, serverStateFileRestored},
 
-	`POST /apps/sciencemesh/~alice/Move {"from":"/subdir","to":"/new_subdir"}`: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/Move {"from":"/subdir","to":"/new_subdir"}`: {200, ``, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/RemoveGrant {"path":"/subdir"} GRANT-ADDED`: {200, ``, serverStateGrantUpdated},
+	`POST /apps/sciencemesh/~einstein/api/RemoveGrant {"path":"/subdir"} GRANT-ADDED`: {200, ``, serverStateGrantUpdated},
 
-	`POST /apps/sciencemesh/~alice/RestoreRecycleItem null`:                       {200, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/RestoreRecycleItem {"path":"/subdirRestored"}`: {200, ``, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/RestoreRecycleItem null`:                       {200, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/RestoreRecycleItem {"path":"/subdirRestored"}`: {200, ``, serverStateFileRestored},
 
-	`POST /apps/sciencemesh/~alice/RestoreRevision {"path":"/versionedFile"}`: {200, ``, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/RestoreRevision {"path":"/versionedFile"}`: {200, ``, serverStateFileRestored},
 
-	`POST /apps/sciencemesh/~alice/SetArbitraryMetadata {"metadata":{"foo":"bar"}}`: {200, ``, serverStateMetadata},
+	`POST /apps/sciencemesh/~einstein/api/SetArbitraryMetadata {"metadata":{"foo":"bar"}}`: {200, ``, serverStateMetadata},
 
-	`POST /apps/sciencemesh/~alice/UnsetArbitraryMetadata {"path":"/subdir"}`: {200, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/UnsetArbitraryMetadata {"path":"/subdir"}`: {200, ``, serverStateSubdir},
 
-	`POST /apps/sciencemesh/~alice/UpdateGrant {"path":"/subdir"}`: {200, ``, serverStateGrantUpdated},
+	`POST /apps/sciencemesh/~einstein/api/UpdateGrant {"path":"/subdir"}`: {200, ``, serverStateGrantUpdated},
 }
 
 // GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server
