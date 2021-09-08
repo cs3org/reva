@@ -50,12 +50,19 @@ type CapabilitiesData struct {
 
 // Capabilities groups several capability aspects
 type Capabilities struct {
-	Core          *CapabilitiesCore          `json:"core" xml:"core"`
-	Checksums     *CapabilitiesChecksums     `json:"checksums" xml:"checksums"`
-	Files         *CapabilitiesFiles         `json:"files" xml:"files" mapstructure:"files"`
-	Dav           *CapabilitiesDav           `json:"dav" xml:"dav"`
-	FilesSharing  *CapabilitiesFilesSharing  `json:"files_sharing" xml:"files_sharing" mapstructure:"files_sharing"`
+	Core         *CapabilitiesCore         `json:"core" xml:"core"`
+	Checksums    *CapabilitiesChecksums    `json:"checksums" xml:"checksums"`
+	Files        *CapabilitiesFiles        `json:"files" xml:"files" mapstructure:"files"`
+	Dav          *CapabilitiesDav          `json:"dav" xml:"dav"`
+	FilesSharing *CapabilitiesFilesSharing `json:"files_sharing" xml:"files_sharing" mapstructure:"files_sharing"`
+	Spaces       *Spaces                   `json:"spaces,omitempty" xml:"spaces,omitempty" mapstructure:"spaces"`
+
 	Notifications *CapabilitiesNotifications `json:"notifications,omitempty" xml:"notifications,omitempty"`
+}
+
+type Spaces struct {
+	Version string `json:"version" xml:"version" mapstructure:"version"`
+	Enabled bool   `json:"enabled" xml:"enabled" mapstructure:"enabled"`
 }
 
 // CapabilitiesCore holds webdav config
