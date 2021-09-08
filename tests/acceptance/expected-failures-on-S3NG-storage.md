@@ -358,11 +358,6 @@ File and sync features in a shared scenario
 #### [Cannot move a file to a shared folder](https://github.com/owncloud/ocis/issues/2146)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:515](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L515)
 
-#### [deleting share response does not contain `data` field](https://github.com/owncloud/ocis/issues/721)
-
--   [apiShareManagementBasicToShares/deleteShareFromShares.feature:43](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L43)
--   [apiShareManagementBasicToShares/deleteShareFromShares.feature:44](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L44)
-
 #### [path property in pending shares gives only filename](https://github.com/owncloud/ocis/issues/2156)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:373](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L373)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:543](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L543)
