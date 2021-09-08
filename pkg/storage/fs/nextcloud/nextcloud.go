@@ -30,6 +30,8 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
@@ -71,16 +73,20 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	return NewStorageDriver(conf, nil)
+	return NewStorageDriver(conf)
 }
 
 // NewStorageDriver returns a new NextcloudStorageDriver
-func NewStorageDriver(c *StorageDriverConfig, client *http.Client) (*StorageDriver, error) {
-	if client == nil {
+func NewStorageDriver(c *StorageDriverConfig) (*StorageDriver, error) {
+	var client *http.Client
+	if c.MockHTTP {
+		nextcloudServerMock := GetNextcloudServerMock()
+		client, _ = TestingHTTPClient(nextcloudServerMock)
+	} else {
 		client = &http.Client{}
 	}
 	return &StorageDriver{
-		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/~alice/"
+		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
 		client:   client,
 	}, nil
 }
@@ -89,6 +95,15 @@ func NewStorageDriver(c *StorageDriverConfig, client *http.Client) (*StorageDriv
 type Action struct {
 	verb string
 	argS string
+}
+
+func getUser(ctx context.Context) (*user.User, error) {
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired(""), "nextcloud storage driver: error getting user from ctx")
+		return nil, err
+	}
+	return u, nil
 }
 
 // SetHTTPClient sets the HTTP client
@@ -120,33 +135,50 @@ func (nc *StorageDriver) doUpload(r io.ReadCloser) error {
 	return err
 }
 
-func (nc *StorageDriver) do(a Action, endPoint string) (int, []byte, error) {
-	url := endPoint + a.verb
+func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) {
+	log := appctx.GetLogger(ctx)
+	user, err := getUser(ctx)
+	if err != nil {
+		return 0, nil, err
+	}
+	url := nc.endPoint + "~" + user.Username + "/api/" + a.verb
+	log.Info().Msgf("nc.do %s", url)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
-		panic(err)
+		return 0, nil, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := nc.client.Do(req)
 	if err != nil {
-		panic(err)
+		return 0, nil, err
 	}
 
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
-	return resp.StatusCode, body, err
+	if err != nil {
+		return 0, nil, err
+	}
+
+	log.Info().Msgf("nc.do response %d %s", resp.StatusCode, body)
+	return resp.StatusCode, body, nil
 }
 
 // GetHome as defined in the storage.FS interface
 func (nc *StorageDriver) GetHome(ctx context.Context) (string, error) {
-	_, respBody, err := nc.do(Action{"GetHome", ""}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("GetHome")
+
+	_, respBody, err := nc.do(ctx, Action{"GetHome", ""})
 	return string(respBody), err
 }
 
 // CreateHome as defined in the storage.FS interface
 func (nc *StorageDriver) CreateHome(ctx context.Context) error {
-	_, _, err := nc.do(Action{"CreateHome", ""}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("CreateHome")
+
+	_, _, err := nc.do(ctx, Action{"CreateHome", ""})
 	return err
 }
 
@@ -156,7 +188,10 @@ func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference)
 	if err != nil {
 		return err
 	}
-	_, _, err = nc.do(Action{"CreateDir", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("CreateDir %s", bodyStr)
+
+	_, _, err = nc.do(ctx, Action{"CreateDir", string(bodyStr)})
 	return err
 }
 
@@ -166,7 +201,10 @@ func (nc *StorageDriver) Delete(ctx context.Context, ref *provider.Reference) er
 	if err != nil {
 		return err
 	}
-	_, _, err = nc.do(Action{"Delete", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("Delete %s", bodyStr)
+
+	_, _, err = nc.do(ctx, Action{"Delete", string(bodyStr)})
 	return err
 }
 
@@ -176,17 +214,23 @@ func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Refe
 	data["from"] = oldRef.Path
 	data["to"] = newRef.Path
 	bodyStr, _ := json.Marshal(data)
-	_, _, err := nc.do(Action{"Move", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("Move %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"Move", string(bodyStr)})
 	return err
 }
 
 // GetMD as defined in the storage.FS interface
 func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	bodyStr, err := json.Marshal(ref)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("GetMD %s", bodyStr)
+
 	if err != nil {
 		return nil, err
 	}
-	status, body, err := nc.do(Action{"GetMD", string(bodyStr)}, nc.endPoint)
+	status, body, err := nc.do(ctx, Action{"GetMD", string(bodyStr)})
 	if err != nil {
 		return nil, err
 	}
@@ -237,10 +281,12 @@ func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdK
 // ListFolder as defined in the storage.FS interface
 func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	bodyStr, err := json.Marshal(ref)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("LisfFolder %s", bodyStr)
 	if err != nil {
 		return nil, err
 	}
-	status, body, err := nc.do(Action{"ListFolder", string(bodyStr)}, nc.endPoint)
+	status, body, err := nc.do(ctx, Action{"ListFolder", string(bodyStr)})
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +323,10 @@ func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference
 // InitiateUpload as defined in the storage.FS interface
 func (nc *StorageDriver) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	bodyStr, _ := json.Marshal(ref)
-	_, respBody, err := nc.do(Action{"InitiateUpload", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("InitiateUpload %s", bodyStr)
+
+	_, respBody, err := nc.do(ctx, Action{"InitiateUpload", string(bodyStr)})
 	if err != nil {
 		return nil, err
 	}
@@ -292,25 +341,34 @@ func (nc *StorageDriver) InitiateUpload(ctx context.Context, ref *provider.Refer
 // Upload as defined in the storage.FS interface
 func (nc *StorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	bodyStr, _ := json.Marshal(ref)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("Upload %s", bodyStr)
+
 	err := nc.doUpload(r)
 	if err != nil {
 		return err
 	}
-	_, _, err = nc.do(Action{"Upload", string(bodyStr)}, nc.endPoint)
+	_, _, err = nc.do(ctx, Action{"Upload", string(bodyStr)})
 	return err
 }
 
 // Download as defined in the storage.FS interface
 func (nc *StorageDriver) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	bodyStr, _ := json.Marshal(ref)
-	_, _, err := nc.do(Action{"Download", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("Download %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"Download", string(bodyStr)})
 	return nil, err
 }
 
 // ListRevisions as defined in the storage.FS interface
 func (nc *StorageDriver) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
 	bodyStr, _ := json.Marshal(ref)
-	_, respBody, err := nc.do(Action{"ListRevisions", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("ListRevisions %s", bodyStr)
+
+	_, respBody, err := nc.do(ctx, Action{"ListRevisions", string(bodyStr)})
 	if err != nil {
 		return nil, err
 	}
@@ -338,20 +396,29 @@ func (nc *StorageDriver) ListRevisions(ctx context.Context, ref *provider.Refere
 // DownloadRevision as defined in the storage.FS interface
 func (nc *StorageDriver) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error) {
 	bodyStr, _ := json.Marshal(ref)
-	_, _, err := nc.do(Action{"DownloadRevision", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("DownloadRevision %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"DownloadRevision", string(bodyStr)})
 	return nil, err
 }
 
 // RestoreRevision as defined in the storage.FS interface
 func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
 	bodyStr, _ := json.Marshal(ref)
-	_, _, err := nc.do(Action{"RestoreRevision", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("RestoreRevision %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"RestoreRevision", string(bodyStr)})
 	return err
 }
 
 // ListRecycle as defined in the storage.FS interface
 func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path string) ([]*provider.RecycleItem, error) {
-	_, respBody, err := nc.do(Action{"ListRecycle", ""}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("ListRecycle")
+	_, respBody, err := nc.do(ctx, Action{"ListRecycle", ""})
+
 	if err != nil {
 		return nil, err
 	}
@@ -386,62 +453,89 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path strin
 // RestoreRecycleItem as defined in the storage.FS interface
 func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, key string, path string, restoreRef *provider.Reference) error {
 	bodyStr, _ := json.Marshal(restoreRef)
-	_, _, err := nc.do(Action{"RestoreRecycleItem", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("RestoreRecycleItem %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"RestoreRecycleItem", string(bodyStr)})
 	return err
 }
 
 // PurgeRecycleItem as defined in the storage.FS interface
 func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, key string, path string) error {
 	bodyStr, _ := json.Marshal(key)
-	_, _, err := nc.do(Action{"PurgeRecycleItem", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("PurgeRecycleItem %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"PurgeRecycleItem", string(bodyStr)})
 	return err
 }
 
 // EmptyRecycle as defined in the storage.FS interface
 func (nc *StorageDriver) EmptyRecycle(ctx context.Context) error {
-	_, _, err := nc.do(Action{"EmptyRecycle", ""}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("EmptyRecycle")
+
+	_, _, err := nc.do(ctx, Action{"EmptyRecycle", ""})
 	return err
 }
 
 // GetPathByID as defined in the storage.FS interface
 func (nc *StorageDriver) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	bodyStr, _ := json.Marshal(id)
-	_, respBody, err := nc.do(Action{"GetPathByID", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("GetPathByID %s", bodyStr)
+
+	_, respBody, err := nc.do(ctx, Action{"GetPathByID", string(bodyStr)})
 	return string(respBody), err
 }
 
 // AddGrant as defined in the storage.FS interface
 func (nc *StorageDriver) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	bodyStr, _ := json.Marshal(ref)
-	_, _, err := nc.do(Action{"AddGrant", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("AggGrant %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"AddGrant", string(bodyStr)})
 	return err
 }
 
 // RemoveGrant as defined in the storage.FS interface
 func (nc *StorageDriver) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	bodyStr, _ := json.Marshal(ref)
-	_, _, err := nc.do(Action{"RemoveGrant", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("RemoveGrant %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"RemoveGrant", string(bodyStr)})
 	return err
 }
 
 // DenyGrant as defined in the storage.FS interface
 func (nc *StorageDriver) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
 	bodyStr, _ := json.Marshal(ref)
-	_, _, err := nc.do(Action{"DenyGrant", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("DenyGrant %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"DenyGrant", string(bodyStr)})
 	return err
 }
 
 // UpdateGrant as defined in the storage.FS interface
 func (nc *StorageDriver) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	bodyStr, _ := json.Marshal(ref)
-	_, _, err := nc.do(Action{"UpdateGrant", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("UpdateGrant %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"UpdateGrant", string(bodyStr)})
 	return err
 }
 
 // ListGrants as defined in the storage.FS interface
 func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
 	bodyStr, _ := json.Marshal(ref)
-	_, respBody, err := nc.do(Action{"ListGrants", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("ListGrants %s", bodyStr)
+
+	_, respBody, err := nc.do(ctx, Action{"ListGrants", string(bodyStr)})
 	if err != nil {
 		return nil, err
 	}
@@ -506,38 +600,56 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 
 // GetQuota as defined in the storage.FS interface
 func (nc *StorageDriver) GetQuota(ctx context.Context) (uint64, uint64, error) {
-	_, _, err := nc.do(Action{"GetQuota", ""}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("GetQuota")
+
+	_, _, err := nc.do(ctx, Action{"GetQuota", ""})
 	return 0, 0, err
 }
 
 // CreateReference as defined in the storage.FS interface
 func (nc *StorageDriver) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
-	_, _, err := nc.do(Action{"CreateReference", fmt.Sprintf(`{"path":"%s"}`, path)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("CreateReference %s", path)
+
+	_, _, err := nc.do(ctx, Action{"CreateReference", fmt.Sprintf(`{"path":"%s"}`, path)})
 	return err
 }
 
 // Shutdown as defined in the storage.FS interface
 func (nc *StorageDriver) Shutdown(ctx context.Context) error {
-	_, _, err := nc.do(Action{"Shutdown", ""}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("Shutdown")
+
+	_, _, err := nc.do(ctx, Action{"Shutdown", ""})
 	return err
 }
 
 // SetArbitraryMetadata as defined in the storage.FS interface
 func (nc *StorageDriver) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
 	bodyStr, _ := json.Marshal(md)
-	_, _, err := nc.do(Action{"SetArbitraryMetadata", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("SetArbitraryMetadata %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"SetArbitraryMetadata", string(bodyStr)})
 	return err
 }
 
 // UnsetArbitraryMetadata as defined in the storage.FS interface
 func (nc *StorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
 	bodyStr, _ := json.Marshal(ref)
-	_, _, err := nc.do(Action{"UnsetArbitraryMetadata", string(bodyStr)}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("UnsetArbitraryMetadata %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"UnsetArbitraryMetadata", string(bodyStr)})
 	return err
 }
 
 // ListStorageSpaces :as defined in the storage.FS interface
 func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
-	_, _, err := nc.do(Action{"ListStorageSpaces", ""}, nc.endPoint)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("ListStorageSpaces")
+
+	_, _, err := nc.do(ctx, Action{"ListStorageSpaces", ""})
 	return nil, err
 }
