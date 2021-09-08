@@ -306,12 +306,6 @@ Synchronization features like etag propagation, setting mtime and locking files
 ### Share
 File and sync features in a shared scenario
 
-#### [etags don't change for a share receiver](https://github.com/owncloud/product/issues/243)
--   [apiWebdavEtagPropagation1/moveFileFolder.feature:244](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/moveFileFolder.feature#L244)
--   [apiWebdavEtagPropagation1/moveFileFolder.feature:245](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/moveFileFolder.feature#L245)
--   [apiWebdavEtagPropagation1/moveFileFolder.feature:314](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/moveFileFolder.feature#L314)
--   [apiWebdavEtagPropagation1/moveFileFolder.feature:315](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation1/moveFileFolder.feature#L315)
-
 ### [Different response containing exact and non exact match in response of getting sharees](https://github.com/owncloud/ocis/issues/2376)
 - [apiSharees/sharees.feature:350](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L350)
 - [apiSharees/sharees.feature:351](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L351)
@@ -627,7 +621,6 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 
 -   [apiShareOperationsToShares1/changingFilesShare.feature:24](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L24)
 -   [apiShareOperationsToShares1/changingFilesShare.feature:25](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L25)
--   [apiShareOperationsToShares1/changingFilesShare.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L66)
 -   [apiShareOperationsToShares1/changingFilesShare.feature:82](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L82)
 -   [apiShareOperationsToShares1/changingFilesShare.feature:98](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L98)
 

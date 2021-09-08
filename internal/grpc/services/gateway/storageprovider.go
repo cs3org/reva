@@ -1029,37 +1029,61 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		dshareName, dshareChild := s.splitShare(ctx, dp)
 		log.Debug().Msgf("srcpath:%s dstpath:%s srcsharename:%s srcsharechild: %s dstsharename:%s dstsharechild:%s ", p, dp, shareName, shareChild, dshareName, dshareChild)
 
-		if shareName != dshareName {
-			err := errtypes.BadRequest("gateway: move: src and dst points to different targets")
-			return &provider.MoveResponse{
-				Status: status.NewStatusFromErrType(ctx, "gateway: error moving", err),
-			}, nil
-
-		}
-
-		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
-		statRes, err := s.stat(ctx, statReq)
+		srcStatReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
+		srcStatRes, err := s.stat(ctx, srcStatReq)
 		if err != nil {
 			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+srcStatReq.Ref.String()),
 			}, nil
 		}
 
-		if statRes.Status.Code != rpc.Code_CODE_OK {
+		if srcStatRes.Status.Code != rpc.Code_CODE_OK {
 			return &provider.MoveResponse{
-				Status: statRes.Status,
+				Status: srcStatRes.Status,
 			}, nil
 		}
 
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
+		dstStatReq := &provider.StatRequest{Ref: &provider.Reference{Path: dshareName}}
+		dstStatRes, err := s.stat(ctx, dstStatReq)
 		if err != nil {
 			return &provider.MoveResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+srcStatReq.Ref.String()),
 			}, nil
 		}
 
-		if protocol == "webdav" {
-			err = s.webdavRefMove(ctx, statRes.Info.Target, shareChild, dshareChild)
+		if dstStatRes.Status.Code != rpc.Code_CODE_OK {
+			return &provider.MoveResponse{
+				Status: srcStatRes.Status,
+			}, nil
+		}
+
+		srcRi, srcProtocol, err := s.checkRef(ctx, srcStatRes.Info)
+		if err != nil {
+			return &provider.MoveResponse{
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+srcStatRes.Info.Target, err),
+			}, nil
+		}
+
+		if srcProtocol == "webdav" {
+			err = s.webdavRefMove(ctx, dstStatRes.Info.Target, shareChild, dshareChild)
+			if err != nil {
+				return &provider.MoveResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error moving resource on webdav host: "+p),
+				}, nil
+			}
+			return &provider.MoveResponse{
+				Status: status.NewOK(ctx),
+			}, nil
+		}
+		dstRi, dstProtocol, err := s.checkRef(ctx, dstStatRes.Info)
+		if err != nil {
+			return &provider.MoveResponse{
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+srcStatRes.Info.Target, err),
+			}, nil
+		}
+
+		if dstProtocol == "webdav" {
+			err = s.webdavRefMove(ctx, dstStatRes.Info.Target, shareChild, dshareChild)
 			if err != nil {
 				return &provider.MoveResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error moving resource on webdav host: "+p),
@@ -1071,10 +1095,10 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}
 
 		src := &provider.Reference{
-			Path: path.Join(ri.Path, shareChild),
+			Path: path.Join(srcRi.Path, shareChild),
 		}
 		dst := &provider.Reference{
-			Path: path.Join(ri.Path, dshareChild),
+			Path: path.Join(dstRi.Path, dshareChild),
 		}
 
 		req.Source = src
@@ -1089,14 +1113,14 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 }
 
 func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	srcList, err := s.findProviders(ctx, req.Source)
+	srcProviders, err := s.findProviders(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, "move src="+req.Source.String(), err),
 		}, nil
 	}
 
-	dstList, err := s.findProviders(ctx, req.Destination)
+	dstProviders, err := s.findProviders(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, "move dst="+req.Destination.String(), err),
@@ -1104,27 +1128,27 @@ func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 	}
 
 	// if providers are not the same we do not implement cross storage move yet.
-	if len(srcList) != 1 || len(dstList) != 1 {
+	if len(srcProviders) != 1 || len(dstProviders) != 1 {
 		res := &provider.MoveResponse{
 			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
 		}
 		return res, nil
 	}
 
-	srcP, dstP := srcList[0], dstList[0]
+	srcProvider, dstProvider := srcProviders[0], dstProviders[0]
 
 	// if providers are not the same we do not implement cross storage copy yet.
-	if srcP.Address != dstP.Address {
+	if srcProvider.Address != dstProvider.Address {
 		res := &provider.MoveResponse{
 			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
 		}
 		return res, nil
 	}
 
-	c, err := s.getStorageProviderClient(ctx, srcP)
+	c, err := s.getStorageProviderClient(ctx, srcProvider)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error connecting to storage provider="+srcP.Address),
+			Status: status.NewInternal(ctx, err, "error connecting to storage provider="+srcProvider.Address),
 		}, nil
 	}
 
