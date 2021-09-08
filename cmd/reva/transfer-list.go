@@ -33,7 +33,7 @@ func transferListCommand() *command {
 	cmd := newCommand("transfer-list")
 	cmd.Description = func() string { return "get a list of transfers" }
 	cmd.Usage = func() string { return "Usage: transfer-list [-flags]" }
-	filterShareId := cmd.String("shareId", "", "share ID filter (optional)")
+	filterShareID := cmd.String("shareId", "", "share ID filter (optional)")
 
 	cmd.Action = func(w ...io.Writer) error {
 		ctx := getAuthContext()
@@ -44,12 +44,12 @@ func transferListCommand() *command {
 
 		// validate flags
 		var filters []*datatx.ListTransfersRequest_Filter
-		if *filterShareId != "" {
+		if *filterShareID != "" {
 			filters = append(filters, &datatx.ListTransfersRequest_Filter{
 				Type: datatx.ListTransfersRequest_Filter_TYPE_SHARE_ID,
 				Term: &datatx.ListTransfersRequest_Filter_ShareId{
 					ShareId: &ocm.ShareId{
-						OpaqueId: *filterShareId,
+						OpaqueId: *filterShareID,
 					},
 				},
 			})

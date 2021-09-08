@@ -34,11 +34,11 @@ func transferRetryCommand() *command {
 	cmd := newCommand("transfer-retry")
 	cmd.Description = func() string { return "retry a transfer" }
 	cmd.Usage = func() string { return "Usage: transfer-retry [-flags]" }
-	txId := cmd.String("txId", "", "the transfer identifier")
+	txID := cmd.String("txId", "", "the transfer identifier")
 
 	cmd.Action = func(w ...io.Writer) error {
 		// validate flags
-		if *txId == "" {
+		if *txID == "" {
 			return errors.New("txId must be specified: use -txId flag\n" + cmd.Usage())
 		}
 
@@ -50,7 +50,7 @@ func transferRetryCommand() *command {
 
 		retryRequest := &datatx.RetryTransferRequest{
 			TxId: &datatx.TxId{
-				OpaqueId: *txId,
+				OpaqueId: *txID,
 			},
 		}
 

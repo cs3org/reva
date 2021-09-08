@@ -34,11 +34,11 @@ func transferCancelCommand() *command {
 	cmd := newCommand("transfer-cancel")
 	cmd.Description = func() string { return "cancel a running transfer" }
 	cmd.Usage = func() string { return "Usage: transfer-cancel [-flags]" }
-	txId := cmd.String("txId", "", "the transfer identifier")
+	txID := cmd.String("txId", "", "the transfer identifier")
 
 	cmd.Action = func(w ...io.Writer) error {
 		// validate flags
-		if *txId == "" {
+		if *txID == "" {
 			return errors.New("txId must be specified: use -txId flag\n" + cmd.Usage())
 		}
 
@@ -49,7 +49,7 @@ func transferCancelCommand() *command {
 		}
 
 		cancelRequest := &datatx.CancelTransferRequest{
-			TxId: &datatx.TxId{OpaqueId: *txId},
+			TxId: &datatx.TxId{OpaqueId: *txID},
 		}
 
 		cancelResponse, err := client.CancelTransfer(ctx, cancelRequest)

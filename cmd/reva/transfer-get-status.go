@@ -34,11 +34,11 @@ func transferGetStatusCommand() *command {
 	cmd := newCommand("transfer-get-status")
 	cmd.Description = func() string { return "get the status of a transfer" }
 	cmd.Usage = func() string { return "Usage: transfer-get-status [-flags]" }
-	txId := cmd.String("txId", "", "the transfer identifier")
+	txID := cmd.String("txId", "", "the transfer identifier")
 
 	cmd.Action = func(w ...io.Writer) error {
 		// validate flags
-		if *txId == "" {
+		if *txID == "" {
 			return errors.New("txId must be specified: use -txId flag\n" + cmd.Usage())
 		}
 
@@ -49,7 +49,7 @@ func transferGetStatusCommand() *command {
 		}
 
 		getStatusRequest := &datatx.GetTransferStatusRequest{
-			TxId: &datatx.TxId{OpaqueId: *txId},
+			TxId: &datatx.TxId{OpaqueId: *txID},
 		}
 
 		getStatusResponse, err := client.GetTransferStatus(ctx, getStatusRequest)
