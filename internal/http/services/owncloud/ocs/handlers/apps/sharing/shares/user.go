@@ -94,15 +94,36 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareI
 		return
 	}
 
-	uReq := &collaboration.RemoveShareRequest{
-		Ref: &collaboration.ShareReference{
-			Spec: &collaboration.ShareReference_Id{
-				Id: &collaboration.ShareId{
-					OpaqueId: shareID,
-				},
+	shareRef := &collaboration.ShareReference{
+		Spec: &collaboration.ShareReference_Id{
+			Id: &collaboration.ShareId{
+				OpaqueId: shareID,
 			},
 		},
 	}
+	// Get the share, so that we can include it in the response.
+	getShareResp, err := uClient.GetShare(ctx, &collaboration.GetShareRequest{Ref: shareRef})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc delete share request", err)
+		return
+	} else if getShareResp.Status.Code != rpc.Code_CODE_OK {
+		if getShareResp.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "deleting share failed", err)
+		return
+	}
+
+	data, err := conversions.CS3Share2ShareData(ctx, getShareResp.Share)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "deleting share failed", err)
+		return
+	}
+	// A deleted share should not have an ID.
+	data.ID = ""
+
+	uReq := &collaboration.RemoveShareRequest{Ref: shareRef}
 	uRes, err := uClient.RemoveShare(ctx, uReq)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc delete share request", err)
@@ -117,7 +138,7 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareI
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc delete share request failed", err)
 		return
 	}
-	response.WriteOCSSuccess(w, r, nil)
+	response.WriteOCSSuccess(w, r, data)
 }
 
 func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filter) ([]*conversions.ShareData, *rpc.Status, error) {
