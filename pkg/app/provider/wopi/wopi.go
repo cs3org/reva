@@ -63,7 +63,7 @@ type config struct {
 	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
 	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
 	JWTSecret           string `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
-	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:";Whether the app can be opened only on desktop."`
+	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:";Specifies if the app can be opened only on desktop."`
 	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
 
@@ -334,16 +334,34 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 					access := action.SelectAttrValue("name", "")
 					if access == "view" || access == "edit" {
 						ext := action.SelectAttrValue("ext", "")
-						url := action.SelectAttrValue("urlsrc", "")
+						urlString := action.SelectAttrValue("urlsrc", "")
 
-						if ext == "" || url == "" {
+						if ext == "" || urlString == "" {
 							continue
 						}
+
+						u, err := url.Parse(urlString)
+						if err != nil {
+							// it sucks we cannot log here because this function is run
+							// on init without any context.
+							// TODO(labkode): add logging when we'll have static logging in boot phase.
+							continue
+						}
+
+						// remove any malformed query parameter from discovery urls
+						q := u.Query()
+						for k := range q {
+							if strings.Contains(k, "<") || strings.Contains(k, ">") {
+								q.Del(k)
+							}
+						}
+
+						u.RawQuery = q.Encode()
 
 						if _, ok := appURLs[access]; !ok {
 							appURLs[access] = make(map[string]string)
 						}
-						appURLs[access]["."+ext] = url
+						appURLs[access]["."+ext] = u.String()
 					}
 				}
 			}
