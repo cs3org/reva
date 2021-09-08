@@ -431,10 +431,9 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 	return res, nil
 }
 
+// CreateStorageSpace creates a storage space
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return &provider.CreateStorageSpaceResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateStorageSpace not implemented"), "CreateStorageSpace not implemented"),
-	}, nil
+	return s.storage.CreateStorageSpace(ctx, req)
 }
 
 func hasNodeID(s *provider.StorageSpace) bool {

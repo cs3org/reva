@@ -705,6 +705,11 @@ func getResourceType(isDir bool) provider.ResourceType {
 	return provider.ResourceType_RESOURCE_TYPE_FILE
 }
 
+// CreateStorageSpace creates a storage space
+func (fs *ocfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+}
+
 func readOrCreateID(ctx context.Context, ip string, conn redis.Conn) string {
 	log := appctx.GetLogger(ctx)
 

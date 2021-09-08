@@ -564,6 +564,11 @@ func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *
 	return fs.propagate(ctx, fn)
 }
 
+// CreateStorageSpace creates a storage space
+func (fs *localfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+}
+
 func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
 
 	np, err := fs.resolve(ctx, ref)

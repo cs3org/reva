@@ -40,7 +40,8 @@ const (
 	OwnerTypeAttr string = OcisPrefix + "owner.type"
 	// the base name of the node
 	// updated when the file is renamed or moved
-	NameAttr     string = OcisPrefix + "name"
+	NameAttr string = OcisPrefix + "name"
+
 	BlobIDAttr   string = OcisPrefix + "blobid"
 	BlobsizeAttr string = OcisPrefix + "blobsize"
 
@@ -76,6 +77,9 @@ const (
 
 	// the quota for the storage space / tree, regardless who accesses it
 	QuotaAttr string = OcisPrefix + "quota"
+
+	// the name given to a storage space. It should not contain any semantics as its only purpose is to be read.
+	SpaceNameAttr string = OcisPrefix + "space.name"
 
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"
