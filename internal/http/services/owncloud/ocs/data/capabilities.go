@@ -60,7 +60,7 @@ type Capabilities struct {
 	Notifications *CapabilitiesNotifications `json:"notifications,omitempty" xml:"notifications,omitempty"`
 }
 
-// CapabilitiesCore lets a service configure its advertised options related to Storage Spaces.
+// Spaces lets a service configure its advertised options related to Storage Spaces.
 type Spaces struct {
 	Version string `json:"version" xml:"version" mapstructure:"version"`
 	Enabled bool   `json:"enabled" xml:"enabled" mapstructure:"enabled"`
