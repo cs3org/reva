@@ -52,6 +52,7 @@ type mgr struct {
 type config struct {
 	Hostname     string     `mapstructure:"hostname"`
 	Port         int        `mapstructure:"port"`
+	Insecure     bool       `mapstructure:"insecure"`
 	BaseDN       string     `mapstructure:"base_dn"`
 	UserFilter   string     `mapstructure:"userfilter"`
 	LoginFilter  string     `mapstructure:"loginfilter"`
@@ -138,7 +139,7 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx)
 
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.c.Hostname, am.c.Port), &tls.Config{InsecureSkipVerify: true})
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.c.Hostname, am.c.Port), &tls.Config{InsecureSkipVerify: am.c.Insecure})
 	if err != nil {
 		return nil, nil, err
 	}

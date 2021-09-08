@@ -51,6 +51,7 @@ type manager struct {
 type config struct {
 	Hostname        string     `mapstructure:"hostname"`
 	Port            int        `mapstructure:"port"`
+	Insecure        bool       `mapstructure:"insecure"`
 	BaseDN          string     `mapstructure:"base_dn"`
 	UserFilter      string     `mapstructure:"userfilter"`
 	AttributeFilter string     `mapstructure:"attributefilter"`
@@ -146,7 +147,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: m.c.Insecure})
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +235,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	}
 
 	log := appctx.GetLogger(ctx)
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: m.c.Insecure})
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +307,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: m.c.Insecure})
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +377,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: m.c.Insecure})
 	if err != nil {
 		return []string{}, err
 	}
