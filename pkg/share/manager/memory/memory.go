@@ -260,12 +260,16 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 			rss = append(rss, rs)
 			continue
 		}
-
+		allFiltersMatch := true
 		for _, f := range filters {
-			if share.MatchesFilter(s, f) {
-				rs := m.convert(ctx, s)
-				rss = append(rss, rs)
+			if !share.MatchesFilter(s, f) {
+				allFiltersMatch = false
+				break
 			}
+		}
+		if allFiltersMatch {
+			rs := m.convert(ctx, s)
+			rss = append(rss, rs)
 		}
 	}
 	return rss, nil
