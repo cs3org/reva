@@ -26,6 +26,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -126,6 +127,8 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
 	}
+
+	s.removeReference(ctx, share.ResourceId)
 
 	// if we don't need to commit we return earlier
 	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
@@ -324,7 +327,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 			}
 			return rsp, nil
 		} else if req.Field.GetState() == collaboration.ShareState_SHARE_STATE_REJECTED {
-			// Nothing more to do, return the original result
+			s.removeReference(ctx, res.Share.Share.ResourceId)
 			return res, nil
 		}
 	}
@@ -334,6 +337,70 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 	return &collaboration.UpdateReceivedShareResponse{
 		Status: status.NewUnimplemented(ctx, err, "error updating received share"),
 	}, nil
+}
+
+func (s *svc) removeReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
+	log := appctx.GetLogger(ctx)
+
+	idReference := &provider.Reference{ResourceId: resourceID}
+	storageProvider, err := s.find(ctx, idReference)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return status.NewNotFound(ctx, "storage provider not found")
+		}
+		return status.NewInternal(ctx, err, "error finding storage provider")
+	}
+
+	statRes, err := storageProvider.Stat(ctx, &provider.StatRequest{Ref: idReference})
+	if err != nil {
+		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
+	}
+
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
+		return status.NewInternal(ctx, err, "could not delete share reference")
+	}
+
+	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		err := errors.Wrap(err, "gateway: error calling GetHome")
+		return status.NewInternal(ctx, err, "could not delete share reference")
+	}
+
+	sharePath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
+	log.Debug().Str("share_path", sharePath).Msg("remove reference of share")
+
+	homeProvider, err := s.find(ctx, &provider.Reference{Path: sharePath})
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return status.NewNotFound(ctx, "storage provider not found")
+		}
+		return status.NewInternal(ctx, err, "error finding storage provider")
+	}
+
+	deleteReq := &provider.DeleteRequest{
+		Opaque: &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				// This signals the storageprovider that we want to delete the share reference and not the underlying file.
+				"deleting_shared_resource": {},
+			},
+		},
+		Ref: &provider.Reference{Path: sharePath},
+	}
+
+	deleteResp, err := homeProvider.Delete(ctx, deleteReq)
+	if err != nil {
+		return status.NewInternal(ctx, err, "could not delete share reference")
+	}
+
+	if deleteResp.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(deleteResp.Status.GetCode(), "gateway")
+		return status.NewInternal(ctx, err, "could not delete share reference")
+	}
+
+	log.Debug().Str("share_path", sharePath).Msg("share reference successfully removed")
+
+	return status.NewOK(ctx)
 }
 
 func (s *svc) createReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {

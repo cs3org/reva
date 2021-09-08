@@ -924,13 +924,16 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 				if err != nil {
 					return nil, err
 				}
+
+				return &provider.DeleteResponse{
+					Status: status.NewOK(ctx),
+				}, nil
 			}
 		}
 
-		ref := &provider.Reference{Path: p}
-
-		req.Ref = ref
-		return s.delete(ctx, req)
+		return &provider.DeleteResponse{
+			Status: status.NewNotFound(ctx, "could not find share"),
+		}, nil
 	}
 
 	if s.isShareChild(ctx, p) {
