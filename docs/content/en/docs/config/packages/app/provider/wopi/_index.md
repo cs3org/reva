@@ -73,7 +73,7 @@ jwt_secret = ""
 {{% /dir %}}
 
 {{% dir name="app_desktop_only" type="bool" default= %}}
-Whether the app can be opened only on desktop. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L66)
+Specifies if the app can be opened only on desktop. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L66)
 {{< highlight toml >}}
 [app.provider.wopi]
 app_desktop_only = 
