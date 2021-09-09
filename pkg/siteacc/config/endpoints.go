@@ -67,4 +67,7 @@ const (
 
 	// EndpointUnregisterSite is the endpoint path for site unregistration.
 	EndpointUnregisterSite = "/unregister-site"
+
+	// EndpointDispatchAlert is the endpoint path for dispatching alerts from Prometheus.
+	EndpointDispatchAlert = "/dispatch-alert"
 )

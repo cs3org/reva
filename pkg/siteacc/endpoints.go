@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/siteacc/html"
 	"github.com/cs3org/reva/pkg/siteacc/manager"
 	"github.com/pkg/errors"
+	"github.com/prometheus/alertmanager/template"
 )
 
 const (
@@ -75,14 +76,14 @@ func getEndpoints() []endpoint {
 		{config.EndpointList, callMethodEndpoint, createMethodCallbacks(handleList, nil), false},
 		{config.EndpointFind, callMethodEndpoint, createMethodCallbacks(handleFind, nil), false},
 		{config.EndpointCreate, callMethodEndpoint, createMethodCallbacks(nil, handleCreate), true},
-		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), true},
-		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), true},
+		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
+		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), false},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
 		// Login endpoints
 		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
 		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), true},
-		{config.EndpointResetPassword, callMethodEndpoint, createMethodCallbacks(nil, handleResetPassword), true},
-		{config.EndpointContact, callMethodEndpoint, createMethodCallbacks(nil, handleContact), true},
+		{config.EndpointResetPassword, callMethodEndpoint, createMethodCallbacks(nil, handleResetPassword), false},
+		{config.EndpointContact, callMethodEndpoint, createMethodCallbacks(nil, handleContact), false},
 		// Authentication endpoints
 		{config.EndpointVerifyUserToken, callMethodEndpoint, createMethodCallbacks(handleVerifyUserToken, nil), true},
 		// Authorization endpoints
@@ -90,6 +91,8 @@ func getEndpoints() []endpoint {
 		{config.EndpointIsAuthorized, callMethodEndpoint, createMethodCallbacks(handleIsAuthorized, nil), false},
 		// Access management endpoints
 		{config.EndpointGrantGOCDBAccess, callMethodEndpoint, createMethodCallbacks(nil, handleGrantGOCDBAccess), false},
+		// Alerting endpoints
+		{config.EndpointDispatchAlert, callMethodEndpoint, createMethodCallbacks(nil, handleDispatchAlert), false},
 		// Account site endpoints
 		{config.EndpointUnregisterSite, callMethodEndpoint, createMethodCallbacks(nil, handleUnregisterSite), false},
 	}
@@ -415,6 +418,20 @@ func handleAuthorize(siteacc *SiteAccounts, values url.Values, body []byte, sess
 		}
 	} else {
 		return nil, errors.Errorf("no authorization status provided")
+	}
+
+	return nil, nil
+}
+
+func handleDispatchAlert(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	alertsData := &template.Data{}
+	if err := json.Unmarshal(body, alertsData); err != nil {
+		return nil, errors.Wrap(err, "unable to unmarshal the alerts data")
+	}
+
+	// Dispatch the alerts using the alerts dispatcher
+	if err := siteacc.AlertsDispatcher().DispatchAlerts(alertsData); err != nil {
+		return nil, errors.Wrap(err, "error while dispatching the alerts")
 	}
 
 	return nil, nil
