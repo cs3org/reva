@@ -36,15 +36,18 @@ import (
 	"github.com/beevik/etree"
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	revajwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -63,6 +66,7 @@ type config struct {
 	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
 	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
 	JWTSecret           string `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
+	JWTTokenTTL         int    `mapstructure:"jwt_token_ttl" docs:";The JWT token TTL (in seconds) to be used to extend the token lifetime for WOPI."`
 	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:";Specifies if the app can be opened only on desktop."`
 	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
@@ -159,6 +163,26 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 
 	httpReq.Header.Set("Authorization", "Bearer "+p.conf.IOPSecret)
+
+	tokenManager, err := revajwt.New(map[string]interface{}{
+		"secret":  p.conf.JWTSecret,
+		"expires": time.Now().Add(time.Duration(p.conf.JWTTokenTTL) * time.Second).Unix(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	scopes := map[string]*authpb.Scope{}
+	scopes, err = scope.AddOwnerScope(scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err = tokenManager.MintToken(ctx, u, scopes)
+	if err != nil {
+		return nil, err
+	}
+
 	httpReq.Header.Set("TokenHeader", token)
 
 	openRes, err := p.wopiClient.Do(httpReq)
