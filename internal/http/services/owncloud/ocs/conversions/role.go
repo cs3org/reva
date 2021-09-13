@@ -48,6 +48,8 @@ const (
 	RoleCoowner string = "coowner"
 	// RoleUploader FIXME: uploader role with only write permission can use InitiateFileUpload, not anything else
 	RoleUploader string = "uploader"
+	// RoleManager grants manager permissions on a resource. Semantically equivalent to co-owner.
+	RoleManager string = "manager"
 )
 
 // CS3ResourcePermissions for the role
@@ -129,8 +131,11 @@ func RoleFromName(name string) *Role {
 		return NewCoownerRole()
 	case RoleUploader:
 		return NewUploaderRole()
+	case RoleManager:
+		return NewManagerRole()
+	default:
+		return NewUnknownRole()
 	}
-	return NewUnknownRole()
 }
 
 // NewUnknownRole creates an unknown role
@@ -275,6 +280,43 @@ func NewUploaderRole() *Role {
 			InitiateFileUpload: true,
 		},
 		ocsPermissions: PermissionCreate,
+	}
+}
+
+// NewManagerRole creates an editor role
+func NewManagerRole() *Role {
+	return &Role{
+		Name: RoleManager,
+		cS3ResourcePermissions: &provider.ResourcePermissions{
+			// read
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			ListGrants:           true,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListRecycle:          true,
+			Stat:                 true,
+
+			// write
+			InitiateFileUpload: true,
+			RestoreFileVersion: true,
+			RestoreRecycleItem: true,
+			Move:               true,
+
+			// create
+			CreateContainer: true,
+
+			// delete
+			Delete:       true,
+			PurgeRecycle: true,
+
+			// grants. These permissions only make sense to enforce them in the root of the storage space.
+			AddGrant:    true, // managers can add users to the space
+			RemoveGrant: true, // managers can remove users from the space
+			UpdateGrant: true,
+		},
+		ocsPermissions: PermissionAll,
 	}
 }
 
