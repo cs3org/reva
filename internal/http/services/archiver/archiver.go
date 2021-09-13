@@ -38,6 +38,8 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/storage/utils/walk"
+	"github.com/gdexlab/go-render/render"
+	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
@@ -46,6 +48,7 @@ type svc struct {
 	config     *Config
 	httpClient *http.Client
 	gtwClient  gateway.GatewayAPIClient
+	log        *zerolog.Logger
 }
 
 // Config holds the config options that need to be passed down to all ocdav handlers
@@ -81,6 +84,7 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
 			rhttp.Insecure(c.Insecure),
 		),
+		log: log,
 	}, nil
 }
 
@@ -101,7 +105,7 @@ func (s *svc) Handler() http.Handler {
 		}
 		dir := v["dir"][0]
 
-		names, ok := v["files"]
+		names, ok := v["file"]
 		if !ok {
 			names = []string{}
 		}
@@ -109,28 +113,30 @@ func (s *svc) Handler() http.Handler {
 		// append to the files name the dir
 		files := []string{}
 		for _, f := range names {
-			files = append(files, path.Join(dir, f))
+			p := path.Join(dir, f)
+			files = append(files, strings.TrimSuffix(p, "/"))
 		}
 
 		archiveName := "download"
 		if len(files) == 0 {
 			// we need to archive the whole dir
 			files = append(files, dir)
-			archiveName = dir
+			archiveName = path.Base(dir)
 		}
 
-		ua := r.Header.Get("User-Agent")
-		isWindows := strings.Contains(ua, "Windows")
+		s.log.Debug().Msg("Requested the following files/folders to archive: " + render.Render(files))
+
+		userAgent := ua.Parse(r.Header.Get("User-Agent"))
 
 		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archiveName))
 		rw.Header().Set("Content-Transfer-Encoding", "binary")
 		rw.WriteHeader(http.StatusOK)
 
 		var err error
-		if isWindows {
-			err = s.createZip(ctx, files, rw)
+		if userAgent.OS == ua.Windows {
+			err = s.createZip(ctx, dir, files, rw)
 		} else {
-			err = s.createTar(ctx, files, rw)
+			err = s.createTar(ctx, dir, files, rw)
 		}
 		if err != nil {
 			rw.WriteHeader(http.StatusInternalServerError)
@@ -152,7 +158,7 @@ func (s *svc) Unprotected() []string {
 	return nil
 }
 
-func (s *svc) createTar(ctx context.Context, files []string, dst io.Writer) error {
+func (s *svc) createTar(ctx context.Context, dir string, files []string, dst io.Writer) error {
 	w := tar.NewWriter(dst)
 
 	for _, root := range files {
@@ -162,8 +168,10 @@ func (s *svc) createTar(ctx context.Context, files []string, dst io.Writer) erro
 				return err
 			}
 
+			fileName := strings.TrimPrefix(path, dir)
+
 			header := tar.Header{
-				Name:    path,
+				Name:    fileName,
 				ModTime: time.Unix(int64(info.Mtime.Seconds), 0),
 			}
 
@@ -198,10 +206,10 @@ func (s *svc) createTar(ctx context.Context, files []string, dst io.Writer) erro
 		}
 
 	}
-	return nil
+	return w.Close()
 }
 
-func (s *svc) createZip(ctx context.Context, files []string, dst io.Writer) error {
+func (s *svc) createZip(ctx context.Context, dir string, files []string, dst io.Writer) error {
 	w := zip.NewWriter(dst)
 
 	for _, root := range files {
@@ -211,8 +219,14 @@ func (s *svc) createZip(ctx context.Context, files []string, dst io.Writer) erro
 				return err
 			}
 
+			fileName := strings.TrimPrefix(strings.Trim(path, dir), "/")
+
+			if fileName == "" {
+				return nil
+			}
+
 			header := zip.FileHeader{
-				Name:     path,
+				Name:     fileName,
 				Modified: time.Unix(int64(info.Mtime.Seconds), 0),
 			}
 
@@ -243,11 +257,11 @@ func (s *svc) createZip(ctx context.Context, files []string, dst io.Writer) erro
 		}
 
 	}
-	return nil
+	return w.Close()
 }
 
 func (s *svc) downloadFile(ctx context.Context, path string, dst io.Writer) error {
-	downReq, err := s.gtwClient.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
+	downResp, err := s.gtwClient.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
 		Ref: &provider.Reference{
 			Path: path,
 		},
@@ -256,12 +270,12 @@ func (s *svc) downloadFile(ctx context.Context, path string, dst io.Writer) erro
 	switch {
 	case err != nil:
 		return err
-	case downReq.Status.Code != rpc.Code_CODE_OK:
-		return errtypes.InternalError(downReq.Status.Message)
+	case downResp.Status.Code != rpc.Code_CODE_OK:
+		return errtypes.InternalError(downResp.Status.Message)
 	}
 
 	var endpoint, token string
-	for _, p := range downReq.Protocols {
+	for _, p := range downResp.Protocols {
 		if p.Protocol == "simple" {
 			endpoint, token = p.DownloadEndpoint, p.Token
 		}
