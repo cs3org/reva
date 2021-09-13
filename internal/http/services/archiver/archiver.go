@@ -71,6 +71,7 @@ func init() {
 	global.Register("archiver", New)
 }
 
+// New creates a new archiver service
 func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	c := &Config{}
 	err := mapstructure.Decode(conf, c)
@@ -192,7 +193,7 @@ func (s *svc) createTar(ctx context.Context, dir string, files []string, dst io.
 				return err
 			}
 
-			filesCount += 1
+			filesCount++
 			if filesCount > s.config.MaxNumFiles {
 				return errMaxFileCount
 			}
@@ -255,7 +256,7 @@ func (s *svc) createZip(ctx context.Context, dir string, files []string, dst io.
 				return err
 			}
 
-			filesCount += 1
+			filesCount++
 			if filesCount > s.config.MaxNumFiles {
 				return errMaxFileCount
 			}
