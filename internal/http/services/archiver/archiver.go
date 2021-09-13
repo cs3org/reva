@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/walk"
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
@@ -92,6 +93,8 @@ func (c *Config) init() {
 	if c.Prefix == "" {
 		c.Prefix = "download_archive"
 	}
+
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 func (s *svc) Handler() http.Handler {
