@@ -173,6 +173,7 @@ func (s *svc) Unprotected() []string {
 	return nil
 }
 
+// create a new tar containing the files in the `files` list, which are in the directory `dir`
 func (s *svc) createTar(ctx context.Context, dir string, files []string, dst io.Writer) error {
 	w := tar.NewWriter(dst)
 
@@ -235,6 +236,7 @@ func (s *svc) createTar(ctx context.Context, dir string, files []string, dst io.
 	return w.Close()
 }
 
+// create a new zip containing the files in the `files` list, which are in the directory `dir`
 func (s *svc) createZip(ctx context.Context, dir string, files []string, dst io.Writer) error {
 	w := zip.NewWriter(dst)
 
