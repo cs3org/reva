@@ -127,6 +127,8 @@ func (s *svc) Handler() http.Handler {
 			files = append(files, strings.TrimSuffix(p, "/"))
 		}
 
+		userAgent := ua.Parse(r.Header.Get("User-Agent"))
+
 		archiveName := "download"
 		if len(files) == 0 {
 			// we need to archive the whole dir
@@ -134,9 +136,13 @@ func (s *svc) Handler() http.Handler {
 			archiveName = path.Base(dir)
 		}
 
-		s.log.Debug().Msg("Requested the following files/folders to archive: " + render.Render(files))
+		if userAgent.OS == ua.Windows {
+			archiveName += ".zip"
+		} else {
+			archiveName += ".tar"
+		}
 
-		userAgent := ua.Parse(r.Header.Get("User-Agent"))
+		s.log.Debug().Msg("Requested the following files/folders to archive: " + render.Render(files))
 
 		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archiveName))
 		rw.Header().Set("Content-Transfer-Encoding", "binary")
