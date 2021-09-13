@@ -54,11 +54,18 @@ type svc struct {
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix     string `mapstructure:"prefix"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
-	Timeout    int64  `mapstructure:"timeout"`
-	Insecure   bool   `mapstructure:"insecure"`
+	Prefix      string `mapstructure:"prefix"`
+	GatewaySvc  string `mapstructure:"gatewaysvc"`
+	Timeout     int64  `mapstructure:"timeout"`
+	Insecure    bool   `mapstructure:"insecure"`
+	MaxNumFiles int64  `mapstructure:"max_num_files"`
+	MaxSize     int64  `mapstructure:"max_size"`
 }
+
+var (
+	errMaxFileCount = errtypes.InternalError("reached max files count")
+	errMaxSize      = errtypes.InternalError("reached max total files size")
+)
 
 func init() {
 	global.Register("archiver", New)
@@ -133,7 +140,6 @@ func (s *svc) Handler() http.Handler {
 
 		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archiveName))
 		rw.Header().Set("Content-Transfer-Encoding", "binary")
-		rw.WriteHeader(http.StatusOK)
 
 		var err error
 		if userAgent.OS == ua.Windows {
@@ -141,7 +147,13 @@ func (s *svc) Handler() http.Handler {
 		} else {
 			err = s.createTar(ctx, dir, files, rw)
 		}
+		if err == errMaxFileCount || err == errMaxSize {
+			s.log.Error().Msg(err.Error())
+			rw.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
 		if err != nil {
+			s.log.Error().Msg(err.Error())
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -164,11 +176,22 @@ func (s *svc) Unprotected() []string {
 func (s *svc) createTar(ctx context.Context, dir string, files []string, dst io.Writer) error {
 	w := tar.NewWriter(dst)
 
+	var filesCount, sizeFiles int64
+
 	for _, root := range files {
 
 		err := walk.Walk(ctx, root, s.gtwClient, func(path string, info *provider.ResourceInfo, err error) error {
 			if err != nil {
 				return err
+			}
+
+			filesCount += 1
+			if filesCount > s.config.MaxNumFiles {
+				return errMaxFileCount
+			}
+			sizeFiles += int64(info.Size)
+			if sizeFiles > s.config.MaxSize {
+				return errMaxSize
 			}
 
 			fileName := strings.TrimPrefix(path, dir)
@@ -215,11 +238,22 @@ func (s *svc) createTar(ctx context.Context, dir string, files []string, dst io.
 func (s *svc) createZip(ctx context.Context, dir string, files []string, dst io.Writer) error {
 	w := zip.NewWriter(dst)
 
+	var filesCount, sizeFiles int64
+
 	for _, root := range files {
 
 		err := walk.Walk(ctx, root, s.gtwClient, func(path string, info *provider.ResourceInfo, err error) error {
 			if err != nil {
 				return err
+			}
+
+			filesCount += 1
+			if filesCount > s.config.MaxNumFiles {
+				return errMaxFileCount
+			}
+			sizeFiles += int64(info.Size)
+			if sizeFiles > s.config.MaxSize {
+				return errMaxSize
 			}
 
 			fileName := strings.TrimPrefix(strings.Trim(path, dir), "/")
