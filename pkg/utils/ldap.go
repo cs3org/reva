@@ -15,21 +15,42 @@
 // In applying this license, CERN does not waive the privileges and immunities
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
+
 package utils
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 
 	"github.com/go-ldap/ldap/v3"
+	"github.com/pkg/errors"
 )
 
+// LDAPConn holds the basic parameter for setting up an
+// LDAP connection.
 type LDAPConn struct {
 	Hostname string `mapstructure:"hostname"`
 	Port     int    `mapstructure:"port"`
 	Insecure bool   `mapstructure:"insecure"`
+	CACert   string `mapstructure:"cacert"`
 }
 
+// GetLDAPConnection initializes an LDAPS connection and allows
+// to set TLS options e.g. to add trusted Certificates or disable
+// Certificate verification
 func GetLDAPConnection(c *LDAPConn) (*ldap.Conn, error) {
-	return ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", c.Hostname, c.Port), &tls.Config{InsecureSkipVerify: c.Insecure})
+	tlsconfig := &tls.Config{InsecureSkipVerify: c.Insecure}
+
+	if !c.Insecure && c.CACert != "" {
+		if pemBytes, err := ioutil.ReadFile(c.CACert); err == nil {
+			rpool, _ := x509.SystemCertPool()
+			rpool.AppendCertsFromPEM(pemBytes)
+			tlsconfig.RootCAs = rpool
+		} else {
+			return nil, errors.Wrapf(err, "Error reading LDAP CA Cert '%s.'", c.CACert)
+		}
+	}
+	return ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", c.Hostname, c.Port), tlsconfig)
 }
