@@ -30,8 +30,17 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
+// WalkFunc is the type of function called by Walk to visit each file or directory
+//
+// Each time the Walk function meet a file/folder path is set to the full path of this.
+// The err argument reports an error related to the path, and the function can decide the action to
+// do with this.
+//
+// The error result returned by the function controls how Walk continues. If the function returns the special value SkipDir, Walk skips the current directory.
+// Otherwise, if the function returns a non-nil error, Walk stops entirely and returns that error.
 type WalkFunc func(path string, info *provider.ResourceInfo, err error) error
 
+// Walk walks the file tree rooted at root, calling fn for each file or folder in the tree, including the root.
 func Walk(ctx context.Context, root string, gtw gateway.GatewayAPIClient, fn WalkFunc) error {
 	info, err := stat(ctx, root, gtw)
 
