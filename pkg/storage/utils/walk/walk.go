@@ -2,11 +2,13 @@ package walk
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -61,8 +63,10 @@ func readDir(ctx context.Context, path string, gtw gateway.GatewayAPIClient) ([]
 	switch {
 	case err != nil:
 		return nil, err
+	case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		return nil, errtypes.NotFound(path)
 	case resp.Status.Code != rpc.Code_CODE_OK:
-		return nil, errtypes.InternalError(resp.Status.Message)
+		return nil, errtypes.InternalError(fmt.Sprintf("error reading dir %s", path))
 	}
 
 	return resp.Infos, nil
@@ -78,8 +82,10 @@ func stat(ctx context.Context, path string, gtw gateway.GatewayAPIClient) (*prov
 	switch {
 	case err != nil:
 		return nil, err
+	case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		return nil, errtypes.NotFound(path)
 	case resp.Status.Code != rpc.Code_CODE_OK:
-		return nil, errtypes.InternalError(resp.Status.Message)
+		return nil, errtypes.InternalError(fmt.Sprintf("error getting stats from %s", path))
 	}
 
 	return resp.Info, nil
