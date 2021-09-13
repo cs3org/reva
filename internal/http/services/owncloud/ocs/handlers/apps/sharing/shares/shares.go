@@ -54,7 +54,6 @@ import (
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/registry"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -300,7 +299,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		resourceID = psRes.Share.ResourceId
 	}
 
-	var receivedShare *collaboration.ReceivedShare
+	// var receivedShare *collaboration.ReceivedShare
 	if share == nil {
 		// check if we have a user share
 		logger.Debug().Str("shareID", shareID).Msg("get user share by id")
@@ -332,31 +331,31 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 
 		if err == nil && uRes.GetShare() != nil {
 			resourceID = uRes.Share.ResourceId
-			currentUser := user.ContextMustGetUser(ctx)
-			if utils.UserEqual(uRes.Share.Creator, currentUser.Id) {
-				share, err = conversions.CS3Share2ShareData(ctx, uRes.Share)
-				if err != nil {
-					response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-					return
-				}
-			} else {
-				rsRes, err := client.GetReceivedShare(ctx, &collaboration.GetReceivedShareRequest{
-					Ref: &collaboration.ShareReference{
-						Spec: &collaboration.ShareReference_Id{
-							Id: uRes.Share.Id,
-						},
-					},
-				})
-
-				if err == nil && rsRes.GetShare() != nil {
-					receivedShare = rsRes.GetShare()
-					share, err = conversions.CS3Share2ShareData(ctx, rsRes.Share.Share)
-					if err != nil {
-						response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-						return
-					}
-				}
+			// currentUser := ctxpkg.ContextMustGetUser(ctx)
+			// if utils.UserEqual(uRes.Share.Creator, currentUser.Id) {
+			share, err = conversions.CS3Share2ShareData(ctx, uRes.Share)
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+				return
 			}
+			// } else {
+			// 	rsRes, err := client.GetReceivedShare(ctx, &collaboration.GetReceivedShareRequest{
+			// 		Ref: &collaboration.ShareReference{
+			// 			Spec: &collaboration.ShareReference_Id{
+			// 				Id: uRes.Share.Id,
+			// 			},
+			// 		},
+			// 	})
+
+			// 	if err == nil && rsRes.GetShare() != nil {
+			// 		receivedShare = rsRes.GetShare()
+			// 		share, err = conversions.CS3Share2ShareData(ctx, rsRes.Share.Share)
+			// 		if err != nil {
+			// 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+			// 			return
+			// 		}
+			// 	}
+			// }
 		}
 	}
 
@@ -385,11 +384,11 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 	}
 	h.mapUserIds(ctx, client, share)
-	if receivedShare != nil && receivedShare.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
-		// Needed because received shares can be jailed in a folder in the users home
-		share.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
-		share.Path = path.Join(h.sharePrefix, path.Base(info.Path))
-	}
+	// if receivedShare != nil && receivedShare.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
+	// 	// Needed because received shares can be jailed in a folder in the users home
+	// 	share.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
+	// 	share.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+	// }
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{share})
 }
 
