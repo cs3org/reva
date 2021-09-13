@@ -21,7 +21,6 @@ package ldap
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"strconv"
 	"strings"
@@ -34,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/group"
 	"github.com/cs3org/reva/pkg/group/manager/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -50,9 +50,7 @@ type manager struct {
 }
 
 type config struct {
-	Hostname        string     `mapstructure:"hostname"`
-	Port            int        `mapstructure:"port"`
-	Insecure        bool       `mapstructure:"insecure"`
+	utils.LDAPConn  `mapstructure:",squash"`
 	BaseDN          string     `mapstructure:"base_dn"`
 	GroupFilter     string     `mapstructure:"groupfilter"`
 	MemberFilter    string     `mapstructure:"memberfilter"`
@@ -135,7 +133,7 @@ func New(m map[string]interface{}) (group.Manager, error) {
 
 func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error) {
 	log := appctx.GetLogger(ctx)
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: m.c.Insecure})
+	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +210,7 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 	}
 
 	log := appctx.GetLogger(ctx)
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: m.c.Insecure})
+	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +268,7 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 }
 
 func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Group, error) {
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: m.c.Insecure})
+	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +320,7 @@ func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Grou
 }
 
 func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*userpb.UserId, error) {
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: m.c.Insecure})
+	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return nil, err
 	}
