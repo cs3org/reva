@@ -38,7 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/storage/utils/walk"
+	"github.com/cs3org/reva/pkg/storage/utils/walker"
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
@@ -188,7 +188,7 @@ func (s *svc) createTar(ctx context.Context, dir string, files []string, dst io.
 
 	for _, root := range files {
 
-		err := walk.Walk(ctx, root, s.gtwClient, func(path string, info *provider.ResourceInfo, err error) error {
+		err := walker.Walk(ctx, root, s.gtwClient, func(path string, info *provider.ResourceInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -251,7 +251,7 @@ func (s *svc) createZip(ctx context.Context, dir string, files []string, dst io.
 
 	for _, root := range files {
 
-		err := walk.Walk(ctx, root, s.gtwClient, func(path string, info *provider.ResourceInfo, err error) error {
+		err := walker.Walk(ctx, root, s.gtwClient, func(path string, info *provider.ResourceInfo, err error) error {
 			if err != nil {
 				return err
 			}
