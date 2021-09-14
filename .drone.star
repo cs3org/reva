@@ -96,12 +96,15 @@ def main(ctx):
   # ocisIntegrationTests(6, [1, 4])     - this will only run 1st and 4th parts
   # implemented for: ocisIntegrationTests and s3ngIntegrationTests
   return [
+    changelog(),
+    coverage(),
     buildAndPublishDocker(),
     buildOnly(),
     testIntegration(),
     release(),
     litmusOcisOldWebdav(),
     litmusOcisNewWebdav(),
+    litmusOcisSpacesDav(),
   ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
 
 
@@ -228,6 +231,76 @@ def buildAndPublishDocker():
     ]
   }
 
+def changelog():
+  return {
+    "kind": "pipeline",
+    "type": "docker",
+    "name": "changelog",
+    "platform": {
+      "os": "linux",
+      "arch": "amd64",
+    },
+   "trigger":{
+     "event": {
+       "include": [
+         "pull_request",
+       ],
+     },
+   },
+   "steps": [
+    {
+      "name": "changelog",
+      "image": "registry.cern.ch/docker.io/library/golang:1.16",
+      "commands": [
+        "make release-deps && /go/bin/calens > /dev/null",
+        "make check-changelog-drone PR=$DRONE_PULL_REQUEST",
+      ],
+     "environment": {
+       "GITHUB_API_TOKEN": {
+         "from_secret": "github_api_token",
+       },
+     },
+    }
+    ]
+  }
+
+def coverage():
+  return {
+    "kind": "pipeline",
+    "type": "docker",
+    "name": "unit-test-coverage",
+    "platform": {
+      "os": "linux",
+      "arch": "amd64",
+    },
+    "trigger":{
+	"ref":[
+		"refs/heads/master",
+		"refs/pull/**",
+	],
+    },
+    "steps": [
+      {
+        "name": "unit-test",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
+        "commands": [
+          "make test",
+        ],
+      },
+      {
+        "name": "codacy",
+        "image": "plugins/codacy:1",
+        "pull": "always",
+        "settings": {
+            "token": {
+                "from_secret": "codacy_token",
+            },
+        },
+      },
+    ],
+    "depends_on": ['changelog'],
+  }
+
 def buildOnly():
   return {
     "kind": "pipeline",
@@ -247,20 +320,16 @@ def buildOnly():
     "steps": [
       licenseScanStep(),
       makeStep("ci"),
-      lintStep(),
       {
-        "name": "changelog",
-        "image": "registry.cern.ch/docker.io/library/golang:1.16",
-        "commands": [
-          "make release-deps && /go/bin/calens > /dev/null",
-          "make check-changelog-drone PR=$DRONE_PULL_REQUEST",
-        ],
-        "environment": {
-          "GITHUB_API_TOKEN": {
-            "from_secret": "github_api_token",
-          },
-        },
+        "name": "Docker build",
+        "image": "plugins/docker",
+        "settings": {
+          "repo": "n/a",
+          "dry_run": "true",
+          "dockerfile": "Dockerfile.revad",
+        }
       },
+      lintStep(),
       {
         "name": "license-check",
         "image": "registry.cern.ch/docker.io/library/golang:1.16",
@@ -275,7 +344,8 @@ def buildOnly():
           "/go/bin/fossa test --timeout 900",
         ],
       },
-    ]
+    ],
+    "depends_on": ['changelog'],
   }
 
 def testIntegration():
@@ -309,6 +379,7 @@ def testIntegration():
     "services": [
       redisService(),
     ],
+    "depends_on": ['changelog'],
   }
 
 def release():
@@ -410,6 +481,7 @@ def release():
         },
       },
     ],
+    "depends_on": ['changelog'],
   }
 
 def litmusOcisOldWebdav():
@@ -462,6 +534,7 @@ def litmusOcisOldWebdav():
         },
       },
     ],
+    "depends_on": ['changelog'],
   }
 
 def litmusOcisNewWebdav():
@@ -515,6 +588,65 @@ def litmusOcisNewWebdav():
         }
       },
     ],
+    "depends_on": ['changelog'],
+  }
+
+def litmusOcisSpacesDav():
+  return {
+    "kind": "pipeline",
+    "type": "docker",
+    "name": "litmus-owncloud-spaces-dav",
+    "platform": {
+      "os": "linux",
+      "arch": "amd64",
+    },
+    "trigger": {
+      "event": {
+        "include": [
+          "pull_request",
+          "tag",
+        ],
+      },
+    },
+    "steps": [
+      makeStep("build-ci"),
+      {
+        "name": "revad-services",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
+        "detach": True,
+        "commands": [
+          "cd /drone/src/tests/oc-integration-tests/drone/",
+          "/drone/src/cmd/revad/revad -c frontend.toml &",
+          "/drone/src/cmd/revad/revad -c gateway.toml &",
+          "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
+          "/drone/src/cmd/revad/revad -c storage-oc-ocis.toml &",
+          "/drone/src/cmd/revad/revad -c users.toml",
+        ]
+      },
+      {
+        "name": "sleep-for-revad-start",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
+        "commands":[
+          "sleep 5",
+        ],
+      },
+      {
+        "name": "litmus-owncloud-spaces-dav",
+        "image": "registry.cern.ch/docker.io/owncloud/litmus:latest",
+        "environment": {
+          "LITMUS_USERNAME": "einstein",
+          "LITMUS_PASSWORD": "relativity",
+          "TESTS": "basic http copymove props",
+        },
+        "commands": [
+          # The spaceid is randomly generated during the first login so we need this hack to construct the correct url.
+          "curl -s -k -u einstein:relativity -I http://revad-services:20080/remote.php/dav/files/einstein",
+          "export LITMUS_URL=http://revad-services:20080/remote.php/dav/spaces/123e4567-e89b-12d3-a456-426655440000!$(ls /drone/src/tmp/reva/data/spaces/personal/)",
+          "/usr/local/bin/litmus-wrapper",
+        ]
+      },
+    ],
+    "depends_on": ['changelog'],
   }
 
 def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
@@ -576,7 +708,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
               "REVA_LDAP_HOSTNAME": "ldap",
               "TEST_REVA": "true",
               "SEND_SCENARIO_LINE_REFERENCES": "true",
-              "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage",
+              "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis",
               "DIVIDE_INTO_NUM_PARTS": parallelRuns,
               "RUN_PART": runPart,
               "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md",
@@ -586,6 +718,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
         "services": [
           ldapService(),
         ],
+        "depends_on": ['changelog'],
       }
     )
 
@@ -650,7 +783,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
               "REVA_LDAP_HOSTNAME": "ldap",
               "TEST_REVA": "true",
               "SEND_SCENARIO_LINE_REFERENCES": "true",
-              "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage",
+              "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis",
               "DIVIDE_INTO_NUM_PARTS": parallelRuns,
               "RUN_PART": runPart,
               "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-S3NG-storage.md",
@@ -662,6 +795,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
           ldapService(),
           cephService(),
         ],
+        "depends_on": ['changelog'],
       }
     )
 

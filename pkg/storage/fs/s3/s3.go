@@ -115,11 +115,11 @@ func (fs *s3FS) addRoot(p string) string {
 }
 
 func (fs *s3FS) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-	if ref.Path != "" {
+	if strings.HasPrefix(ref.Path, "/") {
 		return fs.addRoot(ref.GetPath()), nil
 	}
 
-	if ref.ResourceId != nil {
+	if ref.ResourceId != nil && ref.ResourceId.OpaqueId != "" {
 		fn := path.Join("/", strings.TrimPrefix(ref.ResourceId.OpaqueId, "fileid-"))
 		fn = fs.addRoot(fn)
 		return fn, nil
@@ -293,8 +293,14 @@ func (fs *s3FS) CreateHome(ctx context.Context) error {
 	return errtypes.NotSupported("s3fs: not supported")
 }
 
-func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {
+func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
+
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil
+	}
+
 	fn = fs.addRoot(fn) + "/" // append / to indicate folder // TODO only if fn does not end in /
 
 	input := &s3.PutObjectInput{
@@ -309,11 +315,11 @@ func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {
 		log.Error().Err(err)
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == s3.ErrCodeNoSuchBucket {
-				return errtypes.NotFound(fn)
+				return errtypes.NotFound(ref.Path)
 			}
 		}
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
-		return errors.Wrap(err, "s3fs: error creating dir "+fn)
+		return errors.Wrap(err, "s3fs: error creating dir "+ref.Path)
 	}
 
 	log.Debug().Interface("result", result) // todo cache etag?
@@ -375,6 +381,11 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 
 	log.Debug().Interface("result", result)
 	return nil
+}
+
+// CreateStorageSpace creates a storage space
+func (fs *s3FS) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
 func (fs *s3FS) moveObject(ctx context.Context, oldKey string, newKey string) error {

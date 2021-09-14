@@ -23,19 +23,18 @@ package decomposedfs
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"math"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage"
@@ -45,7 +44,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -68,7 +67,7 @@ type Tree interface {
 	// CreateReference(ctx context.Context, node *node.Node, targetURI *url.URL) error
 	Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error)
 	Delete(ctx context.Context, node *node.Node) (err error)
-	RestoreRecycleItemFunc(ctx context.Context, key, trashPath, restorePath string) (*node.Node, func() error, error) // FIXME REFERENCE use ref instead of path
+	RestoreRecycleItemFunc(ctx context.Context, key, trashPath, restorePath string) (*node.Node, *node.Node, func() error, error) // FIXME REFERENCE use ref instead of path
 	PurgeRecycleItemFunc(ctx context.Context, key, purgePath string) (*node.Node, func() error, error)
 
 	WriteBlob(key string, reader io.Reader) error
@@ -148,7 +147,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context) (total uint64, inUse uint6
 		return 0, 0, errtypes.PermissionDenied(n.ID)
 	}
 
-	ri, err := n.AsResourceInfo(ctx, &rp, []string{"treesize", "quota"})
+	ri, err := n.AsResourceInfo(ctx, &rp, []string{"treesize", "quota"}, true)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -189,7 +188,7 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	if n, err = fs.lu.RootNode(ctx); err != nil {
 		return
 	}
-	h, err = fs.lu.WalkPath(ctx, n, fs.lu.mustGetUserLayout(ctx), func(ctx context.Context, n *node.Node) error {
+	h, err = fs.lu.WalkPath(ctx, n, fs.lu.mustGetUserLayout(ctx), false, func(ctx context.Context, n *node.Node) error {
 		if !n.Exists {
 			if err := fs.tp.CreateDir(ctx, n); err != nil {
 				return err
@@ -202,7 +201,7 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	}
 
 	// update the owner
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	if err = h.WriteMetadata(u.Id); err != nil {
 		return
 	}
@@ -217,27 +216,22 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	}
 
 	// add storage space
-	if err := fs.createStorageSpace("personal", h.ID); err != nil {
+	if err := fs.createStorageSpace(ctx, "personal", h.ID); err != nil {
 		return err
 	}
 
 	return
 }
 
-func (fs *Decomposedfs) createStorageSpace(spaceType, nodeID string) error {
-
-	// create space type dir
-	if err := os.MkdirAll(filepath.Join(fs.o.Root, "spaces", spaceType), 0700); err != nil {
-		return err
+// The os not exists error is buried inside the xattr error,
+// so we cannot just use os.IsNotExists().
+func isAlreadyExists(err error) bool {
+	if xerr, ok := err.(*os.LinkError); ok {
+		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
+			return serr == syscall.EEXIST
+		}
 	}
-
-	// we can reuse the node id as the space id
-	err := os.Symlink("../../nodes/"+nodeID, filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
-	if err != nil {
-		fmt.Printf("could not create symlink for '%s' space %s, %s\n", spaceType, nodeID, err)
-	}
-
-	return nil
+	return false
 }
 
 // GetHome is called to look up the home path for a user
@@ -246,7 +240,7 @@ func (fs *Decomposedfs) GetHome(ctx context.Context) (string, error) {
 	if !fs.o.EnableHome || fs.o.UserLayout == "" {
 		return "", errtypes.NotSupported("Decomposedfs: GetHome() home supported disabled")
 	}
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	layout := templates.WithUser(u, fs.o.UserLayout)
 	return filepath.Join(fs.o.Root, layout), nil // TODO use a namespace?
 }
@@ -262,14 +256,22 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 }
 
 // CreateDir creates the specified directory
-func (fs *Decomposedfs) CreateDir(ctx context.Context, fn string) (err error) {
+func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
+	name := path.Base(ref.Path)
+	if name == "" || name == "." || name == "/" {
+		return errtypes.BadRequest("Invalid path")
+	}
+	ref.Path = path.Dir(ref.Path)
 	var n *node.Node
-	if n, err = fs.lu.NodeFromPath(ctx, fn); err != nil {
+	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+		return
+	}
+	if n, err = n.Child(ctx, name); err != nil {
 		return
 	}
 
 	if n.Exists {
-		return errtypes.AlreadyExists(fn)
+		return errtypes.AlreadyExists(ref.Path)
 	}
 	pn, err := n.Parent()
 	if err != nil {
@@ -318,7 +320,7 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 
 	// create Shares folder if it does not exist
 	var n *node.Node
-	if n, err = fs.lu.NodeFromPath(ctx, fs.o.ShareFolder); err != nil {
+	if n, err = fs.lu.NodeFromPath(ctx, fs.o.ShareFolder, false); err != nil {
 		return errtypes.InternalError(err.Error())
 	} else if !n.Exists {
 		if err = fs.tp.CreateDir(ctx, n); err != nil {
@@ -399,7 +401,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx, &rp, mdKeys)
+	return node.AsResourceInfo(ctx, &rp, mdKeys, utils.IsRelativeReference(ref))
 }
 
 // ListFolder returns a list of resources in the specified folder
@@ -408,6 +410,9 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
+
+	ctx, span := rtrace.Provider.Tracer("decomposedfs").Start(ctx, "ListFolder")
+	defer span.End()
 
 	if !n.Exists {
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
@@ -433,7 +438,7 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		// add this childs permissions
 		pset := n.PermissionSet(ctx)
 		node.AddPermissions(&np, &pset)
-		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys); err == nil {
+		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, utils.IsRelativeReference(ref)); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}
@@ -491,158 +496,6 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 		return nil, errors.Wrap(err, "Decomposedfs: error download blob '"+node.ID+"'")
 	}
 	return reader, nil
-}
-
-// ListStorageSpaces returns a list of StorageSpaces.
-// The list can be filtered by space type or space id.
-// Spaces are persisted with symlinks in /spaces/<type>/<spaceid> pointing to ../../nodes/<nodeid>, the root node of the space
-// The spaceid is a concatenation of storageid + "!" + nodeid
-func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
-	// TODO check filters
-
-	// TODO when a space symlink is broken delete the space for cleanup
-	// read permissions are deduced from the node?
-
-	// TODO for absolute references this actually requires us to move all user homes into a subfolder of /nodes/root,
-	// e.g. /nodes/root/<space type> otherwise storage space names might collide even though they are of different types
-	// /nodes/root/personal/foo and /nodes/root/shares/foo might be two very different spaces, a /nodes/root/foo is not expressive enough
-	// we would not need /nodes/root if access always happened via spaceid+relative path
-
-	var (
-		spaceType = "*"
-		spaceID   = "*"
-	)
-
-	for i := range filter {
-		switch filter[i].Type {
-		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			spaceType = filter[i].GetSpaceType()
-		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			parts := strings.SplitN(filter[i].GetId().OpaqueId, "!", 2)
-			if len(parts) == 2 {
-				spaceID = parts[1]
-			}
-		}
-	}
-
-	// build the glob path, eg.
-	// /path/to/root/spaces/personal/nodeid
-	// /path/to/root/spaces/shared/nodeid
-	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, spaceID))
-	if err != nil {
-		return nil, err
-	}
-
-	spaces := make([]*provider.StorageSpace, 0, len(matches))
-
-	u, ok := user.ContextGetUser(ctx)
-	if !ok {
-		appctx.GetLogger(ctx).Debug().Msg("expected user in context")
-		return spaces, nil
-	}
-
-	for i := range matches {
-		// always read link in case storage space id != node id
-		if target, err := os.Readlink(matches[i]); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[i]).Msg("could not read link, skipping")
-			continue
-		} else {
-			n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
-			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Str("id", filepath.Base(target)).Msg("could not read node, skipping")
-				continue
-			}
-			owner, err := n.Owner()
-			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not read owner, skipping")
-				continue
-			}
-
-			// TODO apply more filters
-
-			space := &provider.StorageSpace{
-				// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
-				//Id: &provider.StorageSpaceId{OpaqueId: "1284d238-aa92-42ce-bdc4-0b0000009157!" + n.ID},
-				Root: &provider.ResourceId{
-					// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
-					//StorageId: "1284d238-aa92-42ce-bdc4-0b0000009157",
-					OpaqueId: n.ID,
-				},
-				Name:      n.Name,
-				SpaceType: filepath.Base(filepath.Dir(matches[i])),
-				// Mtime is set either as node.tmtime or as fi.mtime below
-			}
-
-			if space.SpaceType == "share" {
-				if utils.UserEqual(u.Id, owner) {
-					// do not list shares as spaces for the owner
-					continue
-				}
-			} else {
-				space.Name = "root" // do not expose the id as name, this is the root of a space
-				// TODO read from extended attribute for project / group spaces
-			}
-
-			// filter out spaces user cannot access (currently based on stat permission)
-			p, err := n.ReadUserPermissions(ctx, u)
-			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not read permissions, skipping")
-				continue
-			}
-			if !p.Stat {
-				continue
-			}
-
-			// fill in user object if the current user is the owner
-			if utils.UserEqual(u.Id, owner) {
-				space.Owner = u
-			} else {
-				space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
-					Id: owner,
-				}
-			}
-
-			// we set the space mtime to the root item mtime
-			// override the stat mtime with a tmtime if it is present
-			if tmt, err := n.GetTMTime(); err == nil {
-				un := tmt.UnixNano()
-				space.Mtime = &types.Timestamp{
-					Seconds: uint64(un / 1000000000),
-					Nanos:   uint32(un % 1000000000),
-				}
-			} else if fi, err := os.Stat(matches[i]); err == nil {
-				// fall back to stat mtime
-				un := fi.ModTime().UnixNano()
-				space.Mtime = &types.Timestamp{
-					Seconds: uint64(un / 1000000000),
-					Nanos:   uint32(un % 1000000000),
-				}
-			}
-
-			// quota
-			v, err := xattr.Get(matches[i], xattrs.QuotaAttr)
-			if err == nil {
-				// make sure we have a proper signed int
-				// we use the same magic numbers to indicate:
-				// -1 = uncalculated
-				// -2 = unknown
-				// -3 = unlimited
-				if quota, err := strconv.ParseUint(string(v), 10, 64); err == nil {
-					space.Quota = &provider.Quota{
-						QuotaMaxBytes: quota,
-						QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
-					}
-				} else {
-					appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", matches[i]).Msg("could not read quota")
-				}
-			}
-
-			spaces = append(spaces, space)
-		}
-	}
-
-	return spaces, nil
-
 }
 
 func (fs *Decomposedfs) copyMD(s string, t string) (err error) {

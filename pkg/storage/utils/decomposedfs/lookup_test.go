@@ -20,6 +20,7 @@ package decomposedfs_test
 
 import (
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -40,16 +41,28 @@ var _ = Describe("Lookup", func() {
 		if env != nil {
 			env.Cleanup()
 		}
+
 	})
 
 	Describe("Path", func() {
 		It("returns the path including a leading slash", func() {
-			n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
+			n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1", false)
 			Expect(err).ToNot(HaveOccurred())
 
 			path, err := env.Lookup.Path(env.Ctx, n)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/file1"))
+		})
+	})
+
+	Describe("Reference Parsing", func() {
+		It("parses a valid cs3 reference", func() {
+			in := []byte("cs3:bede11a0-ea3d-11eb-a78b-bf907adce8ed/c402d01c-ea3d-11eb-a0fc-c32f9d32528f")
+			ref, err := xattrs.ReferenceFromAttr(in)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ref.ResourceId.StorageId).To(Equal("bede11a0-ea3d-11eb-a78b-bf907adce8ed"))
+			Expect(ref.ResourceId.OpaqueId).To(Equal("c402d01c-ea3d-11eb-a0fc-c32f9d32528f"))
 		})
 	})
 })

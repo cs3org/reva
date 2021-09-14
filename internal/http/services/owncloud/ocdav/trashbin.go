@@ -29,16 +29,17 @@ import (
 	"strings"
 	"time"
 
+	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
-	"go.opencensus.io/trace"
 )
 
 // TrashbinHandler handles trashbin requests
@@ -71,7 +72,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		u, ok := ctxuser.ContextGetUser(ctx)
+		u, ok := ctxpkg.ContextGetUser(ctx)
 		if !ok {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -142,8 +143,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 }
 
 func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key, itemPath string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "listTrashbin")
+	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "list_trashbin")
 	defer span.End()
 
 	depth := r.Header.Get(HeaderDepth)
@@ -431,8 +431,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 }
 
 func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst, key, itemPath string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "restore")
+	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "restore")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
@@ -591,8 +590,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 // delete has only a key
 func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key, itemPath string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "erase")
+	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "erase")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("key", key).Logger()

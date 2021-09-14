@@ -31,15 +31,14 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
-	"go.opencensus.io/trace"
 )
 
 func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "tus-post")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "tus-post")
 	defer span.End()
 
 	// read filename from metadata
@@ -59,6 +58,33 @@ func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns strin
 
 	ref := &provider.Reference{Path: fn}
 	s.handleTusPost(ctx, w, r, meta, ref, sublog)
+}
+
+func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces-tus-post")
+	defer span.End()
+
+	// read filename from metadata
+	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
+	if meta["filename"] == "" {
+		w.WriteHeader(http.StatusPreconditionFailed)
+		return
+	}
+
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+
+	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, path.Join(r.URL.Path, meta["filename"]))
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handleTusPost(ctx, w, r, meta, spaceRef, sublog)
 }
 
 func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.Request, meta map[string]string, ref *provider.Reference, log zerolog.Logger) {

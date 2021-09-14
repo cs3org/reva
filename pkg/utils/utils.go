@@ -19,9 +19,11 @@
 package utils
 
 import (
+	"fmt"
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os/user"
 	"path"
 	"path/filepath"
@@ -29,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -181,6 +184,24 @@ func IsEmailValid(e string) bool {
 	return matchEmail.MatchString(e)
 }
 
+// IsValidWebAddress checks whether the provided address is a valid URL.
+func IsValidWebAddress(address string) bool {
+	_, err := url.ParseRequestURI(address)
+	return err == nil
+}
+
+// IsValidPhoneNumber checks whether the provided phone number has a valid format.
+func IsValidPhoneNumber(number string) bool {
+	re := regexp.MustCompile(`^(?:(?:\(?(?:00|\+)([1-4]\d\d|[1-9]\d?)\)?)?[\-\.\ \\\/]?)?((?:\(?\d{1,}\)?[\-\.\ \\\/]?){0,})(?:[\-\.\ \\\/]?(?:#|ext\.?|extension|x)[\-\.\ \\\/]?(\d+))?$`)
+	return re.MatchString(number)
+}
+
+// IsValidName cheks if the given name doesn't contain any non-alpha, space or dash characters.
+func IsValidName(name string) bool {
+	re := regexp.MustCompile(`^[A-Za-z\s\-]*$`)
+	return re.MatchString(name)
+}
+
 // MarshalProtoV1ToJSON marshals a proto V1 message to a JSON byte array
 // TODO: update this once we start using V2 in CS3APIs
 func MarshalProtoV1ToJSON(m proto.Message) ([]byte, error) {
@@ -216,6 +237,12 @@ func IsRelativeReference(ref *provider.Reference) bool {
 // places we might not want to set both StorageId and OpaqueId so we can't do a hard check if they are set.
 func IsAbsoluteReference(ref *provider.Reference) bool {
 	return (ref.ResourceId != nil && ref.Path == "") || (ref.ResourceId == nil) && strings.HasPrefix(ref.Path, "/")
+}
+
+// IsAbsolutePathReference returns true if the given reference qualifies as a global path
+// when only the path is set and starts with /
+func IsAbsolutePathReference(ref *provider.Reference) bool {
+	return ref.ResourceId == nil && strings.HasPrefix(ref.Path, "/")
 }
 
 // MakeRelativePath prefixes the path with a . to use it in a relative reference
@@ -270,4 +297,31 @@ func UserTypeToString(accountType userpb.UserType) string {
 		t = "lightweight"
 	}
 	return t
+}
+
+// SplitStorageSpaceID can be used to split `storagespaceid` into `storageid` and `nodeid`
+// Currently they are built using `<storageid>!<nodeid>` in the decomposedfs, but other drivers might return different ids.
+// any place in the code that relies on this function should instead use the storage registry to look up the responsible storage provider.
+// Note: This would in effect change the storage registry into a storage space registry.
+func SplitStorageSpaceID(ssid string) (storageid, nodeid string, err error) {
+	// query that specific storage provider
+	parts := strings.SplitN(ssid, "!", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("storage space id must be separated by '!'")
+	}
+	return parts[0], parts[1], nil
+}
+
+// GetViewMode converts a human-readable string to a view mode for opening a resource in an app.
+func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
+	switch viewMode {
+	case "view":
+		return gateway.OpenInAppRequest_VIEW_MODE_VIEW_ONLY
+	case "read":
+		return gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
+	case "write":
+		return gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
+	default:
+		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
+	}
 }

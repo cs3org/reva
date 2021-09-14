@@ -55,3 +55,13 @@ type Manager interface {
 	// UpdateReceivedShare updates the received share with share state.
 	UpdateReceivedShare(ctx context.Context, ref *ocm.ShareReference, f *ocm.UpdateReceivedOCMShareRequest_UpdateField) (*ocm.ReceivedShare, error)
 }
+
+// ResourceIDFilter is an abstraction for creating filter by resource id.
+func ResourceIDFilter(id *provider.ResourceId) *ocm.ListOCMSharesRequest_Filter {
+	return &ocm.ListOCMSharesRequest_Filter{
+		Type: ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID,
+		Term: &ocm.ListOCMSharesRequest_Filter_ResourceId{
+			ResourceId: id,
+		},
+	}
+}

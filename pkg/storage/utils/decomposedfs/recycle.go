@@ -29,10 +29,10 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -159,7 +159,7 @@ func (fs *Decomposedfs) createTrashItem(ctx context.Context, parentNode, interme
 	// for now we can only really check if the current user is the owner
 	if attrBytes, err := xattr.Get(nodePath, xattrs.OwnerIDAttr); err == nil {
 		if fs.o.EnableHome {
-			u := user.ContextMustGetUser(ctx)
+			u := ctxpkg.ContextMustGetUser(ctx)
 			if u.Id.OpaqueId != string(attrBytes) {
 				log.Warn().Str("trashRoot", trashRoot).Str("link", trashnode).Msg("trash item not owned by current user, skipping")
 				// continue
@@ -241,7 +241,7 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context) ([]*provider.RecycleI
 		// for now we can only really check if the current user is the owner
 		if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDAttr); err == nil {
 			if fs.o.EnableHome {
-				u := user.ContextMustGetUser(ctx)
+				u := ctxpkg.ContextMustGetUser(ctx)
 				if u.Id.OpaqueId != string(attrBytes) {
 					log.Warn().Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", trashnode).Msg("trash item not owned by current user, skipping")
 					continue
@@ -262,7 +262,7 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key, path string
 	if restoreRef == nil {
 		restoreRef = &provider.Reference{}
 	}
-	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, path, restoreRef.Path)
+	rn, p, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, path, restoreRef.Path)
 	if err != nil {
 		return err
 	}
@@ -275,6 +275,16 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key, path string
 	case err != nil:
 		return errtypes.InternalError(err.Error())
 	case !ok:
+		return errtypes.PermissionDenied(key)
+	}
+
+	ps, err := fs.p.AssemblePermissions(ctx, p)
+	if err != nil {
+		return errtypes.InternalError(err.Error())
+	}
+
+	// share receiver cannot restore to a shared resource to which she does not have write permissions.
+	if !ps.InitiateFileUpload {
 		return errtypes.PermissionDenied(key)
 	}
 
@@ -306,7 +316,7 @@ func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, key, path string) 
 
 // EmptyRecycle empties the trash
 func (fs *Decomposedfs) EmptyRecycle(ctx context.Context) error {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	// TODO what permission should we check? we could check the root node of the user? or the owner permissions on his home root node?
 	// The current impl will wipe your own trash. or when no user provided the trash of 'root'
 	if !ok {
@@ -326,7 +336,7 @@ func getResourceType(isDir bool) provider.ResourceType {
 
 func (fs *Decomposedfs) getRecycleRoot(ctx context.Context) string {
 	if fs.o.EnableHome {
-		u := user.ContextMustGetUser(ctx)
+		u := ctxpkg.ContextMustGetUser(ctx)
 		// TODO use layout, see Tree.Delete() for problem
 		return filepath.Join(fs.o.Root, "trash", u.Id.OpaqueId)
 	}

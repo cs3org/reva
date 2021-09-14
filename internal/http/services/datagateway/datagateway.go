@@ -239,7 +239,6 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	defer httpRes.Body.Close()
 
 	copyHeader(w.Header(), httpRes.Header)
-	w.WriteHeader(httpRes.StatusCode)
 	switch httpRes.StatusCode {
 	case http.StatusOK:
 	case http.StatusPartialContent:

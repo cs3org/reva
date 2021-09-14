@@ -128,7 +128,7 @@ func (h *Handler) Init(c *config.Config) {
 		h.c.Capabilities.FilesSharing.Public = &data.CapabilitiesFilesSharingPublic{}
 	}
 
-	// h.c.Capabilities.FilesSharing.Public.Enabled is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Enabled is boolean
 	h.c.Capabilities.FilesSharing.Public.Enabled = true
 
 	if h.c.Capabilities.FilesSharing.Public.Password == nil {
@@ -139,22 +139,22 @@ func (h *Handler) Init(c *config.Config) {
 		h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor = &data.CapabilitiesFilesSharingPublicPasswordEnforcedFor{}
 	}
 
-	// h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor.ReadOnly is boolean
-	// h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor.ReadWrite is boolean
-	// h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor.UploadOnly is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Password.EnforcedFor.ReadOnly is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Password.EnforcedFor.ReadWrite is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Password.EnforcedFor.UploadOnly is boolean
 
-	// h.c.Capabilities.FilesSharing.Public.Password.Enforced is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Password.Enforced is boolean
 
 	if h.c.Capabilities.FilesSharing.Public.ExpireDate == nil {
 		h.c.Capabilities.FilesSharing.Public.ExpireDate = &data.CapabilitiesFilesSharingPublicExpireDate{}
 	}
-	// h.c.Capabilities.FilesSharing.Public.ExpireDate.Enabled is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.ExpireDate.Enabled is boolean
 
-	// h.c.Capabilities.FilesSharing.Public.SendMail is boolean
-	// h.c.Capabilities.FilesSharing.Public.SocialShare is boolean
-	// h.c.Capabilities.FilesSharing.Public.Upload is boolean
-	// h.c.Capabilities.FilesSharing.Public.Multiple is boolean
-	// h.c.Capabilities.FilesSharing.Public.SupportsUploadOnly is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.SendMail is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.SocialShare is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Upload is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Multiple is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.SupportsUploadOnly is boolean
 
 	if h.c.Capabilities.FilesSharing.User == nil {
 		h.c.Capabilities.FilesSharing.User = &data.CapabilitiesFilesSharingUser{}
@@ -217,9 +217,7 @@ func (h *Handler) Init(c *config.Config) {
 }
 
 // Handler renders the capabilities
-func (h *Handler) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c := h.getCapabilitiesForUserAgent(r.UserAgent())
-		response.WriteOCSSuccess(w, r, c)
-	})
+func (h *Handler) GetCapabilities(w http.ResponseWriter, r *http.Request) {
+	c := h.getCapabilitiesForUserAgent(r.UserAgent())
+	response.WriteOCSSuccess(w, r, c)
 }

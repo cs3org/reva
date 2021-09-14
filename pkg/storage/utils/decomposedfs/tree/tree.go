@@ -31,10 +31,11 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -43,6 +44,11 @@ import (
 )
 
 // go:generate mockery -name Blobstore
+
+const (
+	spaceTypePersonal = "personal"
+	spaceTypeShare    = "share"
+)
 
 // Blobstore defines an interface for storing blobs in a blobstore
 type Blobstore interface {
@@ -53,7 +59,7 @@ type Blobstore interface {
 
 // PathLookup defines the interface for the lookup component
 type PathLookup interface {
-	NodeFromPath(ctx context.Context, fn string) (*node.Node, error)
+	NodeFromPath(ctx context.Context, fn string, followReferences bool) (*node.Node, error)
 	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error)
 	RootNode(ctx context.Context) (node *node.Node, err error)
 	HomeOrRootNode(ctx context.Context) (node *node.Node, err error)
@@ -123,11 +129,11 @@ func (t *Tree) Setup(owner string) error {
 	fi, err := os.Stat(spacesPath)
 	if os.IsNotExist(err) {
 		// create personal spaces dir
-		if err := os.MkdirAll(filepath.Join(spacesPath, "personal"), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Join(spacesPath, spaceTypePersonal), 0700); err != nil {
 			return err
 		}
 		// create share spaces dir
-		if err := os.MkdirAll(filepath.Join(spacesPath, "share"), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Join(spacesPath, spaceTypeShare), 0700); err != nil {
 			return err
 		}
 
@@ -145,20 +151,14 @@ func (t *Tree) Setup(owner string) error {
 
 			// is it a user root? -> create personal space
 			if isRootNode(nodePath) {
-				// create personal space
 				// we can reuse the node id as the space id
-				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/personal", nodes[i].Name()))
-				if err != nil {
-					fmt.Printf("could not create symlink for personal space %s, %s\n", nodes[i].Name(), err)
-				}
+				t.linkSpace(spaceTypePersonal, nodes[i].Name(), nodes[i].Name())
 			}
 
-			// is it a shared node? -> create shared space
+			// is it a shared node? -> create share space
 			if isSharedNode(nodePath) {
-				err = os.Symlink("../../nodes/"+nodes[i].Name(), filepath.Join(t.root, "spaces/share", nodes[i].Name()))
-				if err != nil {
-					fmt.Printf("could not create symlink for shared space %s, %s\n", nodes[i].Name(), err)
-				}
+				// we can reuse the node id as the space id
+				t.linkSpace(spaceTypeShare, nodes[i].Name(), nodes[i].Name())
 			}
 		}
 	} else if !fi.IsDir() {
@@ -167,6 +167,40 @@ func (t *Tree) Setup(owner string) error {
 	}
 
 	return nil
+}
+
+// linkSpace creates a new symbolic link for a space with the given type st, and node id
+func (t *Tree) linkSpace(spaceType, spaceID, nodeID string) {
+	spacesPath := filepath.Join(t.root, "spaces", spaceType, spaceID)
+	expectedTarget := "../../nodes/" + nodeID
+	linkTarget, err := os.Readlink(spacesPath)
+	if errors.Is(err, os.ErrNotExist) {
+		err = os.Symlink(expectedTarget, spacesPath)
+		if err != nil {
+			logger.New().Error().Err(err).
+				Str("space_type", spaceType).
+				Str("space", spaceID).
+				Str("node", nodeID).
+				Msg("could not create symlink")
+		}
+	} else {
+		if err != nil {
+			logger.New().Error().Err(err).
+				Str("space_type", spaceType).
+				Str("space", spaceID).
+				Str("node", nodeID).
+				Msg("could not read symlink")
+		}
+		if linkTarget != expectedTarget {
+			logger.New().Warn().
+				Str("space_type", spaceType).
+				Str("space", spaceID).
+				Str("node", nodeID).
+				Str("expected", expectedTarget).
+				Str("actual", linkTarget).
+				Msg("expected a different link target")
+		}
+	}
 }
 
 func isRootNode(nodePath string) bool {
@@ -412,25 +446,35 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	return t.Propagate(ctx, n)
 }
 
-// RestoreRecycleItemFunc returns a node and a function to restore it from the trash
-func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, restorePath string) (*node.Node, func() error, error) {
+// RestoreRecycleItemFunc returns a node and a function to restore it from the trash.
+func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, restorePath string) (*node.Node, *node.Node, func() error, error) {
 	rn, trashItem, deletedNodePath, origin, err := t.readRecycleItem(ctx, key, trashPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if restorePath == "" {
 		restorePath = origin
 	}
 
+	var target *node.Node
+	target, err = t.lookup.NodeFromPath(ctx, restorePath, true)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	p, err := target.Parent()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	fn := func() error {
 		// link to origin
 		var n *node.Node
-		n, err = t.lookup.NodeFromPath(ctx, restorePath)
+		n, err = t.lookup.NodeFromPath(ctx, restorePath, true)
 		if err != nil {
 			return err
 		}
-
 		if n.Exists {
 			return errtypes.AlreadyExists("origin already exists")
 		}
@@ -452,6 +496,21 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 			}
 		}
 
+		// the new node will inherit the permissions of its parent
+		p, err := n.Parent()
+		if err != nil {
+			return err
+		}
+
+		po, err := p.Owner()
+		if err != nil {
+			return err
+		}
+
+		if err := rn.ChangeOwner(po); err != nil {
+			return err
+		}
+
 		n.Exists = true
 		// update name attribute
 		if err := xattr.Set(nodePath, xattrs.NameAttr, []byte(n.Name)); err != nil {
@@ -471,7 +530,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 		}
 		return t.Propagate(ctx, n)
 	}
-	return rn, fn, nil
+	return rn, p, fn, nil
 }
 
 // PurgeRecycleItemFunc returns a node and a function to purge it from the trash
@@ -715,7 +774,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 		return nil, "", "", "", errtypes.InternalError("key is empty")
 	}
 
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	trashItem = filepath.Join(t.lookup.InternalRoot(), "trash", u.Id.OpaqueId, key, path)
 
 	var link string

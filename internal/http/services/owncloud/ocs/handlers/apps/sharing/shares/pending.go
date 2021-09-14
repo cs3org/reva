@@ -28,8 +28,21 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 )
+
+// AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}
+func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
+	shareID := chi.URLParam(r, "shareid")
+	h.updateReceivedShare(w, r, shareID, false)
+}
+
+// RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}
+func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
+	shareID := chi.URLParam(r, "shareid")
+	h.updateReceivedShare(w, r, shareID, true)
+}
 
 func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, shareID string, rejectShare bool) {
 	ctx := r.Context()
@@ -101,7 +114,6 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 
 	if data.State == ocsStateAccepted {
 		// Needed because received shares can be jailed in a folder in the users home
-		data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
 		data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
 	}
 
