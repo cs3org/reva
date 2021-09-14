@@ -129,7 +129,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 				UserId: u.Id,
 			},
 		},
-		Permissions: ocsconv.NewEditorRole().CS3ResourcePermissions(),
+		Permissions: ocsconv.NewManagerRole().CS3ResourcePermissions(),
 	}); err != nil {
 		return nil, err
 	}
