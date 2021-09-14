@@ -19,8 +19,6 @@
 package registry
 
 import (
-	"fmt"
-
 	"github.com/cs3org/reva/pkg/user"
 )
 
@@ -34,6 +32,5 @@ var NewFuncs = map[string]NewFunc{}
 // Register registers a new user manager new function.
 // Not safe for concurrent use. Safe for use from package init.
 func Register(name string, f NewFunc) {
-	fmt.Printf("Got registration for user manager %s\n", name)
 	NewFuncs[name] = f
 }
