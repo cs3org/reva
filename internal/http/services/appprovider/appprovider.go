@@ -124,16 +124,9 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mimeTypes := listRes.MimeTypes
-	filterAppsByUserAgent(mimeTypes, r.UserAgent())
-
-	filterMimeTypes(mimeTypes)
-
-	if mimeTypes == nil {
-		mimeTypes = make(map[string]*appregistry.AppProviderList) // ensure array empty object instead of null in json
-	}
-
-	js, err := json.Marshal(map[string]interface{}{"mime-types": mimeTypes})
+	res := listRes.MimeTypes
+	filterAppsByUserAgent(res, r.UserAgent())
+	js, err := json.Marshal(map[string]interface{}{"mime-types": res})
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
 		return
@@ -189,39 +182,24 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func filterMimeTypes(mimeTypes map[string]*appregistry.AppProviderList) {
-	for m, providers := range mimeTypes {
+func filterAppsByUserAgent(mimeTypes *appregistry.MimeTypeList, userAgent string) {
+	ua := ua.Parse(userAgent)
+	res := []*appregistry.MimeTypeInfo{}
+	for _, m := range mimeTypes.MimeTypes {
 		apps := []*appregistry.ProviderInfo{}
-		for _, p := range providers.AppProviders {
+		for _, p := range m.AppProviders {
 			p.Address = "" // address is internal only and not needed in the client
-			// apps are called by name, so if it has no name you cannot call it. Therefore we should not advertise it.
-			if p.Name != "" {
+			// apps are called by name, so if it has no name it cannot be called and should not be advertised
+			// also filter Desktop-only apps if ua is not Desktop
+			if p.Name != "" && (ua.Desktop || !p.DesktopOnly) {
 				apps = append(apps, p)
 			}
 		}
 		if len(apps) > 0 {
-			mimeTypes[m] = &appregistry.AppProviderList{AppProviders: apps}
-		} else {
-			delete(mimeTypes, m)
+			res = append(res, m)
 		}
 	}
-}
-
-func filterAppsByUserAgent(mimeTypes map[string]*appregistry.AppProviderList, userAgent string) {
-	ua := ua.Parse(userAgent)
-	if ua.Desktop {
-		return
-	}
-
-	for m, providers := range mimeTypes {
-		apps := []*appregistry.ProviderInfo{}
-		for _, p := range providers.AppProviders {
-			if !p.DesktopOnly {
-				apps = append(apps, p)
-			}
-		}
-		mimeTypes[m] = &appregistry.AppProviderList{AppProviders: apps}
-	}
+	mimeTypes.MimeTypes = res
 }
 
 func (s *svc) getStatInfo(ctx context.Context, fileID string, client gateway.GatewayAPIClient) (*provider.ResourceInfo, ocmd.APIErrorCode, error) {
