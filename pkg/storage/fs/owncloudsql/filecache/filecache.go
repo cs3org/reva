@@ -260,15 +260,17 @@ func (c *Cache) List(storage interface{}, p string) ([]*File, error) {
 		return nil, err
 	}
 
-	rows, err := c.db.Query(`
+	var rows *sql.Rows
+	phash := fmt.Sprintf("%x", md5.Sum([]byte(strings.Trim(p, "/"))))
+	rows, err = c.db.Query(`
 		SELECT
 			fc.fileid, fc.storage, fc.path, fc.parent, fc.permissions, fc.mimetype, fc.mimepart,
 			mt.mimetype, fc.size, fc.mtime, fc.storage_mtime, fc.encrypted, fc.unencrypted_size,
 			fc.name, fc.etag, fc.checksum
 		FROM oc_filecache fc
 		LEFT JOIN oc_mimetypes mt ON fc.mimetype = mt.id
-		WHERE path != '' AND path LIKE ? AND PATH NOT LIKE ? AND storage = ?
-	`, p+"%", p+"%/%", storageID)
+		WHERE storage = ? AND parent = (SELECT fileid FROM oc_filecache WHERE storage = ? AND path_hash=?) AND name IS NOT NULL
+	`, storageID, storageID, phash)
 	if err != nil {
 		return nil, err
 	}
