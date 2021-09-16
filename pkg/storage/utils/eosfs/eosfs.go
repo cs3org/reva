@@ -1676,6 +1676,14 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		}
 	}
 
+	// filter 'sys' attrs
+	filteredAttrs := make(map[string]string)
+	for k, v := range eosFileInfo.Attrs {
+		if !strings.HasPrefix(k, "sys") {
+			filteredAttrs[k] = v
+		}
+	}
+
 	info := &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
 		Path:          path,
@@ -1696,6 +1704,9 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 					Value:   fs.getEosMetadata(eosFileInfo),
 				},
 			},
+		},
+		ArbitraryMetadata: &provider.ArbitraryMetadata{
+			Metadata: filteredAttrs,
 		},
 	}
 
