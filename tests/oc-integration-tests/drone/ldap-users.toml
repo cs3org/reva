@@ -13,6 +13,7 @@ auth_manager = "ldap"
 [grpc.services.authprovider.auth_managers.ldap]
 hostname="ldap"
 port=636
+insecure=true
 base_dn="dc=owncloud,dc=com"
 loginfilter="(&(objectclass=posixAccount)(|(cn={{login}}))(uid={{login}}))"
 bind_username="cn=admin,dc=owncloud,dc=com"
@@ -30,6 +31,7 @@ driver = "ldap"
 [grpc.services.userprovider.drivers.ldap]
 hostname="ldap"
 port=636
+insecure=true
 base_dn="dc=owncloud,dc=com"
 userfilter="(&(objectclass=posixAccount)(|(uid={{.OpaqueId}})(cn={{.OpaqueId}})))"
 findfilter="(&(objectclass=posixAccount)(|(cn={{query}}*)(displayname={{query}}*)(mail={{query}}*)))"
@@ -51,6 +53,7 @@ driver = "ldap"
 [grpc.services.groupprovider.drivers.ldap]
 hostname="ldap"
 port=636
+insecure=true
 base_dn="dc=owncloud,dc=com"
 groupfilter="(&(objectclass=posixGroup)(|(gid={{.OpaqueId}})(cn={{.OpaqueId}})))"
 findfilter="(&(objectclass=posixGroup)(|(cn={{query}}*)(displayname={{query}}*)(mail={{query}}*)))"
