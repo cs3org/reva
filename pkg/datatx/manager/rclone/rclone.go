@@ -456,7 +456,6 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 				transfer.TransferStatus = datatx.Status_STATUS_INVALID
 				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
 					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
-					break
 				}
 				break
 			}
@@ -466,6 +465,10 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			u, err := url.Parse(driver.config.Endpoint)
 			if err != nil {
 				logger.Error().Err(err).Msgf("rclone driver: could not parse driver endpoint: %v", err)
+				transfer.TransferStatus = datatx.Status_STATUS_INVALID
+				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
+				}
 				break
 			}
 			u.Path = path.Join(u.Path, transferFileMethod)
@@ -474,6 +477,10 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
 			if err != nil {
 				logger.Error().Err(err).Msgf("rclone driver: error framing post request: %v", err)
+				transfer.TransferStatus = datatx.Status_STATUS_INVALID
+				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
+				}
 				break
 			}
 			req.Header.Set("Content-Type", "application/json")
@@ -481,6 +488,10 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			res, err := driver.client.Do(req)
 			if err != nil {
 				logger.Error().Err(err).Msgf("rclone driver: error sending post request: %v", err)
+				transfer.TransferStatus = datatx.Status_STATUS_INVALID
+				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
+				}
 				break
 			}
 
@@ -493,6 +504,10 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 					logger.Error().Err(err).Msgf("rclone driver: error reading response body: %v", err)
 				}
 				logger.Error().Err(err).Msgf("rclone driver: rclone request responded with error, status: %v, error: %v", errorResData.Status, errorResData.Error)
+				transfer.TransferStatus = datatx.Status_STATUS_INVALID
+				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
+				}
 				break
 			}
 
