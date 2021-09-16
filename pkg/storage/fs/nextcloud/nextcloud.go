@@ -685,8 +685,7 @@ func (nc *StorageDriver) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	// FIXME: https://github.com/cs3org/reva/issues/2069
-	return uint64(respMap["maxBytes"].(float64)), uint64(respMap["maxFiles"].(float64)), err
+	return uint64(respMap["totalBytes"].(float64)), uint64(respMap["usedBytes"].(float64)), err
 }
 
 // CreateReference as defined in the storage.FS interface
