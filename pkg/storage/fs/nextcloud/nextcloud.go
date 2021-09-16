@@ -629,8 +629,8 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 	grants := make([]*provider.Grant, len(respMapArr))
 	for i := 0; i < len(respMapArr); i++ {
 		granteeMap := respMapArr[i]["grantee"].(map[string]interface{})
-		granteeIdMap := granteeMap["Id"].(map[string]interface{})
-		granteeIdUserIdMap := granteeIdMap["UserId"].(map[string]interface{})
+		granteeIDMap := granteeMap["Id"].(map[string]interface{})
+		granteeIDUserIDMap := granteeIDMap["UserId"].(map[string]interface{})
 
 		// if (granteeMap["Id"])
 		permsMap := respMapArr[i]["permissions"].(map[string]interface{})
@@ -639,9 +639,9 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 				Type: provider.GranteeType_GRANTEE_TYPE_USER, // FIXME: support groups too
 				Id: &provider.Grantee_UserId{
 					UserId: &user.UserId{
-						Idp:      granteeIdUserIdMap["idp"].(string),
-						OpaqueId: granteeIdUserIdMap["opaque_id"].(string),
-						Type:     user.UserType(granteeIdUserIdMap["type"].(float64)),
+						Idp:      granteeIDUserIDMap["idp"].(string),
+						OpaqueId: granteeIDUserIDMap["opaque_id"].(string),
+						Type:     user.UserType(granteeIDUserIDMap["type"].(float64)),
 					},
 				},
 			},
