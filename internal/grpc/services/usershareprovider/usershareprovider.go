@@ -187,6 +187,17 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 }
 
 func (s *service) ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*collaboration.ListReceivedSharesResponse, error) {
+	// For the UI add a filter to not display the denial shares
+	foundExclude := false
+	for _, f := range req.Filters {
+		if f.Type == collaboration.Filter_TYPE_EXCLUDE_DENIALS {
+			foundExclude = true
+			break
+		}
+	}
+	if !foundExclude {
+		req.Filters = append(req.Filters, &collaboration.Filter{Type: collaboration.Filter_TYPE_EXCLUDE_DENIALS})
+	}
 	shares, err := s.sm.ListReceivedShares(ctx, req.Filters) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.ListReceivedSharesResponse{
