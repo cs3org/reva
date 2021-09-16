@@ -733,7 +733,6 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 	var infos = make([]*provider.ResourceInfo, 0, len(mds))
 	prefixMountpoint := utils.IsAbsoluteReference(req.Ref)
-
 	for _, md := range mds {
 		if err := s.wrap(ctx, md, prefixMountpoint); err != nil {
 			return &provider.ListContainerResponse{
