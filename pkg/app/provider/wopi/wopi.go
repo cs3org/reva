@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package demo
+package wopi
 
 import (
 	"bytes"
@@ -114,6 +114,18 @@ func New(m map[string]interface{}) (app.Provider, error) {
 		conf:       c,
 		wopiClient: wopiClient,
 		appURLs:    appURLs,
+	}, nil
+}
+
+func (p *wopiProvider) CreateFile(ctx context.Context, ref *provider.Reference, filename string, template string) (*provider.ResourceInfo, error) {
+	if template != "" {
+		// TODO create a file out of the given template
+		return nil, errtypes.NotSupported("Creating documents from templates is not yet supported")
+	}
+	// TODO call webdav PUT
+	return &provider.ResourceInfo{
+		Type: provider.ResourceType_RESOURCE_TYPE_FILE,
+		Path: path.Join(ref.GetPath(), filename),
 	}, nil
 }
 

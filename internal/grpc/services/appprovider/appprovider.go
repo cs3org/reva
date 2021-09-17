@@ -142,6 +142,24 @@ func getProvider(c *config) (app.Provider, error) {
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
+func (s *service) CreateFileForApp(ctx context.Context, req *providerpb.CreateFileForAppRequest) (*providerpb.CreateFileForAppResponse, error) {
+	fileInfo, err := s.provider.CreateFile(ctx, req.Ref, req.Filename, req.Template)
+	if err != nil {
+		err := errors.Wrap(err, "appprovider: error calling CreateFile")
+		res := &providerpb.CreateFileForAppResponse{
+			Status: status.NewInternal(ctx, err, "error creating file"),
+		}
+		return res, nil
+	}
+
+	res := &providerpb.CreateFileForAppResponse{
+		Status:       status.NewOK(ctx),
+		ResourceInfo: fileInfo,
+	}
+	return res, nil
+
+}
+
 func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
 	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken)
 	if err != nil {

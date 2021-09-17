@@ -26,6 +26,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -98,12 +99,56 @@ func (s *svc) Handler() http.Handler {
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 		switch head {
+		case "new":
+			s.handleNew(w, r)
 		case "list":
 			s.handleList(w, r)
 		case "open":
 			s.handleOpen(w, r)
 		}
 	})
+}
+
+func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
+	if err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error getting grpc gateway client", err)
+		return
+	}
+
+	info, errCode, err := s.getStatInfo(ctx, r.URL.Query().Get("container"), client)
+	if err != nil {
+		ocmd.WriteError(w, r, errCode, "error statting container", err)
+		return
+	}
+
+	createReq := appprovider.CreateFileForAppRequest{
+		Ref:      &provider.Reference{ResourceId: info.Id},
+		Filename: r.URL.Query().Get("filename"),
+	}
+	createRes, err := client.CreateFileForApp(ctx, &createReq)
+	if err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error creating resource", err)
+		return
+	}
+	if createRes.Status.Code != rpc.Code_CODE_OK {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error creating resource", status.NewErrorFromCode(createRes.Status.Code, "appprovider"))
+		return
+	}
+
+	js, err := json.Marshal(createRes.ResourceInfo)
+	if err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if _, err = w.Write(js); err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error writing JSON response", err)
+		return
+	}
 }
 
 func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
