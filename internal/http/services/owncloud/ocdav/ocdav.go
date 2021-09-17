@@ -35,15 +35,11 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/favorite"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -101,13 +97,11 @@ type Config struct {
 	// Example: if WebdavNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
-	WebdavNamespace string                            `mapstructure:"webdav_namespace"`
-	GatewaySvc      string                            `mapstructure:"gatewaysvc"`
-	Timeout         int64                             `mapstructure:"timeout"`
-	Insecure        bool                              `mapstructure:"insecure"`
-	PublicURL       string                            `mapstructure:"public_url"`
-	Driver          string                            `mapstructure:"driver"`
-	Drivers         map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
+	WebdavNamespace string `mapstructure:"webdav_namespace"`
+	GatewaySvc      string `mapstructure:"gatewaysvc"`
+	Timeout         int64  `mapstructure:"timeout"`
+	Insecure        bool   `mapstructure:"insecure"`
+	PublicURL       string `mapstructure:"public_url"`
 }
 
 func (c *Config) init() {
@@ -116,18 +110,10 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	c                *Config
-	webDavHandler    *WebDavHandler
-	davHandler       *DavHandler
-	favoritesManager favorite.Manager
-	client           *http.Client
-}
-
-func getFS(c *Config) (storage.FS, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
-	}
-	return nil, errtypes.NotFound("driver not found: " + c.Driver)
+	c             *Config
+	webDavHandler *WebDavHandler
+	davHandler    *DavHandler
+	client        *http.Client
 }
 
 // New returns a new ocdav
@@ -139,11 +125,6 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 	conf.init()
 
-	fs, err := getFS(conf)
-	if err != nil {
-		return nil, err
-	}
-
 	s := &svc{
 		c:             conf,
 		webDavHandler: new(WebDavHandler),
@@ -152,7 +133,6 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
-		favoritesManager: favorite.NewInMemoryManager(fs),
 	}
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {

@@ -30,7 +30,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -233,19 +232,6 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					HandleErrorStatus(&log, w, res.Status)
 					return nil, nil, false
 				}
-				if key == "http://owncloud.org/ns/favorite" {
-					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
-					if err != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					currentUser := ctxpkg.ContextMustGetUser(ctx)
-					err = s.favoritesManager.UnsetFavorite(ctx, currentUser.Id, statRes.Info.Id)
-					if err != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-				}
 				removedProps = append(removedProps, propNameXML)
 			} else {
 				sreq.ArbitraryMetadata.Metadata[key] = value
@@ -273,20 +259,6 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 
 				acceptedProps = append(acceptedProps, propNameXML)
 				delete(sreq.ArbitraryMetadata.Metadata, key)
-
-				if key == "http://owncloud.org/ns/favorite" {
-					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
-					if err != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					currentUser := ctxpkg.ContextMustGetUser(ctx)
-					err = s.favoritesManager.SetFavorite(ctx, currentUser.Id, statRes.Info.Id)
-					if err != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-				}
 			}
 		}
 		// FIXME: in case of error, need to set all properties back to the original state,

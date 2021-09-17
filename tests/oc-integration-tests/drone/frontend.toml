@@ -59,13 +59,6 @@ files_namespace = "/oc"
 # - the oc js sdk is hardcoded to the remote.php/webdav so it will see the new tree
 # - TODO android? no sync ... but will see different tree
 webdav_namespace = "/home"
-driver = "ocis"
-
-[http.services.ocdav.drivers.ocis]
-root = "/drone/src/tmp/reva/data"
-enable_home = true
-treetime_accounting = true
-treesize_accounting = true
 
 [http.services.ocs]
 

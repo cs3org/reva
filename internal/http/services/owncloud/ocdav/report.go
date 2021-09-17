@@ -24,12 +24,6 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-)
-
-const (
-	elementNameSearchFiles = "search-files"
-	elementNameFilterFiles = "filter-files"
 )
 
 func (s *svc) handleReport(w http.ResponseWriter, r *http.Request, ns string) {
@@ -45,11 +39,6 @@ func (s *svc) handleReport(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 	if rep.SearchFiles != nil {
 		s.doSearchFiles(w, r, rep.SearchFiles)
-		return
-	}
-
-	if rep.FilterFiles != nil {
-		s.doFilterFiles(w, r, rep.FilterFiles, ns)
 		return
 	}
 
@@ -70,39 +59,9 @@ func (s *svc) doSearchFiles(w http.ResponseWriter, r *http.Request, sf *reportSe
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFilterFiles, namespace string) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
-
-	if ff.Rules.Favorite {
-		// List the users favorite resources.
-		currentUser := ctxpkg.ContextMustGetUser(ctx)
-		favorites, err := s.favoritesManager.ListFavorites(ctx, currentUser.Id)
-		if err != nil {
-			log.Error().Err(err).Msg("error getting favorites")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		responsesXML, err := s.multistatusResponse(ctx, &propfindXML{Prop: ff.Prop}, favorites, namespace)
-		if err != nil {
-			log.Error().Err(err).Msg("error formatting propfind")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
-		w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
-		w.WriteHeader(http.StatusMultiStatus)
-		if _, err := w.Write([]byte(responsesXML)); err != nil {
-			log.Err(err).Msg("error writing response")
-		}
-	}
-}
-
 type report struct {
 	SearchFiles *reportSearchFiles
 	// FilterFiles TODO add this for tag based search
-	FilterFiles *reportFilterFiles `xml:"filter-files"`
 }
 type reportSearchFiles struct {
 	XMLName xml.Name                `xml:"search-files"`
@@ -114,18 +73,6 @@ type reportSearchFilesSearch struct {
 	Pattern string `xml:"search"`
 	Limit   int    `xml:"limit"`
 	Offset  int    `xml:"offset"`
-}
-
-type reportFilterFiles struct {
-	XMLName xml.Name               `xml:"filter-files"`
-	Lang    string                 `xml:"xml:lang,attr,omitempty"`
-	Prop    propfindProps          `xml:"DAV: prop"`
-	Rules   reportFilterFilesRules `xml:"filter-rules"`
-}
-
-type reportFilterFilesRules struct {
-	Favorite  bool `xml:"favorite"`
-	SystemTag int  `xml:"systemtag"`
 }
 
 func readReport(r io.Reader) (rep *report, status int, err error) {
@@ -142,20 +89,13 @@ func readReport(r io.Reader) (rep *report, status int, err error) {
 		}
 
 		if v, ok := t.(xml.StartElement); ok {
-			if v.Name.Local == elementNameSearchFiles {
+			if v.Name.Local == "search-files" {
 				var repSF reportSearchFiles
 				err = decoder.DecodeElement(&repSF, &v)
 				if err != nil {
 					return nil, http.StatusBadRequest, err
 				}
 				rep.SearchFiles = &repSF
-			} else if v.Name.Local == elementNameFilterFiles {
-				var repFF reportFilterFiles
-				err = decoder.DecodeElement(&repFF, &v)
-				if err != nil {
-					return nil, http.StatusBadRequest, err
-				}
-				rep.FilterFiles = &repFF
 			}
 		}
 	}
