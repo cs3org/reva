@@ -7,7 +7,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/ReneKroon/ttlcache/v2 v2.8.0
+	github.com/ReneKroon/ttlcache/v2 v2.8.1
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
 	github.com/aws/aws-sdk-go v1.40.43
 	github.com/beevik/etree v1.1.0
@@ -64,7 +64,6 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.23.0
 	go.opentelemetry.io/otel v1.0.0-RC3
 	go.opentelemetry.io/otel/exporters/jaeger v1.0.0-RC3
-	go.opentelemetry.io/otel/oteltest v1.0.0-RC2 // indirect
 	go.opentelemetry.io/otel/sdk v1.0.0-RC3
 	go.opentelemetry.io/otel/trace v1.0.0-RC3
 	golang.org/x/crypto v0.0.0-20210915214749-c084706c2272
