@@ -180,6 +180,11 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 			Status: status.NewUnauthenticated(ctx, err, "error dismantling token"),
 		}, nil
 	}
+	groupsRes, err := s.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+	if err != nil {
+		return nil, err
+	}
+	u.Groups = groupsRes.Groups
 
 	res := &gateway.WhoAmIResponse{
 		Status: status.NewOK(ctx),
