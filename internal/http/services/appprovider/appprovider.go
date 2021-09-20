@@ -22,18 +22,24 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"path"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/internal/http/services/ocmd"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -42,6 +48,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func init() {
@@ -118,19 +125,43 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, errCode, err := s.getStatInfo(ctx, r.URL.Query().Get("container"), client)
-	if err != nil {
-		ocmd.WriteError(w, r, errCode, "error statting container", err)
+	if r.URL.Query().Get("template") != "" {
+		// TODO in the future we want to create a file out of the given template
+		ocmd.WriteError(w, r, ocmd.APIErrorInvalidParameter, "Template not implemented",
+			errtypes.NotSupported("Templates are not yet supported"))
 		return
 	}
 
-	createReq := appprovider.CreateFileForAppRequest{
-		Ref:      &provider.Reference{ResourceId: info.Id},
-		Filename: r.URL.Query().Get("filename"),
+	target := r.URL.Query().Get("filename")
+	if target == "" {
+		ocmd.WriteError(w, r, ocmd.APIErrorInvalidParameter, "Missing filename",
+			errtypes.UserRequired("Missing filename"))
+		return
 	}
-	createRes, err := client.CreateFileForApp(ctx, &createReq)
+	// stat the container
+	_, ocmderr, err := statRef(ctx, provider.Reference{Path: r.URL.Query().Get("container")}, client)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error creating resource", err)
+		log.Error().Err(err).Msg("error statting container")
+		ocmd.WriteError(w, r, ocmderr, "Container not found",
+			errtypes.NotFound("Container not found"))
+		return
+	}
+	// Create empty file via storageprovider: obtain the HTTP URL for a PUT
+	target = path.Join(r.URL.Query().Get("container"), target)
+	createReq := &provider.InitiateFileUploadRequest{
+		Ref: &provider.Reference{Path: target},
+		Opaque: &typespb.Opaque{
+			Map: map[string]*typespb.OpaqueEntry{
+				"Upload-Length": {
+					Decoder: "plain",
+					Value:   []byte(strconv.FormatInt(0, 10)),
+				},
+			},
+		},
+	}
+	createRes, err := client.InitiateFileUpload(ctx, createReq)
+	if err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error calling InitiateFileUpload", err)
 		return
 	}
 	if createRes.Status.Code != rpc.Code_CODE_OK {
@@ -138,7 +169,43 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	js, err := json.Marshal(createRes.ResourceInfo)
+	// Do a HTTP PUT with an empty body
+	var ep, token string
+	for _, p := range createRes.Protocols {
+		if p.Protocol == "simple" {
+			ep, token = p.UploadEndpoint, p.Token
+		}
+	}
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, ep, nil)
+	if err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error executing PUT", err)
+		return
+	}
+
+	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+	httpRes, err := rhttp.GetHTTPClient().Do(httpReq)
+	if err != nil {
+		log.Error().Err(err).Msg("error doing PUT request to data service")
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error executing PUT", err)
+		return
+	}
+	defer httpRes.Body.Close()
+	if httpRes.StatusCode != http.StatusOK {
+		log.Error().Msg("PUT request to data server failed")
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error executing PUT",
+			errtypes.InternalError(fmt.Sprint(httpRes.StatusCode)))
+		return
+	}
+
+	// Stat created file and return its file id
+	statRes, ocmderr, err := statRef(ctx, provider.Reference{Path: target}, client)
+	if err != nil {
+		log.Error().Err(err).Msg("error statting created file")
+		ocmd.WriteError(w, r, ocmderr, "Created file not found",
+			errtypes.NotFound("Created file not found"))
+		return
+	}
+	js, err := json.Marshal(map[string]interface{}{"file_id": statRes.Id})
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
 		return
@@ -169,8 +236,7 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := listRes.MimeTypes
-	filterAppsByUserAgent(res, r.UserAgent())
+	res := filterAppsByUserAgent(listRes.MimeTypes, r.UserAgent())
 	js, err := json.Marshal(map[string]interface{}{"mime-types": res})
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
@@ -227,10 +293,10 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func filterAppsByUserAgent(mimeTypes *appregistry.MimeTypeList, userAgent string) {
+func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent string) []*appregistry.MimeTypeInfo {
 	ua := ua.Parse(userAgent)
 	res := []*appregistry.MimeTypeInfo{}
-	for _, m := range mimeTypes.MimeTypes {
+	for _, m := range mimeTypes {
 		apps := []*appregistry.ProviderInfo{}
 		for _, p := range m.AppProviders {
 			p.Address = "" // address is internal only and not needed in the client
@@ -244,7 +310,7 @@ func filterAppsByUserAgent(mimeTypes *appregistry.MimeTypeList, userAgent string
 			res = append(res, m)
 		}
 	}
-	mimeTypes.MimeTypes = res
+	return res
 }
 
 func (s *svc) getStatInfo(ctx context.Context, fileID string, client gateway.GatewayAPIClient) (*provider.ResourceInfo, ocmd.APIErrorCode, error) {
@@ -266,9 +332,11 @@ func (s *svc) getStatInfo(ctx context.Context, fileID string, client gateway.Gat
 		OpaqueId:  parts[1],
 	}
 
-	statReq := provider.StatRequest{
-		Ref: &provider.Reference{ResourceId: res},
-	}
+	return statRef(ctx, provider.Reference{ResourceId: res}, client)
+}
+
+func statRef(ctx context.Context, ref provider.Reference, client gateway.GatewayAPIClient) (*provider.ResourceInfo, ocmd.APIErrorCode, error) {
+	statReq := provider.StatRequest{Ref: &ref}
 	statRes, err := client.Stat(ctx, &statReq)
 	if err != nil {
 		return nil, ocmd.APIErrorServerError, err
@@ -279,7 +347,6 @@ func (s *svc) getStatInfo(ctx context.Context, fileID string, client gateway.Gat
 	if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
 		return nil, ocmd.APIErrorServerError, errors.New("unsupported resource type")
 	}
-
 	return statRes.Info, ocmd.APIErrorCode(""), nil
 }
 

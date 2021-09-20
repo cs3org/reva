@@ -117,18 +117,6 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}, nil
 }
 
-func (p *wopiProvider) CreateFile(ctx context.Context, ref *provider.Reference, filename string, template string) (*provider.ResourceInfo, error) {
-	if template != "" {
-		// TODO create a file out of the given template
-		return nil, errtypes.NotSupported("Creating documents from templates is not yet supported")
-	}
-	// TODO call webdav PUT
-	return &provider.ResourceInfo{
-		Type: provider.ResourceType_RESOURCE_TYPE_FILE,
-		Path: path.Join(ref.GetPath(), filename),
-	}, nil
-}
-
 func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string) (*appprovider.OpenInAppURL, error) {
 	log := appctx.GetLogger(ctx)
 

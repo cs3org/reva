@@ -42,51 +42,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func (s *svc) CreateFileForApp(ctx context.Context, req *providerpb.CreateFileForAppRequest) (*providerpb.CreateFileForAppResponse, error) {
-	_, st := s.getPath(ctx, req.Ref)
-	if st.Code != rpc.Code_CODE_OK {
-		if st.Code == rpc.Code_CODE_NOT_FOUND {
-			return &providerpb.CreateFileForAppResponse{
-				Status: status.NewNotFound(ctx, "gateway: container resource not found:"+req.Ref.String()),
-			}, nil
-		}
-		return &providerpb.CreateFileForAppResponse{
-			Status: st,
-		}, nil
-	}
-
-	// TODO identify app provider: take the GetDefaultProviderForMimeType for the given file extension
-	// provider, err := s.getDefaultAppProvider(ctx, req.Ref.path)
-	// if err != nil {
-	//	err = errors.Wrap(err, "gateway: error calling findAppProvider")
-	//	var st *rpc.Status
-	//	if _, ok := err.(errtypes.IsNotFound); ok {
-	//		st = status.NewNotFound(ctx, "app provider not found")
-	//	} else {
-	//		st = status.NewInternal(ctx, err, "error searching for app provider")
-	//	}
-	//	return &providerpb.CreateFileForAppResponse{
-	//		Status: st,
-	//	}, nil
-	// }
-
-	// appProviderClient, err := pool.GetAppProviderClient(provider.Address)
-	// if err != nil {
-	//	err = errors.Wrap(err, "gateway: error calling GetAppProviderClient")
-	//	return &providerpb.CreateFileForAppResponse{
-	//		Status: status.NewInternal(ctx, err, "error getting appprovider client"),
-	//	}, nil
-	// }
-
-	// res, err := appProviderClient.CreateFileForApp(ctx, req)
-	// if err != nil {
-	//	return nil, errors.Wrap(err, "gateway: error calling CreateFileForApp")
-	// }
-	res := &providerpb.CreateFileForAppResponse{}
-
-	return res, nil
-}
-
 func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
