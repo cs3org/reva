@@ -21,7 +21,9 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"time"
 
+	"github.com/bluele/gcache"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -42,6 +44,8 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
+
+var userGroupsCache gcache.Cache
 
 type config struct {
 	Priority   int    `mapstructure:"priority"`
@@ -97,6 +101,8 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 	if conf.CredentialsByUserAgent == nil {
 		conf.CredentialsByUserAgent = map[string]string{}
 	}
+
+	userGroupsCache = gcache.New(1000000).LFU().Build()
 
 	credChain := map[string]auth.CredentialStrategy{}
 	for i, key := range conf.CredentialChain {
@@ -241,13 +247,17 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				return
 			}
 
-			groupsRes, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
-			if err != nil {
-				log.Error().Err(err).Msg("error getting user groups")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
+			var groups []string
+			if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
+				groups = groupsIf.([]string)
+			} else {
+				groupsRes, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+				if err == nil {
+					groups = groupsRes.Groups
+					_ = userGroupsCache.SetWithExpire(u.Id.OpaqueId, groupsRes.Groups, 3600*time.Second)
+				}
 			}
-			u.Groups = groupsRes.Groups
+			u.Groups = groups
 
 			// ensure access to the resource is allowed
 			ok, err := scope.VerifyScope(tokenScope, r.URL.Path)

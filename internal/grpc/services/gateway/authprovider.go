@@ -181,10 +181,9 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 		}, nil
 	}
 	groupsRes, err := s.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
-	if err != nil {
-		return nil, err
+	if err == nil {
+		u.Groups = groupsRes.Groups
 	}
-	u.Groups = groupsRes.Groups
 
 	res := &gateway.WhoAmIResponse{
 		Status: status.NewOK(ctx),

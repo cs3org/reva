@@ -20,7 +20,9 @@ package auth
 
 import (
 	"context"
+	"time"
 
+	"github.com/bluele/gcache"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
@@ -37,6 +39,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+var userGroupsCache gcache.Cache
 
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
@@ -68,6 +72,8 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		conf.TokenManager = "jwt"
 	}
 	conf.GatewayAddr = sharedconf.GetGatewaySVC(conf.GatewayAddr)
+
+	userGroupsCache = gcache.New(1000000).LFU().Build()
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
@@ -128,6 +134,8 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 	if conf.TokenManager == "" {
 		conf.TokenManager = "jwt"
 	}
+
+	userGroupsCache = gcache.New(1000000).LFU().Build()
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
@@ -203,10 +211,9 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 
 	if fetchUserGroups {
 		groups, err := getUserGroups(ctx, u, gatewayAddr)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			u.Groups = groups
 		}
-		u.Groups = groups
 	}
 
 	// Check if access to the resource is in the scope of the token
@@ -226,6 +233,12 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 }
 
 func getUserGroups(ctx context.Context, u *userpb.User, gatewayAddr string) ([]string, error) {
+	if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
+		log := appctx.GetLogger(ctx)
+		log.Info().Msgf("user groups found in cache %s", u.Id.OpaqueId)
+		return groupsIf.([]string), nil
+	}
+
 	client, err := pool.GetGatewayServiceClient(gatewayAddr)
 	if err != nil {
 		return nil, err
@@ -235,6 +248,7 @@ func getUserGroups(ctx context.Context, u *userpb.User, gatewayAddr string) ([]s
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetUserGroups")
 	}
+	_ = userGroupsCache.SetWithExpire(u.Id.OpaqueId, res.Groups, 3600*time.Second)
 
 	return res.Groups, nil
 }
