@@ -87,12 +87,6 @@ func New(value map[string]interface{}) (token.Manager, error) {
 
 func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
 	ttl := time.Duration(m.conf.Expires) * time.Second
-
-	// We don't encode the groups in the JWT token to reduce its size.
-	// Whenever any services need to enquire about these, they need to make a
-	// request to the userprovider service and cache these on their end.
-	u.Groups = []string{}
-
 	claims := claims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(ttl).Unix(),

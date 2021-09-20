@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
@@ -96,6 +97,11 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "user id is nil"),
 		}, nil
+	}
+
+	u := res.User
+	if sharedconf.SkipUserGroupsInToken() {
+		u.Groups = []string{}
 	}
 
 	// We need to expand the scopes of lightweight accounts, user shares and
@@ -180,8 +186,12 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 			Status: status.NewUnauthenticated(ctx, err, "error dismantling token"),
 		}, nil
 	}
-	groupsRes, err := s.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
-	if err == nil {
+
+	if sharedconf.SkipUserGroupsInToken() {
+		groupsRes, err := s.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+		if err != nil {
+			return nil, err
+		}
 		u.Groups = groupsRes.Groups
 	}
 

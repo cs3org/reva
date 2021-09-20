@@ -247,17 +247,22 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				return
 			}
 
-			var groups []string
-			if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
-				groups = groupsIf.([]string)
-			} else {
-				groupsRes, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
-				if err == nil {
+			if sharedconf.SkipUserGroupsInToken() {
+				var groups []string
+				if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
+					groups = groupsIf.([]string)
+				} else {
+					groupsRes, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+					if err != nil {
+						log.Error().Err(err).Msg("error retrieving user groups")
+						w.WriteHeader(http.StatusInternalServerError)
+						return
+					}
 					groups = groupsRes.Groups
 					_ = userGroupsCache.SetWithExpire(u.Id.OpaqueId, groupsRes.Groups, 3600*time.Second)
 				}
+				u.Groups = groups
 			}
-			u.Groups = groups
 
 			// ensure access to the resource is allowed
 			ok, err := scope.VerifyScope(tokenScope, r.URL.Path)

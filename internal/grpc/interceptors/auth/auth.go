@@ -209,11 +209,12 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		return nil, err
 	}
 
-	if fetchUserGroups {
+	if sharedconf.SkipUserGroupsInToken() && fetchUserGroups {
 		groups, err := getUserGroups(ctx, u, gatewayAddr)
-		if err == nil {
-			u.Groups = groups
+		if err != nil {
+			return nil, err
 		}
+		u.Groups = groups
 	}
 
 	// Check if access to the resource is in the scope of the token
