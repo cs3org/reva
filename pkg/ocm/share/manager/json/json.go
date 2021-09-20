@@ -596,14 +596,6 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 		}
 		if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, share.Grantee.GetUserId()) {
 			rss = append(rss, &rs)
-		} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-			// check if all user groups match this share; TODO(labkode): filter shares created by us.
-			for _, g := range user.Groups {
-				if g == share.Grantee.GetGroupId().OpaqueId {
-					rss = append(rss, &rs)
-					break
-				}
-			}
 		}
 	}
 	return rss, nil
@@ -632,12 +624,6 @@ func (m *mgr) getReceived(ctx context.Context, ref *ocm.ShareReference) (*ocm.Re
 		if sharesEqual(ref, share) {
 			if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, share.Grantee.GetUserId()) {
 				return &rs, nil
-			} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-				for _, g := range user.Groups {
-					if share.Grantee.GetGroupId().OpaqueId == g {
-						return &rs, nil
-					}
-				}
 			}
 		}
 	}

@@ -26,6 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
@@ -199,6 +200,11 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 	if err != nil {
 		return nil, err
 	}
+	groups, err := getUserGroups(ctx, u, gatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+	u.Groups = groups
 
 	// Check if access to the resource is in the scope of the token
 	ok, err := scope.VerifyScope(tokenScope, req)
@@ -214,4 +220,18 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 	}
 
 	return u, nil
+}
+
+func getUserGroups(ctx context.Context, u *userpb.User, gatewayAddr string) ([]string, error) {
+	client, err := pool.GetGatewayServiceClient(gatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetUserGroups")
+	}
+
+	return res.Groups, nil
 }

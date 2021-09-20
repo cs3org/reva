@@ -23,6 +23,7 @@ import (
 	"net/http"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
 	tokenregistry "github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
@@ -154,6 +155,13 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 
 			log := appctx.GetLogger(ctx)
 
+			client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
+			if err != nil {
+				log.Error().Err(err).Msg("error getting the authsvc client")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+
 			// skip auth for urls set in the config.
 			// TODO(labkode): maybe use method:url to bypass auth.
 			if utils.Skip(r.URL.Path, unprotected) {
@@ -203,13 +211,6 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 
 				log.Debug().Msgf("AuthenticateRequest: type: %s, client_id: %s against %s", req.Type, req.ClientId, conf.GatewaySvc)
 
-				client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
-				if err != nil {
-					log.Error().Err(err).Msg("error getting the authsvc client")
-					w.WriteHeader(http.StatusUnauthorized)
-					return
-				}
-
 				res, err := client.Authenticate(ctx, req)
 				if err != nil {
 					log.Error().Err(err).Msg("error calling Authenticate")
@@ -239,6 +240,15 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
+
+			groupsRes, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+			if err != nil {
+				log.Error().Err(err).Msg("error getting user groups")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			u.Groups = groupsRes.Groups
+
 			// ensure access to the resource is allowed
 			ok, err := scope.VerifyScope(tokenScope, r.URL.Path)
 			if err != nil {
