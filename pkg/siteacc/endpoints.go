@@ -430,7 +430,7 @@ func handleDispatchAlert(siteacc *SiteAccounts, values url.Values, body []byte, 
 	}
 
 	// Dispatch the alerts using the alerts dispatcher
-	if err := siteacc.AlertsDispatcher().DispatchAlerts(alertsData); err != nil {
+	if err := siteacc.AlertsDispatcher().DispatchAlerts(alertsData, siteacc.AccountsManager().CloneAccounts(true)); err != nil {
 		return nil, errors.Wrap(err, "error while dispatching the alerts")
 	}
 

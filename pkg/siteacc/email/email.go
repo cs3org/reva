@@ -20,6 +20,7 @@ package email
 
 import (
 	"bytes"
+	"strings"
 	"text/template"
 
 	"github.com/cs3org/reva/pkg/siteacc/config"
@@ -79,6 +80,17 @@ func SendContactForm(account *data.Account, recipients []string, params map[stri
 	return send(recipients, "ScienceMesh: Contact form", contactFormTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
 }
 
+// SendAlertNotification sends an alert via email.
+func SendAlertNotification(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
+	subject := params["Summary"]
+	tpl := alertFiringNotificationTemplate
+	if strings.EqualFold(params["Status"], "resolved") {
+		tpl = alertResolvedNotificationTemplate
+		subject = subject + " [RESOLVED]"
+	}
+	return send(recipients, "ScienceMesh Alert: "+subject, tpl, getEmailData(account, conf, params), conf.Email.SMTP)
+}
+
 func send(recipients []string, subject string, bodyTemplate string, data interface{}, smtp *smtpclient.SMTPCredentials) error {
 	// Do not fail if no SMTP client or recipient is given
 	if smtp == nil {
@@ -86,6 +98,20 @@ func send(recipients []string, subject string, bodyTemplate string, data interfa
 	}
 
 	tpl := template.New("email")
+
+	// Add some custom helper functions to the template
+	tpl.Funcs(template.FuncMap{
+		"indent": func(n int, s string) string {
+			lines := make([]string, 0, 10)
+			for _, line := range strings.Split(s, "\n") {
+				line = strings.TrimSpace(line)
+				line = strings.Repeat(" ", n) + line
+				lines = append(lines, line)
+			}
+			return strings.Join(lines, "\n")
+		},
+	})
+
 	if _, err := tpl.Parse(bodyTemplate); err != nil {
 		return errors.Wrap(err, "error while parsing email template")
 	}

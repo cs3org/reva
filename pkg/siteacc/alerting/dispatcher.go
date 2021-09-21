@@ -19,9 +19,11 @@
 package alerting
 
 import (
-	"fmt"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/siteacc/config"
+	"github.com/cs3org/reva/pkg/siteacc/data"
+	"github.com/cs3org/reva/pkg/siteacc/email"
 	"github.com/cs3org/reva/pkg/smtpclient"
 	"github.com/pkg/errors"
 	"github.com/prometheus/alertmanager/template"
@@ -55,35 +57,46 @@ func (dispatcher *Dispatcher) initialize(conf *config.Configuration, log *zerolo
 	return nil
 }
 
-/*
-{
-  "version": "4",
-  "groupKey": "xxx",
-  "truncatedAlerts": 0,
-  "status": "firing",
-  "receiver": "you",
-  "groupLabels": {},
-  "commonLabels": {},
-  "commonAnnotations": {},
-  "externalURL": "<string>",
-  "alerts": [
-    {
-      "status": "<resolved|firing>",
-      "labels": {},
-      "annotations": {},
-      "startsAt": "2002-10-02T15:00:00Z",
-      "endsAt": "2002-10-02T15:00:00Z",
-      "generatorURL": "<string>",
-      "fingerprint": "<string>"
-    }
-  ]
-}
-*/
-
 // DispatchAlerts sends the provided alert(s) via email to the appropriate recipients.
-func (dispatcher *Dispatcher) DispatchAlerts(alerts *template.Data) error {
-	fmt.Println(alerts)
+func (dispatcher *Dispatcher) DispatchAlerts(alerts *template.Data, accounts data.Accounts) error {
+	for _, alert := range alerts.Alerts {
+		siteID, ok := alert.Labels["site_id"]
+		if !ok {
+			continue
+		}
+
+		// Dispatch the alert to all accounts configured to receive it
+		for _, account := range accounts {
+			if strings.EqualFold(account.Site, siteID) && account.Settings.ReceiveAlerts {
+				if err := dispatcher.dispatchAlert(alert, account); err != nil {
+					// Log errors only
+					dispatcher.log.Err(err).Str("id", alert.Fingerprint).Str("recipient", account.Email).Msg("unable to dispatch alert to user")
+				}
+			}
+		}
+	}
 	return nil
+}
+
+func (dispatcher *Dispatcher) dispatchAlert(alert template.Alert, account *data.Account) error {
+	alertValues := map[string]string{
+		"Status":      alert.Status,
+		"StartDate":   alert.StartsAt.String(),
+		"EndDate":     alert.EndsAt.String(),
+		"Fingerprint": alert.Fingerprint,
+
+		"Name":     alert.Labels["alertname"],
+		"Instance": alert.Labels["instance"],
+		"Job":      alert.Labels["job"],
+		"Severity": alert.Labels["severity"],
+		"Site":     alert.Labels["site"],
+		"SiteID":   alert.Labels["site_id"],
+
+		"Description": alert.Annotations["description"],
+		"Summary":     alert.Annotations["summary"],
+	}
+
+	return email.SendAlertNotification(account, []string{account.Email, dispatcher.conf.Email.NotificationsMail}, alertValues, *dispatcher.conf)
 }
 
 // NewDispatcher creates a new dispatcher instance.
