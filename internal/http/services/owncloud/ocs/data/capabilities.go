@@ -101,6 +101,22 @@ type CapabilitiesFilesTusSupport struct {
 	HTTPMethodOverride string `json:"http_method_override" xml:"http_method_override" mapstructure:"http_method_override"`
 }
 
+// CapabilitiesArchiver holds available archivers information
+type CapabilitiesArchiver struct {
+	Enabled     bool     `json:"enabled" xml:"enabled" mapstructure:"enabled"`
+	Version     string   `json:"version" xml:"version" mapstructure:"version"`
+	Formats     []string `json:"formats" xml:"formats" mapstructure:"formats"`
+	ArchiverURL string   `json:"archiver_url" xml:"archiver_url" mapstructure:"archiver_url"`
+}
+
+// CapabilitiesAppProvider holds available app provider information
+type CapabilitiesAppProvider struct {
+	Enabled bool   `json:"enabled" xml:"enabled" mapstructure:"enabled"`
+	Version string `json:"version" xml:"version" mapstructure:"version"`
+	AppsURL string `json:"apps_url" xml:"apps_url" mapstructure:"apps_url"`
+	OpenURL string `json:"open_url" xml:"open_url" mapstructure:"open_url"`
+}
+
 // CapabilitiesFiles TODO this is storage specific, not global. What effect do these options have on the clients?
 type CapabilitiesFiles struct {
 	PrivateLinks     ocsBool                      `json:"privateLinks" xml:"privateLinks" mapstructure:"private_links"`
@@ -110,6 +126,8 @@ type CapabilitiesFiles struct {
 	Favorites        ocsBool                      `json:"favorites" xml:"favorites"`
 	BlacklistedFiles []string                     `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
 	TusSupport       *CapabilitiesFilesTusSupport `json:"tus_support" xml:"tus_support" mapstructure:"tus_support"`
+	Archivers        []*CapabilitiesArchiver      `json:"archivers" xml:"archivers" mapstructure:"archivers"`
+	AppProviders     []*CapabilitiesAppProvider   `json:"app_providers" xml:"app_providers" mapstructure:"app_providers"`
 }
 
 // CapabilitiesDav holds dav endpoint config
