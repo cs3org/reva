@@ -142,8 +142,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	_, ocmderr, err := statRef(ctx, provider.Reference{Path: r.URL.Query().Get("container")}, client)
 	if err != nil {
 		log.Error().Err(err).Msg("error statting container")
-		ocmd.WriteError(w, r, ocmderr, "Container not found",
-			errtypes.NotFound("Container not found"))
+		ocmd.WriteError(w, r, ocmderr, "Container not found", errtypes.NotFound("Container not found"))
 		return
 	}
 	// Create empty file via storageprovider: obtain the HTTP URL for a PUT
@@ -201,8 +200,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	statRes, ocmderr, err := statRef(ctx, provider.Reference{Path: target}, client)
 	if err != nil {
 		log.Error().Err(err).Msg("error statting created file")
-		ocmd.WriteError(w, r, ocmderr, "Created file not found",
-			errtypes.NotFound("Created file not found"))
+		ocmd.WriteError(w, r, ocmderr, "Created file not found", errtypes.NotFound("Created file not found"))
 		return
 	}
 	js, err := json.Marshal(map[string]interface{}{"file_id": statRes.Id})
@@ -232,7 +230,8 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if listRes.Status.Code != rpc.Code_CODE_OK {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error listing supported mime types", status.NewErrorFromCode(listRes.Status.Code, "appprovider"))
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error listing supported mime types",
+			status.NewErrorFromCode(listRes.Status.Code, "appprovider"))
 		return
 	}
 
@@ -276,7 +275,8 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if openRes.Status.Code != rpc.Code_CODE_OK {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error opening resource information", status.NewErrorFromCode(openRes.Status.Code, "appprovider"))
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error opening resource information",
+			status.NewErrorFromCode(openRes.Status.Code, "appprovider"))
 		return
 	}
 
