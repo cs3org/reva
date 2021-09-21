@@ -148,11 +148,11 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 	return providers, nil
 }
 
-func (b *reg) ListSupportedMimeTypes(ctx context.Context) (*registrypb.MimeTypeList, error) {
+func (b *reg) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.MimeTypeInfo, error) {
 	b.RLock()
 	defer b.RUnlock()
 
-	res := registrypb.MimeTypeList{MimeTypes: []*registrypb.MimeTypeInfo{}}
+	res := []*registrypb.MimeTypeInfo{}
 	mtmap := make(map[string]*registrypb.MimeTypeInfo)
 	for _, p := range b.providers {
 		t := *p
@@ -168,11 +168,11 @@ func (b *reg) ListSupportedMimeTypes(ctx context.Context) (*registrypb.MimeTypeL
 					Description:  "",
 					Icon:         "",
 				}
-				res.MimeTypes = append(res.MimeTypes, mtmap[m])
+				res = append(res, mtmap[m])
 			}
 		}
 	}
-	return &res, nil
+	return res, nil
 }
 
 func (b *reg) SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registrypb.ProviderInfo) error {
