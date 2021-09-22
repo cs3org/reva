@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"path"
 
+	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -283,6 +285,10 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 			Status: status.NewInternal(ctx, err, "error getting share provider client"),
 		}, nil
 	}
+
+	t := rtrace.Provider.Tracer("reva")
+	ctx, span := t.Start(ctx, "Gateway.UpdateReceivedShare")
+	defer span.End()
 
 	res, err := c.UpdateReceivedShare(ctx, req)
 	if err != nil {
