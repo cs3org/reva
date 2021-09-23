@@ -20,6 +20,7 @@ package nextcloud_test
 
 import (
 	"context"
+	// "fmt"
 	"io"
 	"net/url"
 	"os"
@@ -43,7 +44,7 @@ import (
 func setUpNextcloudServer() (*nextcloud.StorageDriver, *[]string, func()) {
 	ncHost := os.Getenv("NEXTCLOUD")
 	var conf *nextcloud.StorageDriverConfig
-
+	// fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
 	if len(ncHost) == 0 {
 		conf = &nextcloud.StorageDriverConfig{
 			EndPoint: "http://mock.com/apps/sciencemesh/",
@@ -59,7 +60,9 @@ func setUpNextcloudServer() (*nextcloud.StorageDriver, *[]string, func()) {
 	called := make([]string, 0)
 	h := nextcloud.GetNextcloudServerMock(&called)
 	mock, teardown := nextcloud.TestingHTTPClient(h)
-	nc.SetHTTPClient(mock)
+	if len(ncHost) == 0 {
+		nc.SetHTTPClient(mock)
+	}
 	return nc, &called, teardown
 }
 
