@@ -41,6 +41,7 @@ type mimeTypeConfig struct {
 	Name        string `mapstructure:"name"`
 	Description string `mapstructure:"description"`
 	Icon        string `mapstructure:"icon"`
+	DefaultApp  string `mapstructure:"default_app"`
 }
 
 type config struct {
@@ -100,7 +101,12 @@ func New(m map[string]interface{}) (app.Registry, error) {
 				if ok {
 					newReg.mimetypes[m].apps = append(newReg.mimetypes[m].apps, addr)
 				} else {
-					newReg.mimetypes[m] = &mimeTypeIndex{apps: []string{addr}}
+					// set a default app provider if provided
+					mime, in := c.MimeTypes[m]
+					if !in {
+						return nil, errtypes.NotFound(fmt.Sprintf("mimetype %s not found in the configuration", m))
+					}
+					newReg.mimetypes[m] = &mimeTypeIndex{apps: []string{addr}, defaultApp: mime.DefaultApp}
 				}
 			}
 		}
