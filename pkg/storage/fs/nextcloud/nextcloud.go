@@ -620,7 +620,6 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 	// })
 	// JSON example:
 	// [{"grantee":{"Id":{"UserId":{"idp":"some-idp","opaque_id":"some-opaque-id","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true}}]
-	fmt.Println(string(respBody))
 	var respMapArr []map[string]interface{}
 	err = json.Unmarshal(respBody, &respMapArr)
 	if err != nil {
