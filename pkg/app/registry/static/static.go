@@ -148,23 +148,32 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 	return providers, nil
 }
 
-func (b *reg) ListSupportedMimeTypes(ctx context.Context) (map[string]*registrypb.AppProviderList, error) {
+func (b *reg) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.MimeTypeInfo, error) {
 	b.RLock()
 	defer b.RUnlock()
 
-	mimeTypes := make(map[string]*registrypb.AppProviderList)
+	res := []*registrypb.MimeTypeInfo{}
+	mtmap := make(map[string]*registrypb.MimeTypeInfo)
 	for _, p := range b.providers {
 		t := *p
 		t.MimeTypes = nil
 		for _, m := range p.MimeTypes {
-			if _, ok := mimeTypes[m]; ok {
-				mimeTypes[m].AppProviders = append(mimeTypes[m].AppProviders, &t)
+			if _, ok := mtmap[m]; ok {
+				mtmap[m].AppProviders = append(mtmap[m].AppProviders, &t)
 			} else {
-				mimeTypes[m] = &registrypb.AppProviderList{AppProviders: []*registrypb.ProviderInfo{&t}}
+				mtmap[m] = &registrypb.MimeTypeInfo{
+					MimeType:     m,
+					AppProviders: []*registrypb.ProviderInfo{&t},
+					Ext:          "", // TODO fetch from config
+					Name:         "",
+					Description:  "",
+					Icon:         "",
+				}
+				res = append(res, mtmap[m])
 			}
 		}
 	}
-	return mimeTypes, nil
+	return res, nil
 }
 
 func (b *reg) SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registrypb.ProviderInfo) error {

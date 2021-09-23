@@ -31,14 +31,14 @@ import (
 type Registry interface {
 	FindProviders(ctx context.Context, mimeType string) ([]*registry.ProviderInfo, error)
 	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
-	ListSupportedMimeTypes(ctx context.Context) (map[string]*registry.AppProviderList, error)
+	ListSupportedMimeTypes(ctx context.Context) ([]*registry.MimeTypeInfo, error)
 	AddProvider(ctx context.Context, p *registry.ProviderInfo) error
 	GetDefaultProviderForMimeType(ctx context.Context, mimeType string) (*registry.ProviderInfo, error)
 	SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registry.ProviderInfo) error
 }
 
 // Provider is the interface that application providers implement
-// for providing the URL of the app which will serve the requested resource.
+// for interacting with external apps that serve the requested resource.
 type Provider interface {
 	GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string) (*appprovider.OpenInAppURL, error)
 	GetAppProviderInfo(ctx context.Context) (*registry.ProviderInfo, error)
