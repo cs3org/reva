@@ -62,8 +62,10 @@ func setUpNextcloudServer() (*nextcloud.StorageDriver, *[]string, func()) {
 	mock, teardown := nextcloud.TestingHTTPClient(h)
 	if len(ncHost) == 0 {
 		nc.SetHTTPClient(mock)
+		return nc, &called, teardown
+	} else {
+		return nc, nil, teardown
 	}
-	return nc, &called, teardown
 }
 
 var _ = Describe("Nextcloud", func() {
@@ -302,8 +304,10 @@ var _ = Describe("Nextcloud", func() {
 				XXX_unrecognized:     nil,
 				XXX_sizecache:        0,
 			}))
-			Expect(len(*called)).To(Equal(1))
-			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"mdKeys":["val1","val2","val3"]}`))
+			if called != nil {
+				Expect(len(*called)).To(Equal(1))
+				Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"mdKeys":["val1","val2","val3"]}`))
+			}
 		})
 	})
 
