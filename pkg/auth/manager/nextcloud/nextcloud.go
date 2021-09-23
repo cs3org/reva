@@ -44,7 +44,8 @@ type mgr struct {
 	endPoint string
 }
 
-type config struct {
+// AuthManagerConfig contains config for a Nextcloud-based AuthManager
+type AuthManagerConfig struct {
 	EndPoint string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
 }
 
@@ -55,11 +56,11 @@ type Action struct {
 	argS     string
 }
 
-func (c *config) init() {
+func (c *AuthManagerConfig) init() {
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
+func parseConfig(m map[string]interface{}) (*AuthManagerConfig, error) {
+	c := &AuthManagerConfig{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
@@ -75,9 +76,14 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}
 	c.init()
 
+	return NewAuthManager(c, &http.Client{})
+}
+
+// NewAuthManager returns a new Nextcloud-based AuthManager
+func NewAuthManager(c *AuthManagerConfig, hc *http.Client) (auth.Manager, error) {
 	return &mgr{
 		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
-		client:   &http.Client{},
+		client:   hc,
 	}, nil
 }
 
@@ -92,7 +98,7 @@ func (am *mgr) do(ctx context.Context, a Action) (int, []byte, error) {
 	// 	return 0, nil, err
 	// }
 	// url := am.endPoint + "~" + a.username + "/api/" + a.verb
-	url := "http://localhost/apps/sciencemesh/~" + a.username + "/api/" + a.verb
+	url := "http://localhost/apps/sciencemesh/~" + a.username + "/api/auth/" + a.verb
 	log.Info().Msgf("am.do %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
@@ -117,18 +123,30 @@ func (am *mgr) do(ctx context.Context, a Action) (int, []byte, error) {
 
 // Authenticate method as defined in https://github.com/cs3org/reva/blob/28500a8/pkg/auth/auth.go#L31-L33
 func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
-	var params = map[string]string{
-		"password": clientSecret,
-		// "username": clientID,
+	type paramsObj struct {
+		ClientID     string `json:"clientID"`
+		ClientSecret string `json:"clientSecret"`
+		// Scope        authpb.Scope
 	}
-	bodyStr, err := json.Marshal(params)
+	bodyObj := &paramsObj{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		// Scope: authpb.Scope{
+		// 	Resource: &types.OpaqueEntry{
+		// 		Decoder: "json",
+		// 		Value:   []byte(`{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}`),
+		// 	},
+		// 	Role: authpb.Role_ROLE_OWNER,
+		// },
+	}
+	bodyStr, err := json.Marshal(bodyObj)
 	if err != nil {
 		return nil, nil, err
 	}
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("Authenticate %s %s", clientID, bodyStr)
 
-	statusCode, _, err := am.do(ctx, Action{"Authenticate", clientID, string(bodyStr)})
+	statusCode, body, err := am.do(ctx, Action{"Authenticate", clientID, string(bodyStr)})
 
 	if err != nil {
 		return nil, nil, err
@@ -137,16 +155,20 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	if statusCode != 200 {
 		return nil, nil, errors.New("Username/password not recognized by Nextcloud backend")
 	}
-	user := &user.User{
-		Username: clientID,
-		Id: &user.UserId{
-			OpaqueId: clientID,
-			Idp:      "localhost",
-			Type:     1,
-		},
-		Mail:        clientID,
-		DisplayName: clientID,
-		Groups:      nil,
+
+	type resultsObj struct {
+		User   user.User               `json:"user"`
+		Scopes map[string]authpb.Scope `json:"scopes"`
 	}
-	return user, nil, nil
+	result := &resultsObj{}
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return nil, nil, err
+	}
+	var pointersMap = make(map[string]*authpb.Scope)
+	for k := range result.Scopes {
+		scope := result.Scopes[k]
+		pointersMap[k] = &scope
+	}
+	return &result.User, pointersMap, nil
 }
