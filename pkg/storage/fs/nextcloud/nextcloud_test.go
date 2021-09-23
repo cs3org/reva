@@ -119,55 +119,33 @@ var _ = Describe("Nextcloud", func() {
 	// 	GetHome(ctx context.Context) (string, error)
 	Describe("GetHome", func() {
 		It("calls the GetHome endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			home, err := nc.GetHome(ctx)
 			Expect(home).To(Equal("yes we are"))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(called)).To(Equal(1))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetHome `))
+			Expect(len(*called)).To(Equal(1))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetHome `))
 		})
 	})
 
 	// CreateHome(ctx context.Context) error
 	Describe("CreateHome", func() {
 		It("calls the CreateHome endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			err := nc.CreateHome(ctx)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(called)).To(Equal(1))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/CreateHome `))
+			Expect(len(*called)).To(Equal(1))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/CreateHome `))
 		})
 	})
 
 	// CreateDir(ctx context.Context, ref *provider.Reference) error
 	Describe("CreateDir", func() {
 		It("calls the CreateDir endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -178,23 +156,16 @@ var _ = Describe("Nextcloud", func() {
 			}
 			err := nc.CreateDir(ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(called)).To(Equal(1))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/CreateDir {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`))
+			Expect(len(*called)).To(Equal(1))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/CreateDir {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`))
 		})
 	})
 
 	// Delete(ctx context.Context, ref *provider.Reference) error
 	Describe("Delete", func() {
 		It("calls the Delete endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -205,8 +176,8 @@ var _ = Describe("Nextcloud", func() {
 			}
 			err := nc.Delete(ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(called)).To(Equal(1))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/Delete {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`))
+			Expect(len(*called)).To(Equal(1))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/Delete {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`))
 		})
 	})
 
@@ -240,15 +211,8 @@ var _ = Describe("Nextcloud", func() {
 	// GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
 	Describe("GetMD", func() {
 		It("calls the GetMD endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -335,23 +299,16 @@ var _ = Describe("Nextcloud", func() {
 				XXX_unrecognized:     nil,
 				XXX_sizecache:        0,
 			}))
-			Expect(len(called)).To(Equal(1))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"mdKeys":["val1","val2","val3"]}`))
+			Expect(len(*called)).To(Equal(1))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"mdKeys":["val1","val2","val3"]}`))
 		})
 	})
 
 	// ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error)
 	Describe("ListFolder", func() {
 		It("calls the ListFolder endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -442,23 +399,16 @@ var _ = Describe("Nextcloud", func() {
 			// Expect(results[0].Etag).To(Equal("in-json-etag"))
 			// Expect(results[0].MimeType).To(Equal("in-json-mimetype"))
 			// Expect(err).ToNot(HaveOccurred())
-			// Expect(len(called)).To(Equal(1))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/ListFolder {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"mdKeys":["val1","val2","val3"]}`))
+			// Expect(len(*called)).To(Equal(1))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/ListFolder {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"mdKeys":["val1","val2","val3"]}`))
 		})
 	})
 
 	// InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error)
 	Describe("InitiateUpload", func() {
 		It("calls the InitiateUpload endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -480,22 +430,15 @@ var _ = Describe("Nextcloud", func() {
 				"what":     "should be",
 				"returned": "here",
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/InitiateUpload {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"uploadLength":12345,"metadata":{"key1":"val1","key2":"val2","key3":"val3"}}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/InitiateUpload {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"uploadLength":12345,"metadata":{"key1":"val1","key2":"val2","key3":"val3"}}`))
 		})
 	})
 
 	// Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
 	Describe("Upload", func() {
 		It("calls the Upload endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -508,21 +451,14 @@ var _ = Describe("Nextcloud", func() {
 			stringReadCloser := io.NopCloser(stringReader)
 			err := nc.Upload(ctx, ref, stringReadCloser)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`PUT /apps/sciencemesh/~tester/api/storage/Upload/some/file/path.txt shiny!`))
+			Expect((*called)[0]).To(Equal(`PUT /apps/sciencemesh/~tester/api/storage/Upload/some/file/path.txt shiny!`))
 		})
 	})
 	// Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
 	Describe("Download", func() {
 		It("calls the Download endpoint with GET", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -533,7 +469,7 @@ var _ = Describe("Nextcloud", func() {
 			}
 			reader, err := nc.Download(ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`GET /apps/sciencemesh/~tester/api/storage/Download/some/file/path.txt `))
+			Expect((*called)[0]).To(Equal(`GET /apps/sciencemesh/~tester/api/storage/Download/some/file/path.txt `))
 			defer reader.Close()
 			body, err := io.ReadAll(reader)
 			Expect(err).ToNot(HaveOccurred())
@@ -544,15 +480,8 @@ var _ = Describe("Nextcloud", func() {
 	// ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	Describe("ListRevisions", func() {
 		It("calls the ListRevisions endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -597,22 +526,15 @@ var _ = Describe("Nextcloud", func() {
 				XXX_unrecognized:     nil,
 				XXX_sizecache:        0,
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/ListRevisions {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/ListRevisions {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`))
 		})
 	})
 
 	// DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
 	Describe("DownloadRevision", func() {
 		It("calls the DownloadRevision endpoint with GET", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -624,7 +546,7 @@ var _ = Describe("Nextcloud", func() {
 			key := "some/revision"
 			reader, err := nc.DownloadRevision(ctx, ref, key)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`GET /apps/sciencemesh/~tester/api/storage/DownloadRevision/some%2Frevision/some/file/path.txt `))
+			Expect((*called)[0]).To(Equal(`GET /apps/sciencemesh/~tester/api/storage/DownloadRevision/some%2Frevision/some/file/path.txt `))
 			defer reader.Close()
 			body, err := io.ReadAll(reader)
 			Expect(err).ToNot(HaveOccurred())
@@ -635,15 +557,8 @@ var _ = Describe("Nextcloud", func() {
 	// RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
 	Describe("RestoreRevision", func() {
 		It("calls the RestoreRevision endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -655,22 +570,15 @@ var _ = Describe("Nextcloud", func() {
 			key := "asdf"
 			err := nc.RestoreRevision(ctx, ref, key)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/RestoreRevision {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"key":"asdf"}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/RestoreRevision {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"key":"asdf"}`))
 		})
 	})
 
 	// ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error)
 	Describe("ListRecycle", func() {
 		It("calls the ListRecycle endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 
 			results, err := nc.ListRecycle(ctx, "asdf", "/some/file.txt")
 			Expect(err).ToNot(HaveOccurred())
@@ -692,22 +600,15 @@ var _ = Describe("Nextcloud", func() {
 				XXX_unrecognized:     nil,
 				XXX_sizecache:        0,
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/ListRecycle {"key":"asdf","path":"/some/file.txt"}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/ListRecycle {"key":"asdf","path":"/some/file.txt"}`))
 		})
 	})
 
 	// RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error
 	Describe("RestoreRecycleItem", func() {
 		It("calls the RestoreRecycleItem endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			restoreRef := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -720,59 +621,38 @@ var _ = Describe("Nextcloud", func() {
 			key := "asdf"
 			err := nc.RestoreRecycleItem(ctx, key, path, restoreRef)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/RestoreRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt","restoreRef":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/RestoreRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt","restoreRef":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}}`))
 		})
 	})
 	// PurgeRecycleItem(ctx context.Context, key, path string) error
 	Describe("PurgeRecycleItem", func() {
 		It("calls the PurgeRecycleItem endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			path := "original/location/when/deleted.txt"
 			key := "asdf"
 			err := nc.PurgeRecycleItem(ctx, key, path)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/PurgeRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt"}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/PurgeRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt"}`))
 		})
 	})
 
 	// EmptyRecycle(ctx context.Context) error
 	Describe("EmpytRecycle", func() {
 		It("calls the EmpytRecycle endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			err := nc.EmptyRecycle(ctx)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/EmptyRecycle `))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/EmptyRecycle `))
 		})
 	})
 
 	// GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	Describe("GetPathByID", func() {
 		It("calls the GetPathByID endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L602-L618
 			id := &provider.ResourceId{
 				StorageId: "storage-id",
@@ -780,7 +660,7 @@ var _ = Describe("Nextcloud", func() {
 			}
 			path, err := nc.GetPathByID(ctx, id)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetPathByID {"storage_id":"storage-id","opaque_id":"opaque-id"}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetPathByID {"storage_id":"storage-id","opaque_id":"opaque-id"}`))
 			Expect(path).To(Equal("the/path/for/that/id.txt"))
 		})
 	})
@@ -788,15 +668,8 @@ var _ = Describe("Nextcloud", func() {
 	// AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	Describe("AddGrant", func() {
 		It("calls the AddGrant endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
 					StorageId: "storage-id",
@@ -841,22 +714,15 @@ var _ = Describe("Nextcloud", func() {
 			}
 			err := nc.AddGrant(ctx, ref, grant)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/AddGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/AddGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`))
 		})
 	})
 
 	// DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error
 	Describe("DenyGrant", func() {
 		It("calls the DenyGrant endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
 					StorageId: "storage-id",
@@ -876,22 +742,15 @@ var _ = Describe("Nextcloud", func() {
 			}
 			err := nc.DenyGrant(ctx, ref, grantee)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/DenyGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/DenyGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}}`))
 		})
 	})
 
 	// RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	Describe("RemoveGrant", func() {
 		It("calls the RemoveGrant endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
 					StorageId: "storage-id",
@@ -936,22 +795,15 @@ var _ = Describe("Nextcloud", func() {
 			}
 			err := nc.RemoveGrant(ctx, ref, grant)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/RemoveGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/RemoveGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`))
 		})
 	})
 
 	// UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	Describe("UpdateGrant", func() {
 		It("calls the UpdateGrant endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
 					StorageId: "storage-id",
@@ -996,22 +848,15 @@ var _ = Describe("Nextcloud", func() {
 			}
 			err := nc.UpdateGrant(ctx, ref, grant)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/UpdateGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/UpdateGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`))
 		})
 	})
 
 	// ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
 	Describe("ListGrants", func() {
 		It("calls the ListGrants endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
 					StorageId: "storage-id",
@@ -1023,81 +868,53 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(grants)).To(Equal(1))
 
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/ListGrants {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/ListGrants {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}`))
 		})
 	})
 
 	// GetQuota(ctx context.Context) (uint64, uint64, error)
 	Describe("GetQuota", func() {
 		It("calls the GetQuota endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			maxBytes, maxFiles, err := nc.GetQuota(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(maxBytes).To(Equal(uint64(456)))
 			Expect(maxFiles).To(Equal(uint64(123)))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetQuota `))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetQuota `))
 		})
 	})
 
 	// CreateReference(ctx context.Context, path string, targetURI *url.URL) error
 	Describe("CreateReference", func() {
 		It("calls the CreateReference endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			path := "some/file/path.txt"
 			targetURI, err := url.Parse("http://bing.com/search?q=dotnet")
 			Expect(err).ToNot(HaveOccurred())
 			err = nc.CreateReference(ctx, path, targetURI)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/CreateReference {"path":"some/file/path.txt","url":"http://bing.com/search?q=dotnet"}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/CreateReference {"path":"some/file/path.txt","url":"http://bing.com/search?q=dotnet"}`))
 		})
 	})
 
 	// Shutdown(ctx context.Context) error
 	Describe("Shutdown", func() {
 		It("calls the Shutdown endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			err := nc.Shutdown(ctx)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/Shutdown `))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/Shutdown `))
 		})
 	})
 
 	// SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
 	Describe("SetArbitraryMetadata", func() {
 		It("calls the SetArbitraryMetadata endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
 					StorageId: "storage-id",
@@ -1113,22 +930,15 @@ var _ = Describe("Nextcloud", func() {
 			}
 			err := nc.SetArbitraryMetadata(ctx, ref, md)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/SetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"md":{"metadata":{"arbi":"trary","meta":"data"}}}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/SetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"md":{"metadata":{"arbi":"trary","meta":"data"}}}`))
 		})
 	})
 
 	// UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
 	Describe("UnsetArbitraryMetadata", func() {
 		It("calls the UnsetArbitraryMetadata endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
 					StorageId: "storage-id",
@@ -1139,22 +949,15 @@ var _ = Describe("Nextcloud", func() {
 			keys := []string{"arbi"}
 			err := nc.UnsetArbitraryMetadata(ctx, ref, keys)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/UnsetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"keys":["arbi"]}`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/UnsetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"keys":["arbi"]}`))
 		})
 	})
 
 	// ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
 	Describe("ListStorageSpaces", func() {
 		It("calls the ListStorageSpaces endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			filter1 := &provider.ListStorageSpacesRequest_Filter{
 				Type: provider.ListStorageSpacesRequest_Filter_TYPE_OWNER,
 				Term: &provider.ListStorageSpacesRequest_Filter_Owner{
@@ -1213,22 +1016,15 @@ var _ = Describe("Nextcloud", func() {
 					Seconds: uint64(1234567890),
 				},
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/ListStorageSpaces [{"type":3,"Term":{"Owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},{"type":2,"Term":{"Id":{"opaque_id":"opaque-id"}}},{"type":4,"Term":{"SpaceType":"home"}}]`))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/ListStorageSpaces [{"type":3,"Term":{"Owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},{"type":2,"Term":{"Id":{"opaque_id":"opaque-id"}}},{"type":4,"Term":{"SpaceType":"home"}}]`))
 		})
 	})
 
 	// CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 	Describe("CreateStorageSpace", func() {
 		It("calls the CreateStorageSpace endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/03e4a408c1f3b2882916cf3fad4c71081a20711d/cs3/storage/provider/v1beta1/provider_api.pb.go#L3176-L3192
 			result, err := nc.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
 				Opaque: &types.Opaque{
@@ -1285,8 +1081,8 @@ var _ = Describe("Nextcloud", func() {
 					},
 				},
 			}))
-			Expect(len(called)).To(Equal(1))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/CreateStorageSpace {"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"type":"home","name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123}}`))
+			Expect(len(*called)).To(Equal(1))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/CreateStorageSpace {"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"type":"home","name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123}}`))
 		})
 	})
 
