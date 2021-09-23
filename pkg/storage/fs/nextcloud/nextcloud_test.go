@@ -212,7 +212,7 @@ var _ = Describe("Nextcloud", func() {
 	})
 
 	// GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
-	Describe("GetMD", func() {
+	FDescribe("GetMD", func() {
 		It("calls the GetMD endpoint", func() {
 			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
