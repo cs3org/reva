@@ -20,6 +20,7 @@ package static
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -35,8 +36,16 @@ func init() {
 	registry.Register("static", New)
 }
 
+type mimeTypeConfig struct {
+	Extension   string `mapstructure:"extension"`
+	Name        string `mapstructure:"name"`
+	Description string `mapstructure:"description"`
+	Icon        string `mapstructure:"icon"`
+}
+
 type config struct {
 	Providers map[string]*registrypb.ProviderInfo `mapstructure:"providers"`
+	MimeTypes map[string]mimeTypeConfig           `mapstructure:"mime_types"`
 }
 
 func (c *config) init() {
@@ -64,6 +73,7 @@ type mimeTypeIndex struct {
 }
 
 type reg struct {
+	config    *config
 	providers map[string]*registrypb.ProviderInfo
 	mimetypes map[string]*mimeTypeIndex // map the mime type to the addresses of the corresponding providers
 	sync.RWMutex
@@ -78,6 +88,7 @@ func New(m map[string]interface{}) (app.Registry, error) {
 	c.init()
 
 	newReg := reg{
+		config:    c,
 		providers: c.Providers,
 		mimetypes: make(map[string]*mimeTypeIndex),
 	}
@@ -161,13 +172,17 @@ func (b *reg) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.MimeTyp
 			if _, ok := mtmap[m]; ok {
 				mtmap[m].AppProviders = append(mtmap[m].AppProviders, &t)
 			} else {
+				mime, ok := b.config.MimeTypes[m]
+				if !ok {
+					return nil, errtypes.NotFound(fmt.Sprintf("mimetype %s not found in the configuration", m))
+				}
 				mtmap[m] = &registrypb.MimeTypeInfo{
 					MimeType:     m,
 					AppProviders: []*registrypb.ProviderInfo{&t},
-					Ext:          "", // TODO fetch from config
-					Name:         "",
-					Description:  "",
-					Icon:         "",
+					Ext:          mime.Extension,
+					Name:         mime.Name,
+					Description:  mime.Description,
+					Icon:         mime.Icon,
 				}
 				res = append(res, mtmap[m])
 			}
