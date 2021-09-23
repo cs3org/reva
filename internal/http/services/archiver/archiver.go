@@ -22,12 +22,15 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -42,6 +45,7 @@ import (
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
@@ -62,7 +66,7 @@ type Config struct {
 	MaxSize     int64  `mapstructure:"max_size"`
 }
 
-var (
+const (
 	errMaxFileCount = errtypes.InternalError("reached max files count")
 	errMaxSize      = errtypes.InternalError("reached max total files size")
 )
@@ -105,38 +109,76 @@ func (c *Config) init() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
+func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, error) {
+	if len(files) == 0 && len(ids) == 0 {
+		return nil, errtypes.BadRequest("file and id lists are both empty")
+	}
+
+	f := []string{}
+
+	for _, id := range ids {
+		// id is base64 encoded and after decoding has the form <storage_id>:<resource_id>
+
+		storageID, opaqueID, err := decodeResourceID(id)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := s.gtwClient.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: storageID,
+					OpaqueId:  opaqueID,
+				},
+			},
+		})
+
+		switch {
+		case err != nil:
+			return nil, err
+		case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
+			return nil, errtypes.NotFound(id)
+		case resp.Status.Code != rpc.Code_CODE_OK:
+			return nil, errtypes.InternalError(fmt.Sprintf("error getting stats from %s", id))
+		}
+
+		f = append(f, resp.Info.Path)
+
+	}
+
+	return append(f, files...), nil
+}
+
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		// get the dir and files to archive from the URL
+		// get the paths and/or the resources id from the query
 		ctx := r.Context()
 		v := r.URL.Query()
-		if _, ok := v["dir"]; !ok {
+
+		paths, ok := v["path"]
+		if !ok {
+			paths = []string{}
+		}
+		ids, ok := v["id"]
+		if !ok {
+			ids = []string{}
+		}
+
+		files, err := s.getFiles(ctx, paths, ids)
+		if err != nil {
+			s.log.Error().Msg(err.Error())
 			rw.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		dir := v["dir"][0]
 
-		names, ok := v["file"]
-		if !ok {
-			names = []string{}
-		}
-
-		// append to the files name the dir
-		files := []string{}
-		for _, f := range names {
-			p := path.Join(dir, f)
-			files = append(files, strings.TrimSuffix(p, "/"))
+		dir := getDeepestCommonDir(files)
+		if pathIn(files, dir) {
+			dir = filepath.Dir(dir)
 		}
 
 		userAgent := ua.Parse(r.Header.Get("User-Agent"))
 
 		archiveName := "download"
-		if len(files) == 0 {
-			// we need to archive the whole dir
-			files = append(files, dir)
-			archiveName = path.Base(dir)
-		}
-
 		if userAgent.OS == ua.Windows {
 			archiveName += ".zip"
 		} else {
@@ -148,7 +190,6 @@ func (s *svc) Handler() http.Handler {
 		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archiveName))
 		rw.Header().Set("Content-Transfer-Encoding", "binary")
 
-		var err error
 		if userAgent.OS == ua.Windows {
 			err = s.createZip(ctx, dir, files, rw)
 		} else {
@@ -202,7 +243,12 @@ func (s *svc) createTar(ctx context.Context, dir string, files []string, dst io.
 				return errMaxSize
 			}
 
-			fileName := strings.TrimPrefix(path, dir)
+			// TODO (gdelmont): remove duplicates if the resources requested overlaps
+			fileName, err := filepath.Rel(dir, path)
+
+			if err != nil {
+				return err
+			}
 
 			header := tar.Header{
 				Name:    fileName,
@@ -265,7 +311,11 @@ func (s *svc) createZip(ctx context.Context, dir string, files []string, dst io.
 				return errMaxSize
 			}
 
-			fileName := strings.TrimPrefix(strings.Trim(path, dir), "/")
+			// TODO (gdelmont): remove duplicates if the resources requested overlaps
+			fileName, err := filepath.Rel(dir, path)
+			if err != nil {
+				return err
+			}
 
 			if fileName == "" {
 				return nil
@@ -345,4 +395,64 @@ func (s *svc) downloadFile(ctx context.Context, path string, dst io.Writer) erro
 
 	_, err = io.Copy(dst, httpRes.Body)
 	return err
+}
+
+func decodeResourceID(encodedID string) (string, string, error) {
+	decodedID, err := base64.URLEncoding.DecodeString(encodedID)
+	if err != nil {
+		return "", "", errors.Wrap(err, "resource ID does not follow the required format")
+	}
+
+	parts := strings.Split(string(decodedID), ":")
+	if len(parts) != 2 {
+		return "", "", errtypes.BadRequest("resource ID does not follow the required format")
+	}
+	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
+		return "", "", errtypes.BadRequest("resourceID contains illegal characters")
+	}
+	return parts[0], parts[1], nil
+}
+
+func pathIn(files []string, f string) bool {
+	cleanedF := filepath.Clean(f)
+	for _, file := range files {
+		if filepath.Clean(file) == cleanedF {
+			return true
+		}
+	}
+	return false
+}
+
+func getDeepestCommonDir(files []string) string {
+
+	if len(files) == 0 {
+		return ""
+	}
+
+	// find the maximum common substring from left
+	res := path.Clean(files[0]) + "/"
+
+	for _, file := range files[1:] {
+		file = path.Clean(file) + "/"
+
+		if len(file) < len(res) {
+			res, file = file, res
+		}
+
+		for i := 0; i < len(res); i++ {
+			if res[i] != file[i] {
+				res = res[:i]
+			}
+		}
+
+	}
+
+	// the common substring could be between two / - inside a file name
+	for i := len(res) - 1; i >= 0; i-- {
+		if res[i] == '/' {
+			res = res[:i+1]
+			break
+		}
+	}
+	return filepath.Clean(res)
 }
