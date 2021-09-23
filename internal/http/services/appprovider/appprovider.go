@@ -24,8 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -105,13 +103,25 @@ func (s *svc) Handler() http.Handler {
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-		switch head {
-		case "new":
-			s.handleNew(w, r)
-		case "list":
-			s.handleList(w, r)
-		case "open":
-			s.handleOpen(w, r)
+		switch r.Method {
+		case "POST":
+			switch head {
+			case "new":
+				s.handleNew(w, r)
+			case "open":
+				s.handleOpen(w, r)
+			default:
+				ocmd.WriteError(w, r, ocmd.APIErrorServerError, "unsupported POST endpoint", nil)
+			}
+		case "GET":
+			switch head {
+			case "list":
+				s.handleList(w, r)
+			default:
+				ocmd.WriteError(w, r, ocmd.APIErrorServerError, "unsupported GET endpoint", nil)
+			}
+		default:
+			ocmd.WriteError(w, r, ocmd.APIErrorServerError, "unsupported method", nil)
 		}
 	})
 }
@@ -138,22 +148,15 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 			errtypes.UserRequired("Missing filename"))
 		return
 	}
-	// stat the container
-	_, ocmderr, err := statRef(ctx, provider.Reference{Path: r.URL.Query().Get("container")}, client)
-	if err != nil {
-		log.Error().Err(err).Msg("error statting container")
-		ocmd.WriteError(w, r, ocmderr, "Container not found", errtypes.NotFound("Container not found"))
-		return
-	}
-	// Create empty file via storageprovider: obtain the HTTP URL for a PUT
-	target = path.Join(r.URL.Query().Get("container"), target)
+
+	// Create empty file via storageprovider
 	createReq := &provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{Path: target},
 		Opaque: &typespb.Opaque{
 			Map: map[string]*typespb.OpaqueEntry{
 				"Upload-Length": {
 					Decoder: "plain",
-					Value:   []byte(strconv.FormatInt(0, 10)),
+					Value:   []byte("0"),
 				},
 			},
 		},
@@ -307,6 +310,7 @@ func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent stri
 			}
 		}
 		if len(apps) > 0 {
+			m.AppProviders = apps
 			res = append(res, m)
 		}
 	}

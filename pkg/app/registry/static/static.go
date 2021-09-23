@@ -162,6 +162,7 @@ func (b *reg) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.MimeTyp
 				mtmap[m].AppProviders = append(mtmap[m].AppProviders, &t)
 			} else {
 				mtmap[m] = &registrypb.MimeTypeInfo{
+					MimeType:     m,
 					AppProviders: []*registrypb.ProviderInfo{&t},
 					Ext:          "", // TODO fetch from config
 					Name:         "",
