@@ -40,6 +40,29 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+func setUpNextcloudServer() (*nextcloud.StorageDriver, *[]string, func()) {
+	ncHost := os.Getenv("NEXTCLOUD")
+	var conf *nextcloud.StorageDriverConfig
+
+	if len(ncHost) == 0 {
+		conf = &nextcloud.StorageDriverConfig{
+			EndPoint: "http://mock.com/apps/sciencemesh/",
+			MockHTTP: true,
+		}
+	} else {
+		conf = &nextcloud.StorageDriverConfig{
+			EndPoint: ncHost + "/apps/sciencemesh/",
+			MockHTTP: false,
+		}
+	}
+	nc, _ := nextcloud.NewStorageDriver(conf)
+	called := make([]string, 0)
+	h := nextcloud.GetNextcloudServerMock(&called)
+	mock, teardown := nextcloud.TestingHTTPClient(h)
+	nc.SetHTTPClient(mock)
+	return nc, &called, teardown
+}
+
 var _ = Describe("Nextcloud", func() {
 	var (
 		ctx     context.Context
@@ -190,15 +213,8 @@ var _ = Describe("Nextcloud", func() {
 	// Move(ctx context.Context, oldRef, newRef *provider.Reference) error
 	Describe("Move", func() {
 		It("calls the Move endpoint", func() {
-			nc, _ := nextcloud.NewStorageDriver(&nextcloud.StorageDriverConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-				MockHTTP: true,
-			})
-			called := make([]string, 0)
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			nc.SetHTTPClient(mock)
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L550-L561
 			ref1 := &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -216,8 +232,8 @@ var _ = Describe("Nextcloud", func() {
 			}
 			err := nc.Move(ctx, ref1, ref2)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(called)).To(Equal(1))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/Move {"oldRef":{"resource_id":{"storage_id":"storage-id-1","opaque_id":"opaque-id-1"},"path":"/some/old/path"},"newRef":{"resource_id":{"storage_id":"storage-id-2","opaque_id":"opaque-id-2"},"path":"/some/new/path"}}`))
+			Expect(len(*called)).To(Equal(1))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/Move {"oldRef":{"resource_id":{"storage_id":"storage-id-1","opaque_id":"opaque-id-1"},"path":"/some/old/path"},"newRef":{"resource_id":{"storage_id":"storage-id-2","opaque_id":"opaque-id-2"},"path":"/some/new/path"}}`))
 		})
 	})
 

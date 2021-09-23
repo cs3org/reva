@@ -21,7 +21,6 @@ package nextcloud
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -210,7 +209,6 @@ func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) 
 		return 0, nil, err
 	}
 
-	// fmt.Printf("nc.do response %d %s\n", resp.StatusCode, body)
 	return resp.StatusCode, body, nil
 }
 
@@ -387,7 +385,6 @@ func (nc *StorageDriver) ListRevisions(ctx context.Context, ref *provider.Refere
 	log.Info().Msgf("ListRevisions %s", bodyStr)
 
 	_, respBody, err := nc.do(ctx, Action{"ListRevisions", string(bodyStr)})
-	// fmt.Printf("ListRevisions respBody %s", respBody)
 
 	if err != nil {
 		return nil, err
@@ -464,7 +461,6 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path strin
 
 // RestoreRecycleItem as defined in the storage.FS interface
 func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, key string, path string, restoreRef *provider.Reference) error {
-	// fmt.Printf("RestoreRecycleItem! %s %s\n\n", key, path)
 	type paramsObj struct {
 		Key        string              `json:"key"`
 		Path       string              `json:"path"`
@@ -777,7 +773,6 @@ func (nc *StorageDriver) CreateStorageSpace(ctx context.Context, req *provider.C
 		return nil, err
 	}
 	var respObj provider.CreateStorageSpaceResponse
-	fmt.Println(string(respBody))
 	err = json.Unmarshal(respBody, &respObj)
 	if err != nil {
 		return nil, err
