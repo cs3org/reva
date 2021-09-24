@@ -63,7 +63,7 @@ type config struct {
 	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
 	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
 	JWTSecret           string `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
-	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:";Specifies if the app can be opened only on desktop."`
+	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
 	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
 
