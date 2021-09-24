@@ -217,7 +217,7 @@ var _ = Describe("Nextcloud", func() {
 	})
 
 	// GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
-	FDescribe("GetMD", func() {
+	Describe("GetMD", func() {
 		It("calls the GetMD endpoint", func() {
 			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
@@ -312,7 +312,7 @@ var _ = Describe("Nextcloud", func() {
 	})
 
 	// ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error)
-	Describe("ListFolder", func() {
+	FDescribe("ListFolder", func() {
 		It("calls the ListFolder endpoint", func() {
 			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
@@ -322,7 +322,7 @@ var _ = Describe("Nextcloud", func() {
 					StorageId: "storage-id",
 					OpaqueId:  "opaque-id",
 				},
-				Path: "/some/path",
+				Path: "/some",
 			}
 			mdKeys := []string{"val1", "val2", "val3"}
 			results, err := nc.ListFolder(ctx, ref, mdKeys)

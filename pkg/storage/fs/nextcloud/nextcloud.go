@@ -21,6 +21,7 @@ package nextcloud
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -316,11 +317,14 @@ func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference
 	}
 	bodyStr, err := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("LisfFolder %s", bodyStr)
+	log.Info().Msgf("ListFolder %s", bodyStr)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("calling!")
+	fmt.Println(string(bodyStr))
 	status, body, err := nc.do(ctx, Action{"ListFolder", string(bodyStr)})
+	fmt.Println(string(body))
 	if err != nil {
 		return nil, err
 	}
