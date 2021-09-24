@@ -281,12 +281,13 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error opening resource", err)
+		log.Error().Err(err).Msg("error calling OpenInApp")
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, err.Error(), err)
 		return
 	}
 	if openRes.Status.Code != rpc.Code_CODE_OK {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error opening resource information",
-			status.NewErrorFromCode(openRes.Status.Code, "appprovider"))
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, openRes.Status.Message,
+			status.NewErrorFromCode(openRes.Status.Code, "error calling OpenInApp"))
 		return
 	}
 

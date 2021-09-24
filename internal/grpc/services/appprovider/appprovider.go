@@ -20,6 +20,7 @@ package appprovider
 
 import (
 	"context"
+	"errors"
 	"os"
 	"time"
 
@@ -35,7 +36,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -145,9 +145,8 @@ func getProvider(c *config) (app.Provider, error) {
 func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
 	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken)
 	if err != nil {
-		err := errors.Wrap(err, "appprovider: error calling GetAppURL")
 		res := &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, err, "error getting app URL"),
+			Status: status.NewInternal(ctx, errors.New("appprovider: error calling GetAppURL"), err.Error()),
 		}
 		return res, nil
 	}
