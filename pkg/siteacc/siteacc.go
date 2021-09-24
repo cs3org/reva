@@ -178,7 +178,7 @@ func New(conf *config.Configuration, log *zerolog.Logger) (*SiteAccounts, error)
 	// Configure the accounts service
 	siteacc := new(SiteAccounts)
 	if err := siteacc.initialize(conf, log); err != nil {
-		return nil, fmt.Errorf("unable to initialize SiteAccounts: %v", err)
+		return nil, fmt.Errorf("unable to initialize site accounts: %v", err)
 	}
 	return siteacc, nil
 }

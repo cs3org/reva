@@ -86,7 +86,7 @@ func SendAlertNotification(account *data.Account, recipients []string, params ma
 	tpl := alertFiringNotificationTemplate
 	if strings.EqualFold(params["Status"], "resolved") {
 		tpl = alertResolvedNotificationTemplate
-		subject = subject + " [RESOLVED]"
+		subject += " [RESOLVED]"
 	}
 	return send(recipients, "ScienceMesh Alert: "+subject, tpl, getEmailData(account, conf, params), conf.Email.SMTP)
 }
@@ -98,19 +98,7 @@ func send(recipients []string, subject string, bodyTemplate string, data interfa
 	}
 
 	tpl := template.New("email")
-
-	// Add some custom helper functions to the template
-	tpl.Funcs(template.FuncMap{
-		"indent": func(n int, s string) string {
-			lines := make([]string, 0, 10)
-			for _, line := range strings.Split(s, "\n") {
-				line = strings.TrimSpace(line)
-				line = strings.Repeat(" ", n) + line
-				lines = append(lines, line)
-			}
-			return strings.Join(lines, "\n")
-		},
-	})
+	prepareEmailTemplate(tpl)
 
 	if _, err := tpl.Parse(bodyTemplate); err != nil {
 		return errors.Wrap(err, "error while parsing email template")
@@ -133,4 +121,19 @@ func send(recipients []string, subject string, bodyTemplate string, data interfa
 	}
 
 	return nil
+}
+
+func prepareEmailTemplate(tpl *template.Template) {
+	// Add some custom helper functions to the template
+	tpl.Funcs(template.FuncMap{
+		"indent": func(n int, s string) string {
+			lines := make([]string, 0, 10)
+			for _, line := range strings.Split(s, "\n") {
+				line = strings.TrimSpace(line)
+				line = strings.Repeat(" ", n) + line
+				lines = append(lines, line)
+			}
+			return strings.Join(lines, "\n")
+		},
+	})
 }

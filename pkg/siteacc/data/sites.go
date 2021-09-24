@@ -82,9 +82,9 @@ func QuerySiteName(siteID string, fullName bool, mentixHost, dataEndpoint string
 	if index != len(sites) {
 		if fullName {
 			return sites[index].FullName, nil
-		} else {
-			return sites[index].Name, nil
 		}
+
+		return sites[index].Name, nil
 	}
 
 	return "", errors.Errorf("no site with ID %v found", siteID)
