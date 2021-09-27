@@ -153,12 +153,16 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		if editAppURL, ok := editAppURLs[ext]; ok {
 			q.Add("appurl", editAppURL)
 		}
-	} else {
+	}
+	if q.Get("appurl") == "" {
 		// assuming that an view action is always available in the /hosting/discovery manifest
 		// eg. Collabora does support viewing jpgs but no editing
 		// eg. OnlyOffice does support viewing pdfs but no editing
 		// there is no known case of supporting edit only without view
 		q.Add("appurl", viewAppURL)
+	}
+	if q.Get("appurl") == "" && q.Get("appviewurl") == "" {
+		return nil, errors.New("wopi: neither edit nor view app url found")
 	}
 
 	if p.conf.AppIntURL != "" {
