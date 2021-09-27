@@ -6,12 +6,12 @@ description: >
   Configuration for the nextcloud service
 ---
 
-# _struct: AuthManagerConfig_
+# _struct: ShareManagerConfig_
 
 {{% dir name="endpoint" type="string" default="" %}}
-The Nextcloud backend endpoint for user check [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/nextcloud/nextcloud.go#L49)
+The Nextcloud backend endpoint for user check [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/share/manager/nextcloud/nextcloud.go#L55)
 {{< highlight toml >}}
-[auth.manager.nextcloud]
+[share.manager.nextcloud]
 endpoint = ""
 {{< /highlight >}}
 {{% /dir %}}
