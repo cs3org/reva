@@ -31,9 +31,10 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/rs/zerolog"
 )
 
-func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+func publicshareScope(scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
 	var share link.PublicShare
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
@@ -73,7 +74,9 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 		return checkResourcePath(v), nil
 	}
 
-	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
+	msg := fmt.Sprintf("resource type assertion failed: %+v", resource)
+	logger.Debug().Str("scope", "publicshareScope").Msg(msg)
+	return false, errtypes.InternalError(msg)
 }
 
 func checkStorageRef(s *link.PublicShare, r *provider.Reference) bool {

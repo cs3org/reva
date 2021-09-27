@@ -26,13 +26,14 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	"github.com/rs/zerolog"
 
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-func resourceinfoScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+func resourceinfoScope(scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
 	var r provider.ResourceInfo
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &r)
 	if err != nil {
@@ -68,7 +69,9 @@ func resourceinfoScope(scope *authpb.Scope, resource interface{}) (bool, error) 
 		return checkResourcePath(v), nil
 	}
 
-	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
+	msg := fmt.Sprintf("resource type assertion failed: %+v", resource)
+	logger.Debug().Str("scope", "resourceinfoScope").Msg(msg)
+	return false, errtypes.InternalError(msg)
 }
 
 func checkResourceInfo(inf *provider.ResourceInfo, ref *provider.Reference) bool {

@@ -265,7 +265,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			}
 
 			// ensure access to the resource is allowed
-			ok, err := scope.VerifyScope(tokenScope, r.URL.Path)
+			ok, err := scope.VerifyScope(ctx, tokenScope, r.URL.Path)
 			if err != nil {
 				log.Error().Err(err).Msg("error verifying scope of access token")
 				w.WriteHeader(http.StatusInternalServerError)
