@@ -101,7 +101,7 @@ var _ = Describe("storage providers", func() {
 	})
 
 	assertCreateHome := func() {
-		It("creates a home directory", func() {
+		FIt("creates a home directory", func() {
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
