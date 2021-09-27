@@ -149,7 +149,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			q.Add("appviewurl", viewAppURL)
 		}
 	}
-	if editAppURLs, ok := p.appURLs["edit"]; !ok {
+	if editAppURLs, ok := p.appURLs["edit"]; ok {
 		if editAppURL, ok := editAppURLs[ext]; ok {
 			q.Add("appurl", editAppURL)
 		}
