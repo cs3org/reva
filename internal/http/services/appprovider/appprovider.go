@@ -49,6 +49,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	idDelimiter string = ":"
+)
+
 func init() {
 	global.Register("appprovider", New)
 }
@@ -199,14 +203,17 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Stat created file and return its file id
+	// Stat the newly created file
 	statRes, ocmderr, err := statRef(ctx, provider.Reference{Path: target}, client)
 	if err != nil {
 		log.Error().Err(err).Msg("error statting created file")
 		ocmd.WriteError(w, r, ocmderr, "Created file not found", errtypes.NotFound("Created file not found"))
 		return
 	}
-	js, err := json.Marshal(map[string]interface{}{"file_id": statRes.Id})
+
+	// Base64-encode the fileid for the web to consume it
+	b64id := base64.StdEncoding.EncodeToString([]byte(statRes.Id.StorageId + idDelimiter + statRes.Id.OpaqueId))
+	js, err := json.Marshal(map[string]interface{}{"file_id": b64id})
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
 		return
@@ -274,12 +281,13 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error opening resource", err)
+		log.Error().Err(err).Msg("error calling OpenInApp")
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, err.Error(), err)
 		return
 	}
 	if openRes.Status.Code != rpc.Code_CODE_OK {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error opening resource information",
-			status.NewErrorFromCode(openRes.Status.Code, "appprovider"))
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, openRes.Status.Message,
+			status.NewErrorFromCode(openRes.Status.Code, "error calling OpenInApp"))
 		return
 	}
 
@@ -327,7 +335,7 @@ func (s *svc) getStatInfo(ctx context.Context, fileID string, client gateway.Gat
 		return nil, ocmd.APIErrorInvalidParameter, errors.Wrap(err, "fileID doesn't follow the required format")
 	}
 
-	parts := strings.Split(string(decodedID), ":")
+	parts := strings.Split(string(decodedID), idDelimiter)
 	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
 		return nil, ocmd.APIErrorInvalidParameter, errors.New("fileID contains illegal characters")
 	}

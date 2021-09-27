@@ -137,7 +137,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("endpoint", resource.GetId().StorageId)
 	q.Add("viewmode", viewMode.String())
 	u, ok := ctxpkg.ContextGetUser(ctx)
-	if ok { // else defaults to "Anonymous Guest"
+	if ok { // else defaults to "Guest xyz"
 		q.Add("username", u.Username)
 	}
 
@@ -178,19 +178,25 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	httpReq.Header.Set("Authorization", "Bearer "+p.conf.IOPSecret)
 	httpReq.Header.Set("TokenHeader", token)
 
+	// Call the WOPI server and parse the response (body will always contain a payload)
 	openRes, err := p.wopiClient.Do(httpReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "wopi: error performing open request to WOPI server")
 	}
 	defer openRes.Body.Close()
 
-	if openRes.StatusCode != http.StatusOK {
-		return nil, errtypes.InternalError("wopi: unexpected status from WOPI server: " + openRes.Status)
-	}
-
 	body, err := ioutil.ReadAll(openRes.Body)
 	if err != nil {
 		return nil, err
+	}
+	if openRes.StatusCode != http.StatusOK {
+		// WOPI returned failure: body contains a user-friendly error message (yet perform a sanity check)
+		sbody := ""
+		if body != nil {
+			sbody = string(body)
+		}
+		log.Warn().Msg(fmt.Sprintf("wopi: WOPI server returned HTTP %s, error was: %s", openRes.Status, sbody))
+		return nil, errors.New(sbody)
 	}
 
 	var result map[string]interface{}
