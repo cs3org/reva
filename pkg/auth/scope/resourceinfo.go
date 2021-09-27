@@ -22,9 +22,11 @@ import (
 	"fmt"
 	"strings"
 
+	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
@@ -39,6 +41,8 @@ func resourceinfoScope(scope *authpb.Scope, resource interface{}) (bool, error) 
 
 	switch v := resource.(type) {
 	// Viewer role
+	case *appregistry.GetDefaultAppProviderForMimeTypeRequest:
+		return true, nil
 	case *registry.GetStorageProvidersRequest:
 		return checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.StatRequest:
@@ -91,6 +95,7 @@ func checkResourcePath(path string) bool {
 	paths := []string{
 		"/dataprovider",
 		"/data",
+		"/app/open",
 	}
 	for _, p := range paths {
 		if strings.HasPrefix(path, p) {
