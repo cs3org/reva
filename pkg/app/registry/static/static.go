@@ -150,6 +150,12 @@ func (b *reg) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error
 		} else {
 			b.mimetypes[m] = &mimeTypeIndex{apps: []string{p.Address}}
 		}
+		// set as default app if configured
+		if mimetypeConfig, ok := b.config.MimeTypes[m]; ok {
+			if mimetypeConfig.DefaultApp == p.Address || mimetypeConfig.DefaultApp == p.Name {
+				b.mimetypes[m].defaultApp = p.Address
+			}
+		}
 	}
 	return nil
 }
@@ -175,13 +181,13 @@ func (b *reg) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.MimeTyp
 		t := *p
 		t.MimeTypes = nil
 		for _, m := range p.MimeTypes {
+			mime, ok := b.config.MimeTypes[m]
+			if !ok {
+				continue // skip mimetype if not on allow list
+			}
 			if _, ok := mtmap[m]; ok {
 				mtmap[m].AppProviders = append(mtmap[m].AppProviders, &t)
 			} else {
-				mime, ok := b.config.MimeTypes[m]
-				if !ok {
-					return nil, errtypes.NotFound(fmt.Sprintf("mimetype %s not found in the configuration", m))
-				}
 				mtmap[m] = &registrypb.MimeTypeInfo{
 					MimeType:     m,
 					AppProviders: []*registrypb.ProviderInfo{&t},
@@ -225,12 +231,12 @@ func (b *reg) GetDefaultProviderForMimeType(ctx context.Context, mimeType string
 	b.RLock()
 	defer b.RUnlock()
 
-	_, ok := b.mimetypes[mimeType]
+	m, ok := b.mimetypes[mimeType]
 	if ok {
-		p, ok := b.providers[b.mimetypes[mimeType].defaultApp]
-		if ok {
+		if p, ok := b.providers[m.defaultApp]; ok {
 			return p, nil
 		}
 	}
+
 	return nil, errtypes.NotFound("default application provider not set for mime type " + mimeType)
 }
