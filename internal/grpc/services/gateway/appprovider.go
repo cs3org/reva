@@ -275,6 +275,16 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 		return nil, err
 	}
 
+	// as long as the above mentioned GetAppProviderByName(app) method is not available
+	// we need to apply a manual filter
+	filteredProviders := []*registry.ProviderInfo{}
+	for _, p := range res.Providers {
+		if p.Name == app {
+			filteredProviders = append(filteredProviders, p)
+		}
+	}
+	res.Providers = filteredProviders
+
 	// if the list of app providers is empty means we expect a CODE_NOT_FOUND in the response
 	if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
