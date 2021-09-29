@@ -56,8 +56,6 @@ type config struct {
 	MemberFilter    string     `mapstructure:"memberfilter"`
 	AttributeFilter string     `mapstructure:"attributefilter"`
 	FindFilter      string     `mapstructure:"findfilter"`
-	BindUsername    string     `mapstructure:"bind_username"`
-	BindPassword    string     `mapstructure:"bind_password"`
 	Idp             string     `mapstructure:"idp"`
 	Schema          attributes `mapstructure:"schema"`
 	Nobody          int64      `mapstructure:"nobody"`
@@ -139,12 +137,6 @@ func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.
 	}
 	defer l.Close()
 
-	// First bind with a read only user
-	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
-	if err != nil {
-		return nil, err
-	}
-
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
 		m.c.BaseDN,
@@ -216,12 +208,6 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 	}
 	defer l.Close()
 
-	// First bind with a read only user
-	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
-	if err != nil {
-		return nil, err
-	}
-
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
 		m.c.BaseDN,
@@ -274,12 +260,6 @@ func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Grou
 	}
 	defer l.Close()
 
-	// First bind with a read only user
-	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
-	if err != nil {
-		return nil, err
-	}
-
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
 		m.c.BaseDN,
@@ -325,12 +305,6 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		return nil, err
 	}
 	defer l.Close()
-
-	// First bind with a read only user
-	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
-	if err != nil {
-		return nil, err
-	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
