@@ -1771,6 +1771,9 @@ func getResourceType(isDir bool) provider.ResourceType {
 }
 
 func (fs *eosfs) extractUIDAndGID(u *userpb.User) (eosclient.Authorization, error) {
+	if u.Id.OpaqueId == "root" {
+		return eosclient.Authorization{Role: eosclient.Role{UID: "0", GID: "0"}}, nil
+	}
 	if u.UidNumber == 0 {
 		return eosclient.Authorization{}, errors.New("eosfs: uid missing for user")
 	}
