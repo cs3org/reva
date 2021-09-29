@@ -79,7 +79,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	}
 
-	err = fs.createStorageSpace(ctx, "project", n.ID)
+	err = fs.createStorageSpace(ctx, req.Type, n.ID)
 	if err != nil {
 		return nil, err
 	}
