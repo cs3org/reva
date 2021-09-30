@@ -50,7 +50,7 @@ type revaWalker struct {
 	gtw gateway.GatewayAPIClient
 }
 
-// NewWalker creates a Walker object that uses the reva gateway to 
+// NewWalker creates a Walker object that uses the reva gateway
 func NewWalker(gtw gateway.GatewayAPIClient) Walker {
 	return &revaWalker{gtw: gtw}
 }
