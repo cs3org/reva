@@ -43,7 +43,7 @@ type FS interface {
 	DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
 	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
 	ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error)
-	RestoreRecycleItem(ctx context.Context, key /* used as path */, path /* unused */ string, restoreRef /* optional */ *provider.Reference) error
+	RestoreRecycleItem(ctx context.Context, key /* the recycle item's original path */, path /* the user's homedir path */ string, restoreRef /* optional */ *provider.Reference) error
 	PurgeRecycleItem(ctx context.Context, key, path string) error
 	EmptyRecycle(ctx context.Context) error
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
