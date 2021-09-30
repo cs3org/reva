@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package handler
+package archiver
 
 import (
 	"context"
@@ -31,7 +31,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
-	"github.com/cs3org/reva/internal/http/services/archiver"
+	"github.com/cs3org/reva/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -61,7 +61,7 @@ type Config struct {
 	Timeout    int64  `mapstructure:"timeout"`
 	Insecure   bool   `mapstructure:"insecure"`
 	Name       string `mapstructure:"name"`
-	archiver.Config
+	manager.Config
 }
 
 func init() {
@@ -166,7 +166,7 @@ func (s *svc) Handler() http.Handler {
 			return
 		}
 
-		arch, err := archiver.NewArchiver(files, s.walker, s.downloader, s.config.Config)
+		arch, err := manager.NewArchiver(files, s.walker, s.downloader, s.config.Config)
 		if err != nil {
 			s.log.Error().Msg(err.Error())
 			rw.WriteHeader(http.StatusInternalServerError)
@@ -194,7 +194,7 @@ func (s *svc) Handler() http.Handler {
 			err = arch.CreateTar(ctx, rw)
 		}
 
-		if err == archiver.ErrMaxFileCount || err == archiver.ErrMaxSize {
+		if err == manager.ErrMaxFileCount || err == manager.ErrMaxSize {
 			s.log.Error().Msg(err.Error())
 			rw.WriteHeader(http.StatusRequestEntityTooLarge)
 			return
