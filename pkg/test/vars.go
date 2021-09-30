@@ -132,15 +132,16 @@ func DirEquals(dir1, dir2 string) bool {
 
 		path1, path2 := path.Join(dir1, r1.Name()), path.Join(dir2, r2.Name())
 
-		if r1.Type().IsDir() && r2.Type().IsDir() {
+		switch {
+		case r1.Type().IsDir() && r2.Type().IsDir(): // both are dirs
 			if !DirEquals(path1, path2) {
 				return false
 			}
-		} else if r1.Type().IsRegular() && r2.Type().IsRegular() {
+		case r1.Type().IsRegular() && r2.Type().IsRegular(): // both are files
 			if !fileEquals(path1, path2) {
 				return false
 			}
-		} else {
+		default: // different resource type
 			return false
 		}
 

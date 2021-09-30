@@ -151,7 +151,7 @@ func TestCreateTar(t *testing.T) {
 	tests := []struct {
 		name     string
 		src      test.Dir
-		config   ArchiverConfig
+		config   Config
 		files    []string
 		expected test.Dir
 		err      error
@@ -163,7 +163,7 @@ func TestCreateTar(t *testing.T) {
 					Content: "foo",
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     3,
 				MaxNumFiles: 1,
 			},
@@ -182,7 +182,7 @@ func TestCreateTar(t *testing.T) {
 					Content: strings.Repeat("a", 1024*1024*1024),
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     1024 * 1024 * 1024 * 2,
 				MaxNumFiles: 1000,
 			},
@@ -201,7 +201,7 @@ func TestCreateTar(t *testing.T) {
 					Content: "foo",
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     3,
 				MaxNumFiles: 0,
 			},
@@ -216,7 +216,7 @@ func TestCreateTar(t *testing.T) {
 					Content: "foo",
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     0,
 				MaxNumFiles: 1,
 			},
@@ -229,7 +229,7 @@ func TestCreateTar(t *testing.T) {
 			src: test.Dir{
 				"foo": test.Dir{},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     1000,
 				MaxNumFiles: 1,
 			},
@@ -244,7 +244,7 @@ func TestCreateTar(t *testing.T) {
 			src: test.Dir{
 				"foo": test.Dir{},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     1000,
 				MaxNumFiles: 0,
 			},
@@ -261,7 +261,7 @@ func TestCreateTar(t *testing.T) {
 					},
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     1000,
 				MaxNumFiles: 1000,
 			},
@@ -300,7 +300,7 @@ func TestCreateTar(t *testing.T) {
 					},
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     100000,
 				MaxNumFiles: 1000,
 			},
@@ -355,7 +355,7 @@ func TestCreateTar(t *testing.T) {
 					},
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     100000,
 				MaxNumFiles: 1000,
 			},
@@ -397,7 +397,7 @@ func TestCreateTar(t *testing.T) {
 					},
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     100000,
 				MaxNumFiles: 1000,
 			},
@@ -441,7 +441,7 @@ func TestCreateTar(t *testing.T) {
 					},
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     100000,
 				MaxNumFiles: 1000,
 			},
@@ -599,7 +599,7 @@ func TestCreateZip(t *testing.T) {
 	tests := []struct {
 		name     string
 		src      test.Dir
-		config   ArchiverConfig
+		config   Config
 		files    []string
 		expected test.Dir
 		err      error
@@ -611,7 +611,7 @@ func TestCreateZip(t *testing.T) {
 					Content: "foo",
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     3,
 				MaxNumFiles: 1,
 			},
@@ -630,7 +630,7 @@ func TestCreateZip(t *testing.T) {
 					Content: strings.Repeat("a", 1024*1024*1024),
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     1024 * 1024 * 1024 * 2,
 				MaxNumFiles: 1000,
 			},
@@ -649,7 +649,7 @@ func TestCreateZip(t *testing.T) {
 					Content: "foo",
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     3,
 				MaxNumFiles: 0,
 			},
@@ -664,7 +664,7 @@ func TestCreateZip(t *testing.T) {
 					Content: "foo",
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     0,
 				MaxNumFiles: 1,
 			},
@@ -677,7 +677,7 @@ func TestCreateZip(t *testing.T) {
 			src: test.Dir{
 				"foo": test.Dir{},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     1000,
 				MaxNumFiles: 1,
 			},
@@ -692,7 +692,7 @@ func TestCreateZip(t *testing.T) {
 			src: test.Dir{
 				"foo": test.Dir{},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     1000,
 				MaxNumFiles: 0,
 			},
@@ -709,7 +709,7 @@ func TestCreateZip(t *testing.T) {
 					},
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     1000,
 				MaxNumFiles: 1000,
 			},
@@ -748,7 +748,7 @@ func TestCreateZip(t *testing.T) {
 					},
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     100000,
 				MaxNumFiles: 1000,
 			},
@@ -803,7 +803,7 @@ func TestCreateZip(t *testing.T) {
 					},
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     100000,
 				MaxNumFiles: 1000,
 			},
@@ -845,7 +845,7 @@ func TestCreateZip(t *testing.T) {
 					},
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     100000,
 				MaxNumFiles: 1000,
 			},
@@ -889,7 +889,7 @@ func TestCreateZip(t *testing.T) {
 					},
 				},
 			},
-			config: ArchiverConfig{
+			config: Config{
 				MaxSize:     100000,
 				MaxNumFiles: 1000,
 			},

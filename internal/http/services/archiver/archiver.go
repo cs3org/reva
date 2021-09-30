@@ -42,8 +42,8 @@ const (
 	ErrEmptyList = errtypes.BadRequest("list of files to archive empty")
 )
 
-// ArchiverConfig is the config for the Archiver
-type ArchiverConfig struct {
+// Config is the config for the Archiver
+type Config struct {
 	MaxNumFiles int64 `mapstructure:"max_num_files"`
 	MaxSize     int64 `mapstructure:"max_size"`
 }
@@ -54,11 +54,11 @@ type Archiver struct {
 	dir        string
 	walker     walker.Walker
 	downloader downloader.Downloader
-	config     ArchiverConfig
+	config     Config
 }
 
 // NewArchiver creates a new archiver able to create an archive containing the files in the list
-func NewArchiver(files []string, w walker.Walker, d downloader.Downloader, config ArchiverConfig) (*Archiver, error) {
+func NewArchiver(files []string, w walker.Walker, d downloader.Downloader, config Config) (*Archiver, error) {
 	if len(files) == 0 {
 		return nil, ErrEmptyList
 	}

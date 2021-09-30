@@ -41,7 +41,7 @@ func convertFileInfoToResourceInfo(path string, f fs.FileInfo) *provider.Resourc
 	if f == nil {
 		return nil
 	}
-	// resource type convertion
+	// resource type conversion
 	t := provider.ResourceType_RESOURCE_TYPE_FILE
 	if f.IsDir() {
 		t = provider.ResourceType_RESOURCE_TYPE_CONTAINER

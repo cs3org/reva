@@ -61,7 +61,7 @@ type Config struct {
 	Timeout    int64  `mapstructure:"timeout"`
 	Insecure   bool   `mapstructure:"insecure"`
 	Name       string `mapstructure:"name"`
-	archiver.ArchiverConfig
+	archiver.Config
 }
 
 func init() {
@@ -166,7 +166,7 @@ func (s *svc) Handler() http.Handler {
 			return
 		}
 
-		arch, err := archiver.NewArchiver(files, s.walker, s.downloader, s.config.ArchiverConfig)
+		arch, err := archiver.NewArchiver(files, s.walker, s.downloader, s.config.Config)
 		if err != nil {
 			s.log.Error().Msg(err.Error())
 			rw.WriteHeader(http.StatusInternalServerError)
