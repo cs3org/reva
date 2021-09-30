@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	// TmpDirPatther is the pattern used for tmp folder creation
+	// TmpDirPattern is the pattern used for tmp folder creation
 	TmpDirPattern = "tmp-reva-"
 )
 
