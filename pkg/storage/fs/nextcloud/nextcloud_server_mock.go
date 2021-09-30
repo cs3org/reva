@@ -116,7 +116,7 @@ var responses = map[string]Response{
 	`POST /apps/sciencemesh/~einstein/api/storage/ListGrants {"path":"/subdir"} GRANT-REMOVED`: {200, `[]`, serverStateEmpty},
 
 	`POST /apps/sciencemesh/~einstein/api/storage/ListRecycle {"key":"","path":"/"} EMPTY`:   {200, `[]`, serverStateEmpty},
-	`POST /apps/sciencemesh/~einstein/api/storage/ListRecycle {"key":"","path":"/"} RECYCLE`: {200, `[{"opaque":{},"key":"some-deleted-version","ref":{"resource_id":{},"path":"/subdir"},"size":12345,"deletion_time":{"seconds":1234567890}}]`, serverStateRecycle},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListRecycle {"key":"","path":"/"} RECYCLE`: {200, `[{"opaque":{},"key":"some-recycle-item","ref":{"resource_id":{},"path":"/subdir"},"size":12345,"deletion_time":{"seconds":1234567890}}]`, serverStateRecycle},
 
 	`POST /apps/sciencemesh/~einstein/api/storage/ListRevisions {"path":"/versionedFile"} EMPTY`:         {200, `[{"opaque":{"map":{"some":{"value":"ZGF0YQ=="}}},"key":"version-12","size":1,"mtime":1234567890,"etag":"deadb00f"}]`, serverStateEmpty},
 	`POST /apps/sciencemesh/~einstein/api/storage/ListRevisions {"path":"/versionedFile"} FILE-RESTORED`: {200, `[{"opaque":{"map":{"some":{"value":"ZGF0YQ=="}}},"key":"version-12","size":1,"mtime":1234567890,"etag":"deadb00f"},{"opaque":{"map":{"different":{"value":"c3R1ZmY="}}},"key":"asdf","size":2,"mtime":1234567890,"etag":"deadbeef"}]`, serverStateFileRestored},
@@ -125,9 +125,9 @@ var responses = map[string]Response{
 
 	`POST /apps/sciencemesh/~einstein/api/storage/RemoveGrant {"path":"/subdir"} GRANT-ADDED`: {200, ``, serverStateGrantRemoved},
 
-	`POST /apps/sciencemesh/~einstein/api/storage/RestoreRecycleItem null`:                                                                              {200, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~einstein/api/storage/RestoreRecycleItem {"key":"some-deleted-version","path":"/","restoreRef":{"path":"/subdirRestored"}}`: {200, ``, serverStateFileRestored},
-	`POST /apps/sciencemesh/~einstein/api/storage/RestoreRecycleItem {"key":"some-deleted-version","path":"/","restoreRef":null}`:                       {200, ``, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/storage/RestoreRecycleItem null`:                                                                           {200, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/RestoreRecycleItem {"key":"some-recycle-item","path":"/","restoreRef":{"path":"/subdirRestored"}}`: {200, ``, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/storage/RestoreRecycleItem {"key":"some-recycle-item","path":"/","restoreRef":null}`:                       {200, ``, serverStateFileRestored},
 
 	`POST /apps/sciencemesh/~einstein/api/storage/RestoreRevision {"ref":{"path":"/versionedFile"},"key":"version-12"}`: {200, ``, serverStateFileRestored},
 
@@ -150,7 +150,7 @@ var responses = map[string]Response{
 	`POST /apps/sciencemesh/~tester/api/storage/ListRevisions {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`:                                                                                                                    {200, `[{"opaque":{"map":{"some":{"value":"ZGF0YQ=="}}},"key":"version-12","size":12345,"mtime":1234567890,"etag":"deadb00f"},{"opaque":{"map":{"different":{"value":"c3R1ZmY="}}},"key":"asdf","size":12345,"mtime":1234567890,"etag":"deadbeef"}]`, serverStateEmpty},
 	`GET /apps/sciencemesh/~tester/api/storage/DownloadRevision/some%2Frevision/some/file/path.txt `:                                                                                                                                                                      {200, `the contents of that revision`, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/RestoreRevision {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"key":"asdf"}`:                                                                                     {200, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~tester/api/storage/ListRecycle {"key":"asdf","path":"/some/file.txt"}`:                                                                                                                                                                       {200, `[{"opaque":{},"key":"some-deleted-version","ref":{"resource_id":{},"path":"/some/file.txt"},"size":12345,"deletion_time":{"seconds":1234567890}}]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/ListRecycle {"key":"asdf","path":"/some/file.txt"}`:                                                                                                                                                                       {200, `[{"opaque":{},"key":"some-recycle-item","ref":{"resource_id":{},"path":"/some/file.txt"},"size":12345,"deletion_time":{"seconds":1234567890}}]`, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/RestoreRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt","restoreRef":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}}`:                               {200, ``, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/PurgeRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt"}`:                                                                                                                                              {200, ``, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/EmptyRecycle `:                                                                                                                                                                                                            {200, ``, serverStateEmpty},
