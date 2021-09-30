@@ -56,12 +56,13 @@ type svc struct {
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix     string `mapstructure:"prefix"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
-	Timeout    int64  `mapstructure:"timeout"`
-	Insecure   bool   `mapstructure:"insecure"`
-	Name       string `mapstructure:"name"`
-	manager.Config
+	Prefix      string `mapstructure:"prefix"`
+	GatewaySvc  string `mapstructure:"gatewaysvc"`
+	Timeout     int64  `mapstructure:"timeout"`
+	Insecure    bool   `mapstructure:"insecure"`
+	Name        string `mapstructure:"name"`
+	MaxNumFiles int64  `mapstructure:"max_num_files"`
+	MaxSize     int64  `mapstructure:"max_size"`
 }
 
 func init() {
@@ -166,7 +167,10 @@ func (s *svc) Handler() http.Handler {
 			return
 		}
 
-		arch, err := manager.NewArchiver(files, s.walker, s.downloader, s.config.Config)
+		arch, err := manager.NewArchiver(files, s.walker, s.downloader, manager.Config{
+			MaxNumFiles: s.config.MaxNumFiles,
+			MaxSize:     s.config.MaxSize,
+		})
 		if err != nil {
 			s.log.Error().Msg(err.Error())
 			rw.WriteHeader(http.StatusInternalServerError)

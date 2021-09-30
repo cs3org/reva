@@ -44,8 +44,8 @@ const (
 
 // Config is the config for the Archiver
 type Config struct {
-	MaxNumFiles int64 `mapstructure:"max_num_files"`
-	MaxSize     int64 `mapstructure:"max_size"`
+	MaxNumFiles int64
+	MaxSize     int64
 }
 
 // Archiver is the struct able to create an archive
