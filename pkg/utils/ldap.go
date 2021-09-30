@@ -31,10 +31,12 @@ import (
 // LDAPConn holds the basic parameter for setting up an
 // LDAP connection.
 type LDAPConn struct {
-	Hostname string `mapstructure:"hostname"`
-	Port     int    `mapstructure:"port"`
-	Insecure bool   `mapstructure:"insecure"`
-	CACert   string `mapstructure:"cacert"`
+	Hostname     string `mapstructure:"hostname"`
+	Port         int    `mapstructure:"port"`
+	Insecure     bool   `mapstructure:"insecure"`
+	CACert       string `mapstructure:"cacert"`
+	BindUsername string `mapstructure:"bind_username"`
+	BindPassword string `mapstructure:"bind_password"`
 }
 
 // GetLDAPConnection initializes an LDAPS connection and allows
@@ -52,5 +54,17 @@ func GetLDAPConnection(c *LDAPConn) (*ldap.Conn, error) {
 			return nil, errors.Wrapf(err, "Error reading LDAP CA Cert '%s.'", c.CACert)
 		}
 	}
-	return ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", c.Hostname, c.Port), tlsconfig)
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", c.Hostname, c.Port), tlsconfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.BindUsername != "" && c.BindPassword != "" {
+		err = l.Bind(c.BindUsername, c.BindPassword)
+		if err != nil {
+			l.Close()
+			return nil, err
+		}
+	}
+	return l, nil
 }
