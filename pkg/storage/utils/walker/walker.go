@@ -23,10 +23,10 @@ import (
 	"fmt"
 	"path/filepath"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -40,15 +40,30 @@ import (
 // Otherwise, if the function returns a non-nil error, Walk stops entirely and returns that error.
 type WalkFunc func(path string, info *provider.ResourceInfo, err error) error
 
+// Walker is an interface implemented by objects that are able to walk from a dir rooted into the passed path
+type Walker interface {
+	// Walk walks the file tree rooted at root, calling fn for each file or folder in the tree, including the root.
+	Walk(context.Context, string, WalkFunc) error
+}
+
+type revaWalker struct {
+	gtw gateway.GatewayAPIClient
+}
+
+// NewWalker creates a Walker object that uses the reva gateway
+func NewWalker(gtw gateway.GatewayAPIClient) Walker {
+	return &revaWalker{gtw: gtw}
+}
+
 // Walk walks the file tree rooted at root, calling fn for each file or folder in the tree, including the root.
-func Walk(ctx context.Context, root string, gtw gateway.GatewayAPIClient, fn WalkFunc) error {
-	info, err := stat(ctx, root, gtw)
+func (r *revaWalker) Walk(ctx context.Context, root string, fn WalkFunc) error {
+	info, err := r.stat(ctx, root)
 
 	if err != nil {
 		return fn(root, nil, err)
 	}
 
-	err = walkRecursively(ctx, root, info, gtw, fn)
+	err = r.walkRecursively(ctx, root, info, fn)
 
 	if err == filepath.SkipDir {
 		return nil
@@ -57,13 +72,13 @@ func Walk(ctx context.Context, root string, gtw gateway.GatewayAPIClient, fn Wal
 	return err
 }
 
-func walkRecursively(ctx context.Context, path string, info *provider.ResourceInfo, gtw gateway.GatewayAPIClient, fn WalkFunc) error {
+func (r *revaWalker) walkRecursively(ctx context.Context, path string, info *provider.ResourceInfo, fn WalkFunc) error {
 
 	if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		return fn(path, info, nil)
 	}
 
-	list, err := readDir(ctx, path, gtw)
+	list, err := r.readDir(ctx, path)
 	errFn := fn(path, info, err)
 
 	if err != nil || errFn != nil {
@@ -71,7 +86,7 @@ func walkRecursively(ctx context.Context, path string, info *provider.ResourceIn
 	}
 
 	for _, file := range list {
-		err = walkRecursively(ctx, file.Path, file, gtw, fn)
+		err = r.walkRecursively(ctx, file.Path, file, fn)
 		if err != nil && (file.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER || err != filepath.SkipDir) {
 			return err
 		}
@@ -80,8 +95,8 @@ func walkRecursively(ctx context.Context, path string, info *provider.ResourceIn
 	return nil
 }
 
-func readDir(ctx context.Context, path string, gtw gateway.GatewayAPIClient) ([]*provider.ResourceInfo, error) {
-	resp, err := gtw.ListContainer(ctx, &provider.ListContainerRequest{
+func (r *revaWalker) readDir(ctx context.Context, path string) ([]*provider.ResourceInfo, error) {
+	resp, err := r.gtw.ListContainer(ctx, &provider.ListContainerRequest{
 		Ref: &provider.Reference{
 			Path: path,
 		},
@@ -99,8 +114,8 @@ func readDir(ctx context.Context, path string, gtw gateway.GatewayAPIClient) ([]
 	return resp.Infos, nil
 }
 
-func stat(ctx context.Context, path string, gtw gateway.GatewayAPIClient) (*provider.ResourceInfo, error) {
-	resp, err := gtw.Stat(ctx, &provider.StatRequest{
+func (r *revaWalker) stat(ctx context.Context, path string) (*provider.ResourceInfo, error) {
+	resp, err := r.gtw.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
 			Path: path,
 		},
