@@ -99,6 +99,7 @@ func checkResourcePath(path string) bool {
 		"/dataprovider",
 		"/data",
 		"/app/open",
+		"/archiver",
 	}
 	for _, p := range paths {
 		if strings.HasPrefix(path, p) {
