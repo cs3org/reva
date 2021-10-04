@@ -18,7 +18,7 @@ Read the [getting started guide](https://reva.link/docs/getting-started/) and th
 
 
 ## Build and run it yourself
-You need to have [Go](https://golang.org/doc/install), [git](https://git-scm.com/) and [make](https://en.wikipedia.org/wiki/Make_(software)) installed. Some of these commands may require `sudo`, depending on your system setup.
+You need to have [Go](https://golang.org/doc/install) (version 1.16 or higher), [git](https://git-scm.com/) and [make](https://en.wikipedia.org/wiki/Make_(software)) installed. Some of these commands may require `sudo`, depending on your system setup.
 
 ```
 $ git clone https://github.com/cs3org/reva

@@ -102,7 +102,9 @@ func checkResourcePath(path string) bool {
 
 // AddResourceInfoScope adds the scope to allow access to a resource info object.
 func AddResourceInfoScope(r *provider.ResourceInfo, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-	val, err := utils.MarshalProtoV1ToJSON(r)
+	// Create a new "scope info" to only expose the required fields `Id` and `Path` to the scope.
+	scopeInfo := &provider.ResourceInfo{Id: r.Id, Path: r.Path}
+	val, err := utils.MarshalProtoV1ToJSON(scopeInfo)
 	if err != nil {
 		return nil, err
 	}

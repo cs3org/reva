@@ -28,9 +28,10 @@ import (
 var sharedConf = &conf{}
 
 type conf struct {
-	JWTSecret   string `mapstructure:"jwt_secret"`
-	GatewaySVC  string `mapstructure:"gatewaysvc"`
-	DataGateway string `mapstructure:"datagateway"`
+	JWTSecret             string `mapstructure:"jwt_secret"`
+	GatewaySVC            string `mapstructure:"gatewaysvc"`
+	DataGateway           string `mapstructure:"datagateway"`
+	SkipUserGroupsInToken bool   `mapstructure:"skip_user_groups_in_token"`
 }
 
 // Decode decodes the configuration.
@@ -85,4 +86,9 @@ func GetDataGateway(val string) string {
 		return sharedConf.DataGateway
 	}
 	return val
+}
+
+// SkipUserGroupsInToken returns whether to skip encoding user groups in the access tokens.
+func SkipUserGroupsInToken() bool {
+	return sharedConf.SkipUserGroupsInToken
 }

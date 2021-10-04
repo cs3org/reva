@@ -20,10 +20,14 @@ package nextcloud
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
 
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -42,19 +46,19 @@ type manager struct {
 	endPoint string
 }
 
-type config struct {
-	EndPoint string `mapstructure:"end_point"`
-	MockHTTP bool   `mapstructure:"mock_http"`
+// UserManagerConfig contains config for a Nextcloud-based UserManager
+type UserManagerConfig struct {
+	EndPoint string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user management"`
 }
 
-func (c *config) init() {
+func (c *UserManagerConfig) init() {
 	if c.EndPoint == "" {
 		c.EndPoint = "http://localhost/end/point?"
 	}
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
+func parseConfig(m map[string]interface{}) (*UserManagerConfig, error) {
+	c := &UserManagerConfig{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
@@ -76,14 +80,32 @@ func New(m map[string]interface{}) (user.Manager, error) {
 		return nil, err
 	}
 
+	return NewUserManager(c, &http.Client{})
+}
+
+// NewUserManager returns a new Nextcloud-based UserManager
+func NewUserManager(c *UserManagerConfig, hc *http.Client) (user.Manager, error) {
 	return &manager{
-		client:   &http.Client{},
 		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
+		client:   hc,
 	}, nil
 }
 
-func (m *manager) do(a Action) (int, []byte, error) {
-	url := m.endPoint + a.verb
+func getUser(ctx context.Context) (*userpb.User, error) {
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired(""), "nextcloud storage driver: error getting user from ctx")
+		return nil, err
+	}
+	return u, nil
+}
+
+func (m *manager) do(ctx context.Context, a Action) (int, []byte, error) {
+	user, err := getUser(ctx)
+	if err != nil {
+		return 0, nil, err
+	}
+	url := m.endPoint + "~" + user.Username + "/api/user/" + a.verb
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
 		panic(err)
@@ -105,51 +127,75 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 }
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
-	_, respBody, err := m.do(Action{"GetUser", uid.Idp})
-	u := &userpb.User{
-		Username: string(respBody),
+	bodyStr, err := json.Marshal(uid)
+	if err != nil {
+		return nil, err
 	}
-	return u, err
-}
+	_, respBody, err := m.do(ctx, Action{"GetUser", string(bodyStr)})
+	if err != nil {
+		return nil, err
+	}
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
-	_, respBody, err := m.do(Action{"FindUsers", query})
-	u := &userpb.User{
-		Username: string(respBody),
+	result := &userpb.User{}
+	err = json.Unmarshal(respBody, &result)
+	if err != nil {
+		return nil, err
 	}
-	var us = make([]*userpb.User, 1)
-	us[0] = u
-	return us, err
+	return result, err
 }
 
 func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
-	_, respBody, err := m.do(Action{"GetUserByClaim", value})
-	u := &userpb.User{
-		Username: string(respBody),
+	type paramsObj struct {
+		Claim string `json:"claim"`
+		Value string `json:"value"`
 	}
-	return u, err
+	bodyObj := &paramsObj{
+		Claim: claim,
+		Value: value,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
+	_, respBody, err := m.do(ctx, Action{"GetUserByClaim", string(bodyStr)})
+	if err != nil {
+		return nil, err
+	}
+	result := &userpb.User{}
+	err = json.Unmarshal(respBody, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, err
 }
 
-// func extractClaim(u *userpb.User, claim string) (string, error) {
-// 	_, respBody, err := m.do(Action{"ExtractClaim", claim})
-// 	u := &userpb.User{
-// 		Username: string(respBody),
-// 	}
-// 	return u, err
-// }
-
-// func userContains(u *userpb.User, query string) bool {
-// 	_, respBody, err := m.do(Action{"userContains", query})
-// 	u := &userpb.User{
-// 		Username: string(respBody),
-// 	}
-// 	return u, err
-// 	return false
-// }
-
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
-	_, respBody, err := m.do(Action{"GetUserGroups", uid.Idp})
-	var gs = make([]string, 1)
-	gs[0] = string(respBody)
+	bodyStr, err := json.Marshal(uid)
+	if err != nil {
+		return nil, err
+	}
+	_, respBody, err := m.do(ctx, Action{"GetUserGroups", string(bodyStr)})
+	if err != nil {
+		return nil, err
+	}
+	var gs []string
+	err = json.Unmarshal(respBody, &gs)
+	if err != nil {
+		return nil, err
+	}
 	return gs, err
+}
+
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+	_, respBody, err := m.do(ctx, Action{"FindUsers", query})
+	if err != nil {
+		return nil, err
+	}
+	var respArr []userpb.User
+	err = json.Unmarshal(respBody, &respArr)
+	if err != nil {
+		return nil, err
+	}
+	var pointers = make([]*userpb.User, len(respArr))
+	for i := 0; i < len(respArr); i++ {
+		pointers[i] = &respArr[i]
+	}
+	return pointers, err
 }

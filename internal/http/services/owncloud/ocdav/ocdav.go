@@ -153,7 +153,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/"}
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -187,7 +187,20 @@ func (s *svc) Handler() http.Handler {
 
 			// yet, add it to baseURI
 			base = path.Join(base, "remote.php")
-
+		case "apps":
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+			if head == "files" {
+				s.handleLegacyPath(w, r)
+				return
+			}
+		case "index.php":
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+			if head == "s" {
+				token := r.URL.Path
+				url := s.c.PublicURL + path.Join("#", head, token)
+				http.Redirect(w, r, url, http.StatusMovedPermanently)
+				return
+			}
 		}
 		switch head {
 		// the old `/webdav` endpoint uses remote.php/webdav/$path

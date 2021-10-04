@@ -20,6 +20,7 @@ package appprovider
 
 import (
 	"context"
+	"errors"
 	"os"
 	"time"
 
@@ -35,7 +36,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -53,6 +53,7 @@ type config struct {
 	Drivers        map[string]map[string]interface{} `mapstructure:"drivers"`
 	AppProviderURL string                            `mapstructure:"app_provider_url"`
 	GatewaySvc     string                            `mapstructure:"gatewaysvc"`
+	MimeTypes      []string                          `mapstructure:"mime_types"` // define the mimetypes supported by the AppProvider
 }
 
 func (c *config) init() {
@@ -106,6 +107,12 @@ func (s *service) registerProvider() {
 	}
 	pInfo.Address = s.conf.AppProviderURL
 
+	// Add the supported mime types from the configuration
+	if len(s.conf.MimeTypes) != 0 {
+		pInfo.MimeTypes = s.conf.MimeTypes
+		log.Debug().Msg("app provider: overridden mimetype")
+	}
+
 	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: could not get gateway client")
@@ -145,9 +152,8 @@ func getProvider(c *config) (app.Provider, error) {
 func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
 	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken)
 	if err != nil {
-		err := errors.Wrap(err, "appprovider: error calling GetAppURL")
 		res := &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, err, "error getting app URL"),
+			Status: status.NewInternal(ctx, errors.New("appprovider: error calling GetAppURL"), err.Error()),
 		}
 		return res, nil
 	}

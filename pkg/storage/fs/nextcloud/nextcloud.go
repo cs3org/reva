@@ -29,7 +29,6 @@ import (
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -76,16 +75,12 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return NewStorageDriver(conf)
 }
 
-// CreateStorageSpace creates a storage space
-func (nc *StorageDriver) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
-}
-
 // NewStorageDriver returns a new NextcloudStorageDriver
 func NewStorageDriver(c *StorageDriverConfig) (*StorageDriver, error) {
 	var client *http.Client
 	if c.MockHTTP {
-		nextcloudServerMock := GetNextcloudServerMock()
+		called := make([]string, 0)
+		nextcloudServerMock := GetNextcloudServerMock(&called)
 		client, _ = TestingHTTPClient(nextcloudServerMock)
 	} else {
 		client = &http.Client{}
@@ -116,12 +111,15 @@ func (nc *StorageDriver) SetHTTPClient(c *http.Client) {
 	nc.client = c
 }
 
-func (nc *StorageDriver) doUpload(r io.ReadCloser) error {
-	filePath := "test.txt"
-
-	// initialize http client
-	client := &http.Client{}
-	url := nc.endPoint + "Upload/" + filePath
+func (nc *StorageDriver) doUpload(ctx context.Context, filePath string, r io.ReadCloser) error {
+	// log := appctx.GetLogger(ctx)
+	user, err := getUser(ctx)
+	if err != nil {
+		return err
+	}
+	// See https://github.com/pondersource/nc-sciencemesh/issues/5
+	// url := nc.endPoint + "~" + user.Username + "/files/" + filePath
+	url := nc.endPoint + "~" + user.Username + "/api/storage/Upload/" + filePath
 	req, err := http.NewRequest(http.MethodPut, url, r)
 	if err != nil {
 		panic(err)
@@ -130,7 +128,7 @@ func (nc *StorageDriver) doUpload(r io.ReadCloser) error {
 	// set the request header Content-Type for the upload
 	// FIXME: get the actual content type from somewhere
 	req.Header.Set("Content-Type", "text/plain")
-	resp, err := client.Do(req)
+	resp, err := nc.client.Do(req)
 	if err != nil {
 		panic(err)
 	}
@@ -140,13 +138,60 @@ func (nc *StorageDriver) doUpload(r io.ReadCloser) error {
 	return err
 }
 
+func (nc *StorageDriver) doDownload(ctx context.Context, filePath string) (io.ReadCloser, error) {
+	user, err := getUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// See https://github.com/pondersource/nc-sciencemesh/issues/5
+	// url := nc.endPoint + "~" + user.Username + "/files/" + filePath
+	url := nc.endPoint + "~" + user.Username + "/api/storage/Download/" + filePath
+	req, err := http.NewRequest(http.MethodGet, url, strings.NewReader(""))
+	if err != nil {
+		panic(err)
+	}
+
+	resp, err := nc.client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	if resp.StatusCode != 200 {
+		panic("No 200 response code in download request")
+	}
+
+	return resp.Body, err
+}
+
+func (nc *StorageDriver) doDownloadRevision(ctx context.Context, filePath string, key string) (io.ReadCloser, error) {
+	user, err := getUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// See https://github.com/pondersource/nc-sciencemesh/issues/5
+	url := nc.endPoint + "~" + user.Username + "/api/storage/DownloadRevision/" + url.QueryEscape(key) + "/" + filePath
+	req, err := http.NewRequest(http.MethodGet, url, strings.NewReader(""))
+	if err != nil {
+		panic(err)
+	}
+
+	resp, err := nc.client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	if resp.StatusCode != 200 {
+		panic("No 200 response code in download request")
+	}
+
+	return resp.Body, err
+}
+
 func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) {
 	log := appctx.GetLogger(ctx)
 	user, err := getUser(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
-	url := nc.endPoint + "~" + user.Username + "/api/" + a.verb
+	url := nc.endPoint + "~" + user.Username + "/api/storage/" + a.verb
 	log.Info().Msgf("nc.do %s", url)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
@@ -165,7 +210,7 @@ func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) 
 		return 0, nil, err
 	}
 
-	log.Info().Msgf("nc.do response %d %s", resp.StatusCode, body)
+	// fmt.Printf("nc.do response %d %s\n", resp.StatusCode, body)
 	return resp.StatusCode, body, nil
 }
 
@@ -215,10 +260,15 @@ func (nc *StorageDriver) Delete(ctx context.Context, ref *provider.Reference) er
 
 // Move as defined in the storage.FS interface
 func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
-	data := make(map[string]string)
-	data["from"] = oldRef.Path
-	data["to"] = newRef.Path
-	bodyStr, _ := json.Marshal(data)
+	type paramsObj struct {
+		OldRef *provider.Reference `json:"oldRef"`
+		NewRef *provider.Reference `json:"newRef"`
+	}
+	bodyObj := &paramsObj{
+		OldRef: oldRef,
+		NewRef: newRef,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("Move %s", bodyStr)
 
@@ -228,13 +278,19 @@ func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Refe
 
 // GetMD as defined in the storage.FS interface
 func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
-	bodyStr, err := json.Marshal(ref)
+	type paramsObj struct {
+		Ref    *provider.Reference `json:"ref"`
+		MdKeys []string            `json:"mdKeys"`
+		// MetaData provider.ResourceInfo `json:"metaData"`
+	}
+	bodyObj := &paramsObj{
+		Ref:    ref,
+		MdKeys: mdKeys,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("GetMD %s", bodyStr)
 
-	if err != nil {
-		return nil, err
-	}
 	status, body, err := nc.do(ctx, Action{"GetMD", string(bodyStr)})
 	if err != nil {
 		return nil, err
@@ -242,50 +298,25 @@ func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdK
 	if status == 404 {
 		return nil, errtypes.NotFound("")
 	}
-	var respMap map[string]interface{}
-	err = json.Unmarshal(body, &respMap)
+	var respObj provider.ResourceInfo
+	err = json.Unmarshal(body, &respObj)
 	if err != nil {
 		return nil, err
 	}
-	size := int(respMap["size"].(float64))
-	mdMap, ok := respMap["metadata"].(map[string]interface{})
-	mdMapString := make(map[string]string)
-	if ok {
-		for key, value := range mdMap {
-			mdMapString[key] = value.(string)
-		}
-	}
-	md := &provider.ResourceInfo{
-		Opaque:            &types.Opaque{},
-		Type:              provider.ResourceType_RESOURCE_TYPE_FILE,
-		Id:                &provider.ResourceId{OpaqueId: "fileid-" + url.QueryEscape(ref.Path)},
-		Checksum:          &provider.ResourceChecksum{},
-		Etag:              "some-etag",
-		MimeType:          "application/octet-stream",
-		Mtime:             &types.Timestamp{Seconds: 1234567890},
-		Path:              ref.Path,
-		PermissionSet:     &provider.ResourcePermissions{},
-		Size:              uint64(size),
-		Owner:             nil,
-		Target:            "",
-		CanonicalMetadata: &provider.CanonicalMetadata{},
-		ArbitraryMetadata: &provider.ArbitraryMetadata{
-			Metadata:             mdMapString,
-			XXX_NoUnkeyedLiteral: struct{}{},
-			XXX_unrecognized:     []byte{},
-			XXX_sizecache:        0,
-		},
-		XXX_NoUnkeyedLiteral: struct{}{},
-		XXX_unrecognized:     []byte{},
-		XXX_sizecache:        0,
-	}
-
-	return md, nil
+	return &respObj, nil
 }
 
 // ListFolder as defined in the storage.FS interface
 func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
-	bodyStr, err := json.Marshal(ref)
+	type paramsObj struct {
+		Ref    *provider.Reference `json:"ref"`
+		MdKeys []string            `json:"mdKeys"`
+	}
+	bodyObj := &paramsObj{
+		Ref:    ref,
+		MdKeys: mdKeys,
+	}
+	bodyStr, err := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("LisfFolder %s", bodyStr)
 	if err != nil {
@@ -298,36 +329,32 @@ func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference
 	if status == 404 {
 		return nil, errtypes.NotFound("")
 	}
-	var bodyArr []string
-	err = json.Unmarshal(body, &bodyArr)
-	var infos = make([]*provider.ResourceInfo, len(bodyArr))
-	for i := 0; i < len(bodyArr); i++ {
-		infos[i] = &provider.ResourceInfo{
-			Opaque:               &types.Opaque{},
-			Type:                 provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			Id:                   &provider.ResourceId{OpaqueId: "fileid-" + url.QueryEscape(bodyArr[i])},
-			Checksum:             &provider.ResourceChecksum{},
-			Etag:                 "some-etag",
-			MimeType:             "application/octet-stream",
-			Mtime:                &types.Timestamp{Seconds: 1234567890},
-			Path:                 "/subdir", // FIXME: bodyArr[i],
-			PermissionSet:        &provider.ResourcePermissions{},
-			Size:                 0,
-			Owner:                &user.UserId{OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"},
-			Target:               "",
-			CanonicalMetadata:    &provider.CanonicalMetadata{},
-			ArbitraryMetadata:    nil,
-			XXX_NoUnkeyedLiteral: struct{}{},
-			XXX_unrecognized:     []byte{},
-			XXX_sizecache:        0,
-		}
+
+	var respMapArr []provider.ResourceInfo
+	err = json.Unmarshal(body, &respMapArr)
+	if err != nil {
+		return nil, err
 	}
-	return infos, err
+	var pointers = make([]*provider.ResourceInfo, len(respMapArr))
+	for i := 0; i < len(respMapArr); i++ {
+		pointers[i] = &respMapArr[i]
+	}
+	return pointers, err
 }
 
 // InitiateUpload as defined in the storage.FS interface
 func (nc *StorageDriver) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-	bodyStr, _ := json.Marshal(ref)
+	type paramsObj struct {
+		Ref          *provider.Reference `json:"ref"`
+		UploadLength int64               `json:"uploadLength"`
+		Metadata     map[string]string   `json:"metadata"`
+	}
+	bodyObj := &paramsObj{
+		Ref:          ref,
+		UploadLength: uploadLength,
+		Metadata:     metadata,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("InitiateUpload %s", bodyStr)
 
@@ -345,26 +372,12 @@ func (nc *StorageDriver) InitiateUpload(ctx context.Context, ref *provider.Refer
 
 // Upload as defined in the storage.FS interface
 func (nc *StorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	bodyStr, _ := json.Marshal(ref)
-	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("Upload %s", bodyStr)
-
-	err := nc.doUpload(r)
-	if err != nil {
-		return err
-	}
-	_, _, err = nc.do(ctx, Action{"Upload", string(bodyStr)})
-	return err
+	return nc.doUpload(ctx, ref.Path, r)
 }
 
 // Download as defined in the storage.FS interface
 func (nc *StorageDriver) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	bodyStr, _ := json.Marshal(ref)
-	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("Download %s", bodyStr)
-
-	_, _, err := nc.do(ctx, Action{"Download", string(bodyStr)})
-	return nil, err
+	return nc.doDownload(ctx, ref.Path)
 }
 
 // ListRevisions as defined in the storage.FS interface
@@ -374,43 +387,43 @@ func (nc *StorageDriver) ListRevisions(ctx context.Context, ref *provider.Refere
 	log.Info().Msgf("ListRevisions %s", bodyStr)
 
 	_, respBody, err := nc.do(ctx, Action{"ListRevisions", string(bodyStr)})
+	// fmt.Printf("ListRevisions respBody %s", respBody)
+
 	if err != nil {
 		return nil, err
 	}
-	var m []int
-	err = json.Unmarshal(respBody, &m)
+	var respMapArr []provider.FileVersion
+	err = json.Unmarshal(respBody, &respMapArr)
 	if err != nil {
 		return nil, err
 	}
-	revs := make([]*provider.FileVersion, len(m))
-	for i := 0; i < len(m); i++ {
-		revs[i] = &provider.FileVersion{
-			Opaque:               &types.Opaque{},
-			Key:                  fmt.Sprint(i),
-			Size:                 uint64(m[i]),
-			Mtime:                0,
-			Etag:                 "",
-			XXX_NoUnkeyedLiteral: struct{}{},
-			XXX_unrecognized:     []byte{},
-			XXX_sizecache:        0,
-		}
+	revs := make([]*provider.FileVersion, len(respMapArr))
+	for i := 0; i < len(respMapArr); i++ {
+		revs[i] = &respMapArr[i]
 	}
 	return revs, err
 }
 
 // DownloadRevision as defined in the storage.FS interface
 func (nc *StorageDriver) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error) {
-	bodyStr, _ := json.Marshal(ref)
 	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("DownloadRevision %s", bodyStr)
+	log.Info().Msgf("DownloadRevision %s %s", ref.Path, key)
 
-	_, _, err := nc.do(ctx, Action{"DownloadRevision", string(bodyStr)})
-	return nil, err
+	readCloser, err := nc.doDownloadRevision(ctx, ref.Path, key)
+	return readCloser, err
 }
 
 // RestoreRevision as defined in the storage.FS interface
 func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
-	bodyStr, _ := json.Marshal(ref)
+	type paramsObj struct {
+		Ref *provider.Reference `json:"ref"`
+		Key string              `json:"key"`
+	}
+	bodyObj := &paramsObj{
+		Ref: ref,
+		Key: key,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("RestoreRevision %s", bodyStr)
 
@@ -422,52 +435,67 @@ func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Refe
 func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("ListRecycle")
-	_, respBody, err := nc.do(ctx, Action{"ListRecycle", ""})
+	type paramsObj struct {
+		Key  string `json:"key"`
+		Path string `json:"path"`
+	}
+	bodyObj := &paramsObj{
+		Key:  key,
+		Path: path,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
+
+	_, respBody, err := nc.do(ctx, Action{"ListRecycle", string(bodyStr)})
 
 	if err != nil {
 		return nil, err
 	}
-	var m []string
-	err = json.Unmarshal(respBody, &m)
+	var respMapArr []provider.RecycleItem
+	err = json.Unmarshal(respBody, &respMapArr)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]*provider.RecycleItem, len(m))
-	for i := 0; i < len(m); i++ {
-		items[i] = &provider.RecycleItem{
-			Opaque: &types.Opaque{},
-			Type:   0,
-			Key:    "",
-			Ref: &provider.Reference{
-				ResourceId:           &provider.ResourceId{},
-				Path:                 m[i],
-				XXX_NoUnkeyedLiteral: struct{}{},
-				XXX_unrecognized:     []byte{},
-				XXX_sizecache:        0,
-			},
-			Size:                 0,
-			DeletionTime:         &types.Timestamp{},
-			XXX_NoUnkeyedLiteral: struct{}{},
-			XXX_unrecognized:     []byte{},
-			XXX_sizecache:        0,
-		}
+	items := make([]*provider.RecycleItem, len(respMapArr))
+	for i := 0; i < len(respMapArr); i++ {
+		items[i] = &respMapArr[i]
 	}
 	return items, err
 }
 
 // RestoreRecycleItem as defined in the storage.FS interface
 func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, key string, path string, restoreRef *provider.Reference) error {
-	bodyStr, _ := json.Marshal(restoreRef)
+	// fmt.Printf("RestoreRecycleItem! %s %s\n\n", key, path)
+	type paramsObj struct {
+		Key        string              `json:"key"`
+		Path       string              `json:"path"`
+		RestoreRef *provider.Reference `json:"restoreRef"`
+	}
+	bodyObj := &paramsObj{
+		Key:        key,
+		Path:       path,
+		RestoreRef: restoreRef,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("RestoreRecycleItem %s", bodyStr)
 
 	_, _, err := nc.do(ctx, Action{"RestoreRecycleItem", string(bodyStr)})
+
 	return err
 }
 
 // PurgeRecycleItem as defined in the storage.FS interface
 func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, key string, path string) error {
-	bodyStr, _ := json.Marshal(key)
+	type paramsObj struct {
+		Key  string `json:"key"`
+		Path string `json:"path"`
+	}
+	bodyObj := &paramsObj{
+		Key:  key,
+		Path: path,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("PurgeRecycleItem %s", bodyStr)
 
@@ -487,36 +515,39 @@ func (nc *StorageDriver) EmptyRecycle(ctx context.Context) error {
 // GetPathByID as defined in the storage.FS interface
 func (nc *StorageDriver) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	bodyStr, _ := json.Marshal(id)
-	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("GetPathByID %s", bodyStr)
-
 	_, respBody, err := nc.do(ctx, Action{"GetPathByID", string(bodyStr)})
 	return string(respBody), err
 }
 
 // AddGrant as defined in the storage.FS interface
 func (nc *StorageDriver) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	bodyStr, _ := json.Marshal(ref)
+	type paramsObj struct {
+		Ref *provider.Reference `json:"ref"`
+		G   *provider.Grant     `json:"g"`
+	}
+	bodyObj := &paramsObj{
+		Ref: ref,
+		G:   g,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("AggGrant %s", bodyStr)
+	log.Info().Msgf("AddGrant %s", bodyStr)
 
 	_, _, err := nc.do(ctx, Action{"AddGrant", string(bodyStr)})
 	return err
 }
 
-// RemoveGrant as defined in the storage.FS interface
-func (nc *StorageDriver) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	bodyStr, _ := json.Marshal(ref)
-	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("RemoveGrant %s", bodyStr)
-
-	_, _, err := nc.do(ctx, Action{"RemoveGrant", string(bodyStr)})
-	return err
-}
-
 // DenyGrant as defined in the storage.FS interface
 func (nc *StorageDriver) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
-	bodyStr, _ := json.Marshal(ref)
+	type paramsObj struct {
+		Ref *provider.Reference `json:"ref"`
+		G   *provider.Grantee   `json:"g"`
+	}
+	bodyObj := &paramsObj{
+		Ref: ref,
+		G:   g,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("DenyGrant %s", bodyStr)
 
@@ -524,9 +555,35 @@ func (nc *StorageDriver) DenyGrant(ctx context.Context, ref *provider.Reference,
 	return err
 }
 
+// RemoveGrant as defined in the storage.FS interface
+func (nc *StorageDriver) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	type paramsObj struct {
+		Ref *provider.Reference `json:"ref"`
+		G   *provider.Grant     `json:"g"`
+	}
+	bodyObj := &paramsObj{
+		Ref: ref,
+		G:   g,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("RemoveGrant %s", bodyStr)
+
+	_, _, err := nc.do(ctx, Action{"RemoveGrant", string(bodyStr)})
+	return err
+}
+
 // UpdateGrant as defined in the storage.FS interface
 func (nc *StorageDriver) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	bodyStr, _ := json.Marshal(ref)
+	type paramsObj struct {
+		Ref *provider.Reference `json:"ref"`
+		G   *provider.Grant     `json:"g"`
+	}
+	bodyObj := &paramsObj{
+		Ref: ref,
+		G:   g,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("UpdateGrant %s", bodyStr)
 
@@ -544,60 +601,69 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 	if err != nil {
 		return nil, err
 	}
-	var m []map[string]bool
-	err = json.Unmarshal(respBody, &m)
+
+	// To avoid this error:
+	// json: cannot unmarshal object into Go struct field Grantee.grantee.Id of type providerv1beta1.isGrantee_Id
+	// To test:
+	// bodyStr, _ := json.Marshal(provider.Grant{
+	// 	 Grantee: &provider.Grantee{
+	// 		 Type: provider.GranteeType_GRANTEE_TYPE_USER,
+	// 		 Id: &provider.Grantee_UserId{
+	// 			 UserId: &user.UserId{
+	// 				 Idp:      "some-idp",
+	// 				 OpaqueId: "some-opaque-id",
+	// 				 Type:     user.UserType_USER_TYPE_PRIMARY,
+	// 			 },
+	// 		 },
+	// 	 },
+	// 	 Permissions: &provider.ResourcePermissions{},
+	// })
+	// JSON example:
+	// [{"grantee":{"Id":{"UserId":{"idp":"some-idp","opaque_id":"some-opaque-id","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true}}]
+	var respMapArr []map[string]interface{}
+	err = json.Unmarshal(respBody, &respMapArr)
 	if err != nil {
 		return nil, err
 	}
-	grants := make([]*provider.Grant, len(m))
-	for i := 0; i < len(m); i++ {
-		var perms = &provider.ResourcePermissions{
-			AddGrant:             false,
-			CreateContainer:      false,
-			Delete:               false,
-			GetPath:              false,
-			GetQuota:             false,
-			InitiateFileDownload: false,
-			InitiateFileUpload:   false,
-			ListGrants:           false,
-			ListContainer:        false,
-			ListFileVersions:     false,
-			ListRecycle:          false,
-			Move:                 false,
-			RemoveGrant:          false,
-			PurgeRecycle:         false,
-			RestoreFileVersion:   false,
-			RestoreRecycleItem:   false,
-			Stat:                 false,
-			UpdateGrant:          false,
-			XXX_NoUnkeyedLiteral: struct{}{},
-			XXX_unrecognized:     []byte{},
-			XXX_sizecache:        0,
-		}
-		for key, element := range m[i] {
-			if key == "stat" {
-				perms.Stat = element
-			}
-			if key == "move" {
-				perms.Move = element
-			}
-			if key == "delete" {
-				perms.Delete = element
-			}
-		}
+	grants := make([]*provider.Grant, len(respMapArr))
+	for i := 0; i < len(respMapArr); i++ {
+		granteeMap := respMapArr[i]["grantee"].(map[string]interface{})
+		granteeIDMap := granteeMap["Id"].(map[string]interface{})
+		granteeIDUserIDMap := granteeIDMap["UserId"].(map[string]interface{})
+
+		// if (granteeMap["Id"])
+		permsMap := respMapArr[i]["permissions"].(map[string]interface{})
 		grants[i] = &provider.Grant{
 			Grantee: &provider.Grantee{
-				Type:                 provider.GranteeType_GRANTEE_TYPE_USER,
-				Id:                   nil,
-				Opaque:               &types.Opaque{},
-				XXX_NoUnkeyedLiteral: struct{}{},
-				XXX_unrecognized:     []byte{},
-				XXX_sizecache:        0,
+				Type: provider.GranteeType_GRANTEE_TYPE_USER, // FIXME: support groups too
+				Id: &provider.Grantee_UserId{
+					UserId: &user.UserId{
+						Idp:      granteeIDUserIDMap["idp"].(string),
+						OpaqueId: granteeIDUserIDMap["opaque_id"].(string),
+						Type:     user.UserType(granteeIDUserIDMap["type"].(float64)),
+					},
+				},
 			},
-			Permissions:          perms,
-			XXX_NoUnkeyedLiteral: struct{}{},
-			XXX_unrecognized:     []byte{},
-			XXX_sizecache:        0,
+			Permissions: &provider.ResourcePermissions{
+				AddGrant:             permsMap["add_grant"].(bool),
+				CreateContainer:      permsMap["create_container"].(bool),
+				Delete:               permsMap["delete"].(bool),
+				GetPath:              permsMap["get_path"].(bool),
+				GetQuota:             permsMap["get_quota"].(bool),
+				InitiateFileDownload: permsMap["initiate_file_download"].(bool),
+				InitiateFileUpload:   permsMap["initiate_file_upload"].(bool),
+				ListGrants:           permsMap["list_grants"].(bool),
+				ListContainer:        permsMap["list_container"].(bool),
+				ListFileVersions:     permsMap["list_file_versions"].(bool),
+				ListRecycle:          permsMap["list_recycle"].(bool),
+				Move:                 permsMap["move"].(bool),
+				RemoveGrant:          permsMap["remove_grant"].(bool),
+				PurgeRecycle:         permsMap["purge_recycle"].(bool),
+				RestoreFileVersion:   permsMap["restore_file_version"].(bool),
+				RestoreRecycleItem:   permsMap["restore_recycle_item"].(bool),
+				Stat:                 permsMap["stat"].(bool),
+				UpdateGrant:          permsMap["update_grant"].(bool),
+			},
 		}
 	}
 	return grants, err
@@ -608,16 +674,32 @@ func (nc *StorageDriver) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("GetQuota")
 
-	_, _, err := nc.do(ctx, Action{"GetQuota", ""})
-	return 0, 0, err
+	_, respBody, err := nc.do(ctx, Action{"GetQuota", ""})
+	if err != nil {
+		return 0, 0, err
+	}
+
+	var respMap map[string]interface{}
+	err = json.Unmarshal(respBody, &respMap)
+	if err != nil {
+		return 0, 0, err
+	}
+	return uint64(respMap["totalBytes"].(float64)), uint64(respMap["usedBytes"].(float64)), err
 }
 
 // CreateReference as defined in the storage.FS interface
 func (nc *StorageDriver) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
-	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("CreateReference %s", path)
+	type paramsObj struct {
+		Path string `json:"path"`
+		URL  string `json:"url"`
+	}
+	bodyObj := &paramsObj{
+		Path: path,
+		URL:  targetURI.String(),
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
 
-	_, _, err := nc.do(ctx, Action{"CreateReference", fmt.Sprintf(`{"path":"%s"}`, path)})
+	_, _, err := nc.do(ctx, Action{"CreateReference", string(bodyStr)})
 	return err
 }
 
@@ -632,7 +714,15 @@ func (nc *StorageDriver) Shutdown(ctx context.Context) error {
 
 // SetArbitraryMetadata as defined in the storage.FS interface
 func (nc *StorageDriver) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
-	bodyStr, _ := json.Marshal(md)
+	type paramsObj struct {
+		Ref *provider.Reference         `json:"ref"`
+		Md  *provider.ArbitraryMetadata `json:"md"`
+	}
+	bodyObj := &paramsObj{
+		Ref: ref,
+		Md:  md,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("SetArbitraryMetadata %s", bodyStr)
 
@@ -642,7 +732,15 @@ func (nc *StorageDriver) SetArbitraryMetadata(ctx context.Context, ref *provider
 
 // UnsetArbitraryMetadata as defined in the storage.FS interface
 func (nc *StorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
-	bodyStr, _ := json.Marshal(ref)
+	type paramsObj struct {
+		Ref  *provider.Reference `json:"ref"`
+		Keys []string            `json:"keys"`
+	}
+	bodyObj := &paramsObj{
+		Ref:  ref,
+		Keys: keys,
+	}
+	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("UnsetArbitraryMetadata %s", bodyStr)
 
@@ -650,11 +748,39 @@ func (nc *StorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provid
 	return err
 }
 
-// ListStorageSpaces :as defined in the storage.FS interface
-func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
-	log := appctx.GetLogger(ctx)
-	log.Info().Msg("ListStorageSpaces")
+// ListStorageSpaces as defined in the storage.FS interface
+func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, f []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	bodyStr, _ := json.Marshal(f)
+	_, respBody, err := nc.do(ctx, Action{"ListStorageSpaces", string(bodyStr)})
+	if err != nil {
+		return nil, err
+	}
 
-	_, _, err := nc.do(ctx, Action{"ListStorageSpaces", ""})
-	return nil, err
+	// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1341-L1366
+	var respMapArr []provider.StorageSpace
+	err = json.Unmarshal(respBody, &respMapArr)
+	if err != nil {
+		return nil, err
+	}
+	var spaces = make([]*provider.StorageSpace, len(respMapArr))
+	for i := 0; i < len(respMapArr); i++ {
+		spaces[i] = &respMapArr[i]
+	}
+	return spaces, err
+}
+
+// CreateStorageSpace creates a storage space
+func (nc *StorageDriver) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	bodyStr, _ := json.Marshal(req)
+	_, respBody, err := nc.do(ctx, Action{"CreateStorageSpace", string(bodyStr)})
+	if err != nil {
+		return nil, err
+	}
+	var respObj provider.CreateStorageSpaceResponse
+	fmt.Println(string(respBody))
+	err = json.Unmarshal(respBody, &respObj)
+	if err != nil {
+		return nil, err
+	}
+	return &respObj, nil
 }

@@ -91,7 +91,9 @@ func checkPublicShareRef(s *link.PublicShare, ref *link.PublicShareReference) bo
 // AddPublicShareScope adds the scope to allow access to a public share and
 // the shared resource.
 func AddPublicShareScope(share *link.PublicShare, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-	val, err := utils.MarshalProtoV1ToJSON(share)
+	// Create a new "scope share" to only expose the required fields `ResourceId` and `Token` to the scope.
+	scopeShare := &link.PublicShare{ResourceId: share.ResourceId, Token: share.Token}
+	val, err := utils.MarshalProtoV1ToJSON(scopeShare)
 	if err != nil {
 		return nil, err
 	}

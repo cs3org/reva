@@ -1318,7 +1318,7 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 
 	for i, p := range providers {
 		wg.Add(1)
-		go s.statOnProvider(ctx, req, infoFromProviders[i], p, &errors[i], &wg)
+		go s.statOnProvider(ctx, req, &infoFromProviders[i], p, &errors[i], &wg)
 	}
 	wg.Wait()
 
@@ -1348,7 +1348,7 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 	}, nil
 }
 
-func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res *provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
+func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res **provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
 	defer wg.Done()
 	c, err := s.getStorageProviderClient(ctx, p)
 	if err != nil {
@@ -1370,10 +1370,7 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 		*e = errors.Wrap(err, fmt.Sprintf("gateway: error calling Stat %s on %+v", req.Ref, p))
 		return
 	}
-	if res == nil {
-		res = &provider.ResourceInfo{}
-	}
-	*res = *r.Info
+	*res = r.Info
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {

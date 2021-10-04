@@ -107,6 +107,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 				}
 			}
 		}
+
 	} else if ref, ok := extractShareRef(req); ok {
 		// It's a share ref
 		// The request might be coming from a share created for a lightweight account

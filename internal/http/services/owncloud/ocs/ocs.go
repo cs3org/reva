@@ -138,6 +138,8 @@ func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 		log.Debug().Str("path", r.URL.Path).Msg("ocs routing")
+		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
+		r.URL.RawPath = ""
 		s.router.ServeHTTP(w, r)
 	})
 }

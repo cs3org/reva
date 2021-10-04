@@ -1,6 +1,5 @@
-Enhancement: Nextcloud user backend
+Enhancement: More unit tests for the Nextcloud auth and user managers
 
-Adds Nextcloud as a user backend (Nextcloud drivers for 'auth' and 'user').
-Also adds back the Nextcloud storage integration tests.
+Adds more unit tests for the Nextcloud auth manager and the Nextcloud user manager
 
-https://github.com/cs3org/reva/pull/2043
+https://github.com/cs3org/reva/pull/2087

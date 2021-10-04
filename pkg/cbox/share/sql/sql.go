@@ -276,20 +276,19 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	uid := conversions.FormatUserID(ctxpkg.ContextMustGetUser(ctx).Id)
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, id, stime, permissions, share_type FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner=? or uid_initiator=?) AND (share_type=? OR share_type=?)"
-	var filterQuery string
+	query := `SELECT coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with,
+	                 coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, id, stime, permissions, share_type
+			    FROM oc_share
+			   WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner=? or uid_initiator=?) AND (share_type=? OR share_type=?)`
 	params := []interface{}{uid, uid, 0, 1}
-	for i, f := range filters {
+	for _, f := range filters {
 		if f.Type == collaboration.Filter_TYPE_RESOURCE_ID {
-			filterQuery += "(fileid_prefix=? AND item_source=?)"
-			if i != len(filters)-1 {
-				filterQuery += " AND "
-			}
+			query += " AND (fileid_prefix=? AND item_source=?)"
 			params = append(params, f.GetResourceId().StorageId, f.GetResourceId().OpaqueId)
+		} else if f.Type == collaboration.Filter_TYPE_EXCLUDE_DENIALS {
+			// TODO this may change once the mapping of permission to share types is completed (cf. pkg/cbox/utils/conversions.go)
+			query += " AND (permissions > 0)"
 		}
-	}
-	if filterQuery != "" {
-		query = fmt.Sprintf("%s AND (%s)", query, filterQuery)
 	}
 
 	rows, err := m.db.Query(query, params...)
@@ -323,11 +322,24 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 		params = append(params, v)
 	}
 
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, ts.id, stime, permissions, share_type, accepted, coalesce(tr.rejected_by, '') as rejected_by FROM oc_share ts LEFT JOIN oc_share_acl tr ON (ts.id = tr.id AND tr.rejected_by = ?) WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner != ? AND uid_initiator != ?) "
+	query := `SELECT coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with,
+				     coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, ts.id, stime,
+					 permissions, share_type, accepted, coalesce(tr.rejected_by, '') as rejected_by
+			    FROM oc_share ts LEFT JOIN oc_share_acl tr ON (ts.id = tr.id AND tr.rejected_by = ?)
+			   WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner != ? AND uid_initiator != ?)`
 	if len(user.Groups) > 0 {
-		query += "AND (share_with=? OR share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + "))"
+		query += " AND (share_with=? OR share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + "))"
 	} else {
-		query += "AND (share_with=?)"
+		query += " AND (share_with=?)"
+	}
+
+	for _, f := range filters {
+		if f.Type == collaboration.Filter_TYPE_RESOURCE_ID {
+			query += " AND (fileid_prefix=? AND item_source=?)"
+			params = append(params, f.GetResourceId().StorageId, f.GetResourceId().OpaqueId)
+		} else if f.Type == collaboration.Filter_TYPE_EXCLUDE_DENIALS {
+			query += " AND (permissions > 0)"
+		}
 	}
 
 	rows, err := m.db.Query(query, params...)

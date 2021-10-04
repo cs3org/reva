@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
@@ -98,12 +99,17 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
+	u := res.User
+	if sharedconf.SkipUserGroupsInToken() {
+		u.Groups = []string{}
+	}
+
 	// We need to expand the scopes of lightweight accounts, user shares and
 	// public shares, for which we need to retrieve the receieved shares and stat
 	// the resources referenced by these. Since the current scope can do that,
 	// mint a temporary token based on that and expand the scope. Then set the
 	// token obtained from the updated scope in the context.
-	token, err := s.tokenmgr.MintToken(ctx, res.User, res.TokenScope)
+	token, err := s.tokenmgr.MintToken(ctx, u, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -123,7 +129,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
-	token, err = s.tokenmgr.MintToken(ctx, res.User, scope)
+	token, err = s.tokenmgr.MintToken(ctx, u, scope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -179,6 +185,14 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 		return &gateway.WhoAmIResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error dismantling token"),
 		}, nil
+	}
+
+	if sharedconf.SkipUserGroupsInToken() {
+		groupsRes, err := s.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+		if err != nil {
+			return nil, err
+		}
+		u.Groups = groupsRes.Groups
 	}
 
 	res := &gateway.WhoAmIResponse{
