@@ -304,9 +304,9 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent string) []*appregistry.MimeTypeInfo {
+func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent string) map[string]*appregistry.MimeTypeInfo {
 	ua := ua.Parse(userAgent)
-	res := []*appregistry.MimeTypeInfo{}
+	res := map[string]*appregistry.MimeTypeInfo{}
 	for _, m := range mimeTypes {
 		apps := []*appregistry.ProviderInfo{}
 		for _, p := range m.AppProviders {
@@ -318,8 +318,9 @@ func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent stri
 			}
 		}
 		if len(apps) > 0 {
+			// to ease manipulation from the client, the result is rearranged as a map[mimetype] -> MimeTypeInfo
 			m.AppProviders = apps
-			res = append(res, m)
+			res[m.MimeType] = m
 		}
 	}
 	return res
