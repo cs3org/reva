@@ -295,13 +295,7 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 
 	// if we only have one app provider we verify that it matches the requested app name
 	if len(res.Providers) == 1 {
-		p := res.Providers[0]
-		if p.Name == app {
-			return p, nil
-		}
-		// we return error if we return the wrong app provider
-		err = errtypes.InternalError(fmt.Sprintf("gateway: user asked for app %q and we gave %q", app, p.Name))
-		return nil, err
+		return res.Providers[0], nil
 	}
 
 	// we should never arrive to the point of having more than one
