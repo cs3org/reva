@@ -275,6 +275,14 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 		return nil, err
 	}
 
+	// if the list of app providers is empty means we expect a CODE_NOT_FOUND in the response
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return nil, errtypes.NotFound("gateway: app provider not found for resource: " + ri.String())
+		}
+		return nil, errtypes.InternalError("gateway: error finding app providers")
+	}
+
 	// as long as the above mentioned GetAppProviderByName(app) method is not available
 	// we need to apply a manual filter
 	filteredProviders := []*registry.ProviderInfo{}
@@ -284,14 +292,6 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 		}
 	}
 	res.Providers = filteredProviders
-
-	// if the list of app providers is empty means we expect a CODE_NOT_FOUND in the response
-	if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			return nil, errtypes.NotFound("gateway: app provider not found for resource: " + ri.String())
-		}
-		return nil, errtypes.InternalError("gateway: error finding app providers")
-	}
 
 	// if we only have one app provider we verify that it matches the requested app name
 	if len(res.Providers) == 1 {
