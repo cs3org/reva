@@ -494,14 +494,6 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareR
 	return rs, nil
 }
 
-func groupFiltersByType(filters []*collaboration.Filter) map[collaboration.Filter_Type][]*collaboration.Filter {
-	grouped := make(map[collaboration.Filter_Type][]*collaboration.Filter)
-	for _, f := range filters {
-		grouped[f.Type] = append(grouped[f.Type], f)
-	}
-	return grouped
-}
-
 func granteeTypeToShareType(granteeType provider.GranteeType) int {
 	switch granteeType {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
@@ -519,7 +511,7 @@ func translateFilters(filters []*collaboration.Filter) (string, []interface{}, e
 		params      []interface{}
 	)
 
-	groupedFilters := groupFiltersByType(filters)
+	groupedFilters := share.GroupFiltersByType(filters)
 	// If multiple filters of the same type are passed to this function, they need to be combined with the `OR` operator.
 	// That is why the filters got grouped by type.
 	// For every given filter type, iterate over the filters and if there are more than one combine them.

@@ -122,3 +122,36 @@ func MatchesFilter(share *collaboration.Share, filter *collaboration.Filter) boo
 		return false
 	}
 }
+
+// MatchesAnyFilter checks if the share passes at least one of the given filters.
+func MatchesAnyFilter(share *collaboration.Share, filters []*collaboration.Filter) bool {
+	for _, f := range filters {
+		if MatchesFilter(share, f) {
+			return true
+		}
+	}
+	return false
+}
+
+// MatchesFilters checks if the share passes the given filters.
+// Filters of the same type form a disjuntion, a logical OR. Filters of separate type form a conjunction, a logical AND.
+// Here is an example:
+// (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP)
+func MatchesFilters(share *collaboration.Share, filters []*collaboration.Filter) bool {
+	grouped := GroupFiltersByType(filters)
+	for _, f := range grouped {
+		if !MatchesAnyFilter(share, f) {
+			return false
+		}
+	}
+	return true
+}
+
+// GroupFiltersByType groups the given filters and returns a map using the filter type as the key.
+func GroupFiltersByType(filters []*collaboration.Filter) map[collaboration.Filter_Type][]*collaboration.Filter {
+	grouped := make(map[collaboration.Filter_Type][]*collaboration.Filter)
+	for _, f := range filters {
+		grouped[f.Type] = append(grouped[f.Type], f)
+	}
+	return grouped
+}

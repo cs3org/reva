@@ -361,14 +361,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 				continue
 			}
 			// check filters
-			allFiltersMatch := true
-			for _, f := range filters {
-				if !share.MatchesFilter(s, f) {
-					allFiltersMatch = false
-					break
-				}
-			}
-			if allFiltersMatch {
+			if share.MatchesFilters(s, filters) {
 				ss = append(ss, s)
 			}
 		}
@@ -394,14 +387,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 			continue
 		}
 
-		allFiltersMatch := true
-		for _, f := range filters {
-			if !share.MatchesFilter(s, f) {
-				allFiltersMatch = false
-				break
-			}
-		}
-		if allFiltersMatch {
+		if share.MatchesFilters(s, filters) {
 			rs := m.convert(ctx, s)
 			rss = append(rss, rs)
 		}
