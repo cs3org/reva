@@ -100,12 +100,11 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			statRes, err := client.Stat(ctx, &providerv1beta1.StatRequest{Ref: &providerv1beta1.Reference{ResourceId: favorites[i]}})
 			if err != nil {
 				log.Error().Err(err).Msg("error getting resource info")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
+				continue
 			}
 			if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-				HandleErrorStatus(log, w, statRes.Status)
-				return
+				log.Error().Interface("stat_response", statRes).Msg("error getting resource info")
+				continue
 			}
 
 			// The paths we receive have the format /user/<username>/<filepath>
@@ -113,8 +112,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			parts := strings.SplitN(statRes.Info.Path, "/", 4)
 			if len(parts) != 4 {
 				log.Error().Str("path", statRes.Info.Path).Msg("path doesn't have the expected format")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
+				continue
 			}
 			statRes.Info.Path = parts[3]
 
