@@ -216,7 +216,7 @@ var _ = Describe("Nextcloud", func() {
 	})
 
 	// GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
-	FDescribe("GetMD", func() {
+	Describe("GetMD", func() {
 		It("calls the GetMD endpoint", func() {
 			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
@@ -403,7 +403,7 @@ var _ = Describe("Nextcloud", func() {
 				XXX_sizecache:        0,
 			}))
 			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListFolder {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"mdKeys":["val1","val2","val3"]}`)
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListFolder {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some"},"mdKeys":["val1","val2","val3"]}`)
 		})
 	})
 
