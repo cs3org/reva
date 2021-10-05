@@ -21,8 +21,11 @@ package share
 import (
 	"context"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 // Manager is the interface that manipulates shares.
@@ -81,4 +84,74 @@ func ResourceIDFilter(id *provider.ResourceId) *collaboration.Filter {
 			ResourceId: id,
 		},
 	}
+}
+
+// IsCreatedByUser checks if the user is the owner or creator of the share.
+func IsCreatedByUser(share *collaboration.Share, user *userv1beta1.User) bool {
+	return utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator)
+}
+
+// IsGrantedToUser checks if the user is a grantee of the share. Either by a user grant or by a group grant.
+func IsGrantedToUser(share *collaboration.Share, user *userv1beta1.User) bool {
+	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, share.Grantee.GetUserId()) {
+		return true
+	}
+	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		// check if any of the user's group is the grantee of the share
+		for _, g := range user.Groups {
+			if g == share.Grantee.GetGroupId().OpaqueId {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// MatchesFilter tests if the share passes the filter.
+func MatchesFilter(share *collaboration.Share, filter *collaboration.Filter) bool {
+	switch filter.Type {
+	case collaboration.Filter_TYPE_RESOURCE_ID:
+		return utils.ResourceIDEqual(share.ResourceId, filter.GetResourceId())
+	case collaboration.Filter_TYPE_GRANTEE_TYPE:
+		return share.Grantee.Type == filter.GetGranteeType()
+	case collaboration.Filter_TYPE_EXCLUDE_DENIALS:
+		// This filter type is used to filter out "denial shares". These are currently implemented by having the permission "0".
+		// I.e. if the permission is 0 we don't want to show it.
+		return int(conversions.RoleFromResourcePermissions(share.Permissions.Permissions).OCSPermissions()) != 0
+	default:
+		return false
+	}
+}
+
+// MatchesAnyFilter checks if the share passes at least one of the given filters.
+func MatchesAnyFilter(share *collaboration.Share, filters []*collaboration.Filter) bool {
+	for _, f := range filters {
+		if MatchesFilter(share, f) {
+			return true
+		}
+	}
+	return false
+}
+
+// MatchesFilters checks if the share passes the given filters.
+// Filters of the same type form a disjuntion, a logical OR. Filters of separate type form a conjunction, a logical AND.
+// Here is an example:
+// (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP)
+func MatchesFilters(share *collaboration.Share, filters []*collaboration.Filter) bool {
+	grouped := GroupFiltersByType(filters)
+	for _, f := range grouped {
+		if !MatchesAnyFilter(share, f) {
+			return false
+		}
+	}
+	return true
+}
+
+// GroupFiltersByType groups the given filters and returns a map using the filter type as the key.
+func GroupFiltersByType(filters []*collaboration.Filter) map[collaboration.Filter_Type][]*collaboration.Filter {
+	grouped := make(map[collaboration.Filter_Type][]*collaboration.Filter)
+	for _, f := range filters {
+		grouped[f.Type] = append(grouped[f.Type], f)
+	}
+	return grouped
 }
