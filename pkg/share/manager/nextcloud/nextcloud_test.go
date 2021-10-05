@@ -20,6 +20,7 @@ package nextcloud_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"google.golang.org/grpc/metadata"
@@ -43,8 +44,8 @@ import (
 func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
 	var conf *nextcloud.ShareManagerConfig
 
-	// fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
 	ncHost := os.Getenv("NEXTCLOUD")
+	fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
 	if len(ncHost) == 0 {
 		conf = &nextcloud.ShareManagerConfig{
 			EndPoint: "http://mock.com/apps/sciencemesh/",
@@ -128,8 +129,9 @@ var _ = Describe("Nextcloud", func() {
 	})
 
 	// Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error)
-	Describe("Share", func() {
+	FDescribe("Share", func() {
 		It("calls the Share endpoint", func() {
+			fmt.Println("Calling setUpNextCloudServer!")
 			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
 

@@ -151,7 +151,9 @@ func (sm *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 		return 0, nil, err
 	}
 	// url := am.endPoint + "~" + a.username + "/api/" + a.verb
-	url := "http://localhost/apps/sciencemesh/~" + user.Username + "/api/share/" + a.verb
+	// url := "http://localhost/apps/sciencemesh/~" + user.Username + "/api/share/" + a.verb
+	url := sm.endPoint + "~" + user.Username + "/api/share/" + a.verb
+
 	log.Info().Msgf("am.do %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
