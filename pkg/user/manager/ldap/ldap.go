@@ -149,37 +149,26 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	}
 	defer l.Close()
 
-	// Search for the given clientID
-	searchRequest := ldap.NewSearchRequest(
-		m.c.BaseDN,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		m.getUserFilter(uid),
-		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.UIDNumber, m.c.Schema.GIDNumber},
-		nil,
-	)
-
-	sr, err := l.Search(searchRequest)
+	userEntry, err := m.getLDAPUserById(ctx, l, uid)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(sr.Entries) != 1 {
-		return nil, errtypes.NotFound(uid.OpaqueId)
-	}
-
-	log.Debug().Interface("entries", sr.Entries).Msg("entries")
+	log.Debug().Interface("entry", userEntry).Msg("entries")
 
 	id := &userpb.UserId{
 		Idp:      m.c.Idp,
-		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
+		OpaqueId: userEntry.GetEqualFoldAttributeValue(m.c.Schema.UID),
 		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
-	groups, err := m.GetUserGroups(ctx, id)
+
+	groups, err := m.getLDAPUserGroups(ctx, l, userEntry)
 	if err != nil {
 		return nil, err
 	}
+
 	gidNumber := m.c.Nobody
-	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
+	gidValue := userEntry.GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
 	if gidValue != "" {
 		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
 		if err != nil {
@@ -187,7 +176,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		}
 	}
 	uidNumber := m.c.Nobody
-	uidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)
+	uidValue := userEntry.GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)
 	if uidValue != "" {
 		uidNumber, err = strconv.ParseInt(uidValue, 10, 64)
 		if err != nil {
@@ -196,10 +185,10 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	}
 	u := &userpb.User{
 		Id:          id,
-		Username:    sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.CN),
+		Username:    userEntry.GetEqualFoldAttributeValue(m.c.Schema.CN),
 		Groups:      groups,
-		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.Mail),
-		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
+		Mail:        userEntry.GetEqualFoldAttributeValue(m.c.Schema.Mail),
+		DisplayName: userEntry.GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
 		GidNumber:   gidNumber,
 		UidNumber:   uidNumber,
 	}
@@ -256,7 +245,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
 		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
-	groups, err := m.GetUserGroups(ctx, id)
+	groups, err := m.getLDAPUserGroups(ctx, l, sr.Entries[0])
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +308,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.UID),
 			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		}
-		groups, err := m.GetUserGroups(ctx, id)
+		groups, err := m.getLDAPUserGroups(ctx, l, entry)
 		if err != nil {
 			return nil, err
 		}
@@ -361,16 +350,50 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	}
 	defer l.Close()
 
-	// Search for the given clientID
+	userEntry, err := m.getLDAPUserById(ctx, l, uid)
+	return m.getLDAPUserGroups(ctx, l, userEntry)
+}
+
+func (m *manager) getLDAPUserById(ctx context.Context, conn *ldap.Conn, uid *userpb.UserId) (*ldap.Entry, error) {
+	log := appctx.GetLogger(ctx)
+	// Search for the given clientID, use a sizeLimit of 1 to be able
+	// to error out early when the userid is not unique
+	searchRequest := ldap.NewSearchRequest(
+		m.c.BaseDN,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 1, 0, false,
+		m.getUserFilter(uid),
+		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.UIDNumber, m.c.Schema.GIDNumber},
+		nil,
+	)
+
+	sr, err := conn.Search(searchRequest)
+	if err != nil {
+		if lerr, ok := err.(*ldap.Error); ok {
+			if lerr.ResultCode == ldap.LDAPResultSizeLimitExceeded {
+				log.Error().Err(lerr).Msg(fmt.Sprintf("userid '%s' is not unique", uid))
+			}
+		}
+		return nil, errtypes.NotFound(uid.OpaqueId)
+	}
+
+	if len(sr.Entries) == 0 {
+		return nil, errtypes.NotFound(uid.OpaqueId)
+	}
+	return sr.Entries[0], nil
+
+}
+
+func (m *manager) getLDAPUserGroups(ctx context.Context, conn *ldap.Conn, userEntry *ldap.Entry) ([]string, error) {
+	username := userEntry.GetEqualFoldAttributeValue(m.c.Schema.CN)
 	searchRequest := ldap.NewSearchRequest(
 		m.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		m.getGroupFilter(uid),
+		m.getGroupFilter(username),
 		[]string{m.c.Schema.CN}, // TODO use DN to look up group id
 		nil,
 	)
 
-	sr, err := l.Search(searchRequest)
+	sr, err := conn.Search(searchRequest)
 	if err != nil {
 		return []string{}, err
 	}
@@ -383,7 +406,6 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		// FIXME 2. ook up the id for each group
 		groups = append(groups, entry.GetEqualFoldAttributeValue(m.c.Schema.CN))
 	}
-
 	return groups, nil
 }
 
@@ -405,7 +427,7 @@ func (m *manager) getFindFilter(query string) string {
 	return strings.ReplaceAll(m.c.FindFilter, "{{query}}", ldap.EscapeFilter(query))
 }
 
-func (m *manager) getGroupFilter(uid *userpb.UserId) string {
+func (m *manager) getGroupFilter(uid interface{}) string {
 	b := bytes.Buffer{}
 	if err := m.groupfilter.Execute(&b, uid); err != nil {
 		err := errors.Wrap(err, fmt.Sprintf("error executing group template: userid:%+v", uid))
