@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage/favorite"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -110,10 +111,11 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	c             *Config
-	webDavHandler *WebDavHandler
-	davHandler    *DavHandler
-	client        *http.Client
+	c                *Config
+	webDavHandler    *WebDavHandler
+	davHandler       *DavHandler
+	favoritesManager favorite.Manager
+	client           *http.Client
 }
 
 // New returns a new ocdav
@@ -133,6 +135,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
+		favoritesManager: favorite.NewInMemoryManager(),
 	}
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
