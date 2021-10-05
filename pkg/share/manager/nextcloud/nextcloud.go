@@ -45,7 +45,7 @@ func init() {
 	registry.Register("nextcloud", New)
 }
 
-type mgr struct {
+type Manager struct {
 	client   *http.Client
 	endPoint string
 }
@@ -53,6 +53,7 @@ type mgr struct {
 // ShareManagerConfig contains config for a Nextcloud-based ShareManager
 type ShareManagerConfig struct {
 	EndPoint string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
+	MockHTTP bool   `mapstructure:"mock_http"`
 }
 
 // Action describes a REST request to forward to the Nextcloud backend
@@ -107,7 +108,7 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
-// New returns an share manager implementation that verifies against a Nextcloud backend.
+// New returns a share manager implementation that verifies against a Nextcloud backend.
 func New(m map[string]interface{}) (share.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
@@ -115,18 +116,35 @@ func New(m map[string]interface{}) (share.Manager, error) {
 	}
 	c.init()
 
-	return NewShareManager(c, &http.Client{})
+	return NewShareManager(c)
 }
 
 // NewShareManager returns a new Nextcloud-based ShareManager
-func NewShareManager(c *ShareManagerConfig, hc *http.Client) (share.Manager, error) {
-	return &mgr{
+func NewShareManager(c *ShareManagerConfig) (*Manager, error) {
+	var client *http.Client
+	if c.MockHTTP {
+		// called := make([]string, 0)
+		// nextcloudServerMock := GetNextcloudServerMock(&called)
+		// client, _ = TestingHTTPClient(nextcloudServerMock)
+
+		// Wait for SetHTTPClient to be called later
+		client = nil
+	} else {
+		client = &http.Client{}
+	}
+
+	return &Manager{
 		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
-		client:   hc,
+		client:   client,
 	}, nil
 }
 
-func (sm *mgr) do(ctx context.Context, a Action) (int, []byte, error) {
+// SetHTTPClient sets the HTTP client
+func (sm *Manager) SetHTTPClient(c *http.Client) {
+	sm.client = c
+}
+
+func (sm *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	log := appctx.GetLogger(ctx)
 	user, err := getUser(ctx)
 	if err != nil {
@@ -156,7 +174,7 @@ func (sm *mgr) do(ctx context.Context, a Action) (int, []byte, error) {
 	return resp.StatusCode, body, nil
 }
 
-func (sm *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
+func (sm *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	type paramsObj struct {
 		Md *provider.ResourceInfo    `json:"md"`
 		G  *collaboration.ShareGrant `json:"g"`
@@ -196,7 +214,7 @@ func (sm *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabor
 }
 
 // GetShare gets the information for a share by the given ref.
-func (sm *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
+func (sm *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
 		return nil, err
@@ -226,7 +244,7 @@ func (sm *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) 
 }
 
 // Unshare deletes the share pointed by ref.
-func (sm *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
+func (sm *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
 		return err
@@ -237,7 +255,7 @@ func (sm *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) e
 }
 
 // UpdateShare updates the mode of the given share.
-func (sm *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+func (sm *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
 	type paramsObj struct {
 		Ref *collaboration.ShareReference   `json:"ref"`
 		P   *collaboration.SharePermissions `json:"p"`
@@ -278,7 +296,7 @@ func (sm *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReferenc
 
 // ListShares returns the shares created by the user. If md is provided is not nil,
 // it returns only shares attached to the given resource.
-func (sm *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
+func (sm *Manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	bodyStr, err := json.Marshal(filters)
 	if err != nil {
 		return nil, err
@@ -315,7 +333,7 @@ func (sm *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) 
 }
 
 // ListReceivedShares returns the list of shares the user has access.
-func (sm *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
+func (sm *Manager) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
 	bodyStr, err := json.Marshal(filters)
 	if err != nil {
 		return nil, err
@@ -362,7 +380,7 @@ func (sm *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.
 }
 
 // GetReceivedShare returns the information for a received share the user has access.
-func (sm *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
+func (sm *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
 		return nil, err
@@ -403,7 +421,7 @@ func (sm *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareRef
 }
 
 // UpdateReceivedShare updates the received share with share state.
-func (sm *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareReference, f *collaboration.UpdateReceivedShareRequest_UpdateField) (*collaboration.ReceivedShare, error) {
+func (sm *Manager) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareReference, f *collaboration.UpdateReceivedShareRequest_UpdateField) (*collaboration.ReceivedShare, error) {
 	type paramsObj struct {
 		Ref *collaboration.ShareReference                         `json:"ref"`
 		F   *collaboration.UpdateReceivedShareRequest_UpdateField `json:"f"`

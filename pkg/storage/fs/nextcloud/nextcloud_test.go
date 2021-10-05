@@ -42,29 +42,28 @@ import (
 )
 
 func setUpNextcloudServer() (*nextcloud.StorageDriver, *[]string, func()) {
-	ncHost := os.Getenv("NEXTCLOUD")
 	var conf *nextcloud.StorageDriverConfig
+
 	// fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
+	ncHost := os.Getenv("NEXTCLOUD")
 	if len(ncHost) == 0 {
 		conf = &nextcloud.StorageDriverConfig{
 			EndPoint: "http://mock.com/apps/sciencemesh/",
 			MockHTTP: true,
 		}
+		nc, _ := nextcloud.NewStorageDriver(conf)
+		called := make([]string, 0)
+		h := nextcloud.GetNextcloudServerMock(&called)
+		mock, teardown := nextcloud.TestingHTTPClient(h)
+		nc.SetHTTPClient(mock)
+		return nc, &called, teardown
 	} else {
 		conf = &nextcloud.StorageDriverConfig{
 			EndPoint: ncHost + "/apps/sciencemesh/",
 			MockHTTP: false,
 		}
-	}
-	nc, _ := nextcloud.NewStorageDriver(conf)
-	called := make([]string, 0)
-	h := nextcloud.GetNextcloudServerMock(&called)
-	mock, teardown := nextcloud.TestingHTTPClient(h)
-	if len(ncHost) == 0 {
-		nc.SetHTTPClient(mock)
-		return nc, &called, teardown
-	} else {
-		return nc, nil, teardown
+		nc, _ := nextcloud.NewStorageDriver(conf)
+		return nc, nil, func() {}
 	}
 }
 

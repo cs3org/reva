@@ -31,6 +31,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+
 	"github.com/cs3org/reva/pkg/share/manager/nextcloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/tests/helpers"
@@ -38,6 +39,40 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
+	var conf *nextcloud.ShareManagerConfig
+
+	// fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
+	ncHost := os.Getenv("NEXTCLOUD")
+	if len(ncHost) == 0 {
+		conf = &nextcloud.ShareManagerConfig{
+			EndPoint: "http://mock.com/apps/sciencemesh/",
+			MockHTTP: true,
+		}
+		nc, _ := nextcloud.NewShareManager(conf)
+		called := make([]string, 0)
+		h := nextcloud.GetNextcloudServerMock(&called)
+		mock, teardown := nextcloud.TestingHTTPClient(h)
+		nc.SetHTTPClient(mock)
+		return nc, &called, teardown
+	} else {
+		conf = &nextcloud.ShareManagerConfig{
+			EndPoint: ncHost + "/apps/sciencemesh/",
+			MockHTTP: false,
+		}
+		nc, _ := nextcloud.NewShareManager(conf)
+		return nc, nil, func() {}
+	}
+}
+
+func checkCalled(called *[]string, expected string) {
+	if called == nil {
+		return
+	}
+	Expect(len(*called)).To(Equal(1))
+	Expect((*called)[0]).To(Equal(expected))
+}
 
 var _ = Describe("Nextcloud", func() {
 	var (
@@ -95,14 +130,9 @@ var _ = Describe("Nextcloud", func() {
 	// Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error)
 	Describe("Share", func() {
 		It("calls the Share endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			am, _ := nextcloud.NewShareManager(&nextcloud.ShareManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			share, err := am.Share(ctx, &provider.ResourceInfo{
 				Opaque: &types.Opaque{
 					Map:                  nil,
@@ -244,21 +274,16 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/share/Share {"md":{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/some/path","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}},"g":{"grantee":{"Id":null},"permissions":{"permissions":{}}}}`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/share/Share {"md":{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/some/path","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}},"g":{"grantee":{"Id":null},"permissions":{"permissions":{}}}}`)
 		})
 	})
 
 	// GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error)
 	Describe("GetShare", func() {
 		It("calls the GetShare endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			am, _ := nextcloud.NewShareManager(&nextcloud.ShareManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			share, err := am.GetShare(ctx, &collaboration.ShareReference{
 				Spec: &collaboration.ShareReference_Id{
 					Id: &collaboration.ShareId{
@@ -327,21 +352,16 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/share/GetShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/share/GetShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
 	})
 
 	// Unshare(ctx context.Context, ref *collaboration.ShareReference) error
 	Describe("Unshare", func() {
 		It("calls the Unshare endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			am, _ := nextcloud.NewShareManager(&nextcloud.ShareManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			err := am.Unshare(ctx, &collaboration.ShareReference{
 				Spec: &collaboration.ShareReference_Id{
 					Id: &collaboration.ShareId{
@@ -350,21 +370,16 @@ var _ = Describe("Nextcloud", func() {
 				},
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/share/Unshare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/share/Unshare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
 	})
 
 	// UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error)
 	Describe("UpdateShare", func() {
 		It("calls the UpdateShare endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			am, _ := nextcloud.NewShareManager(&nextcloud.ShareManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			share, err := am.UpdateShare(ctx, &collaboration.ShareReference{
 				Spec: &collaboration.ShareReference_Id{
 					Id: &collaboration.ShareId{
@@ -456,21 +471,16 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/share/UpdateShare {"ref":{"Spec":{"Id":{"opaque_id":"some-share-id"}}},"p":{"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/share/UpdateShare {"ref":{"Spec":{"Id":{"opaque_id":"some-share-id"}}},"p":{"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`)
 		})
 	})
 
 	// ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error)
 	Describe("ListShares", func() {
 		It("calls the ListShares endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			am, _ := nextcloud.NewShareManager(&nextcloud.ShareManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			shares, err := am.ListShares(ctx, []*collaboration.Filter{
 				{
 					Type: collaboration.Filter_TYPE_CREATOR,
@@ -545,21 +555,16 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/share/ListShares [{"type":4,"Term":{"Creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}]`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/share/ListShares [{"type":4,"Term":{"Creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}]`)
 		})
 	})
 
 	// ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error)
 	Describe("ListReceivedShares", func() {
 		It("calls the ListReceivedShares endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			am, _ := nextcloud.NewShareManager(&nextcloud.ShareManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			receivedShares, err := am.ListReceivedShares(ctx, []*collaboration.Filter{
 				{
 					Type: collaboration.Filter_TYPE_CREATOR,
@@ -637,21 +642,16 @@ var _ = Describe("Nextcloud", func() {
 				},
 				State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/share/ListReceivedShares [{"type":4,"Term":{"Creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}]`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/share/ListReceivedShares [{"type":4,"Term":{"Creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}]`)
 		})
 	})
 
 	// GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error)
 	Describe("GetReceivedShare", func() {
 		It("calls the GetReceivedShare endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			am, _ := nextcloud.NewShareManager(&nextcloud.ShareManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			receivedShare, err := am.GetReceivedShare(ctx, &collaboration.ShareReference{
 				Spec: &collaboration.ShareReference_Id{
 					Id: &collaboration.ShareId{
@@ -723,21 +723,16 @@ var _ = Describe("Nextcloud", func() {
 				},
 				State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/share/GetReceivedShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/share/GetReceivedShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
 	})
 
 	// UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareReference, f *collaboration.UpdateReceivedShareRequest_UpdateField) (*collaboration.ReceivedShare, error)
 	Describe("UpdateReceivedShare", func() {
 		It("calls the UpdateReceivedShare endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			am, _ := nextcloud.NewShareManager(&nextcloud.ShareManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			receivedShare, err := am.UpdateReceivedShare(ctx, &collaboration.ShareReference{
 				Spec: &collaboration.ShareReference_Id{
 					Id: &collaboration.ShareId{
@@ -814,7 +809,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/share/UpdateReceivedShare {"ref":{"Spec":{"Id":{"opaque_id":"some-share-id"}}},"f":{"Field":{"DisplayName":"some new name for this received share"}}}`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/share/UpdateReceivedShare {"ref":{"Spec":{"Id":{"opaque_id":"some-share-id"}}},"f":{"Field":{"DisplayName":"some new name for this received share"}}}`)
 		})
 	})
 
