@@ -19,23 +19,25 @@
 package mime
 
 import (
-	gomime "mime"
 	"path"
+	"sync"
+
+	gomime "github.com/cubewise-code/go-mime"
 )
 
 const defaultMimeDir = "httpd/unix-directory"
 
-var mimes map[string]string
+var mimes sync.Map
 
 func init() {
-	mimes = map[string]string{}
+	mimes = sync.Map{}
 }
 
 // RegisterMime is a package level function that registers
 // a mime type with the given extension.
 // TODO(labkode): check that we do not override mime type mappings?
 func RegisterMime(ext, mime string) {
-	mimes[ext] = mime
+	mimes.Store(ext, mime)
 }
 
 // Detect returns the mimetype associated with the given filename.
@@ -60,5 +62,8 @@ func Detect(isDir bool, fn string) string {
 }
 
 func getCustomMime(ext string) string {
-	return mimes[ext]
+	if m, ok := mimes.Load(ext); ok {
+		return m.(string)
+	}
+	return ""
 }

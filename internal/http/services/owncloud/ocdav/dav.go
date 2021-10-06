@@ -30,11 +30,9 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
-	"github.com/cs3org/reva/pkg/user"
-	ctxuser "github.com/cs3org/reva/pkg/user"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -47,6 +45,7 @@ type DavHandler struct {
 	FilesHomeHandler    *WebDavHandler
 	MetaHandler         *MetaHandler
 	TrashbinHandler     *TrashbinHandler
+	SpacesHandler       *SpacesHandler
 	PublicFolderHandler *WebDavHandler
 	PublicFileHandler   *PublicFileHandler
 }
@@ -69,6 +68,11 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 	h.TrashbinHandler = new(TrashbinHandler)
+
+	h.SpacesHandler = new(SpacesHandler)
+	if err := h.SpacesHandler.init(c); err != nil {
+		return err
+	}
 
 	h.PublicFolderHandler = new(WebDavHandler)
 	if err := h.PublicFolderHandler.init("public", true); err != nil { // jail public file requests to /public/ prefix
@@ -97,7 +101,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		// https://github.com/owncloud/core/blob/18475dac812064b21dabcc50f25ef3ffe55691a5/tests/acceptance/features/apiWebdavOperations/propfind.feature
 		if r.URL.Path == "/files" {
 			log.Debug().Str("path", r.URL.Path).Msg("method not allowed")
-			contextUser, ok := ctxuser.ContextGetUser(ctx)
+			contextUser, ok := ctxpkg.ContextGetUser(ctx)
 			if ok {
 				r.URL.Path = path.Join(r.URL.Path, contextUser.Username)
 			}
@@ -137,7 +141,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			requestUserID, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 			// note: some requests like OPTIONS don't forward the user
-			contextUser, ok := ctxuser.ContextGetUser(ctx)
+			contextUser, ok := ctxpkg.ContextGetUser(ctx)
 			if ok && isOwner(requestUserID, contextUser) {
 				// use home storage handler when user was detected
 				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
@@ -163,6 +167,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
+		case "spaces":
+			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "spaces")
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
+			h.SpacesHandler.Handler(s).ServeHTTP(w, r)
 		case "public-files":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
@@ -204,9 +213,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			ctx = tokenpkg.ContextSetToken(ctx, res.Token)
-			ctx = user.ContextSetUser(ctx, res.User)
-			ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, res.Token)
+			ctx = ctxpkg.ContextSetToken(ctx, res.Token)
+			ctx = ctxpkg.ContextSetUser(ctx, res.User)
+			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, res.Token)
 
 			r = r.WithContext(ctx)
 

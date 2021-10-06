@@ -21,8 +21,11 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"time"
 
+	"github.com/bluele/gcache"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
 	tokenregistry "github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
@@ -30,18 +33,19 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
+
+var userGroupsCache gcache.Cache
 
 type config struct {
 	Priority   int    `mapstructure:"priority"`
@@ -97,6 +101,8 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 	if conf.CredentialsByUserAgent == nil {
 		conf.CredentialsByUserAgent = map[string]string{}
 	}
+
+	userGroupsCache = gcache.New(1000000).LFU().Build()
 
 	credChain := map[string]auth.CredentialStrategy{}
 	for i, key := range conf.CredentialChain {
@@ -155,6 +161,13 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 
 			log := appctx.GetLogger(ctx)
 
+			client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
+			if err != nil {
+				log.Error().Err(err).Msg("error getting the authsvc client")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+
 			// skip auth for urls set in the config.
 			// TODO(labkode): maybe use method:url to bypass auth.
 			if utils.Skip(r.URL.Path, unprotected) {
@@ -204,13 +217,6 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 
 				log.Debug().Msgf("AuthenticateRequest: type: %s, client_id: %s against %s", req.Type, req.ClientId, conf.GatewaySvc)
 
-				client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
-				if err != nil {
-					log.Error().Err(err).Msg("error getting the authsvc client")
-					w.WriteHeader(http.StatusUnauthorized)
-					return
-				}
-
 				res, err := client.Authenticate(ctx, req)
 				if err != nil {
 					log.Error().Err(err).Msg("error calling Authenticate")
@@ -240,6 +246,24 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
+
+			if sharedconf.SkipUserGroupsInToken() {
+				var groups []string
+				if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
+					groups = groupsIf.([]string)
+				} else {
+					groupsRes, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+					if err != nil {
+						log.Error().Err(err).Msg("error retrieving user groups")
+						w.WriteHeader(http.StatusInternalServerError)
+						return
+					}
+					groups = groupsRes.Groups
+					_ = userGroupsCache.SetWithExpire(u.Id.OpaqueId, groupsRes.Groups, 3600*time.Second)
+				}
+				u.Groups = groups
+			}
+
 			// ensure access to the resource is allowed
 			ok, err := scope.VerifyScope(tokenScope, r.URL.Path)
 			if err != nil {
@@ -253,9 +277,9 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			}
 
 			// store user and core access token in context.
-			ctx = user.ContextSetUser(ctx, u)
-			ctx = token.ContextSetToken(ctx, tkn)
-			ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+			ctx = ctxpkg.ContextSetUser(ctx, u)
+			ctx = ctxpkg.ContextSetToken(ctx, tkn)
+			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 			r = r.WithContext(ctx)
 			h.ServeHTTP(w, r)

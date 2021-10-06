@@ -29,6 +29,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/go-chi/chi/v5"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
@@ -119,11 +120,13 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 	response.WriteOCSSuccess(w, r, "OCM Share created")
 }
 
-func (h *Handler) getFederatedShare(w http.ResponseWriter, r *http.Request, shareID string) {
+// GetFederatedShare handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares/{shareid}
+func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: Implement response with HAL schemating
 	ctx := r.Context()
 
+	shareID := chi.URLParam(r, "shareid")
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
@@ -153,7 +156,8 @@ func (h *Handler) getFederatedShare(w http.ResponseWriter, r *http.Request, shar
 	response.WriteOCSSuccess(w, r, share)
 }
 
-func (h *Handler) listFederatedShares(w http.ResponseWriter, r *http.Request) {
+// ListFederatedShares handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares
+func (h *Handler) ListFederatedShares(w http.ResponseWriter, r *http.Request) {
 
 	// TODO Implement pagination.
 	// TODO Implement response with HAL schemating

@@ -22,11 +22,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cs3org/reva/pkg/app"
-
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/mitchellh/mapstructure"
 )
@@ -39,9 +38,12 @@ type demoProvider struct {
 	iframeUIProvider string
 }
 
-func (p *demoProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string) (string, error) {
-	msg := fmt.Sprintf("<iframe src=%s/open/%s?view-mode=%s&access-token=%s />", p.iframeUIProvider, resource.Id.StorageId+":"+resource.Id.OpaqueId, viewMode.String(), token)
-	return msg, nil
+func (p *demoProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string) (*appprovider.OpenInAppURL, error) {
+	url := fmt.Sprintf("<iframe src=%s/open/%s?view-mode=%s&access-token=%s />", p.iframeUIProvider, resource.Id.StorageId+":"+resource.Id.OpaqueId, viewMode.String(), token)
+	return &appprovider.OpenInAppURL{
+		AppUrl: url,
+		Method: "GET",
+	}, nil
 }
 
 func (p *demoProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.ProviderInfo, error) {

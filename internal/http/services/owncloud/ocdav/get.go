@@ -28,21 +28,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
-	"github.com/cs3org/reva/internal/http/services/datagateway"
-	"github.com/rs/zerolog"
-	"go.opencensus.io/trace"
-
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "get")
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "get")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -158,4 +156,25 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		}
 	}
 	// TODO we need to send the If-Match etag in the GET to the datagateway to prevent race conditions between stating and reading the file
+}
+
+func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_get")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "get").Logger()
+
+	// retrieve a specific storage space
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
+	s.handleGet(ctx, w, r, ref, "spaces", sublog)
 }

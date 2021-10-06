@@ -27,18 +27,18 @@ import (
 	"strings"
 	"time"
 
+	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/trace"
 )
 
 func (s *svc) handlePathHead(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "head")
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "head")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -86,4 +86,25 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 		w.Header().Set(HeaderAcceptRanges, "bytes")
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *svc) handleSpacesHead(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_head")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+
+	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handleHead(ctx, w, r, spaceRef, sublog)
 }

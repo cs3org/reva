@@ -20,8 +20,6 @@ package ldap
 
 import (
 	"context"
-	"crypto/tls"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -36,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -50,17 +49,14 @@ type mgr struct {
 }
 
 type config struct {
-	Hostname     string     `mapstructure:"hostname"`
-	Port         int        `mapstructure:"port"`
-	BaseDN       string     `mapstructure:"base_dn"`
-	UserFilter   string     `mapstructure:"userfilter"`
-	LoginFilter  string     `mapstructure:"loginfilter"`
-	BindUsername string     `mapstructure:"bind_username"`
-	BindPassword string     `mapstructure:"bind_password"`
-	Idp          string     `mapstructure:"idp"`
-	GatewaySvc   string     `mapstructure:"gatewaysvc"`
-	Schema       attributes `mapstructure:"schema"`
-	Nobody       int64      `mapstructure:"nobody"`
+	utils.LDAPConn `mapstructure:",squash"`
+	BaseDN         string     `mapstructure:"base_dn"`
+	UserFilter     string     `mapstructure:"userfilter"`
+	LoginFilter    string     `mapstructure:"loginfilter"`
+	Idp            string     `mapstructure:"idp"`
+	GatewaySvc     string     `mapstructure:"gatewaysvc"`
+	Schema         attributes `mapstructure:"schema"`
+	Nobody         int64      `mapstructure:"nobody"`
 }
 
 type attributes struct {
@@ -104,9 +100,18 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an auth manager implementation that connects to a LDAP server to validate the user.
 func New(m map[string]interface{}) (auth.Manager, error) {
-	c, err := parseConfig(m)
+	manager := &mgr{}
+	err := manager.Configure(m)
 	if err != nil {
 		return nil, err
+	}
+	return manager, nil
+}
+
+func (am *mgr) Configure(m map[string]interface{}) error {
+	c, err := parseConfig(m)
+	if err != nil {
+		return err
 	}
 
 	// backwards compatibility
@@ -122,27 +127,17 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-
-	return &mgr{
-		c: c,
-	}, nil
+	am.c = c
+	return nil
 }
 
 func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx)
-
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.c.Hostname, am.c.Port), &tls.Config{InsecureSkipVerify: true})
+	l, err := utils.GetLDAPConnection(&am.c.LDAPConn)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer l.Close()
-
-	// First bind with a read only user
-	err = l.Bind(am.c.BindUsername, am.c.BindPassword)
-	if err != nil {
-		log.Error().Err(err).Msg("bind with system user failed")
-		return nil, nil, err
-	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
@@ -237,5 +232,5 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 }
 
 func (am *mgr) getLoginFilter(login string) string {
-	return strings.ReplaceAll(am.c.LoginFilter, "{{login}}", login)
+	return strings.ReplaceAll(am.c.LoginFilter, "{{login}}", ldap.EscapeFilter(login))
 }

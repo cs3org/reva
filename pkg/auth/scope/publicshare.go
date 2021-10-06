@@ -71,7 +71,7 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 }
 
 func checkStorageRef(s *link.PublicShare, r *provider.Reference) bool {
-	// r: <id:<storage_id:$storageID node_id:$nodeID path:$path > >
+	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> path:$path > >
 	if r.ResourceId != nil && r.Path == "" { // path must be empty
 		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId())
 	}
@@ -91,7 +91,9 @@ func checkPublicShareRef(s *link.PublicShare, ref *link.PublicShareReference) bo
 // AddPublicShareScope adds the scope to allow access to a public share and
 // the shared resource.
 func AddPublicShareScope(share *link.PublicShare, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-	val, err := utils.MarshalProtoV1ToJSON(share)
+	// Create a new "scope share" to only expose the required fields `ResourceId` and `Token` to the scope.
+	scopeShare := &link.PublicShare{ResourceId: share.ResourceId, Token: share.Token}
+	val, err := utils.MarshalProtoV1ToJSON(scopeShare)
 	if err != nil {
 		return nil, err
 	}

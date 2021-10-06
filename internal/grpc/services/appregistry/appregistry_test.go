@@ -40,6 +40,7 @@ func Test_ListAppProviders(t *testing.T) {
 	tests := []struct {
 		name      string
 		providers map[string]interface{}
+		mimeTypes map[string]map[string]string
 		want      *registrypb.ListAppProvidersResponse
 	}{
 		{
@@ -52,6 +53,20 @@ func Test_ListAppProviders(t *testing.T) {
 				"another address": map[string]interface{}{
 					"address":   "another address",
 					"mimetypes": []string{"currently/ignored"},
+				},
+			},
+			mimeTypes: map[string]map[string]string{
+				"text/json": {
+					"extension":   "json",
+					"name":        "JSON File",
+					"icon":        "https://example.org/icons&file=json.png",
+					"default_app": "some Address",
+				},
+				"currently/ignored": {
+					"extension":   "unknown",
+					"name":        "Ignored file",
+					"icon":        "https://example.org/icons&file=unknown.png",
+					"default_app": "some Address",
 				},
 			},
 
@@ -77,6 +92,7 @@ func Test_ListAppProviders(t *testing.T) {
 		{
 			name:      "providers is nil",
 			providers: nil,
+			mimeTypes: nil,
 			want: &registrypb.ListAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:  1,
@@ -85,7 +101,7 @@ func Test_ListAppProviders(t *testing.T) {
 				Providers: []*registrypb.ProviderInfo{
 					{
 						Address:   "",
-						MimeTypes: []string{"text/plain"},
+						MimeTypes: []string{},
 					},
 				},
 			},
@@ -93,6 +109,7 @@ func Test_ListAppProviders(t *testing.T) {
 		{
 			name:      "empty providers",
 			providers: map[string]interface{}{},
+			mimeTypes: map[string]map[string]string{},
 
 			// only Status and Providers will be asserted in the tests
 			want: &registrypb.ListAppProvidersResponse{
@@ -104,7 +121,7 @@ func Test_ListAppProviders(t *testing.T) {
 				Providers: []*registrypb.ProviderInfo{
 					{
 						Address:   "",
-						MimeTypes: []string{"text/plain"},
+						MimeTypes: []string{},
 					},
 				},
 			},
@@ -114,6 +131,7 @@ func Test_ListAppProviders(t *testing.T) {
 			providers: map[string]interface{}{
 				"some Address": nil,
 			},
+			mimeTypes: map[string]map[string]string{},
 
 			// only Status and Providers will be asserted in the tests
 			want: &registrypb.ListAppProvidersResponse{
@@ -129,7 +147,7 @@ func Test_ListAppProviders(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rr, err := static.New(map[string]interface{}{"Providers": tt.providers})
+			rr, err := static.New(map[string]interface{}{"providers": tt.providers, "mime_types": tt.mimeTypes})
 			if err != nil {
 				t.Errorf("could not create registry error = %v", err)
 				return
@@ -165,6 +183,45 @@ func Test_GetAppProviders(t *testing.T) {
 		"misc appprovider addr": map[string]interface{}{
 			"address":   "misc appprovider addr",
 			"mimetypes": []string{"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.oasis.opendocument.presentation", "application/vnd.apple.installer+xml"},
+		},
+	}
+
+	mimeTypes := map[string]map[string]string{
+		"text/json": {
+			"extension":   "json",
+			"name":        "JSON File",
+			"icon":        "https://example.org/icons&file=json.png",
+			"default_app": "some Address",
+		},
+		"text/xml": {
+			"extension":   "xml",
+			"name":        "XML File",
+			"icon":        "https://example.org/icons&file=xml.png",
+			"default_app": "some Address",
+		},
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+			"extension":   "doc",
+			"name":        "Word File",
+			"icon":        "https://example.org/icons&file=doc.png",
+			"default_app": "some Address",
+		},
+		"application/vnd.oasis.opendocument.presentation": {
+			"extension":   "odf",
+			"name":        "OpenDocument File",
+			"icon":        "https://example.org/icons&file=odf.png",
+			"default_app": "some Address",
+		},
+		"application/vnd.apple.installer+xml": {
+			"extension":   "mpkg",
+			"name":        "Mpkg File",
+			"icon":        "https://example.org/icons&file=mpkg.png",
+			"default_app": "some Address",
+		},
+		"image/bmp": {
+			"extension":   "bmp",
+			"name":        "Image File",
+			"icon":        "https://example.org/icons&file=bmp.png",
+			"default_app": "some Address",
 		},
 	}
 
@@ -258,7 +315,7 @@ func Test_GetAppProviders(t *testing.T) {
 		},
 	}
 
-	rr, err := static.New(map[string]interface{}{"providers": providers})
+	rr, err := static.New(map[string]interface{}{"providers": providers, "mime_types": mimeTypes})
 	if err != nil {
 		t.Errorf("could not create registry error = %v", err)
 		return

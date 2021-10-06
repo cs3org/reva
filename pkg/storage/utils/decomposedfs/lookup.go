@@ -26,11 +26,13 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/pkg/xattr"
 )
 
 // Lookup implements transformations from filepath to node and back
@@ -41,11 +43,30 @@ type Lookup struct {
 // NodeFromResource takes in a request path or request id and converts it to a Node
 func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error) {
 	if ref.ResourceId != nil {
-		return lu.NodeFromID(ctx, ref.ResourceId)
+		// check if a storage space reference is used
+		// currently, the decomposed fs uses the root node id as the space id
+		n, err := lu.NodeFromID(ctx, ref.ResourceId)
+		if err != nil {
+			return nil, err
+		}
+
+		p := filepath.Clean(ref.Path)
+		if p != "." {
+			// walk the relative path
+			n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error {
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+			return n, nil
+		}
+
+		return n, nil
 	}
 
 	if ref.Path != "" {
-		return lu.NodeFromPath(ctx, ref.GetPath())
+		return lu.NodeFromPath(ctx, ref.GetPath(), false)
 	}
 
 	// reference is invalid
@@ -53,7 +74,7 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 }
 
 // NodeFromPath converts a filename into a Node
-func (lu *Lookup) NodeFromPath(ctx context.Context, fn string) (*node.Node, error) {
+func (lu *Lookup) NodeFromPath(ctx context.Context, fn string, followReferences bool) (*node.Node, error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
 
@@ -63,8 +84,9 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string) (*node.Node, erro
 	}
 
 	// TODO collect permissions of the current user on every segment
-	if fn != "/" {
-		n, err = lu.WalkPath(ctx, n, fn, func(ctx context.Context, n *node.Node) error {
+	fn = filepath.Clean(fn)
+	if fn != "/" && fn != "." {
+		n, err = lu.WalkPath(ctx, n, fn, followReferences, func(ctx context.Context, n *node.Node) error {
 			log.Debug().Interface("node", n).Msg("NodeFromPath() walk")
 			return nil
 		})
@@ -119,20 +141,36 @@ func (lu *Lookup) HomeNode(ctx context.Context) (node *node.Node, err error) {
 	if node, err = lu.RootNode(ctx); err != nil {
 		return
 	}
-	node, err = lu.WalkPath(ctx, node, lu.mustGetUserLayout(ctx), nil)
+	node, err = lu.WalkPath(ctx, node, lu.mustGetUserLayout(ctx), false, nil)
 	return
 }
 
-// WalkPath calls n.Child(segment) on every path segment in p starting at the node r
-// If a function f is given it will be executed for every segment node, but not the root node r
-func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, f func(ctx context.Context, n *node.Node) error) (*node.Node, error) {
+// WalkPath calls n.Child(segment) on every path segment in p starting at the node r.
+// If a function f is given it will be executed for every segment node, but not the root node r.
+// If followReferences is given the current visited reference node is replaced by the referenced node.
+func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followReferences bool, f func(ctx context.Context, n *node.Node) error) (*node.Node, error) {
 	segments := strings.Split(strings.Trim(p, "/"), "/")
 	var err error
 	for i := range segments {
 		if r, err = r.Child(ctx, segments[i]); err != nil {
 			return r, err
 		}
-		// if an intermediate node is missing return not found
+
+		if followReferences {
+			if attrBytes, err := xattr.Get(r.InternalPath(), xattrs.ReferenceAttr); err == nil {
+				realNodeID := attrBytes
+				ref, err := xattrs.ReferenceFromAttr(realNodeID)
+				if err != nil {
+					return nil, err
+				}
+
+				r, err = lu.NodeFromID(ctx, ref.ResourceId)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
 		if !r.Exists && i < len(segments)-1 {
 			return r, errtypes.NotFound(segments[i])
 		}
@@ -165,7 +203,7 @@ func (lu *Lookup) InternalPath(id string) string {
 }
 
 func (lu *Lookup) mustGetUserLayout(ctx context.Context) string {
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	return templates.WithUser(u, lu.Options.UserLayout)
 }
 

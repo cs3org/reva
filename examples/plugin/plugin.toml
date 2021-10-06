@@ -1,0 +1,15 @@
+[shared]
+gatewaysvc = "localhost:19000"
+plugin = true
+
+[grpc]
+address = "0.0.0.0:19000"
+
+[grpc.services.gateway]
+userprovidersvc = "localhost:19000"
+
+[grpc.services.userprovider]
+driver = "./json"
+
+[grpc.services.userprovider.drivers.json]
+users = "users.demo.json"

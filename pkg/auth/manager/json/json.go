@@ -79,30 +79,37 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns a new auth Manager.
 func New(m map[string]interface{}) (auth.Manager, error) {
-	c, err := parseConfig(m)
+	mgr := &manager{}
+	err := mgr.Configure(m)
 	if err != nil {
 		return nil, err
 	}
+	return mgr, nil
+}
 
-	manager := &manager{credentials: map[string]*Credentials{}}
+func (m *manager) Configure(ml map[string]interface{}) error {
+	c, err := parseConfig(ml)
+	if err != nil {
+		return err
+	}
 
+	m.credentials = map[string]*Credentials{}
 	f, err := ioutil.ReadFile(c.Users)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	credentials := []*Credentials{}
 
 	err = json.Unmarshal(f, &credentials)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for _, c := range credentials {
-		manager.credentials[c.Username] = c
+		m.credentials[c.Username] = c
 	}
-
-	return manager, nil
+	return nil
 }
 
 func (m *manager) Authenticate(ctx context.Context, username string, secret string) (*user.User, map[string]*authpb.Scope, error) {

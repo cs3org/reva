@@ -31,7 +31,7 @@ import (
 type FS interface {
 	GetHome(ctx context.Context) (string, error)
 	CreateHome(ctx context.Context) error
-	CreateDir(ctx context.Context, fn string) error
+	CreateDir(ctx context.Context, ref *provider.Reference) error
 	Delete(ctx context.Context, ref *provider.Reference) error
 	Move(ctx context.Context, oldRef, newRef *provider.Reference) error
 	GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
@@ -52,12 +52,13 @@ type FS interface {
 	RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
-	GetQuota(ctx context.Context) (uint64, uint64, error)
+	GetQuota(ctx context.Context) ( /*TotalBytes*/ uint64 /*UsedBytes*/, uint64, error)
 	CreateReference(ctx context.Context, path string, targetURI *url.URL) error
 	Shutdown(ctx context.Context) error
 	SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
 	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
 	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
+	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 }
 
 // Registry is the interface that storage registries implement

@@ -34,11 +34,11 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
-	userpkg "github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
@@ -99,12 +99,17 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
+	u := res.User
+	if sharedconf.SkipUserGroupsInToken() {
+		u.Groups = []string{}
+	}
+
 	// We need to expand the scopes of lightweight accounts, user shares and
 	// public shares, for which we need to retrieve the receieved shares and stat
 	// the resources referenced by these. Since the current scope can do that,
 	// mint a temporary token based on that and expand the scope. Then set the
 	// token obtained from the updated scope in the context.
-	token, err := s.tokenmgr.MintToken(ctx, res.User, res.TokenScope)
+	token, err := s.tokenmgr.MintToken(ctx, u, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -113,9 +118,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
-	ctx = tokenpkg.ContextSetToken(ctx, token)
-	ctx = userpkg.ContextSetUser(ctx, res.User)
-	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token)
+	ctx = ctxpkg.ContextSetToken(ctx, token)
+	ctx = ctxpkg.ContextSetUser(ctx, res.User)
+	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token)
 	scope, err := s.expandScopes(ctx, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error expanding token scope")
@@ -124,7 +129,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
-	token, err = s.tokenmgr.MintToken(ctx, res.User, scope)
+	token, err = s.tokenmgr.MintToken(ctx, u, scope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -144,9 +149,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	// we need to pass the token to authenticate the CreateHome request.
 	// TODO(labkode): appending to existing context will not pass the token.
-	ctx = tokenpkg.ContextSetToken(ctx, token)
-	ctx = userpkg.ContextSetUser(ctx, res.User)
-	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+	ctx = ctxpkg.ContextSetToken(ctx, token)
+	ctx = ctxpkg.ContextSetUser(ctx, res.User)
+	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
 	createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
@@ -180,6 +185,14 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 		return &gateway.WhoAmIResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error dismantling token"),
 		}, nil
+	}
+
+	if sharedconf.SkipUserGroupsInToken() {
+		groupsRes, err := s.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+		if err != nil {
+			return nil, err
+		}
+		u.Groups = groupsRes.Groups
 	}
 
 	res := &gateway.WhoAmIResponse{

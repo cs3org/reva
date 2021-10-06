@@ -53,8 +53,6 @@ func (h *Handler) Init(c *config.Config) {
 }
 
 // Handler renders the config
-func (h *Handler) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response.WriteOCSSuccess(w, r, h.c)
-	})
+func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
+	response.WriteOCSSuccess(w, r, h.c)
 }

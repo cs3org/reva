@@ -30,8 +30,24 @@ appauth = "localhost:15000"
 [grpc.services.ocminvitemanager]
 [grpc.services.ocmproviderauthorizer]
 
+[grpc.services.appregistry]
+[grpc.services.appregistry.drivers.static.mime_types]
+"application/vnd.openxmlformats-officedocument.wordprocessingml.document" = {"extension" = "docx", "name" = "Microsoft Word", "description" = "Microsoft Word document"}
+"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" = {"extension" = "xlsx", "name" = "Microsoft Excel", "description" = "Microsoft Excel document"}
+"application/vnd.openxmlformats-officedocument.presentationml.presentation" = {"extension" = "pptx", "name" = "Microsoft PowerPoint", "description" = "Microsoft PowerPoint document"}
+"application/vnd.oasis.opendocument.text" = {"extension" = "odt", "name" = "OpenDocument", "description" = "OpenDocument text document"}
+"application/vnd.oasis.opendocument.spreadsheet" = {"extension" = "ods", "name" = "OpenSpreadsheet", "description" = "OpenDocument spreadsheet document"}
+"application/vnd.oasis.opendocument.presentation" = {"extension" = "odp", "name" = "OpenPresentation", "description" = "OpenDocument presentation document"}
+"text/plain" = {"extension" = "txt", "name" = "Text file", "description" = "Text file"}
+"text/markdown" = {"extension" = "md", "name" = "Markdown file", "description" = "Markdown file"}
+"application/vnd.jupyter" = {"extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
+
+[grpc.services.appprovider]
+mime_types = ["text/plain"]
+
 [http.services.datagateway]
 [http.services.prometheus]
 [http.services.ocmd]
 [http.services.ocdav]
 [http.services.ocs]
+[http.services.appprovider]

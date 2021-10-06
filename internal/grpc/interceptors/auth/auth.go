@@ -20,23 +20,27 @@ package auth
 
 import (
 	"context"
+	"time"
 
+	"github.com/bluele/gcache"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+var userGroupsCache gcache.Cache
 
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
@@ -69,6 +73,8 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	}
 	conf.GatewayAddr = sharedconf.GetGatewaySVC(conf.GatewayAddr)
 
+	userGroupsCache = gcache.New(1000000).LFU().Build()
+
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
 		return nil, errtypes.NotFound("auth: token manager does not exist: " + conf.TokenManager)
@@ -80,29 +86,24 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	}
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		ctx, span := trace.StartSpan(ctx, "auth")
-		defer span.End()
 		log := appctx.GetLogger(ctx)
 
 		if utils.Skip(info.FullMethod, unprotected) {
-			span.AddAttributes(trace.BoolAttribute("auth_enabled", false))
 			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 
 			// If a token is present, set it anyway, as we might need the user info
 			// to decide the storage provider.
-			tkn, ok := token.ContextGetToken(ctx)
+			tkn, ok := ctxpkg.ContextGetToken(ctx)
 			if ok {
-				u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr)
+				u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, false)
 				if err == nil {
-					ctx = user.ContextSetUser(ctx, u)
+					ctx = ctxpkg.ContextSetUser(ctx, u)
 				}
 			}
 			return handler(ctx, req)
 		}
 
-		span.AddAttributes(trace.BoolAttribute("auth_enabled", true))
-
-		tkn, ok := token.ContextGetToken(ctx)
+		tkn, ok := ctxpkg.ContextGetToken(ctx)
 
 		if !ok || tkn == "" {
 			log.Warn().Msg("access token not found or empty")
@@ -110,21 +111,13 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		}
 
 		// validate the token and ensure access to the resource is allowed
-		u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr)
+		u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, true)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
 			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
 
-		// store user and core access token in context.
-		span.AddAttributes(
-			trace.StringAttribute("id.idp", u.Id.Idp),
-			trace.StringAttribute("id.opaque_id", u.Id.OpaqueId),
-			trace.StringAttribute("username", u.Username),
-			trace.StringAttribute("token", tkn))
-		span.AddAttributes(trace.StringAttribute("user", u.String()), trace.StringAttribute("token", tkn))
-
-		ctx = user.ContextSetUser(ctx, u)
+		ctx = ctxpkg.ContextSetUser(ctx, u)
 		return handler(ctx, req)
 	}
 	return interceptor, nil
@@ -141,6 +134,8 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 	if conf.TokenManager == "" {
 		conf.TokenManager = "jwt"
 	}
+
+	userGroupsCache = gcache.New(1000000).LFU().Build()
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
@@ -161,11 +156,11 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 
 			// If a token is present, set it anyway, as we might need the user info
 			// to decide the storage provider.
-			tkn, ok := token.ContextGetToken(ctx)
+			tkn, ok := ctxpkg.ContextGetToken(ctx)
 			if ok {
-				u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr)
+				u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, false)
 				if err == nil {
-					ctx = user.ContextSetUser(ctx, u)
+					ctx = ctxpkg.ContextSetUser(ctx, u)
 					ss = newWrappedServerStream(ctx, ss)
 				}
 			}
@@ -173,7 +168,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			return handler(srv, ss)
 		}
 
-		tkn, ok := token.ContextGetToken(ctx)
+		tkn, ok := ctxpkg.ContextGetToken(ctx)
 
 		if !ok || tkn == "" {
 			log.Warn().Msg("access token not found")
@@ -181,14 +176,14 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		}
 
 		// validate the token and ensure access to the resource is allowed
-		u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr)
+		u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, true)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
 			return status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
 
 		// store user and core access token in context.
-		ctx = user.ContextSetUser(ctx, u)
+		ctx = ctxpkg.ContextSetUser(ctx, u)
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}
@@ -208,10 +203,18 @@ func (ss *wrappedServerStream) Context() context.Context {
 	return ss.newCtx
 }
 
-func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string) (*userpb.User, error) {
+func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string, fetchUserGroups bool) (*userpb.User, error) {
 	u, tokenScope, err := mgr.DismantleToken(ctx, tkn)
 	if err != nil {
 		return nil, err
+	}
+
+	if sharedconf.SkipUserGroupsInToken() && fetchUserGroups {
+		groups, err := getUserGroups(ctx, u, gatewayAddr)
+		if err != nil {
+			return nil, err
+		}
+		u.Groups = groups
 	}
 
 	// Check if access to the resource is in the scope of the token
@@ -228,4 +231,25 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 	}
 
 	return u, nil
+}
+
+func getUserGroups(ctx context.Context, u *userpb.User, gatewayAddr string) ([]string, error) {
+	if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
+		log := appctx.GetLogger(ctx)
+		log.Info().Msgf("user groups found in cache %s", u.Id.OpaqueId)
+		return groupsIf.([]string), nil
+	}
+
+	client, err := pool.GetGatewayServiceClient(gatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetUserGroups")
+	}
+	_ = userGroupsCache.SetWithExpire(u.Id.OpaqueId, res.Groups, 3600*time.Second)
+
+	return res.Groups, nil
 }

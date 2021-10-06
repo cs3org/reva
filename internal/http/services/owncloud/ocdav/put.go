@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
@@ -104,7 +105,9 @@ func isContentRange(r *http.Request) bool {
 }
 
 func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "put")
+	defer span.End()
+
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
@@ -247,38 +250,37 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	if length > 0 {
-		httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, ep, r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, ep, r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-		httpRes, err := s.client.Do(httpReq)
-		if err != nil {
-			log.Error().Err(err).Msg("error doing PUT request to data service")
-			w.WriteHeader(http.StatusInternalServerError)
+	httpRes, err := s.client.Do(httpReq)
+	if err != nil {
+		log.Error().Err(err).Msg("error doing PUT request to data service")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer httpRes.Body.Close()
+	if httpRes.StatusCode != http.StatusOK {
+		if httpRes.StatusCode == http.StatusPartialContent {
+			w.WriteHeader(http.StatusPartialContent)
 			return
 		}
-		defer httpRes.Body.Close()
-		if httpRes.StatusCode != http.StatusOK {
-			if httpRes.StatusCode == http.StatusPartialContent {
-				w.WriteHeader(http.StatusPartialContent)
-				return
-			}
-			if httpRes.StatusCode == errtypes.StatusChecksumMismatch {
-				w.WriteHeader(http.StatusBadRequest)
-				b, err := Marshal(exception{
-					code:    SabredavBadRequest,
-					message: "The computed checksum does not match the one received from the client.",
-				})
-				HandleWebdavError(&log, w, b, err)
-			}
-			log.Error().Err(err).Msg("PUT request to data server failed")
-			w.WriteHeader(httpRes.StatusCode)
+		if httpRes.StatusCode == errtypes.StatusChecksumMismatch {
+			w.WriteHeader(http.StatusBadRequest)
+			b, err := Marshal(exception{
+				code:    SabredavBadRequest,
+				message: "The computed checksum does not match the one received from the client.",
+			})
+			HandleWebdavError(&log, w, b, err)
 			return
 		}
+		log.Error().Err(err).Msg("PUT request to data server failed")
+		w.WriteHeader(httpRes.StatusCode)
+		return
 	}
 
 	ok, err := chunking.IsChunked(ref.Path)
@@ -326,6 +328,27 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	// overwrite
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_put")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+
+	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handlePut(ctx, w, r, spaceRef, sublog)
 }
 
 func checkPreconditions(w http.ResponseWriter, r *http.Request, log zerolog.Logger) bool {

@@ -21,6 +21,7 @@ package gateway
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -32,10 +33,10 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -157,8 +158,8 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 	}
 
 	gatewayClient := gateway.NewGatewayAPIClient(conn)
-	remoteCtx := token.ContextSetToken(context.Background(), ep.token)
-	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, token.TokenHeader, ep.token)
+	remoteCtx := ctxpkg.ContextSetToken(context.Background(), ep.token)
+	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, ctxpkg.TokenHeader, ep.token)
 
 	res, err := gatewayClient.OpenInApp(remoteCtx, appProviderReq)
 	if err != nil {
@@ -171,7 +172,7 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo,
 	vm gateway.OpenInAppRequest_ViewMode, app string) (*providerpb.OpenInAppResponse, error) {
 
-	accessToken, ok := token.ContextGetToken(ctx)
+	accessToken, ok := ctxpkg.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
 		return &providerpb.OpenInAppResponse{
 			Status: status.NewUnauthenticated(ctx, errtypes.InvalidCredentials("Access token is invalid or empty"), ""),
@@ -221,17 +222,51 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 		return nil, err
 	}
 
+	// when app is empty it means the user assumes a default behaviour.
+	// From a web perspective, means the user click on the file itself.
+	// Normally the file will get downloaded but if a suitable application exists
+	// the behaviour will change from download to open the file with the app.
 	if app == "" {
-		// We need to get the default provider in case app is not set
-		// If the default isn't set as well, we'll return the first provider which matches the mimetype
+		// If app is empty means that we need to rely on "default" behaviour.
+		// We currently do not have user preferences implemented so the only default
+		// we can currently enforce is one configured by the system admins, the
+		// "system default".
+		// If a default is not set we raise an error rather that giving the user the first provider in the list
+		// as the list is built on init time and is not deterministic, giving the user different results on service
+		// reload.
 		res, err := c.GetDefaultAppProviderForMimeType(ctx, &registry.GetDefaultAppProviderForMimeTypeRequest{
 			MimeType: ri.MimeType,
 		})
-		if err == nil && res.Status.Code == rpc.Code_CODE_OK && res.Provider != nil {
+		if err != nil {
+			err = errors.Wrap(err, "gateway: error calling GetDefaultAppProviderForMimeType")
+			return nil, err
+
+		}
+
+		// we've found a provider
+		if res.Status.Code == rpc.Code_CODE_OK && res.Provider != nil {
 			return res.Provider, nil
 		}
+
+		// we did not find a default provider
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			err := errtypes.NotFound(fmt.Sprintf("gateway: default app rovider for mime type:%s not found", ri.MimeType))
+			return nil, err
+		}
+
+		// response code is something else, bubble up error
+		// if a default is not set we abort as returning the first application available is not
+		// deterministic for the end-user as it depends on initialization order of the app approviders with the registry.
+		// It also provides a good hint to the system admin to configure the defaults accordingly.
+		err = errtypes.InternalError(fmt.Sprintf("gateway: unexpected grpc response status:%s when calling GetDefaultAppProviderForMimeType", res.Status))
+		return nil, err
 	}
 
+	// app has been forced and is set, we try to get an app provider that can satisfy it
+	// Note that we ask for the list of all available providers for a given resource
+	// even though we're only interested into the one set by the "app" parameter.
+	// A better call will be to issue a (to be added) GetAppProviderByName(app) method
+	// to just what we ask for.
 	res, err := c.GetAppProviders(ctx, &registry.GetAppProvidersRequest{
 		ResourceInfo: ri,
 	})
@@ -239,6 +274,8 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 		err = errors.Wrap(err, "gateway: error calling GetAppProviders")
 		return nil, err
 	}
+
+	// if the list of app providers is empty means we expect a CODE_NOT_FOUND in the response
 	if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			return nil, errtypes.NotFound("gateway: app provider not found for resource: " + ri.String())
@@ -246,17 +283,25 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 		return nil, errtypes.InternalError("gateway: error finding app providers")
 	}
 
-	if app != "" {
-		for _, p := range res.Providers {
-			if p.Name == app {
-				return p, nil
-			}
+	// as long as the above mentioned GetAppProviderByName(app) method is not available
+	// we need to apply a manual filter
+	filteredProviders := []*registry.ProviderInfo{}
+	for _, p := range res.Providers {
+		if p.Name == app {
+			filteredProviders = append(filteredProviders, p)
 		}
-		return nil, errtypes.NotFound("gateway: app provider not found: " + app)
+	}
+	res.Providers = filteredProviders
+
+	// if we only have one app provider we verify that it matches the requested app name
+	if len(res.Providers) == 1 {
+		return res.Providers[0], nil
 	}
 
-	// As a fallback, return the first provider in the list
-	return res.Providers[0], nil
+	// we should never arrive to the point of having more than one
+	// provider for the given "app" parameters sent by the user
+	return nil, errtypes.InternalError(fmt.Sprintf("gateway: user requested app %q and we provided %d applications", app, len(res.Providers)))
+
 }
 
 func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {

@@ -934,6 +934,7 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 	name := line[0:length]
 
 	kv := make(map[string]string)
+	attrs := make(map[string]string)
 	// strip trailing slash
 	kv["file"] = strings.TrimSuffix(name, "/")
 
@@ -948,9 +949,9 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 			// handle xattrn and xattrv special cases
 			switch {
 			case partsByEqual[0] == "xattrn":
-				previousXAttr = partsByEqual[1]
+				previousXAttr = strings.Replace(partsByEqual[1], "user.", "", 1)
 			case partsByEqual[0] == "xattrv":
-				kv[previousXAttr] = partsByEqual[1]
+				attrs[previousXAttr] = partsByEqual[1]
 				previousXAttr = ""
 			default:
 				kv[partsByEqual[0]] = partsByEqual[1]
@@ -958,7 +959,7 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 			}
 		}
 	}
-	fi, err := c.mapToFileInfo(kv)
+	fi, err := c.mapToFileInfo(kv, attrs)
 	if err != nil {
 		return nil, err
 	}
@@ -968,7 +969,7 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 // mapToFileInfo converts the dictionary to an usable structure.
 // The kv has format:
 // map[sys.forced.space:default files:0 mode:42555 ino:5 sys.forced.blocksize:4k sys.forced.layout:replica uid:0 fid:5 sys.forced.blockchecksum:crc32c sys.recycle:/eos/backup/proc/recycle/ fxid:00000005 pid:1 etag:5:0.000 keylength.file:4 file:/eos treesize:1931593933849913 container:3 gid:0 mtime:1498571294.108614409 ctime:1460121992.294326762 pxid:00000001 sys.forced.checksum:adler sys.forced.nstripes:2]
-func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error) {
+func (c *Client) mapToFileInfo(kv, attrs map[string]string) (*eosclient.FileInfo, error) {
 	inode, err := strconv.ParseUint(kv["ino"], 10, 64)
 	if err != nil {
 		return nil, err
@@ -1055,11 +1056,11 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error
 		}
 	}
 
-	sysACL, err := acl.Parse(kv["sys.acl"], acl.ShortTextForm)
+	sysACL, err := acl.Parse(attrs["sys.acl"], acl.ShortTextForm)
 	if err != nil {
 		return nil, err
 	}
-	lwACLStr, ok := kv[lwShareAttrKey]
+	lwACLStr, ok := attrs[lwShareAttrKey]
 	if ok {
 		lwAcls, err := acl.Parse(lwACLStr, acl.ShortTextForm)
 		if err != nil {
@@ -1088,7 +1089,7 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error
 		Instance:   c.opt.URL,
 		SysACL:     sysACL,
 		TreeCount:  treeCount,
-		Attrs:      kv,
+		Attrs:      attrs,
 		XS:         xs,
 	}
 

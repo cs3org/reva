@@ -32,8 +32,6 @@ import (
 	"strings"
 	"time"
 
-	"go.opencensus.io/trace"
-
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -41,9 +39,11 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxuser "github.com/cs3org/reva/pkg/user"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -63,9 +63,10 @@ const (
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "propfind")
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
+
+	span.SetAttributes(attribute.String("component", "ocdav"))
 
 	fn := path.Join(ns, r.URL.Path)
 
@@ -88,8 +89,52 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 	s.propfindResponse(ctx, w, r, ns, pf, parentInfo, resourceInfos, sublog)
 }
 
+func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_propfind")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
+
+	pf, status, err := readPropfind(r.Body)
+	if err != nil {
+		sublog.Debug().Err(err).Msg("error reading propfind request")
+		w.WriteHeader(status)
+		return
+	}
+
+	// retrieve a specific storage space
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
+
+	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, sublog)
+	if !ok {
+		// getResourceInfos handles responses in case of an error so we can just return here.
+		return
+	}
+
+	// parentInfo Path is the name but we need /
+	parentInfo.Path = "/"
+
+	// prefix space id to paths
+	for i := range resourceInfos {
+		resourceInfos[i].Path = path.Join("/", spaceID, r.URL.Path, resourceInfos[i].Path)
+	}
+
+	s.propfindResponse(ctx, w, r, "", pf, parentInfo, resourceInfos, sublog)
+
+}
+
 func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
-	propRes, err := s.formatPropfind(ctx, &pf, resourceInfos, namespace)
+	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, namespace)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -297,7 +342,7 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 	return pf, 0, nil
 }
 
-func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string) (string, error) {
+func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string) (string, error) {
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
 		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns)
@@ -568,10 +613,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "public-link-share-owner":
 					if ls != nil && ls.Owner != nil {
 						if isCurrentUserOwner(ctx, ls.Owner) {
-							u := ctxuser.ContextMustGetUser(ctx)
+							u := ctxpkg.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-owner", u.Username))
 						} else {
-							u, _ := ctxuser.ContextGetUser(ctx)
+							u, _ := ctxpkg.ContextGetUser(ctx)
 							sublog.Error().Interface("share", ls).Interface("user", u).Msg("the current user in the context should be the owner of a public link share")
 							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-owner", ""))
 						}
@@ -600,7 +645,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "owner-id": // phoenix only
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
-							u := ctxuser.ContextMustGetUser(ctx)
+							u := ctxpkg.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", u.Username))
 						} else {
 							sublog.Debug().Msg("TODO fetch user username")
@@ -673,7 +718,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "owner-display-name": // phoenix only
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
-							u := ctxuser.ContextMustGetUser(ctx)
+							u := ctxpkg.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", u.DisplayName))
 						} else {
 							sublog.Debug().Msg("TODO fetch user displayname")
@@ -836,7 +881,7 @@ func quoteEtag(etag string) string {
 
 // a file is only yours if you are the owner
 func isCurrentUserOwner(ctx context.Context, owner *userv1beta1.UserId) bool {
-	contextUser, ok := ctxuser.ContextGetUser(ctx)
+	contextUser, ok := ctxpkg.ContextGetUser(ctx)
 	if ok && contextUser.Id != nil && owner != nil &&
 		contextUser.Id.Idp == owner.Idp &&
 		contextUser.Id.OpaqueId == owner.OpaqueId {

@@ -54,11 +54,13 @@ func GenerateURL(host string, path string, params URLParams) (*url.URL, error) {
 
 	fullURL.Path = p.Join(fullURL.Path, path)
 
-	query := make(url.Values)
-	for key, value := range params {
-		query.Set(key, value)
+	if len(params) > 0 {
+		query := make(url.Values)
+		for key, value := range params {
+			query.Set(key, value)
+		}
+		fullURL.RawQuery = query.Encode()
 	}
-	fullURL.RawQuery = query.Encode()
 
 	return fullURL, nil
 }
@@ -79,11 +81,12 @@ func queryEndpoint(method string, endpointURL *url.URL, auth *BasicAuth, checkSt
 	if err != nil {
 		return nil, fmt.Errorf("unable to get data from endpoint: %v", err)
 	}
+	defer resp.Body.Close()
+
 	if checkStatus && resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("invalid response received: %v", resp.Status)
 	}
 
-	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	return body, nil
 }

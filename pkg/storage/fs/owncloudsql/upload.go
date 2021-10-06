@@ -32,12 +32,12 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -201,7 +201,7 @@ func (fs *owncloudsqlfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upl
 	if err != nil {
 		return nil, errors.Wrap(err, "owncloudsql: error resolving upload path")
 	}
-	usr := user.ContextMustGetUser(ctx)
+	usr := ctxpkg.ContextMustGetUser(ctx)
 	storageID, err := fs.getStorage(ip)
 	if err != nil {
 		return nil, err
@@ -256,7 +256,7 @@ func (fs *owncloudsqlfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upl
 }
 
 func (fs *owncloudsqlfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return "", err
@@ -293,7 +293,7 @@ func (fs *owncloudsqlfs) GetUpload(ctx context.Context, id string) (tusd.Upload,
 		Username: info.Storage["UserName"],
 	}
 
-	ctx = user.ContextSetUser(ctx, u)
+	ctx = ctxpkg.ContextSetUser(ctx, u)
 	// TODO configure the logger the same way ... store and add traceid in file info
 
 	var opts []logger.Option

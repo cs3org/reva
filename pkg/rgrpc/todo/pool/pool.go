@@ -39,7 +39,8 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	"go.opencensus.io/plugin/ocgrpc"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 )
 
@@ -87,10 +88,28 @@ func NewConn(endpoint string) (*grpc.ClientConn, error) {
 	conn, err := grpc.Dial(
 		endpoint,
 		grpc.WithInsecure(),
-		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize),
-		))
+		),
+		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor(
+			otelgrpc.WithTracerProvider(
+				rtrace.Provider,
+			),
+			otelgrpc.WithPropagators(
+				rtrace.Propagator,
+			),
+		)),
+		grpc.WithUnaryInterceptor(
+			otelgrpc.UnaryClientInterceptor(
+				otelgrpc.WithTracerProvider(
+					rtrace.Provider,
+				),
+				otelgrpc.WithPropagators(
+					rtrace.Propagator,
+				),
+			),
+		),
+	)
 	if err != nil {
 		return nil, err
 	}
