@@ -210,7 +210,15 @@ var _ = Describe("Nextcloud", func() {
 				XXX_unrecognized:     nil,
 				XXX_sizecache:        0,
 			}, &collaboration.ShareGrant{
-				Grantee: &provider.Grantee{},
+				Grantee: &provider.Grantee{
+					Id: &provider.Grantee_UserId{
+						UserId: &userpb.UserId{
+							Idp:      "0.0.0.0:19000",
+							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+							Type:     userpb.UserType_USER_TYPE_PRIMARY,
+						},
+					},
+				},
 				Permissions: &collaboration.SharePermissions{
 					Permissions: &provider.ResourcePermissions{},
 				},
@@ -276,7 +284,7 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/share/Share {"md":{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/some/path","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}},"g":{"grantee":{"Id":null},"permissions":{"permissions":{}}}}`)
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/share/Share {"md":{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/some/path","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"permissions":{}}}}`)
 		})
 	})
 
