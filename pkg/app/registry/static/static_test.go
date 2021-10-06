@@ -161,9 +161,9 @@ func TestWithConfiguredMimeTypes(t *testing.T) {
 	err = manager.AddProvider(ctx, codimdProvider)
 	assert.Empty(t, err)
 
-	providers, err := manager.FindProviders(ctx, "text/markdown")
+	providers, err := manager.FindProviders(ctx, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	assert.Empty(t, err)
-	assert.ElementsMatch(t, providers, []*registrypb.ProviderInfo{collaboraProvider, codimdProvider})
+	assert.ElementsMatch(t, providers, []*registrypb.ProviderInfo{collaboraProvider, microsoftProvider})
 
 	mimeTypes, err = manager.ListSupportedMimeTypes(ctx)
 	assert.Empty(t, err)
