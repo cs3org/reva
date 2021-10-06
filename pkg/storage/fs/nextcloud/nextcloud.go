@@ -195,7 +195,7 @@ func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) 
 		return 0, nil, err
 	}
 	url := nc.endPoint + "~" + user.Username + "/api/storage/" + a.verb
-	log.Info().Msgf("nc.do %s", url)
+	log.Info().Msgf("nc.do req %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
 		return 0, nil, err
@@ -209,9 +209,11 @@ func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) 
 
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
+
 	if err != nil {
 		return 0, nil, err
 	}
+	log.Info().Msgf("nc.do res %s %s", url, string(body))
 
 	return resp.StatusCode, body, nil
 }
