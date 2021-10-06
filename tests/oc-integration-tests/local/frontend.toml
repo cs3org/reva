@@ -37,7 +37,7 @@ chunk_folder = "/var/tmp/reva/chunks"
 # While owncloud has only listed usernames at this endpoint CERN has
 # been exposing more than just usernames. For owncloud deployments we
 # can prefix the path to jail the requests to the correct CS3 namespace.
-# In this deployment we mounted the owncloud storage provider at /oc. It
+# In this deployment we mounted the owncloud storage provider at /users. It
 # expects a username as the first path segment.
 # currently, only the desktop client will use this endpoint, but only if
 # the dav.chunking capability is available

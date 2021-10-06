@@ -130,27 +130,37 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
     ```
 
 3.  clone ownCloud 10
-    `git clone https://github.com/owncloud/core.git ./testrunner`
+    ```
+    git clone https://github.com/owncloud/core.git ./testrunner
+    ```
 
-4.  clone the testing app
-    `git clone https://github.com/owncloud/testing.git ./testrunner/apps/testing`
+4.  to run the correct version of the testsuite check out the commit id from the `.drone.env` file
 
-5.  run the tests
+5.  clone the testing app
+    ```
+    git clone https://github.com/owncloud/testing.git ./testrunner/apps/testing
+    ```
+
+6.  run the tests
     ```
     cd testrunner
     TEST_SERVER_URL='http://localhost:20080' \
     OCIS_REVA_DATA_ROOT='/var/tmp/reva/' \
+    DELETE_USER_DATA_CMD="rm -rf /var/tmp/reva/data/nodes/root/* /var/tmp/reva/data/nodes/*-*-*-* /var/tmp/reva/data/blobs/*" \
     SKELETON_DIR='./apps/testing/data/apiSkeleton' \
     TEST_WITH_LDAP='true' \
     REVA_LDAP_HOSTNAME='localhost' \
     TEST_REVA='true' \
-    BEHAT_FILTER_TAGS='~@skipOnOcis&&~@skipOnOcis-OCIS-Storage&&~@notToImplementOnOCIS' \
+    BEHAT_FILTER_TAGS='~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis' \
+    EXPECTED_FAILURES_FILE=../reva/tests/acceptance/expected-failures-on-OCIS-storage.md \
     make test-acceptance-api
     ```
 
     This will run all tests that are relevant to reva.
 
-    To run a single test add BEHAT_FEATURE=<feature file> and specify the path to the feature file and an optional line number. For example: BEHAT_FEATURE='tests/acceptance/features/apiWebdavUpload1/uploadFile.feature:12'
+    To run a single test add `BEHAT_FEATURE=<feature file>` and specify the path to the feature file and an optional line number. For example: `BEHAT_FEATURE='tests/acceptance/features/apiWebdavUpload1/uploadFile.feature:12'`
+
+    Make sure to double check the paths if you are changing the `OCIS_REVA_DATA_ROOT`. The `DELETE_USER_DATA_CMD` needs to clean up the correct folders.
 
 ## Daily releases
 On every commit on the master branch (including merged Pull Requests) a new release will be created and 

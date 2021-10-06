@@ -16,10 +16,6 @@ gatewaysvc = "localhost:19000"
 address = "0.0.0.0:12000"
 
 # This is a storage provider that grants direct access to the wrapped storage
-# TODO same storage id as the /oc/ storage provider
-# if we have an id, we can directly go to that storage, no need to wrap paths
-# we have a locally running dataprovider
-# this is where clients can find it
 # the context path wrapper reads tho username from the context and prefixes the relative storage path with it
 [grpc.services.storageprovider]
 driver = "s3ng"
@@ -40,6 +36,7 @@ treesize_accounting = true
 "s3.access_key" = "test"
 "s3.secret_key" = "test"
 
+# we have a locally running dataprovider
 [http]
 address = "0.0.0.0:12001"
 
