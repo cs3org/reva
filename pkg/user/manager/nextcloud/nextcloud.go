@@ -140,17 +140,17 @@ func (m *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 }
 
 // Configure method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (m *Manager) Configure(ml map[string]interface{}) error {
+func (um *Manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
 // GetUser method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (m *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	bodyStr, err := json.Marshal(uid)
 	if err != nil {
 		return nil, err
 	}
-	_, respBody, err := m.do(ctx, Action{"GetUser", string(bodyStr)})
+	_, respBody, err := um.do(ctx, Action{"GetUser", string(bodyStr)})
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (m *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 }
 
 // GetUserByClaim method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (m *Manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
 	type paramsObj struct {
 		Claim string `json:"claim"`
 		Value string `json:"value"`
@@ -174,7 +174,7 @@ func (m *Manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 		Value: value,
 	}
 	bodyStr, _ := json.Marshal(bodyObj)
-	_, respBody, err := m.do(ctx, Action{"GetUserByClaim", string(bodyStr)})
+	_, respBody, err := um.do(ctx, Action{"GetUserByClaim", string(bodyStr)})
 	if err != nil {
 		return nil, err
 	}
@@ -187,12 +187,12 @@ func (m *Manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 }
 
 // GetUserGroups method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (m *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
+func (um *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	bodyStr, err := json.Marshal(uid)
 	if err != nil {
 		return nil, err
 	}
-	_, respBody, err := m.do(ctx, Action{"GetUserGroups", string(bodyStr)})
+	_, respBody, err := um.do(ctx, Action{"GetUserGroups", string(bodyStr)})
 	if err != nil {
 		return nil, err
 	}
@@ -205,8 +205,8 @@ func (m *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 }
 
 // FindUsers method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (m *Manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
-	_, respBody, err := m.do(ctx, Action{"FindUsers", query})
+func (um *Manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+	_, respBody, err := um.do(ctx, Action{"FindUsers", query})
 	if err != nil {
 		return nil, err
 	}
