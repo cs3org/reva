@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"io/ioutil"
+	"os"
 
 	"google.golang.org/grpc/metadata"
 
@@ -32,6 +33,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
+	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 
 	. "github.com/onsi/ginkgo"
@@ -139,13 +141,13 @@ var _ = Describe("storage providers", func() {
 	}
 
 	assertListContainer := func() {
-		FIt("lists a directory", func() {
+		It("lists a directory", func() {
 			listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			// Expect(len(listRes.Infos)).To(Equal(1))
+			Expect(len(listRes.Infos)).To(Equal(1))
 
-			info := listRes.Infos[len(listRes.Infos)-1]
+			info := listRes.Infos[0]
 			Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
 			Expect(info.Path).To(Equal(subdirPath))
 			Expect(info.Owner.OpaqueId).To(Equal("f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"))
@@ -502,6 +504,132 @@ var _ = Describe("storage providers", func() {
 				fs, err := ocis.New(map[string]interface{}{
 					"root":        revads["storage"].TmpRoot,
 					"enable_home": true,
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
+				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+
+				ctx := ctxpkg.ContextSetUser(context.Background(), user)
+
+				err = fs.CreateHome(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content1)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content2)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			assertFileVersions()
+		})
+	})
+
+	Describe("ocis", func() {
+		BeforeEach(func() {
+			dependencies = map[string]string{
+				"storage": "storageprovider-ocis.toml",
+			}
+		})
+
+		assertCreateHome()
+
+		Context("with a home and a subdirectory", func() {
+			JustBeforeEach(func() {
+				res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				subdirRes, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: subdirRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(subdirRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			})
+
+			assertCreateContainer()
+			assertListContainer()
+			assertGetPath()
+			assertDelete()
+			assertMove()
+			assertGrants()
+			assertUploads()
+			assertDownloads()
+			assertRecycle()
+			assertReferences()
+			assertMetadata()
+		})
+
+		Context("with an existing file /versioned_file", func() {
+			JustBeforeEach(func() {
+				fs, err := ocis.New(map[string]interface{}{
+					"root":        revads["storage"].TmpRoot,
+					"enable_home": true,
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
+				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+
+				ctx := ctxpkg.ContextSetUser(context.Background(), user)
+
+				err = fs.CreateHome(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content1)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content2)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			assertFileVersions()
+		})
+	})
+
+	Describe("owncloud", func() {
+		BeforeEach(func() {
+			dependencies = map[string]string{
+				"users":   "userprovider-json.toml",
+				"storage": "storageprovider-owncloud.toml",
+			}
+
+			redisAddress := os.Getenv("REDIS_ADDRESS")
+			if redisAddress == "" {
+				Fail("REDIS_ADDRESS not set")
+			}
+			variables = map[string]string{
+				"redis_address": redisAddress,
+			}
+		})
+
+		assertCreateHome()
+
+		Context("with a home and a subdirectory", func() {
+			JustBeforeEach(func() {
+				res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				subdirRes, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: subdirRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(subdirRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			})
+
+			assertCreateContainer()
+			assertListContainer()
+			assertGetPath()
+			assertDelete()
+			assertMove()
+			assertGrants()
+			assertUploads()
+			assertDownloads()
+			assertRecycle()
+			assertReferences()
+			assertMetadata()
+		})
+
+		Context("with an existing file /versioned_file", func() {
+			JustBeforeEach(func() {
+				fs, err := owncloud.New(map[string]interface{}{
+					"datadirectory":   revads["storage"].TmpRoot,
+					"userprovidersvc": revads["users"].GrpcAddress,
+					"enable_home":     true,
 				})
 				Expect(err).ToNot(HaveOccurred())
 
