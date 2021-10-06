@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
 	"time"
 
@@ -59,9 +61,35 @@ func (h *sharesHandler) Handler() http.Handler {
 func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-
-	shareWith, protocol, meshProvider := r.FormValue("shareWith"), r.FormValue("protocol"), r.FormValue("meshProvider")
-	resource, providerID, owner := r.FormValue("name"), r.FormValue("providerId"), r.FormValue("owner")
+	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	fmt.Printf("contentType '%s'", contentType)
+	var shareWith, protocol, meshProvider, resource, providerID, owner string
+	if err == nil && contentType == "application/json" {
+		fmt.Println('1')
+		defer r.Body.Close()
+		reqBody, err := io.ReadAll(r.Body)
+		fmt.Printf("reqBody '%s'", reqBody)
+		if err == nil {
+			fmt.Println('2')
+			reqMap := make(map[string]string)
+			err = json.Unmarshal(reqBody, &reqMap)
+			if err == nil {
+				fmt.Println('3')
+				shareWith, protocol, meshProvider = reqMap["shareWith"], reqMap["protocol"], reqMap["meshProvider"]
+				resource, providerID, owner = reqMap["name"], reqMap["providerId"], reqMap["owner"]
+				fmt.Println('4')
+			}
+			fmt.Println('5')
+		}
+		fmt.Println('6')
+	} else {
+		fmt.Println('7')
+		shareWith, protocol, meshProvider = r.FormValue("shareWith"), r.FormValue("protocol"), r.FormValue("meshProvider")
+		resource, providerID, owner = r.FormValue("name"), r.FormValue("providerId"), r.FormValue("owner")
+		fmt.Println('8')
+	}
+	fmt.Println('9')
+	fmt.Printf("shareWith '%s'", shareWith)
 
 	if resource == "" || providerID == "" || owner == "" {
 		WriteError(w, r, APIErrorInvalidParameter, "missing details about resource to be shared", nil)
