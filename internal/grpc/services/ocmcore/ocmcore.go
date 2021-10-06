@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -109,17 +108,9 @@ func (s *service) UnprotectedEndpoints() []string {
 
 // CreateOCMCoreShare is called when an OCM request comes into this reva instance from
 func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
-	parts := strings.Split(req.ProviderId, ":")
-	if len(parts) < 2 {
-		err := errtypes.BadRequest("resource ID does not follow the layout storageid:opaqueid " + req.ProviderId)
-		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, err, "error decoding resource ID"),
-		}, nil
-	}
-
 	resource := &provider.ResourceId{
-		StorageId: parts[0],
-		OpaqueId:  parts[1],
+		StorageId: "remote",
+		OpaqueId:  req.ProviderId,
 	}
 
 	var resourcePermissions *provider.ResourcePermissions
