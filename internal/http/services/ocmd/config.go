@@ -30,7 +30,7 @@ type configData struct {
 	Enabled       bool            `json:"enabled" xml:"enabled"`
 	APIVersion    string          `json:"apiVersion" xml:"apiVersion"`
 	Host          string          `json:"host" xml:"host"`
-	Endpoint      string          `json:"endpoint" xml:"endpoint"`
+	Endpoint      string          `json:"endPoint" xml:"endPoint"`
 	Provider      string          `json:"provider" xml:"provider"`
 	ResourceTypes []resourceTypes `json:"resourceTypes" xml:"resourceTypes"`
 }
