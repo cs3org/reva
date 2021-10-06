@@ -152,13 +152,12 @@ func (regManager *manager) AddProvider(ctx context.Context, p *registrypb.Provid
 			idx.apps = append(idx.apps, p.Address)
 		} else {
 			regManager.mimetypesIdx[m] = &mimeTypeIndex{apps: []string{p.Address}}
-		}
-
-		if mimetypeConfig, ok := regManager.config.MimeTypes[m]; ok {
-			// If the mime type is specified in the config,
-			// it is whitelisted for new file creation
-			regManager.mimetypesIdx[m].allowCreation = true
-			regManager.mimetypesIdx[m].mimeConf = mimetypeConfig
+			if mimetypeConfig, ok := regManager.config.MimeTypes[m]; ok {
+				// If the mime type is specified in the config,
+				// it is whitelisted for new file creation
+				regManager.mimetypesIdx[m].allowCreation = true
+				regManager.mimetypesIdx[m].mimeConf = mimetypeConfig
+			}
 		}
 
 		// set this as default app for mime types if configured via name

@@ -26,15 +26,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var ctx = context.Background()
-
-var input map[string]interface{}
-
-type ExpectedError struct {
-	message string
-}
-
 var (
+	 ctx = context.Background()
+
 	microsoftProvider = &registrypb.ProviderInfo{
 		Address:     "localhost:19000",
 		Name:        "Microsoft Office",
@@ -50,8 +44,8 @@ var (
 		Name:        "Collabora",
 		Description: "Collabora office editing apps",
 		Icon:        "https://www.collaboraoffice.com/wp-content/uploads/2019/01/CP-icon.png",
-		MimeTypes: []string{"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-			"application/vnd.openxmlformats-officedocument.presentationml.presentation", "text/markdown"},
+		MimeTypes: []string{"application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
+			"application/vnd.oasis.opendocument.presentation", "text/markdown"},
 	}
 
 	codimdProvider = &registrypb.ProviderInfo{
@@ -62,6 +56,9 @@ var (
 		MimeTypes:   []string{"text/markdown", "application/compressed-markdown"},
 	}
 
+mimeTypesForCreation = []string{"application/pdf", "application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+
 	testConfig = map[string]interface{}{
 		"mime_types": map[string]interface{}{
 			"application/pdf": map[string]string{
@@ -69,7 +66,6 @@ var (
 				"name":        "PDF",
 				"description": "PDF document",
 				"icon":        "",
-				"default_app": "",
 			},
 			"application/vnd.oasis.opendocument.text": map[string]string{
 				"extension":   "odt",
@@ -101,9 +97,6 @@ var (
 			},
 		},
 	}
-
-	mimeTypesForCreation = []string{"application/pdf", "application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
-		"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
 )
 
 func mimeTypeAllowedForCreation(mimeType string) bool {
@@ -134,11 +127,15 @@ func TestWithoutMimeTypesConfig(t *testing.T) {
 
 	providers, err := manager.FindProviders(ctx, "text/markdown")
 	assert.Empty(t, err)
-	assert.ElementsMatch(t, providers, []*registrypb.ProviderInfo{collaboraProvider, codimdProvider})
+	assert.ElementsMatch(t, []*registrypb.ProviderInfo{collaboraProvider, codimdProvider}, providers)
 
 	mimeTypes, err = manager.ListSupportedMimeTypes(ctx)
 	assert.Empty(t, err)
 	assert.Equal(t, len(mimeTypes), 9)
+
+	// default app is not set
+	_, err = manager.GetDefaultProviderForMimeType(ctx, "application/vnd.oasis.opendocument.text")
+	assert.Equal(t, err.Error(), "error: not found: default application provider not set for mime type application/vnd.oasis.opendocument.text")
 }
 
 func TestWithConfiguredMimeTypes(t *testing.T) {
@@ -161,9 +158,9 @@ func TestWithConfiguredMimeTypes(t *testing.T) {
 	err = manager.AddProvider(ctx, codimdProvider)
 	assert.Empty(t, err)
 
-	providers, err := manager.FindProviders(ctx, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	providers, err := manager.FindProviders(ctx, "application/vnd.oasis.opendocument.spreadsheet")
 	assert.Empty(t, err)
-	assert.ElementsMatch(t, providers, []*registrypb.ProviderInfo{collaboraProvider, microsoftProvider})
+	assert.ElementsMatch(t, []*registrypb.ProviderInfo{collaboraProvider, microsoftProvider}, providers)
 
 	mimeTypes, err = manager.ListSupportedMimeTypes(ctx)
 	assert.Empty(t, err)
@@ -171,4 +168,13 @@ func TestWithConfiguredMimeTypes(t *testing.T) {
 	for _, m := range mimeTypes {
 		assert.Equal(t, m.AllowCreation, mimeTypeAllowedForCreation(m.MimeType))
 	}
+
+	// default app is set
+	defaultAppSet, err := manager.GetDefaultProviderForMimeType(ctx, "application/vnd.oasis.opendocument.text")
+	assert.Empty(t, err)
+	assert.Equal(t, collaboraProvider, defaultAppSet)
+
+	// default app is not set
+	_, err = manager.GetDefaultProviderForMimeType(ctx, "application/compressed-markdown")
+	assert.Equal(t, err.Error(), "error: not found: default application provider not set for mime type application/compressed-markdown")
 }
