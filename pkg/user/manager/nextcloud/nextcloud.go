@@ -117,19 +117,19 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
-func (m *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
+func (um *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	user, err := getUser(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
-	url := m.endPoint + "~" + user.Username + "/api/user/" + a.verb
+	url := um.endPoint + "~" + user.Username + "/api/user/" + a.verb
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
 		panic(err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := m.client.Do(req)
+	resp, err := um.client.Do(req)
 	if err != nil {
 		panic(err)
 	}
