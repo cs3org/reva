@@ -83,8 +83,12 @@ func NewStorageDriver(c *StorageDriverConfig) (*StorageDriver, error) {
 		// nextcloudServerMock := GetNextcloudServerMock(&called)
 		// client, _ = TestingHTTPClient(nextcloudServerMock)
 
-		// Wait for SetHTTPClient to be called later
-		client = nil
+		// This is only used by the integration tests:
+		// (unit tests will call SetHTTPClient later):
+		called := make([]string, 0)
+		h := GetNextcloudServerMock(&called)
+		client, _ = TestingHTTPClient(h)
+		// FIXME: defer teardown()
 	} else {
 		client = &http.Client{}
 	}
