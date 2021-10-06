@@ -20,6 +20,7 @@ package nextcloud_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"google.golang.org/grpc/metadata"
@@ -35,6 +36,39 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
+	var conf *nextcloud.UserManagerConfig
+
+	ncHost := os.Getenv("NEXTCLOUD")
+	fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
+	if len(ncHost) == 0 {
+		conf = &nextcloud.UserManagerConfig{
+			EndPoint: "http://mock.com/apps/sciencemesh/",
+			MockHTTP: true,
+		}
+		nc, _ := nextcloud.NewUserManager(conf)
+		called := make([]string, 0)
+		h := nextcloud.GetNextcloudServerMock(&called)
+		mock, teardown := nextcloud.TestingHTTPClient(h)
+		nc.SetHTTPClient(mock)
+		return nc, &called, teardown
+	}
+	conf = &nextcloud.UserManagerConfig{
+		EndPoint: ncHost + "/apps/sciencemesh/",
+		MockHTTP: false,
+	}
+	nc, _ := nextcloud.NewUserManager(conf)
+	return nc, nil, func() {}
+}
+
+func checkCalled(called *[]string, expected string) {
+	if called == nil {
+		return
+	}
+	Expect(len(*called)).To(Equal(1))
+	Expect((*called)[0]).To(Equal(expected))
+}
 
 var _ = Describe("Nextcloud", func() {
 	var (
@@ -92,14 +126,9 @@ var _ = Describe("Nextcloud", func() {
 	// GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error)
 	Describe("GetUser", func() {
 		It("calls the GetUser endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			um, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			um, _ := nextcloud.NewUserManager(&nextcloud.UserManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			user, err := um.GetUser(ctx, &userpb.UserId{
 				Idp:      "some-idp",
 				OpaqueId: "some-opaque-user-id",
@@ -121,21 +150,16 @@ var _ = Describe("Nextcloud", func() {
 				UidNumber:    0,
 				GidNumber:    0,
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`)
 		})
 	})
 
 	// GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error)
 	Describe("GetUserByClaim", func() {
 		It("calls the GetUserByClaim endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			um, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			um, _ := nextcloud.NewUserManager(&nextcloud.UserManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			user, err := um.GetUserByClaim(ctx, "claim-string", "value-string")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(user).To(Equal(&userpb.User{
@@ -153,21 +177,16 @@ var _ = Describe("Nextcloud", func() {
 				UidNumber:    0,
 				GidNumber:    0,
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/user/GetUserByClaim {"claim":"claim-string","value":"value-string"}`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/user/GetUserByClaim {"claim":"claim-string","value":"value-string"}`)
 		})
 	})
 
 	// GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error)
 	Describe("GetUserGroups", func() {
 		It("calls the GetUserGroups endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			um, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			um, _ := nextcloud.NewUserManager(&nextcloud.UserManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			groups, err := um.GetUserGroups(ctx, &userpb.UserId{
 				Idp:      "some-idp",
 				OpaqueId: "some-opaque-user-id",
@@ -175,21 +194,16 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(groups).To(Equal([]string{"wine-lovers"}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/user/GetUserGroups {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/user/GetUserGroups {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`)
 		})
 	})
 
 	// FindUsers(ctx context.Context, query string) ([]*userpb.User, error)
 	Describe("FindUsers", func() {
 		It("calls the FindUsers endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			um, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			um, _ := nextcloud.NewUserManager(&nextcloud.UserManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			users, err := um.FindUsers(ctx, "some-query")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(users)).To(Equal(1))
@@ -208,7 +222,7 @@ var _ = Describe("Nextcloud", func() {
 				UidNumber:    0,
 				GidNumber:    0,
 			}))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/user/FindUsers some-query`))
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/user/FindUsers some-query`)
 		})
 	})
 })

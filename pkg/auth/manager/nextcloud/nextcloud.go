@@ -39,7 +39,9 @@ func init() {
 	registry.Register("nextcloud", New)
 }
 
-type mgr struct {
+// Manager is the Nextcloud-based implementation of the auth.Manager interface
+// see https://github.com/cs3org/reva/blob/v1.13.0/pkg/auth/auth.go#L32-L35
+type Manager struct {
 	client   *http.Client
 	endPoint string
 }
@@ -47,6 +49,7 @@ type mgr struct {
 // AuthManagerConfig contains config for a Nextcloud-based AuthManager
 type AuthManagerConfig struct {
 	EndPoint string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
+	MockHTTP bool   `mapstructure:"mock_http"`
 }
 
 // Action describes a REST request to forward to the Nextcloud backend
@@ -76,29 +79,41 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}
 	c.init()
 
-	return NewAuthManager(c, &http.Client{})
+	return NewAuthManager(c)
 }
 
 // NewAuthManager returns a new Nextcloud-based AuthManager
-func NewAuthManager(c *AuthManagerConfig, hc *http.Client) (auth.Manager, error) {
-	return &mgr{
+func NewAuthManager(c *AuthManagerConfig) (*Manager, error) {
+	var client *http.Client
+	if c.MockHTTP {
+		// called := make([]string, 0)
+		// nextcloudServerMock := GetNextcloudServerMock(&called)
+		// client, _ = TestingHTTPClient(nextcloudServerMock)
+
+		// Wait for SetHTTPClient to be called later
+		client = nil
+	} else {
+		client = &http.Client{}
+	}
+
+	return &Manager{
 		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
-		client:   hc,
+		client:   client,
 	}, nil
 }
 
-func (am *mgr) Configure(ml map[string]interface{}) error {
+func (am *Manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-func (am *mgr) do(ctx context.Context, a Action) (int, []byte, error) {
+// SetHTTPClient sets the HTTP client
+func (am *Manager) SetHTTPClient(c *http.Client) {
+	am.client = c
+}
+
+func (am *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	log := appctx.GetLogger(ctx)
-	// user, err := getUser(ctx)
-	// if err != nil {
-	// 	return 0, nil, err
-	// }
-	// url := am.endPoint + "~" + a.username + "/api/" + a.verb
-	url := "http://localhost/apps/sciencemesh/~" + a.username + "/api/auth/" + a.verb
+	url := am.endPoint + "~" + a.username + "/api/auth/" + a.verb
 	log.Info().Msgf("am.do %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
@@ -122,7 +137,7 @@ func (am *mgr) do(ctx context.Context, a Action) (int, []byte, error) {
 }
 
 // Authenticate method as defined in https://github.com/cs3org/reva/blob/28500a8/pkg/auth/auth.go#L31-L33
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+func (am *Manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	type paramsObj struct {
 		ClientID     string `json:"clientID"`
 		ClientSecret string `json:"clientSecret"`

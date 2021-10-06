@@ -41,7 +41,9 @@ func init() {
 	registry.Register("nextcloud", New)
 }
 
-type manager struct {
+// Manager is the Nextcloud-based implementation of the share.Manager interface
+// see https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+type Manager struct {
 	client   *http.Client
 	endPoint string
 }
@@ -49,6 +51,7 @@ type manager struct {
 // UserManagerConfig contains config for a Nextcloud-based UserManager
 type UserManagerConfig struct {
 	EndPoint string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user management"`
+	MockHTTP bool   `mapstructure:"mock_http"`
 }
 
 func (c *UserManagerConfig) init() {
@@ -79,16 +82,30 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.init()
 
-	return NewUserManager(c, &http.Client{})
+	return NewUserManager(c)
 }
 
 // NewUserManager returns a new Nextcloud-based UserManager
-func NewUserManager(c *UserManagerConfig, hc *http.Client) (user.Manager, error) {
-	return &manager{
+func NewUserManager(c *UserManagerConfig) (*Manager, error) {
+	var client *http.Client
+	if c.MockHTTP {
+		// Wait for SetHTTPClient to be called later
+		client = nil
+	} else {
+		client = &http.Client{}
+	}
+
+	return &Manager{
 		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
-		client:   hc,
+		client:   client,
 	}, nil
+}
+
+// SetHTTPClient sets the HTTP client
+func (um *Manager) SetHTTPClient(c *http.Client) {
+	um.client = c
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
@@ -100,7 +117,7 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
-func (m *manager) do(ctx context.Context, a Action) (int, []byte, error) {
+func (m *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	user, err := getUser(ctx)
 	if err != nil {
 		return 0, nil, err
@@ -122,11 +139,11 @@ func (m *manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	return resp.StatusCode, body, err
 }
 
-func (m *manager) Configure(ml map[string]interface{}) error {
+func (m *Manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (m *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	bodyStr, err := json.Marshal(uid)
 	if err != nil {
 		return nil, err
@@ -144,7 +161,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	return result, err
 }
 
-func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (m *Manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
 	type paramsObj struct {
 		Claim string `json:"claim"`
 		Value string `json:"value"`
@@ -166,7 +183,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	return result, err
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
+func (m *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	bodyStr, err := json.Marshal(uid)
 	if err != nil {
 		return nil, err
@@ -183,7 +200,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	return gs, err
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+func (m *Manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 	_, respBody, err := m.do(ctx, Action{"FindUsers", query})
 	if err != nil {
 		return nil, err
