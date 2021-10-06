@@ -128,7 +128,7 @@ var _ = Describe("Nextcloud", func() {
 	})
 
 	// Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error)
-	FDescribe("Share", func() {
+	Describe("Share", func() {
 		It("calls the Share endpoint", func() {
 			fmt.Println("Calling setUpNextCloudServer!")
 			am, called, teardown := setUpNextcloudServer()
