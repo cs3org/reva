@@ -53,8 +53,6 @@ type config struct {
 	BaseDN         string     `mapstructure:"base_dn"`
 	UserFilter     string     `mapstructure:"userfilter"`
 	LoginFilter    string     `mapstructure:"loginfilter"`
-	BindUsername   string     `mapstructure:"bind_username"`
-	BindPassword   string     `mapstructure:"bind_password"`
 	Idp            string     `mapstructure:"idp"`
 	GatewaySvc     string     `mapstructure:"gatewaysvc"`
 	Schema         attributes `mapstructure:"schema"`
@@ -140,13 +138,6 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, err
 	}
 	defer l.Close()
-
-	// First bind with a read only user
-	err = l.Bind(am.c.BindUsername, am.c.BindPassword)
-	if err != nil {
-		log.Error().Err(err).Msg("bind with system user failed")
-		return nil, nil, err
-	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(

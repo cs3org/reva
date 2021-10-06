@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage/favorite"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -110,10 +111,11 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	c             *Config
-	webDavHandler *WebDavHandler
-	davHandler    *DavHandler
-	client        *http.Client
+	c                *Config
+	webDavHandler    *WebDavHandler
+	davHandler       *DavHandler
+	favoritesManager favorite.Manager
+	client           *http.Client
 }
 
 // New returns a new ocdav
@@ -133,6 +135,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
+		favoritesManager: favorite.NewInMemoryManager(),
 	}
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
@@ -153,7 +156,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/"}
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -187,7 +190,20 @@ func (s *svc) Handler() http.Handler {
 
 			// yet, add it to baseURI
 			base = path.Join(base, "remote.php")
-
+		case "apps":
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+			if head == "files" {
+				s.handleLegacyPath(w, r)
+				return
+			}
+		case "index.php":
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+			if head == "s" {
+				token := r.URL.Path
+				url := s.c.PublicURL + path.Join("#", head, token)
+				http.Redirect(w, r, url, http.StatusMovedPermanently)
+				return
+			}
 		}
 		switch head {
 		// the old `/webdav` endpoint uses remote.php/webdav/$path

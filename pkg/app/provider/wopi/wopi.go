@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package demo
+package wopi
 
 import (
 	"bytes"
@@ -63,7 +63,7 @@ type config struct {
 	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
 	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
 	JWTSecret           string `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
-	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:";Specifies if the app can be opened only on desktop."`
+	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
 	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
 
@@ -137,21 +137,38 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("endpoint", resource.GetId().StorageId)
 	q.Add("viewmode", viewMode.String())
 	u, ok := ctxpkg.ContextGetUser(ctx)
-	if ok { // else defaults to "Anonymous Guest"
+	if ok { // else defaults to "Guest xyz"
 		q.Add("username", u.Username)
 	}
 
 	q.Add("appname", p.conf.AppName)
-	q.Add("appurl", p.appURLs["edit"][ext])
+
+	var viewAppURL string
+	if viewAppURLs, ok := p.appURLs["view"]; ok {
+		if viewAppURL, ok = viewAppURLs[ext]; ok {
+			q.Add("appviewurl", viewAppURL)
+		}
+	}
+	if editAppURLs, ok := p.appURLs["edit"]; ok {
+		if editAppURL, ok := editAppURLs[ext]; ok {
+			q.Add("appurl", editAppURL)
+		}
+	}
+	if q.Get("appurl") == "" {
+		// assuming that an view action is always available in the /hosting/discovery manifest
+		// eg. Collabora does support viewing jpgs but no editing
+		// eg. OnlyOffice does support viewing pdfs but no editing
+		// there is no known case of supporting edit only without view
+		q.Add("appurl", viewAppURL)
+	}
+	if q.Get("appurl") == "" && q.Get("appviewurl") == "" {
+		return nil, errors.New("wopi: neither edit nor view app url found")
+	}
 
 	if p.conf.AppIntURL != "" {
 		q.Add("appinturl", p.conf.AppIntURL)
 	}
-	if viewExts, ok := p.appURLs["view"]; ok {
-		if url, ok := viewExts[ext]; ok {
-			q.Add("appviewurl", url)
-		}
-	}
+
 	httpReq.URL.RawQuery = q.Encode()
 
 	if p.conf.AppAPIKey != "" {
@@ -161,19 +178,25 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	httpReq.Header.Set("Authorization", "Bearer "+p.conf.IOPSecret)
 	httpReq.Header.Set("TokenHeader", token)
 
+	// Call the WOPI server and parse the response (body will always contain a payload)
 	openRes, err := p.wopiClient.Do(httpReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "wopi: error performing open request to WOPI server")
 	}
 	defer openRes.Body.Close()
 
-	if openRes.StatusCode != http.StatusOK {
-		return nil, errtypes.InternalError("wopi: unexpected status from WOPI server: " + openRes.Status)
-	}
-
 	body, err := ioutil.ReadAll(openRes.Body)
 	if err != nil {
 		return nil, err
+	}
+	if openRes.StatusCode != http.StatusOK {
+		// WOPI returned failure: body contains a user-friendly error message (yet perform a sanity check)
+		sbody := ""
+		if body != nil {
+			sbody = string(body)
+		}
+		log.Warn().Msg(fmt.Sprintf("wopi: WOPI server returned HTTP %s, error was: %s", openRes.Status, sbody))
+		return nil, errors.New(sbody)
 	}
 
 	var result map[string]interface{}

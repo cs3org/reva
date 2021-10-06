@@ -107,6 +107,8 @@ type CapabilitiesArchiver struct {
 	Version     string   `json:"version" xml:"version" mapstructure:"version"`
 	Formats     []string `json:"formats" xml:"formats" mapstructure:"formats"`
 	ArchiverURL string   `json:"archiver_url" xml:"archiver_url" mapstructure:"archiver_url"`
+	MaxNumFiles string   `json:"max_num_files" xml:"max_num_files" mapstructure:"max_num_files"`
+	MaxSize     string   `json:"max_size" xml:"max_size" mapstructure:"max_size"`
 }
 
 // CapabilitiesAppProvider holds available app provider information
