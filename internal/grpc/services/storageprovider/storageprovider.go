@@ -1181,7 +1181,7 @@ func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlink
 }
 
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
-	total, used, err := s.storage.GetQuota(ctx)
+	total, used, err := s.storage.GetQuota(ctx, req)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {

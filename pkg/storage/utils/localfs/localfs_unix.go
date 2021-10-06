@@ -30,6 +30,7 @@ import (
 	"strings"
 	"syscall"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
@@ -66,7 +67,7 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	return fmt.Sprintf("\"%s\"", strings.Trim(etag, "\""))
 }
 
-func (fs *localfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
+func (fs *localfs) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (uint64, uint64, error) {
 	// TODO quota of which storage space?
 	// we could use the logged in user, but when a user has access to multiple storages this falls short
 	// for now return quota of root
