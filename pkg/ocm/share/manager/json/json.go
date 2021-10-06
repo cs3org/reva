@@ -304,15 +304,19 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			}
 		}
 
-		requestBody := url.Values{
-			"shareWith":    {g.Grantee.GetUserId().OpaqueId},
-			"name":         {name},
-			"providerId":   {fmt.Sprintf("%s:%s", md.StorageId, md.OpaqueId)},
-			"owner":        {userID.OpaqueId},
-			"protocol":     {string(protocol)},
-			"meshProvider": {userID.Idp},
+		requestBodyMap := map[string]string{
+			"shareWith":    g.Grantee.GetUserId().OpaqueId,
+			"name":         name,
+			"providerId":   fmt.Sprintf("%s:%s", md.StorageId, md.OpaqueId),
+			"owner":        userID.OpaqueId,
+			"protocol":     string(protocol),
+			"meshProvider": userID.Idp,
 		}
-
+		requestBody, err := json.Marshal(requestBodyMap)
+		if err != nil {
+			err = errors.Wrap(err, "error marshalling request body")
+			return nil, err
+		}
 		ocmEndpoint, err := getOCMEndpoint(pi)
 		if err != nil {
 			return nil, err
@@ -324,11 +328,11 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		u.Path = path.Join(u.Path, createOCMCoreShareEndpoint)
 		recipientURL := u.String()
 
-		req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
+		req, err := http.NewRequest("POST", recipientURL, strings.NewReader(string(requestBody)))
 		if err != nil {
 			return nil, errors.Wrap(err, "json: error framing post request")
 		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
+		req.Header.Set("Content-Type", "application/json; param=value")
 
 		resp, err := m.client.Do(req)
 		if err != nil {
