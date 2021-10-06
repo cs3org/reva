@@ -5,5 +5,5 @@ address = "{{grpc_address}}"
 driver = "nextcloud"
 
 [grpc.services.storageprovider.drivers.nextcloud]
-end_point = "http://mock.com/apps/sciencemesh/"
+end_point = "http://localhost:8080/apps/sciencemesh/"
 mock_http = true
