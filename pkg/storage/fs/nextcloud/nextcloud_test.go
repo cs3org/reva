@@ -59,14 +59,13 @@ func setUpNextcloudServer() (*nextcloud.StorageDriver, *[]string, func()) {
 		mock, teardown := nextcloud.TestingHTTPClient(h)
 		nc.SetHTTPClient(mock)
 		return nc, &called, teardown
-	} else {
-		conf = &nextcloud.StorageDriverConfig{
-			EndPoint: ncHost + "/apps/sciencemesh/",
-			MockHTTP: false,
-		}
-		nc, _ := nextcloud.NewStorageDriver(conf)
-		return nc, nil, func() {}
 	}
+	conf = &nextcloud.StorageDriverConfig{
+		EndPoint: ncHost + "/apps/sciencemesh/",
+		MockHTTP: false,
+	}
+	nc, _ := nextcloud.NewStorageDriver(conf)
+	return nc, nil, func() {}
 }
 
 func checkCalled(called *[]string, expected string) {

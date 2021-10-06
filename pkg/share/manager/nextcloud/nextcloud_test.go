@@ -57,14 +57,13 @@ func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
 		mock, teardown := nextcloud.TestingHTTPClient(h)
 		nc.SetHTTPClient(mock)
 		return nc, &called, teardown
-	} else {
-		conf = &nextcloud.ShareManagerConfig{
-			EndPoint: ncHost + "/apps/sciencemesh/",
-			MockHTTP: false,
-		}
-		nc, _ := nextcloud.NewShareManager(conf)
-		return nc, nil, func() {}
 	}
+	conf = &nextcloud.ShareManagerConfig{
+		EndPoint: ncHost + "/apps/sciencemesh/",
+		MockHTTP: false,
+	}
+	nc, _ := nextcloud.NewShareManager(conf)
+	return nc, nil, func() {}
 }
 
 func checkCalled(called *[]string, expected string) {

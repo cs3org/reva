@@ -45,6 +45,8 @@ func init() {
 	registry.Register("nextcloud", New)
 }
 
+// Manager is the Nextcloud-based implementation of the share.Manager interface
+// see https://github.com/cs3org/reva/blob/v1.13.0/pkg/share/share.go#L29-L54
 type Manager struct {
 	client   *http.Client
 	endPoint string
@@ -176,6 +178,8 @@ func (sm *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	return resp.StatusCode, body, nil
 }
 
+// Share as defined in the share.Manager interface
+// https://github.com/cs3org/reva/blob/v1.13.0/pkg/share/share.go#L29-L54
 func (sm *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	type paramsObj struct {
 		Md *provider.ResourceInfo    `json:"md"`
@@ -215,7 +219,8 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *coll
 	}, err
 }
 
-// GetShare gets the information for a share by the given ref.
+// GetShare as defined in the share.Manager interface
+// https://github.com/cs3org/reva/blob/v1.13.0/pkg/share/share.go#L29-L54
 func (sm *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
@@ -245,7 +250,8 @@ func (sm *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferen
 	}, err
 }
 
-// Unshare deletes the share pointed by ref.
+// Unshare as defined in the share.Manager interface
+// https://github.com/cs3org/reva/blob/v1.13.0/pkg/share/share.go#L29-L54
 func (sm *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
@@ -256,7 +262,8 @@ func (sm *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReferenc
 	return err
 }
 
-// UpdateShare updates the mode of the given share.
+// UpdateShare as defined in the share.Manager interface
+// https://github.com/cs3org/reva/blob/v1.13.0/pkg/share/share.go#L29-L54
 func (sm *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
 	type paramsObj struct {
 		Ref *collaboration.ShareReference   `json:"ref"`
@@ -296,8 +303,8 @@ func (sm *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefe
 	}, err
 }
 
-// ListShares returns the shares created by the user. If md is provided is not nil,
-// it returns only shares attached to the given resource.
+// ListShares as defined in the share.Manager interface
+// https://github.com/cs3org/reva/blob/v1.13.0/pkg/share/share.go#L29-L54
 func (sm *Manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	bodyStr, err := json.Marshal(filters)
 	if err != nil {
@@ -334,7 +341,8 @@ func (sm *Manager) ListShares(ctx context.Context, filters []*collaboration.Filt
 	return pointers, err
 }
 
-// ListReceivedShares returns the list of shares the user has access.
+// ListReceivedShares as defined in the share.Manager interface
+// https://github.com/cs3org/reva/blob/v1.13.0/pkg/share/share.go#L29-L54
 func (sm *Manager) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
 	bodyStr, err := json.Marshal(filters)
 	if err != nil {
@@ -381,7 +389,8 @@ func (sm *Manager) ListReceivedShares(ctx context.Context, filters []*collaborat
 
 }
 
-// GetReceivedShare returns the information for a received share the user has access.
+// GetReceivedShare as defined in the share.Manager interface
+// https://github.com/cs3org/reva/blob/v1.13.0/pkg/share/share.go#L29-L54
 func (sm *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
@@ -422,7 +431,8 @@ func (sm *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.Shar
 	}, err
 }
 
-// UpdateReceivedShare updates the received share with share state.
+// UpdateReceivedShare as defined in the share.Manager interface
+// https://github.com/cs3org/reva/blob/v1.13.0/pkg/share/share.go#L29-L54
 func (sm *Manager) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareReference, f *collaboration.UpdateReceivedShareRequest_UpdateField) (*collaboration.ReceivedShare, error) {
 	type paramsObj struct {
 		Ref *collaboration.ShareReference                         `json:"ref"`
