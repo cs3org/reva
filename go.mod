@@ -59,6 +59,7 @@ require (
 	github.com/thanhpk/randstr v1.0.4
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tus/tusd v1.6.0
+	github.com/wk8/go-ordered-map v0.2.0
 	go.mongodb.org/mongo-driver v1.7.2 // indirect
 	go.opencensus.io v0.23.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.24.0
