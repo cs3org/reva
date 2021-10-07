@@ -27,8 +27,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/errtypes"
-
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -298,6 +296,33 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 }
 
+func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	// TODO(refs) poor choice of API. Use an update mask to prevent unnecessary checks.
+	// MVP: update name attribute only.
+	/*
+		1. look for the requested space
+		2. iterate over the space properties and apply the changes
+	*/
+
+	n, _ := fs.lu.NodeFromResource(ctx, &provider.Reference{
+		ResourceId: req.StorageSpace.Root,
+	})
+
+	if !n.Exists {
+		panic("space does not exist")
+	}
+
+	if err := n.SetMetadata(xattrs.SpaceNameAttr, req.StorageSpace.Name); err != nil {
+		return nil, err
+	}
+
+	return &provider.UpdateStorageSpaceResponse{
+		Status: &v1beta11.Status{
+			Code: v1beta11.Code_CODE_OK,
+		},
+	}, nil
+}
+
 // createHiddenSpaceFolder bootstraps a storage space root with a hidden ".space" folder used to store space related
 // metadata such as a description or an image.
 // Internally createHiddenSpaceFolder leverages the use of node.Child() to create a new node under the space root.
@@ -329,8 +354,4 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeI
 	}
 
 	return nil
-}
-
-func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	return nil, errtypes.NotSupported("update storage space")
 }
