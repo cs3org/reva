@@ -63,6 +63,7 @@ const (
 	HeaderTusResumable         = "Tus-Resumable"
 	HeaderTusVersion           = "Tus-Version"
 	HeaderTusExtension         = "Tus-Extension"
+	HeaderTusChecksumAlgorithm = "Tus-Checksum-Algorithm"
 	HeaderDestination          = "Destination"
 	HeaderOverwrite            = "Overwrite"
 	HeaderUploadChecksum       = "Upload-Checksum"

@@ -29,6 +29,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 	rtrace "github.com/cs3org/reva/pkg/trace"
@@ -90,6 +91,7 @@ func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceI
 func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.Request, meta map[string]string, ref *provider.Reference, log zerolog.Logger) {
 	w.Header().Add(HeaderAccessControlAllowHeaders, strings.Join([]string{HeaderTusResumable, HeaderUploadLength, HeaderUploadMetadata, HeaderIfMatch}, ", "))
 	w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderLocation}, ", "))
+	w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
 
 	w.Header().Set(HeaderTusResumable, "1.0.0")
 
@@ -260,6 +262,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 		// check if upload was fully completed
 		if length == 0 || httpRes.Header.Get(HeaderUploadOffset) == r.Header.Get(HeaderUploadLength) {
 			// get uploaded file metadata
+
 			sRes, err := client.Stat(ctx, sReq)
 			if err != nil {
 				log.Error().Err(err).Msg("error sending grpc stat request")
@@ -268,6 +271,14 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 			}
 
 			if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+
+				if sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+					// the token expired during upload, so the stat failed
+					// and we can't do anything about it.
+					// the clients will handle this gracefully by doing a propfind on the file
+					return
+				}
+
 				HandleErrorStatus(&log, w, sRes.Status)
 				return
 			}
@@ -283,10 +294,21 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 				w.Header().Set(HeaderOCMtime, httpRes.Header.Get(HeaderOCMtime))
 			}
 
+			// get WebDav permissions for file
+			role := conversions.RoleFromResourcePermissions(info.PermissionSet)
+			permissions := role.WebDAVPermissions(
+				info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				false,
+				false,
+				false,
+			)
+
 			w.Header().Set(HeaderContentType, info.MimeType)
 			w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
 			w.Header().Set(HeaderOCETag, info.Etag)
 			w.Header().Set(HeaderETag, info.Etag)
+			w.Header().Set("permissions-HEADER-TODO", permissions)
+
 			t := utils.TSToTime(info.Mtime).UTC()
 			lastModifiedString := t.Format(time.RFC1123Z)
 			w.Header().Set(HeaderLastModified, lastModifiedString)

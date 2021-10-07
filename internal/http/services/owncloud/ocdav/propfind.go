@@ -153,7 +153,7 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 			w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderTusVersion, HeaderTusExtension}, ", "))
 			w.Header().Set(HeaderTusResumable, "1.0.0")
 			w.Header().Set(HeaderTusVersion, "1.0.0")
-			w.Header().Set(HeaderTusExtension, "creation,creation-with-upload")
+			w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
 		}
 	}
 	w.WriteHeader(http.StatusMultiStatus)

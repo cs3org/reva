@@ -86,7 +86,8 @@ func New(value map[string]interface{}) (token.Manager, error) {
 }
 
 func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
-	ttl := time.Duration(m.conf.Expires) * time.Second
+	ttl := 60 * time.Second
+	//ttl := time.Duration(m.conf.Expires) * time.Second
 	claims := claims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(ttl).Unix(),

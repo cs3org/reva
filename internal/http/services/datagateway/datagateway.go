@@ -41,6 +41,8 @@ import (
 const (
 	// TokenTransportHeader holds the header key for the reva transfer token
 	TokenTransportHeader = "X-Reva-Transfer"
+	// UploadExpiresHeader holds the timestamp for the transport token expiry, defined in https://tus.io/protocols/resumable-upload.html#expiration
+	UploadExpiresHeader = "Upload-Expires"
 )
 
 func init() {
@@ -196,6 +198,9 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	defer httpRes.Body.Close()
 
 	copyHeader(w.Header(), httpRes.Header)
+
+	// add upload expiry / transfer token expiry header for tus https://tus.io/protocols/resumable-upload.html#expiration
+	w.Header().Set(UploadExpiresHeader, time.Unix(claims.ExpiresAt, 0).Format(time.RFC1123))
 
 	if httpRes.StatusCode != http.StatusOK {
 		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
