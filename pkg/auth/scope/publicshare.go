@@ -19,22 +19,30 @@
 package scope
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/metadata"
+
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 )
 
-func publicshareScope(scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
+func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger, client gatewayv1beta1.GatewayAPIClient, mgr token.Manager) (bool, error) {
 	var share link.PublicShare
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
@@ -44,25 +52,25 @@ func publicshareScope(scope *authpb.Scope, resource interface{}, logger *zerolog
 	switch v := resource.(type) {
 	// Viewer role
 	case *registry.GetStorageProvidersRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
 	case *provider.StatRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
 	case *provider.ListContainerRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
 	case *provider.InitiateFileDownloadRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
 
 		// Editor role
 		// TODO(ishank011): Add role checks,
 		// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
 	case *provider.DeleteRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
 	case *provider.MoveRequest:
-		return checkStorageRef(&share, v.GetSource()) && checkStorageRef(&share, v.GetDestination()), nil
+		return checkStorageRef(ctx, &share, v.GetSource(), client, mgr) && checkStorageRef(ctx, &share, v.GetDestination(), client, mgr), nil
 	case *provider.InitiateFileUploadRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
 	case *appregistry.GetAppProvidersRequest:
 		return utils.ResourceIDEqual(share.ResourceId, v.ResourceInfo.Id), nil
 	case *appprovider.OpenInAppRequest:
@@ -79,10 +87,38 @@ func publicshareScope(scope *authpb.Scope, resource interface{}, logger *zerolog
 	return false, errtypes.InternalError(msg)
 }
 
-func checkStorageRef(s *link.PublicShare, r *provider.Reference) bool {
+func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Reference, client gatewayv1beta1.GatewayAPIClient, mgr token.Manager) bool {
 	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> path:$path > >
 	if r.ResourceId != nil && r.Path == "" { // path must be empty
-		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId())
+		if utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) {
+			return true
+		}
+		shareStat, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: s.ResourceId}})
+		if err != nil || shareStat.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return false
+		}
+
+		userResp, err := client.GetUserByClaim(ctx, &userv1beta1.GetUserByClaimRequest{Claim: "userid", Value: shareStat.Info.Owner.OpaqueId})
+		if err != nil || userResp.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return false
+		}
+
+		scope, err := AddOwnerScope(map[string]*authpb.Scope{})
+		if err != nil {
+			return false
+		}
+		token, err := mgr.MintToken(ctx, userResp.User, scope)
+		if err != nil {
+			return false
+		}
+
+		ctx = metadata.AppendToOutgoingContext(context.Background(), ctxpkg.TokenHeader, token)
+		refStat, err := client.Stat(ctx, &provider.StatRequest{Ref: r})
+		if err != nil || refStat.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return false
+		}
+
+		return strings.HasPrefix(refStat.Info.Path, shareStat.Info.Path)
 	}
 
 	// r: <path:"/public/$token" >

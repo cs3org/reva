@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/bluele/gcache"
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
@@ -209,8 +210,13 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		return nil, err
 	}
 
+	client, err := pool.GetGatewayServiceClient(gatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	if sharedconf.SkipUserGroupsInToken() && fetchUserGroups {
-		groups, err := getUserGroups(ctx, u, gatewayAddr)
+		groups, err := getUserGroups(ctx, u, client)
 		if err != nil {
 			return nil, err
 		}
@@ -218,7 +224,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 	}
 
 	// Check if access to the resource is in the scope of the token
-	ok, err := scope.VerifyScope(ctx, tokenScope, req)
+	ok, err := scope.VerifyScope(ctx, tokenScope, req, client, mgr)
 	if err != nil {
 		return nil, errtypes.InternalError("error verifying scope of access token")
 	}
@@ -233,16 +239,11 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 	return u, nil
 }
 
-func getUserGroups(ctx context.Context, u *userpb.User, gatewayAddr string) ([]string, error) {
+func getUserGroups(ctx context.Context, u *userpb.User, client gatewayv1beta1.GatewayAPIClient) ([]string, error) {
 	if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
 		log := appctx.GetLogger(ctx)
 		log.Info().Msgf("user groups found in cache %s", u.Id.OpaqueId)
 		return groupsIf.([]string), nil
-	}
-
-	client, err := pool.GetGatewayServiceClient(gatewayAddr)
-	if err != nil {
-		return nil, err
 	}
 
 	res, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})

@@ -19,17 +19,20 @@
 package scope
 
 import (
+	"context"
 	"fmt"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
-func receivedShareScope(scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
+func receivedShareScope(_ context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger, _ gatewayv1beta1.GatewayAPIClient, _ token.Manager) (bool, error) {
 	var share collaboration.ReceivedShare
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
