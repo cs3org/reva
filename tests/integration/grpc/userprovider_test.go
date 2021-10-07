@@ -134,7 +134,7 @@ var _ = Describe("user providers", func() {
 					},
 					want: &userpb.GetUserResponse{
 						Status: &rpc.Status{
-							Code: 15,
+							Code: 6,
 						},
 					},
 				},
@@ -147,7 +147,7 @@ var _ = Describe("user providers", func() {
 					},
 					want: &userpb.GetUserResponse{
 						Status: &rpc.Status{
-							Code: 15,
+							Code: 6,
 						},
 					},
 				},
@@ -160,7 +160,7 @@ var _ = Describe("user providers", func() {
 					},
 					want: &userpb.GetUserResponse{
 						Status: &rpc.Status{
-							Code: 15,
+							Code: 6,
 						},
 					},
 				},
