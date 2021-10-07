@@ -72,9 +72,16 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 	case *provider.InitiateFileUploadRequest:
 		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
 	case *appregistry.GetAppProvidersRequest:
-		return utils.ResourceIDEqual(share.ResourceId, v.ResourceInfo.Id), nil
+		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.ResourceInfo.Id}, client, mgr), nil
+	case *appregistry.GetDefaultAppProviderForMimeTypeRequest:
+		return true, nil
 	case *appprovider.OpenInAppRequest:
-		return utils.ResourceIDEqual(share.ResourceId, v.ResourceInfo.Id), nil
+		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.ResourceInfo.Id}, client, mgr), nil
+	case *gatewayv1beta1.OpenInAppRequest:
+		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
+
+	case *userv1beta1.GetUserByClaimRequest:
+		return true, nil
 
 	case *link.GetPublicShareRequest:
 		return checkPublicShareRef(&share, v.GetRef()), nil
