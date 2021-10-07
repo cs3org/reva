@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	 ctx = context.Background()
+	ctx = context.Background()
 
 	microsoftProvider = &registrypb.ProviderInfo{
 		Address:     "localhost:19000",
@@ -56,7 +56,7 @@ var (
 		MimeTypes:   []string{"text/markdown", "application/compressed-markdown"},
 	}
 
-mimeTypesForCreation = []string{"application/pdf", "application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
+	mimeTypesForCreation = []string{"application/pdf", "application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
 		"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
 
 	testConfig = map[string]interface{}{
