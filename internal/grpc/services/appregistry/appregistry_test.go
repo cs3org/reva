@@ -98,12 +98,7 @@ func Test_ListAppProviders(t *testing.T) {
 					Code:  1,
 					Trace: "00000000000000000000000000000000",
 				},
-				Providers: []*registrypb.ProviderInfo{
-					{
-						Address:   "",
-						MimeTypes: []string{},
-					},
-				},
+				Providers: []*registrypb.ProviderInfo{},
 			},
 		},
 		{
@@ -118,12 +113,7 @@ func Test_ListAppProviders(t *testing.T) {
 					Trace:   "00000000000000000000000000000000",
 					Message: "",
 				},
-				Providers: []*registrypb.ProviderInfo{
-					{
-						Address:   "",
-						MimeTypes: []string{},
-					},
-				},
+				Providers: []*registrypb.ProviderInfo{},
 			},
 		},
 		{
