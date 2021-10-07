@@ -244,25 +244,50 @@ func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool
 	// namespace template.
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok || !useLoggedInUserNS {
-		var requestUserID string
-		requestUserID, requestPath = router.ShiftPath(requestPath)
+		// take a shortcut if "ns" is not a template
+		if !strings.Contains(ns, "{{") {
+			return ns, requestPath, nil
+		}
+		var requestUsernameOrID string
+		requestUsernameOrID, requestPath = router.ShiftPath(requestPath)
 
 		gatewayClient, err := s.getClient()
 		if err != nil {
 			return "", "", err
 		}
-		userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
-			UserId: &userpb.UserId{OpaqueId: requestUserID},
+
+		// Check if we got a Username
+		res, err := gatewayClient.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+			Claim: "username",
+			Value: requestUsernameOrID,
 		})
 		if err != nil {
 			return "", "", err
 		}
-		if userRes.Status.Code != rpc.Code_CODE_OK {
-			return "", "", errors.New(userRes.Status.Message)
+
+		// If it's not a Username, try if it is a valid userid
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+				UserId: &userpb.UserId{OpaqueId: requestUsernameOrID},
+			})
+			if err != nil {
+				return "", "", err
+			}
+			res.Status = userRes.Status
+			res.User = userRes.User
 		}
 
-		u = userRes.User
+		// If still didn't find a user, fallback
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			res.User = &userpb.User{
+				Username: requestUsernameOrID,
+				Id:       &userpb.UserId{OpaqueId: requestUsernameOrID},
+			}
+		}
+
+		u = res.User
 	}
+
 	return templates.WithUser(u, ns), requestPath, nil
 }
 
