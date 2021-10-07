@@ -103,10 +103,14 @@ func (s *service) Register(ss *grpc.Server) {
 func (s *service) GetGroup(ctx context.Context, req *grouppb.GetGroupRequest) (*grouppb.GetGroupResponse, error) {
 	group, err := s.groupmgr.GetGroup(ctx, req.GroupId)
 	if err != nil {
-		err = errors.Wrap(err, "groupprovidersvc: error getting group")
-		return &grouppb.GetGroupResponse{
-			Status: status.NewInternal(ctx, err, "error getting group"),
-		}, nil
+		res := &grouppb.GetGroupResponse{}
+		if _, ok := err.(errtypes.NotFound); ok {
+			res.Status = status.NewNotFound(ctx, "group not found")
+		} else {
+			err = errors.Wrap(err, "groupprovidersvc: error getting group")
+			res.Status = status.NewInternal(ctx, err, "error getting group")
+		}
+		return res, nil
 	}
 
 	return &grouppb.GetGroupResponse{
@@ -118,10 +122,14 @@ func (s *service) GetGroup(ctx context.Context, req *grouppb.GetGroupRequest) (*
 func (s *service) GetGroupByClaim(ctx context.Context, req *grouppb.GetGroupByClaimRequest) (*grouppb.GetGroupByClaimResponse, error) {
 	group, err := s.groupmgr.GetGroupByClaim(ctx, req.Claim, req.Value)
 	if err != nil {
-		err = errors.Wrap(err, "groupprovidersvc: error getting group by claim")
-		return &grouppb.GetGroupByClaimResponse{
-			Status: status.NewInternal(ctx, err, "error getting group by claim"),
-		}, nil
+		res := &grouppb.GetGroupByClaimResponse{}
+		if _, ok := err.(errtypes.NotFound); ok {
+			res.Status = status.NewNotFound(ctx, fmt.Sprintf("group not found %s %s", req.Claim, req.Value))
+		} else {
+			err = errors.Wrap(err, "groupprovidersvc: error getting group by claim")
+			res.Status = status.NewInternal(ctx, err, "error getting group by claim")
+		}
+		return res, nil
 	}
 
 	return &grouppb.GetGroupByClaimResponse{
