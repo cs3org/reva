@@ -19,8 +19,11 @@
 package ocdav
 
 import (
+	"fmt"
 	"net/http"
 	"path"
+
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 // Common Webdav methods.
@@ -91,7 +94,16 @@ func (h *WebDavHandler) init(ns string, useLoggedInUserNS bool) error {
 // Handler handles requests
 func (h *WebDavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
+		ns, newPath, err := s.ApplyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: fmt.Sprintf("could not get storage for %s", r.RemoteAddr),
+			})
+			HandleWebdavError(appctx.GetLogger(r.Context()), w, b, err)
+		}
+		r.URL.Path = newPath
 		switch r.Method {
 		case MethodPropfind:
 			s.handlePathPropfind(w, r, ns)
