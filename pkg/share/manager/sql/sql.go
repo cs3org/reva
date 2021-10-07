@@ -277,18 +277,22 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	uid := ctxpkg.ContextMustGetUser(ctx).Username
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with,  id, stime, permissions, share_type FROM oc_share WHERE (uid_owner=? or uid_initiator=?) AND (share_type=? OR share_type=?)"
-	var filterQuery string
-	params := []interface{}{uid, uid, 0, 1}
-	for i, f := range filters {
-		if f.Type == collaboration.Filter_TYPE_RESOURCE_ID {
-			filterQuery += "(file_source=?)"
-			if i != len(filters)-1 {
-				filterQuery += " AND "
-			}
-			params = append(params, f.GetResourceId().OpaqueId)
-		} else {
-			return nil, fmt.Errorf("filter type is not supported")
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source, file_target, id, stime, permissions, share_type FROM oc_share WHERE (uid_owner=? or uid_initiator=?)"
+	params := []interface{}{uid, uid}
+
+	var (
+		filterQuery  string
+		filterParams []interface{}
+		err          error
+	)
+	if len(filters) == 0 {
+		filterQuery += "(share_type=? OR share_type=?)"
+		params = append(params, shareTypeUser)
+		params = append(params, shareTypeGroup)
+	} else {
+		filterQuery, filterParams, err = translateFilters(filters)
+		if err != nil {
+			return nil, err
 		}
 		params = append(params, filterParams...)
 	}
