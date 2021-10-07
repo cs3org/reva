@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cs3org/reva/pkg/errtypes"
+
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -327,4 +329,8 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeI
 	}
 
 	return nil
+}
+
+func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
 }

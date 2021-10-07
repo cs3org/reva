@@ -1513,6 +1513,10 @@ func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
+func (fs *eosfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
+}
+
 func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) (*provider.RecycleItem, error) {
 	path, err := fs.unwrap(ctx, eosDeletedItem.RestorePath)
 	if err != nil {

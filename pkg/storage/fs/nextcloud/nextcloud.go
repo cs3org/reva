@@ -27,6 +27,9 @@ import (
 	"net/url"
 	"strings"
 
+	"google.golang.org/grpc/codes"
+	gstatus "google.golang.org/grpc/status"
+
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -783,4 +786,8 @@ func (nc *StorageDriver) CreateStorageSpace(ctx context.Context, req *provider.C
 		return nil, err
 	}
 	return &respObj, nil
+}
+
+func (nc *StorageDriver) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
