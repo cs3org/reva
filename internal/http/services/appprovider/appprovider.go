@@ -332,12 +332,12 @@ func (s *svc) getStatInfo(ctx context.Context, fileID string, client gateway.Gat
 
 	decodedID, err := base64.URLEncoding.DecodeString(fileID)
 	if err != nil {
-		return nil, ocmd.APIErrorInvalidParameter, errors.Wrap(err, "fileID doesn't follow the required format")
+		return nil, ocmd.APIErrorInvalidParameter, errors.Wrap(err, fmt.Sprintf("fileID %s doesn't follow the required format", fileID))
 	}
 
 	parts := strings.Split(string(decodedID), idDelimiter)
 	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
-		return nil, ocmd.APIErrorInvalidParameter, errors.New("fileID contains illegal characters")
+		return nil, ocmd.APIErrorInvalidParameter, errtypes.BadRequest(fmt.Sprintf("fileID %s contains illegal characters", fileID))
 	}
 	res := &provider.ResourceId{
 		StorageId: parts[0],
