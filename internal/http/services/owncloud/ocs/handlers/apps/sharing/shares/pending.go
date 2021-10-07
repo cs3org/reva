@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 // AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}
@@ -54,28 +55,17 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 		return
 	}
 
-	ref := &collaboration.ShareReference{
-		Spec: &collaboration.ShareReference_Id{
-			Id: &collaboration.ShareId{
-				OpaqueId: shareID,
-			},
-		},
-	}
-
 	shareRequest := &collaboration.UpdateReceivedShareRequest{
-		Ref: ref,
-		Field: &collaboration.UpdateReceivedShareRequest_UpdateField{
-			Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
-				State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
-			},
+		Share: &collaboration.ReceivedShare{
+			Share: &collaboration.Share{Id: &collaboration.ShareId{OpaqueId: shareID}},
 		},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
 	}
 	if rejectShare {
-		shareRequest.Field = &collaboration.UpdateReceivedShareRequest_UpdateField{
-			Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
-				State: collaboration.ShareState_SHARE_STATE_REJECTED,
-			},
-		}
+		shareRequest.Share.State = collaboration.ShareState_SHARE_STATE_REJECTED
+	} else {
+		// TODO find free mount point and pass it on with an updated field mask
+		shareRequest.Share.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
 	}
 
 	shareRes, err := client.UpdateReceivedShare(ctx, shareRequest)

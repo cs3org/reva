@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/share"
 	sqlmanager "github.com/cs3org/reva/pkg/share/manager/sql"
 	mocks "github.com/cs3org/reva/pkg/share/manager/sql/mocks"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/mock"
@@ -199,7 +200,7 @@ var _ = Describe("SQL manager", func() {
 	})
 
 	Describe("UpdateReceivedShare", func() {
-		It("updates the received share", func() {
+		It("returns an error when no valid field is set in the mask", func() {
 			loginAs(otherUser)
 
 			share, err := mgr.GetReceivedShare(ctx, shareRef)
@@ -207,11 +208,21 @@ var _ = Describe("SQL manager", func() {
 			Expect(share).ToNot(BeNil())
 			Expect(share.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 
-			share, err = mgr.UpdateReceivedShare(ctx, shareRef, &collaboration.UpdateReceivedShareRequest_UpdateField{
-				Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
-					State: collaboration.ShareState_SHARE_STATE_REJECTED,
-				},
-			})
+			share.State = collaboration.ShareState_SHARE_STATE_REJECTED
+			_, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"foo"}})
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("updates the state when the state is set in the mask", func() {
+			loginAs(otherUser)
+
+			share, err := mgr.GetReceivedShare(ctx, shareRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(share).ToNot(BeNil())
+			Expect(share.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+
+			share.State = collaboration.ShareState_SHARE_STATE_REJECTED
+			share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(share.State).To(Equal(collaboration.ShareState_SHARE_STATE_REJECTED))
 

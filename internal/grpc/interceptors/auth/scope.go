@@ -195,7 +195,7 @@ func extractShareRef(req interface{}) (*collaboration.ShareReference, bool) {
 	case *collaboration.GetReceivedShareRequest:
 		return v.GetRef(), true
 	case *collaboration.UpdateReceivedShareRequest:
-		return v.GetRef(), true
+		return &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: v.GetShare().GetShare().GetId()}}, true
 	}
 	return nil, false
 }
