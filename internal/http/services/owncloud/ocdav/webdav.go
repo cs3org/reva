@@ -99,7 +99,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 			w.WriteHeader(http.StatusNotFound)
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,
-				message: fmt.Sprintf("could not get storage for %s", r.RemoteAddr),
+				message: fmt.Sprintf("could not get storage for %s", r.URL.Path),
 			})
 			HandleWebdavError(appctx.GetLogger(r.Context()), w, b, err)
 		}
