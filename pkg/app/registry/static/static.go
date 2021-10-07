@@ -35,17 +35,17 @@ func init() {
 }
 
 type mimeTypeConfig struct {
-	Extension   string `mapstructure:"extension"`
-	Name        string `mapstructure:"name"`
-	Description string `mapstructure:"description"`
-	Icon        string `mapstructure:"icon"`
-	DefaultApp  string `mapstructure:"default_app"`
+	Extension     string `mapstructure:"extension"`
+	Name          string `mapstructure:"name"`
+	Description   string `mapstructure:"description"`
+	Icon          string `mapstructure:"icon"`
+	DefaultApp    string `mapstructure:"default_app"`
+	AllowCreation bool   `mapstructure:"allow_creation"`
 }
 
 type mimeTypeIndex struct {
-	mimeConf      mimeTypeConfig
-	allowCreation bool
-	apps          []string
+	mimeConf mimeTypeConfig
+	apps     []string
 }
 
 type config struct {
@@ -93,9 +93,6 @@ func New(m map[string]interface{}) (app.Registry, error) {
 				} else {
 					mimetypes[m] = &mimeTypeIndex{apps: []string{addr}}
 					if mimeConf, ok := conf.MimeTypes[m]; ok {
-						// If the mime type is specified in the config,
-						// it is whitelisted for new file creation
-						mimetypes[m].allowCreation = true
 						mimetypes[m].mimeConf = mimeConf
 					}
 				}
@@ -153,9 +150,6 @@ func (regManager *manager) AddProvider(ctx context.Context, p *registrypb.Provid
 		} else {
 			regManager.mimetypesIdx[m] = &mimeTypeIndex{apps: []string{p.Address}}
 			if mimetypeConfig, ok := regManager.config.MimeTypes[m]; ok {
-				// If the mime type is specified in the config,
-				// it is whitelisted for new file creation
-				regManager.mimetypesIdx[m].allowCreation = true
 				regManager.mimetypesIdx[m].mimeConf = mimetypeConfig
 			}
 		}
@@ -193,7 +187,7 @@ func (regManager *manager) ListSupportedMimeTypes(ctx context.Context) ([]*regis
 			Name:          mime.mimeConf.Name,
 			Description:   mime.mimeConf.Description,
 			Icon:          mime.mimeConf.Icon,
-			AllowCreation: mime.allowCreation,
+			AllowCreation: mime.mimeConf.AllowCreation,
 		}
 		for _, p := range mime.apps {
 			if provider, ok := regManager.providers[p]; ok {

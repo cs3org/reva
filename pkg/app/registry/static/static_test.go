@@ -56,44 +56,48 @@ var (
 		MimeTypes:   []string{"text/markdown", "application/compressed-markdown"},
 	}
 
-	mimeTypesForCreation = []string{"application/pdf", "application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
+	mimeTypesForCreation = []string{"application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
 		"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
 
 	testConfig = map[string]interface{}{
 		"mime_types": map[string]interface{}{
-			"application/pdf": map[string]string{
+			"application/pdf": map[string]interface{}{
 				"extension":   "pdf",
 				"name":        "PDF",
 				"description": "PDF document",
 				"icon":        "",
 			},
-			"application/vnd.oasis.opendocument.text": map[string]string{
-				"extension":   "odt",
-				"name":        "Open Document",
-				"description": "OpenDocument text document",
-				"icon":        "",
-				"default_app": "Collabora",
+			"application/vnd.oasis.opendocument.text": map[string]interface{}{
+				"extension":      "odt",
+				"name":           "Open Document",
+				"description":    "OpenDocument text document",
+				"icon":           "",
+				"default_app":    "Collabora",
+				"allow_creation": true,
 			},
-			"application/vnd.oasis.opendocument.spreadsheet": map[string]string{
-				"extension":   "ods",
-				"name":        "Open Spreadsheet",
-				"description": "OpenDocument spreadsheet document",
-				"icon":        "",
-				"default_app": "Collabora",
+			"application/vnd.oasis.opendocument.spreadsheet": map[string]interface{}{
+				"extension":      "ods",
+				"name":           "Open Spreadsheet",
+				"description":    "OpenDocument spreadsheet document",
+				"icon":           "",
+				"default_app":    "Collabora",
+				"allow_creation": true,
 			},
-			"application/vnd.openxmlformats-officedocument.wordprocessingml.document": map[string]string{
-				"extension":   "docx",
-				"name":        "Word Document",
-				"description": "Microsoft Word document",
-				"icon":        "",
-				"default_app": "Microsoft Office",
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document": map[string]interface{}{
+				"extension":      "docx",
+				"name":           "Word Document",
+				"description":    "Microsoft Word document",
+				"icon":           "",
+				"default_app":    "Microsoft Office",
+				"allow_creation": true,
 			},
-			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": map[string]string{
-				"extension":   "xlsx",
-				"name":        "Excel Spreadsheet",
-				"description": "Microsoft Excel document",
-				"icon":        "",
-				"default_app": "Microsoft Office",
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": map[string]interface{}{
+				"extension":      "xlsx",
+				"name":           "Excel Spreadsheet",
+				"description":    "Microsoft Excel document",
+				"icon":           "",
+				"default_app":    "Microsoft Office",
+				"allow_creation": true,
 			},
 		},
 	}
