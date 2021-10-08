@@ -209,7 +209,7 @@ func TestAddProvider(t *testing.T) {
 		mimeTypes         []*mimeTypeConfig
 		initProviders     []*registrypb.ProviderInfo
 		newProvider       *registrypb.ProviderInfo
-		expectedProviders map[string][]string
+		expectedProviders map[string][]*registrypb.ProviderInfo
 	}{
 		{
 			name:          "no mime types defined - no initial providers",
@@ -220,9 +220,13 @@ func TestAddProvider(t *testing.T) {
 				Address:   "ip-provider1",
 				Name:      "provider1",
 			},
-			expectedProviders: map[string][]string{
+			expectedProviders: map[string][]*registrypb.ProviderInfo{
 				"text/json": {
-					"ip-provider1",
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider1",
+						Name:      "provider1",
+					},
 				},
 			},
 		},
@@ -249,10 +253,18 @@ func TestAddProvider(t *testing.T) {
 				Address:   "ip-provider1",
 				Name:      "provider1",
 			},
-			expectedProviders: map[string][]string{
+			expectedProviders: map[string][]*registrypb.ProviderInfo{
 				"text/json": {
-					"ip-provider1",
-					"ip-provider2",
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider1",
+						Name:      "provider1",
+					},
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider2",
+						Name:      "provider2",
+					},
 				},
 			},
 		},
@@ -279,10 +291,18 @@ func TestAddProvider(t *testing.T) {
 				Address:   "ip-provider1",
 				Name:      "provider1",
 			},
-			expectedProviders: map[string][]string{
+			expectedProviders: map[string][]*registrypb.ProviderInfo{
 				"text/json": {
-					"ip-provider2",
-					"ip-provider1",
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider2",
+						Name:      "provider2",
+					},
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider1",
+						Name:      "provider1",
+					},
 				},
 			},
 		},
@@ -726,24 +746,4 @@ func equalsMimeTypeInfo(m1, m2 *registrypb.MimeTypeInfo) bool {
 		m1.Ext == m2.Ext &&
 		m1.MimeType == m2.MimeType &&
 		m1.Name == m2.Name
-}
-
-func equalsProviderInfo(p1, p2 *registrypb.ProviderInfo) bool {
-	return p1.Address == p2.Address &&
-		p1.Name == p2.Name &&
-		reflect.DeepEqual(p1.MimeTypes, p2.MimeTypes)
-}
-
-// check that all providers in the two lists are equals
-func providersEquals(l1, l2 []*registrypb.ProviderInfo) bool {
-	if len(l1) != len(l2) {
-		return false
-	}
-
-	for i := 0; i < len(l1); i++ {
-		if !equalsProviderInfo(l1[i], l2[i]) {
-			return false
-		}
-	}
-	return true
 }
