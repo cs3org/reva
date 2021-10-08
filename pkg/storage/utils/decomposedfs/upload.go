@@ -735,7 +735,8 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 }
 
 func checkQuota(ctx context.Context, fs *Decomposedfs, fileSize uint64) (quotaSufficient bool, err error) {
-	total, inUse, err := fs.GetQuota(ctx)
+	req := &provider.GetQuotaRequest{}
+	total, inUse, err := fs.GetQuota(ctx, req)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.NotFound:

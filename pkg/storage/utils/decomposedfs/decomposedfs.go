@@ -130,8 +130,14 @@ func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
 // TODO Document in the cs3 should we return quota or free space?
 func (fs *Decomposedfs) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (total uint64, inUse uint64, err error) {
 	var n *node.Node
-	if n, err = fs.lu.HomeOrRootNode(ctx); err != nil {
-		return 0, 0, err
+	if req.Ref != nil {
+		if n, err = fs.lu.NodeFromResource(ctx, req.Ref); err != nil {
+			return 0, 0, err
+		}
+	} else {
+		if n, err = fs.lu.HomeOrRootNode(ctx); err != nil {
+			return 0, 0, err
+		}
 	}
 
 	if !n.Exists {

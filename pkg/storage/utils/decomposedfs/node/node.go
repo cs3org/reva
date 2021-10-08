@@ -65,13 +65,14 @@ const (
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
 type Node struct {
-	ParentID string
-	ID       string
-	Name     string
-	Blobsize int64
-	BlobID   string
-	owner    *userpb.UserId
-	Exists   bool
+	ParentID  string
+	ID        string
+	Name      string
+	Blobsize  int64
+	BlobID    string
+	owner     *userpb.UserId
+	Exists    bool
+	SpaceRoot *Node
 
 	lu PathLookup
 }
@@ -608,12 +609,13 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// quota
 	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
 		var quotaPath string
-		if r, err := n.lu.HomeOrRootNode(ctx); err == nil {
-			quotaPath = r.InternalPath()
-			readQuotaIntoOpaque(ctx, quotaPath, ri)
+		if n.SpaceRoot != nil {
+			quotaPath = n.SpaceRoot.InternalPath()
 		} else {
-			sublog.Error().Err(err).Msg("error determining home or root node for quota")
+			sublog.Error().Err(err).Msg("error determining the space root node for quota")
 		}
+		quotaPath = n.InternalPath()
+		readQuotaIntoOpaque(ctx, quotaPath, ri)
 	}
 
 	// only read the requested metadata attributes

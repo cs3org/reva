@@ -45,11 +45,12 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 	if ref.ResourceId != nil {
 		// check if a storage space reference is used
 		// currently, the decomposed fs uses the root node id as the space id
-		n, err := lu.NodeFromID(ctx, ref.ResourceId)
+		spaceRoot, err := lu.NodeFromID(ctx, ref.ResourceId)
 		if err != nil {
 			return nil, err
 		}
 
+		n := spaceRoot
 		p := filepath.Clean(ref.Path)
 		if p != "." {
 			// walk the relative path
@@ -59,6 +60,8 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 			if err != nil {
 				return nil, err
 			}
+			// use reference id as space root for relative references
+			n.SpaceRoot = spaceRoot
 			return n, nil
 		}
 
@@ -78,11 +81,12 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string, followReferences 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
 
-	n, err := lu.HomeOrRootNode(ctx)
+	root, err := lu.HomeOrRootNode(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	n := root
 	// TODO collect permissions of the current user on every segment
 	fn = filepath.Clean(fn)
 	if fn != "/" && fn != "." {
@@ -94,7 +98,7 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string, followReferences 
 			return nil, err
 		}
 	}
-
+	n.SpaceRoot = root
 	return n, nil
 }
 
