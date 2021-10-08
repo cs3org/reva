@@ -20,165 +20,730 @@ package static
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
-	"github.com/stretchr/testify/assert"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
-var (
-	ctx = context.Background()
+func TestFindProviders(t *testing.T) {
 
-	microsoftProvider = &registrypb.ProviderInfo{
-		Address:     "localhost:19000",
-		Name:        "Microsoft Office",
-		Description: "MS office 365",
-		Icon:        "https://msp2l1160225102310.blob.core.windows.net/ms-p2-l1-160225-1023-13-assets/office_365_icon_en-US.png",
-		MimeTypes: []string{"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-			"application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
-			"application/vnd.oasis.opendocument.presentation", "application/pdf"},
-	}
-
-	collaboraProvider = &registrypb.ProviderInfo{
-		Address:     "localhost:18000",
-		Name:        "Collabora",
-		Description: "Collabora office editing apps",
-		Icon:        "https://www.collaboraoffice.com/wp-content/uploads/2019/01/CP-icon.png",
-		MimeTypes: []string{"application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
-			"application/vnd.oasis.opendocument.presentation", "text/markdown"},
-	}
-
-	codimdProvider = &registrypb.ProviderInfo{
-		Address:     "localhost:17000",
-		Name:        "CodiMD",
-		Description: "App for markdown files",
-		Icon:        "https://avatars.githubusercontent.com/u/48181221?s=200&v=4",
-		MimeTypes:   []string{"text/markdown", "application/compressed-markdown"},
-	}
-
-	mimeTypesForCreation = []string{"application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
-		"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
-
-	testConfig = map[string]interface{}{
-		"mime_types": map[string]interface{}{
-			"application/pdf": map[string]interface{}{
-				"extension":   "pdf",
-				"name":        "PDF",
-				"description": "PDF document",
-				"icon":        "",
+	testCases := []struct {
+		name         string
+		mimeTypes    []*mimeTypeConfig
+		regProviders []*registrypb.ProviderInfo
+		mimeType     string
+		expectedRes  []*registrypb.ProviderInfo
+		expectedErr  error
+	}{
+		{
+			name:        "no mime types registered",
+			mimeTypes:   []*mimeTypeConfig{},
+			mimeType:    "SOMETHING",
+			expectedErr: errtypes.NotFound("application provider not found for mime type SOMETHING"),
+		},
+		{
+			name: "one provider registered for one mime type",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "some Address",
+				},
 			},
-			"application/vnd.oasis.opendocument.text": map[string]interface{}{
-				"extension":      "odt",
-				"name":           "Open Document",
-				"description":    "OpenDocument text document",
-				"icon":           "",
-				"default_app":    "Collabora",
-				"allow_creation": true,
+			regProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "some Address",
+					Name:      "some Name",
+				},
 			},
-			"application/vnd.oasis.opendocument.spreadsheet": map[string]interface{}{
-				"extension":      "ods",
-				"name":           "Open Spreadsheet",
-				"description":    "OpenDocument spreadsheet document",
-				"icon":           "",
-				"default_app":    "Collabora",
-				"allow_creation": true,
+			mimeType:    "text/json",
+			expectedErr: nil,
+			expectedRes: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "some Address",
+					Name:      "some Name",
+				},
 			},
-			"application/vnd.openxmlformats-officedocument.wordprocessingml.document": map[string]interface{}{
-				"extension":      "docx",
-				"name":           "Word Document",
-				"description":    "Microsoft Word document",
-				"icon":           "",
-				"default_app":    "Microsoft Office",
-				"allow_creation": true,
+		},
+		{
+			name: "more providers registered for one mime type",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "provider2",
+				},
 			},
-			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": map[string]interface{}{
-				"extension":      "xlsx",
-				"name":           "Excel Spreadsheet",
-				"description":    "Microsoft Excel document",
-				"icon":           "",
-				"default_app":    "Microsoft Office",
-				"allow_creation": true,
+			regProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider1",
+					Name:      "provider1",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider2",
+					Name:      "provider2",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider3",
+					Name:      "provider3",
+				},
+			},
+			mimeType:    "text/json",
+			expectedErr: nil,
+			expectedRes: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider2",
+					Name:      "provider2",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider1",
+					Name:      "provider1",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider3",
+					Name:      "provider3",
+				},
+			},
+		},
+		{
+			name: "more providers registered for different mime types",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "provider2",
+				},
+				{
+					MimeType:   "text/xml",
+					Extension:  "xml",
+					Name:       "XML File",
+					Icon:       "https://example.org/icons&file=xml.png",
+					DefaultApp: "provider1",
+				},
+			},
+			regProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json", "text/xml"},
+					Address:   "ip-provider1",
+					Name:      "provider1",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider2",
+					Name:      "provider2",
+				},
+				{
+					MimeTypes: []string{"text/xml"},
+					Address:   "ip-provider3",
+					Name:      "provider3",
+				},
+			},
+			mimeType:    "text/json",
+			expectedErr: nil,
+			expectedRes: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider2",
+					Name:      "provider2",
+				},
+				{
+					MimeTypes: []string{"text/json", "text/xml"},
+					Address:   "ip-provider1",
+					Name:      "provider1",
+				},
 			},
 		},
 	}
-)
 
-func mimeTypeAllowedForCreation(mimeType string) bool {
-	for _, m := range mimeTypesForCreation {
-		if m == mimeType {
-			return true
+	for _, tt := range testCases {
+
+		t.Run(tt.name, func(t *testing.T) {
+
+			ctx := context.TODO()
+
+			registry, err := New(map[string]interface{}{
+				"mime_types": tt.mimeTypes,
+				"providers":  tt.regProviders,
+			})
+			if err != nil {
+				t.Error("unexpected error creating the registry:", err)
+			}
+
+			providers, err := registry.FindProviders(ctx, tt.mimeType)
+
+			// check that the error returned by FindProviders is the same as the expected
+			if tt.expectedErr != err {
+				t.Errorf("different error returned: got=%v expected=%v", err, tt.expectedErr)
+			}
+
+			if !providersEquals(providers, tt.expectedRes) {
+				t.Errorf("providers list different from expected: \n\tgot=%v\n\texp=%v", providers, tt.expectedRes)
+			}
+
+		})
+
+	}
+
+}
+
+func TestAddProvider(t *testing.T) {
+
+	testCases := []struct {
+		name              string
+		mimeTypes         []*mimeTypeConfig
+		initProviders     []*registrypb.ProviderInfo
+		newProvider       *registrypb.ProviderInfo
+		expectedProviders map[string][]*registrypb.ProviderInfo
+	}{
+		{
+			name:          "no mime types defined - no initial providers",
+			mimeTypes:     []*mimeTypeConfig{},
+			initProviders: []*registrypb.ProviderInfo{},
+			newProvider: &registrypb.ProviderInfo{
+				MimeTypes: []string{"text/json"},
+				Address:   "ip-provider1",
+				Name:      "provider1",
+			},
+			expectedProviders: map[string][]*registrypb.ProviderInfo{
+				"text/json": {
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider1",
+						Name:      "provider1",
+					},
+				},
+			},
+		},
+		{
+			name: "one mime types defined - no initial providers - registering provider is the default",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "provider1",
+				},
+			},
+			initProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider2",
+					Name:      "provider2",
+				},
+			},
+			newProvider: &registrypb.ProviderInfo{
+				MimeTypes: []string{"text/json"},
+				Address:   "ip-provider1",
+				Name:      "provider1",
+			},
+			expectedProviders: map[string][]*registrypb.ProviderInfo{
+				"text/json": {
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider1",
+						Name:      "provider1",
+					},
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider2",
+						Name:      "provider2",
+					},
+				},
+			},
+		},
+		{
+			name: "one mime types defined - no initial providers - default already registered",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "provider2",
+				},
+			},
+			initProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider2",
+					Name:      "provider2",
+				},
+			},
+			newProvider: &registrypb.ProviderInfo{
+				MimeTypes: []string{"text/json"},
+				Address:   "ip-provider1",
+				Name:      "provider1",
+			},
+			expectedProviders: map[string][]*registrypb.ProviderInfo{
+				"text/json": {
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider2",
+						Name:      "provider2",
+					},
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider1",
+						Name:      "provider1",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+
+			ctx := context.TODO()
+
+			registry, err := New(map[string]interface{}{
+				"providers":  tt.initProviders,
+				"mime_types": tt.mimeTypes,
+			})
+			if err != nil {
+				t.Error("unexpected error creating the registry:", err)
+			}
+
+			err = registry.AddProvider(ctx, tt.newProvider)
+			if err != nil {
+				t.Error("unexpected error adding a new provider:", err)
+			}
+
+			// test that the internal set of providers keep the new provider
+			// and the key is the provider's address
+			staticReg := registry.(*manager)
+
+			in, ok := staticReg.providers[tt.newProvider.Address]
+			if !ok {
+				t.Error("cannot find a provider in the internal map with address", tt.newProvider.Address)
+			}
+
+			// check that the provider in the set is the same as the new one
+			if !equalsProviderInfo(tt.newProvider, in) {
+				t.Errorf("providers are different: got=%v expected=%v", in, tt.newProvider)
+			}
+
+			for mime, expAddrs := range tt.expectedProviders {
+				mimeConfInterface, _ := staticReg.mimetypes.Get(mime)
+				addrsReg := mimeConfInterface.(*mimeTypeConfig).apps
+
+				if !reflect.DeepEqual(expAddrs, addrsReg) {
+					t.Errorf("list of addresses different from expected: \n\tgot=%v\n\texp=%v", addrsReg, expAddrs)
+				}
+			}
+
+		})
+	}
+
+}
+
+func TestListSupportedMimeTypes(t *testing.T) {
+	testCases := []struct {
+		name         string
+		mimeTypes    []*mimeTypeConfig
+		newProviders []*registrypb.ProviderInfo
+		expected     []*registrypb.MimeTypeInfo
+	}{
+		{
+			name: "one mime type - no provider registered",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "provider2",
+				},
+			},
+			newProviders: []*registrypb.ProviderInfo{},
+			expected: []*registrypb.MimeTypeInfo{
+				{
+					MimeType:     "text/json",
+					Ext:          "json",
+					AppProviders: []*registrypb.ProviderInfo{},
+					Name:         "JSON File",
+					Icon:         "https://example.org/icons&file=json.png",
+				},
+			},
+		},
+		{
+			name: "one mime type - only default provider registered",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "provider1",
+				},
+			},
+			newProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider1",
+					Name:      "provider1",
+				},
+			},
+			expected: []*registrypb.MimeTypeInfo{
+				{
+					MimeType: "text/json",
+					Ext:      "json",
+					AppProviders: []*registrypb.ProviderInfo{
+						{
+							MimeTypes: []string{"text/json"},
+							Address:   "ip-provider1",
+							Name:      "provider1",
+						},
+					},
+					Name: "JSON File",
+					Icon: "https://example.org/icons&file=json.png",
+				},
+			},
+		},
+		{
+			name: "one mime type - more providers",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "JSON_DEFAULT_PROVIDER",
+				},
+			},
+			newProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider2",
+					Name:      "NOT_DEFAULT_PROVIDER",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider1",
+					Name:      "JSON_DEFAULT_PROVIDER",
+				},
+			},
+			expected: []*registrypb.MimeTypeInfo{
+				{
+					MimeType: "text/json",
+					Ext:      "json",
+					AppProviders: []*registrypb.ProviderInfo{
+						{
+							MimeTypes: []string{"text/json"},
+							Address:   "ip-provider1",
+							Name:      "JSON_DEFAULT_PROVIDER",
+						},
+						{
+							MimeTypes: []string{"text/json"},
+							Address:   "ip-provider2",
+							Name:      "NOT_DEFAULT_PROVIDER",
+						},
+					},
+					Name: "JSON File",
+					Icon: "https://example.org/icons&file=json.png",
+				},
+			},
+		},
+		{
+			name: "multiple mime types",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "JSON_DEFAULT_PROVIDER",
+				},
+				{
+					MimeType:   "text/xml",
+					Extension:  "xml",
+					Name:       "XML File",
+					Icon:       "https://example.org/icons&file=xml.png",
+					DefaultApp: "XML_DEFAULT_PROVIDER",
+				},
+			},
+			newProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json", "text/xml"},
+					Address:   "1",
+					Name:      "NOT_DEFAULT_PROVIDER2",
+				},
+				{
+					MimeTypes: []string{"text/xml"},
+					Address:   "2",
+					Name:      "NOT_DEFAULT_PROVIDER1",
+				},
+				{
+					MimeTypes: []string{"text/xml", "text/json"},
+					Address:   "3",
+					Name:      "JSON_DEFAULT_PROVIDER",
+				},
+				{
+					MimeTypes: []string{"text/xml", "text/json"},
+					Address:   "4",
+					Name:      "XML_DEFAULT_PROVIDER",
+				},
+			},
+			expected: []*registrypb.MimeTypeInfo{
+				{
+					MimeType: "text/json",
+					Ext:      "json",
+					AppProviders: []*registrypb.ProviderInfo{
+						{
+							MimeTypes: []string{"text/xml", "text/json"},
+							Address:   "3",
+							Name:      "JSON_DEFAULT_PROVIDER",
+						},
+						{
+							MimeTypes: []string{"text/json", "text/xml"},
+							Address:   "1",
+							Name:      "NOT_DEFAULT_PROVIDER2",
+						},
+						{
+							MimeTypes: []string{"text/xml", "text/json"},
+							Address:   "4",
+							Name:      "XML_DEFAULT_PROVIDER",
+						},
+					},
+					Name: "JSON File",
+					Icon: "https://example.org/icons&file=json.png",
+				},
+				{
+					MimeType: "text/xml",
+					Ext:      "xml",
+					AppProviders: []*registrypb.ProviderInfo{
+						{
+							MimeTypes: []string{"text/xml", "text/json"},
+							Address:   "4",
+							Name:      "XML_DEFAULT_PROVIDER",
+						},
+						{
+							MimeTypes: []string{"text/json", "text/xml"},
+							Address:   "1",
+							Name:      "NOT_DEFAULT_PROVIDER2",
+						},
+						{
+							MimeTypes: []string{"text/xml"},
+							Address:   "2",
+							Name:      "NOT_DEFAULT_PROVIDER1",
+						},
+						{
+							MimeTypes: []string{"text/xml", "text/json"},
+							Address:   "3",
+							Name:      "JSON_DEFAULT_PROVIDER",
+						},
+					},
+					Name: "XML File",
+					Icon: "https://example.org/icons&file=xml.png",
+				},
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+
+			ctx := context.TODO()
+
+			registry, err := New(map[string]interface{}{
+				"mime_types": tt.mimeTypes,
+			})
+			if err != nil {
+				t.Error("unexpected error creating the registry:", err)
+			}
+
+			// add all the providers
+			for _, p := range tt.newProviders {
+				err = registry.AddProvider(ctx, p)
+				if err != nil {
+					t.Error("unexpected error creating adding new providers:", err)
+				}
+			}
+
+			got, err := registry.ListSupportedMimeTypes(ctx)
+			if err != nil {
+				t.Error("unexpected error listing supported mime types:", err)
+			}
+
+			if !mimeTypesEquals(got, tt.expected) {
+				t.Errorf("mime types list different from expected: \n\tgot=%v\n\texp=%v", got, tt.expected)
+			}
+
+		})
+	}
+}
+
+func TestSetDefaultProviderForMimeType(t *testing.T) {
+	testCases := []struct {
+		name          string
+		mimeTypes     []*mimeTypeConfig
+		initProviders []*registrypb.ProviderInfo
+		newDefault    struct {
+			mimeType string
+			provider *registrypb.ProviderInfo
+		}
+		newProviders []*registrypb.ProviderInfo
+	}{
+		{
+			name: "set new default - no new providers",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "JSON_DEFAULT_PROVIDER",
+				},
+			},
+			initProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "1",
+					Name:      "JSON_DEFAULT_PROVIDER",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "2",
+					Name:      "NEW_DEFAULT",
+				},
+			},
+			newDefault: struct {
+				mimeType string
+				provider *registrypb.ProviderInfo
+			}{
+				mimeType: "text/json",
+				provider: &registrypb.ProviderInfo{
+					MimeTypes: []string{"text/json"},
+					Address:   "2",
+					Name:      "NEW_DEFAULT",
+				},
+			},
+			newProviders: []*registrypb.ProviderInfo{},
+		},
+		{
+			name: "set default - other providers (one is the previous default)",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "JSON_DEFAULT_PROVIDER",
+				},
+			},
+			initProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "4",
+					Name:      "NO_DEFAULT_PROVIDER",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "2",
+					Name:      "NEW_DEFAULT",
+				},
+			},
+			newDefault: struct {
+				mimeType string
+				provider *registrypb.ProviderInfo
+			}{
+				mimeType: "text/json",
+				provider: &registrypb.ProviderInfo{
+					MimeTypes: []string{"text/json"},
+					Address:   "2",
+					Name:      "NEW_DEFAULT",
+				},
+			},
+			newProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "1",
+					Name:      "JSON_DEFAULT_PROVIDER",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "3",
+					Name:      "OTHER_PROVIDER",
+				},
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+
+			ctx := context.TODO()
+
+			registry, err := New(map[string]interface{}{
+				"providers":  tt.initProviders,
+				"mime_types": tt.mimeTypes,
+			})
+			if err != nil {
+				t.Error("unexpected error creating a new registry:", err)
+			}
+
+			err = registry.SetDefaultProviderForMimeType(ctx, tt.newDefault.mimeType, tt.newDefault.provider)
+			if err != nil {
+				t.Error("unexpected error setting a default provider for mime type:", err)
+			}
+
+			// add other provider to move things around internally :)
+			for _, p := range tt.newProviders {
+				err = registry.AddProvider(ctx, p)
+				if err != nil {
+					t.Error("unexpected error adding a new provider:", err)
+				}
+			}
+
+			// check if the new default is the one set
+			got, err := registry.GetDefaultProviderForMimeType(ctx, tt.newDefault.mimeType)
+			if err != nil {
+				t.Error("unexpected error getting the default app provider:", err)
+			}
+
+			if !equalsProviderInfo(got, tt.newDefault.provider) {
+				t.Errorf("provider differ from expected:\n\tgot=%v\n\texp=%v", got, tt.newDefault.provider)
+			}
+
+		})
+	}
+}
+
+func mimeTypesEquals(l1, l2 []*registrypb.MimeTypeInfo) bool {
+	if len(l1) != len(l2) {
+		return false
+	}
+
+	for i := 0; i < len(l1); i++ {
+		if !equalsMimeTypeInfo(l1[i], l2[i]) {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
-func TestWithoutMimeTypesConfig(t *testing.T) {
-	manager, err := New(map[string]interface{}{})
-	assert.Empty(t, err)
-
-	err = manager.AddProvider(ctx, microsoftProvider)
-	assert.Empty(t, err)
-
-	err = manager.AddProvider(ctx, collaboraProvider)
-	assert.Empty(t, err)
-
-	mimeTypes, err := manager.ListSupportedMimeTypes(ctx)
-	assert.Empty(t, err)
-	assert.Equal(t, len(mimeTypes), 8)
-
-	err = manager.AddProvider(ctx, codimdProvider)
-	assert.Empty(t, err)
-
-	providers, err := manager.FindProviders(ctx, "text/markdown")
-	assert.Empty(t, err)
-	assert.ElementsMatch(t, []*registrypb.ProviderInfo{collaboraProvider, codimdProvider}, providers)
-
-	mimeTypes, err = manager.ListSupportedMimeTypes(ctx)
-	assert.Empty(t, err)
-	assert.Equal(t, len(mimeTypes), 9)
-
-	// default app is not set
-	_, err = manager.GetDefaultProviderForMimeType(ctx, "application/vnd.oasis.opendocument.text")
-	assert.Equal(t, err.Error(), "error: not found: default application provider not set for mime type application/vnd.oasis.opendocument.text")
-}
-
-func TestWithConfiguredMimeTypes(t *testing.T) {
-	manager, err := New(testConfig)
-	assert.Empty(t, err)
-
-	err = manager.AddProvider(ctx, microsoftProvider)
-	assert.Empty(t, err)
-
-	err = manager.AddProvider(ctx, collaboraProvider)
-	assert.Empty(t, err)
-
-	mimeTypes, err := manager.ListSupportedMimeTypes(ctx)
-	assert.Empty(t, err)
-	assert.Equal(t, len(mimeTypes), 8)
-	for _, m := range mimeTypes {
-		assert.Equal(t, m.AllowCreation, mimeTypeAllowedForCreation(m.MimeType))
-	}
-
-	err = manager.AddProvider(ctx, codimdProvider)
-	assert.Empty(t, err)
-
-	providers, err := manager.FindProviders(ctx, "application/vnd.oasis.opendocument.spreadsheet")
-	assert.Empty(t, err)
-	assert.ElementsMatch(t, []*registrypb.ProviderInfo{collaboraProvider, microsoftProvider}, providers)
-
-	mimeTypes, err = manager.ListSupportedMimeTypes(ctx)
-	assert.Empty(t, err)
-	assert.Equal(t, len(mimeTypes), 9)
-	for _, m := range mimeTypes {
-		assert.Equal(t, m.AllowCreation, mimeTypeAllowedForCreation(m.MimeType))
-	}
-
-	// default app is set
-	defaultAppSet, err := manager.GetDefaultProviderForMimeType(ctx, "application/vnd.oasis.opendocument.text")
-	assert.Empty(t, err)
-	assert.Equal(t, collaboraProvider, defaultAppSet)
-
-	// default app is not set
-	_, err = manager.GetDefaultProviderForMimeType(ctx, "application/compressed-markdown")
-	assert.Equal(t, err.Error(), "error: not found: default application provider not set for mime type application/compressed-markdown")
+func equalsMimeTypeInfo(m1, m2 *registrypb.MimeTypeInfo) bool {
+	return m1.Description == m2.Description &&
+		m1.AllowCreation == m2.AllowCreation &&
+		providersEquals(m1.AppProviders, m2.AppProviders) &&
+		m1.Ext == m2.Ext &&
+		m1.MimeType == m2.MimeType &&
+		m1.Name == m2.Name
 }

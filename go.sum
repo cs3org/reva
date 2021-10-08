@@ -465,6 +465,8 @@ github.com/tus/tusd v1.6.0/go.mod h1:ygrT4B9ZSb27dx3uTnobX5nOFDnutBL6iWKLH4+KpA0
 github.com/ugorji/go v1.1.7/go.mod h1:kZn38zHttfInRq0xu/PH0az30d+z6vm202qpg1oXVMw=
 github.com/ugorji/go/codec v1.1.7/go.mod h1:Ax+UKWsSmolVDwsd+7N3ZtXu+yMGCf907BLYF3GoBXY=
 github.com/vimeo/go-util v1.2.0/go.mod h1:s13SMDTSO7AjH1nbgp707mfN5JFIWUFDU5MDDuRRtKs=
+github.com/wk8/go-ordered-map v0.2.0 h1:KlvGyHstD1kkGZkPtHCyCfRYS0cz84uk6rrW/Dnhdtk=
+github.com/wk8/go-ordered-map v0.2.0/go.mod h1:9ZIbRunKbuvfPKyBP1SIKLcXNlv74YCOZ3t3VTS6gRk=
 github.com/xdg-go/pbkdf2 v1.0.0/go.mod h1:jrpuAogTd400dnrH08LKmI/xc1MbPOebTwRqcT5RDeI=
 github.com/xdg-go/scram v1.0.2/go.mod h1:1WAq6h33pAW+iRreB34OORO2Nf7qel3VV3fjBj+hCSs=
 github.com/xdg-go/stringprep v1.0.2/go.mod h1:8F9zXuvzgwmyT5DUm4GUfZGDdT3W+LCvS6+da4O5kxM=
