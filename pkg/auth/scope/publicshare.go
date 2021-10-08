@@ -79,6 +79,10 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.ResourceInfo.Id}, client, mgr), nil
 	case *gatewayv1beta1.OpenInAppRequest:
 		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
+	case *provider.SetArbitraryMetadataRequest:
+		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
+	case *provider.UnsetArbitraryMetadataRequest:
+		return checkStorageRef(ctx, &share, v.GetRef(), client, mgr), nil
 
 	case *userv1beta1.GetUserByClaimRequest:
 		return true, nil

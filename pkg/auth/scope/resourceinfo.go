@@ -67,6 +67,10 @@ func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interfac
 		return checkResourceInfo(&r, v.GetSource()) && checkResourceInfo(&r, v.GetDestination()), nil
 	case *provider.InitiateFileUploadRequest:
 		return checkResourceInfo(&r, v.GetRef()), nil
+	case *provider.SetArbitraryMetadataRequest:
+		return checkResourceInfo(&r, v.GetRef()), nil
+	case *provider.UnsetArbitraryMetadataRequest:
+		return checkResourceInfo(&r, v.GetRef()), nil
 
 	case string:
 		return checkResourcePath(v), nil
