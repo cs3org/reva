@@ -276,6 +276,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 					// the token expired during upload, so the stat failed
 					// and we can't do anything about it.
 					// the clients will handle this gracefully by doing a propfind on the file
+					w.WriteHeader(http.StatusOK)
 					return
 				}
 
