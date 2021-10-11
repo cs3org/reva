@@ -245,13 +245,6 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// hide mimetypes for app providers
-	for _, mime := range listRes.MimeTypes {
-		for _, app := range mime.AppProviders {
-			app.MimeTypes = nil
-		}
-	}
-
 	res := filterAppsByUserAgent(listRes.MimeTypes, r.UserAgent())
 	js, err := json.Marshal(map[string]interface{}{"mime-types": res})
 	if err != nil {
