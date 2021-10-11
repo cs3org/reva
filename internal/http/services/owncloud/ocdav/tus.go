@@ -251,6 +251,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 
 			w.Header().Set(HeaderUploadOffset, httpRes.Header.Get(HeaderUploadOffset))
 			w.Header().Set(HeaderTusResumable, httpRes.Header.Get(HeaderTusResumable))
+			w.Header().Set(HeaderTusUploadExpires, httpRes.Header.Get(HeaderTusUploadExpires))
 			if httpRes.StatusCode != http.StatusNoContent {
 				w.WriteHeader(httpRes.StatusCode)
 				return
@@ -308,7 +309,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 			w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
 			w.Header().Set(HeaderOCETag, info.Etag)
 			w.Header().Set(HeaderETag, info.Etag)
-			w.Header().Set("permissions-HEADER-TODO", permissions)
+			w.Header().Set(HeaderOCPermissions, permissions)
 
 			t := utils.TSToTime(info.Mtime).UTC()
 			lastModifiedString := t.Format(time.RFC1123Z)
