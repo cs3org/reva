@@ -29,7 +29,6 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/registry/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/mime"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog/log"
 	orderedmap "github.com/wk8/go-ordered-map"
@@ -265,14 +264,12 @@ func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType st
 }
 
 func dummyMimeType(m string, apps []*registrypb.ProviderInfo) *mimeTypeConfig {
-	ext := mime.Detect(false, m)
-
 	return &mimeTypeConfig{
-		MimeType:    m,
-		apps:        apps,
-		Extension:   ext,
-		Name:        fmt.Sprintf("%s file", strings.ToUpper(ext)),
-		Description: fmt.Sprintf("%s file", strings.ToUpper(ext)),
+		MimeType: m,
+		apps:     apps,
+		//Extension: "", // there is no meaningful general extension, so omit it
+		//Name:        "", // there is no meaningful general name, so omit it
+		//Description: "", // there is no meaningful general description, so omit it
 	}
 }
 
