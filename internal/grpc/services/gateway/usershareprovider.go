@@ -382,6 +382,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
 	}
 
+	// FIXME how can we delete a reference if the original resource was deleted?
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
 		return status.NewInternal(ctx, err, "could not delete share reference")
@@ -419,7 +420,13 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		return status.NewInternal(ctx, err, "could not delete share reference")
 	}
 
-	if deleteResp.Status.Code != rpc.Code_CODE_OK {
+	switch deleteResp.Status.Code {
+	case rpc.Code_CODE_OK:
+		// we can continue deleting the reference
+	case rpc.Code_CODE_NOT_FOUND:
+		// This is fine, we wanted to delete it anyway
+		return status.NewOK(ctx)
+	default:
 		err := status.NewErrorFromCode(deleteResp.Status.GetCode(), "gateway")
 		return status.NewInternal(ctx, err, "could not delete share reference")
 	}
