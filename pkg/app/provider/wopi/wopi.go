@@ -139,6 +139,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if ok { // else defaults to "Guest xyz"
 		q.Add("username", u.Username)
+		q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
 	}
 
 	q.Add("appname", p.conf.AppName)
