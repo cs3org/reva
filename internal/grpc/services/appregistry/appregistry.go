@@ -151,6 +151,13 @@ func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registrypb.ListSu
 		}, nil
 	}
 
+	// hide mimetypes for app providers
+	for _, mime := range mimeTypes {
+		for _, app := range mime.AppProviders {
+			app.MimeTypes = nil
+		}
+	}
+
 	res := &registrypb.ListSupportedMimeTypesResponse{
 		Status:    status.NewOK(ctx),
 		MimeTypes: mimeTypes,
