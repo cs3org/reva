@@ -252,12 +252,14 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 
 	info.Storage = map[string]string{
+		// Todo: add storage space root
 		"Type":    "OCISStore",
 		"BinPath": binPath,
 
 		"NodeId":       n.ID,
 		"NodeParentId": n.ParentID,
 		"NodeName":     n.Name,
+		"SpaceRoot":    n.SpaceRoot.ID,
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
@@ -474,7 +476,9 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		nil,
 		upload.fs.lu,
 	)
-
+	n.SpaceRoot = &node.Node{
+		ID: upload.info.Storage["SpaceRoot"],
+	}
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}

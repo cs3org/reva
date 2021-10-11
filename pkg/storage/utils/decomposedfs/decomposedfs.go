@@ -295,7 +295,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 
 	err = fs.tp.CreateDir(ctx, n)
 
-	if fs.o.TreeTimeAccounting {
+	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
 		nodePath := n.InternalPath()
 		// mark the home node as the end of propagation
 		if err = xattr.Set(nodePath, xattrs.PropagationAttr, []byte("1")); err != nil {

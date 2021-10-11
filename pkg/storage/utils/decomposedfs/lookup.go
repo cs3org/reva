@@ -49,22 +49,22 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 		if err != nil {
 			return nil, err
 		}
-
 		n := spaceRoot
-		p := filepath.Clean(ref.Path)
-		if p != "." {
-			// walk the relative path
-			n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error {
-				return nil
-			})
-			if err != nil {
-				return nil, err
+		// is this a relative reference?
+		if ref.Path != "" {
+			p := filepath.Clean(ref.Path)
+			if p != "." {
+				// walk the relative path
+				n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error {
+					return nil
+				})
+				if err != nil {
+					return nil, err
+				}
 			}
 			// use reference id as space root for relative references
 			n.SpaceRoot = spaceRoot
-			return n, nil
 		}
-
 		return n, nil
 	}
 

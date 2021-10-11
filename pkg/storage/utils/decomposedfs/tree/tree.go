@@ -578,8 +578,12 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 	// is propagation enabled for the parent node?
 
 	var root *node.Node
-	if root, err = t.lookup.HomeOrRootNode(ctx); err != nil {
-		return
+	if n.SpaceRoot == nil {
+		if root, err = t.lookup.HomeOrRootNode(ctx); err != nil {
+			return
+		}
+	} else {
+		root = n.SpaceRoot
 	}
 
 	// use a sync time and don't rely on the mtime of the current node, as the stat might not change when a rename happened too quickly

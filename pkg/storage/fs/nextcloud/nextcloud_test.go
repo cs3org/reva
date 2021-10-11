@@ -882,6 +882,8 @@ var _ = Describe("Nextcloud", func() {
 			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
 			maxBytes, maxFiles, err := nc.GetQuota(ctx)
+			nc.SetHTTPClient(mock)
+			maxBytes, maxFiles, err := nc.GetQuota(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(maxBytes).To(Equal(uint64(456)))
 			Expect(maxFiles).To(Equal(uint64(123)))

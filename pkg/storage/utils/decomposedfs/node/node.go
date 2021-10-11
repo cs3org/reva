@@ -240,9 +240,10 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	if err != nil {
 		if os.IsNotExist(err) || isNotDir(err) {
 			c := &Node{
-				lu:       n.lu,
-				ParentID: n.ID,
-				Name:     name,
+				lu:        n.lu,
+				ParentID:  n.ID,
+				Name:      name,
+				SpaceRoot: n.SpaceRoot,
 			}
 			return c, nil // if the file does not exist we return a node that has Exists = false
 		}
@@ -269,8 +270,9 @@ func (n *Node) Parent() (p *Node, err error) {
 		return nil, fmt.Errorf("Decomposedfs: root has no parent")
 	}
 	p = &Node{
-		lu: n.lu,
-		ID: n.ParentID,
+		lu:        n.lu,
+		ID:        n.ParentID,
+		SpaceRoot: n.SpaceRoot,
 	}
 
 	parentPath := n.lu.InternalPath(n.ParentID)
@@ -612,9 +614,12 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		if n.SpaceRoot != nil {
 			quotaPath = n.SpaceRoot.InternalPath()
 		} else {
-			sublog.Error().Err(err).Msg("error determining the space root node for quota")
+			root, err := n.lu.HomeOrRootNode(ctx)
+			if err != nil {
+				sublog.Error().Err(err).Msg("error determining the space root node for quota")
+			}
+			quotaPath = root.InternalPath()
 		}
-		quotaPath = n.InternalPath()
 		readQuotaIntoOpaque(ctx, quotaPath, ri)
 	}
 
