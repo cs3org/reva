@@ -26,7 +26,10 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/utils"
+	"google.golang.org/genproto/protobuf/field_mask"
 )
+
+//go:generate mockery -name Manager
 
 // Manager is the interface that manipulates shares.
 type Manager interface {
@@ -53,7 +56,7 @@ type Manager interface {
 	GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error)
 
 	// UpdateReceivedShare updates the received share with share state.
-	UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareReference, f *collaboration.UpdateReceivedShareRequest_UpdateField) (*collaboration.ReceivedShare, error)
+	UpdateReceivedShare(ctx context.Context, share *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error)
 }
 
 // GroupGranteeFilter is an abstraction for creating filter by grantee type group.

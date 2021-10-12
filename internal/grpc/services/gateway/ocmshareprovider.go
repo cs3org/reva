@@ -224,54 +224,64 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 		return res, nil
 	}
 
-	// we don't commit to storage invalid update fields or empty display names.
-	if req.Field.GetState() == ocm.ShareState_SHARE_STATE_INVALID && req.Field.GetDisplayName() == "" {
-		log.Error().Msg("the update field is invalid, aborting reference manipulation")
-		return res, nil
-
-	}
-
-	// TODO(labkode): if update field is displayName we need to do a rename on the storage to align
-	// share display name and storage filename.
-	if req.Field.GetState() != ocm.ShareState_SHARE_STATE_INVALID {
-		if req.Field.GetState() == ocm.ShareState_SHARE_STATE_ACCEPTED {
-			getShareReq := &ocm.GetReceivedOCMShareRequest{Ref: req.Ref}
-			getShareRes, err := s.GetReceivedOCMShare(ctx, getShareReq)
-			if err != nil {
-				log.Err(err).Msg("gateway: error calling GetReceivedShare")
-				return &ocm.UpdateReceivedOCMShareResponse{
-					Status: &rpc.Status{
-						Code: rpc.Code_CODE_INTERNAL,
+	// properties are updated in the order they appear in the field mask
+	// when an error occurs the request ends and no further fields are updated
+	for i := range req.UpdateMask.Paths {
+		switch req.UpdateMask.Paths[i] {
+		case "state":
+			switch req.GetShare().GetState() {
+			case ocm.ShareState_SHARE_STATE_ACCEPTED:
+				getShareReq := &ocm.GetReceivedOCMShareRequest{
+					Ref: &ocm.ShareReference{
+						Spec: &ocm.ShareReference_Id{
+							Id: req.Share.Share.Id,
+						},
 					},
-				}, nil
-			}
+				}
+				getShareRes, err := s.GetReceivedOCMShare(ctx, getShareReq)
+				if err != nil {
+					log.Err(err).Msg("gateway: error calling GetReceivedShare")
+					return &ocm.UpdateReceivedOCMShareResponse{
+						Status: &rpc.Status{
+							Code: rpc.Code_CODE_INTERNAL,
+						},
+					}, nil
+				}
 
-			if getShareRes.Status.Code != rpc.Code_CODE_OK {
-				log.Error().Msg("gateway: error calling GetReceivedShare")
+				if getShareRes.Status.Code != rpc.Code_CODE_OK {
+					log.Error().Msg("gateway: error calling GetReceivedShare")
+					return &ocm.UpdateReceivedOCMShareResponse{
+						Status: &rpc.Status{
+							Code: rpc.Code_CODE_INTERNAL,
+						},
+					}, nil
+				}
+
+				share := getShareRes.Share
+				if share == nil {
+					panic("gateway: error updating a received share: the share is nil")
+				}
+
+				createRefStatus, err := s.createOCMReference(ctx, share.Share)
 				return &ocm.UpdateReceivedOCMShareResponse{
-					Status: &rpc.Status{
-						Code: rpc.Code_CODE_INTERNAL,
-					},
-				}, nil
+					Status: createRefStatus,
+				}, err
+			case ocm.ShareState_SHARE_STATE_REJECTED:
+				s.removeReference(ctx, req.GetShare().GetShare().ResourceId) // error is logged inside removeReference
+				// FIXME we are ignoring an error from removeReference here
+				return res, nil
 			}
-
-			share := getShareRes.Share
-			if share == nil {
-				panic("gateway: error updating a received share: the share is nil")
-			}
-
-			createRefStatus, err := s.createOCMReference(ctx, share.Share)
+		case "mount_point":
+			// TODO(labkode): implementing updating mount point
+			err = errtypes.NotSupported("gateway: update of mount point is not yet implemented")
 			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: createRefStatus,
-			}, err
+				Status: status.NewUnimplemented(ctx, err, "error updating received share"),
+			}, nil
+		default:
+			return nil, errtypes.NotSupported("updating " + req.UpdateMask.Paths[i] + " is not supported")
 		}
 	}
-
-	// TODO(labkode): implementing updating display name
-	err = errtypes.NotSupported("gateway: update of display name is not yet implemented")
-	return &ocm.UpdateReceivedOCMShareResponse{
-		Status: status.NewUnimplemented(ctx, err, "error updating received share"),
-	}, nil
+	return res, nil
 }
 
 func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {

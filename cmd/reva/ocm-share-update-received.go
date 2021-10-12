@@ -25,6 +25,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 func ocmShareUpdateReceivedCommand() *command {
@@ -57,7 +58,7 @@ func ocmShareUpdateReceivedCommand() *command {
 
 		shareState := getOCMShareState(*state)
 
-		shareRequest := &ocm.UpdateReceivedOCMShareRequest{
+		shareRes, err := shareClient.GetReceivedOCMShare(ctx, &ocm.GetReceivedOCMShareRequest{
 			Ref: &ocm.ShareReference{
 				Spec: &ocm.ShareReference_Id{
 					Id: &ocm.ShareId{
@@ -65,20 +66,27 @@ func ocmShareUpdateReceivedCommand() *command {
 					},
 				},
 			},
-			Field: &ocm.UpdateReceivedOCMShareRequest_UpdateField{
-				Field: &ocm.UpdateReceivedOCMShareRequest_UpdateField_State{
-					State: shareState,
-				},
-			},
+		})
+		if err != nil {
+			return err
+		}
+		if shareRes.Status.Code != rpc.Code_CODE_OK {
+			return formatError(shareRes.Status)
+		}
+		shareRes.Share.State = shareState
+
+		shareRequest := &ocm.UpdateReceivedOCMShareRequest{
+			Share:      shareRes.Share,
+			UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
 		}
 
-		shareRes, err := shareClient.UpdateReceivedOCMShare(ctx, shareRequest)
+		updateRes, err := shareClient.UpdateReceivedOCMShare(ctx, shareRequest)
 		if err != nil {
 			return err
 		}
 
-		if shareRes.Status.Code != rpc.Code_CODE_OK {
-			return formatError(shareRes.Status)
+		if updateRes.Status.Code != rpc.Code_CODE_OK {
+			return formatError(updateRes.Status)
 		}
 
 		fmt.Println("OK")

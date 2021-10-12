@@ -29,6 +29,7 @@ import (
 	"time"
 
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -888,7 +889,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		// the following will check that:
 		// - the resource to delete is a share the current user received
 		// - signal the storage the delete must not land in the trashbin
-		// - delete the resource and update the share status to pending
+		// - delete the resource and update the share status to "rejected"
 		for _, share := range sRes.Shares {
 			if statRes != nil && (share.Share.ResourceId.OpaqueId == statRes.Info.Id.OpaqueId) && (share.Share.ResourceId.StorageId == statRes.Info.Id.StorageId) {
 				// this opaque needs explanation. It signals the storage the resource we're about to delete does not
@@ -903,21 +904,13 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 					},
 				}
 
-				// the following block takes care of updating the state of the share to "pending". This will ensure the user
+				// the following block takes care of updating the state of the share to "rejected". This will ensure the user
 				// can "Accept" the share once again.
+				// TODO should this be pending? If so, update the two comments above as well. If not, get rid of this comment.
+				share.State = collaboration.ShareState_SHARE_STATE_REJECTED
 				r := &collaboration.UpdateReceivedShareRequest{
-					Ref: &collaboration.ShareReference{
-						Spec: &collaboration.ShareReference_Id{
-							Id: &collaboration.ShareId{
-								OpaqueId: share.Share.Id.OpaqueId,
-							},
-						},
-					},
-					Field: &collaboration.UpdateReceivedShareRequest_UpdateField{
-						Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
-							State: collaboration.ShareState_SHARE_STATE_REJECTED,
-						},
-					},
+					Share:      share,
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
 				}
 
 				_, err := s.UpdateReceivedShare(ctx, r)

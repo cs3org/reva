@@ -266,7 +266,7 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 	// Note that we ask for the list of all available providers for a given resource
 	// even though we're only interested into the one set by the "app" parameter.
 	// A better call will be to issue a (to be added) GetAppProviderByName(app) method
-	// to just what we ask for.
+	// to just get what we ask for.
 	res, err := c.GetAppProviders(ctx, &registry.GetAppProvidersRequest{
 		ResourceInfo: ri,
 	})

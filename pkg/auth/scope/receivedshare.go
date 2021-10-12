@@ -39,7 +39,7 @@ func receivedShareScope(scope *authpb.Scope, resource interface{}) (bool, error)
 	case *collaboration.GetReceivedShareRequest:
 		return checkShareRef(share.Share, v.GetRef()), nil
 	case *collaboration.UpdateReceivedShareRequest:
-		return checkShareRef(share.Share, v.GetRef()), nil
+		return checkShare(share.Share, v.GetShare().GetShare()), nil
 	case string:
 		return checkSharePath(v) || checkResourcePath(v), nil
 	}

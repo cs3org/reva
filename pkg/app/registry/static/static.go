@@ -21,6 +21,7 @@ package static
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -28,8 +29,9 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/registry/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog/log"
+	orderedmap "github.com/wk8/go-ordered-map"
 )
 
 func init() {
@@ -37,26 +39,26 @@ func init() {
 }
 
 type mimeTypeConfig struct {
-	Extension   string `mapstructure:"extension"`
-	Name        string `mapstructure:"name"`
-	Description string `mapstructure:"description"`
-	Icon        string `mapstructure:"icon"`
-	DefaultApp  string `mapstructure:"default_app"`
+	MimeType      string `mapstructure:"mime_type"`
+	Extension     string `mapstructure:"extension"`
+	Name          string `mapstructure:"name"`
+	Description   string `mapstructure:"description"`
+	Icon          string `mapstructure:"icon"`
+	DefaultApp    string `mapstructure:"default_app"`
+	AllowCreation bool   `mapstructure:"allow_creation"`
+	// apps keeps the Providers able to open this mime type.
+	// the list will always keep the default AppProvider at the head
+	apps []*registrypb.ProviderInfo
 }
 
 type config struct {
-	Providers map[string]*registrypb.ProviderInfo `mapstructure:"providers"`
-	MimeTypes map[string]mimeTypeConfig           `mapstructure:"mime_types"`
+	Providers []*registrypb.ProviderInfo `mapstructure:"providers"`
+	MimeTypes []*mimeTypeConfig          `mapstructure:"mime_types"`
 }
 
 func (c *config) init() {
 	if len(c.Providers) == 0 {
-		c.Providers = map[string]*registrypb.ProviderInfo{
-			sharedconf.GetGatewaySVC(""): {
-				Address:   sharedconf.GetGatewaySVC(""),
-				MimeTypes: []string{},
-			},
-		}
+		c.Providers = []*registrypb.ProviderInfo{}
 	}
 }
 
@@ -68,15 +70,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-type mimeTypeIndex struct {
-	defaultApp string
-	apps       []string
-}
-
-type reg struct {
-	config    *config
+type manager struct {
 	providers map[string]*registrypb.ProviderInfo
-	mimetypes map[string]*mimeTypeIndex // map the mime type to the addresses of the corresponding providers
+	mimetypes *orderedmap.OrderedMap // map[string]*mimeTypeConfig  ->  map the mime type to the addresses of the corresponding providers
 	sync.RWMutex
 }
 
@@ -88,40 +84,57 @@ func New(m map[string]interface{}) (app.Registry, error) {
 	}
 	c.init()
 
-	newReg := reg{
-		config:    c,
-		providers: c.Providers,
-		mimetypes: make(map[string]*mimeTypeIndex),
+	mimetypes := orderedmap.New()
+
+	for _, mime := range c.MimeTypes {
+		mimetypes.Set(mime.MimeType, mime)
 	}
 
-	for addr, p := range c.Providers {
+	providerMap := make(map[string]*registrypb.ProviderInfo)
+	for _, p := range c.Providers {
+		providerMap[p.Address] = p
+	}
+
+	// register providers configured manually from the config
+	// (different from the others that are registering themselves -
+	// dinamically added invoking the AddProvider function)
+	for _, p := range c.Providers {
 		if p != nil {
 			for _, m := range p.MimeTypes {
-				_, ok := newReg.mimetypes[m]
-				if ok {
-					newReg.mimetypes[m].apps = append(newReg.mimetypes[m].apps, addr)
+				if v, ok := mimetypes.Get(m); ok {
+					mtc := v.(*mimeTypeConfig)
+					registerProvider(p, mtc)
 				} else {
-					// set a default app provider if provided
-					mime, in := c.MimeTypes[m]
-					if !in {
-						return nil, errtypes.NotFound(fmt.Sprintf("mimetype %s not found in the configuration", m))
-					}
-					newReg.mimetypes[m] = &mimeTypeIndex{apps: []string{addr}, defaultApp: mime.DefaultApp}
+					return nil, errtypes.NotFound(fmt.Sprintf("mimetype %s not found in the configuration", m))
 				}
 			}
 		}
 	}
-	return &newReg, nil
+
+	newManager := manager{
+		providers: providerMap,
+		mimetypes: mimetypes,
+	}
+	return &newManager, nil
 }
 
-func (b *reg) FindProviders(ctx context.Context, mimeType string) ([]*registrypb.ProviderInfo, error) {
+func registerProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
+	if providerIsDefaultForMimeType(p, mime) {
+		mime.apps = prependProvider(p, mime.apps)
+	} else {
+		mime.apps = append(mime.apps, p)
+	}
+}
+
+func (m *manager) FindProviders(ctx context.Context, mimeType string) ([]*registrypb.ProviderInfo, error) {
 	// find longest match
 	var match string
 
-	b.RLock()
-	defer b.RUnlock()
+	m.RLock()
+	defer m.RUnlock()
 
-	for prefix := range b.mimetypes {
+	for pair := m.mimetypes.Oldest(); pair != nil; pair = pair.Next() {
+		prefix := pair.Key.(string)
 		if strings.HasPrefix(mimeType, prefix) && len(prefix) > len(match) {
 			match = prefix
 		}
@@ -131,112 +144,167 @@ func (b *reg) FindProviders(ctx context.Context, mimeType string) ([]*registrypb
 		return nil, errtypes.NotFound("application provider not found for mime type " + mimeType)
 	}
 
-	var providers = make([]*registrypb.ProviderInfo, 0, len(b.mimetypes[match].apps))
-	for _, p := range b.mimetypes[match].apps {
-		providers = append(providers, b.providers[p])
+	mimeInterface, _ := m.mimetypes.Get(match)
+	mimeMatch := mimeInterface.(*mimeTypeConfig)
+	var providers = make([]*registrypb.ProviderInfo, 0, len(mimeMatch.apps))
+	for _, p := range mimeMatch.apps {
+		providers = append(providers, m.providers[p.Address])
 	}
 	return providers, nil
 }
 
-func (b *reg) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error {
-	b.Lock()
-	defer b.Unlock()
+func providerIsDefaultForMimeType(p *registrypb.ProviderInfo, mime *mimeTypeConfig) bool {
+	return p.Address == mime.DefaultApp || p.Name == mime.DefaultApp
+}
 
-	b.providers[p.Address] = p
+func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error {
+	m.Lock()
+	defer m.Unlock()
 
-	for _, m := range p.MimeTypes {
-		if _, ok := b.mimetypes[m]; ok {
-			b.mimetypes[m].apps = append(b.mimetypes[m].apps, p.Address)
+	m.providers[p.Address] = p
+
+	// log := appctx.GetLogger(ctx)
+
+	for _, mime := range p.MimeTypes {
+		if mimeTypeInterface, ok := m.mimetypes.Get(mime); ok {
+			// TODO (gdelmont): don't add to the list of apps an AppProvider
+			// that was already registered
+			mimeType := mimeTypeInterface.(*mimeTypeConfig)
+			registerProvider(p, mimeType)
 		} else {
-			b.mimetypes[m] = &mimeTypeIndex{apps: []string{p.Address}}
-		}
-		// set as default app if configured
-		if mimetypeConfig, ok := b.config.MimeTypes[m]; ok {
-			if mimetypeConfig.DefaultApp == p.Address || mimetypeConfig.DefaultApp == p.Name {
-				b.mimetypes[m].defaultApp = p.Address
-			}
+			// the mime type should be already registered as config in the AppRegistry
+			// we will create a new entry fot the mimetype, but leaving a warning for
+			// future log inspection for weird behaviour
+			// log.Warn().Msgf("config for mimetype '%s' not found while adding a new AppProvider", m)
+			m.mimetypes.Set(mime, dummyMimeType(mime, []*registrypb.ProviderInfo{p}))
 		}
 	}
 	return nil
 }
 
-func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
-	b.RLock()
-	defer b.RUnlock()
+func (m *manager) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+	m.RLock()
+	defer m.RUnlock()
 
-	providers := make([]*registrypb.ProviderInfo, 0, len(b.providers))
-	for _, p := range b.providers {
+	providers := make([]*registrypb.ProviderInfo, 0, len(m.providers))
+	for _, p := range m.providers {
 		providers = append(providers, p)
 	}
 	return providers, nil
 }
 
-func (b *reg) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.MimeTypeInfo, error) {
-	b.RLock()
-	defer b.RUnlock()
+func (m *manager) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.MimeTypeInfo, error) {
+	m.RLock()
+	defer m.RUnlock()
 
-	res := []*registrypb.MimeTypeInfo{}
-	mtmap := make(map[string]*registrypb.MimeTypeInfo)
-	for _, p := range b.providers {
-		t := *p
-		t.MimeTypes = nil
-		for _, m := range p.MimeTypes {
-			mime, ok := b.config.MimeTypes[m]
-			if !ok {
-				continue // skip mimetype if not on allow list
-			}
-			if _, ok := mtmap[m]; ok {
-				mtmap[m].AppProviders = append(mtmap[m].AppProviders, &t)
-			} else {
-				mtmap[m] = &registrypb.MimeTypeInfo{
-					MimeType:     m,
-					AppProviders: []*registrypb.ProviderInfo{&t},
-					Ext:          mime.Extension,
-					Name:         mime.Name,
-					Description:  mime.Description,
-					Icon:         mime.Icon,
-				}
-				res = append(res, mtmap[m])
-			}
-		}
+	res := make([]*registrypb.MimeTypeInfo, 0, m.mimetypes.Len())
+
+	for pair := m.mimetypes.Oldest(); pair != nil; pair = pair.Next() {
+
+		mime := pair.Value.(*mimeTypeConfig)
+
+		res = append(res, &registrypb.MimeTypeInfo{
+			MimeType:      mime.MimeType,
+			Ext:           mime.Extension,
+			Name:          mime.Name,
+			Description:   mime.Description,
+			Icon:          mime.Icon,
+			AppProviders:  mime.apps,
+			AllowCreation: mime.AllowCreation,
+		})
+
 	}
+
 	return res, nil
 }
 
-func (b *reg) SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registrypb.ProviderInfo) error {
-	b.Lock()
-	defer b.Unlock()
+// prepend an AppProvider obj to the list
+func prependProvider(n *registrypb.ProviderInfo, lst []*registrypb.ProviderInfo) []*registrypb.ProviderInfo {
+	lst = append(lst, &registrypb.ProviderInfo{})
+	copy(lst[1:], lst)
+	lst[0] = n
+	return lst
+}
 
-	_, ok := b.mimetypes[mimeType]
+func getIndex(lst []*registrypb.ProviderInfo, s *registrypb.ProviderInfo) (int, bool) {
+	for i, e := range lst {
+		if equalsProviderInfo(e, s) {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registrypb.ProviderInfo) error {
+	m.Lock()
+	defer m.Unlock()
+
+	mimeInterface, ok := m.mimetypes.Get(mimeType)
 	if ok {
-		b.mimetypes[mimeType].defaultApp = p.Address
-		// Add to list of apps if not present
-		var present bool
-		for _, pr := range b.mimetypes[mimeType].apps {
-			if pr == p.Address {
-				present = true
-				break
-			}
+		mime := mimeInterface.(*mimeTypeConfig)
+		mime.DefaultApp = p.Address
+
+		if index, in := getIndex(mime.apps, p); in {
+			// the element is in the list, we will remove it
+			// TODO (gdelmont): not the best way to remove an element from a slice
+			// but maybe we want to keep the order?
+			mime.apps = append(mime.apps[:index], mime.apps[index+1:]...)
 		}
-		if !present {
-			b.mimetypes[mimeType].apps = append(b.mimetypes[mimeType].apps, p.Address)
-		}
+		// prepend it to the front of the list
+		mime.apps = prependProvider(p, mime.apps)
+
 	} else {
-		b.mimetypes[mimeType] = &mimeTypeIndex{apps: []string{p.Address}, defaultApp: p.Address}
+		// the mime type should be already registered as config in the AppRegistry
+		// we will create a new entry fot the mimetype, but leaving a warning for
+		// future log inspection for weird behaviour
+		log.Warn().Msgf("config for mimetype '%s' not found while setting a new default AppProvider", mimeType)
+		m.mimetypes.Set(mimeType, dummyMimeType(mimeType, []*registrypb.ProviderInfo{p}))
 	}
 	return nil
 }
 
-func (b *reg) GetDefaultProviderForMimeType(ctx context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
-	b.RLock()
-	defer b.RUnlock()
+func dummyMimeType(m string, apps []*registrypb.ProviderInfo) *mimeTypeConfig {
+	return &mimeTypeConfig{
+		MimeType: m,
+		apps:     apps,
+		//Extension: "", // there is no meaningful general extension, so omit it
+		//Name:        "", // there is no meaningful general name, so omit it
+		//Description: "", // there is no meaningful general description, so omit it
+	}
+}
 
-	m, ok := b.mimetypes[mimeType]
+func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
+	m.RLock()
+	defer m.RUnlock()
+
+	mime, ok := m.mimetypes.Get(mimeType)
 	if ok {
-		if p, ok := b.providers[m.defaultApp]; ok {
+		if p, ok := m.providers[mime.(*mimeTypeConfig).DefaultApp]; ok {
 			return p, nil
 		}
 	}
 
 	return nil, errtypes.NotFound("default application provider not set for mime type " + mimeType)
+}
+
+func equalsProviderInfo(p1, p2 *registrypb.ProviderInfo) bool {
+	return p1.Address == p2.Address &&
+		p1.Name == p2.Name &&
+		reflect.DeepEqual(p1.MimeTypes, p2.MimeTypes) &&
+		p1.Description == p2.Description &&
+		p1.DesktopOnly == p2.DesktopOnly
+}
+
+// check that all providers in the two lists are equals
+func providersEquals(l1, l2 []*registrypb.ProviderInfo) bool {
+	if len(l1) != len(l2) {
+		return false
+	}
+
+	for i := 0; i < len(l1); i++ {
+		if !equalsProviderInfo(l1[i], l2[i]) {
+			return false
+		}
+	}
+	return true
 }
