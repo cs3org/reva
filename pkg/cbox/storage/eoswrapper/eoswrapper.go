@@ -44,7 +44,6 @@ const (
 	// We can use a regex for these, but that might have inferior performance
 	projectSpaceGroupsPrefix = "cernbox-project-"
 	projectSpaceAdminGroups  = "-admins"
-	projectSpaceWriterGroups = "-writers"
 )
 
 type wrapper struct {
@@ -148,8 +147,8 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 		user := ctxpkg.ContextMustGetUser(ctx)
 
 		for _, g := range user.Groups {
-			// Check if user is present in the admins or writers groups
-			if strings.HasPrefix(g, projectSpaceGroupsPrefix) && (strings.HasSuffix(g, projectSpaceAdminGroups) || strings.HasSuffix(g, projectSpaceWriterGroups)) {
+			// Check if user is present in the admins groups
+			if strings.HasPrefix(g, projectSpaceGroupsPrefix) && strings.HasSuffix(g, projectSpaceAdminGroups) {
 				userHasSharingAccess = true
 				break
 			}
