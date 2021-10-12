@@ -27,6 +27,7 @@ import (
 	"github.com/Masterminds/sprig"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
@@ -39,16 +40,15 @@ func init() {
 }
 
 const (
-	eosProjectsNamespace = "/eos/project"
+	eosProjectsNamespace = "/eos/project/"
 
 	// We can use a regex for these, but that might have inferior performance
-	projectSpaceGroupsPrefix = "cernbox-project-"
-	projectSpaceAdminGroups  = "-admins"
+	projectSpaceGroupsPrefix      = "cernbox-project-"
+	projectSpaceAdminGroupsSuffix = "-admins"
 )
 
 type wrapper struct {
 	storage.FS
-	config          *eosfs.Config
 	mountIDTemplate *template.Template
 }
 
@@ -90,7 +90,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	return &wrapper{FS: eos, config: c, mountIDTemplate: mountIDTemplate}, nil
+	return &wrapper{FS: eos, mountIDTemplate: mountIDTemplate}, nil
 }
 
 // We need to override the two methods, GetMD and ListFolder to fill the
@@ -142,13 +142,21 @@ func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) stri
 }
 
 func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.ResourceInfo) error {
-	if strings.HasPrefix(w.config.Namespace, eosProjectsNamespace) {
+	if strings.HasPrefix(r.Path, eosProjectsNamespace) {
+
+		// Extract project name from the path resembling /eos/project/c/cernbox/minutes/..
+		path := strings.TrimPrefix(r.Path, eosProjectsNamespace)
+		parts := strings.SplitN(path, "/", 3)
+		if len(parts) != 3 {
+			return errtypes.BadRequest("eoswrapper: path does not follow the allowed format")
+		}
+		adminGroup := projectSpaceGroupsPrefix + parts[1] + projectSpaceAdminGroupsSuffix
+
 		var userHasSharingAccess bool
 		user := ctxpkg.ContextMustGetUser(ctx)
 
 		for _, g := range user.Groups {
-			// Check if user is present in the admins groups
-			if strings.HasPrefix(g, projectSpaceGroupsPrefix) && strings.HasSuffix(g, projectSpaceAdminGroups) {
+			if g == adminGroup {
 				userHasSharingAccess = true
 				break
 			}
