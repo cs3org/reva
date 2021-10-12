@@ -21,10 +21,12 @@ package eoshome
 import (
 	"bytes"
 	"context"
+	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
@@ -36,8 +38,18 @@ func init() {
 	registry.Register("eoswrapper", New)
 }
 
+const (
+	eosProjectsNamespace = "/eos/project"
+
+	// We can use a regex for these, but that might have inferior performance
+	projectSpaceGroupsPrefix = "cernbox-project-"
+	projectSpaceAdminGroups  = "-admins"
+	projectSpaceWriterGroups = "-writers"
+)
+
 type wrapper struct {
 	storage.FS
+	config          *eosfs.Config
 	mountIDTemplate *template.Template
 }
 
@@ -79,7 +91,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	return &wrapper{FS: eos, mountIDTemplate: mountIDTemplate}, nil
+	return &wrapper{FS: eos, config: c, mountIDTemplate: mountIDTemplate}, nil
 }
 
 // We need to override the two methods, GetMD and ListFolder to fill the
@@ -96,6 +108,11 @@ func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	// Take the first letter of the resource path after the namespace has been removed.
 	// If it's empty, leave it empty to be filled by storageprovider.
 	res.Id.StorageId = w.getMountID(ctx, res)
+
+	if err = w.setProjectSharingPermissions(ctx, res); err != nil {
+		return nil, err
+	}
+
 	return res, nil
 
 }
@@ -107,6 +124,9 @@ func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	}
 	for _, r := range res {
 		r.Id.StorageId = w.getMountID(ctx, r)
+		if err = w.setProjectSharingPermissions(ctx, r); err != nil {
+			continue
+		}
 	}
 	return res, nil
 }
@@ -120,4 +140,26 @@ func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) stri
 		return ""
 	}
 	return b.String()
+}
+
+func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.ResourceInfo) error {
+	if strings.HasPrefix(w.config.Namespace, eosProjectsNamespace) {
+		var userHasSharingAccess bool
+		user := ctxpkg.ContextMustGetUser(ctx)
+
+		for _, g := range user.Groups {
+			// Check if user is present in the admins or writers groups
+			if strings.HasPrefix(g, projectSpaceGroupsPrefix) && (strings.HasSuffix(g, projectSpaceAdminGroups) || strings.HasSuffix(g, projectSpaceWriterGroups)) {
+				userHasSharingAccess = true
+				break
+			}
+		}
+
+		if userHasSharingAccess {
+			r.PermissionSet.AddGrant = true
+			r.PermissionSet.RemoveGrant = true
+			r.PermissionSet.UpdateGrant = true
+		}
+	}
+	return nil
 }

@@ -96,7 +96,7 @@ func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermission
 		rp.Delete = false
 	}
 
-	if strings.Contains(perm, "w") && strings.Contains(perm, "x") && !strings.Contains(perm, "!m") {
+	if strings.Contains(perm, "m") && !strings.Contains(perm, "!m") {
 		rp.AddGrant = true
 		rp.ListGrants = true
 		rp.RemoveGrant = true
