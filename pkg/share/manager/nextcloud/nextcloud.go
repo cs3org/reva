@@ -434,7 +434,7 @@ func (sm *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.Shar
 
 // UpdateReceivedShare as defined in the share.Manager interface
 // https://github.com/cs3org/reva/blob/v1.13.0/pkg/share/share.go#L29-L54
-func (sm *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
+func (sm Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
 	type paramsObj struct {
 		ReceivedShare *collaboration.ReceivedShare `json:"received_share"`
 		FieldMask     *field_mask.FieldMask        `json:"field_mask"`
