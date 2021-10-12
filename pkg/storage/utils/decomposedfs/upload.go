@@ -157,7 +157,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
 
-	_, err = checkQuota(ctx, fs, uint64(info.Size))
+	_, err = checkQuota(ctx, fs, n.SpaceRoot, uint64(info.Size))
 	if err != nil {
 		return nil, err
 	}
@@ -462,11 +462,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return
 	}
 
-	_, err = checkQuota(upload.ctx, upload.fs, uint64(fi.Size()))
-	if err != nil {
-		return err
-	}
-
 	n := node.New(
 		upload.info.Storage["NodeId"],
 		upload.info.Storage["NodeParentId"],
@@ -479,6 +474,11 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	n.SpaceRoot = &node.Node{
 		ID: upload.info.Storage["SpaceRoot"],
 	}
+	_, err = checkQuota(upload.ctx, upload.fs, n.SpaceRoot, uint64(fi.Size()))
+	if err != nil {
+		return err
+	}
+
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}
@@ -738,8 +738,14 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 	return
 }
 
-func checkQuota(ctx context.Context, fs *Decomposedfs, fileSize uint64) (quotaSufficient bool, err error) {
-	req := &provider.GetQuotaRequest{}
+func checkQuota(ctx context.Context, fs *Decomposedfs, spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
+	req := &provider.GetQuotaRequest{
+		Ref: &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				OpaqueId: spaceRoot.ID,
+			},
+		},
+	}
 	total, inUse, err := fs.GetQuota(ctx, req)
 	if err != nil {
 		switch err.(type) {

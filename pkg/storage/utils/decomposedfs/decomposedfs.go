@@ -212,7 +212,7 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 		return
 	}
 
-	if fs.o.TreeTimeAccounting {
+	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
 		homePath := h.InternalPath()
 		// mark the home node as the end of propagation
 		if err = xattr.Set(homePath, xattrs.PropagationAttr, []byte("1")); err != nil {

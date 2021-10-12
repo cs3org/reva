@@ -1181,7 +1181,17 @@ func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlink
 }
 
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
-	total, used, err := s.storage.GetQuota(ctx, req)
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.GetQuotaResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+	newReq := &provider.GetQuotaRequest{
+		Ref:    newRef,
+		Opaque: req.Opaque,
+	}
+	total, used, err := s.storage.GetQuota(ctx, newReq)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
