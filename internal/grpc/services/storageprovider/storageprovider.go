@@ -433,7 +433,14 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 
 // CreateStorageSpace creates a storage space
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return s.storage.CreateStorageSpace(ctx, req)
+	resp, err := s.storage.CreateStorageSpace(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp.StorageSpace.Root = &provider.ResourceId{StorageId: s.mountID, OpaqueId: resp.StorageSpace.Id.OpaqueId}
+	resp.StorageSpace.Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "!" + resp.StorageSpace.Id.OpaqueId}
+	return resp, nil
 }
 
 func hasNodeID(s *provider.StorageSpace) bool {
