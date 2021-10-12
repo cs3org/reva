@@ -1930,6 +1930,11 @@ func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provid
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
+// UpdateStorageSpace updates a storage space
+func (fs *owncloudsqlfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
+}
+
 func readChecksumIntoResourceChecksum(ctx context.Context, checksums, algo string, ri *provider.ResourceInfo) {
 	re := regexp.MustCompile(strings.ToUpper(algo) + `:(.*)`)
 	matches := re.FindStringSubmatch(checksums)

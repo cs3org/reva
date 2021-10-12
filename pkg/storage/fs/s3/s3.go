@@ -680,3 +680,8 @@ func (fs *s3FS) RestoreRecycleItem(ctx context.Context, basePath, key, relativeP
 func (fs *s3FS) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("list storage spaces")
 }
+
+// UpdateStorageSpace updates a storage space
+func (fs *s3FS) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
+}

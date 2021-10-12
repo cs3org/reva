@@ -2234,6 +2234,11 @@ func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListSt
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
+// UpdateStorageSpace updates a storage space
+func (fs *ocfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
+}
+
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 	var root string
 	if fs.c.EnableHome {

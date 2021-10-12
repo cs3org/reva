@@ -1264,6 +1264,11 @@ func (fs *localfs) ListStorageSpaces(ctx context.Context, filter []*provider.Lis
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
+// UpdateStorageSpace updates a storage space
+func (fs *localfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
+}
+
 func (fs *localfs) propagate(ctx context.Context, leafPath string) error {
 
 	var root string
