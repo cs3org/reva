@@ -30,17 +30,17 @@ func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request, ns string) {
 
 	isPublic := strings.Contains(r.Context().Value(ctxKeyBaseURI).(string), "public-files")
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set(HeaderContentType, "application/xml")
 	w.Header().Set("Allow", allow)
 	w.Header().Set("DAV", "1, 2")
 	w.Header().Set("MS-Author-Via", "DAV")
 	if !isPublic {
-		w.Header().Add("Access-Control-Allow-Headers", "Tus-Resumable")
-		w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
-		w.Header().Set("Tus-Resumable", "1.0.0") // TODO(jfd): only for dirs?
-		w.Header().Set("Tus-Version", "1.0.0")
-		w.Header().Set("Tus-Extension", "creation,creation-with-upload,checksum")
-		w.Header().Set("Tus-Checksum-Algorithm", "md5,sha1,crc32")
+		w.Header().Add(HeaderAccessControlAllowHeaders, HeaderTusResumable)
+		w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderTusVersion, HeaderTusExtension}, ","))
+		w.Header().Set(HeaderTusResumable, "1.0.0") // TODO(jfd): only for dirs?
+		w.Header().Set(HeaderTusVersion, "1.0.0")
+		w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
+		w.Header().Set(HeaderTusChecksumAlgorithm, "md5,sha1,crc32")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
