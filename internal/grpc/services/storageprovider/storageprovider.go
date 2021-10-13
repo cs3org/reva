@@ -926,8 +926,8 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 		return nil, err
 	}
 	// if a key was sent as opaque id purge only that item
-	if req.Key != "" {
-		key, itemPath := router.ShiftPath(req.Key)
+	key, itemPath := router.ShiftPath(req.Key)
+	if key != "" {
 		if err := s.storage.PurgeRecycleItem(ctx, ref.GetPath(), key, itemPath); err != nil {
 			var st *rpc.Status
 			switch err.(type) {

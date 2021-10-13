@@ -1467,9 +1467,32 @@ func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
 }
 
 func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
-	auth, err := fs.getUserAuthForPath(ctx, basePath)
-	if err != nil {
-		return nil, err
+	var auth eosclient.Authorization
+
+	if !fs.conf.EnableHome && basePath != "/" {
+		// We need to access the recycle bin for a non-home reference.
+		// We'll get the owner of the particular resource and impersonate them
+		// if we have access to it.
+		md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+		if err != nil {
+			return nil, err
+		}
+		if md.PermissionSet.ListRecycle {
+			auth, err = fs.getUIDGateway(ctx, md.Owner)
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		// We just act on the logged-in user's recycle bin
+		u, err := getUser(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "eosfs: no user in ctx")
+		}
+		auth, err = fs.getUserAuth(ctx, u, "")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth)
@@ -1493,44 +1516,35 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 }
 
 func (fs *eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
-	auth, err := fs.getUserAuthForPath(ctx, basePath)
-	if err != nil {
-		return err
-	}
-
-	return fs.c.RestoreDeletedEntry(ctx, auth, key)
-}
-
-func (fs *eosfs) getUserAuthForPath(ctx context.Context, path string) (eosclient.Authorization, error) {
 	var auth eosclient.Authorization
 
-	if !fs.conf.EnableHome && path != "/" {
-		// We need to list recycle for a non-home reference.
+	if !fs.conf.EnableHome && basePath != "/" {
+		// We need to access the recycle bin for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
-		md, err := fs.GetMD(ctx, &provider.Reference{Path: path}, nil)
+		md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
 		if err != nil {
-			return auth, err
+			return err
 		}
-		if md.PermissionSet.ListRecycle {
+		if md.PermissionSet.RestoreRecycleItem {
 			auth, err = fs.getUIDGateway(ctx, md.Owner)
 			if err != nil {
-				return auth, err
+				return err
 			}
 		}
 	} else {
-		// We just list the logged-in user's recycle bin
+		// We just act on the logged-in user's recycle bin
 		u, err := getUser(ctx)
 		if err != nil {
-			return auth, errors.Wrap(err, "eosfs: no user in ctx")
+			return errors.Wrap(err, "eosfs: no user in ctx")
 		}
 		auth, err = fs.getUserAuth(ctx, u, "")
 		if err != nil {
-			return auth, err
+			return err
 		}
 	}
 
-	return auth, nil
+	return fs.c.RestoreDeletedEntry(ctx, auth, key)
 }
 
 func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
