@@ -2162,7 +2162,7 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 	}
 }
 
-func (fs *ocfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error) {
+func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {

@@ -101,8 +101,8 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		var key string
 		key, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-		// If the recycle bin corresponding to a speicific path is requested, use that
-		// If not, we need to prepend the user home to the key and paths
+		// If the recycle bin corresponding to a speicific path is requested, use that.
+		// If not, we user the user home to route the request
 		basePath := r.URL.Query().Get("base_path")
 		if basePath == "" {
 			gc, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
@@ -216,7 +216,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	// ask gateway for recycle items
-	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{Path: path.Join(basePath, key, itemPath)}})
+	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{Path: basePath}, Key: path.Join(key, itemPath)})
 
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
@@ -244,7 +244,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 		for len(stack) > 0 {
 			key := stack[len(stack)-1]
-			getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{Path: path.Join(basePath, key)}})
+			getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{Path: basePath}, Key: key})
 			if err != nil {
 				sublog.Error().Err(err).Msg("error calling ListRecycle")
 				w.WriteHeader(http.StatusInternalServerError)

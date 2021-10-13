@@ -1711,7 +1711,7 @@ func (fs *owncloudsqlfs) convertToRecycleItem(ctx context.Context, md os.FileInf
 	}
 }
 
-func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error) {
+func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {

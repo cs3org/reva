@@ -584,7 +584,7 @@ var _ = Describe("Nextcloud", func() {
 			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			results, err := nc.ListRecycle(ctx, "asdf", "/some/file.txt")
+			results, err := nc.ListRecycle(ctx, "/", "asdf", "/some/file.txt")
 			Expect(err).ToNot(HaveOccurred())
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1085-L1110
 			Expect(len(results)).To(Equal(1))

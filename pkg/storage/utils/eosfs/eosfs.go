@@ -1466,7 +1466,7 @@ func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
 	return fs.c.PurgeDeletedEntries(ctx, auth)
 }
 
-func (fs *eosfs) ListRecycle(ctx context.Context, key, itemPath string) ([]*provider.RecycleItem, error) {
+func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: no user in ctx")

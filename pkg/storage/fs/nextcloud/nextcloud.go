@@ -442,7 +442,7 @@ func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Refe
 }
 
 // ListRecycle as defined in the storage.FS interface
-func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path string) ([]*provider.RecycleItem, error) {
+func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key string, relativePath string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("ListRecycle")
 	type paramsObj struct {
@@ -451,7 +451,7 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path strin
 	}
 	bodyObj := &paramsObj{
 		Key:  key,
-		Path: path,
+		Path: relativePath,
 	}
 	bodyStr, _ := json.Marshal(bodyObj)
 

@@ -2078,12 +2078,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 		}, nil
 	}
 
-	res, err := c.ListRecycle(ctx, &provider.ListRecycleRequest{
-		Opaque: req.Opaque,
-		FromTs: req.FromTs,
-		ToTs:   req.ToTs,
-		Ref:    req.Ref,
-	})
+	res, err := c.ListRecycle(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListRecycleRequest")
 	}
@@ -2115,10 +2110,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 		}, nil
 	}
 
-	res, err := c.PurgeRecycle(ctx, &provider.PurgeRecycleRequest{
-		Opaque: req.GetOpaque(),
-		Ref:    req.GetRef(),
-	})
+	res, err := c.PurgeRecycle(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
 	}
