@@ -791,7 +791,7 @@ func checkSpaceQuota(ctx context.Context, n *node.Node, fileSize uint64, fs *Dec
 		return false, err
 	}
 
-	var inUse uint64 = uint64(size)
+	var inUse = uint64(size)
 
 	// we are operating with bytes here. If the new uload bytes count is greater than the number of available bytes, or
 	// the quota was updated to a value that is inferior to the number of bytes used, then the quota was exceeded. We need
