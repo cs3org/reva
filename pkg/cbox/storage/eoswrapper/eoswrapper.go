@@ -151,21 +151,16 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 			return errtypes.BadRequest("eoswrapper: path does not follow the allowed format")
 		}
 		adminGroup := projectSpaceGroupsPrefix + parts[1] + projectSpaceAdminGroupsSuffix
-
-		var userHasSharingAccess bool
 		user := ctxpkg.ContextMustGetUser(ctx)
 
 		for _, g := range user.Groups {
 			if g == adminGroup {
-				userHasSharingAccess = true
-				break
+				r.PermissionSet.AddGrant = true
+				r.PermissionSet.RemoveGrant = true
+				r.PermissionSet.UpdateGrant = true
+				r.PermissionSet.ListGrants = true
+				return nil
 			}
-		}
-
-		if userHasSharingAccess {
-			r.PermissionSet.AddGrant = true
-			r.PermissionSet.RemoveGrant = true
-			r.PermissionSet.UpdateGrant = true
 		}
 	}
 	return nil
