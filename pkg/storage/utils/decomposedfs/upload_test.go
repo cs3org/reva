@@ -96,6 +96,7 @@ var _ = Describe("File uploads", func() {
 	Context("with insufficient permissions", func() {
 		BeforeEach(func() {
 			permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+			permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(provider.ResourcePermissions{GetQuota: true}, nil)
 		})
 
 		Describe("InitiateUpload", func() {
@@ -109,6 +110,7 @@ var _ = Describe("File uploads", func() {
 	Context("with sufficient permissions", func() {
 		BeforeEach(func() {
 			permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
+			permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(provider.ResourcePermissions{GetQuota: true}, nil)
 		})
 
 		Describe("InitiateUpload", func() {

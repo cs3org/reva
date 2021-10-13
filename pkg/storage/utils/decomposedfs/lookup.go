@@ -133,7 +133,9 @@ func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) 
 
 // RootNode returns the root node of the storage
 func (lu *Lookup) RootNode(ctx context.Context) (*node.Node, error) {
-	return node.New("root", "", "", 0, "", nil, lu), nil
+	n := node.New("root", "", "", 0, "", nil, lu)
+	n.Exists = true
+	return n, nil
 }
 
 // HomeNode returns the home node of a user
