@@ -132,6 +132,9 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 			"dir":      filepath.Dir(relative),
 		},
 		Size: uploadLength,
+		Storage: map[string]string{
+			"SpaceRoot": n.SpaceRoot.ID,
+		},
 	}
 
 	if metadata != nil {
@@ -250,16 +253,23 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error determining owner")
 	}
+	var spaceRoot string
+	if info.Storage != nil {
+		if spaceRoot, ok = info.Storage["SpaceRoot"]; !ok {
+			spaceRoot = n.SpaceRoot.ID
+		}
+	} else {
+		spaceRoot = n.SpaceRoot.ID
+	}
 
 	info.Storage = map[string]string{
-		// Todo: add storage space root
 		"Type":    "OCISStore",
 		"BinPath": binPath,
 
 		"NodeId":       n.ID,
 		"NodeParentId": n.ParentID,
 		"NodeName":     n.Name,
-		"SpaceRoot":    n.SpaceRoot.ID,
+		"SpaceRoot":    spaceRoot,
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
@@ -739,14 +749,13 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 }
 
 func checkQuota(ctx context.Context, fs *Decomposedfs, spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
-	req := &provider.GetQuotaRequest{
+	total, inUse, err := fs.GetQuota(ctx, &provider.GetQuotaRequest{
 		Ref: &provider.Reference{
 			ResourceId: &provider.ResourceId{
 				OpaqueId: spaceRoot.ID,
 			},
 		},
-	}
-	total, inUse, err := fs.GetQuota(ctx, req)
+	})
 	if err != nil {
 		switch err.(type) {
 		case errtypes.NotFound:

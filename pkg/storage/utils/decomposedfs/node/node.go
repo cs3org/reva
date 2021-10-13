@@ -611,16 +611,19 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// quota
 	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
 		var quotaPath string
-		if n.SpaceRoot != nil {
-			quotaPath = n.SpaceRoot.InternalPath()
-		} else {
+		if n.SpaceRoot == nil {
 			root, err := n.lu.HomeOrRootNode(ctx)
-			if err != nil {
-				sublog.Error().Err(err).Msg("error determining the space root node for quota")
+			if err == nil {
+				quotaPath = root.InternalPath()
+			} else {
+				sublog.Debug().Err(err).Msg("error determining the space root node for quota")
 			}
-			quotaPath = root.InternalPath()
+		} else {
+			quotaPath = n.SpaceRoot.InternalPath()
 		}
-		readQuotaIntoOpaque(ctx, quotaPath, ri)
+		if quotaPath != "" {
+			readQuotaIntoOpaque(ctx, quotaPath, ri)
+		}
 	}
 
 	// only read the requested metadata attributes
