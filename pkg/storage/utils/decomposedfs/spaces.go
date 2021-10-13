@@ -328,3 +328,37 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeI
 
 	return nil
 }
+
+// containedWithinSpace is a working name. It checks whether a reference is contained within a Storage Space or not. If
+// it is, it will return the root node of the storage space.
+func (fs *Decomposedfs) containedWithinSpace(ctx context.Context, n *node.Node) (*node.Node, bool) {
+	// get home or root node
+	// is the current node's parent the root of a storage space?
+	//	yes -> return the current node's parent and true
+	//	no -> traverse up the tree until the home / root node checking for storage space's root nodes.
+	root, err := fs.lu.HomeOrRootNode(ctx)
+	if err != nil {
+		return nil, false
+	}
+
+	if root.ID == n.ID {
+		// we reached the root node, and by definition it is not a space.
+		return nil, false
+	}
+
+	p, err := n.Parent()
+	if err != nil {
+		return nil, false
+	}
+
+	sName, err := xattr.Get(p.InternalPath(), xattrs.SpaceNameAttr)
+	if err != nil {
+		return nil, false
+	}
+
+	if len(sName) > 0 {
+		return p, true
+	}
+
+	return fs.containedWithinSpace(ctx, p)
+}

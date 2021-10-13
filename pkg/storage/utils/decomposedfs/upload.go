@@ -31,8 +31,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/pkg/xattr"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -157,9 +161,17 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
 
-	_, err = checkQuota(ctx, fs, uint64(info.Size))
-	if err != nil {
-		return nil, err
+	// if ref is the root of a storage space -> checkQuota should be done over this root folder.
+	if r, spaceContained := fs.containedWithinSpace(ctx, n); spaceContained {
+		_, err = checkSpaceQuota(ctx, r, uint64(info.Size), fs)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		_, err = checkQuota(ctx, fs, uint64(info.Size))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	upload, err := fs.NewUpload(ctx, info)
@@ -748,5 +760,45 @@ func checkQuota(ctx context.Context, fs *Decomposedfs, fileSize uint64) (quotaSu
 	if !(total == 0) && fileSize > total-inUse {
 		return false, errtypes.InsufficientStorage("quota exceeded")
 	}
+	return true, nil
+}
+
+func checkSpaceQuota(ctx context.Context, n *node.Node, fileSize uint64, fs *Decomposedfs) (quotaSufficient bool, err error) {
+	quotaB, err := xattr.Get(n.InternalPath(), xattrs.QuotaAttr)
+	if err != nil {
+		return false, err
+	}
+
+	total, err := strconv.ParseUint(string(quotaB), 10, 64)
+	if err != nil {
+		return false, err
+	}
+
+	var size int64
+	err = filepath.Walk(n.InternalPath(), func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.Name() == ".space" {
+			return nil
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	if err != nil {
+		return false, err
+	}
+
+	var inUse uint64 = uint64(size)
+
+	// we are operating with bytes here. If the new uload bytes count is greater than the number of available bytes, or
+	// the quota was updated to a value that is inferior to the number of bytes used, then the quota was exceeded. We need
+	// to guard against the later check.
+	if fileSize > total-inUse || total < inUse {
+		return false, errtypes.InsufficientStorage("quota exceeded")
+	}
+
 	return true, nil
 }
