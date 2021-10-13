@@ -21,10 +21,13 @@ package eoshome
 import (
 	"bytes"
 	"context"
+	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
@@ -35,6 +38,14 @@ import (
 func init() {
 	registry.Register("eoswrapper", New)
 }
+
+const (
+	eosProjectsNamespace = "/eos/project/"
+
+	// We can use a regex for these, but that might have inferior performance
+	projectSpaceGroupsPrefix      = "cernbox-project-"
+	projectSpaceAdminGroupsSuffix = "-admins"
+)
 
 type wrapper struct {
 	storage.FS
@@ -96,6 +107,11 @@ func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	// Take the first letter of the resource path after the namespace has been removed.
 	// If it's empty, leave it empty to be filled by storageprovider.
 	res.Id.StorageId = w.getMountID(ctx, res)
+
+	if err = w.setProjectSharingPermissions(ctx, res); err != nil {
+		return nil, err
+	}
+
 	return res, nil
 
 }
@@ -107,6 +123,9 @@ func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	}
 	for _, r := range res {
 		r.Id.StorageId = w.getMountID(ctx, r)
+		if err = w.setProjectSharingPermissions(ctx, r); err != nil {
+			continue
+		}
 	}
 	return res, nil
 }
@@ -120,4 +139,29 @@ func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) stri
 		return ""
 	}
 	return b.String()
+}
+
+func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.ResourceInfo) error {
+	if strings.HasPrefix(r.Path, eosProjectsNamespace) {
+
+		// Extract project name from the path resembling /eos/project/c/cernbox/minutes/..
+		path := strings.TrimPrefix(r.Path, eosProjectsNamespace)
+		parts := strings.SplitN(path, "/", 3)
+		if len(parts) != 3 {
+			return errtypes.BadRequest("eoswrapper: path does not follow the allowed format")
+		}
+		adminGroup := projectSpaceGroupsPrefix + parts[1] + projectSpaceAdminGroupsSuffix
+		user := ctxpkg.ContextMustGetUser(ctx)
+
+		for _, g := range user.Groups {
+			if g == adminGroup {
+				r.PermissionSet.AddGrant = true
+				r.PermissionSet.RemoveGrant = true
+				r.PermissionSet.UpdateGrant = true
+				r.PermissionSet.ListGrants = true
+				return nil
+			}
+		}
+	}
+	return nil
 }

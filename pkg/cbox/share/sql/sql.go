@@ -531,7 +531,7 @@ func translateFilters(filters []*collaboration.Filter) (string, []interface{}, e
 		case collaboration.Filter_TYPE_RESOURCE_ID:
 			filterQuery += "("
 			for i, f := range filters {
-				filterQuery += "(fileid_prefix =? AND item_source=?"
+				filterQuery += "(fileid_prefix =? AND item_source=?)"
 				params = append(params, f.GetResourceId().StorageId, f.GetResourceId().OpaqueId)
 
 				if i != len(filters)-1 {
