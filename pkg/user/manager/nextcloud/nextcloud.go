@@ -41,7 +41,9 @@ func init() {
 	registry.Register("nextcloud", New)
 }
 
-type manager struct {
+// Manager is the Nextcloud-based implementation of the share.Manager interface
+// see https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+type Manager struct {
 	client   *http.Client
 	endPoint string
 }
@@ -49,6 +51,7 @@ type manager struct {
 // UserManagerConfig contains config for a Nextcloud-based UserManager
 type UserManagerConfig struct {
 	EndPoint string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user management"`
+	MockHTTP bool   `mapstructure:"mock_http"`
 }
 
 func (c *UserManagerConfig) init() {
@@ -79,16 +82,30 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.init()
 
-	return NewUserManager(c, &http.Client{})
+	return NewUserManager(c)
 }
 
 // NewUserManager returns a new Nextcloud-based UserManager
-func NewUserManager(c *UserManagerConfig, hc *http.Client) (user.Manager, error) {
-	return &manager{
+func NewUserManager(c *UserManagerConfig) (*Manager, error) {
+	var client *http.Client
+	if c.MockHTTP {
+		// Wait for SetHTTPClient to be called later
+		client = nil
+	} else {
+		client = &http.Client{}
+	}
+
+	return &Manager{
 		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
-		client:   hc,
+		client:   client,
 	}, nil
+}
+
+// SetHTTPClient sets the HTTP client
+func (um *Manager) SetHTTPClient(c *http.Client) {
+	um.client = c
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
@@ -100,19 +117,19 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
-func (m *manager) do(ctx context.Context, a Action) (int, []byte, error) {
+func (um *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	user, err := getUser(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
-	url := m.endPoint + "~" + user.Username + "/api/user/" + a.verb
+	url := um.endPoint + "~" + user.Username + "/api/user/" + a.verb
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
 		panic(err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := m.client.Do(req)
+	resp, err := um.client.Do(req)
 	if err != nil {
 		panic(err)
 	}
@@ -122,16 +139,18 @@ func (m *manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	return resp.StatusCode, body, err
 }
 
-func (m *manager) Configure(ml map[string]interface{}) error {
+// Configure method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+func (um *Manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+// GetUser method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	bodyStr, err := json.Marshal(uid)
 	if err != nil {
 		return nil, err
 	}
-	_, respBody, err := m.do(ctx, Action{"GetUser", string(bodyStr)})
+	_, respBody, err := um.do(ctx, Action{"GetUser", string(bodyStr)})
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +163,8 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	return result, err
 }
 
-func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+// GetUserByClaim method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
 	type paramsObj struct {
 		Claim string `json:"claim"`
 		Value string `json:"value"`
@@ -154,7 +174,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 		Value: value,
 	}
 	bodyStr, _ := json.Marshal(bodyObj)
-	_, respBody, err := m.do(ctx, Action{"GetUserByClaim", string(bodyStr)})
+	_, respBody, err := um.do(ctx, Action{"GetUserByClaim", string(bodyStr)})
 	if err != nil {
 		return nil, err
 	}
@@ -166,12 +186,13 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	return result, err
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
+// GetUserGroups method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+func (um *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	bodyStr, err := json.Marshal(uid)
 	if err != nil {
 		return nil, err
 	}
-	_, respBody, err := m.do(ctx, Action{"GetUserGroups", string(bodyStr)})
+	_, respBody, err := um.do(ctx, Action{"GetUserGroups", string(bodyStr)})
 	if err != nil {
 		return nil, err
 	}
@@ -183,8 +204,9 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	return gs, err
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
-	_, respBody, err := m.do(ctx, Action{"FindUsers", query})
+// FindUsers method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+func (um *Manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+	_, respBody, err := um.do(ctx, Action{"FindUsers", query})
 	if err != nil {
 		return nil, err
 	}

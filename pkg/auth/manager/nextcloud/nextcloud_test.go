@@ -20,6 +20,7 @@ package nextcloud_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"google.golang.org/grpc/metadata"
@@ -37,6 +38,39 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
+	var conf *nextcloud.AuthManagerConfig
+
+	ncHost := os.Getenv("NEXTCLOUD")
+	fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
+	if len(ncHost) == 0 {
+		conf = &nextcloud.AuthManagerConfig{
+			EndPoint: "http://mock.com/apps/sciencemesh/",
+			MockHTTP: true,
+		}
+		nc, _ := nextcloud.NewAuthManager(conf)
+		called := make([]string, 0)
+		h := nextcloud.GetNextcloudServerMock(&called)
+		mock, teardown := nextcloud.TestingHTTPClient(h)
+		nc.SetHTTPClient(mock)
+		return nc, &called, teardown
+	}
+	conf = &nextcloud.AuthManagerConfig{
+		EndPoint: ncHost + "/apps/sciencemesh/",
+		MockHTTP: false,
+	}
+	nc, _ := nextcloud.NewAuthManager(conf)
+	return nc, nil, func() {}
+}
+
+func checkCalled(called *[]string, expected string) {
+	if called == nil {
+		return
+	}
+	Expect(len(*called)).To(Equal(1))
+	Expect((*called)[0]).To(Equal(expected))
+}
 
 var _ = Describe("Nextcloud", func() {
 	var (
@@ -94,14 +128,9 @@ var _ = Describe("Nextcloud", func() {
 	// Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error)
 	Describe("Authenticate", func() {
 		It("calls the GetHome endpoint", func() {
-			called := make([]string, 0)
-
-			h := nextcloud.GetNextcloudServerMock(&called)
-			mock, teardown := nextcloud.TestingHTTPClient(h)
+			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			am, _ := nextcloud.NewAuthManager(&nextcloud.AuthManagerConfig{
-				EndPoint: "http://mock.com/apps/sciencemesh/",
-			}, mock)
+
 			user, scope, err := am.Authenticate(ctx, "einstein", "relativity")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(user).To(Equal(&userpb.User{
@@ -128,8 +157,7 @@ var _ = Describe("Nextcloud", func() {
 					Role: 1,
 				},
 			}))
-			Expect(len(called)).To(Equal(1))
-			Expect(called[0]).To(Equal(`POST /apps/sciencemesh/~einstein/api/auth/Authenticate {"clientID":"einstein","clientSecret":"relativity"}`))
+			checkCalled(called, `POST /apps/sciencemesh/~einstein/api/auth/Authenticate {"clientID":"einstein","clientSecret":"relativity"}`)
 		})
 	})
 
