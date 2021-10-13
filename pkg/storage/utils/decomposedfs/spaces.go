@@ -351,10 +351,7 @@ func (fs *Decomposedfs) containedWithinSpace(ctx context.Context, n *node.Node) 
 		return nil, false
 	}
 
-	sName, err := xattr.Get(p.InternalPath(), xattrs.SpaceNameAttr)
-	if err != nil {
-		return nil, false
-	}
+	sName, _ := xattr.Get(p.InternalPath(), xattrs.SpaceNameAttr)
 
 	if len(sName) > 0 {
 		return p, true
