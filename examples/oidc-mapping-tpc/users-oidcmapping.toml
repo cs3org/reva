@@ -12,12 +12,12 @@ auth_manager = "oidcmapping"
 [grpc.services.authprovider.auth_managers.json]
 users = "users.json"
 [grpc.services.authprovider.auth_managers.oidcmapping]
-issuer = "http://iam-login-service:8080/"
+issuer = "https://iam-escape.cloud.cnaf.infn.it/"
 userprovidersvc = "0.0.0.0:13000"
 # The OIDC users mapping file path
-usersmapping = "/go/src/github/cs3org/reva/examples/oidc-mapping/users-oidcmapping.json"
+usersmapping = "users-oidcmapping.demo.json"
 
 [grpc.services.userprovider]
 driver = "json"
 [grpc.services.userprovider.drivers.json]
-users = "users.json"
+users = "users.demo.json"
