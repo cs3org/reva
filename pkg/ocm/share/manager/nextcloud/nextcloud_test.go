@@ -150,7 +150,27 @@ var _ = Describe("Nextcloud", func() {
 					},
 				},
 				Permissions: &ocm.SharePermissions{
-					Permissions: &provider.ResourcePermissions{},
+					Permissions: &provider.ResourcePermissions{
+						AddGrant:             false,
+						CreateContainer:      false,
+						Delete:               false,
+						GetPath:              true,
+						GetQuota:             false,
+						InitiateFileDownload: false,
+						InitiateFileUpload:   false,
+						ListGrants:           false,
+						ListContainer:        false,
+						ListFileVersions:     false,
+						ListRecycle:          false,
+						Move:                 false,
+						RemoveGrant:          false,
+						PurgeRecycle:         false,
+						RestoreFileVersion:   false,
+						RestoreRecycleItem:   false,
+						Stat:                 false,
+						UpdateGrant:          false,
+						DenyGrant:            false,
+					},
 				},
 			}
 			var name = "Some Name"
@@ -226,7 +246,7 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/Share {"md":{"opaque_id":"fileid-/some/path"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"permissions":{}}}}`)
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/Share {"md":{"opaque_id":"fileid-/some/path"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"permissions":{"get_path":true}}}}`)
 		})
 	})
 
