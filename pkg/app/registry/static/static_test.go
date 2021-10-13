@@ -306,6 +306,157 @@ func TestAddProvider(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "register a provider already registered",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "provider2",
+				},
+			},
+			initProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider1",
+					Name:      "provider1",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider2",
+					Name:      "provider2",
+				},
+			},
+			newProvider: &registrypb.ProviderInfo{
+				MimeTypes: []string{"text/json"},
+				Address:   "ip-provider1",
+				Name:      "provider1",
+			},
+			expectedProviders: map[string][]*registrypb.ProviderInfo{
+				"text/json": {
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider2",
+						Name:      "provider2",
+					},
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider1",
+						Name:      "provider1",
+					},
+				},
+			},
+		},
+		{
+			name: "register a provider already registered supporting more mime types",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "provider2",
+				},
+				{
+					MimeType:   "text/xml",
+					Extension:  "xml",
+					Name:       "XML File",
+					Icon:       "https://example.org/icons&file=xml.png",
+					DefaultApp: "provider1",
+				},
+			},
+			initProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider1",
+					Name:      "provider1",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider2",
+					Name:      "provider2",
+				},
+			},
+			newProvider: &registrypb.ProviderInfo{
+				MimeTypes: []string{"text/json", "text/xml"},
+				Address:   "ip-provider1",
+				Name:      "provider1",
+			},
+			expectedProviders: map[string][]*registrypb.ProviderInfo{
+				"text/json": {
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider2",
+						Name:      "provider2",
+					},
+					{
+						MimeTypes: []string{"text/json", "text/xml"},
+						Address:   "ip-provider1",
+						Name:      "provider1",
+					},
+				},
+				"text/xml": {
+					{
+						MimeTypes: []string{"text/json", "text/xml"},
+						Address:   "ip-provider1",
+						Name:      "provider1",
+					},
+				},
+			},
+		},
+		{
+			name: "register a provider already registered supporting less mime types",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "provider2",
+				},
+				{
+					MimeType:   "text/xml",
+					Extension:  "xml",
+					Name:       "XML File",
+					Icon:       "https://example.org/icons&file=xml.png",
+					DefaultApp: "provider1",
+				},
+			},
+			initProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json", "text/xml"},
+					Address:   "ip-provider1",
+					Name:      "provider1",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "ip-provider2",
+					Name:      "provider2",
+				},
+			},
+			newProvider: &registrypb.ProviderInfo{
+				MimeTypes: []string{"text/json"},
+				Address:   "ip-provider1",
+				Name:      "provider1",
+			},
+			expectedProviders: map[string][]*registrypb.ProviderInfo{
+				"text/json": {
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider2",
+						Name:      "provider2",
+					},
+					{
+						MimeTypes: []string{"text/json"},
+						Address:   "ip-provider1",
+						Name:      "provider1",
+					},
+				},
+				"text/xml": {},
+			},
+		},
 	}
 
 	for _, tt := range testCases {
