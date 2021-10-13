@@ -1146,7 +1146,7 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 	return fs.propagate(ctx, np)
 }
 
-func (fs *localfs) PurgeRecycleItem(ctx context.Context, key, itemPath string) error {
+func (fs *localfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
 	rp := fs.wrapRecycleBin(ctx, key)
 
 	if err := os.Remove(rp); err != nil {
@@ -1214,7 +1214,7 @@ func (fs *localfs) ListRecycle(ctx context.Context, basePath, key, relativePath 
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, key, itemPath string, restoreRef *provider.Reference) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 
 	suffix := path.Ext(key)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {

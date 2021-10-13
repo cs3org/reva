@@ -623,7 +623,7 @@ var _ = Describe("Nextcloud", func() {
 			}
 			path := "original/location/when/deleted.txt"
 			key := "asdf"
-			err := nc.RestoreRecycleItem(ctx, key, path, restoreRef)
+			err := nc.RestoreRecycleItem(ctx, "/", key, path, restoreRef)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/RestoreRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt","restoreRef":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}}`)
 		})
@@ -635,7 +635,7 @@ var _ = Describe("Nextcloud", func() {
 			defer teardown()
 			path := "original/location/when/deleted.txt"
 			key := "asdf"
-			err := nc.PurgeRecycleItem(ctx, key, path)
+			err := nc.PurgeRecycleItem(ctx, "/", key, path)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/PurgeRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt"}`)
 		})

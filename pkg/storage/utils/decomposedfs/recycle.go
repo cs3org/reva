@@ -258,11 +258,11 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context) ([]*provider.RecycleI
 }
 
 // RestoreRecycleItem restores the specified item
-func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error {
+func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	if restoreRef == nil {
 		restoreRef = &provider.Reference{}
 	}
-	rn, p, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, path, restoreRef.Path)
+	rn, p, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, relativePath, restoreRef.Path)
 	if err != nil {
 		return err
 	}
@@ -293,8 +293,8 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key, path string
 }
 
 // PurgeRecycleItem purges the specified item
-func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
-	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, key, path)
+func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, key, relativePath)
 	if err != nil {
 		return err
 	}

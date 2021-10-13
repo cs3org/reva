@@ -1579,7 +1579,7 @@ func (fs *owncloudsqlfs) RestoreRevision(ctx context.Context, ref *provider.Refe
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
+func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
@@ -1738,7 +1738,7 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativ
 	return items, nil
 }
 
-func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error {
+func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 
 	base, ttime, err := splitTrashKey(key)

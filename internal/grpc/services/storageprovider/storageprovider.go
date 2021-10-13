@@ -898,7 +898,8 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 	if err != nil {
 		return nil, err
 	}
-	if err := s.storage.RestoreRecycleItem(ctx, req.Key, ref.Path, req.RestoreRef); err != nil {
+	key, itemPath := router.ShiftPath(req.Key)
+	if err := s.storage.RestoreRecycleItem(ctx, ref.GetPath(), key, itemPath, req.RestoreRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -920,9 +921,14 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 }
 
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
+	ref, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
 	// if a key was sent as opaque id purge only that item
-	if req.GetRef() != nil && req.GetRef().GetResourceId() != nil && req.GetRef().GetResourceId().OpaqueId != "" {
-		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetResourceId().OpaqueId, req.GetRef().Path); err != nil {
+	if req.Key != "" {
+		key, itemPath := router.ShiftPath(req.Key)
+		if err := s.storage.PurgeRecycleItem(ctx, ref.GetPath(), key, itemPath); err != nil {
 			var st *rpc.Status
 			switch err.(type) {
 			case errtypes.IsNotFound:

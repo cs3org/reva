@@ -540,9 +540,9 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
 		// TODO currently limited to the home storage
 		Ref: &provider.Reference{
-			Path: path.Join(basePath, itemPath),
+			Path: basePath,
 		},
-		Key:        key,
+		Key:        path.Join(key, itemPath),
 		RestoreRef: &provider.Reference{Path: dst},
 	}
 
@@ -600,28 +600,14 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		return
 	}
 
-	sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: basePath}})
-	if err != nil {
-		sublog.Error().Err(err).Msg("error calling Stat")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if sRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, sRes.Status)
-		return
-	}
-
 	// set key as opaque id, the storageprovider will use it as the key for the
 	// storage drives  PurgeRecycleItem key call
 
 	req := &provider.PurgeRecycleRequest{
 		Ref: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: sRes.Info.Id.StorageId,
-				OpaqueId:  key,
-			},
-			Path: utils.MakeRelativePath(itemPath),
+			Path: basePath,
 		},
+		Key: path.Join(key, utils.MakeRelativePath(itemPath)),
 	}
 
 	res, err := client.PurgeRecycle(ctx, req)
@@ -634,9 +620,9 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	case rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusNoContent)
 	case rpc.Code_CODE_NOT_FOUND:
-		sublog.Debug().Str("storageid", sRes.Info.Id.StorageId).Str("key", key).Interface("status", res.Status).Msg("resource not found")
+		sublog.Debug().Str("path", basePath).Str("key", key).Interface("status", res.Status).Msg("resource not found")
 		w.WriteHeader(http.StatusConflict)
-		m := fmt.Sprintf("storageid %v not found", sRes.Info.Id.StorageId)
+		m := fmt.Sprintf("path %s not found", basePath)
 		b, err := Marshal(exception{
 			code:    SabredavConflict,
 			message: m,
