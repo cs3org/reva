@@ -1187,11 +1187,7 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
-	newReq := &provider.GetQuotaRequest{
-		Ref:    newRef,
-		Opaque: req.Opaque,
-	}
-	total, used, err := s.storage.GetQuota(ctx, newReq)
+	total, used, err := s.storage.GetQuota(ctx, newRef)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
