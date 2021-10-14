@@ -31,6 +31,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -749,23 +750,37 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 }
 
 func checkQuota(ctx context.Context, fs *Decomposedfs, spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
-	total, inUse, err := fs.GetQuota(ctx, &provider.GetQuotaRequest{
-		Ref: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				OpaqueId: spaceRoot.ID,
-			},
-		},
-	})
+
+	ri, err := spaceRoot.AsResourceInfo(ctx, nil, []string{"treesize", "quota"}, true)
 	if err != nil {
-		switch err.(type) {
-		case errtypes.NotFound:
-			// no quota for this storage (eg. no user context)
-			return true, nil
-		default:
-			return false, err
+		return false, err
+	}
+
+	quotaStr := node.QuotaUnknown
+	if ri.Opaque != nil && ri.Opaque.Map != nil && ri.Opaque.Map["quota"] != nil && ri.Opaque.Map["quota"].Decoder == "plain" {
+		quotaStr = string(ri.Opaque.Map["quota"].Value)
+	}
+
+	avail, err := fs.getAvailableSize(spaceRoot.InternalPath())
+	if err != nil {
+		return false, err
+	}
+	total := avail + ri.Size
+
+	switch {
+	case quotaStr == node.QuotaUncalculated, quotaStr == node.QuotaUnknown, quotaStr == node.QuotaUnlimited:
+	// best we can do is return current total
+	// TODO indicate unlimited total? -> in opaque data?
+	// TODO distinguish two errors: out of quota vs oud of disk space
+	// - the user might not be out of quota, but the disk might still be full -> admin needs to take care, actually LOG an ERR, ui needs to explain
+	default:
+		if quota, err := strconv.ParseUint(quotaStr, 10, 64); err == nil {
+			if total > quota {
+				total = quota
+			}
 		}
 	}
-	if !(total == 0) && fileSize > total-inUse {
+	if !(total == 0) && fileSize > total-ri.Size {
 		return false, errtypes.InsufficientStorage("quota exceeded")
 	}
 	return true, nil
