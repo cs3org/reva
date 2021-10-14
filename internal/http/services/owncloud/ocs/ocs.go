@@ -20,7 +20,11 @@ package ocs
 
 import (
 	"net/http"
+	"time"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/cache"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/cache/strategies/shareswithme"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/cache/strategies/shareswithothers"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/sharees"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
@@ -41,8 +45,9 @@ func init() {
 }
 
 type svc struct {
-	c      *config.Config
-	router *chi.Mux
+	c           *config.Config
+	router      *chi.Mux
+	cacheWarmup *cache.WarmupSet
 }
 
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
@@ -57,6 +62,10 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	s := &svc{
 		c:      conf,
 		router: r,
+	}
+
+	if conf.CacheWarmupDriver == "first-request" && conf.ResourceInfoCacheTTL > 0 {
+		s.cacheWarmup = cache.New(time.Second * time.Duration(conf.ResourceInfoCacheTTL))
 	}
 
 	if err := s.routerInit(); err != nil {
@@ -131,6 +140,13 @@ func (s *svc) routerInit() error {
 			})
 		})
 	})
+
+	// set some cache warmup
+	// TODO (gdelmont): set from a config?
+	if s.cacheWarmup != nil {
+		s.cacheWarmup.Register(shareswithothers.New(sharesHandler))
+		s.cacheWarmup.Register(shareswithme.New(sharesHandler))
+	}
 	return nil
 }
 
@@ -138,6 +154,12 @@ func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 		log.Debug().Str("path", r.URL.Path).Msg("ocs routing")
+
+		if s.cacheWarmup != nil {
+			// Warmup the share cache for the user
+			s.cacheWarmup.Warmup(r)
+		}
+
 		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
 		r.URL.RawPath = ""
 		s.router.ServeHTTP(w, r)
