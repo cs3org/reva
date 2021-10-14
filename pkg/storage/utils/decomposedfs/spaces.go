@@ -233,15 +233,13 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 					// do not list shares as spaces for the owner
 					continue
 				}
-			case "project":
+			default:
 				sname, err := xattr.Get(n.InternalPath(), xattrs.SpaceNameAttr)
 				if err != nil {
 					appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not read space name, attribute not found")
 					continue
 				}
 				space.Name = string(sname)
-			default:
-				space.Name = "root"
 			}
 
 			// filter out spaces user cannot access (currently based on stat permission)
