@@ -20,9 +20,10 @@ package machine
 
 import (
 	"context"
+	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -66,7 +67,7 @@ func New(conf map[string]interface{}) (auth.Manager, error) {
 }
 
 // Authenticate impersonate an user if the provided secret is equal to the api-key
-func (m *manager) Authenticate(ctx context.Context, username, secret string) (*user.User, map[string]*authpb.Scope, error) {
+func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userpb.User, map[string]*authpb.Scope, error) {
 	if m.APIKey != secret {
 		return nil, nil, errtypes.InvalidCredentials("")
 	}
@@ -76,9 +77,13 @@ func (m *manager) Authenticate(ctx context.Context, username, secret string) (*u
 		return nil, nil, err
 	}
 
-	userResponse, err := gtw.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
-		Claim: "username",
-		Value: username,
+	// username could be either a normal username or a string <claim>:<value>
+	// in the first case the calim is the default one, so "username"
+	claim, value := parseUser(user)
+
+	userResponse, err := gtw.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+		Claim: claim,
+		Value: value,
 	})
 
 	switch {
@@ -97,4 +102,12 @@ func (m *manager) Authenticate(ctx context.Context, username, secret string) (*u
 
 	return userResponse.GetUser(), scope, nil
 
+}
+
+func parseUser(user string) (string, string) {
+	s := strings.Split(user, ":")
+	if len(s) == 2 {
+		return s[0], s[1]
+	}
+	return "username", user
 }
