@@ -23,14 +23,12 @@ import (
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/token"
 	"github.com/rs/zerolog"
 )
 
 // Verifier is the function signature which every scope verifier should implement.
-type Verifier func(context.Context, *authpb.Scope, interface{}, *zerolog.Logger, gatewayv1beta1.GatewayAPIClient, token.Manager) (bool, error)
+type Verifier func(context.Context, *authpb.Scope, interface{}, *zerolog.Logger) (bool, error)
 
 var supportedScopes = map[string]Verifier{
 	"user":          userScope,
@@ -43,12 +41,12 @@ var supportedScopes = map[string]Verifier{
 
 // VerifyScope is the function to be called when dismantling tokens to check if
 // the token has access to a particular resource.
-func VerifyScope(ctx context.Context, scopeMap map[string]*authpb.Scope, resource interface{}, client gatewayv1beta1.GatewayAPIClient, mgr token.Manager) (bool, error) {
+func VerifyScope(ctx context.Context, scopeMap map[string]*authpb.Scope, resource interface{}) (bool, error) {
 	logger := appctx.GetLogger(ctx)
 	for k, scope := range scopeMap {
 		for s, f := range supportedScopes {
 			if strings.HasPrefix(k, s) {
-				if valid, err := f(ctx, scope, resource, logger, client, mgr); err == nil && valid {
+				if valid, err := f(ctx, scope, resource, logger); err == nil && valid {
 					return true, nil
 				}
 			}

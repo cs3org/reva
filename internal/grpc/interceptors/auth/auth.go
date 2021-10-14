@@ -224,7 +224,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 	}
 
 	// Check if access to the resource is in the scope of the token
-	ok, err := scope.VerifyScope(ctx, tokenScope, req, client, mgr)
+	ok, err := scope.VerifyScope(ctx, tokenScope, req)
 	if err != nil {
 		return nil, errtypes.InternalError("error verifying scope of access token")
 	}
@@ -232,7 +232,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		return u, nil
 	}
 
-	if err = expandAndVerifyScope(ctx, req, tokenScope, gatewayAddr); err != nil {
+	if err = expandAndVerifyScope(ctx, req, tokenScope, gatewayAddr, mgr); err != nil {
 		return nil, err
 	}
 
