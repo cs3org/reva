@@ -485,7 +485,19 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	}
 
 	log.Debug().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Msg("")
-	return info, nil
+	return c.mergeParentACLsForFiles(ctx, auth, info), nil
+}
+
+func (c *Client) mergeParentACLsForFiles(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
+	// We need to inherit the ACLs for the parent directory as these are not available for files
+	if !info.IsDir {
+		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
+		// Even if this call fails, at least return the current file object
+		if err == nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
+		}
+	}
+	return info
 }
 
 // SetAttr sets an extended attributes on a path.
@@ -627,7 +639,8 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 		}
 		info.Inode = inode
 	}
-	return info, nil
+
+	return c.mergeParentACLsForFiles(ctx, auth, info), nil
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal
