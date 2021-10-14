@@ -81,7 +81,7 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 
 	ref := &provider.Reference{Path: fn}
 
-	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, sublog)
+	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, false, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
@@ -115,7 +115,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		return
 	}
 
-	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, sublog)
+	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, true, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
@@ -162,7 +162,7 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 }
 
-func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, ref *provider.Reference, log zerolog.Logger) (*provider.ResourceInfo, []*provider.ResourceInfo, bool) {
+func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, ref *provider.Reference, spacesPropfind bool, log zerolog.Logger) (*provider.ResourceInfo, []*provider.ResourceInfo, bool) {
 	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
 		depth = "1"
@@ -223,7 +223,38 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 
 	parentInfo := res.Info
 	resourceInfos := []*provider.ResourceInfo{parentInfo}
-	if parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
+
+	switch {
+	case !spacesPropfind && parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		// The propfind is requested for a file that exists
+		// In this case, we can stat the parent directory and return both
+		parentPath := path.Dir(parentInfo.Path)
+		resourceInfos = append(resourceInfos, parentInfo)
+		parentRes, err := client.Stat(ctx, &provider.StatRequest{
+			Ref:                   &provider.Reference{Path: parentPath},
+			ArbitraryMetadataKeys: metadataKeys,
+		})
+		if err != nil {
+			log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return nil, nil, false
+		} else if parentRes.Status.Code != rpc.Code_CODE_OK {
+			if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				w.WriteHeader(http.StatusNotFound)
+				m := fmt.Sprintf("Resource %v not found", parentPath)
+				b, err := Marshal(exception{
+					code:    SabredavNotFound,
+					message: m,
+				})
+				HandleWebdavError(&log, w, b, err)
+				return nil, nil, false
+			}
+			HandleErrorStatus(&log, w, parentRes.Status)
+			return nil, nil, false
+		}
+		parentInfo = parentRes.Info
+
+	case parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
 		req := &provider.ListContainerRequest{
 			Ref:                   ref,
 			ArbitraryMetadataKeys: metadataKeys,
@@ -240,7 +271,8 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			return nil, nil, false
 		}
 		resourceInfos = append(resourceInfos, res.Infos...)
-	} else if depth == "infinity" {
+
+	case depth == "infinity":
 		// FIXME: doesn't work cross-storage as the results will have the wrong paths!
 		// use a stack to explore sub-containers breadth-first
 		stack := []string{parentInfo.Path}
