@@ -84,9 +84,11 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	}
 
-	// set default space quota
-	if err := n.SetMetadata(xattrs.QuotaAttr, strconv.FormatUint(req.GetQuota().QuotaMaxBytes, 10)); err != nil {
-		return nil, err
+	if q := req.GetQuota(); q != nil {
+		// set default space quota
+		if err := n.SetMetadata(xattrs.QuotaAttr, strconv.FormatUint(q.QuotaMaxBytes, 10)); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := n.SetMetadata(xattrs.SpaceNameAttr, req.Name); err != nil {
