@@ -607,7 +607,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		Ref: &provider.Reference{
 			Path: basePath,
 		},
-		Key: path.Join(key, utils.MakeRelativePath(itemPath)),
+		Key: path.Join(key, itemPath),
 	}
 
 	res, err := client.PurgeRecycle(ctx, req)
