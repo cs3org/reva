@@ -13,12 +13,15 @@ type strategy struct {
 	handler *shares.Handler
 }
 
+// New creates a SharesWithMe cache warmup
 func New(h *shares.Handler) cache.Warmuper {
 	return &strategy{
 		handler: h,
 	}
 }
 
+// Warmup returns a function that will fill the cache for the SharesWithMe
+// if the key string is in the cache
 func (s *strategy) Warmup(r *http.Request) (string, cache.ActionFunc) {
 	user := ctxpkg.ContextMustGetUser(r.Context())
 

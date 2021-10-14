@@ -22,9 +22,15 @@ type WarmupSet struct {
 	ttl     time.Duration
 }
 
+// ActionFunc defines the action to run in a warmup strategy
 type ActionFunc func()
 
+// A Warmuper is an object that defines a warmup strategy
 type Warmuper interface {
+	// Warmup is a function that return a function to exec as warmup
+	// strategy and a string key that defines when run this function.
+	// The object that will execute the function will check in the cache
+	// for the key and execute the key only if it not in the cache.
 	Warmup(r *http.Request) (string, ActionFunc)
 }
 
