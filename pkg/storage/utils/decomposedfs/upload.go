@@ -31,6 +31,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,9 +43,11 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
@@ -132,6 +135,9 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 			"dir":      filepath.Dir(relative),
 		},
 		Size: uploadLength,
+		Storage: map[string]string{
+			"SpaceRoot": n.SpaceRoot.ID,
+		},
 	}
 
 	if metadata != nil {
@@ -157,7 +163,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
 
-	_, err = checkQuota(ctx, fs, uint64(info.Size))
+	_, err = checkQuota(ctx, fs, n.SpaceRoot, uint64(info.Size))
 	if err != nil {
 		return nil, err
 	}
@@ -250,6 +256,14 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error determining owner")
 	}
+	var spaceRoot string
+	if info.Storage != nil {
+		if spaceRoot, ok = info.Storage["SpaceRoot"]; !ok {
+			spaceRoot = n.SpaceRoot.ID
+		}
+	} else {
+		spaceRoot = n.SpaceRoot.ID
+	}
 
 	info.Storage = map[string]string{
 		"Type":    "OCISStore",
@@ -258,6 +272,7 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		"NodeId":       n.ID,
 		"NodeParentId": n.ParentID,
 		"NodeName":     n.Name,
+		"SpaceRoot":    spaceRoot,
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
@@ -460,11 +475,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return
 	}
 
-	_, err = checkQuota(upload.ctx, upload.fs, uint64(fi.Size()))
-	if err != nil {
-		return err
-	}
-
 	n := node.New(
 		upload.info.Storage["NodeId"],
 		upload.info.Storage["NodeParentId"],
@@ -474,6 +484,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		nil,
 		upload.fs.lu,
 	)
+	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
+
+	_, err = checkQuota(upload.ctx, upload.fs, n.SpaceRoot, uint64(fi.Size()))
+	if err != nil {
+		return err
+	}
 
 	if n.ID == "" {
 		n.ID = uuid.New().String()
@@ -734,19 +750,27 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 	return
 }
 
-func checkQuota(ctx context.Context, fs *Decomposedfs, fileSize uint64) (quotaSufficient bool, err error) {
-	total, inUse, err := fs.GetQuota(ctx)
-	if err != nil {
-		switch err.(type) {
-		case errtypes.NotFound:
-			// no quota for this storage (eg. no user context)
-			return true, nil
-		default:
-			return false, err
-		}
+func checkQuota(ctx context.Context, fs *Decomposedfs, spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
+	used, _ := spaceRoot.GetTreeSize()
+	quotaB, _ := xattr.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
+	total, _ := strconv.ParseUint(string(quotaB), 10, 64)
+
+	enoughDiskSpace := enoughDiskSpace(fs, spaceRoot.InternalPath(), fileSize)
+	if !enoughDiskSpace {
+		return false, errtypes.InsufficientStorage("disk full")
 	}
-	if !(total == 0) && fileSize > total-inUse {
+
+	if (fileSize > total-used || total < used) && !enoughDiskSpace {
 		return false, errtypes.InsufficientStorage("quota exceeded")
 	}
 	return true, nil
+}
+
+func enoughDiskSpace(fs *Decomposedfs, path string, fileSize uint64) bool {
+	avalB, err := fs.getAvailableSize(path)
+	if err != nil {
+		return false
+	}
+
+	return avalB > fileSize
 }

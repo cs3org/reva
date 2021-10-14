@@ -45,23 +45,26 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 	if ref.ResourceId != nil {
 		// check if a storage space reference is used
 		// currently, the decomposed fs uses the root node id as the space id
-		n, err := lu.NodeFromID(ctx, ref.ResourceId)
+		spaceRoot, err := lu.NodeFromID(ctx, ref.ResourceId)
 		if err != nil {
 			return nil, err
 		}
-
-		p := filepath.Clean(ref.Path)
-		if p != "." {
-			// walk the relative path
-			n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error {
-				return nil
-			})
-			if err != nil {
-				return nil, err
+		n := spaceRoot
+		// is this a relative reference?
+		if ref.Path != "" {
+			p := filepath.Clean(ref.Path)
+			if p != "." {
+				// walk the relative path
+				n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error {
+					return nil
+				})
+				if err != nil {
+					return nil, err
+				}
 			}
-			return n, nil
+			// use reference id as space root for relative references
+			n.SpaceRoot = spaceRoot
 		}
-
 		return n, nil
 	}
 
@@ -78,23 +81,27 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string, followReferences 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
 
-	n, err := lu.HomeOrRootNode(ctx)
+	root, err := lu.HomeOrRootNode(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	n := root
 	// TODO collect permissions of the current user on every segment
 	fn = filepath.Clean(fn)
 	if fn != "/" && fn != "." {
 		n, err = lu.WalkPath(ctx, n, fn, followReferences, func(ctx context.Context, n *node.Node) error {
 			log.Debug().Interface("node", n).Msg("NodeFromPath() walk")
+			if n.SpaceRoot != nil && n.SpaceRoot != root {
+				root = n.SpaceRoot
+			}
 			return nil
 		})
 		if err != nil {
 			return nil, err
 		}
 	}
-
+	n.SpaceRoot = root
 	return n, nil
 }
 
@@ -129,7 +136,9 @@ func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) 
 
 // RootNode returns the root node of the storage
 func (lu *Lookup) RootNode(ctx context.Context) (*node.Node, error) {
-	return node.New("root", "", "", 0, "", nil, lu), nil
+	n := node.New("root", "", "", 0, "", nil, lu)
+	n.Exists = true
+	return n, nil
 }
 
 // HomeNode returns the home node of a user

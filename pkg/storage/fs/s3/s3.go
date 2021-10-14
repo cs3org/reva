@@ -268,7 +268,7 @@ func (fs *s3FS) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pro
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
-func (fs *s3FS) GetQuota(ctx context.Context) (uint64, uint64, error) {
+func (fs *s3FS) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
 	return 0, 0, nil
 }
 

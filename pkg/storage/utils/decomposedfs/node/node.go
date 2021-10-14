@@ -65,13 +65,14 @@ const (
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
 type Node struct {
-	ParentID string
-	ID       string
-	Name     string
-	Blobsize int64
-	BlobID   string
-	owner    *userpb.UserId
-	Exists   bool
+	ParentID  string
+	ID        string
+	Name      string
+	Blobsize  int64
+	BlobID    string
+	owner     *userpb.UserId
+	Exists    bool
+	SpaceRoot *Node
 
 	lu PathLookup
 }
@@ -191,6 +192,10 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	default:
 		return nil, errtypes.InternalError(err.Error())
 	}
+	// check if this is a space root
+	if _, err = xattr.Get(nodePath, xattrs.SpaceNameAttr); err == nil {
+		n.SpaceRoot = n
+	}
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, xattrs.NameAttr); err == nil {
 		n.Name = string(attrBytes)
@@ -239,9 +244,10 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	if err != nil {
 		if os.IsNotExist(err) || isNotDir(err) {
 			c := &Node{
-				lu:       n.lu,
-				ParentID: n.ID,
-				Name:     name,
+				lu:        n.lu,
+				ParentID:  n.ID,
+				Name:      name,
+				SpaceRoot: n.SpaceRoot,
 			}
 			return c, nil // if the file does not exist we return a node that has Exists = false
 		}
@@ -268,8 +274,9 @@ func (n *Node) Parent() (p *Node, err error) {
 		return nil, fmt.Errorf("Decomposedfs: root has no parent")
 	}
 	p = &Node{
-		lu: n.lu,
-		ID: n.ParentID,
+		lu:        n.lu,
+		ID:        n.ParentID,
+		SpaceRoot: n.SpaceRoot,
 	}
 
 	parentPath := n.lu.InternalPath(n.ParentID)
@@ -608,11 +615,18 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// quota
 	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
 		var quotaPath string
-		if r, err := n.lu.HomeOrRootNode(ctx); err == nil {
-			quotaPath = r.InternalPath()
-			readQuotaIntoOpaque(ctx, quotaPath, ri)
+		if n.SpaceRoot == nil {
+			root, err := n.lu.HomeOrRootNode(ctx)
+			if err == nil {
+				quotaPath = root.InternalPath()
+			} else {
+				sublog.Debug().Err(err).Msg("error determining the space root node for quota")
+			}
 		} else {
-			sublog.Error().Err(err).Msg("error determining home or root node for quota")
+			quotaPath = n.SpaceRoot.InternalPath()
+		}
+		if quotaPath != "" {
+			readQuotaIntoOpaque(ctx, quotaPath, ri)
 		}
 	}
 

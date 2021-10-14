@@ -128,10 +128,16 @@ func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
 
 // GetQuota returns the quota available
 // TODO Document in the cs3 should we return quota or free space?
-func (fs *Decomposedfs) GetQuota(ctx context.Context) (total uint64, inUse uint64, err error) {
+func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, inUse uint64, err error) {
 	var n *node.Node
-	if n, err = fs.lu.HomeOrRootNode(ctx); err != nil {
-		return 0, 0, err
+	if ref != nil {
+		if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+			return 0, 0, err
+		}
+	} else {
+		if n, err = fs.lu.HomeOrRootNode(ctx); err != nil {
+			return 0, 0, err
+		}
 	}
 
 	if !n.Exists {
@@ -206,13 +212,17 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 		return
 	}
 
-	if fs.o.TreeTimeAccounting {
+	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
 		homePath := h.InternalPath()
 		// mark the home node as the end of propagation
 		if err = xattr.Set(homePath, xattrs.PropagationAttr, []byte("1")); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", h).Msg("could not mark home as propagation root")
 			return
 		}
+	}
+
+	if err := n.SetMetadata(xattrs.SpaceNameAttr, u.DisplayName); err != nil {
+		return err
 	}
 
 	// add storage space
@@ -289,7 +299,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 
 	err = fs.tp.CreateDir(ctx, n)
 
-	if fs.o.TreeTimeAccounting {
+	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
 		nodePath := n.InternalPath()
 		// mark the home node as the end of propagation
 		if err = xattr.Set(nodePath, xattrs.PropagationAttr, []byte("1")); err != nil {

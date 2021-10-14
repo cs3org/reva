@@ -66,6 +66,14 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	}
 
+	// always enable propagation on the storage space root
+	nodePath := n.InternalPath()
+	// mark the space root node as the end of propagation
+	if err = xattr.Set(nodePath, xattrs.PropagationAttr, []byte("1")); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
+		return nil, err
+	}
+
 	if err := fs.createHiddenSpaceFolder(ctx, n); err != nil {
 		return nil, err
 	}
