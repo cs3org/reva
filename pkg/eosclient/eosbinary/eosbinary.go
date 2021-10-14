@@ -462,6 +462,15 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 		info.Inode = inode
 	}
 
+	// We need to inherit the ACLs for the parent directory as these are not available for files
+	if !info.IsDir {
+		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
+		// Even if this call fails, at least return the current file object
+		if err == nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
+		}
+	}
+
 	return info, nil
 }
 
@@ -472,12 +481,27 @@ func (c *Client) GetFileInfoByFXID(ctx context.Context, auth eosclient.Authoriza
 	if err != nil {
 		return nil, err
 	}
-	return c.parseFileInfo(stdout)
+
+	info, err := c.parseFileInfo(stdout)
+	if err != nil {
+		return nil, err
+	}
+
+	// We need to inherit the ACLs for the parent directory as these are not available for files
+	if !info.IsDir {
+		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
+		// Even if this call fails, at least return the current file object
+		if err == nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
+		}
+	}
+
+	return info, nil
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path
-func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
-	args := []string{"file", "info", path, "-m"}
+func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authorization, resourcePath string) (*eosclient.FileInfo, error) {
+	args := []string{"file", "info", resourcePath, "-m"}
 	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, err
@@ -487,9 +511,18 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 		return nil, err
 	}
 
-	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
-		if inode, err := c.getVersionFolderInode(ctx, auth, path); err == nil {
+	if c.opt.VersionInvariant && !isVersionFolder(resourcePath) && !info.IsDir {
+		if inode, err := c.getVersionFolderInode(ctx, auth, resourcePath); err == nil {
 			info.Inode = inode
+		}
+	}
+
+	// We need to inherit the ACLs for the parent directory as these are not available for files
+	if !info.IsDir {
+		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
+		// Even if this call fails, at least return the current file object
+		if err == nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
 		}
 	}
 
