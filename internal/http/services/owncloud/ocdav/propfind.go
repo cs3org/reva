@@ -223,7 +223,37 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 
 	parentInfo := res.Info
 	resourceInfos := []*provider.ResourceInfo{parentInfo}
-	if parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
+
+	switch {
+	case parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		// The propfind is requested for a file that exists
+		// In this case, we can stat the parent directory and return both
+		resourceInfos = append(resourceInfos, parentInfo)
+		parentRes, err := client.Stat(ctx, &provider.StatRequest{
+			Ref:                   &provider.Reference{Path: path.Dir(parentInfo.Path)},
+			ArbitraryMetadataKeys: metadataKeys,
+		})
+		if err != nil {
+			log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return nil, nil, false
+		} else if res.Status.Code != rpc.Code_CODE_OK {
+			if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				w.WriteHeader(http.StatusNotFound)
+				m := fmt.Sprintf("Resource %v not found", ref.Path)
+				b, err := Marshal(exception{
+					code:    SabredavNotFound,
+					message: m,
+				})
+				HandleWebdavError(&log, w, b, err)
+				return nil, nil, false
+			}
+			HandleErrorStatus(&log, w, res.Status)
+			return nil, nil, false
+		}
+		parentInfo = parentRes.Info
+
+	case parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
 		req := &provider.ListContainerRequest{
 			Ref:                   ref,
 			ArbitraryMetadataKeys: metadataKeys,
@@ -240,7 +270,8 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			return nil, nil, false
 		}
 		resourceInfos = append(resourceInfos, res.Infos...)
-	} else if depth == "infinity" {
+
+	case depth == "infinity":
 		// FIXME: doesn't work cross-storage as the results will have the wrong paths!
 		// use a stack to explore sub-containers breadth-first
 		stack := []string{parentInfo.Path}

@@ -1,0 +1,1 @@
+Enhancement: Handle propfind requests for existing files

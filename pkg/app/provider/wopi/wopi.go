@@ -196,7 +196,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		if body != nil {
 			sbody = string(body)
 		}
-		log.Warn().Msg(fmt.Sprintf("wopi: WOPI server returned HTTP %s, error was: %s", openRes.Status, sbody))
+		log.Warn().Msg(fmt.Sprintf("wopi: WOPI server returned HTTP %s to request %s, error was: %s", openRes.Status, httpReq.URL.String(), sbody))
 		return nil, errors.New(sbody)
 	}
 
