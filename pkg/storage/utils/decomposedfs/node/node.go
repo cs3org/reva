@@ -192,6 +192,10 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	default:
 		return nil, errtypes.InternalError(err.Error())
 	}
+	// check if this is a space root
+	if _, err = xattr.Get(nodePath, xattrs.SpaceNameAttr); err == nil {
+		n.SpaceRoot = n
+	}
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, xattrs.NameAttr); err == nil {
 		n.Name = string(attrBytes)
