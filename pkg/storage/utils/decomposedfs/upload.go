@@ -482,9 +482,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		nil,
 		upload.fs.lu,
 	)
-	n.SpaceRoot = &node.Node{
-		ID: upload.info.Storage["SpaceRoot"],
-	}
+	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
+
 	_, err = checkQuota(upload.ctx, upload.fs, n.SpaceRoot, uint64(fi.Size()))
 	if err != nil {
 		return err
