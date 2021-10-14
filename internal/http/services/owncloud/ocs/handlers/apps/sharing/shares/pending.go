@@ -26,14 +26,12 @@ import (
 	"sort"
 	"strconv"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
@@ -49,8 +47,7 @@ const (
 func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	shareID := chi.URLParam(r, shareID)
-
-	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	client, err := h.getClient()
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -75,17 +72,25 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// we need to sort the received shares by mount point in order to make things easier to evaluate.
+	base := path.Base(sharedResource.GetInfo().GetPath())
+	mount := base
 	var mountPoints []string
+	sharesToAccept := map[string]bool{shareID: true}
 	for _, s := range lrs.Shares {
-		if s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED && !utils.ResourceIDEqual(s.Share.ResourceId, share.Share.GetResourceId()) {
-			// only when the share is accepted there is a mount point.
-			mountPoints = append(mountPoints, s.MountPoint.Path)
+		if utils.ResourceIDEqual(s.Share.ResourceId, share.Share.GetResourceId()) {
+			if s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
+				mount = s.MountPoint.Path
+			} else {
+				sharesToAccept[s.Share.Id.OpaqueId] = true
+			}
+		} else {
+			if s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
+				mountPoints = append(mountPoints, s.MountPoint.Path)
+			}
 		}
 	}
 
 	sort.Strings(mountPoints)
-	base := path.Base(sharedResource.GetInfo().GetPath())
-	mount := base
 
 	// now we have a list of shares, we want to iterate over all of them and check for name collisions
 	for i, mp := range mountPoints {
@@ -94,7 +99,9 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.updateReceivedShare(w, r, shareID, false, mount)
+	for id, _ := range sharesToAccept {
+		h.updateReceivedShare(w, r, id, false, mount)
+	}
 }
 
 // RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}
@@ -107,7 +114,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 	ctx := r.Context()
 	logger := appctx.GetLogger(ctx)
 
-	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	client, err := h.getClient()
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -173,7 +180,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 }
 
 // getShareFromID uses a client to the gateway to fetch a share based on its ID.
-func getShareFromID(ctx context.Context, client gateway.GatewayAPIClient, shareID string) (*collaboration.GetShareResponse, *response.Response) {
+func getShareFromID(ctx context.Context, client GatewayClient, shareID string) (*collaboration.GetShareResponse, *response.Response) {
 	s, err := client.GetShare(ctx, &collaboration.GetShareRequest{
 		Ref: &collaboration.ShareReference{
 			Spec: &collaboration.ShareReference_Id{
@@ -202,7 +209,7 @@ func getShareFromID(ctx context.Context, client gateway.GatewayAPIClient, shareI
 }
 
 // getSharedResource attempts to get a shared resource from the storage from the resource reference.
-func getSharedResource(ctx context.Context, client gateway.GatewayAPIClient, share *collaboration.GetShareResponse) (*provider.StatResponse, *response.Response) {
+func getSharedResource(ctx context.Context, client GatewayClient, share *collaboration.GetShareResponse) (*provider.StatResponse, *response.Response) {
 	res, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
 			ResourceId: share.Share.GetResourceId(),
@@ -226,7 +233,7 @@ func getSharedResource(ctx context.Context, client gateway.GatewayAPIClient, sha
 }
 
 // getSharedResource gets the list of all shares for the current user.
-func getSharesList(ctx context.Context, client gateway.GatewayAPIClient) (*collaboration.ListReceivedSharesResponse, *response.Response) {
+func getSharesList(ctx context.Context, client GatewayClient) (*collaboration.ListReceivedSharesResponse, *response.Response) {
 	shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 	if err != nil {
 		e := errors.Wrap(err, "error getting shares list")

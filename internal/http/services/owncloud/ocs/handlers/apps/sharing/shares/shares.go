@@ -32,7 +32,6 @@ import (
 	"text/template"
 	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -41,6 +40,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
+	grpc "google.golang.org/grpc"
 
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/bluele/gcache"
@@ -58,6 +58,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+//go:generate mockery -name GatewayClient
+
 const (
 	storageIDPrefix string = "shared::"
 )
@@ -72,6 +74,8 @@ type Handler struct {
 	userIdentifierCache    *ttlcache.Cache
 	resourceInfoCache      gcache.Cache
 	resourceInfoCacheTTL   time.Duration
+
+	getClient GatewayClientGetter
 }
 
 // we only cache the minimal set of data instead of the full user metadata
@@ -88,8 +92,22 @@ func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
 	return nil, fmt.Errorf("driver not found: %s", c.CacheWarmupDriver)
 }
 
+type GatewayClientGetter func() (GatewayClient, error)
+type GatewayClient interface {
+	Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error)
+	ListContainer(ctx context.Context, in *provider.ListContainerRequest, opts ...grpc.CallOption) (*provider.ListContainerResponse, error)
+
+	GetShare(ctx context.Context, in *collaboration.GetShareRequest, opts ...grpc.CallOption) (*collaboration.GetShareResponse, error)
+	CreateShare(ctx context.Context, in *collaboration.CreateShareRequest, opts ...grpc.CallOption) (*collaboration.CreateShareResponse, error)
+	ListReceivedShares(ctx context.Context, in *collaboration.ListReceivedSharesRequest, opts ...grpc.CallOption) (*collaboration.ListReceivedSharesResponse, error)
+	UpdateReceivedShare(ctx context.Context, in *collaboration.UpdateReceivedShareRequest, opts ...grpc.CallOption) (*collaboration.UpdateReceivedShareResponse, error)
+
+	GetGroup(ctx context.Context, in *grouppb.GetGroupRequest, opts ...grpc.CallOption) (*grouppb.GetGroupResponse, error)
+	GetUser(ctx context.Context, in *userpb.GetUserRequest, opts ...grpc.CallOption) (*userpb.GetUserResponse, error)
+}
+
 // Init initializes this and any contained handlers
-func (h *Handler) Init(c *config.Config) {
+func (h *Handler) InitDefault(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
@@ -108,6 +126,12 @@ func (h *Handler) Init(c *config.Config) {
 			go h.startCacheWarmup(cwm)
 		}
 	}
+	h.getClient = h.getPoolClient
+}
+
+func (h *Handler) Init(c *config.Config, clientGetter GatewayClientGetter) {
+	h.InitDefault(c)
+	h.getClient = clientGetter
 }
 
 func (h *Handler) startCacheWarmup(c cache.Warmup) {
@@ -513,7 +537,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	stateFilter := getStateFilter(r.FormValue("state"))
 
 	log := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	client, err := h.getClient()
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -878,7 +902,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 }
 
 // mustGetIdentifiers always returns a struct with identifiers, if the user or group could not be found they will all be empty
-func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.GatewayAPIClient, id string, isGroup bool) *userIdentifiers {
+func (h *Handler) mustGetIdentifiers(ctx context.Context, client GatewayClient, id string, isGroup bool) *userIdentifiers {
 	sublog := appctx.GetLogger(ctx).With().Str("id", id).Logger()
 	if id == "" {
 		return &userIdentifiers{}
@@ -956,7 +980,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 	return ui
 }
 
-func (h *Handler) mapUserIds(ctx context.Context, client gateway.GatewayAPIClient, s *conversions.ShareData) {
+func (h *Handler) mapUserIds(ctx context.Context, client GatewayClient, s *conversions.ShareData) {
 	if s.UIDOwner != "" {
 		owner := h.mustGetIdentifiers(ctx, client, s.UIDOwner, false)
 		s.UIDOwner = owner.Username
@@ -1001,19 +1025,19 @@ func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentif
 	return buf.String()
 }
 
-func (h *Handler) getResourceInfoByPath(ctx context.Context, client gateway.GatewayAPIClient, path string) (*provider.ResourceInfo, *rpc.Status, error) {
+func (h *Handler) getResourceInfoByPath(ctx context.Context, client GatewayClient, path string) (*provider.ResourceInfo, *rpc.Status, error) {
 	return h.getResourceInfo(ctx, client, path, &provider.Reference{
 		Path: path,
 	})
 }
 
-func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
+func (h *Handler) getResourceInfoByID(ctx context.Context, client GatewayClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
 	return h.getResourceInfo(ctx, client, wrapResourceID(id), &provider.Reference{ResourceId: id})
 }
 
 // getResourceInfo retrieves the resource info to a target.
 // This method utilizes caching if it is enabled.
-func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPIClient, key string, ref *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
+func (h *Handler) getResourceInfo(ctx context.Context, client GatewayClient, key string, ref *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
 	logger := appctx.GetLogger(ctx)
 
 	var pinfo *provider.ResourceInfo
@@ -1047,7 +1071,7 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	return pinfo, status, nil
 }
 
-func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) {
+func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client GatewayClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) {
 	createShareResponse, err := client.CreateShare(ctx, req)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)
@@ -1106,4 +1130,8 @@ func getStateFilter(s string) collaboration.ShareState {
 		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED
 	}
 	return stateFilter
+}
+
+func (h *Handler) getPoolClient() (GatewayClient, error) {
+	return pool.GetGatewayServiceClient(h.gatewayAddr)
 }
