@@ -4,5 +4,5 @@ Implementation of [cs3org/cs3apis#147](https://github.com/cs3org/cs3apis/pull/14
 
 Make the cs3apis accept a Reference in the getQuota Request to limit the call to a specific storage space.
 
-https://github.com/cs3org/reva/issues/2152
-https://github.com/cs3org/reva/issues/2178
+https://github.com/cs3org/reva/pull/2152
+https://github.com/cs3org/reva/pull/2178
