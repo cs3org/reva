@@ -484,6 +484,15 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 		info.Inode = inode
 	}
 
+	// We need to inherit the ACLs for the parent directory as these are not available for files
+	if !info.IsDir {
+		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
+		// Even if this call fails, at least return the current file object
+		if err == nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
+		}
+	}
+
 	log.Debug().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Msg("")
 	return info, nil
 }
@@ -576,9 +585,9 @@ func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, name
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path
-func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
+func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authorization, filePath string) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "GetFileInfoByPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
+	log.Info().Str("func", "GetFileInfoByPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", filePath).Msg("")
 
 	// Initialize the common fields of the MDReq
 	mdrq, err := c.initMDRequest(ctx, auth)
@@ -588,18 +597,18 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 
 	mdrq.Type = erpc.TYPE_STAT
 	mdrq.Id = new(erpc.MDId)
-	mdrq.Id.Path = []byte(path)
+	mdrq.Id.Path = []byte(filePath)
 
 	// Now send the req and see what happens
 	resp, err := c.cl.MD(ctx, mdrq)
 	if err != nil {
-		log.Error().Str("func", "GetFileInfoByPath").Err(err).Str("path", path).Str("err", err.Error())
+		log.Error().Str("func", "GetFileInfoByPath").Err(err).Str("path", filePath).Str("err", err.Error())
 
 		return nil, err
 	}
 	rsp, err := resp.Recv()
 	if err != nil {
-		log.Error().Str("func", "GetFileInfoByPath").Err(err).Str("path", path).Str("err", err.Error())
+		log.Error().Str("func", "GetFileInfoByPath").Err(err).Str("path", filePath).Str("err", err.Error())
 
 		// FIXME: this is very very bad and poisonous for the project!!!!!!!
 		// Apparently here we have to assume that an error in Recv() means "file not found"
@@ -610,23 +619,33 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	}
 
 	if rsp == nil {
-		return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+		return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", filePath))
 	}
 
-	log.Debug().Str("func", "GetFileInfoByPath").Str("path", path).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
+	log.Debug().Str("func", "GetFileInfoByPath").Str("path", filePath).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-	info, err := c.grpcMDResponseToFileInfo(rsp, filepath.Dir(path))
+	info, err := c.grpcMDResponseToFileInfo(rsp, filepath.Dir(filePath))
 	if err != nil {
 		return nil, err
 	}
 
-	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
-		inode, err := c.getVersionFolderInode(ctx, auth, path)
+	if c.opt.VersionInvariant && !isVersionFolder(filePath) && !info.IsDir {
+		inode, err := c.getVersionFolderInode(ctx, auth, filePath)
 		if err != nil {
 			return nil, err
 		}
 		info.Inode = inode
 	}
+
+	// We need to inherit the ACLs for the parent directory as these are not available for files
+	if !info.IsDir {
+		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
+		// Even if this call fails, at least return the current file object
+		if err == nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
+		}
+	}
+
 	return info, nil
 }
 
