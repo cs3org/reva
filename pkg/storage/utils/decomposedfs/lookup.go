@@ -92,7 +92,7 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string, followReferences 
 	if fn != "/" && fn != "." {
 		n, err = lu.WalkPath(ctx, n, fn, followReferences, func(ctx context.Context, n *node.Node) error {
 			log.Debug().Interface("node", n).Msg("NodeFromPath() walk")
-			if n.SpaceRoot != root {
+			if n.SpaceRoot != nil && n.SpaceRoot != root {
 				root = n.SpaceRoot
 			}
 			return nil

@@ -221,6 +221,10 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 		}
 	}
 
+	if err := n.SetMetadata(xattrs.SpaceNameAttr, u.DisplayName); err != nil {
+		return err
+	}
+
 	// add storage space
 	if err := fs.createStorageSpace(ctx, "personal", h.ID); err != nil {
 		return err
