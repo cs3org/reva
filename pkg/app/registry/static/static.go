@@ -21,7 +21,6 @@ package static
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 
@@ -118,7 +117,20 @@ func New(m map[string]interface{}) (app.Registry, error) {
 	return &newManager, nil
 }
 
+// remove a provider from the provider list in a mime type
+// it's a no-op if the provider is not in the list of providers in the mime type
+func unregisterProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
+	if index, in := getIndex(mime.apps, p); in {
+		// remove the provider from the list
+		mime.apps = append(mime.apps[:index], mime.apps[index+1:]...)
+	}
+}
+
 func registerProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
+	// the app provider could be previously registered to the same mime type list
+	// so we will remove it
+	unregisterProvider(p, mime)
+
 	if providerIsDefaultForMimeType(p, mime) {
 		mime.apps = prependProvider(p, mime.apps)
 	} else {
@@ -161,14 +173,25 @@ func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) e
 	m.Lock()
 	defer m.Unlock()
 
-	m.providers[p.Address] = p
+	// check if the provider was already registered
+	// if it's the case, we have to unregister it
+	// from all the old mime types
+	if oldP, ok := m.providers[p.Address]; ok {
+		oldMimeTypes := oldP.MimeTypes
+		for _, mimeName := range oldMimeTypes {
+			mimeIf, ok := m.mimetypes.Get(mimeName)
+			if !ok {
+				continue
+			}
+			mime := mimeIf.(*mimeTypeConfig)
+			unregisterProvider(p, mime)
+		}
+	}
 
-	// log := appctx.GetLogger(ctx)
+	m.providers[p.Address] = p
 
 	for _, mime := range p.MimeTypes {
 		if mimeTypeInterface, ok := m.mimetypes.Get(mime); ok {
-			// TODO (gdelmont): don't add to the list of apps an AppProvider
-			// that was already registered
 			mimeType := mimeTypeInterface.(*mimeTypeConfig)
 			registerProvider(p, mimeType)
 		} else {
@@ -288,11 +311,7 @@ func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType st
 }
 
 func equalsProviderInfo(p1, p2 *registrypb.ProviderInfo) bool {
-	return p1.Address == p2.Address &&
-		p1.Name == p2.Name &&
-		reflect.DeepEqual(p1.MimeTypes, p2.MimeTypes) &&
-		p1.Description == p2.Description &&
-		p1.DesktopOnly == p2.DesktopOnly
+	return p1.Name == p2.Name
 }
 
 // check that all providers in the two lists are equals
