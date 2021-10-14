@@ -228,19 +228,20 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	case parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
 		// The propfind is requested for a file that exists
 		// In this case, we can stat the parent directory and return both
+		parentPath := path.Dir(parentInfo.Path)
 		resourceInfos = append(resourceInfos, parentInfo)
 		parentRes, err := client.Stat(ctx, &provider.StatRequest{
-			Ref:                   &provider.Reference{Path: path.Dir(parentInfo.Path)},
+			Ref:                   &provider.Reference{Path: parentPath},
 			ArbitraryMetadataKeys: metadataKeys,
 		})
 		if err != nil {
 			log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return nil, nil, false
-		} else if res.Status.Code != rpc.Code_CODE_OK {
-			if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		} else if parentRes.Status.Code != rpc.Code_CODE_OK {
+			if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				w.WriteHeader(http.StatusNotFound)
-				m := fmt.Sprintf("Resource %v not found", ref.Path)
+				m := fmt.Sprintf("Resource %v not found", parentPath)
 				b, err := Marshal(exception{
 					code:    SabredavNotFound,
 					message: m,
@@ -248,7 +249,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				HandleWebdavError(&log, w, b, err)
 				return nil, nil, false
 			}
-			HandleErrorStatus(&log, w, res.Status)
+			HandleErrorStatus(&log, w, parentRes.Status)
 			return nil, nil, false
 		}
 		parentInfo = parentRes.Info
