@@ -93,7 +93,10 @@ func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
 	return nil, fmt.Errorf("driver not found: %s", c.CacheWarmupDriver)
 }
 
+// GatewayClientGetter is the function being used to retrieve a gateway client instance
 type GatewayClientGetter func() (GatewayClient, error)
+
+// GatewayClient is the interface to the gateway service
 type GatewayClient interface {
 	Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error)
 	ListContainer(ctx context.Context, in *provider.ListContainerRequest, opts ...grpc.CallOption) (*provider.ListContainerResponse, error)
@@ -110,7 +113,7 @@ type GatewayClient interface {
 	GetUserByClaim(ctx context.Context, in *userpb.GetUserByClaimRequest, opts ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error)
 }
 
-// Init initializes this and any contained handlers
+// InitDefault initializes the handler using default values
 func (h *Handler) InitDefault(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.publicURL = c.Config.Host
@@ -133,6 +136,7 @@ func (h *Handler) InitDefault(c *config.Config) {
 	h.getClient = h.getPoolClient
 }
 
+// Init initializes the handler
 func (h *Handler) Init(c *config.Config, clientGetter GatewayClientGetter) {
 	h.InitDefault(c)
 	h.getClient = clientGetter

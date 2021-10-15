@@ -99,7 +99,7 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	for id, _ := range sharesToAccept {
+	for id := range sharesToAccept {
 		h.updateReceivedShare(w, r, id, false, mount)
 	}
 }

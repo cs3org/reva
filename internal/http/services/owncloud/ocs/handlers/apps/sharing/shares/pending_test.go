@@ -54,7 +54,7 @@ var _ = Describe("The ocs API", func() {
 
 	Describe("AcceptReceivedShare", func() {
 		type responseShare struct {
-			Id string `xml:"id"`
+			ID string `xml:"id"`
 		}
 		type listSharesData struct {
 			Shares []responseShare `xml:"element"`
@@ -64,11 +64,11 @@ var _ = Describe("The ocs API", func() {
 		}
 
 		var (
-			resId = &provider.ResourceId{
+			resID = &provider.ResourceId{
 				StorageId: "share1-storageid",
 				OpaqueId:  "share1",
 			}
-			otherResId = &provider.ResourceId{
+			otherResID = &provider.ResourceId{
 				StorageId: "share1-storageid",
 				OpaqueId:  "share3",
 			}
@@ -77,7 +77,7 @@ var _ = Describe("The ocs API", func() {
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 				},
-				ResourceId: resId,
+				ResourceId: resID,
 				Permissions: &collaboration.SharePermissions{
 					Permissions: &provider.ResourcePermissions{
 						Stat:          true,
@@ -90,7 +90,7 @@ var _ = Describe("The ocs API", func() {
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
 				},
-				ResourceId: resId,
+				ResourceId: resID,
 				Permissions: &collaboration.SharePermissions{
 					Permissions: &provider.ResourcePermissions{
 						Stat:          true,
@@ -103,7 +103,7 @@ var _ = Describe("The ocs API", func() {
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
 				},
-				ResourceId: otherResId,
+				ResourceId: otherResID,
 				Permissions: &collaboration.SharePermissions{
 					Permissions: &provider.ResourcePermissions{
 						Stat:          true,
@@ -124,7 +124,7 @@ var _ = Describe("The ocs API", func() {
 				Info: &provider.ResourceInfo{
 					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 					Path: "/share1",
-					Id:   resId,
+					Id:   resID,
 					PermissionSet: &provider.ResourcePermissions{
 						Stat: true,
 					},
@@ -138,7 +138,7 @@ var _ = Describe("The ocs API", func() {
 					{
 						Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 						Path: "/share1",
-						Id:   resId,
+						Id:   resID,
 						Size: 1,
 					},
 				},

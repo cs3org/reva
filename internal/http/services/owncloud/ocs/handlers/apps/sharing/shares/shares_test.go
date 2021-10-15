@@ -58,7 +58,7 @@ var _ = Describe("The ocs API", func() {
 
 	Describe("CreateShare", func() {
 		var (
-			resId = &provider.ResourceId{
+			resID = &provider.ResourceId{
 				StorageId: "share1-storageid",
 				OpaqueId:  "share1",
 			}
@@ -67,7 +67,7 @@ var _ = Describe("The ocs API", func() {
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 				},
-				ResourceId: resId,
+				ResourceId: resID,
 				Permissions: &collaboration.SharePermissions{
 					Permissions: &provider.ResourcePermissions{
 						Stat:          true,
@@ -80,7 +80,7 @@ var _ = Describe("The ocs API", func() {
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 				},
-				ResourceId: resId,
+				ResourceId: resID,
 				Permissions: &collaboration.SharePermissions{
 					Permissions: &provider.ResourcePermissions{
 						Stat:          true,
@@ -96,7 +96,7 @@ var _ = Describe("The ocs API", func() {
 				Info: &provider.ResourceInfo{
 					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 					Path: "/newshare",
-					Id:   resId,
+					Id:   resID,
 					PermissionSet: &provider.ResourcePermissions{
 						Stat:        true,
 						AddGrant:    true,
@@ -213,7 +213,7 @@ var _ = Describe("The ocs API", func() {
 
 	Describe("ListShares", func() {
 		BeforeEach(func() {
-			resId := &provider.ResourceId{
+			resID := &provider.ResourceId{
 				StorageId: "share1-storageid",
 				OpaqueId:  "share1",
 			}
@@ -227,7 +227,7 @@ var _ = Describe("The ocs API", func() {
 							Grantee: &provider.Grantee{
 								Type: provider.GranteeType_GRANTEE_TYPE_USER,
 							},
-							ResourceId: resId,
+							ResourceId: resID,
 							Permissions: &collaboration.SharePermissions{
 								Permissions: &provider.ResourcePermissions{
 									Stat:          true,
@@ -245,7 +245,7 @@ var _ = Describe("The ocs API", func() {
 				Info: &provider.ResourceInfo{
 					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 					Path: "/share1",
-					Id:   resId,
+					Id:   resID,
 					PermissionSet: &provider.ResourcePermissions{
 						Stat: true,
 					},
@@ -259,7 +259,7 @@ var _ = Describe("The ocs API", func() {
 					{
 						Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 						Path: "/share1",
-						Id:   resId,
+						Id:   resID,
 						Size: 1,
 					},
 				},
@@ -268,7 +268,7 @@ var _ = Describe("The ocs API", func() {
 
 		It("lists accepted shares", func() {
 			type share struct {
-				Id string `xml:"id"`
+				ID string `xml:"id"`
 			}
 			type data struct {
 				Shares []share `xml:"element"`
@@ -287,7 +287,7 @@ var _ = Describe("The ocs API", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(res.Data.Shares)).To(Equal(1))
 			s := res.Data.Shares[0]
-			Expect(s.Id).To(Equal("10"))
+			Expect(s.ID).To(Equal("10"))
 		})
 	})
 })
