@@ -19,14 +19,17 @@
 package scope
 
 import (
+	"context"
+
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/rs/zerolog"
 )
 
-func lightweightAccountScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource interface{}, _ *zerolog.Logger) (bool, error) {
 	// Lightweight accounts have access to resources shared with them.
 	// These cannot be resolved from here, but need to be added to the scope from
 	// where the call to mint tokens is made.

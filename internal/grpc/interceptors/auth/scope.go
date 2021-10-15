@@ -22,21 +22,33 @@ import (
 	"context"
 	"strings"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	statuspkg "github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/utils"
+	"google.golang.org/grpc/metadata"
 )
 
-func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, gatewayAddr string) error {
+func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, gatewayAddr string, mgr token.Manager) error {
 	log := appctx.GetLogger(ctx)
+	client, err := pool.GetGatewayServiceClient(gatewayAddr)
+	if err != nil {
+		return err
+	}
 
 	if ref, ok := extractRef(req); ok {
 		// Check if req is of type *provider.Reference_Path
@@ -53,7 +65,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 					if err != nil {
 						continue
 					}
-					if ok, err := checkResourcePath(ctx, ref, share.ResourceId, gatewayAddr); err == nil && ok {
+					if ok, err := checkIfNestedResource(ctx, ref, share.ResourceId, client, mgr); err == nil && ok {
 						return nil
 					}
 
@@ -63,21 +75,17 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 					if err != nil {
 						continue
 					}
-					if ok, err := checkResourcePath(ctx, ref, share.ResourceId, gatewayAddr); err == nil && ok {
+					if ok, err := checkIfNestedResource(ctx, ref, share.ResourceId, client, mgr); err == nil && ok {
 						return nil
 					}
 				case strings.HasPrefix(k, "lightweight"):
-					client, err := pool.GetGatewayServiceClient(gatewayAddr)
-					if err != nil {
-						continue
-					}
 					shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 					if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
 						log.Warn().Err(err).Msg("error listing received shares")
 						continue
 					}
 					for _, share := range shares.Shares {
-						if ok, err := checkResourcePath(ctx, ref, share.Share.ResourceId, gatewayAddr); err == nil && ok {
+						if ok, err := checkIfNestedResource(ctx, ref, share.Share.ResourceId, client, mgr); err == nil && ok {
 							return nil
 						}
 					}
@@ -85,15 +93,17 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 			}
 		} else {
 			// ref has ID present
-			// The request might be coming from a share created for a lightweight account
-			// after the token was minted.
-			log.Info().Msgf("resolving ID reference against received shares to verify token scope %+v", ref.GetResourceId())
+			// The request might be coming from
+			// - a resource present inside a shared folder, or
+			// - a share created for a lightweight account after the token was minted.
+
 			client, err := pool.GetGatewayServiceClient(gatewayAddr)
 			if err != nil {
 				return err
 			}
 			for k := range tokenScope {
 				if strings.HasPrefix(k, "lightweight") {
+					log.Info().Msgf("resolving ID reference against received shares to verify token scope %+v", ref.GetResourceId())
 					shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 					if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
 						log.Warn().Err(err).Msg("error listing received shares")
@@ -103,6 +113,15 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 						if utils.ResourceIDEqual(share.Share.ResourceId, ref.GetResourceId()) {
 							return nil
 						}
+					}
+				} else if strings.HasPrefix(k, "publicshare") {
+					var share link.PublicShare
+					err := utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
+					if err != nil {
+						continue
+					}
+					if ok, err := checkIfNestedResource(ctx, ref, share.ResourceId, client, mgr); err == nil && ok {
+						return nil
 					}
 				}
 			}
@@ -140,32 +159,50 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
 }
 
-func checkResourcePath(ctx context.Context, ref *provider.Reference, r *provider.ResourceId, gatewayAddr string) (bool, error) {
-	client, err := pool.GetGatewayServiceClient(gatewayAddr)
-	if err != nil {
-		return false, err
-	}
-
+func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) (bool, error) {
 	// Since the resource ID is obtained from the scope, the current token
 	// has access to it.
-	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{ResourceId: r},
-	}
-
-	statResponse, err := client.Stat(ctx, statReq)
+	statResponse, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: parent}})
 	if err != nil {
 		return false, err
 	}
 	if statResponse.Status.Code != rpc.Code_CODE_OK {
 		return false, statuspkg.NewErrorFromCode(statResponse.Status.Code, "auth interceptor")
 	}
+	parentPath := statResponse.Info.Path
 
-	if strings.HasPrefix(ref.GetPath(), statResponse.Info.Path) {
-		// The path corresponds to the resource to which the token has access.
-		// We allow access to it.
-		return true, nil
+	childPath := ref.GetPath()
+	if childPath == "" {
+		// We mint a token as the owner of the public share and try to stat the reference
+		// TODO(ishank011): We need to find a better alternative to this
+
+		userResp, err := client.GetUser(ctx, &userpb.GetUserRequest{UserId: statResponse.Info.Owner})
+		if err != nil || userResp.Status.Code != rpc.Code_CODE_OK {
+			return false, err
+		}
+
+		scope, err := scope.AddOwnerScope(map[string]*authpb.Scope{})
+		if err != nil {
+			return false, err
+		}
+		token, err := mgr.MintToken(ctx, userResp.User, scope)
+		if err != nil {
+			return false, err
+		}
+		ctx = metadata.AppendToOutgoingContext(context.Background(), ctxpkg.TokenHeader, token)
+
+		childStat, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+		if err != nil {
+			return false, err
+		}
+		if childStat.Status.Code != rpc.Code_CODE_OK {
+			return false, statuspkg.NewErrorFromCode(childStat.Status.Code, "auth interceptor")
+		}
+		childPath = statResponse.Info.Path
 	}
-	return false, nil
+
+	return strings.HasPrefix(childPath, parentPath), nil
+
 }
 
 func extractRef(req interface{}) (*provider.Reference, bool) {
@@ -186,6 +223,18 @@ func extractRef(req interface{}) (*provider.Reference, bool) {
 		return v.GetRef(), true
 	case *provider.InitiateFileUploadRequest:
 		return v.GetRef(), true
+	case *appprovider.OpenInAppRequest:
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
+	case *gateway.OpenInAppRequest:
+		return v.GetRef(), true
+	case *provider.SetArbitraryMetadataRequest:
+		return v.GetRef(), true
+	case *provider.UnsetArbitraryMetadataRequest:
+		return v.GetRef(), true
+
+		// App provider requests
+	case *appregistry.GetAppProvidersRequest:
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	}
 	return nil, false
 }

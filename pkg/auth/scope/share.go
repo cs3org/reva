@@ -19,6 +19,7 @@
 package scope
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -29,9 +30,10 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/rs/zerolog"
 )
 
-func shareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+func shareScope(_ context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
 	var share collaboration.Share
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
@@ -69,7 +71,9 @@ func shareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 		return checkSharePath(v) || checkResourcePath(v), nil
 	}
 
-	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
+	msg := fmt.Sprintf("resource type assertion failed: %+v", resource)
+	logger.Debug().Str("scope", "shareScope").Msg(msg)
+	return false, errtypes.InternalError(msg)
 }
 
 func checkShareStorageRef(s *collaboration.Share, r *provider.Reference) bool {
