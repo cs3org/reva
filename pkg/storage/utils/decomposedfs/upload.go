@@ -752,15 +752,20 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 
 func checkQuota(ctx context.Context, fs *Decomposedfs, spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
 	used, _ := spaceRoot.GetTreeSize()
-	quotaB, _ := xattr.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
-	total, _ := strconv.ParseUint(string(quotaB), 10, 64)
-
 	enoughDiskSpace := enoughDiskSpace(fs, spaceRoot.InternalPath(), fileSize)
 	if !enoughDiskSpace {
 		return false, errtypes.InsufficientStorage("disk full")
 	}
+	quotaB, _ := xattr.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
+	var total uint64
+	if quotaB != nil {
+		total, _ = strconv.ParseUint(string(quotaB), 10, 64)
+	} else {
+		// if quota is not set, it means unlimited
+		return true, nil
+	}
 
-	if (fileSize > total-used || total < used) && !enoughDiskSpace {
+	if fileSize > total-used || total < used {
 		return false, errtypes.InsufficientStorage("quota exceeded")
 	}
 	return true, nil

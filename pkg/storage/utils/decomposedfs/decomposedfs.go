@@ -221,7 +221,7 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 		}
 	}
 
-	if err := n.SetMetadata(xattrs.SpaceNameAttr, u.DisplayName); err != nil {
+	if err := h.SetMetadata(xattrs.SpaceNameAttr, u.DisplayName); err != nil {
 		return err
 	}
 
