@@ -38,6 +38,9 @@ import (
 // To impersonate the given user it's only needed an api-key, saved
 // in a config file.
 
+// supported claims
+var claims = []string{"mail", "uid", "username"}
+
 type manager struct {
 	APIKey      string `mapstructure:"api_key"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
@@ -78,7 +81,7 @@ func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userp
 	}
 
 	// username could be either a normal username or a string <claim>:<value>
-	// in the first case the calim is the default one, so "username"
+	// in the first case the claim is "username"
 	claim, value := parseUser(user)
 
 	userResponse, err := gtw.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
@@ -104,9 +107,18 @@ func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userp
 
 }
 
+func contains(lst []string, s string) bool {
+	for _, e := range lst {
+		if e == s {
+			return true
+		}
+	}
+	return false
+}
+
 func parseUser(user string) (string, string) {
-	s := strings.Split(user, ":")
-	if len(s) == 2 {
+	s := strings.SplitN(user, ":", 2)
+	if len(s) == 2 && contains(claims, s[0]) {
 		return s[0], s[1]
 	}
 	return "username", user
