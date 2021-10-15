@@ -45,11 +45,10 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 	if ref.ResourceId != nil {
 		// check if a storage space reference is used
 		// currently, the decomposed fs uses the root node id as the space id
-		spaceRoot, err := lu.NodeFromID(ctx, ref.ResourceId)
+		n, err := lu.NodeFromID(ctx, ref.ResourceId)
 		if err != nil {
 			return nil, err
 		}
-		n := spaceRoot
 		// is this a relative reference?
 		if ref.Path != "" {
 			p := filepath.Clean(ref.Path)
@@ -62,8 +61,6 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 					return nil, err
 				}
 			}
-			// use reference id as space root for relative references
-			n.SpaceRoot = spaceRoot
 		}
 		return n, nil
 	}
@@ -110,7 +107,12 @@ func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *n
 	if id == nil || id.OpaqueId == "" {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
 	}
-	return node.ReadNode(ctx, lu, id.OpaqueId)
+	n, err = node.ReadNode(ctx, lu, id.OpaqueId)
+	if err != nil {
+		return nil, err
+	}
+
+	return n, lu.FindStorageSpaceRoot(n)
 }
 
 // Path returns the path for node
@@ -179,6 +181,9 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 				}
 			}
 		}
+		if isSpaceRoot(r) {
+			r.SpaceRoot = r
+		}
 
 		if !r.Exists && i < len(segments)-1 {
 			return r, errtypes.NotFound(segments[i])
@@ -190,6 +195,33 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 		}
 	}
 	return r, nil
+}
+
+// FindStorageSpaceRoot calls n.Parent() and climbs the tree until it finds the space root node.
+func (lu *Lookup) FindStorageSpaceRoot(n *node.Node) error {
+	var err error
+	// remember the node we ask for and use parent to climb the tree
+	parent := n
+	for parent.ParentID != "" {
+		if parent, err = parent.Parent(); err != nil {
+			return err
+		}
+		if isSpaceRoot(parent) {
+			n.SpaceRoot = parent
+			break
+		}
+	}
+	return nil
+}
+
+func isSpaceRoot(r *node.Node) bool {
+	path := r.InternalPath()
+	if spaceNameBytes, err := xattr.Get(path, xattrs.SpaceNameAttr); err == nil {
+		if string(spaceNameBytes) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // HomeOrRootNode returns the users home node when home support is enabled.

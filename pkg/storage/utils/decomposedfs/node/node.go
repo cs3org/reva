@@ -192,6 +192,7 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	default:
 		return nil, errtypes.InternalError(err.Error())
 	}
+
 	// check if this is a space root
 	if _, err = xattr.Get(nodePath, xattrs.SpaceNameAttr); err == nil {
 		n.SpaceRoot = n
@@ -261,6 +262,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "could not read child node")
 		}
+		c.SpaceRoot = n.SpaceRoot
 	} else {
 		return nil, fmt.Errorf("Decomposedfs: expected '../ prefix, got' %+v", link)
 	}

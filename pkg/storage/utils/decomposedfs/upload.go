@@ -110,6 +110,35 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 	return uploadInfo.FinishUpload(ctx)
 }
 
+// CheckQuota checks if both disk space and available quota are sufficient
+var CheckQuota = func(ctx context.Context, fs *Decomposedfs, spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
+	used, _ := spaceRoot.GetTreeSize()
+	if !enoughDiskSpace(fs, spaceRoot.InternalPath(), fileSize) {
+		return false, errtypes.InsufficientStorage("disk full")
+	}
+	quotaByte, _ := xattr.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
+	var total uint64
+	if quotaByte == nil {
+		// if quota is not set, it means unlimited
+		return true, nil
+	}
+	total, _ = strconv.ParseUint(string(quotaByte), 10, 64)
+	// if total is smaller that used, total-used could overflow and be bigger than fileSize
+	if fileSize > total-used || total < used {
+		return false, errtypes.InsufficientStorage("quota exceeded")
+	}
+	return true, nil
+}
+
+func enoughDiskSpace(fs *Decomposedfs, path string, fileSize uint64) bool {
+	avalB, err := fs.getAvailableSize(path)
+	if err != nil {
+		return false
+	}
+
+	return avalB > fileSize
+}
+
 // InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
 // TODO InitiateUpload (and Upload) needs a way to receive the expected checksum. Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
@@ -163,7 +192,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
 
-	_, err = checkQuota(ctx, fs, n.SpaceRoot, uint64(info.Size))
+	_, err = CheckQuota(ctx, fs, n.SpaceRoot, uint64(info.Size))
 	if err != nil {
 		return nil, err
 	}
@@ -486,7 +515,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	)
 	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
 
-	_, err = checkQuota(upload.ctx, upload.fs, n.SpaceRoot, uint64(fi.Size()))
+	_, err = CheckQuota(upload.ctx, upload.fs, n.SpaceRoot, uint64(fi.Size()))
 	if err != nil {
 		return err
 	}
@@ -748,34 +777,4 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 	}
 
 	return
-}
-
-func checkQuota(ctx context.Context, fs *Decomposedfs, spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
-	used, _ := spaceRoot.GetTreeSize()
-	enoughDiskSpace := enoughDiskSpace(fs, spaceRoot.InternalPath(), fileSize)
-	if !enoughDiskSpace {
-		return false, errtypes.InsufficientStorage("disk full")
-	}
-	quotaB, _ := xattr.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
-	var total uint64
-	if quotaB != nil {
-		total, _ = strconv.ParseUint(string(quotaB), 10, 64)
-	} else {
-		// if quota is not set, it means unlimited
-		return true, nil
-	}
-
-	if fileSize > total-used || total < used {
-		return false, errtypes.InsufficientStorage("quota exceeded")
-	}
-	return true, nil
-}
-
-func enoughDiskSpace(fs *Decomposedfs, path string, fileSize uint64) bool {
-	avalB, err := fs.getAvailableSize(path)
-	if err != nil {
-		return false
-	}
-
-	return avalB > fileSize
 }
