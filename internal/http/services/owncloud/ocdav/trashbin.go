@@ -59,7 +59,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		log := appctx.GetLogger(ctx)
 
 		if r.Method == http.MethodOptions {
-			s.handleOptions(w, r, "trashbin")
+			s.handleOptions(w, r)
 			return
 		}
 

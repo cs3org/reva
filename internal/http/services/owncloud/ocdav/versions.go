@@ -60,7 +60,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 		var key string
 		key, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if r.Method == http.MethodOptions {
-			s.handleOptions(w, r, "versions")
+			s.handleOptions(w, r)
 			return
 		}
 		if key == "" && r.Method == MethodPropfind {
