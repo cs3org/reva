@@ -39,7 +39,7 @@ import (
 // in a config file.
 
 // supported claims
-var claims = []string{"mail", "uid", "username"}
+var claims = []string{"mail", "uid", "username", "gid", "userid"}
 
 type manager struct {
 	APIKey      string `mapstructure:"api_key"`
