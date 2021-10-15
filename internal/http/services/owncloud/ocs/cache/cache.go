@@ -64,7 +64,7 @@ func New(ttl time.Duration) *WarmupSet {
 func (c *WarmupSet) Register(w Warmuper) {
 	// TODO: check for duplicates
 	cache := ttlcache.NewCache()
-	cache.SetTTL(c.ttl)
+	_ = cache.SetTTL(c.ttl)
 
 	wd := &warmupDriver{
 		driver: w,
