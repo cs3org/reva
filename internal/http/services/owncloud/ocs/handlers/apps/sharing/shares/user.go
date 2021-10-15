@@ -30,21 +30,20 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) *collaboration.Share {
 	ctx := r.Context()
-	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	c, err := h.getClient()
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-		return
+		return nil
 	}
 
 	shareWith := r.FormValue("shareWith")
 	if shareWith == "" {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing shareWith", nil)
-		return
+		return nil
 	}
 
 	userRes, err := c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
@@ -53,12 +52,12 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 	})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)
-		return
+		return nil
 	}
 
 	if userRes.Status.Code != rpc.Code_CODE_OK {
 		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "user not found", err)
-		return
+		return nil
 	}
 
 	createShareReq := &collaboration.CreateShareRequest{
@@ -82,13 +81,13 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		},
 	}
 
-	h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
+	return h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
 }
 
 func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
-	uClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	uClient, err := h.getClient()
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -152,7 +151,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 	ocsDataPayload := make([]*conversions.ShareData, 0)
 	if h.gatewayAddr != "" {
 		// get a connection to the users share provider
-		client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		client, err := h.getClient()
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}

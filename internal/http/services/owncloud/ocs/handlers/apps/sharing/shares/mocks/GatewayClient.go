@@ -143,6 +143,36 @@ func (_m *GatewayClient) GetUser(ctx context.Context, in *userv1beta1.GetUserReq
 	return r0, r1
 }
 
+// GetUserByClaim provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayClient) GetUserByClaim(ctx context.Context, in *userv1beta1.GetUserByClaimRequest, opts ...grpc.CallOption) (*userv1beta1.GetUserByClaimResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *userv1beta1.GetUserByClaimResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *userv1beta1.GetUserByClaimRequest, ...grpc.CallOption) *userv1beta1.GetUserByClaimResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*userv1beta1.GetUserByClaimResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *userv1beta1.GetUserByClaimRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // ListContainer provides a mock function with given fields: ctx, in, opts
 func (_m *GatewayClient) ListContainer(ctx context.Context, in *providerv1beta1.ListContainerRequest, opts ...grpc.CallOption) (*providerv1beta1.ListContainerResponse, error) {
 	_va := make([]interface{}, len(opts))
@@ -195,6 +225,66 @@ func (_m *GatewayClient) ListReceivedShares(ctx context.Context, in *collaborati
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, *collaborationv1beta1.ListReceivedSharesRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ListShares provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayClient) ListShares(ctx context.Context, in *collaborationv1beta1.ListSharesRequest, opts ...grpc.CallOption) (*collaborationv1beta1.ListSharesResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *collaborationv1beta1.ListSharesResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *collaborationv1beta1.ListSharesRequest, ...grpc.CallOption) *collaborationv1beta1.ListSharesResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*collaborationv1beta1.ListSharesResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *collaborationv1beta1.ListSharesRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// RemoveShare provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayClient) RemoveShare(ctx context.Context, in *collaborationv1beta1.RemoveShareRequest, opts ...grpc.CallOption) (*collaborationv1beta1.RemoveShareResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *collaborationv1beta1.RemoveShareResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *collaborationv1beta1.RemoveShareRequest, ...grpc.CallOption) *collaborationv1beta1.RemoveShareResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*collaborationv1beta1.RemoveShareResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *collaborationv1beta1.RemoveShareRequest, ...grpc.CallOption) error); ok {
 		r1 = rf(ctx, in, opts...)
 	} else {
 		r1 = ret.Error(1)
