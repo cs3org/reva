@@ -52,21 +52,20 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "copy")
 	defer span.End()
 
-	// If is a third party copy
-	if r.Header.Get("ThirdPartyCopy") == "T" {
+	// If HTTP third-party copy mode is enabled, go for that
+	if s.c.EnableHTTPTpc {
 
-		// Push Mode
 		if r.Header.Get("Source") == "" {
+			// Push Mode
 			s.handleTPCPush(ctx, w, r, ns)
-			return
+		} else {
+			// Pull Mode
+			s.handleTPCPull(ctx, w, r, ns)
 		}
-
-		// Pull Mode
-		s.handleTPCPull(ctx, w, r, ns)
 		return
 	}
 
-	// is a local copy
+	// else it is a local copy
 	src := path.Join(ns, r.URL.Path)
 	dst, err := extractDestination(r)
 	if err != nil {
@@ -113,8 +112,8 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.WriteHeader(cp.successCode)
-
 }
+
 func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClient, w http.ResponseWriter, r *http.Request, cp *copy) error {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("src", cp.sourceInfo.Path).Str("dst", cp.destination.Path).Msg("descending")

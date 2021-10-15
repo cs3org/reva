@@ -171,7 +171,7 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	if overwrite == "F" {
-		sublog.Warn().Str("overwrite", overwrite).Msg("dst already exists")
+		sublog.Warn().Str("overwrite", overwrite).Msg("Destination already exists")
 		w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 		return
 	}
