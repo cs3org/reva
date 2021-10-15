@@ -22,6 +22,8 @@ import (
 	"context"
 	"strings"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -221,6 +223,18 @@ func extractRef(req interface{}) (*provider.Reference, bool) {
 		return v.GetRef(), true
 	case *provider.InitiateFileUploadRequest:
 		return v.GetRef(), true
+	case *appprovider.OpenInAppRequest:
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
+	case *gateway.OpenInAppRequest:
+		return v.GetRef(), true
+	case *provider.SetArbitraryMetadataRequest:
+		return v.GetRef(), true
+	case *provider.UnsetArbitraryMetadataRequest:
+		return v.GetRef(), true
+
+		// App provider requests
+	case *appregistry.GetAppProvidersRequest:
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	}
 	return nil, false
 }

@@ -23,10 +23,8 @@ import (
 	"fmt"
 	"strings"
 
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -71,15 +69,9 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 	case *provider.UnsetArbitraryMetadataRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
 
-		// App provider requests
-	case *appregistry.GetAppProvidersRequest:
-		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.ResourceInfo.Id}), nil
+	// App provider requests
 	case *appregistry.GetDefaultAppProviderForMimeTypeRequest:
 		return true, nil
-	case *appprovider.OpenInAppRequest:
-		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.ResourceInfo.Id}), nil
-	case *gatewayv1beta1.OpenInAppRequest:
-		return checkStorageRef(ctx, &share, v.GetRef()), nil
 
 	case *userv1beta1.GetUserByClaimRequest:
 		return true, nil
