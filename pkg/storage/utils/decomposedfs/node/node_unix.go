@@ -19,11 +19,12 @@
 //go:build !windows
 // +build !windows
 
-package decomposedfs
+package node
 
 import "syscall"
 
-func (fs *Decomposedfs) getAvailableSize(path string) (uint64, error) {
+// GetAvailableSize stats the filesystem and return the available bytes
+func GetAvailableSize(path string) (uint64, error) {
 	stat := syscall.Statfs_t{}
 	err := syscall.Statfs(path, &stat)
 	if err != nil {

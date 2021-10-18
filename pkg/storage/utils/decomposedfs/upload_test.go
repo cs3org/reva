@@ -101,13 +101,13 @@ var _ = Describe("File uploads", func() {
 	Context("quota exceeded", func() {
 		Describe("InitiateUpload", func() {
 			It("fails", func() {
-				var originalFunc = decomposedfs.CheckQuota
-				decomposedfs.CheckQuota = func(ctx context.Context, fs *decomposedfs.Decomposedfs, spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
+				var originalFunc = node.CheckQuota
+				node.CheckQuota = func(spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
 					return false, errtypes.InsufficientStorage("quota exceeded")
 				}
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).To(MatchError(errtypes.InsufficientStorage("quota exceeded")))
-				decomposedfs.CheckQuota = originalFunc
+				node.CheckQuota = originalFunc
 			})
 		})
 	})

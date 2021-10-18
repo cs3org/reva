@@ -938,3 +938,31 @@ func parseMTime(v string) (t time.Time, err error) {
 	}
 	return time.Unix(sec, nsec), err
 }
+
+// CheckQuota checks if both disk space and available quota are sufficient
+var CheckQuota = func(spaceRoot *Node, fileSize uint64) (quotaSufficient bool, err error) {
+	used, _ := spaceRoot.GetTreeSize()
+	if !enoughDiskSpace(spaceRoot.InternalPath(), fileSize) {
+		return false, errtypes.InsufficientStorage("disk full")
+	}
+	quotaByte, _ := xattr.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
+	var total uint64
+	if quotaByte == nil {
+		// if quota is not set, it means unlimited
+		return true, nil
+	}
+	total, _ = strconv.ParseUint(string(quotaByte), 10, 64)
+	// if total is smaller that used, total-used could overflow and be bigger than fileSize
+	if fileSize > total-used || total < used {
+		return false, errtypes.InsufficientStorage("quota exceeded")
+	}
+	return true, nil
+}
+
+func enoughDiskSpace(path string, fileSize uint64) bool {
+	avalB, err := GetAvailableSize(path)
+	if err != nil {
+		return false
+	}
+	return avalB > fileSize
+}

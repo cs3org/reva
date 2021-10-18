@@ -163,7 +163,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 		quotaStr = string(ri.Opaque.Map["quota"].Value)
 	}
 
-	avail, err := fs.getAvailableSize(n.InternalPath())
+	avail, err := node.GetAvailableSize(n.InternalPath())
 	if err != nil {
 		return 0, 0, err
 	}
