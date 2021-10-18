@@ -78,8 +78,10 @@ func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermission
 	if strings.Contains(perm, "w") && !strings.Contains(perm, "!w") {
 		rp.Move = true
 		rp.Delete = true
+		rp.PurgeRecycle = true
 		rp.InitiateFileUpload = true
 		rp.RestoreFileVersion = true
+		rp.RestoreRecycleItem = true
 		if isDir {
 			rp.CreateContainer = true
 		}
@@ -87,6 +89,7 @@ func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermission
 
 	if strings.Contains(perm, "x") && !strings.Contains(perm, "!x") {
 		rp.ListFileVersions = true
+		rp.ListRecycle = true
 		if isDir {
 			rp.ListContainer = true
 		}
@@ -94,6 +97,7 @@ func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermission
 
 	if strings.Contains(perm, "!d") {
 		rp.Delete = false
+		rp.PurgeRecycle = false
 	}
 
 	if strings.Contains(perm, "m") && !strings.Contains(perm, "!m") {

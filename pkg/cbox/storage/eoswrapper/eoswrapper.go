@@ -40,7 +40,7 @@ func init() {
 }
 
 const (
-	eosProjectsNamespace = "/eos/project/"
+	eosProjectsNamespace = "/eos/project"
 
 	// We can use a regex for these, but that might have inferior performance
 	projectSpaceGroupsPrefix      = "cernbox-project-"
@@ -147,8 +147,7 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 	if strings.HasPrefix(w.conf.Namespace, eosProjectsNamespace) {
 
 		// Extract project name from the path resembling /c/cernbox or /c/cernbox/minutes/..
-		path := strings.TrimPrefix(r.Path, eosProjectsNamespace)
-		parts := strings.SplitN(path, "/", 4)
+		parts := strings.SplitN(r.Path, "/", 4)
 		if len(parts) != 4 && len(parts) != 3 {
 			return errtypes.BadRequest("eoswrapper: path does not follow the allowed format")
 		}

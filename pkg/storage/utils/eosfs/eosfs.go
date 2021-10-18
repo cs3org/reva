@@ -1482,6 +1482,8 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore recycled items")
 		}
 	} else {
 		// We just act on the logged-in user's recycle bin
@@ -1531,6 +1533,8 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 			if err != nil {
 				return err
 			}
+		} else {
+			return errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore recycled items")
 		}
 	} else {
 		// We just act on the logged-in user's recycle bin
