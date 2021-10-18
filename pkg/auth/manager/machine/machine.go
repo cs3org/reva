@@ -20,9 +20,10 @@ package machine
 
 import (
 	"context"
+	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -36,6 +37,9 @@ import (
 // 'machine' is an authentication method used to impersonate users.
 // To impersonate the given user it's only needed an api-key, saved
 // in a config file.
+
+// supported claims
+var claims = []string{"mail", "uid", "username", "gid", "userid"}
 
 type manager struct {
 	APIKey      string `mapstructure:"api_key"`
@@ -66,7 +70,7 @@ func New(conf map[string]interface{}) (auth.Manager, error) {
 }
 
 // Authenticate impersonate an user if the provided secret is equal to the api-key
-func (m *manager) Authenticate(ctx context.Context, username, secret string) (*user.User, map[string]*authpb.Scope, error) {
+func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userpb.User, map[string]*authpb.Scope, error) {
 	if m.APIKey != secret {
 		return nil, nil, errtypes.InvalidCredentials("")
 	}
@@ -76,9 +80,13 @@ func (m *manager) Authenticate(ctx context.Context, username, secret string) (*u
 		return nil, nil, err
 	}
 
-	userResponse, err := gtw.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
-		Claim: "username",
-		Value: username,
+	// username could be either a normal username or a string <claim>:<value>
+	// in the first case the claim is "username"
+	claim, value := parseUser(user)
+
+	userResponse, err := gtw.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+		Claim: claim,
+		Value: value,
 	})
 
 	switch {
@@ -97,4 +105,21 @@ func (m *manager) Authenticate(ctx context.Context, username, secret string) (*u
 
 	return userResponse.GetUser(), scope, nil
 
+}
+
+func contains(lst []string, s string) bool {
+	for _, e := range lst {
+		if e == s {
+			return true
+		}
+	}
+	return false
+}
+
+func parseUser(user string) (string, string) {
+	s := strings.SplitN(user, ":", 2)
+	if len(s) == 2 && contains(claims, s[0]) {
+		return s[0], s[1]
+	}
+	return "username", user
 }
