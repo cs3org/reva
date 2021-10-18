@@ -46,7 +46,7 @@ import (
 // contain a directory with symlinks to trash files for every userid/"root"
 
 // ListRecycle returns the list of available recycle items
-func (fs *Decomposedfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error) {
+func (fs *Decomposedfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 
 	items := make([]*provider.RecycleItem, 0)
@@ -65,12 +65,12 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, key, path string) ([]*p
 		}
 	}
 
-	if key == "" && path == "/" {
+	if key == "" && relativePath == "/" {
 		return fs.listTrashRoot(ctx)
 	}
 
 	trashRoot := fs.getRecycleRoot(ctx)
-	f, err := os.Open(filepath.Join(trashRoot, key, path))
+	f, err := os.Open(filepath.Join(trashRoot, key, relativePath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return items, nil
@@ -89,7 +89,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, key, path string) ([]*p
 		return nil, err
 	} else if !md.IsDir() {
 		// this is the case when we want to directly list a file in the trashbin
-		item, err := fs.createTrashItem(ctx, parentNode, filepath.Dir(path), filepath.Join(trashRoot, key, path))
+		item, err := fs.createTrashItem(ctx, parentNode, filepath.Dir(relativePath), filepath.Join(trashRoot, key, relativePath))
 		if err != nil {
 			return items, err
 		}
@@ -102,7 +102,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, key, path string) ([]*p
 		return nil, err
 	}
 	for i := range names {
-		if item, err := fs.createTrashItem(ctx, parentNode, path, filepath.Join(trashRoot, key, path, names[i])); err == nil {
+		if item, err := fs.createTrashItem(ctx, parentNode, relativePath, filepath.Join(trashRoot, key, relativePath, names[i])); err == nil {
 			items = append(items, item)
 		}
 	}
@@ -258,11 +258,11 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context) ([]*provider.RecycleI
 }
 
 // RestoreRecycleItem restores the specified item
-func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error {
+func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	if restoreRef == nil {
 		restoreRef = &provider.Reference{}
 	}
-	rn, p, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, path, restoreRef.Path)
+	rn, p, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, relativePath, restoreRef.Path)
 	if err != nil {
 		return err
 	}
@@ -293,8 +293,8 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key, path string
 }
 
 // PurgeRecycleItem purges the specified item
-func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
-	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, key, path)
+func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, key, relativePath)
 	if err != nil {
 		return err
 	}

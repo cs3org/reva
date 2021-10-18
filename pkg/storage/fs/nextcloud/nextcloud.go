@@ -442,7 +442,7 @@ func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Refe
 }
 
 // ListRecycle as defined in the storage.FS interface
-func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path string) ([]*provider.RecycleItem, error) {
+func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key string, relativePath string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("ListRecycle")
 	type paramsObj struct {
@@ -451,7 +451,7 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path strin
 	}
 	bodyObj := &paramsObj{
 		Key:  key,
-		Path: path,
+		Path: relativePath,
 	}
 	bodyStr, _ := json.Marshal(bodyObj)
 
@@ -473,7 +473,7 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path strin
 }
 
 // RestoreRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, key string, path string, restoreRef *provider.Reference) error {
+func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	type paramsObj struct {
 		Key        string              `json:"key"`
 		Path       string              `json:"path"`
@@ -481,7 +481,7 @@ func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, key string, pat
 	}
 	bodyObj := &paramsObj{
 		Key:        key,
-		Path:       path,
+		Path:       relativePath,
 		RestoreRef: restoreRef,
 	}
 	bodyStr, _ := json.Marshal(bodyObj)
@@ -495,14 +495,14 @@ func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, key string, pat
 }
 
 // PurgeRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, key string, path string) error {
+func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
 	type paramsObj struct {
 		Key  string `json:"key"`
 		Path string `json:"path"`
 	}
 	bodyObj := &paramsObj{
 		Key:  key,
-		Path: path,
+		Path: relativePath,
 	}
 	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)

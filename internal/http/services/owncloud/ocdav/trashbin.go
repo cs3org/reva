@@ -31,7 +31,6 @@ import (
 
 	rtrace "github.com/cs3org/reva/pkg/trace"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -98,18 +97,39 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		// key will be a base63 encoded cs3 path, it uniquely identifies a trash item & storage
+		// key will be a base64 encoded cs3 path, it uniquely identifies a trash item & storage
 		var key string
 		key, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-		// TODO another options handler should not be necessary
-		// if r.Method == http.MethodOptions {
-		//	s.doOptions(w, r, "trashbin")
-		//	return
-		//}
+		// If the recycle bin corresponding to a speicific path is requested, use that.
+		// If not, we user the user home to route the request
+		basePath := r.URL.Query().Get("base_path")
+		if basePath == "" {
+			gc, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
+			if err != nil {
+				// TODO(jfd) how do we make the user aware that some storages are not available?
+				// opaque response property? Or a list of errors?
+				// add a recycle entry with the path to the storage that produced the error?
+				log.Error().Err(err).Msg("error getting gateway client")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
+			if err != nil {
+				log.Error().Err(err).Msg("error calling GetHome")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if getHomeRes.Status.Code != rpc.Code_CODE_OK {
+				HandleErrorStatus(log, w, getHomeRes.Status)
+				return
+			}
+			basePath = getHomeRes.Path
+		}
 
 		if r.Method == MethodPropfind {
-			h.listTrashbin(w, r, s, u, key, r.URL.Path)
+			h.listTrashbin(w, r, s, u, basePath, key, r.URL.Path)
 			return
 		}
 		if key != "" && r.Method == MethodMove {
@@ -129,12 +149,12 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 			log.Debug().Str("key", key).Str("dst", dst).Msg("restore")
 
-			h.restore(w, r, s, u, dst, key, r.URL.Path)
+			h.restore(w, r, s, u, basePath, dst, key, r.URL.Path)
 			return
 		}
 
 		if r.Method == http.MethodDelete {
-			h.delete(w, r, s, u, key, r.URL.Path)
+			h.delete(w, r, s, u, basePath, key, r.URL.Path)
 			return
 		}
 
@@ -142,7 +162,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key, itemPath string) {
+func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "list_trashbin")
 	defer span.End()
 
@@ -195,19 +215,8 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		sublog.Error().Err(err).Msg("error calling GetHome")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, getHomeRes.Status)
-		return
-	}
-
 	// ask gateway for recycle items
-	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: &provider.Reference{Path: path.Join(getHomeRes.Path, key, itemPath)}})
+	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{Path: basePath}, Key: path.Join(key, itemPath)})
 
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
@@ -235,7 +244,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 		for len(stack) > 0 {
 			key := stack[len(stack)-1]
-			getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{Ref: &provider.Reference{Path: path.Join(getHomeRes.Path, key)}})
+			getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{Path: basePath}, Key: key})
 			if err != nil {
 				sublog.Error().Err(err).Msg("error calling ListRecycle")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -430,7 +439,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 	return &response, nil
 }
 
-func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst, key, itemPath string) {
+func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, dst, key, itemPath string) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "restore")
 	defer span.End()
 
@@ -455,19 +464,8 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 
-	getHomeRes, err := client.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		sublog.Error().Err(err).Msg("error calling GetHome")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, getHomeRes.Status)
-		return
-	}
-
 	dstRef := &provider.Reference{
-		Path: path.Join(getHomeRes.Path, dst),
+		Path: path.Join(basePath, dst),
 	}
 
 	dstStatReq := &provider.StatRequest{
@@ -490,7 +488,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	// restore location exists, and if it doesn't returns a conflict error code.
 	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst) {
 		parentStatReq := &provider.StatRequest{
-			Ref: &provider.Reference{Path: path.Join(getHomeRes.Path, filepath.Dir(dst))},
+			Ref: &provider.Reference{Path: path.Join(basePath, filepath.Dir(dst))},
 		}
 
 		parentStatResponse, err := client.Stat(ctx, parentStatReq)
@@ -542,9 +540,9 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
 		// TODO currently limited to the home storage
 		Ref: &provider.Reference{
-			Path: path.Join(getHomeRes.Path, itemPath),
+			Path: basePath,
 		},
-		Key:        key,
+		Key:        path.Join(key, itemPath),
 		RestoreRef: &provider.Reference{Path: dst},
 	}
 
@@ -589,7 +587,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 }
 
 // delete has only a key
-func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key, itemPath string) {
+func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "erase")
 	defer span.End()
 
@@ -602,38 +600,14 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		return
 	}
 
-	getHomeRes, err := client.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		sublog.Error().Err(err).Msg("error calling GetHomeProvider")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, getHomeRes.Status)
-		return
-	}
-	sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
-	if err != nil {
-		sublog.Error().Err(err).Msg("error calling Stat")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if sRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, sRes.Status)
-		return
-	}
-
 	// set key as opaque id, the storageprovider will use it as the key for the
 	// storage drives  PurgeRecycleItem key call
 
-	req := &gateway.PurgeRecycleRequest{
+	req := &provider.PurgeRecycleRequest{
 		Ref: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: sRes.Info.Id.StorageId,
-				OpaqueId:  key,
-			},
-			Path: utils.MakeRelativePath(itemPath),
+			Path: basePath,
 		},
+		Key: path.Join(key, itemPath),
 	}
 
 	res, err := client.PurgeRecycle(ctx, req)
@@ -646,9 +620,9 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	case rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusNoContent)
 	case rpc.Code_CODE_NOT_FOUND:
-		sublog.Debug().Str("storageid", sRes.Info.Id.StorageId).Str("key", key).Interface("status", res.Status).Msg("resource not found")
+		sublog.Debug().Str("path", basePath).Str("key", key).Interface("status", res.Status).Msg("resource not found")
 		w.WriteHeader(http.StatusConflict)
-		m := fmt.Sprintf("storageid %v not found", sRes.Info.Id.StorageId)
+		m := fmt.Sprintf("path %s not found", basePath)
 		b, err := Marshal(exception{
 			code:    SabredavConflict,
 			message: m,
