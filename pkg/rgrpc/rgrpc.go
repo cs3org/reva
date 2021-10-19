@@ -19,6 +19,7 @@
 package rgrpc
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -37,6 +38,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -100,6 +102,8 @@ type config struct {
 	Services         map[string]map[string]interface{} `mapstructure:"services"`
 	Interceptors     map[string]map[string]interface{} `mapstructure:"interceptors"`
 	EnableReflection bool                              `mapstructure:"enable_reflection"`
+	CertFile         string                            `mapstructure:"certfile"`
+	KeyFile          string                            `mapstructure:"keyfile"`
 }
 
 func (c *config) init() {
@@ -119,6 +123,22 @@ type Server struct {
 	listener net.Listener
 	log      zerolog.Logger
 	services map[string]Service
+}
+
+func loadTLSCredentials(certFile string, keyFile string) (credentials.TransportCredentials, error) {
+	// Load server's certificate and private key
+	serverCert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the credentials and return it
+	config := &tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+		ClientAuth:   tls.NoClientCert,
+	}
+
+	return credentials.NewTLS(config), nil
 }
 
 // NewServer returns a new Server.
@@ -196,6 +216,16 @@ func (s *Server) registerServices() error {
 	if err != nil {
 		return err
 	}
+
+	if (s.conf.CertFile != "") && (s.conf.KeyFile != "") {
+		tlsCredentials, err := loadTLSCredentials(s.conf.CertFile, s.conf.KeyFile)
+		if err != nil {
+			s.log.Info().Msg("cannot load TLS credentials")
+		} else {
+			opts = append(opts, grpc.Creds(tlsCredentials))
+		}
+	}
+
 	grpcServer := grpc.NewServer(opts...)
 
 	for _, svc := range s.services {
