@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"path"
 	"strconv"
@@ -27,6 +28,7 @@ import (
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -297,12 +299,21 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 			}
 
 			// get WebDav permissions for file
+			isPublic := false
+			if info.Opaque != nil && info.Opaque.Map != nil {
+				if info.Opaque.Map["link-share"] != nil && info.Opaque.Map["link-share"].Decoder == "json" {
+					ls := &link.PublicShare{}
+					_ = json.Unmarshal(info.Opaque.Map["link-share"].Value, ls)
+					isPublic = ls != nil
+				}
+			}
+			isShared := !isCurrentUserOwner(ctx, info.Owner)
 			role := conversions.RoleFromResourcePermissions(info.PermissionSet)
 			permissions := role.WebDAVPermissions(
 				info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				isShared,
 				false,
-				false,
-				false,
+				isPublic,
 			)
 
 			w.Header().Set(HeaderContentType, info.MimeType)
