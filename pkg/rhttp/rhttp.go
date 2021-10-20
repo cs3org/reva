@@ -112,10 +112,10 @@ func (s *Server) Start(ln net.Listener) error {
 	s.listener = ln
 
 	if (s.conf.CertFile != "") && (s.conf.KeyFile != "") {
-		s.log.Info().Msgf("https server listening at https://%s", s.conf.Address)
+		s.log.Info().Msgf("https server listening at https://%s '%s' '%s'", s.conf.Address, s.conf.CertFile, s.conf.KeyFile)
 		err = s.httpServer.ServeTLS(s.listener, s.conf.CertFile, s.conf.KeyFile)
 	} else {
-		s.log.Info().Msgf("http server listening at http://%s", s.conf.Address)
+		s.log.Info().Msgf("http server listening at http://%s '%s' '%s'", s.conf.Address, s.conf.CertFile, s.conf.KeyFile)
 		err = s.httpServer.Serve(s.listener)
 	}
 	if err == nil || err == http.ErrServerClosed {

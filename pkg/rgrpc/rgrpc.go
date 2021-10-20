@@ -218,12 +218,15 @@ func (s *Server) registerServices() error {
 	}
 
 	if (s.conf.CertFile != "") && (s.conf.KeyFile != "") {
+		s.log.Info().Msgf("loading TLS credentials '%s' '%s'", s.conf.CertFile, s.conf.KeyFile)
 		tlsCredentials, err := loadTLSCredentials(s.conf.CertFile, s.conf.KeyFile)
 		if err != nil {
-			s.log.Info().Msg("cannot load TLS credentials")
+			s.log.Info().Msgf("cannot load TLS credentials '%s' '%s'", s.conf.CertFile, s.conf.KeyFile)
 		} else {
 			opts = append(opts, grpc.Creds(tlsCredentials))
 		}
+	} else {
+		s.log.Info().Msgf("not loading TLS credentials '%s' '%s'", s.conf.CertFile, s.conf.KeyFile)
 	}
 
 	grpcServer := grpc.NewServer(opts...)
