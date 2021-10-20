@@ -939,6 +939,35 @@ func parseMTime(v string) (t time.Time, err error) {
 	return time.Unix(sec, nsec), err
 }
 
+// FindStorageSpaceRoot calls n.Parent() and climbs the tree
+// until it finds the space root node and adds it to the node
+func (n *Node) FindStorageSpaceRoot() error {
+	var err error
+	// remember the node we ask for and use parent to climb the tree
+	parent := n
+	for parent.ParentID != "" {
+		if parent, err = parent.Parent(); err != nil {
+			return err
+		}
+		if IsSpaceRoot(parent) {
+			n.SpaceRoot = parent
+			break
+		}
+	}
+	return nil
+}
+
+// IsSpaceRoot checks if the node is a space root
+func IsSpaceRoot(r *Node) bool {
+	path := r.InternalPath()
+	if spaceNameBytes, err := xattr.Get(path, xattrs.SpaceNameAttr); err == nil {
+		if string(spaceNameBytes) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // CheckQuota checks if both disk space and available quota are sufficient
 var CheckQuota = func(spaceRoot *Node, fileSize uint64) (quotaSufficient bool, err error) {
 	used, _ := spaceRoot.GetTreeSize()
@@ -952,7 +981,7 @@ var CheckQuota = func(spaceRoot *Node, fileSize uint64) (quotaSufficient bool, e
 		return true, nil
 	}
 	total, _ = strconv.ParseUint(string(quotaByte), 10, 64)
-	// if total is smaller that used, total-used could overflow and be bigger than fileSize
+	// if total is smaller than used, total-used could overflow and be bigger than fileSize
 	if fileSize > total-used || total < used {
 		return false, errtypes.InsufficientStorage("quota exceeded")
 	}
