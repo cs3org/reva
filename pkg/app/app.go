@@ -26,6 +26,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
+// Test
 // Registry is the interface that application registries implement
 // for discovering application providers
 type Registry interface {
