@@ -1,6 +1,8 @@
 *				@labkode @ishank011
-pkg/storage/fs/owncloudsql	@cs3org/owncloud-team
-pkg/storage/fs/owncloud   	@cs3org/owncloud-team
-pkg/storage/fs/ocis		@cs3org/owncloud-team
-pkg/user/manager/owncloudsql	@cs3org/owncloud-team
-pkg/app           		@wkloucek @glpatcern @ishank011
+pkg/storage/fs/owncloudsql      @cs3org/owncloud-team
+pkg/storage/fs/owncloud   	  @cs3org/owncloud-team
+pkg/storage/fs/ocis             @cs3org/owncloud-team
+pkg/storage/utils/decomposedfs  @cs3org/owncloud-team
+pkg/user/manager/owncloudsql	  @cs3org/owncloud-team
+changelog	                  @cs3org/owncloud-team
+pkg/app           		  @wkloucek @glpatcern @ishank011
