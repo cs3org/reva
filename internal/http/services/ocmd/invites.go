@@ -194,7 +194,8 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 			reqMap := make(map[string]string)
 			err = json.Unmarshal(reqBody, &reqMap)
 			if err == nil {
-				token, userID, recipientProvider = reqMap["token"], reqMap["usderId"], reqMap["recipientProvider"]
+				// FIXME: userID vs userId
+				token, userID, recipientProvider = reqMap["token"], reqMap["userId"], reqMap["recipientProvider"]
 				name, email = reqMap["name"], reqMap["email"]
 			}
 		}
