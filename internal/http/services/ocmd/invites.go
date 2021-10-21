@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -29,7 +31,6 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/smtpclient"
@@ -58,10 +59,10 @@ func (h *invitesHandler) Handler() http.Handler {
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 
 		switch head {
-		case "":
-			h.generateInviteToken(w, r)
-		case "forward":
-			h.forwardInvite(w, r)
+		// case "":
+		// 	h.generateInviteToken(w, r)
+		// case "forward":
+		// 	h.forwardInvite(w, r)
 		case "accept":
 			h.acceptInvite(w, r)
 		default:
@@ -70,122 +71,138 @@ func (h *invitesHandler) Handler() http.Handler {
 	})
 }
 
-func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Request) {
+// func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Request) {
+//
+// 	ctx := r.Context()
+//
+// 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+// 	if err != nil {
+// 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
+// 		return
+// 	}
+//
+// 	token, err := gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{})
+// 	if err != nil {
+// 		WriteError(w, r, APIErrorServerError, "error generating token", err)
+// 		return
+// 	}
+//
+// 	if r.FormValue("recipient") != "" && h.smtpCredentials != nil {
+//
+// 		usr := ctxpkg.ContextMustGetUser(ctx)
+//
+// 		// TODO: the message body needs to point to the meshdirectory service
+// 		subject := fmt.Sprintf("ScienceMesh: %s wants to collaborate with you", usr.DisplayName)
+// 		body := "Hi,\n\n" +
+// 			usr.DisplayName + " (" + usr.Mail + ") wants to start sharing OCM resources with you. " +
+// 			"To accept the invite, please visit the following URL:\n" +
+// 			h.meshDirectoryURL + "?token=" + token.InviteToken.Token + "&providerDomain=" + usr.Id.Idp + "\n\n" +
+// 			"Alternatively, you can visit your mesh provider and use the following details:\n" +
+// 			"Token: " + token.InviteToken.Token + "\n" +
+// 			"ProviderDomain: " + usr.Id.Idp + "\n\n" +
+// 			"Best,\nThe ScienceMesh team"
+//
+// 		err = h.smtpCredentials.SendMail(r.FormValue("recipient"), subject, body)
+// 		if err != nil {
+// 			WriteError(w, r, APIErrorServerError, "error sending token by mail", err)
+// 			return
+// 		}
+// 	}
+//
+// 	jsonResponse, err := json.Marshal(token.InviteToken)
+// 	if err != nil {
+// 		WriteError(w, r, APIErrorServerError, "error marshalling token data", err)
+// 		return
+// 	}
+//
+// 	// Write response
+// 	_, err = w.Write(jsonResponse)
+// 	if err != nil {
+// 		WriteError(w, r, APIErrorServerError, "error writing token data", err)
+// 		return
+// 	}
+//
+// 	w.Header().Set("Content-Type", "application/json")
+// 	w.WriteHeader(http.StatusOK)
+// }
 
-	ctx := r.Context()
-
-	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
-		return
-	}
-
-	token, err := gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{})
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error generating token", err)
-		return
-	}
-
-	if r.FormValue("recipient") != "" && h.smtpCredentials != nil {
-
-		usr := ctxpkg.ContextMustGetUser(ctx)
-
-		// TODO: the message body needs to point to the meshdirectory service
-		subject := fmt.Sprintf("ScienceMesh: %s wants to collaborate with you", usr.DisplayName)
-		body := "Hi,\n\n" +
-			usr.DisplayName + " (" + usr.Mail + ") wants to start sharing OCM resources with you. " +
-			"To accept the invite, please visit the following URL:\n" +
-			h.meshDirectoryURL + "?token=" + token.InviteToken.Token + "&providerDomain=" + usr.Id.Idp + "\n\n" +
-			"Alternatively, you can visit your mesh provider and use the following details:\n" +
-			"Token: " + token.InviteToken.Token + "\n" +
-			"ProviderDomain: " + usr.Id.Idp + "\n\n" +
-			"Best,\nThe ScienceMesh team"
-
-		err = h.smtpCredentials.SendMail(r.FormValue("recipient"), subject, body)
-		if err != nil {
-			WriteError(w, r, APIErrorServerError, "error sending token by mail", err)
-			return
-		}
-	}
-
-	jsonResponse, err := json.Marshal(token.InviteToken)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error marshalling token data", err)
-		return
-	}
-
-	// Write response
-	_, err = w.Write(jsonResponse)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error writing token data", err)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
-
-	if r.FormValue("token") == "" || r.FormValue("providerDomain") == "" {
-		WriteError(w, r, APIErrorInvalidParameter, "token and providerDomain must not be null", nil)
-		return
-	}
-
-	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
-		return
-	}
-
-	token := &invitepb.InviteToken{
-		Token: r.FormValue("token"),
-	}
-
-	providerInfo, err := gatewayClient.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
-		Domain: r.FormValue("providerDomain"),
-	})
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error sending a grpc get invite by domain info request", err)
-		return
-	}
-	if providerInfo.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(providerInfo.Status.Message))
-		return
-	}
-
-	forwardInviteReq := &invitepb.ForwardInviteRequest{
-		InviteToken:          token,
-		OriginSystemProvider: providerInfo.ProviderInfo,
-	}
-	forwardInviteResponse, err := gatewayClient.ForwardInvite(ctx, forwardInviteReq)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error sending a grpc forward invite request", err)
-		return
-	}
-	if forwardInviteResponse.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(forwardInviteResponse.Status.Message))
-		return
-	}
-
-	_, err = w.Write([]byte("Accepted invite from: " + r.FormValue("providerDomain")))
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error writing token data", err)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-
-	log.Info().Msgf("Invite forwarded to: %s", r.FormValue("providerDomain"))
-}
+// func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
+// 	ctx := r.Context()
+// 	log := appctx.GetLogger(ctx)
+//
+// 	if r.FormValue("token") == "" || r.FormValue("providerDomain") == "" {
+// 		WriteError(w, r, APIErrorInvalidParameter, "token and providerDomain must not be null", nil)
+// 		return
+// 	}
+//
+// 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+// 	if err != nil {
+// 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
+// 		return
+// 	}
+//
+// 	token := &invitepb.InviteToken{
+// 		Token: r.FormValue("token"),
+// 	}
+//
+// 	providerInfo, err := gatewayClient.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+// 		Domain: r.FormValue("providerDomain"),
+// 	})
+// 	if err != nil {
+// 		WriteError(w, r, APIErrorServerError, "error sending a grpc get invite by domain info request", err)
+// 		return
+// 	}
+// 	if providerInfo.Status.Code != rpc.Code_CODE_OK {
+// 		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(providerInfo.Status.Message))
+// 		return
+// 	}
+//
+// 	forwardInviteReq := &invitepb.ForwardInviteRequest{
+// 		InviteToken:          token,
+// 		OriginSystemProvider: providerInfo.ProviderInfo,
+// 	}
+// 	forwardInviteResponse, err := gatewayClient.ForwardInvite(ctx, forwardInviteReq)
+// 	if err != nil {
+// 		WriteError(w, r, APIErrorServerError, "error sending a grpc forward invite request", err)
+// 		return
+// 	}
+// 	if forwardInviteResponse.Status.Code != rpc.Code_CODE_OK {
+// 		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(forwardInviteResponse.Status.Message))
+// 		return
+// 	}
+//
+// 	_, err = w.Write([]byte("Accepted invite from: " + r.FormValue("providerDomain")))
+// 	if err != nil {
+// 		WriteError(w, r, APIErrorServerError, "error writing token data", err)
+// 		return
+// 	}
+// 	w.WriteHeader(http.StatusOK)
+//
+// 	log.Info().Msgf("Invite forwarded to: %s", r.FormValue("providerDomain"))
+// }
 
 func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	token, userID, recipientProvider := r.FormValue("token"), r.FormValue("userID"), r.FormValue("recipientProvider")
-	name, email := r.FormValue("name"), r.FormValue("email")
+	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	var token, userID, recipientProvider, name, email string
+	if err == nil && contentType == "application/json" {
+		defer r.Body.Close()
+		reqBody, err := io.ReadAll(r.Body)
+		if err == nil {
+			reqMap := make(map[string]string)
+			err = json.Unmarshal(reqBody, &reqMap)
+			if err == nil {
+				token, userID, recipientProvider = reqMap["token"], reqMap["usderId"], reqMap["recipientProvider"]
+				name, email = reqMap["name"], reqMap["email"]
+			}
+		}
+	} else {
+		token, userID, recipientProvider = r.FormValue("token"), r.FormValue("userID"), r.FormValue("recipientProvider")
+		name, email = r.FormValue("name"), r.FormValue("email")
+	}
+
 	if token == "" || userID == "" || recipientProvider == "" || email == "" {
 		WriteError(w, r, APIErrorInvalidParameter, "missing parameters in request", nil)
 		return
