@@ -1469,7 +1469,7 @@ func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
 func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 	var auth eosclient.Authorization
 
-	if !fs.conf.EnableHome && basePath != "/" {
+	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && basePath != "/" {
 		// We need to access the recycle bin for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
@@ -1520,7 +1520,7 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 func (fs *eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	var auth eosclient.Authorization
 
-	if !fs.conf.EnableHome && basePath != "/" {
+	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && basePath != "/" {
 		// We need to access the recycle bin for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.

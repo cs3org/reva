@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package eoshome
+package eoswrapper
 
 import (
 	"bytes"
@@ -63,6 +63,11 @@ func parseConfig(m map[string]interface{}) (*eosfs.Config, string, error) {
 	// default to version invariance if not configured
 	if _, ok := m["version_invariant"]; !ok {
 		c.VersionInvariant = true
+	}
+
+	// allow recycle operations for project spaces
+	if !c.EnableHome && strings.HasPrefix(c.Namespace, eosProjectsNamespace) {
+		c.AllowPathRecycleOperations = true
 	}
 
 	t, ok := m["mount_id_template"].(string)
