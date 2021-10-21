@@ -28,7 +28,7 @@ import (
 )
 
 func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
-	if s.warmupCache != nil {
+	if s.warmupCacheTracker != nil {
 		u := ctxpkg.ContextMustGetUser(r.Context())
 		tkn := ctxpkg.ContextMustGetToken(r.Context())
 
@@ -40,13 +40,13 @@ func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 		req.Method = http.MethodGet
 
 		id := u.Id.OpaqueId
-		if _, err := s.warmupCache.Get(id); err != nil {
+		if _, err := s.warmupCacheTracker.Get(id); err != nil {
 			p := httptest.NewRecorder()
-			_ = s.warmupCache.Set(id, true)
-			req.URL.Path = "/apps/files_sharing/api/v1/shares"
-			go s.router.ServeHTTP(p, req)
-			req.URL.Path = "/apps/files_sharing/api/v1/shares?shared_with_me=true"
-			go s.router.ServeHTTP(p, req)
+			_ = s.warmupCacheTracker.Set(id, true)
+			req.URL.Path = "/v1.php/apps/files_sharing/api/v1/shares"
+			s.router.ServeHTTP(p, req)
+			req.URL.Path = "/v1.php/apps/files_sharing/api/v1/shares?shared_with_me=true"
+			s.router.ServeHTTP(p, req)
 		}
 	}
 }

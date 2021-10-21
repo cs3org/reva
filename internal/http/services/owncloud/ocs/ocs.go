@@ -43,9 +43,9 @@ func init() {
 }
 
 type svc struct {
-	c           *config.Config
-	router      *chi.Mux
-	warmupCache *ttlcache.Cache
+	c                  *config.Config
+	router             *chi.Mux
+	warmupCacheTracker *ttlcache.Cache
 }
 
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
@@ -67,8 +67,8 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	if conf.CacheWarmupDriver == "first-request" && conf.ResourceInfoCacheTTL > 0 {
-		s.warmupCache = ttlcache.NewCache()
-		_ = s.warmupCache.SetTTL(time.Second * time.Duration(conf.ResourceInfoCacheTTL))
+		s.warmupCacheTracker = ttlcache.NewCache()
+		_ = s.warmupCacheTracker.SetTTL(time.Second * time.Duration(conf.ResourceInfoCacheTTL))
 	}
 
 	return s, nil
@@ -148,7 +148,7 @@ func (s *svc) Handler() http.Handler {
 		log.Debug().Str("path", r.URL.Path).Msg("ocs routing")
 
 		// Warmup the share cache for the user
-		s.cacheWarmup(w, r)
+		go s.cacheWarmup(w, r)
 
 		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
 		r.URL.RawPath = ""

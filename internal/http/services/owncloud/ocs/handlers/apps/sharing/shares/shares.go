@@ -494,11 +494,11 @@ func (h *Handler) ListShares(w http.ResponseWriter, r *http.Request) {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 		}
 		if listSharedWithMe {
-			h.ListSharesWithMe(w, r)
+			h.listSharesWithMe(w, r)
 			return
 		}
 	}
-	h.ListSharesWithOthers(w, r)
+	h.listSharesWithOthers(w, r)
 }
 
 const (
@@ -508,8 +508,7 @@ const (
 	ocsStateRejected = 2
 )
 
-// ListSharesWithMe returns the shares receieved by the user present in the context
-func (h *Handler) ListSharesWithMe(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
 	stateFilter := getStateFilter(r.FormValue("state"))
 
@@ -706,9 +705,7 @@ func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId)
 	return nil
 }
 
-// ListSharesWithOthers returns the public, user, group and federated shares
-// created by the user present in the context
-func (h *Handler) ListSharesWithOthers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 
 	filters := []*collaboration.Filter{}
