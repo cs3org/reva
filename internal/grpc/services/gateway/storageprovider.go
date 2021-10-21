@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cs3org/reva/pkg/utils"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
