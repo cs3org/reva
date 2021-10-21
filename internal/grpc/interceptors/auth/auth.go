@@ -92,7 +92,6 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		log := appctx.GetLogger(ctx)
 
 		if utils.Skip(info.FullMethod, unprotected) {
-			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 
 			// If a token is present, set it anyway, as we might need the user info
 			// to decide the storage provider.

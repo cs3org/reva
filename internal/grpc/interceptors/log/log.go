@@ -53,17 +53,14 @@ func NewUnary() grpc.UnaryServerInterceptor {
 		var event *zerolog.Event
 		if code != codes.OK {
 			event = log.Error()
-		} else {
-			event = log.Debug()
+			event.Str("user-agent", userAgent).
+				Str("from", fromAddress).
+				Str("uri", info.FullMethod).
+				Str("start", start.Format("02/Jan/2006:15:04:05 -0700")).
+				Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff)).
+				Str("code", code.String()).
+				Msg("unary")
 		}
-
-		event.Str("user-agent", userAgent).
-			Str("from", fromAddress).
-			Str("uri", info.FullMethod).
-			Str("start", start.Format("02/Jan/2006:15:04:05 -0700")).
-			Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff)).
-			Str("code", code.String()).
-			Msg("unary")
 
 		return res, err
 	}
@@ -93,17 +90,14 @@ func NewStream() grpc.StreamServerInterceptor {
 		var event *zerolog.Event
 		if code != codes.OK {
 			event = log.Error()
-		} else {
-			event = log.Info()
+			event.Str("user-agent", userAgent).
+				Str("from", fromAddress).
+				Str("uri", info.FullMethod).
+				Str("start", start.Format("02/Jan/2006:15:04:05 -0700")).
+				Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff)).
+				Str("code", code.String()).
+				Msg("stream")
 		}
-
-		event.Str("user-agent", userAgent).
-			Str("from", fromAddress).
-			Str("uri", info.FullMethod).
-			Str("start", start.Format("02/Jan/2006:15:04:05 -0700")).
-			Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff)).
-			Str("code", code.String()).
-			Msg("stream")
 
 		return err
 	}
