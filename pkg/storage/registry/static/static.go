@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -43,9 +44,10 @@ func init() {
 var bracketRegex = regexp.MustCompile(`\[(.*?)\]`)
 
 type rule struct {
-	Mapping string            `mapstructure:"mapping"`
-	Address string            `mapstructure:"address"`
-	Aliases map[string]string `mapstructure:"aliases"`
+	Mapping           string            `mapstructure:"mapping"`
+	Address           string            `mapstructure:"address"`
+	Aliases           map[string]string `mapstructure:"aliases"`
+	AllowedUserAgents []string          `mapstructure:"allowed_user_agents"`
 }
 
 type config struct {
@@ -138,6 +140,27 @@ func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 	return nil, errors.New("static: home not found")
 }
 
+func userAgentIsAllowed(ua *ua.UserAgent, userAgents []string) bool {
+	for _, userAgent := range userAgents {
+		switch userAgent {
+		case "web":
+			if ua.IsChrome() || ua.IsEdge() || ua.IsFirefox() || ua.IsSafari() ||
+				ua.IsInternetExplorer() || ua.IsOpera() || ua.IsOperaMini() {
+				return true
+			}
+		case "desktop":
+			if ua.Desktop {
+				return true
+			}
+		case "grpc":
+			if ua.Name == "grpc-go" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
 	// find longest match
 	var match *registrypb.ProviderInfo
@@ -147,6 +170,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	if ref.ResourceId != nil {
 		if ref.ResourceId.StorageId != "" {
 			for prefix, rule := range b.c.Rules {
+
 				addr := getProviderAddr(ctx, rule)
 				r, err := regexp.Compile("^" + prefix + "$")
 				if err != nil {
@@ -173,6 +197,22 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	fn := path.Clean(ref.GetPath())
 	if fn != "" {
 		for prefix, rule := range b.c.Rules {
+
+			// check if the provider is allowed to be shown according to the
+			// user agent that made the request
+			// if the list of AllowedUserAgents is empty, this means that
+			// every agents that made the request could see the provider
+
+			if len(rule.AllowedUserAgents) != 0 {
+				ua, ok := ctxpkg.ContextGetUserAgent(ctx)
+				if !ok {
+					continue
+				}
+				if !userAgentIsAllowed(ua, rule.AllowedUserAgents) {
+					continue // skip this provider
+				}
+			}
+
 			addr := getProviderAddr(ctx, rule)
 			r, err := regexp.Compile("^" + prefix)
 			if err != nil {
