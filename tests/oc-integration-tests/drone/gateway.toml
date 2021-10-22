@@ -53,6 +53,7 @@ driver = "static"
 publicshares = "localhost:17000" # started with the shares.toml
 basic = "localhost:18000" # started with the users.toml
 bearer = "localhost:20099" # started with the frontend.toml
+machine = "localhost:21000" # started with the machine-auth.toml
 
 [grpc.services.storageregistry]
 driver = "static"
