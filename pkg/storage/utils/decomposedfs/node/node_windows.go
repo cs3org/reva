@@ -19,11 +19,12 @@
 //go:build windows
 // +build windows
 
-package decomposedfs
+package node
 
 import "golang.org/x/sys/windows"
 
-func (fs *Decomposedfs) getAvailableSize(path string) (uint64, error) {
+// GetAvailableSize stats the filesystem and return the available bytes
+func GetAvailableSize(path string) (uint64, error) {
 	var free, total, avail uint64
 	pathPtr, err := windows.UTF16PtrFromString(path)
 	if err != nil {

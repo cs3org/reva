@@ -6,3 +6,4 @@ Make the cs3apis accept a Reference in the getQuota Request to limit the call to
 
 https://github.com/cs3org/reva/pull/2152
 https://github.com/cs3org/reva/pull/2178
+https://github.com/cs3org/reva/pull/2187

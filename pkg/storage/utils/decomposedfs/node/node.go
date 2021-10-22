@@ -192,6 +192,7 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	default:
 		return nil, errtypes.InternalError(err.Error())
 	}
+
 	// check if this is a space root
 	if _, err = xattr.Get(nodePath, xattrs.SpaceNameAttr); err == nil {
 		n.SpaceRoot = n
@@ -261,6 +262,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "could not read child node")
 		}
+		c.SpaceRoot = n.SpaceRoot
 	} else {
 		return nil, fmt.Errorf("Decomposedfs: expected '../ prefix, got' %+v", link)
 	}
@@ -935,4 +937,61 @@ func parseMTime(v string) (t time.Time, err error) {
 		}
 	}
 	return time.Unix(sec, nsec), err
+}
+
+// FindStorageSpaceRoot calls n.Parent() and climbs the tree
+// until it finds the space root node and adds it to the node
+func (n *Node) FindStorageSpaceRoot() error {
+	var err error
+	// remember the node we ask for and use parent to climb the tree
+	parent := n
+	for parent.ParentID != "" {
+		if parent, err = parent.Parent(); err != nil {
+			return err
+		}
+		if IsSpaceRoot(parent) {
+			n.SpaceRoot = parent
+			break
+		}
+	}
+	return nil
+}
+
+// IsSpaceRoot checks if the node is a space root
+func IsSpaceRoot(r *Node) bool {
+	path := r.InternalPath()
+	if spaceNameBytes, err := xattr.Get(path, xattrs.SpaceNameAttr); err == nil {
+		if string(spaceNameBytes) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// CheckQuota checks if both disk space and available quota are sufficient
+var CheckQuota = func(spaceRoot *Node, fileSize uint64) (quotaSufficient bool, err error) {
+	used, _ := spaceRoot.GetTreeSize()
+	if !enoughDiskSpace(spaceRoot.InternalPath(), fileSize) {
+		return false, errtypes.InsufficientStorage("disk full")
+	}
+	quotaByte, _ := xattr.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
+	var total uint64
+	if quotaByte == nil {
+		// if quota is not set, it means unlimited
+		return true, nil
+	}
+	total, _ = strconv.ParseUint(string(quotaByte), 10, 64)
+	// if total is smaller than used, total-used could overflow and be bigger than fileSize
+	if fileSize > total-used || total < used {
+		return false, errtypes.InsufficientStorage("quota exceeded")
+	}
+	return true, nil
+}
+
+func enoughDiskSpace(path string, fileSize uint64) bool {
+	avalB, err := GetAvailableSize(path)
+	if err != nil {
+		return false
+	}
+	return avalB > fileSize
 }

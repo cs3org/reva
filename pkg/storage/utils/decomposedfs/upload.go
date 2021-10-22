@@ -31,7 +31,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -43,11 +42,9 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
@@ -163,7 +160,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
 
-	_, err = checkQuota(ctx, fs, n.SpaceRoot, uint64(info.Size))
+	_, err = node.CheckQuota(n.SpaceRoot, uint64(info.Size))
 	if err != nil {
 		return nil, err
 	}
@@ -486,7 +483,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	)
 	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
 
-	_, err = checkQuota(upload.ctx, upload.fs, n.SpaceRoot, uint64(fi.Size()))
+	_, err = node.CheckQuota(n.SpaceRoot, uint64(fi.Size()))
 	if err != nil {
 		return err
 	}
@@ -748,34 +745,4 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 	}
 
 	return
-}
-
-func checkQuota(ctx context.Context, fs *Decomposedfs, spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
-	used, _ := spaceRoot.GetTreeSize()
-	enoughDiskSpace := enoughDiskSpace(fs, spaceRoot.InternalPath(), fileSize)
-	if !enoughDiskSpace {
-		return false, errtypes.InsufficientStorage("disk full")
-	}
-	quotaB, _ := xattr.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
-	var total uint64
-	if quotaB != nil {
-		total, _ = strconv.ParseUint(string(quotaB), 10, 64)
-	} else {
-		// if quota is not set, it means unlimited
-		return true, nil
-	}
-
-	if fileSize > total-used || total < used {
-		return false, errtypes.InsufficientStorage("quota exceeded")
-	}
-	return true, nil
-}
-
-func enoughDiskSpace(fs *Decomposedfs, path string, fileSize uint64) bool {
-	avalB, err := fs.getAvailableSize(path)
-	if err != nil {
-		return false
-	}
-
-	return avalB > fileSize
 }
