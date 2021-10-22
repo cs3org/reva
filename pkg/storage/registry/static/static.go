@@ -153,7 +153,7 @@ func userAgentIsAllowed(ua *ua.UserAgent, userAgents []string) bool {
 				return true
 			}
 		case "grpc":
-			if ua.Name == "grpc-go" {
+			if strings.HasPrefix(ua.Name, "grpc") {
 				return true
 			}
 		}
@@ -170,7 +170,6 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	if ref.ResourceId != nil {
 		if ref.ResourceId.StorageId != "" {
 			for prefix, rule := range b.c.Rules {
-
 				addr := getProviderAddr(ctx, rule)
 				r, err := regexp.Compile("^" + prefix + "$")
 				if err != nil {
