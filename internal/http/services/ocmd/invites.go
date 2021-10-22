@@ -191,12 +191,13 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		reqBody, err := io.ReadAll(r.Body)
 		if err == nil {
-			reqMap := make(map[string]string)
-			err = json.Unmarshal(reqBody, &reqMap)
+			bodyMap := make(map[string]interface{})
+			err = json.Unmarshal(reqBody, &bodyMap)
+			inviteMap := bodyMap["invite"].(map[string]string)
 			if err == nil {
 				// FIXME: userID vs userId
-				token, userID, recipientProvider = reqMap["token"], reqMap["userId"], reqMap["recipientProvider"]
-				name, email = reqMap["name"], reqMap["email"]
+				token, userID, recipientProvider = inviteMap["token"], inviteMap["userId"], inviteMap["recipientProvider"]
+				name, email = inviteMap["name"], inviteMap["email"]
 			}
 		}
 	} else {
