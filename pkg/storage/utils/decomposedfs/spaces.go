@@ -326,6 +326,10 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 
 	// TODO apply more filters
 
+	sname, err := xattr.Get(node.InternalPath(), xattrs.SpaceNameAttr)
+	if err != nil {
+		return nil, err
+	}
 	space := &provider.StorageSpace{
 		// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
 		//Id: &provider.StorageSpaceId{OpaqueId: "1284d238-aa92-42ce-bdc4-0b0000009157!" + n.ID},
@@ -334,20 +338,9 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 			//StorageId: "1284d238-aa92-42ce-bdc4-0b0000009157",
 			OpaqueId: node.ID,
 		},
-		Name:      node.Name,
+		Name:      string(sname),
 		SpaceType: spaceType,
 		// Mtime is set either as node.tmtime or as fi.mtime below
-	}
-
-	switch space.SpaceType {
-	case "project":
-		sname, err := xattr.Get(node.InternalPath(), xattrs.SpaceNameAttr)
-		if err != nil {
-			return nil, err
-		}
-		space.Name = string(sname)
-	default:
-		space.Name = "root"
 	}
 
 	user := ctxpkg.ContextMustGetUser(ctx)
