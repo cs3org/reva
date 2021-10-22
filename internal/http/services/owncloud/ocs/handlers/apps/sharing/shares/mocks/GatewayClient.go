@@ -83,6 +83,36 @@ func (_m *GatewayClient) GetGroup(ctx context.Context, in *groupv1beta1.GetGroup
 	return r0, r1
 }
 
+// GetGroupByClaim provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayClient) GetGroupByClaim(ctx context.Context, in *groupv1beta1.GetGroupByClaimRequest, opts ...grpc.CallOption) (*groupv1beta1.GetGroupByClaimResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *groupv1beta1.GetGroupByClaimResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *groupv1beta1.GetGroupByClaimRequest, ...grpc.CallOption) *groupv1beta1.GetGroupByClaimResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*groupv1beta1.GetGroupByClaimResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *groupv1beta1.GetGroupByClaimRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetShare provides a mock function with given fields: ctx, in, opts
 func (_m *GatewayClient) GetShare(ctx context.Context, in *collaborationv1beta1.GetShareRequest, opts ...grpc.CallOption) (*collaborationv1beta1.GetShareResponse, error) {
 	_va := make([]interface{}, len(opts))
