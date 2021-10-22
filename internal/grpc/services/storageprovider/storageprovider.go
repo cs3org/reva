@@ -489,9 +489,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	return &provider.UpdateStorageSpaceResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("UpdateStorageSpace not implemented"), "UpdateStorageSpace not implemented"),
-	}, nil
+	return s.storage.UpdateStorageSpace(ctx, req)
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {

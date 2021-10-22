@@ -42,6 +42,11 @@ import (
 	"github.com/pkg/xattr"
 )
 
+const (
+	spaceTypeAny = "*"
+	spaceIDAny   = "*"
+)
+
 // CreateStorageSpace creates a storage space
 func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	// spaces will be located by default in the root of the storage.
@@ -163,8 +168,8 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// we would not need /nodes/root if access always happened via spaceid+relative path
 
 	var (
-		spaceType = "*"
-		spaceID   = "*"
+		spaceType = spaceTypeAny
+		spaceID   = spaceIDAny
 	)
 
 	for i := range filter {
@@ -206,102 +211,84 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 				appctx.GetLogger(ctx).Error().Err(err).Str("id", filepath.Base(target)).Msg("could not read node, skipping")
 				continue
 			}
+
+			spaceType := filepath.Base(filepath.Dir(matches[i]))
+
 			owner, err := n.Owner()
 			if err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not read owner, skipping")
 				continue
 			}
 
+			if spaceType == "share" && utils.UserEqual(u.Id, owner) {
+				// do not list shares as spaces for the owner
+				continue
+			}
+
 			// TODO apply more filters
-
-			space := &provider.StorageSpace{
-				// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
-				//Id: &provider.StorageSpaceId{OpaqueId: "1284d238-aa92-42ce-bdc4-0b0000009157!" + n.ID},
-				Root: &provider.ResourceId{
-					// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
-					//StorageId: "1284d238-aa92-42ce-bdc4-0b0000009157",
-					OpaqueId: n.ID,
-				},
-				Name:      n.Name,
-				SpaceType: filepath.Base(filepath.Dir(matches[i])),
-				// Mtime is set either as node.tmtime or as fi.mtime below
-			}
-
-			switch space.SpaceType {
-			case "share":
-				if utils.UserEqual(u.Id, owner) {
-					// do not list shares as spaces for the owner
-					continue
-				}
-			default:
-				sname, err := xattr.Get(n.InternalPath(), xattrs.SpaceNameAttr)
-				if err != nil {
-					appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not read space name, attribute not found")
-					continue
-				}
-				space.Name = string(sname)
-			}
-
-			// filter out spaces user cannot access (currently based on stat permission)
-			p, err := n.ReadUserPermissions(ctx, u)
+			space, err := fs.storageSpaceFromNode(ctx, n, matches[i], spaceType)
 			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not read permissions, skipping")
+				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
 				continue
 			}
-			if !p.Stat {
-				continue
-			}
-
-			// fill in user object if the current user is the owner
-			if utils.UserEqual(u.Id, owner) {
-				space.Owner = u
-			} else {
-				space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
-					Id: owner,
-				}
-			}
-
-			// we set the space mtime to the root item mtime
-			// override the stat mtime with a tmtime if it is present
-			if tmt, err := n.GetTMTime(); err == nil {
-				un := tmt.UnixNano()
-				space.Mtime = &types.Timestamp{
-					Seconds: uint64(un / 1000000000),
-					Nanos:   uint32(un % 1000000000),
-				}
-			} else if fi, err := os.Stat(matches[i]); err == nil {
-				// fall back to stat mtime
-				un := fi.ModTime().UnixNano()
-				space.Mtime = &types.Timestamp{
-					Seconds: uint64(un / 1000000000),
-					Nanos:   uint32(un % 1000000000),
-				}
-			}
-
-			// quota
-			v, err := xattr.Get(matches[i], xattrs.QuotaAttr)
-			if err == nil {
-				// make sure we have a proper signed int
-				// we use the same magic numbers to indicate:
-				// -1 = uncalculated
-				// -2 = unknown
-				// -3 = unlimited
-				if quota, err := strconv.ParseUint(string(v), 10, 64); err == nil {
-					space.Quota = &provider.Quota{
-						QuotaMaxBytes: quota,
-						QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
-					}
-				} else {
-					appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", matches[i]).Msg("could not read quota")
-				}
-			}
-
 			spaces = append(spaces, space)
 		}
 	}
 
 	return spaces, nil
 
+}
+
+// UpdateStorageSpace updates a storage space
+func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	space := req.StorageSpace
+
+	_, spaceID, err := utils.SplitStorageSpaceID(space.Id.OpaqueId)
+	if err != nil {
+		return nil, err
+	}
+
+	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(matches) != 1 {
+		return nil, errors.New("multiple spaces found")
+	}
+
+	target, err := os.Readlink(matches[0])
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[0]).Msg("could not read link, skipping")
+	}
+
+	node, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
+	if err != nil {
+		return nil, err
+	}
+
+	if space.Name != "" {
+		if err := node.SetMetadata(xattrs.SpaceNameAttr, space.Name); err != nil {
+			return nil, err
+		}
+	}
+
+	if space.Quota != nil {
+		if err := node.SetMetadata(xattrs.QuotaAttr, strconv.FormatUint(space.Quota.QuotaMaxBytes, 10)); err != nil {
+			return nil, err
+		}
+	}
+
+	spaceType := filepath.Base(filepath.Dir(matches[0]))
+	updated, err := fs.storageSpaceFromNode(ctx, node, matches[0], spaceType)
+	if err != nil {
+		return nil, err
+	}
+
+	return &provider.UpdateStorageSpaceResponse{
+		Status:       &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
+		StorageSpace: updated,
+	}, nil
 }
 
 // createHiddenSpaceFolder bootstraps a storage space root with a hidden ".space" folder used to store space related
@@ -335,4 +322,89 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeI
 	}
 
 	return nil
+}
+
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Node, nodePath, spaceType string) (*provider.StorageSpace, error) {
+	owner, err := node.Owner()
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO apply more filters
+
+	space := &provider.StorageSpace{
+		// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
+		//Id: &provider.StorageSpaceId{OpaqueId: "1284d238-aa92-42ce-bdc4-0b0000009157!" + n.ID},
+		Root: &provider.ResourceId{
+			// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
+			//StorageId: "1284d238-aa92-42ce-bdc4-0b0000009157",
+			OpaqueId: node.ID,
+		},
+		Name:      node.Name,
+		SpaceType: spaceType,
+		// Mtime is set either as node.tmtime or as fi.mtime below
+	}
+
+	switch space.SpaceType {
+	case "project":
+		sname, err := xattr.Get(node.InternalPath(), xattrs.SpaceNameAttr)
+		if err != nil {
+			return nil, err
+		}
+		space.Name = string(sname)
+	default:
+		space.Name = "root"
+	}
+
+	user := ctxpkg.ContextMustGetUser(ctx)
+
+	// filter out spaces user cannot access (currently based on stat permission)
+	p, err := node.ReadUserPermissions(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	if !p.Stat {
+		return nil, errors.New("user is not allowed to Stat the space")
+	}
+
+	space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
+		Id: owner,
+	}
+
+	// we set the space mtime to the root item mtime
+	// override the stat mtime with a tmtime if it is present
+	if tmt, err := node.GetTMTime(); err == nil {
+		un := tmt.UnixNano()
+		space.Mtime = &types.Timestamp{
+			Seconds: uint64(un / 1000000000),
+			Nanos:   uint32(un % 1000000000),
+		}
+	} else if fi, err := os.Stat(nodePath); err == nil {
+		// fall back to stat mtime
+		un := fi.ModTime().UnixNano()
+		space.Mtime = &types.Timestamp{
+			Seconds: uint64(un / 1000000000),
+			Nanos:   uint32(un % 1000000000),
+		}
+	}
+
+	// quota
+	v, err := xattr.Get(nodePath, xattrs.QuotaAttr)
+	if err == nil {
+		// make sure we have a proper signed int
+		// we use the same magic numbers to indicate:
+		// -1 = uncalculated
+		// -2 = unknown
+		// -3 = unlimited
+		if quota, err := strconv.ParseUint(string(v), 10, 64); err == nil {
+			space.Quota = &provider.Quota{
+				QuotaMaxBytes: quota,
+				QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
+			}
+		} else {
+			return nil, err
+		}
+	}
+
+	return space, nil
 }

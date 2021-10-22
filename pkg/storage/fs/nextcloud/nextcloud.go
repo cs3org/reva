@@ -792,3 +792,19 @@ func (nc *StorageDriver) CreateStorageSpace(ctx context.Context, req *provider.C
 	}
 	return &respObj, nil
 }
+
+// UpdateStorageSpace updates a storage space
+func (nc *StorageDriver) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	bodyStr, _ := json.Marshal(req)
+	_, respBody, err := nc.do(ctx, Action{"UpdateStorageSpace", string(bodyStr)})
+	if err != nil {
+		return nil, err
+	}
+	var respObj provider.UpdateStorageSpaceResponse
+	fmt.Println(string(respBody))
+	err = json.Unmarshal(respBody, &respObj)
+	if err != nil {
+		return nil, err
+	}
+	return &respObj, nil
+}
