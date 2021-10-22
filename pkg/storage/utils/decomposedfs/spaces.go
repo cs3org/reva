@@ -254,7 +254,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	if len(matches) != 1 {
-		return nil, errors.New("multiple spaces found")
+		return nil, fmt.Errorf("update space failed: found %d matching spaces", len(matches))
 	}
 
 	target, err := os.Readlink(matches[0])
@@ -279,15 +279,9 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}
 	}
 
-	spaceType := filepath.Base(filepath.Dir(matches[0]))
-	updated, err := fs.storageSpaceFromNode(ctx, node, matches[0], spaceType)
-	if err != nil {
-		return nil, err
-	}
-
 	return &provider.UpdateStorageSpaceResponse{
 		Status:       &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
-		StorageSpace: updated,
+		StorageSpace: space,
 	}, nil
 }
 
