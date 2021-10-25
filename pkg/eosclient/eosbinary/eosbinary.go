@@ -462,7 +462,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 		info.Inode = inode
 	}
 
-	return info, nil
+	return c.mergeParentACLsForFiles(ctx, auth, info), nil
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal
@@ -472,7 +472,13 @@ func (c *Client) GetFileInfoByFXID(ctx context.Context, auth eosclient.Authoriza
 	if err != nil {
 		return nil, err
 	}
-	return c.parseFileInfo(stdout)
+
+	info, err := c.parseFileInfo(stdout)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.mergeParentACLsForFiles(ctx, auth, info), nil
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path
@@ -493,7 +499,19 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 		}
 	}
 
-	return info, nil
+	return c.mergeParentACLsForFiles(ctx, auth, info), nil
+}
+
+func (c *Client) mergeParentACLsForFiles(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
+	// We need to inherit the ACLs for the parent directory as these are not available for files
+	if !info.IsDir {
+		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
+		// Even if this call fails, at least return the current file object
+		if err == nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
+		}
+	}
+	return info
 }
 
 // SetAttr sets an extended attributes on a path.
@@ -857,6 +875,8 @@ func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
 	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
 		return c == '\n'
 	})
+
+	var parent *eosclient.FileInfo
 	for _, rl := range rawLines {
 		if rl == "" {
 			continue
@@ -869,10 +889,20 @@ func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
 		// we skip the current directory as eos find will return the directory we
 		// ask to find
 		if fi.File == path.Clean(dirPath) {
+			parent = fi
 			continue
 		}
+
 		finfos = append(finfos, fi)
 	}
+
+	for _, fi := range finfos {
+		// For files, inherit ACLs from the parent
+		if !fi.IsDir && parent != nil {
+			fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+		}
+	}
+
 	return finfos, nil
 }
 
@@ -934,6 +964,7 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 	name := line[0:length]
 
 	kv := make(map[string]string)
+	attrs := make(map[string]string)
 	// strip trailing slash
 	kv["file"] = strings.TrimSuffix(name, "/")
 
@@ -948,9 +979,9 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 			// handle xattrn and xattrv special cases
 			switch {
 			case partsByEqual[0] == "xattrn":
-				previousXAttr = partsByEqual[1]
+				previousXAttr = strings.Replace(partsByEqual[1], "user.", "", 1)
 			case partsByEqual[0] == "xattrv":
-				kv[previousXAttr] = partsByEqual[1]
+				attrs[previousXAttr] = partsByEqual[1]
 				previousXAttr = ""
 			default:
 				kv[partsByEqual[0]] = partsByEqual[1]
@@ -958,7 +989,7 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 			}
 		}
 	}
-	fi, err := c.mapToFileInfo(kv)
+	fi, err := c.mapToFileInfo(kv, attrs)
 	if err != nil {
 		return nil, err
 	}
@@ -968,7 +999,7 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 // mapToFileInfo converts the dictionary to an usable structure.
 // The kv has format:
 // map[sys.forced.space:default files:0 mode:42555 ino:5 sys.forced.blocksize:4k sys.forced.layout:replica uid:0 fid:5 sys.forced.blockchecksum:crc32c sys.recycle:/eos/backup/proc/recycle/ fxid:00000005 pid:1 etag:5:0.000 keylength.file:4 file:/eos treesize:1931593933849913 container:3 gid:0 mtime:1498571294.108614409 ctime:1460121992.294326762 pxid:00000001 sys.forced.checksum:adler sys.forced.nstripes:2]
-func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error) {
+func (c *Client) mapToFileInfo(kv, attrs map[string]string) (*eosclient.FileInfo, error) {
 	inode, err := strconv.ParseUint(kv["ino"], 10, 64)
 	if err != nil {
 		return nil, err
@@ -1055,11 +1086,11 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error
 		}
 	}
 
-	sysACL, err := acl.Parse(kv["sys.acl"], acl.ShortTextForm)
+	sysACL, err := acl.Parse(attrs["sys.acl"], acl.ShortTextForm)
 	if err != nil {
 		return nil, err
 	}
-	lwACLStr, ok := kv[lwShareAttrKey]
+	lwACLStr, ok := attrs[lwShareAttrKey]
 	if ok {
 		lwAcls, err := acl.Parse(lwACLStr, acl.ShortTextForm)
 		if err != nil {
@@ -1088,7 +1119,7 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error
 		Instance:   c.opt.URL,
 		SysACL:     sysACL,
 		TreeCount:  treeCount,
-		Attrs:      kv,
+		Attrs:      attrs,
 		XS:         xs,
 	}
 

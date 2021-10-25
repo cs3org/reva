@@ -35,6 +35,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"google.golang.org/genproto/protobuf/field_mask"
 
 	"github.com/cs3org/reva/pkg/share/manager/registry"
 	"github.com/cs3org/reva/pkg/utils"
@@ -268,21 +269,15 @@ func (m *mgr) get(ctx context.Context, ref *collaboration.ShareReference) (s *co
 
 	// check if we are the owner
 	user := ctxpkg.ContextMustGetUser(ctx)
-	if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+	if share.IsCreatedByUser(s, user) {
 		return s, nil
 	}
 
 	// or the grantee
-	if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
+	if share.IsGrantedToUser(s, user) {
 		return s, nil
-	} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		// check if all user groups match this share; TODO(labkode): filter shares created by us.
-		for _, g := range user.Groups {
-			if g == s.Grantee.GetGroupId().OpaqueId {
-				return s, nil
-			}
-		}
 	}
+
 	// we return not found to not disclose information
 	return nil, errtypes.NotFound(ref.String())
 }
@@ -302,7 +297,7 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 	user := ctxpkg.ContextMustGetUser(ctx)
 	for i, s := range m.model.Shares {
 		if sharesEqual(ref, s) {
-			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+			if share.IsCreatedByUser(s, user) {
 				m.model.Shares[len(m.model.Shares)-1], m.model.Shares[i] = m.model.Shares[i], m.model.Shares[len(m.model.Shares)-1]
 				m.model.Shares = m.model.Shares[:len(m.model.Shares)-1]
 				if err := m.model.Save(); err != nil {
@@ -336,7 +331,7 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 	user := ctxpkg.ContextMustGetUser(ctx)
 	for i, s := range m.model.Shares {
 		if sharesEqual(ref, s) {
-			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+			if share.IsCreatedByUser(s, user) {
 				now := time.Now().UnixNano()
 				m.model.Shares[i].Permissions = p
 				m.model.Shares[i].Mtime = &typespb.Timestamp{
@@ -354,26 +349,21 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.ListSharesRequest_Filter) ([]*collaboration.Share, error) {
+func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	var ss []*collaboration.Share
 	m.Lock()
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
-		if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+		if share.IsCreatedByUser(s, user) {
 			// no filter we return earlier
 			if len(filters) == 0 {
 				ss = append(ss, s)
-			} else {
-				// check filters
-				// TODO(labkode): add the rest of filters.
-				for _, f := range filters {
-					if f.Type == collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID {
-						if utils.ResourceIDEqual(s.ResourceId, f.GetResourceId()) {
-							ss = append(ss, s)
-						}
-					}
-				}
+				continue
+			}
+			// check filters
+			if share.MatchesFilters(s, filters) {
+				ss = append(ss, s)
 			}
 		}
 	}
@@ -381,27 +371,26 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.ListShare
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
-func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.ReceivedShare, error) {
+func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
 	var rss []*collaboration.ReceivedShare
 	m.Lock()
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
-		if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
-			// omit shares created by me
+		if share.IsCreatedByUser(s, user) || !share.IsGrantedToUser(s, user) {
+			// omit shares created by the user or shares the user can't access
 			continue
 		}
-		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
+
+		if len(filters) == 0 {
 			rs := m.convert(ctx, s)
 			rss = append(rss, rs)
-		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-			// check if all user groups match this share; TODO(labkode): filter shares created by us.
-			for _, g := range user.Groups {
-				if g == s.Grantee.GetGroupId().OpaqueId {
-					rs := m.convert(ctx, s)
-					rss = append(rss, rs)
-				}
-			}
+			continue
+		}
+
+		if share.MatchesFilters(s, filters) {
+			rs := m.convert(ctx, s)
+			rss = append(rss, rs)
 		}
 	}
 	return rss, nil
@@ -432,24 +421,17 @@ func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference
 	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
 		if sharesEqual(ref, s) {
-			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
+			if share.IsGrantedToUser(s, user) {
 				rs := m.convert(ctx, s)
 				return rs, nil
-			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-				for _, g := range user.Groups {
-					if s.Grantee.GetGroupId().OpaqueId == g {
-						rs := m.convert(ctx, s)
-						return rs, nil
-					}
-				}
 			}
 		}
 	}
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareReference, f *collaboration.UpdateReceivedShareRequest_UpdateField) (*collaboration.ReceivedShare, error) {
-	rs, err := m.getReceived(ctx, ref)
+func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
+	rs, err := m.getReceived(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: receivedShare.Share.Id}})
 	if err != nil {
 		return nil, err
 	}
@@ -458,12 +440,22 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareR
 	m.Lock()
 	defer m.Unlock()
 
+	for i := range fieldMask.Paths {
+		switch fieldMask.Paths[i] {
+		case "state":
+			rs.State = receivedShare.State
+		// TODO case "mount_point":
+		default:
+			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
+		}
+	}
+
 	if v, ok := m.model.State[user.Id.String()]; ok {
-		v[rs.Share.Id.String()] = f.GetState()
+		v[rs.Share.Id.String()] = rs.GetState()
 		m.model.State[user.Id.String()] = v
 	} else {
 		a := map[string]collaboration.ShareState{
-			rs.Share.Id.String(): f.GetState(),
+			rs.Share.Id.String(): rs.GetState(),
 		}
 		m.model.State[user.Id.String()] = a
 	}
@@ -473,6 +465,5 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareR
 		return nil, err
 	}
 
-	rs.State = f.GetState()
 	return rs, nil
 }

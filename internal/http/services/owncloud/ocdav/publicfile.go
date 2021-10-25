@@ -62,7 +62,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 			case http.MethodGet:
 				s.handlePathGet(w, r, h.namespace)
 			case http.MethodOptions:
-				s.handleOptions(w, r, h.namespace)
+				s.handleOptions(w, r)
 			case http.MethodHead:
 				s.handlePathHead(w, r, h.namespace)
 			case http.MethodPut:
@@ -76,7 +76,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 			case MethodPropfind:
 				s.handlePropfindOnToken(w, r, h.namespace, true)
 			case http.MethodOptions:
-				s.handleOptions(w, r, h.namespace)
+				s.handleOptions(w, r)
 			case http.MethodHead:
 				s.handlePathHead(w, r, h.namespace)
 			default:
@@ -186,7 +186,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
 
-	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

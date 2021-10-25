@@ -32,6 +32,9 @@ import (
 	"github.com/pkg/xattr"
 )
 
+// SpaceGrant is the key used to signal not to create a new space when a grant is assigned to a storage space.
+var SpaceGrant struct{}
+
 // DenyGrant denies access to a resource.
 func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
 	return errtypes.NotSupported("decomposedfs: not supported")
@@ -68,8 +71,12 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return err
 	}
 
-	if err := fs.createStorageSpace(ctx, "share", node.ID); err != nil {
-		return err
+	// when a grant is added to a space, do not add a new space under "shares"
+	if spaceGrant := ctx.Value(SpaceGrant); spaceGrant == nil {
+		err := fs.createStorageSpace(ctx, "share", node.ID)
+		if err != nil {
+			return err
+		}
 	}
 
 	return fs.tp.Propagate(ctx, node)

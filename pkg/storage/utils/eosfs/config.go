@@ -134,6 +134,12 @@ type Config struct {
 	// the HTTP chunked encoding
 	WriteUsesLocalTemp bool `mapstructure:"write_uses_local_temp"`
 
+	// Whether to allow recycle operations on base paths.
+	// If set to true, we'll look up the owner of the passed path and perform
+	// operations on that user's recycle bin.
+	// Only considered when EnableHome is false.
+	AllowPathRecycleOperations bool `mapstructure:"allow_path_recycle_operations"`
+
 	// HTTP connections to EOS: max number of idle conns
 	MaxIdleConns int `mapstructure:"max_idle_conns"`
 

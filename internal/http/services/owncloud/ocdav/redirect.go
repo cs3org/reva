@@ -16,21 +16,17 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// +build windows
+package ocdav
 
-package decomposedfs
+import (
+	"net/http"
+	"net/url"
+	"path"
+)
 
-import "golang.org/x/sys/windows"
-
-func (fs *Decomposedfs) getAvailableSize(path string) (uint64, error) {
-	var free, total, avail uint64
-	pathPtr, err := windows.UTF16PtrFromString(path)
-	if err != nil {
-		return 0, err
-	}
-	err = windows.GetDiskFreeSpaceEx(pathPtr, &avail, &total, &free)
-	if err != nil {
-		return 0, err
-	}
-	return avail, nil
+func (s *svc) handleLegacyPath(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	dir := query.Get("dir")
+	url := s.c.PublicURL + path.Join("#", "/files/list/all", url.PathEscape(dir))
+	http.Redirect(w, r, url, http.StatusMovedPermanently)
 }

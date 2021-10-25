@@ -19,9 +19,12 @@
 package nextcloud
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 )
 
@@ -42,6 +45,7 @@ const serverStateSubdirNewdir = "SUBDIR-NEWDIR"
 const serverStateFileRestored = "FILE-RESTORED"
 const serverStateGrantAdded = "GRANT-ADDED"
 const serverStateGrantUpdated = "GRANT-UPDATED"
+const serverStateGrantRemoved = "GRANT-REMOVED"
 const serverStateRecycle = "RECYCLE"
 const serverStateReference = "REFERENCE"
 const serverStateMetadata = "METADATA"
@@ -49,90 +53,125 @@ const serverStateMetadata = "METADATA"
 var serverState = serverStateEmpty
 
 var responses = map[string]Response{
-	`POST /apps/sciencemesh/~alice/AddGrant {"path":"/subdir"}`: {200, ``, serverStateGrantAdded},
+	`POST /apps/sciencemesh/~einstein/api/storage/AddGrant {"ref":{"path":"/subdir"},"g":{"grantee":{"type":1,"Id":{"UserId":{"opaque_id":"4c510ada-c86b-4815-8820-42cdf82c3d51"}}},"permissions":{"move":true,"stat":true}}} EMPTY`: {200, ``, serverStateGrantAdded},
 
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/subdir"} EMPTY`:  {200, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/subdir"} HOME`:   {200, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/subdir"} NEWDIR`: {200, ``, serverStateSubdirNewdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/CreateDir {"path":"/subdir"} EMPTY`:  {200, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/CreateDir {"path":"/subdir"} HOME`:   {200, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/CreateDir {"path":"/subdir"} NEWDIR`: {200, ``, serverStateSubdirNewdir},
 
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/newdir"} EMPTY`:  {200, ``, serverStateNewdir},
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/newdir"} HOME`:   {200, ``, serverStateNewdir},
-	`POST /apps/sciencemesh/~alice/CreateDir {"path":"/newdir"} SUBDIR`: {200, ``, serverStateSubdirNewdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/CreateDir {"path":"/newdir"} EMPTY`:  {200, ``, serverStateNewdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/CreateDir {"path":"/newdir"} HOME`:   {200, ``, serverStateNewdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/CreateDir {"path":"/newdir"} SUBDIR`: {200, ``, serverStateSubdirNewdir},
 
-	`POST /apps/sciencemesh/~alice/CreateHome `:   {200, ``, serverStateHome},
-	`POST /apps/sciencemesh/~alice/CreateHome {}`: {200, ``, serverStateHome},
+	`POST /apps/sciencemesh/~einstein/api/storage/CreateHome `:   {200, ``, serverStateHome},
+	`POST /apps/sciencemesh/~einstein/api/storage/CreateHome {}`: {200, ``, serverStateHome},
 
-	`POST /apps/sciencemesh/~alice/CreateReference {"path":"/Shares/reference"}`: {200, `[]`, serverStateReference},
+	`POST /apps/sciencemesh/~einstein/api/storage/CreateReference {"path":"/Shares/reference","url":"scheme://target"}`: {200, `[]`, serverStateReference},
 
-	`POST /apps/sciencemesh/~alice/Delete {"path":"/subdir"}`: {200, ``, serverStateRecycle},
+	`POST /apps/sciencemesh/~einstein/api/storage/Delete {"path":"/subdir"}`: {200, ``, serverStateRecycle},
 
-	`POST /apps/sciencemesh/~alice/EmptyRecycle `: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/EmptyRecycle `: {200, ``, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/"} EMPTY`: {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/"} HOME`:  {200, `{ "size": 1 }`, serverStateHome},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/"},"mdKeys":null} EMPTY`: {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/"},"mdKeys":null} HOME`:  {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}`, serverStateHome},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/newdir"} EMPTY`:         {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/newdir"} HOME`:          {404, ``, serverStateHome},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/newdir"} SUBDIR`:        {404, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/newdir"} NEWDIR`:        {200, `{ "size": 1 }`, serverStateNewdir},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/newdir"} SUBDIR-NEWDIR`: {200, `{ "size": 1 }`, serverStateSubdirNewdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/newdir"},"mdKeys":null} EMPTY`:         {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/newdir"},"mdKeys":null} HOME`:          {404, ``, serverStateHome},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/newdir"},"mdKeys":null} SUBDIR`:        {404, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/newdir"},"mdKeys":null} NEWDIR`:        {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/newdir","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}`, serverStateNewdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/newdir"},"mdKeys":null} SUBDIR-NEWDIR`: {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/newdir","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}`, serverStateSubdirNewdir},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/new_subdir"}`: {200, `{ "size": 1 }`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/new_subdir"},"mdKeys":null}`: {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/new_subdir","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}`, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} EMPTY`:         {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} HOME`:          {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} NEWDIR`:        {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} RECYCLE`:       {404, ``, serverStateRecycle},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} SUBDIR`:        {200, `{ "size": 1 }`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} SUBDIR-NEWDIR`: {200, `{ "size": 1 }`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdir"} METADATA`:      {200, `{ "size": 1, "metadata": { "foo": "bar" } }`, serverStateMetadata},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdir"},"mdKeys":null} EMPTY`:         {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdir"},"mdKeys":null} HOME`:          {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdir"},"mdKeys":null} NEWDIR`:        {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdir"},"mdKeys":null} RECYCLE`:       {404, ``, serverStateRecycle},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdir"},"mdKeys":null} SUBDIR`:        {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/subdir","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{}}}`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdir"},"mdKeys":null} SUBDIR-NEWDIR`: {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/subdir","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{}}}`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdir"},"mdKeys":null} METADATA`:      {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/subdir","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"foo":"bar"}}}`, serverStateMetadata},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdirRestored"} EMPTY`:         {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdirRestored"} RECYCLE`:       {404, ``, serverStateRecycle},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdirRestored"} SUBDIR`:        {404, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/subdirRestored"} FILE-RESTORED`: {200, `{ "size": 1 }`, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdirRestored"},"mdKeys":null} EMPTY`:         {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdirRestored"},"mdKeys":null} RECYCLE`:       {404, ``, serverStateRecycle},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdirRestored"},"mdKeys":null} SUBDIR`:        {404, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdirRestored"},"mdKeys":null} FILE-RESTORED`: {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/subdirRestored","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}`, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/subdir"},"mdKeys":null} FILE-RESTORED`:         {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/subdirRestored","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}`, serverStateFileRestored},
 
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/versionedFile"} EMPTY`:         {200, `{ "size": 2 }`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/GetMD {"path":"/versionedFile"} FILE-RESTORED`: {200, `{ "size": 1 }`, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/versionedFile"},"mdKeys":null} EMPTY`:         {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/versionedFile","permission_set":{},"size":2,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetMD {"ref":{"path":"/versionedFile"},"mdKeys":null} FILE-RESTORED`: {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/versionedFile","permission_set":{},"size":1,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}`, serverStateFileRestored},
 
-	`POST /apps/sciencemesh/~alice/GetPathByID {"storage_id":"00000000-0000-0000-0000-000000000000","opaque_id":"fileid-%2Fsubdir"}`: {200, "/subdir", serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/GetPathByID {"storage_id":"00000000-0000-0000-0000-000000000000","opaque_id":"fileid-/some/path"} EMPTY`: {200, "/subdir", serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/InitiateUpload {"path":"/file"}`: {200, `{"simple": "yes","tus": "yes"}`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/InitiateUpload {"ref":{"path":"/file"},"uploadLength":0,"metadata":{}}`: {200, `{"simple": "yes","tus": "yes"}`, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/ListFolder {"path":"/"}`: {200, `["/subdir"]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListFolder {"ref":{"path":"/"},"mdKeys":null}`: {200, `[{"opaque":{},"type":2,"id":{"opaque_id":"fileid-/subdir"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/subdir","permission_set":{},"size":12345,"canonical_metadata":{},"owner":{"opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}]`, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/ListFolder {"path":"/Shares"} EMPTY`:     {404, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/ListFolder {"path":"/Shares"} SUBDIR`:    {404, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/ListFolder {"path":"/Shares"} REFERENCE`: {200, `["reference"]`, serverStateReference},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListFolder {"ref":{"path":"/Shares"},"mdKeys":null} EMPTY`:     {404, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListFolder {"ref":{"path":"/Shares"},"mdKeys":null} SUBDIR`:    {404, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListFolder {"ref":{"path":"/Shares"},"mdKeys":null} REFERENCE`: {200, `[{"opaque":{},"type":2,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/subdir","permission_set":{},"size":12345,"canonical_metadata":{},"owner":{"opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}]`, serverStateReference},
 
-	`POST /apps/sciencemesh/~alice/ListGrants {"path":"/subdir"} SUBDIR`:        {200, `[]`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/ListGrants {"path":"/subdir"} GRANT-ADDED`:   {200, `[ { "stat": true, "move": true, "delete": false } ]`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/ListGrants {"path":"/subdir"} GRANT-UPDATED`: {200, `[ { "stat": true, "move": true, "delete": true } ]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListGrants {"path":"/subdir"} SUBDIR`:        {200, `[]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListGrants {"path":"/subdir"} GRANT-ADDED`:   {200, `[{"grantee":{"type":1,"Id":{"UserId":{"idp":"some-idp","opaque_id":"some-opaque-id","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":false,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListGrants {"path":"/subdir"} GRANT-UPDATED`: {200, `[{"grantee":{"type":1,"Id":{"UserId":{"idp":"some-idp","opaque_id":"some-opaque-id","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListGrants {"path":"/subdir"} GRANT-REMOVED`: {200, `[]`, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/ListRecycle  EMPTY`:   {200, `[]`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/ListRecycle  RECYCLE`: {200, `["/subdir"]`, serverStateRecycle},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListRecycle {"key":"","path":"/"} EMPTY`:   {200, `[]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListRecycle {"key":"","path":"/"} RECYCLE`: {200, `[{"opaque":{},"key":"some-deleted-version","ref":{"resource_id":{},"path":"/subdir"},"size":12345,"deletion_time":{"seconds":1234567890}}]`, serverStateRecycle},
 
-	`POST /apps/sciencemesh/~alice/ListRevisions {"path":"/versionedFile"} EMPTY`:         {500, `[1]`, serverStateEmpty},
-	`POST /apps/sciencemesh/~alice/ListRevisions {"path":"/versionedFile"} FILE-RESTORED`: {500, `[1, 2]`, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListRevisions {"path":"/versionedFile"} EMPTY`:         {200, `[{"opaque":{"map":{"some":{"value":"ZGF0YQ=="}}},"key":"version-12","size":1,"mtime":1234567890,"etag":"deadb00f"}]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/ListRevisions {"path":"/versionedFile"} FILE-RESTORED`: {200, `[{"opaque":{"map":{"some":{"value":"ZGF0YQ=="}}},"key":"version-12","size":1,"mtime":1234567890,"etag":"deadb00f"},{"opaque":{"map":{"different":{"value":"c3R1ZmY="}}},"key":"asdf","size":2,"mtime":1234567890,"etag":"deadbeef"}]`, serverStateFileRestored},
 
-	`POST /apps/sciencemesh/~alice/Move {"from":"/subdir","to":"/new_subdir"}`: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~einstein/api/storage/Move {"oldRef":{"path":"/subdir"},"newRef":{"path":"/new_subdir"}}`: {200, ``, serverStateEmpty},
 
-	`POST /apps/sciencemesh/~alice/RemoveGrant {"path":"/subdir"} GRANT-ADDED`: {200, ``, serverStateGrantUpdated},
+	`POST /apps/sciencemesh/~einstein/api/storage/RemoveGrant {"path":"/subdir"} GRANT-ADDED`: {200, ``, serverStateGrantRemoved},
 
-	`POST /apps/sciencemesh/~alice/RestoreRecycleItem null`:                       {200, ``, serverStateSubdir},
-	`POST /apps/sciencemesh/~alice/RestoreRecycleItem {"path":"/subdirRestored"}`: {200, ``, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/storage/RestoreRecycleItem null`:                                                                              {200, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/RestoreRecycleItem {"key":"some-deleted-version","path":"/","restoreRef":{"path":"/subdirRestored"}}`: {200, ``, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/storage/RestoreRecycleItem {"key":"some-deleted-version","path":"/","restoreRef":null}`:                       {200, ``, serverStateFileRestored},
 
-	`POST /apps/sciencemesh/~alice/RestoreRevision {"path":"/versionedFile"}`: {200, ``, serverStateFileRestored},
+	`POST /apps/sciencemesh/~einstein/api/storage/RestoreRevision {"ref":{"path":"/versionedFile"},"key":"version-12"}`: {200, ``, serverStateFileRestored},
 
-	`POST /apps/sciencemesh/~alice/SetArbitraryMetadata {"metadata":{"foo":"bar"}}`: {200, ``, serverStateMetadata},
+	`POST /apps/sciencemesh/~einstein/api/storage/SetArbitraryMetadata {"ref":{"path":"/subdir"},"md":{"metadata":{"foo":"bar"}}}`: {200, ``, serverStateMetadata},
 
-	`POST /apps/sciencemesh/~alice/UnsetArbitraryMetadata {"path":"/subdir"}`: {200, ``, serverStateSubdir},
+	`POST /apps/sciencemesh/~einstein/api/storage/UnsetArbitraryMetadata {"ref":{"path":"/subdir"},"keys":["foo"]}`: {200, ``, serverStateSubdir},
 
-	`POST /apps/sciencemesh/~alice/UpdateGrant {"path":"/subdir"}`: {200, ``, serverStateGrantUpdated},
+	`POST /apps/sciencemesh/~einstein/api/storage/UpdateGrant {"ref":{"path":"/subdir"},"g":{"grantee":{"type":1,"Id":{"UserId":{"opaque_id":"4c510ada-c86b-4815-8820-42cdf82c3d51"}}},"permissions":{"delete":true,"move":true,"stat":true}}}`: {200, ``, serverStateGrantUpdated},
+
+	`POST /apps/sciencemesh/~tester/api/storage/GetHome `:    {200, `yes we are`, serverStateHome},
+	`POST /apps/sciencemesh/~tester/api/storage/CreateHome `: {201, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/CreateDir {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`:                                                                                                                        {201, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/Delete {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`:                                                                                                                           {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/Move {"oldRef":{"resource_id":{"storage_id":"storage-id-1","opaque_id":"opaque-id-1"},"path":"/some/old/path"},"newRef":{"resource_id":{"storage_id":"storage-id-2","opaque_id":"opaque-id-2"},"path":"/some/new/path"}}`: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"mdKeys":["val1","val2","val3"]}`:                                                                                    {200, `{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/some/path","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}`, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/ListFolder {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some"},"mdKeys":["val1","val2","val3"]}`:                                                                                    {200, `[{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/some/path","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}]`, serverStateEmpty},
+	// `POST /apps/sciencemesh/~tester/api/storage/ListFolder {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some"},"mdKeys":["val1","val2","val3"]}`:                                                                                    {200, `[{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/path","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/InitiateUpload {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"uploadLength":12345,"metadata":{"key1":"val1","key2":"val2","key3":"val3"}}`: {200, `{ "not":"sure", "what": "should be", "returned": "here" }`, serverStateEmpty},
+	`PUT /apps/sciencemesh/~tester/api/storage/Upload/some/file/path.txt shiny!`:                                                                                                                                                            {200, ``, serverStateEmpty},
+	`GET /apps/sciencemesh/~tester/api/storage/Download/some/file/path.txt `:                                                                                                                                                                {200, `the contents of the file`, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/ListRevisions {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`:                                                                                      {200, `[{"opaque":{"map":{"some":{"value":"ZGF0YQ=="}}},"key":"version-12","size":12345,"mtime":1234567890,"etag":"deadb00f"},{"opaque":{"map":{"different":{"value":"c3R1ZmY="}}},"key":"asdf","size":12345,"mtime":1234567890,"etag":"deadbeef"}]`, serverStateEmpty},
+	`GET /apps/sciencemesh/~tester/api/storage/DownloadRevision/some%2Frevision/some/file/path.txt `:                                                                                                                                        {200, `the contents of that revision`, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/RestoreRevision {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"key":"asdf"}`:                                                       {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/ListRecycle {"key":"asdf","path":"/some/file.txt"}`:                                                                                                                                         {200, `[{"opaque":{},"key":"some-deleted-version","ref":{"resource_id":{},"path":"/some/file.txt"},"size":12345,"deletion_time":{"seconds":1234567890}}]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/RestoreRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt","restoreRef":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}}`: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/PurgeRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt"}`:                                                                                                                {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/EmptyRecycle `:                                                                                                                                                                              {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/GetPathByID {"storage_id":"storage-id","opaque_id":"opaque-id"}`:                                                                                                                            {200, `the/path/for/that/id.txt`, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/AddGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/DenyGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}}`: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/RemoveGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/UpdateGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/ListGrants {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}`: {200, `[{"grantee":{"type":1,"Id":{"UserId":{"idp":"some-idp","opaque_id":"some-opaque-id","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/GetQuota `:                                                                             {200, `{"totalBytes":456,"usedBytes":123}`, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/CreateReference {"path":"some/file/path.txt","url":"http://bing.com/search?q=dotnet"}`: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/Shutdown `:                                                                             {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/SetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"md":{"metadata":{"arbi":"trary","meta":"data"}}}`: {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/UnsetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"keys":["arbi"]}`:                                {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/ListStorageSpaces [{"type":3,"Term":{"Owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},{"type":2,"Term":{"Id":{"opaque_id":"opaque-id"}}},{"type":4,"Term":{"SpaceType":"home"}}]`: {200, `	[{"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"id":{"opaque_id":"some-opaque-storage-space-id"},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"root":{"storage_id":"some-storage-ud","opaque_id":"some-opaque-root-id"},"name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123},"space_type":"home","mtime":{"seconds":1234567890}}]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/CreateStorageSpace {"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"type":"home","name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123}}`: {200, `{"storage_space":{"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"id":{"opaque_id":"some-opaque-storage-space-id"},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"root":{"storage_id":"some-storage-ud","opaque_id":"some-opaque-root-id"},"name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123},"space_type":"home","mtime":{"seconds":1234567890}}}`, serverStateEmpty},
 }
 
 // GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server
-func GetNextcloudServerMock() http.Handler {
+func GetNextcloudServerMock(called *[]string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		buf := new(strings.Builder)
 		_, err := io.Copy(buf, r.Body)
@@ -140,11 +179,14 @@ func GetNextcloudServerMock() http.Handler {
 			panic("Error reading response into buffer")
 		}
 		var key = fmt.Sprintf("%s %s %s", r.Method, r.URL, buf.String())
-		fmt.Printf("Nextcloud Server Mock key %s\n", key)
+		// fmt.Printf("Nextcloud Server Mock key components %s %d %s %d %s %d\n", r.Method, len(r.Method), r.URL.String(), len(r.URL.String()), buf.String(), len(buf.String()))
+		// fmt.Printf("Nextcloud Server Mock key %s\n", key)
+		*called = append(*called, key)
 		response := responses[key]
 		if (response == Response{}) {
 			key = fmt.Sprintf("%s %s %s %s", r.Method, r.URL, buf.String(), serverState)
-			fmt.Printf("Nextcloud Server Mock key with State %s\n", key)
+			// fmt.Printf("Nextcloud Server Mock key with State %s\n", key)
+			// *called = append(*called, key)
 			response = responses[key]
 		}
 		if (response == Response{}) {
@@ -160,9 +202,30 @@ func GetNextcloudServerMock() http.Handler {
 			serverState = serverStateError
 		}
 		w.WriteHeader(response.code)
+		// w.Header().Set("Etag", "mocker-etag")
 		_, err = w.Write([]byte(responses[key].body))
 		if err != nil {
 			panic(err)
 		}
 	})
+}
+
+// TestingHTTPClient thanks to https://itnext.io/how-to-stub-requests-to-remote-hosts-with-go-6c2c1db32bf2
+// Ideally, this function would live in tests/helpers, but
+// if we put it there, it gets excluded by .dockerignore, and the
+// Docker build fails (see https://github.com/cs3org/reva/issues/1999)
+// So putting it here for now - open to suggestions if someone knows
+// a better way to inject this.
+func TestingHTTPClient(handler http.Handler) (*http.Client, func()) {
+	s := httptest.NewServer(handler)
+
+	cli := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, network, _ string) (net.Conn, error) {
+				return net.Dial(network, s.Listener.Addr().String())
+			},
+		},
+	}
+
+	return cli, s.Close
 }

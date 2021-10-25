@@ -705,6 +705,11 @@ func getResourceType(isDir bool) provider.ResourceType {
 	return provider.ResourceType_RESOURCE_TYPE_FILE
 }
 
+// CreateStorageSpace creates a storage space
+func (fs *ocfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+}
+
 func readOrCreateID(ctx context.Context, ip string, conn redis.Conn) string {
 	log := appctx.GetLogger(ctx)
 
@@ -2064,7 +2069,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
+func (fs *ocfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
@@ -2157,7 +2162,7 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 	}
 }
 
-func (fs *ocfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error) {
+func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -2184,7 +2189,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.
 	return items, nil
 }
 
-func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error {
+func (fs *ocfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
@@ -2227,6 +2232,11 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key, path string, restor
 
 func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("list storage spaces")
+}
+
+// UpdateStorageSpace updates a storage space
+func (fs *ocfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
 }
 
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {

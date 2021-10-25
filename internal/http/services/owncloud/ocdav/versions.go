@@ -60,7 +60,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 		var key string
 		key, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if r.Method == http.MethodOptions {
-			s.handleOptions(w, r, "versions")
+			s.handleOptions(w, r)
 			return
 		}
 		if key == "" && r.Method == MethodPropfind {
@@ -164,7 +164,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		infos = append(infos, vi)
 	}
 
-	propRes, err := s.formatPropfind(ctx, &pf, infos, "")
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, "")
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

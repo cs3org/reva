@@ -431,10 +431,16 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 	return res, nil
 }
 
+// CreateStorageSpace creates a storage space
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return &provider.CreateStorageSpaceResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateStorageSpace not implemented"), "CreateStorageSpace not implemented"),
-	}, nil
+	resp, err := s.storage.CreateStorageSpace(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp.StorageSpace.Root = &provider.ResourceId{StorageId: s.mountID, OpaqueId: resp.StorageSpace.Id.OpaqueId}
+	resp.StorageSpace.Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "!" + resp.StorageSpace.Id.OpaqueId}
+	return resp, nil
 }
 
 func hasNodeID(s *provider.StorageSpace) bool {
@@ -483,9 +489,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	return &provider.UpdateStorageSpaceResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("UpdateStorageSpace not implemented"), "UpdateStorageSpace not implemented"),
-	}, nil
+	return s.storage.UpdateStorageSpace(ctx, req)
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
@@ -820,7 +824,8 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 		return err
 	}
 
-	items, err := s.storage.ListRecycle(ctx, ref.ResourceId.OpaqueId, ref.Path)
+	key, itemPath := router.ShiftPath(req.Key)
+	items, err := s.storage.ListRecycle(ctx, ref.GetPath(), key, itemPath)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -860,8 +865,8 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 	if err != nil {
 		return nil, err
 	}
-	key, itemPath := router.ShiftPath(ref.Path)
-	items, err := s.storage.ListRecycle(ctx, key, itemPath)
+	key, itemPath := router.ShiftPath(req.Key)
+	items, err := s.storage.ListRecycle(ctx, ref.GetPath(), key, itemPath)
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err != nil {
 		var st *rpc.Status
@@ -891,7 +896,8 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 	if err != nil {
 		return nil, err
 	}
-	if err := s.storage.RestoreRecycleItem(ctx, req.Key, ref.Path, req.RestoreRef); err != nil {
+	key, itemPath := router.ShiftPath(req.Key)
+	if err := s.storage.RestoreRecycleItem(ctx, ref.GetPath(), key, itemPath, req.RestoreRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -913,9 +919,14 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 }
 
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
+	ref, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
 	// if a key was sent as opaque id purge only that item
-	if req.GetRef() != nil && req.GetRef().GetResourceId() != nil && req.GetRef().GetResourceId().OpaqueId != "" {
-		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetResourceId().OpaqueId, req.GetRef().Path); err != nil {
+	key, itemPath := router.ShiftPath(req.Key)
+	if key != "" {
+		if err := s.storage.PurgeRecycleItem(ctx, ref.GetPath(), key, itemPath); err != nil {
 			var st *rpc.Status
 			switch err.(type) {
 			case errtypes.IsNotFound:
@@ -1175,7 +1186,13 @@ func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlink
 }
 
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
-	total, used, err := s.storage.GetQuota(ctx)
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.GetQuotaResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+	total, used, err := s.storage.GetQuota(ctx, newRef)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {

@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/share"
 	sqlmanager "github.com/cs3org/reva/pkg/share/manager/sql"
 	mocks "github.com/cs3org/reva/pkg/share/manager/sql/mocks"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/mock"
@@ -165,20 +166,15 @@ var _ = Describe("SQL manager", func() {
 
 	Describe("ListShares", func() {
 		It("lists shares", func() {
-			shares, err := mgr.ListShares(ctx, []*collaboration.ListSharesRequest_Filter{})
+			shares, err := mgr.ListShares(ctx, []*collaboration.Filter{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 
-			shares, err = mgr.ListShares(ctx, []*collaboration.ListSharesRequest_Filter{
-				{
-					Type: collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID,
-					Term: &collaboration.ListSharesRequest_Filter_ResourceId{
-						ResourceId: &provider.ResourceId{
-							StorageId: "/",
-							OpaqueId:  "somethingElse",
-						},
-					},
-				},
+			shares, err = mgr.ListShares(ctx, []*collaboration.Filter{
+				share.ResourceIDFilter(&provider.ResourceId{
+					StorageId: "/",
+					OpaqueId:  "somethingElse",
+				}),
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(0))
@@ -188,7 +184,7 @@ var _ = Describe("SQL manager", func() {
 	Describe("ListReceivedShares", func() {
 		It("lists received shares", func() {
 			loginAs(otherUser)
-			shares, err := mgr.ListReceivedShares(ctx)
+			shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 		})
@@ -204,7 +200,7 @@ var _ = Describe("SQL manager", func() {
 	})
 
 	Describe("UpdateReceivedShare", func() {
-		It("updates the received share", func() {
+		It("returns an error when no valid field is set in the mask", func() {
 			loginAs(otherUser)
 
 			share, err := mgr.GetReceivedShare(ctx, shareRef)
@@ -212,11 +208,21 @@ var _ = Describe("SQL manager", func() {
 			Expect(share).ToNot(BeNil())
 			Expect(share.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 
-			share, err = mgr.UpdateReceivedShare(ctx, shareRef, &collaboration.UpdateReceivedShareRequest_UpdateField{
-				Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
-					State: collaboration.ShareState_SHARE_STATE_REJECTED,
-				},
-			})
+			share.State = collaboration.ShareState_SHARE_STATE_REJECTED
+			_, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"foo"}})
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("updates the state when the state is set in the mask", func() {
+			loginAs(otherUser)
+
+			share, err := mgr.GetReceivedShare(ctx, shareRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(share).ToNot(BeNil())
+			Expect(share.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+
+			share.State = collaboration.ShareState_SHARE_STATE_REJECTED
+			share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(share.State).To(Equal(collaboration.ShareState_SHARE_STATE_REJECTED))
 
@@ -230,7 +236,7 @@ var _ = Describe("SQL manager", func() {
 	Describe("Unshare", func() {
 		It("deletes shares", func() {
 			loginAs(otherUser)
-			shares, err := mgr.ListReceivedShares(ctx)
+			shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 
@@ -243,7 +249,7 @@ var _ = Describe("SQL manager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			loginAs(otherUser)
-			shares, err = mgr.ListReceivedShares(ctx)
+			shares, err = mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(0))
 		})

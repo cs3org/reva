@@ -485,7 +485,19 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	}
 
 	log.Debug().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Msg("")
-	return info, nil
+	return c.mergeParentACLsForFiles(ctx, auth, info), nil
+}
+
+func (c *Client) mergeParentACLsForFiles(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
+	// We need to inherit the ACLs for the parent directory as these are not available for files
+	if !info.IsDir {
+		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
+		// Even if this call fails, at least return the current file object
+		if err == nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
+		}
+	}
+	return info
 }
 
 // SetAttr sets an extended attributes on a path.
@@ -627,7 +639,8 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 		}
 		info.Inode = inode
 	}
-	return info, nil
+
+	return c.mergeParentACLsForFiles(ctx, auth, info), nil
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal
@@ -1100,13 +1113,14 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	}
 
 	var mylst []*eosclient.FileInfo
+	var parent *eosclient.FileInfo
 	i := 0
 	for {
 		rsp, err := resp.Recv()
 		if err != nil {
 			if err == io.EOF {
 				log.Debug().Str("path", dpath).Int("nitems", i).Msg("OK, no more items, clean exit")
-				return mylst, nil
+				break
 			}
 
 			// We got an error while reading items. We log this as an error and we return
@@ -1123,14 +1137,6 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 			return nil, errtypes.NotFound(dpath)
 		}
 
-		i++
-
-		// The first item is the directory itself... skip
-		if i == 1 {
-			log.Debug().Str("func", "List").Str("path", dpath).Str("skipping first item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
-			continue
-		}
-
 		log.Debug().Str("func", "List").Str("path", dpath).Str("item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
 		myitem, err := c.grpcMDResponseToFileInfo(rsp, dpath)
@@ -1140,8 +1146,24 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 			return nil, err
 		}
 
+		i++
+		// The first item is the directory itself... skip
+		if i == 1 {
+			parent = myitem
+			log.Debug().Str("func", "List").Str("path", dpath).Str("skipping first item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
+			continue
+		}
+
 		mylst = append(mylst, myitem)
 	}
+
+	for _, info := range mylst {
+		if !info.IsDir && parent != nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+		}
+	}
+
+	return mylst, nil
 
 }
 

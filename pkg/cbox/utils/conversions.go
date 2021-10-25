@@ -106,6 +106,7 @@ func SharePermToInt(p *provider.ResourcePermissions) int {
 	} else if p.ListContainer {
 		perm = 1
 	}
+	// TODO map denials and resharing; currently, denials are mapped to 0
 	return perm
 }
 
@@ -143,6 +144,7 @@ func IntTosharePerm(p int) *provider.ResourcePermissions {
 			PurgeRecycle:       true,
 		}
 	default:
+		// TODO we may have other options, for now this is a denial
 		return &provider.ResourcePermissions{}
 	}
 }

@@ -28,15 +28,16 @@ import (
 	"sync"
 	"time"
 
-	rtrace "github.com/cs3org/reva/pkg/trace"
-
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -101,7 +102,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	c, err := s.findByPath(ctx, req.Type)
+	c, err := s.findByPath(ctx, "/users")
 	if err != nil {
 		return &provider.CreateStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
@@ -888,7 +889,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		// the following will check that:
 		// - the resource to delete is a share the current user received
 		// - signal the storage the delete must not land in the trashbin
-		// - delete the resource and update the share status to pending
+		// - delete the resource and update the share status to "rejected"
 		for _, share := range sRes.Shares {
 			if statRes != nil && (share.Share.ResourceId.OpaqueId == statRes.Info.Id.OpaqueId) && (share.Share.ResourceId.StorageId == statRes.Info.Id.StorageId) {
 				// this opaque needs explanation. It signals the storage the resource we're about to delete does not
@@ -903,34 +904,29 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 					},
 				}
 
-				// the following block takes care of updating the state of the share to "pending". This will ensure the user
+				// the following block takes care of updating the state of the share to "rejected". This will ensure the user
 				// can "Accept" the share once again.
+				// TODO should this be pending? If so, update the two comments above as well. If not, get rid of this comment.
+				share.State = collaboration.ShareState_SHARE_STATE_REJECTED
 				r := &collaboration.UpdateReceivedShareRequest{
-					Ref: &collaboration.ShareReference{
-						Spec: &collaboration.ShareReference_Id{
-							Id: &collaboration.ShareId{
-								OpaqueId: share.Share.Id.OpaqueId,
-							},
-						},
-					},
-					Field: &collaboration.UpdateReceivedShareRequest_UpdateField{
-						Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
-							State: collaboration.ShareState_SHARE_STATE_REJECTED,
-						},
-					},
+					Share:      share,
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
 				}
 
 				_, err := s.UpdateReceivedShare(ctx, r)
 				if err != nil {
 					return nil, err
 				}
+
+				return &provider.DeleteResponse{
+					Status: status.NewOK(ctx),
+				}, nil
 			}
 		}
 
-		ref := &provider.Reference{Path: p}
-
-		req.Ref = ref
-		return s.delete(ctx, req)
+		return &provider.DeleteResponse{
+			Status: status.NewNotFound(ctx, "could not find share"),
+		}, nil
 	}
 
 	if s.isShareChild(ctx, p) {
@@ -1029,37 +1025,61 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		dshareName, dshareChild := s.splitShare(ctx, dp)
 		log.Debug().Msgf("srcpath:%s dstpath:%s srcsharename:%s srcsharechild: %s dstsharename:%s dstsharechild:%s ", p, dp, shareName, shareChild, dshareName, dshareChild)
 
-		if shareName != dshareName {
-			err := errtypes.BadRequest("gateway: move: src and dst points to different targets")
-			return &provider.MoveResponse{
-				Status: status.NewStatusFromErrType(ctx, "gateway: error moving", err),
-			}, nil
-
-		}
-
-		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
-		statRes, err := s.stat(ctx, statReq)
+		srcStatReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
+		srcStatRes, err := s.stat(ctx, srcStatReq)
 		if err != nil {
 			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+srcStatReq.Ref.String()),
 			}, nil
 		}
 
-		if statRes.Status.Code != rpc.Code_CODE_OK {
+		if srcStatRes.Status.Code != rpc.Code_CODE_OK {
 			return &provider.MoveResponse{
-				Status: statRes.Status,
+				Status: srcStatRes.Status,
 			}, nil
 		}
 
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
+		dstStatReq := &provider.StatRequest{Ref: &provider.Reference{Path: dshareName}}
+		dstStatRes, err := s.stat(ctx, dstStatReq)
 		if err != nil {
 			return &provider.MoveResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+srcStatReq.Ref.String()),
 			}, nil
 		}
 
-		if protocol == "webdav" {
-			err = s.webdavRefMove(ctx, statRes.Info.Target, shareChild, dshareChild)
+		if dstStatRes.Status.Code != rpc.Code_CODE_OK {
+			return &provider.MoveResponse{
+				Status: srcStatRes.Status,
+			}, nil
+		}
+
+		srcRi, srcProtocol, err := s.checkRef(ctx, srcStatRes.Info)
+		if err != nil {
+			return &provider.MoveResponse{
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+srcStatRes.Info.Target, err),
+			}, nil
+		}
+
+		if srcProtocol == "webdav" {
+			err = s.webdavRefMove(ctx, dstStatRes.Info.Target, shareChild, dshareChild)
+			if err != nil {
+				return &provider.MoveResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error moving resource on webdav host: "+p),
+				}, nil
+			}
+			return &provider.MoveResponse{
+				Status: status.NewOK(ctx),
+			}, nil
+		}
+		dstRi, dstProtocol, err := s.checkRef(ctx, dstStatRes.Info)
+		if err != nil {
+			return &provider.MoveResponse{
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+srcStatRes.Info.Target, err),
+			}, nil
+		}
+
+		if dstProtocol == "webdav" {
+			err = s.webdavRefMove(ctx, dstStatRes.Info.Target, shareChild, dshareChild)
 			if err != nil {
 				return &provider.MoveResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error moving resource on webdav host: "+p),
@@ -1071,10 +1091,10 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}
 
 		src := &provider.Reference{
-			Path: path.Join(ri.Path, shareChild),
+			Path: path.Join(srcRi.Path, shareChild),
 		}
 		dst := &provider.Reference{
-			Path: path.Join(ri.Path, dshareChild),
+			Path: path.Join(dstRi.Path, dshareChild),
 		}
 
 		req.Source = src
@@ -1089,14 +1109,14 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 }
 
 func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	srcList, err := s.findProviders(ctx, req.Source)
+	srcProviders, err := s.findProviders(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, "move src="+req.Source.String(), err),
 		}, nil
 	}
 
-	dstList, err := s.findProviders(ctx, req.Destination)
+	dstProviders, err := s.findProviders(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, "move dst="+req.Destination.String(), err),
@@ -1104,27 +1124,27 @@ func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 	}
 
 	// if providers are not the same we do not implement cross storage move yet.
-	if len(srcList) != 1 || len(dstList) != 1 {
+	if len(srcProviders) != 1 || len(dstProviders) != 1 {
 		res := &provider.MoveResponse{
 			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
 		}
 		return res, nil
 	}
 
-	srcP, dstP := srcList[0], dstList[0]
+	srcProvider, dstProvider := srcProviders[0], dstProviders[0]
 
 	// if providers are not the same we do not implement cross storage copy yet.
-	if srcP.Address != dstP.Address {
+	if srcProvider.Address != dstProvider.Address {
 		res := &provider.MoveResponse{
 			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
 		}
 		return res, nil
 	}
 
-	c, err := s.getStorageProviderClient(ctx, srcP)
+	c, err := s.getStorageProviderClient(ctx, srcProvider)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error connecting to storage provider="+srcP.Address),
+			Status: status.NewInternal(ctx, err, "error connecting to storage provider="+srcProvider.Address),
 		}, nil
 	}
 
@@ -1291,7 +1311,7 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 
 	for i, p := range providers {
 		wg.Add(1)
-		go s.statOnProvider(ctx, req, infoFromProviders[i], p, &errors[i], &wg)
+		go s.statOnProvider(ctx, req, &infoFromProviders[i], p, &errors[i], &wg)
 	}
 	wg.Wait()
 
@@ -1321,7 +1341,7 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 	}, nil
 }
 
-func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res *provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
+func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res **provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
 	defer wg.Done()
 	c, err := s.getStorageProviderClient(ctx, p)
 	if err != nil {
@@ -1343,10 +1363,7 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 		*e = errors.Wrap(err, fmt.Sprintf("gateway: error calling Stat %s on %+v", req.Ref, p))
 		return
 	}
-	if res == nil {
-		res = &provider.ResourceInfo{}
-	}
-	*res = *r.Info
+	*res = r.Info
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
@@ -2048,12 +2065,12 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 	return res, nil
 }
 
-func (s *svc) ListRecycleStream(_ *gateway.ListRecycleStreamRequest, _ gateway.GatewayAPI_ListRecycleStreamServer) error {
+func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.GatewayAPI_ListRecycleStreamServer) error {
 	return errtypes.NotSupported("ListRecycleStream unimplemented")
 }
 
 // TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
-func (s *svc) ListRecycle(ctx context.Context, req *gateway.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
+func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
 	c, err := s.find(ctx, req.GetRef())
 	if err != nil {
 		return &provider.ListRecycleResponse{
@@ -2061,12 +2078,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *gateway.ListRecycleRequest) 
 		}, nil
 	}
 
-	res, err := c.ListRecycle(ctx, &provider.ListRecycleRequest{
-		Opaque: req.Opaque,
-		FromTs: req.FromTs,
-		ToTs:   req.ToTs,
-		Ref:    req.Ref,
-	})
+	res, err := c.ListRecycle(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListRecycleRequest")
 	}
@@ -2090,7 +2102,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	return res, nil
 }
 
-func (s *svc) PurgeRecycle(ctx context.Context, req *gateway.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
+func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.PurgeRecycleResponse{
@@ -2098,10 +2110,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *gateway.PurgeRecycleRequest
 		}, nil
 	}
 
-	res, err := c.PurgeRecycle(ctx, &provider.PurgeRecycleRequest{
-		Opaque: req.GetOpaque(),
-		Ref:    req.GetRef(),
-	})
+	res, err := c.PurgeRecycle(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
 	}
@@ -2118,7 +2127,7 @@ func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*prov
 
 	res, err := c.GetQuota(ctx, &provider.GetQuotaRequest{
 		Opaque: req.GetOpaque(),
-		// Ref:    req.GetRef(), // TODO send which storage space ... or root
+		Ref:    req.GetRef(),
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetQuota")

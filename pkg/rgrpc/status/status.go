@@ -29,6 +29,8 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // NewOK returns a Status with CODE_OK.
@@ -169,6 +171,28 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 	case errtypes.BadRequest:
 		return NewInvalidArg(ctx, "gateway: "+msg+":"+err.Error())
 	}
+
+	// map GRPC status codes coming from the auth middleware
+	grpcErr := err
+	for {
+		st, ok := status.FromError(grpcErr)
+		if ok {
+			switch st.Code() {
+			case codes.NotFound:
+				return NewNotFound(ctx, "gateway: "+msg+": "+err.Error())
+			case codes.Unauthenticated:
+				return NewUnauthenticated(ctx, err, "gateway: "+msg+": "+err.Error())
+			case codes.PermissionDenied:
+				return NewPermissionDenied(ctx, err, "gateway: "+msg+": "+err.Error())
+			}
+		}
+		// the actual error can be wrapped multiple times
+		grpcErr = errors.Unwrap(grpcErr)
+		if grpcErr == nil {
+			break
+		}
+	}
+
 	return NewInternal(ctx, err, "gateway: "+msg+":"+err.Error())
 }
 

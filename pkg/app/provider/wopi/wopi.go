@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package demo
+package wopi
 
 import (
 	"bytes"
@@ -63,7 +63,7 @@ type config struct {
 	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
 	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
 	JWTSecret           string `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
-	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:";Whether the app can be opened only on desktop."`
+	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
 	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
 
@@ -136,25 +136,40 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("fileid", resource.GetId().OpaqueId)
 	q.Add("endpoint", resource.GetId().StorageId)
 	q.Add("viewmode", viewMode.String())
-	// TODO the folder URL should be resolved as e.g. `'https://cernbox.cern.ch/index.php/apps/files/?dir=' + filepath.Dir(req.Ref.GetPath())`
-	// or should be deprecated/removed altogether, needs discussion and decision.
-	// q.Add("folderurl", "...")
 	u, ok := ctxpkg.ContextGetUser(ctx)
-	if ok { // else defaults to "Anonymous Guest"
+	if ok { // else defaults to "Guest xyz"
 		q.Add("username", u.Username)
+		q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
 	}
 
 	q.Add("appname", p.conf.AppName)
-	q.Add("appurl", p.appURLs["edit"][ext])
+
+	var viewAppURL string
+	if viewAppURLs, ok := p.appURLs["view"]; ok {
+		if viewAppURL, ok = viewAppURLs[ext]; ok {
+			q.Add("appviewurl", viewAppURL)
+		}
+	}
+	if editAppURLs, ok := p.appURLs["edit"]; ok {
+		if editAppURL, ok := editAppURLs[ext]; ok {
+			q.Add("appurl", editAppURL)
+		}
+	}
+	if q.Get("appurl") == "" {
+		// assuming that an view action is always available in the /hosting/discovery manifest
+		// eg. Collabora does support viewing jpgs but no editing
+		// eg. OnlyOffice does support viewing pdfs but no editing
+		// there is no known case of supporting edit only without view
+		q.Add("appurl", viewAppURL)
+	}
+	if q.Get("appurl") == "" && q.Get("appviewurl") == "" {
+		return nil, errors.New("wopi: neither edit nor view app url found")
+	}
 
 	if p.conf.AppIntURL != "" {
 		q.Add("appinturl", p.conf.AppIntURL)
 	}
-	if viewExts, ok := p.appURLs["view"]; ok {
-		if url, ok := viewExts[ext]; ok {
-			q.Add("appviewurl", url)
-		}
-	}
+
 	httpReq.URL.RawQuery = q.Encode()
 
 	if p.conf.AppAPIKey != "" {
@@ -164,19 +179,25 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	httpReq.Header.Set("Authorization", "Bearer "+p.conf.IOPSecret)
 	httpReq.Header.Set("TokenHeader", token)
 
+	// Call the WOPI server and parse the response (body will always contain a payload)
 	openRes, err := p.wopiClient.Do(httpReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "wopi: error performing open request to WOPI server")
 	}
 	defer openRes.Body.Close()
 
-	if openRes.StatusCode != http.StatusOK {
-		return nil, errtypes.InternalError("wopi: unexpected status from WOPI server: " + openRes.Status)
-	}
-
 	body, err := ioutil.ReadAll(openRes.Body)
 	if err != nil {
 		return nil, err
+	}
+	if openRes.StatusCode != http.StatusOK {
+		// WOPI returned failure: body contains a user-friendly error message (yet perform a sanity check)
+		sbody := ""
+		if body != nil {
+			sbody = string(body)
+		}
+		log.Warn().Msg(fmt.Sprintf("wopi: WOPI server returned HTTP %s to request %s, error was: %s", openRes.Status, httpReq.URL.String(), sbody))
+		return nil, errors.New(sbody)
 	}
 
 	var result map[string]interface{}
@@ -287,17 +308,18 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 
 		// scrape app's home page to find the appname
 		if !strings.Contains(buf.String(), c.AppName) {
-			// || (c.AppName != "CodiMD" && c.AppName != "Etherpad") {
 			return nil, errors.New("Application server at " + c.AppURL + " does not match this AppProvider for " + c.AppName)
 		}
 
 		// register the supported mimetypes in the AppRegistry: this is hardcoded for the time being
-		if c.AppName == "CodiMD" {
+		switch c.AppName {
+		case "CodiMD":
 			appURLs = getCodimdExtensions(c.AppURL)
-		} else if c.AppName == "Etherpad" {
+		case "Etherpad":
 			appURLs = getEtherpadExtensions(c.AppURL)
+		default:
+			return nil, errors.New("Application server " + c.AppName + " running at " + c.AppURL + " is unsupported")
 		}
-
 	}
 	return appURLs, nil
 }
@@ -336,16 +358,34 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 					access := action.SelectAttrValue("name", "")
 					if access == "view" || access == "edit" {
 						ext := action.SelectAttrValue("ext", "")
-						url := action.SelectAttrValue("urlsrc", "")
+						urlString := action.SelectAttrValue("urlsrc", "")
 
-						if ext == "" || url == "" {
+						if ext == "" || urlString == "" {
 							continue
 						}
+
+						u, err := url.Parse(urlString)
+						if err != nil {
+							// it sucks we cannot log here because this function is run
+							// on init without any context.
+							// TODO(labkode): add logging when we'll have static logging in boot phase.
+							continue
+						}
+
+						// remove any malformed query parameter from discovery urls
+						q := u.Query()
+						for k := range q {
+							if strings.Contains(k, "<") || strings.Contains(k, ">") {
+								q.Del(k)
+							}
+						}
+
+						u.RawQuery = q.Encode()
 
 						if _, ok := appURLs[access]; !ok {
 							appURLs[access] = make(map[string]string)
 						}
-						appURLs[access]["."+ext] = url
+						appURLs[access]["."+ext] = u.String()
 					}
 				}
 			}
@@ -370,7 +410,7 @@ func getCodimdExtensions(appURL string) map[string]map[string]string {
 func getEtherpadExtensions(appURL string) map[string]map[string]string {
 	appURLs := make(map[string]map[string]string)
 	appURLs["edit"] = map[string]string{
-		".etherpad": appURL,
+		".epd": appURL,
 	}
 	return appURLs
 }

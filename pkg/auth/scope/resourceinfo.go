@@ -19,18 +19,21 @@
 package scope
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	"github.com/rs/zerolog"
+
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-func resourceinfoScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
 	var r provider.ResourceInfo
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &r)
 	if err != nil {
@@ -59,12 +62,18 @@ func resourceinfoScope(scope *authpb.Scope, resource interface{}) (bool, error) 
 		return checkResourceInfo(&r, v.GetSource()) && checkResourceInfo(&r, v.GetDestination()), nil
 	case *provider.InitiateFileUploadRequest:
 		return checkResourceInfo(&r, v.GetRef()), nil
+	case *provider.SetArbitraryMetadataRequest:
+		return checkResourceInfo(&r, v.GetRef()), nil
+	case *provider.UnsetArbitraryMetadataRequest:
+		return checkResourceInfo(&r, v.GetRef()), nil
 
 	case string:
 		return checkResourcePath(v), nil
 	}
 
-	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
+	msg := fmt.Sprintf("resource type assertion failed: %+v", resource)
+	logger.Debug().Str("scope", "resourceinfoScope").Msg(msg)
+	return false, errtypes.InternalError(msg)
 }
 
 func checkResourceInfo(inf *provider.ResourceInfo, ref *provider.Reference) bool {
@@ -91,6 +100,10 @@ func checkResourcePath(path string) bool {
 	paths := []string{
 		"/dataprovider",
 		"/data",
+		"/app/open",
+		"/archiver",
+		"/ocs/v2.php/cloud/capabilities",
+		"/ocs/v1.php/cloud/capabilities",
 	}
 	for _, p := range paths {
 		if strings.HasPrefix(path, p) {
@@ -102,7 +115,9 @@ func checkResourcePath(path string) bool {
 
 // AddResourceInfoScope adds the scope to allow access to a resource info object.
 func AddResourceInfoScope(r *provider.ResourceInfo, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-	val, err := utils.MarshalProtoV1ToJSON(r)
+	// Create a new "scope info" to only expose the required fields `Id` and `Path` to the scope.
+	scopeInfo := &provider.ResourceInfo{Id: r.Id, Path: r.Path}
+	val, err := utils.MarshalProtoV1ToJSON(scopeInfo)
 	if err != nil {
 		return nil, err
 	}

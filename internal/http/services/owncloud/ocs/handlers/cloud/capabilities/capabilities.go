@@ -104,6 +104,14 @@ func (h *Handler) Init(c *config.Config) {
 	// h.c.Capabilities.Files.Versioning is boolean
 	// h.c.Capabilities.Files.Favorites is boolean
 
+	if h.c.Capabilities.Files.Archivers == nil {
+		h.c.Capabilities.Files.Archivers = []*data.CapabilitiesArchiver{}
+	}
+
+	if h.c.Capabilities.Files.AppProviders == nil {
+		h.c.Capabilities.Files.AppProviders = []*data.CapabilitiesAppProvider{}
+	}
+
 	// dav
 
 	if h.c.Capabilities.Dav == nil {

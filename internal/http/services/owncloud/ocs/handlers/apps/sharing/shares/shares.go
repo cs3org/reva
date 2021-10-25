@@ -49,11 +49,17 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/registry"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
+)
+
+const (
+	storageIDPrefix string = "shared::"
 )
 
 // Handler implements the shares part of the ownCloud sharing API
@@ -539,7 +545,36 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	lrsRes, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+	filters := []*collaboration.Filter{}
+	var shareTypes []string
+	shareTypesParam := r.URL.Query().Get("share_types")
+	if shareTypesParam != "" {
+		shareTypes = strings.Split(shareTypesParam, ",")
+	}
+	for _, s := range shareTypes {
+		if s == "" {
+			continue
+		}
+		shareType, err := strconv.Atoi(strings.TrimSpace(s))
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid share type", err)
+			return
+		}
+		switch shareType {
+		case int(conversions.ShareTypeUser):
+			filters = append(filters, share.UserGranteeFilter())
+		case int(conversions.ShareTypeGroup):
+			filters = append(filters, share.GroupGranteeFilter())
+		}
+	}
+
+	if len(shareTypes) != 0 && len(filters) == 0 {
+		// If a share_types filter was set for anything other than user or group shares just return an empty response
+		response.WriteOCSSuccess(w, r, []*conversions.ShareData{})
+		return
+	}
+
+	lrsRes, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{Filters: filters})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc ListReceivedShares request", err)
 		return
@@ -552,6 +587,27 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		}
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc ListReceivedShares request failed", err)
 		return
+	}
+
+	// in a jailed namespace we have to point to the mount point in the users /Shares jail
+	// to do that we have to list the /Shares jail and use those paths instead of stating the shared resources
+	// The stat results would start with a path outside the jail and thus be inaccessible
+
+	var shareJailInfos []*provider.ResourceInfo
+
+	if h.sharePrefix != "/" {
+		// we only need the path from the share jail for accepted shares
+		if stateFilter == collaboration.ShareState_SHARE_STATE_ACCEPTED || stateFilter == ocsStateUnknown {
+			// only log errors. They may happen but we can continue trying to at least list the shares
+			lcRes, err := client.ListContainer(ctx, &provider.ListContainerRequest{
+				Ref: &provider.Reference{Path: path.Join(h.homeNamespace, h.sharePrefix)},
+			})
+			if err != nil || lcRes.Status.Code != rpc.Code_CODE_OK {
+				h.logProblems(lcRes.GetStatus(), err, "could not list container, continuing without share jail path info")
+			} else {
+				shareJailInfos = lcRes.Infos
+			}
+		}
 	}
 
 	shares := make([]*conversions.ShareData, 0, len(lrsRes.GetShares()))
@@ -594,20 +650,64 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		h.mapUserIds(r.Context(), client, data)
 
 		if data.State == ocsStateAccepted {
+			// only accepted shares can be accessed when jailing users into their home.
+			// in this case we cannot stat shared resources that are outside the users home (/home),
+			// the path (/users/u-u-i-d/foo) will not be accessible
+
+			// in a global namespace we can access the share using the full path
+			// in a jailed namespace we have to point to the mount point in the users /Shares jail
+			// - needed for oc10 hot migration
+			// or use the /dav/spaces/<space id> endpoint?
+
+			// list /Shares and match fileids with list of received shares
+			// - only works for a /Shares folder jail
+			// - does not work for freely mountable shares as in oc10 because we would need to iterate over the whole tree, there is no listing of mountpoints, yet
+
+			// can we return the mountpoint when the gateway resolves the listing of shares?
+			// - no, the gateway only sees the same list any has the same options as the ocs service
+			// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration migration
+
+			// best we can do for now is stat the /Shares jail if it is set and return those paths
+
+			// if we are in a jail and the current share has been accepted use the stat from the share jail
 			// Needed because received shares can be jailed in a folder in the users home
-			data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+
+			if h.sharePrefix != "/" {
+				// if we have share jail infos use them to build the path
+				if sji := findMatch(shareJailInfos, rs.Share.ResourceId); sji != nil {
+					// override path with info from share jail
+					data.FileTarget = path.Join(h.sharePrefix, path.Base(sji.Path))
+					data.Path = path.Join(h.sharePrefix, path.Base(sji.Path))
+				} else {
+					data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
+					data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+				}
+			} else {
+				data.FileTarget = info.Path
+				data.Path = info.Path
+			}
 		}
 
 		shares = append(shares, data)
+		log.Debug().Msgf("share: %+v", *data)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
 }
 
+func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId) *provider.ResourceInfo {
+	for i := range shareJailInfos {
+		if shareJailInfos[i].Id != nil && shareJailInfos[i].Id.StorageId == id.StorageId && shareJailInfos[i].Id.OpaqueId == id.OpaqueId {
+			return shareJailInfos[i]
+		}
+	}
+	return nil
+}
+
 func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 
-	filters := []*collaboration.ListSharesRequest_Filter{}
+	filters := []*collaboration.Filter{}
 	linkFilters := []*link.ListPublicSharesRequest_Filter{}
 	var e error
 
@@ -622,23 +722,45 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	shareTypes := strings.Split(r.URL.Query().Get("share_types"), ",")
+	var shareTypes []string
+	shareTypesParam := r.URL.Query().Get("share_types")
+	if shareTypesParam != "" {
+		shareTypes = strings.Split(shareTypesParam, ",")
+	}
+
+	listPublicShares := len(shareTypes) == 0 // if no share_types filter was set we want to list all share by default
+	listUserShares := len(shareTypes) == 0   // if no share_types filter was set we want to list all share by default
 	for _, s := range shareTypes {
+		if s == "" {
+			continue
+		}
 		shareType, err := strconv.Atoi(strings.TrimSpace(s))
-		if err != nil && s != "" {
+		if err != nil {
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid share type", err)
 			return
 		}
-		if s == "" || shareType == int(conversions.ShareTypeUser) || shareType == int(conversions.ShareTypeGroup) {
-			userShares, status, err := h.listUserShares(r, filters)
-			h.logProblems(status, err, "could not listUserShares")
-			shares = append(shares, userShares...)
+
+		switch shareType {
+		case int(conversions.ShareTypeUser):
+			listUserShares = true
+			filters = append(filters, share.UserGranteeFilter())
+		case int(conversions.ShareTypeGroup):
+			listUserShares = true
+			filters = append(filters, share.GroupGranteeFilter())
+		case int(conversions.ShareTypePublicLink):
+			listPublicShares = true
 		}
-		if s == "" || shareType == int(conversions.ShareTypePublicLink) {
-			publicShares, status, err := h.listPublicShares(r, linkFilters)
-			h.logProblems(status, err, "could not listPublicShares")
-			shares = append(shares, publicShares...)
-		}
+	}
+
+	if listPublicShares {
+		publicShares, status, err := h.listPublicShares(r, linkFilters)
+		h.logProblems(status, err, "could not listPublicShares")
+		shares = append(shares, publicShares...)
+	}
+	if listUserShares {
+		userShares, status, err := h.listUserShares(r, filters)
+		h.logProblems(status, err, "could not listUserShares")
+		shares = append(shares, userShares...)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
@@ -663,8 +785,8 @@ func (h *Handler) logProblems(s *rpc.Status, e error, msg string) {
 	}
 }
 
-func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.ListSharesRequest_Filter, []*link.ListPublicSharesRequest_Filter, error) {
-	collaborationFilters := []*collaboration.ListSharesRequest_Filter{}
+func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.Filter, []*link.ListPublicSharesRequest_Filter, error) {
+	collaborationFilters := []*collaboration.Filter{}
 	linkFilters := []*link.ListPublicSharesRequest_Filter{}
 	ctx := r.Context()
 
@@ -692,19 +814,9 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 		return nil, nil, err
 	}
 
-	collaborationFilters = append(collaborationFilters, &collaboration.ListSharesRequest_Filter{
-		Type: collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID,
-		Term: &collaboration.ListSharesRequest_Filter_ResourceId{
-			ResourceId: info.Id,
-		},
-	})
+	collaborationFilters = append(collaborationFilters, share.ResourceIDFilter(info.Id))
 
-	linkFilters = append(linkFilters, &link.ListPublicSharesRequest_Filter{
-		Type: link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID,
-		Term: &link.ListPublicSharesRequest_Filter_ResourceId{
-			ResourceId: info.Id,
-		},
-	})
+	linkFilters = append(linkFilters, publicshare.ResourceIDFilter(info.Id))
 
 	return collaborationFilters, linkFilters, nil
 }
@@ -732,16 +844,21 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		}
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
-		s.StorageID = info.Id.StorageId + "!" + info.Id.OpaqueId
 		// TODO Storage: int
 		s.ItemSource = wrapResourceID(info.Id)
 		s.FileSource = s.ItemSource
-		if s.ShareType == conversions.ShareTypePublicLink {
+		switch {
+		case s.ShareType == conversions.ShareTypePublicLink:
 			s.FileTarget = path.Join("/", path.Base(info.Path))
-		} else {
+			s.Path = path.Join("/", path.Base(info.Path))
+		case h.sharePrefix == "/":
+			s.FileTarget = path.Join("/", path.Base(info.Path))
+			s.Path = path.Join("/", path.Base(info.Path))
+		default:
 			s.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
+			s.Path = path.Join("/", path.Base(info.Path))
 		}
-		s.Path = path.Join("/", path.Base(info.Path)) // TODO hm this might have to be relative to the users home ... depends on the webdav_namespace config
+		s.StorageID = storageIDPrefix + s.FileTarget
 		// TODO FileParent:
 		// item type
 		s.ItemType = conversions.ResourceType(info.GetType()).String()

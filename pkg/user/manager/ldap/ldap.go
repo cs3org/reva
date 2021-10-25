@@ -21,7 +21,6 @@ package ldap
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"strconv"
 	"strings"
@@ -33,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -49,15 +49,12 @@ type manager struct {
 }
 
 type config struct {
-	Hostname        string     `mapstructure:"hostname"`
-	Port            int        `mapstructure:"port"`
+	utils.LDAPConn  `mapstructure:",squash"`
 	BaseDN          string     `mapstructure:"base_dn"`
 	UserFilter      string     `mapstructure:"userfilter"`
 	AttributeFilter string     `mapstructure:"attributefilter"`
 	FindFilter      string     `mapstructure:"findfilter"`
 	GroupFilter     string     `mapstructure:"groupfilter"`
-	BindUsername    string     `mapstructure:"bind_username"`
-	BindPassword    string     `mapstructure:"bind_password"`
 	Idp             string     `mapstructure:"idp"`
 	Schema          attributes `mapstructure:"schema"`
 	Nobody          int64      `mapstructure:"nobody"`
@@ -146,17 +143,11 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
+	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return nil, err
 	}
 	defer l.Close()
-
-	// First bind with a read only user
-	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
-	if err != nil {
-		return nil, err
-	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
@@ -234,17 +225,11 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	}
 
 	log := appctx.GetLogger(ctx)
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
+	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return nil, err
 	}
 	defer l.Close()
-
-	// First bind with a read only user
-	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
-	if err != nil {
-		return nil, err
-	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
@@ -306,17 +291,11 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
+	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return nil, err
 	}
 	defer l.Close()
-
-	// First bind with a read only user
-	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
-	if err != nil {
-		return nil, err
-	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
@@ -376,17 +355,11 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
+	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return []string{}, err
 	}
 	defer l.Close()
-
-	// First bind with a read only user
-	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
-	if err != nil {
-		return []string{}, err
-	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
@@ -424,12 +397,12 @@ func (m *manager) getUserFilter(uid *userpb.UserId) string {
 }
 
 func (m *manager) getAttributeFilter(attribute, value string) string {
-	attr := strings.ReplaceAll(m.c.AttributeFilter, "{{attr}}", attribute)
-	return strings.ReplaceAll(attr, "{{value}}", value)
+	attr := strings.ReplaceAll(m.c.AttributeFilter, "{{attr}}", ldap.EscapeFilter(attribute))
+	return strings.ReplaceAll(attr, "{{value}}", ldap.EscapeFilter(value))
 }
 
 func (m *manager) getFindFilter(query string) string {
-	return strings.ReplaceAll(m.c.FindFilter, "{{query}}", query)
+	return strings.ReplaceAll(m.c.FindFilter, "{{query}}", ldap.EscapeFilter(query))
 }
 
 func (m *manager) getGroupFilter(uid *userpb.UserId) string {

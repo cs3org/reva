@@ -564,6 +564,11 @@ func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *
 	return fs.propagate(ctx, fn)
 }
 
+// CreateStorageSpace creates a storage space
+func (fs *localfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+}
+
 func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
 
 	np, err := fs.resolve(ctx, ref)
@@ -1141,7 +1146,7 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 	return fs.propagate(ctx, np)
 }
 
-func (fs *localfs) PurgeRecycleItem(ctx context.Context, key, itemPath string) error {
+func (fs *localfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
 	rp := fs.wrapRecycleBin(ctx, key)
 
 	if err := os.Remove(rp); err != nil {
@@ -1191,7 +1196,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 }
 
-func (fs *localfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error) {
+func (fs *localfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 
 	rp := fs.wrapRecycleBin(ctx, "/")
 
@@ -1209,7 +1214,7 @@ func (fs *localfs) ListRecycle(ctx context.Context, key, path string) ([]*provid
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, key, itemPath string, restoreRef *provider.Reference) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 
 	suffix := path.Ext(key)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
@@ -1257,6 +1262,11 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, key, itemPath string,
 
 func (fs *localfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("list storage spaces")
+}
+
+// UpdateStorageSpace updates a storage space
+func (fs *localfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
 }
 
 func (fs *localfs) propagate(ctx context.Context, leafPath string) error {
