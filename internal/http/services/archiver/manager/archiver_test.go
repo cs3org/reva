@@ -179,17 +179,17 @@ func TestCreateTar(t *testing.T) {
 			name: "one big file",
 			src: test.Dir{
 				"foo": test.File{
-					Content: strings.Repeat("a", 1024*1024*1024),
+					Content: strings.Repeat("a", 1024*1024),
 				},
 			},
 			config: Config{
-				MaxSize:     1024 * 1024 * 1024 * 2,
+				MaxSize:     1024 * 1024 * 2,
 				MaxNumFiles: 1000,
 			},
 			files: []string{"foo"},
 			expected: test.Dir{
 				"foo": test.File{
-					Content: strings.Repeat("a", 1024*1024*1024),
+					Content: strings.Repeat("a", 1024*1024),
 				},
 			},
 			err: nil,
@@ -627,17 +627,17 @@ func TestCreateZip(t *testing.T) {
 			name: "one big file",
 			src: test.Dir{
 				"foo": test.File{
-					Content: strings.Repeat("a", 1024*1024*1024),
+					Content: strings.Repeat("a", 1024*1024),
 				},
 			},
 			config: Config{
-				MaxSize:     1024 * 1024 * 1024 * 2,
+				MaxSize:     1024 * 1024 * 2,
 				MaxNumFiles: 1000,
 			},
 			files: []string{"foo"},
 			expected: test.Dir{
 				"foo": test.File{
-					Content: strings.Repeat("a", 1024*1024*1024),
+					Content: strings.Repeat("a", 1024*1024),
 				},
 			},
 			err: nil,

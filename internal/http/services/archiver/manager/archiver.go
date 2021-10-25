@@ -136,13 +136,21 @@ func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 				return err
 			}
 
+			isDir := info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER
+
 			filesCount++
 			if filesCount > a.config.MaxNumFiles {
 				return ErrMaxFileCount
 			}
-			sizeFiles += int64(info.Size)
-			if sizeFiles > a.config.MaxSize {
-				return ErrMaxSize
+
+			if !isDir {
+				// only add the size if the resource is not a directory
+				// as its size could be resursive-computed, and we would
+				// count the files not only once
+				sizeFiles += int64(info.Size)
+				if sizeFiles > a.config.MaxSize {
+					return ErrMaxSize
+				}
 			}
 
 			// TODO (gdelmont): remove duplicates if the resources requested overlaps
@@ -156,8 +164,6 @@ func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 				Name:    fileName,
 				ModTime: time.Unix(int64(info.Mtime.Seconds), 0),
 			}
-
-			isDir := info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER
 
 			if isDir {
 				// the resource is a folder
@@ -204,13 +210,21 @@ func (a *Archiver) CreateZip(ctx context.Context, dst io.Writer) error {
 				return err
 			}
 
+			isDir := info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER
+
 			filesCount++
 			if filesCount > a.config.MaxNumFiles {
 				return ErrMaxFileCount
 			}
-			sizeFiles += int64(info.Size)
-			if sizeFiles > a.config.MaxSize {
-				return ErrMaxSize
+
+			if !isDir {
+				// only add the size if the resource is not a directory
+				// as its size could be resursive-computed, and we would
+				// count the files not only once
+				sizeFiles += int64(info.Size)
+				if sizeFiles > a.config.MaxSize {
+					return ErrMaxSize
+				}
 			}
 
 			// TODO (gdelmont): remove duplicates if the resources requested overlaps
@@ -227,8 +241,6 @@ func (a *Archiver) CreateZip(ctx context.Context, dst io.Writer) error {
 				Name:     fileName,
 				Modified: time.Unix(int64(info.Mtime.Seconds), 0),
 			}
-
-			isDir := info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER
 
 			if isDir {
 				header.Name += "/"

@@ -1,210 +1,350 @@
-Changelog for reva 1.13.0 (2021-09-14)
+Changelog for reva 1.14.0 (2021-10-12)
 =======================================
 
-The following sections list the changes in reva 1.13.0 relevant to
+The following sections list the changes in reva 1.14.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Fix #2024: Fixes for http appprovider endpoints
- * Fix #2054: Fix the response after deleting a share
- * Fix #2026: Fix moving of a shared file
- * Fix #2047: Do not truncate logs on restart
- * Fix #1605: Allow to expose full paths in OCS API
- * Fix #2033: Fix the storage id of shares
- * Fix #2059: Remove "Got registration for user manager" print statements
- * Fix #2051: Remove malformed parameters from WOPI discovery URLs
- * Fix #2055: Fix uploads of empty files
- * Fix #1991: Remove share references when declining shares
- * Fix #2030: Fix superfluous WriteHeader on file upload
- * Enh #2034: Fail initialization of a WOPI AppProvider if
- * Enh #1968: Use a URL object in OpenInAppResponse
- * Enh #1698: Implement folder download as archive
- * Enh #2042: Escape ldap filters
- * Enh #2028: Machine auth provider
- * Enh #2043: Nextcloud user backend
- * Enh #2006: Move ocs API to go-chi/chi based URL routing
- * Enh #1994: Add owncloudsql driver for the userprovider
- * Enh #1971: Add documentation for runtime-plugins
- * Enh #2044: Add utility methods for creating share filters
- * Enh #2065: New sharing role Manager
- * Enh #2015: Add spaces to the list of capabilities
- * Enh #2041: Create operations for Spaces
- * Enh #2029: Tracing agent configuration
+ * Fix #2103: AppProvider: propagate back errors reported by WOPI
+ * Fix #2149: Remove excess info from the http list app providers endpoint
+ * Fix #2114: Add as default app while registering and skip unset mimetypes
+ * Fix #2095: Fix app open when multiple app providers are present
+ * Fix #2135: Make TUS capabilities configurable
+ * Fix #2076: Fix chi routing
+ * Fix #2077: Fix concurrent registration of mimetypes
+ * Fix #2154: Return OK when trying to delete a non existing reference
+ * Fix #2078: Fix nil pointer exception in stat
+ * Fix #2073: Fix opening a readonly filetype with WOPI
+ * Fix #2140: Map GRPC error codes to REVA errors
+ * Fix #2147: Follow up of #2138: this is the new expected format
+ * Fix #2116: Differentiate share types when retrieving received shares in sql driver
+ * Fix #2074: Fix Stat() for EOS storage provider
+ * Fix #2151: Fix return code for webdav uploads when the token expired
+ * Chg #2121: Sharemanager API change
+ * Enh #2090: Return space name during list storage spaces
+ * Enh #2138: Default AppProvider on top of the providers list
+ * Enh #2137: Revamp app registry and add parameter to control file creation
+ * Enh #145: UI improvements for the AppProviders
+ * Enh #2088: Add archiver and app provider to ocs capabilities
+ * Enh #2537: Add maximum files and size to archiver capabilities
+ * Enh #2100: Add support for resource id to the archiver
+ * Enh #2158: Augment the Id of new spaces
+ * Enh #2085: Make encoding user groups in access tokens configurable
+ * Enh #146: Filter the denial shares (permission = 0) out of
+ * Enh #2141: Use golang v1.17
+ * Enh #2053: Safer defaults for TLS verification on LDAP connections
+ * Enh #2115: Reduce code duplication in LDAP related drivers
+ * Enh #1989: Add redirects from OC10 URL formats
+ * Enh #2479: Limit publicshare and resourceinfo scope content
+ * Enh #2071: Implement listing favorites via the dav report API
+ * Enh #2091: Nextcloud share managers
+ * Enh #2070: More unit tests for the Nextcloud storage provider
+ * Enh #2087: More unit tests for the Nextcloud auth and user managers
+ * Enh #2075: Make owncloudsql leverage existing filecache index
+ * Enh #2050: Add a share types filter to the OCS API
+ * Enh #2134: Use space Type from request
+ * Enh #2132: Align local tests with drone setup
+ * Enh #2095: Whitelisting for apps
+ * Enh #2155: Pass an extra query parameter to WOPI /openinapp with a
 
 Details
 -------
 
- * Bugfix #2024: Fixes for http appprovider endpoints
+ * Bugfix #2103: AppProvider: propagate back errors reported by WOPI
 
-   https://github.com/cs3org/reva/pull/2024
-   https://github.com/cs3org/reva/pull/1968
+   On /app/open and return base64-encoded fileids on /app/new
 
- * Bugfix #2054: Fix the response after deleting a share
+   https://github.com/cs3org/reva/pull/2103
 
-   Added the deleted share to the response after deleting it.
+ * Bugfix #2149: Remove excess info from the http list app providers endpoint
 
-   https://github.com/cs3org/reva/pull/2054
+   We've removed excess info from the http list app providers endpoint. The app provider section
+   contained all mime types supported by a certain app provider, which led to a very big JSON
+   payload and since they are not used they have been removed again. Mime types not on the mime type
+   configuration list always had `application/octet-stream` as a file extension and
+   `APPLICATION/OCTET-STREAM file` as name and description. Now these information are just
+   omitted.
 
- * Bugfix #2026: Fix moving of a shared file
+   https://github.com/cs3org/reva/pull/2149
+   https://github.com/owncloud/ocis/pull/2603
+   https://github.com/cs3org/reva/pull/2138
 
-   As the share receiver, moving a shared file to another share was not possible.
+ * Bugfix #2114: Add as default app while registering and skip unset mimetypes
 
-   https://github.com/cs3org/reva/pull/2026
+   We fixed that app providers will be set as default app while registering if configured. Also we
+   changed the behaviour that listing supported mimetypes only displays allowed / configured
+   mimetypes.
 
- * Bugfix #2047: Do not truncate logs on restart
+   https://github.com/cs3org/reva/pull/2114
+   https://github.com/cs3org/reva/pull/2095
 
-   This change fixes the way log files were opened. Before they were truncated and now the log file
-   will be open in append mode and created it if it does not exist.
+ * Bugfix #2095: Fix app open when multiple app providers are present
 
-   https://github.com/cs3org/reva/pull/2047
+   We've fixed the gateway behavior, that when multiple app providers are present, it always
+   returned that we have duplicate names for app providers. This was due the call to
+   GetAllProviders() without any subsequent filtering by name. Now this filter mechanism is in
+   place and the duplicate app providers error will only appear if a real duplicate is found.
 
- * Bugfix #1605: Allow to expose full paths in OCS API
+   https://github.com/cs3org/reva/issues/2095
+   https://github.com/cs3org/reva/pull/2117
 
-   Before this fix a share file_target was always harcoded to use a base path. This fix provides the
-   possiblity to expose full paths in the OCIS API and asymptotically in OCIS web.
+ * Bugfix #2135: Make TUS capabilities configurable
 
-   https://github.com/cs3org/reva/pull/1605
+   We've fixed the configuration for the TUS capabilities, which will now take the given
+   configuration instead of always using hardcoded defaults.
 
- * Bugfix #2033: Fix the storage id of shares
+   https://github.com/cs3org/reva/pull/2135
 
-   The storageid in the share object contained an incorrect value.
+ * Bugfix #2076: Fix chi routing
 
-   https://github.com/cs3org/reva/pull/2033
+   Chi routes based on the URL.RawPath, which is not updated by the shiftPath based routing used in
+   reva. By setting the RawPath to an empty string chi will fall pack to URL.Path, allowing it to
+   match percent encoded path segments, e.g. when trying to match emails or multibyte
+   characters.
 
- * Bugfix #2059: Remove "Got registration for user manager" print statements
+   https://github.com/cs3org/reva/pull/2076
 
-   Removed the "Got registration for user manager" print statements which spams the log output
-   without respecting any log level.
+ * Bugfix #2077: Fix concurrent registration of mimetypes
 
-   https://github.com/cs3org/reva/pull/2059
+   We fixed registering mimetypes in the mime package when starting multiple storage providers
+   in the same process.
 
- * Bugfix #2051: Remove malformed parameters from WOPI discovery URLs
+   https://github.com/cs3org/reva/pull/2077
 
-   This change fixes the parsing of WOPI discovery URLs for MSOffice /hosting/discovery
-   endpoint. This endpoint is known to contain malformed query paramters and therefore this fix
-   removes them.
+ * Bugfix #2154: Return OK when trying to delete a non existing reference
 
-   https://github.com/cs3org/reva/pull/2051
+   When the gateway declines a share we can ignore a non existing reference.
 
- * Bugfix #2055: Fix uploads of empty files
+   https://github.com/cs3org/reva/pull/2154
+   https://github.com/owncloud/ocis/pull/2603
 
-   This change fixes upload of empty files. Previously this was broken and only worked for the
-   owncloud filesystem as it bypasses the semantics of the InitiateFileUpload call to touch a
-   local file.
+ * Bugfix #2078: Fix nil pointer exception in stat
 
-   https://github.com/cs3org/reva/pull/2055
+   https://github.com/cs3org/reva/pull/2078
 
- * Bugfix #1991: Remove share references when declining shares
+ * Bugfix #2073: Fix opening a readonly filetype with WOPI
 
-   Implemented the removal of share references when a share gets declined. Now when a user
-   declines a share it will no longer be listed in their `Shares` directory.
+   This change fixes the opening of filetypes that are only supported to be viewed and not to be
+   edited by some WOPI compliant office suites.
 
-   https://github.com/cs3org/reva/pull/1991
+   https://github.com/cs3org/reva/pull/2073
 
- * Bugfix #2030: Fix superfluous WriteHeader on file upload
+ * Bugfix #2140: Map GRPC error codes to REVA errors
 
-   Removes superfluous Writeheader on file upload and therefore removes the error message
-   "http: superfluous response.WriteHeader call from
-   github.com/cs3org/reva/internal/http/interceptors/log.(*responseLogger).WriteHeader
-   (log.go:154)"
+   We've fixed the error return behaviour in the gateway which would return GRPC error codes from
+   the auth middleware. Now it returns REVA errors which other parts of REVA are also able to
+   understand.
 
-   https://github.com/cs3org/reva/pull/2030
+   https://github.com/cs3org/reva/pull/2140
 
- * Enhancement #2034: Fail initialization of a WOPI AppProvider if
+ * Bugfix #2147: Follow up of #2138: this is the new expected format
 
-   The underlying app is not WOPI-compliant nor it is supported by the WOPI bridge extensions
+   For the mime types configuration for the AppRegistry.
 
-   https://github.com/cs3org/reva/pull/2034
+   https://github.com/cs3org/reva/pull/2147
 
- * Enhancement #1968: Use a URL object in OpenInAppResponse
+ * Bugfix #2116: Differentiate share types when retrieving received shares in sql driver
 
-   https://github.com/cs3org/reva/pull/1968
+   https://github.com/cs3org/reva/pull/2116
 
- * Enhancement #1698: Implement folder download as archive
+ * Bugfix #2074: Fix Stat() for EOS storage provider
 
-   Adds a new http service which will create an archive (platform dependent, zip in windows and tar
-   in linux) given a list of file.
+   This change fixes the convertion between the eosclient.FileInfo to ResourceInfo, in which
+   the field ArbitraryMetadata was missing. Moreover, to be consistent with
+   SetArbitraryMetadata() EOS implementation, all the "user." prefix are stripped out from the
+   xattrs.
 
-   https://github.com/cs3org/reva/issues/1698
-   https://github.com/cs3org/reva/pull/2066
+   https://github.com/cs3org/reva/pull/2074
 
- * Enhancement #2042: Escape ldap filters
+ * Bugfix #2151: Fix return code for webdav uploads when the token expired
 
-   Added ldap filter escaping to increase the security of reva.
+   We've fixed the behavior webdav uploads when the token expired before the final stat.
+   Previously clients would receive a http 500 error which is wrong, because the file was
+   successfully uploaded and only the stat couldn't be performed. Now we return a http 200 ok and
+   the clients will fetch the file info in a separate propfind request.
 
-   https://github.com/cs3org/reva/pull/2042
+   Also we introduced the upload expires header on the webdav/TUS and datagateway endpoints, to
+   signal clients how long an upload can be performed.
 
- * Enhancement #2028: Machine auth provider
+   https://github.com/cs3org/reva/pull/2151
 
-   Adds a new authentication method used to impersonate users, using a shared secret, called
-   api-key.
+ * Change #2121: Sharemanager API change
 
-   https://github.com/cs3org/reva/pull/2028
+   This PR updates reva to reflect the share manager CS3 API changes.
 
- * Enhancement #2043: Nextcloud user backend
+   https://github.com/cs3org/reva/pull/2121
 
-   Adds Nextcloud as a user backend (Nextcloud drivers for 'auth' and 'user'). Also adds back the
-   Nextcloud storage integration tests.
+ * Enhancement #2090: Return space name during list storage spaces
 
-   https://github.com/cs3org/reva/pull/2043
+   In the decomposedfs we return now the space name in the response which is stored in the extended
+   attributes.
 
- * Enhancement #2006: Move ocs API to go-chi/chi based URL routing
+   https://github.com/cs3org/reva/issues/2090
 
-   https://github.com/cs3org/reva/issues/1986
-   https://github.com/cs3org/reva/pull/2006
+ * Enhancement #2138: Default AppProvider on top of the providers list
 
- * Enhancement #1994: Add owncloudsql driver for the userprovider
+   For each mime type
 
-   We added a new backend for the userprovider that is backed by an owncloud 10 database. By default
-   the `user_id` column is used as the reva user username and reva user opaque id. When setting
-   `join_username=true` the reva user username is joined from the `oc_preferences` table
-   (`appid='core' AND configkey='username'`) instead. When setting
-   `join_ownclouduuid=true` the reva user opaqueid is joined from the `oc_preferences` table
-   (`appid='core' AND configkey='ownclouduuid'`) instead. This allows more flexible
-   migration strategies. It also supports a `enable_medial_search` config option when
-   searching users that will enclose the query with `%`.
+   Now for each mime type, when asking for the list of mime types, the default AppProvider, set both
+   using the config and the SetDefaultProviderForMimeType method, is always in the top of the
+   list of AppProviders. The config for the Providers and Mime Types for the AppRegistry changed,
+   using a list instead of a map. In fact the list of mime types returned by ListSupportedMimeTypes
+   is now ordered according the config.
 
-   https://github.com/cs3org/reva/pull/1994
+   https://github.com/cs3org/reva/pull/2138
 
- * Enhancement #1971: Add documentation for runtime-plugins
+ * Enhancement #2137: Revamp app registry and add parameter to control file creation
 
-   https://github.com/cs3org/reva/pull/1971
+   https://github.com/cs3org/reva/pull/2137
 
- * Enhancement #2044: Add utility methods for creating share filters
+ * Enhancement #145: UI improvements for the AppProviders
 
-   Updated the CS3 API to include the new share grantee filter and added utility methods for
-   creating share filters. This will help making the code more concise.
+   Mime types and their friendly names are now handled in the /app/list HTTP endpoint, and an
+   additional /app/new endpoint is made available to create new files for apps.
 
-   https://github.com/cs3org/reva/pull/2044
+   https://github.com/cs3org/cs3apis/pull/145
+   https://github.com/cs3org/reva/pull/2067
 
- * Enhancement #2065: New sharing role Manager
+ * Enhancement #2088: Add archiver and app provider to ocs capabilities
 
-   The new Manager role is equivalent to a Co-Owner with the difference that a Manager can create
-   grants on the root of the Space. This means inviting a user to a space will not require an action
-   from them, as the Manager assigns the grants.
+   The archiver and app provider has been added to the ocs capabilities.
 
-   https://github.com/cs3org/reva/pull/2065
+   https://github.com/cs3org/reva/pull/2088
+   https://github.com/owncloud/ocis/pull/2529
 
- * Enhancement #2015: Add spaces to the list of capabilities
+ * Enhancement #2537: Add maximum files and size to archiver capabilities
 
-   In order for clients to be aware of the new spaces feature we need to enable the `spaces` flag on
-   the capabilities' endpoint.
+   We added the maximum files count and maximum archive size of the archiver to the capabilities
+   endpoint. Clients can use this to generate warnings before the actual archive creation fails.
 
-   https://github.com/cs3org/reva/pull/2015
+   https://github.com/owncloud/ocis/issues/2537
+   https://github.com/cs3org/reva/pull/2105
 
- * Enhancement #2041: Create operations for Spaces
+ * Enhancement #2100: Add support for resource id to the archiver
 
-   DecomposedFS is aware now of the concept of Spaces, and supports for creating them.
+   Before the archiver only supported resources provided by a path. Now also the resources ID are
+   supported in order to specify the content of the archive to download. The parameters accepted
+   by the archiver are two: an optional list of `path` (containing the paths of the resources) and
+   an optional list of `id` (containing the resources IDs of the resources).
 
-   https://github.com/cs3org/reva/pull/2041
+   https://github.com/cs3org/reva/issues/2097
+   https://github.com/cs3org/reva/pull/2100
 
- * Enhancement #2029: Tracing agent configuration
+ * Enhancement #2158: Augment the Id of new spaces
 
-   Earlier we could only use the collector URL directly, but since an agent can be deployed as a
-   sidecar process it makes much more sense to use it instead of the collector directly.
+   Newly created spaces were missing the Root reference and the storage id in the space id.
 
-   https://github.com/cs3org/reva/pull/2029
+   https://github.com/cs3org/reva/issues/2158
+
+ * Enhancement #2085: Make encoding user groups in access tokens configurable
+
+   https://github.com/cs3org/reva/pull/2085
+
+ * Enhancement #146: Filter the denial shares (permission = 0) out of
+
+   The Shared-with-me UI view. Also they work regardless whether they are accepted or not,
+   therefore there's no point to expose them.
+
+   https://github.com/cs3org/cs3apis/pull/146
+   https://github.com/cs3org/reva/pull/2072
+
+ * Enhancement #2141: Use golang v1.17
+
+   https://github.com/cs3org/reva/pull/2141
+
+ * Enhancement #2053: Safer defaults for TLS verification on LDAP connections
+
+   The LDAP client connections were hardcoded to ignore certificate validation errors. Now
+   verification is enabled by default and a new config parameter 'insecure' is introduced to
+   override that default. It is also possible to add trusted Certificates by using the new
+   'cacert' config paramter.
+
+   https://github.com/cs3org/reva/pull/2053
+
+ * Enhancement #2115: Reduce code duplication in LDAP related drivers
+
+   https://github.com/cs3org/reva/pull/2115
+
+ * Enhancement #1989: Add redirects from OC10 URL formats
+
+   Added redirectors for ownCloud 10 URLs. This allows users to continue to use their bookmarks
+   from ownCloud 10 in ocis.
+
+   https://github.com/cs3org/reva/pull/1989
+
+ * Enhancement #2479: Limit publicshare and resourceinfo scope content
+
+   We changed the publicshare and resourceinfo scopes to contain only necessary values. This
+   reduces the size of the resulting token and also limits the amount of data which can be leaked.
+
+   https://github.com/owncloud/ocis/issues/2479
+   https://github.com/cs3org/reva/pull/2093
+
+ * Enhancement #2071: Implement listing favorites via the dav report API
+
+   Added filter-files to the dav REPORT API. This enables the listing of favorites.
+
+   https://github.com/cs3org/reva/pull/2071
+   https://github.com/cs3org/reva/pull/2086
+
+ * Enhancement #2091: Nextcloud share managers
+
+   Share manager that uses Nextcloud as a backend
+
+   https://github.com/cs3org/reva/pull/2091
+
+ * Enhancement #2070: More unit tests for the Nextcloud storage provider
+
+   Adds more unit tests for the Nextcloud storage provider.
+
+   https://github.com/cs3org/reva/pull/2070
+
+ * Enhancement #2087: More unit tests for the Nextcloud auth and user managers
+
+   Adds more unit tests for the Nextcloud auth manager and the Nextcloud user manager
+
+   https://github.com/cs3org/reva/pull/2087
+
+ * Enhancement #2075: Make owncloudsql leverage existing filecache index
+
+   When listing folders the SQL query now uses an existing index on the filecache table.
+
+   https://github.com/cs3org/reva/pull/2075
+
+ * Enhancement #2050: Add a share types filter to the OCS API
+
+   Added a filter to the OCS API to filter the received shares by type.
+
+   https://github.com/cs3org/reva/pull/2050
+
+ * Enhancement #2134: Use space Type from request
+
+   In the decomposedfs we now use the space type from the request when creating a new space.
+
+   https://github.com/cs3org/reva/issues/2134
+
+ * Enhancement #2132: Align local tests with drone setup
+
+   We fixed running the tests locally and align it with the drone setup.
+
+   https://github.com/cs3org/reva/issues/2132
+
+ * Enhancement #2095: Whitelisting for apps
+
+   AppProvider supported mime types are now overridden in its configuration. A friendly name, a
+   description, an extension, an icon and a default app, can be configured in the AppRegistry for
+   each mime type.
+
+   https://github.com/cs3org/reva/pull/2095
+
+ * Enhancement #2155: Pass an extra query parameter to WOPI /openinapp with a
+
+   Unique and consistent over time user identifier. The Reva token used so far is not consistent
+   (it's per session) and also too long.
+
+   https://github.com/cs3org/reva/pull/2155
+   https://github.com/cs3org/wopiserver/pull/48
 
 

@@ -28,15 +28,16 @@ import (
 	"sync"
 	"time"
 
-	rtrace "github.com/cs3org/reva/pkg/trace"
-
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -888,7 +889,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		// the following will check that:
 		// - the resource to delete is a share the current user received
 		// - signal the storage the delete must not land in the trashbin
-		// - delete the resource and update the share status to pending
+		// - delete the resource and update the share status to "rejected"
 		for _, share := range sRes.Shares {
 			if statRes != nil && (share.Share.ResourceId.OpaqueId == statRes.Info.Id.OpaqueId) && (share.Share.ResourceId.StorageId == statRes.Info.Id.StorageId) {
 				// this opaque needs explanation. It signals the storage the resource we're about to delete does not
@@ -903,21 +904,13 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 					},
 				}
 
-				// the following block takes care of updating the state of the share to "pending". This will ensure the user
+				// the following block takes care of updating the state of the share to "rejected". This will ensure the user
 				// can "Accept" the share once again.
+				// TODO should this be pending? If so, update the two comments above as well. If not, get rid of this comment.
+				share.State = collaboration.ShareState_SHARE_STATE_REJECTED
 				r := &collaboration.UpdateReceivedShareRequest{
-					Ref: &collaboration.ShareReference{
-						Spec: &collaboration.ShareReference_Id{
-							Id: &collaboration.ShareId{
-								OpaqueId: share.Share.Id.OpaqueId,
-							},
-						},
-					},
-					Field: &collaboration.UpdateReceivedShareRequest_UpdateField{
-						Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
-							State: collaboration.ShareState_SHARE_STATE_REJECTED,
-						},
-					},
+					Share:      share,
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
 				}
 
 				_, err := s.UpdateReceivedShare(ctx, r)
@@ -2072,12 +2065,12 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 	return res, nil
 }
 
-func (s *svc) ListRecycleStream(_ *gateway.ListRecycleStreamRequest, _ gateway.GatewayAPI_ListRecycleStreamServer) error {
+func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.GatewayAPI_ListRecycleStreamServer) error {
 	return errtypes.NotSupported("ListRecycleStream unimplemented")
 }
 
 // TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
-func (s *svc) ListRecycle(ctx context.Context, req *gateway.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
+func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
 	c, err := s.find(ctx, req.GetRef())
 	if err != nil {
 		return &provider.ListRecycleResponse{
@@ -2085,12 +2078,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *gateway.ListRecycleRequest) 
 		}, nil
 	}
 
-	res, err := c.ListRecycle(ctx, &provider.ListRecycleRequest{
-		Opaque: req.Opaque,
-		FromTs: req.FromTs,
-		ToTs:   req.ToTs,
-		Ref:    req.Ref,
-	})
+	res, err := c.ListRecycle(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListRecycleRequest")
 	}
@@ -2114,7 +2102,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	return res, nil
 }
 
-func (s *svc) PurgeRecycle(ctx context.Context, req *gateway.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
+func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.PurgeRecycleResponse{
@@ -2122,10 +2110,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *gateway.PurgeRecycleRequest
 		}, nil
 	}
 
-	res, err := c.PurgeRecycle(ctx, &provider.PurgeRecycleRequest{
-		Opaque: req.GetOpaque(),
-		Ref:    req.GetRef(),
-	})
+	res, err := c.PurgeRecycle(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
 	}
@@ -2142,7 +2127,7 @@ func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*prov
 
 	res, err := c.GetQuota(ctx, &provider.GetQuotaRequest{
 		Opaque: req.GetOpaque(),
-		// Ref:    req.GetRef(), // TODO send which storage space ... or root
+		Ref:    req.GetRef(),
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetQuota")

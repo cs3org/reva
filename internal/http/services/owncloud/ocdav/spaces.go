@@ -46,7 +46,7 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		// log := appctx.GetLogger(ctx)
 
 		if r.Method == http.MethodOptions {
-			s.handleOptions(w, r, "spaces")
+			s.handleOptions(w, r)
 			return
 		}
 
@@ -83,7 +83,7 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		case http.MethodPost:
 			s.handleSpacesTusPost(w, r, spaceID)
 		case http.MethodOptions:
-			s.handleOptions(w, r, spaceID)
+			s.handleOptions(w, r)
 		case http.MethodHead:
 			s.handleSpacesHead(w, r, spaceID)
 		case http.MethodDelete:

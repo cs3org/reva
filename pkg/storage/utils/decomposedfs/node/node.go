@@ -65,13 +65,14 @@ const (
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
 type Node struct {
-	ParentID string
-	ID       string
-	Name     string
-	Blobsize int64
-	BlobID   string
-	owner    *userpb.UserId
-	Exists   bool
+	ParentID  string
+	ID        string
+	Name      string
+	Blobsize  int64
+	BlobID    string
+	owner     *userpb.UserId
+	Exists    bool
+	SpaceRoot *Node
 
 	lu PathLookup
 }
@@ -191,6 +192,11 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	default:
 		return nil, errtypes.InternalError(err.Error())
 	}
+
+	// check if this is a space root
+	if _, err = xattr.Get(nodePath, xattrs.SpaceNameAttr); err == nil {
+		n.SpaceRoot = n
+	}
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, xattrs.NameAttr); err == nil {
 		n.Name = string(attrBytes)
@@ -239,9 +245,10 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	if err != nil {
 		if os.IsNotExist(err) || isNotDir(err) {
 			c := &Node{
-				lu:       n.lu,
-				ParentID: n.ID,
-				Name:     name,
+				lu:        n.lu,
+				ParentID:  n.ID,
+				Name:      name,
+				SpaceRoot: n.SpaceRoot,
 			}
 			return c, nil // if the file does not exist we return a node that has Exists = false
 		}
@@ -255,6 +262,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "could not read child node")
 		}
+		c.SpaceRoot = n.SpaceRoot
 	} else {
 		return nil, fmt.Errorf("Decomposedfs: expected '../ prefix, got' %+v", link)
 	}
@@ -268,8 +276,9 @@ func (n *Node) Parent() (p *Node, err error) {
 		return nil, fmt.Errorf("Decomposedfs: root has no parent")
 	}
 	p = &Node{
-		lu: n.lu,
-		ID: n.ParentID,
+		lu:        n.lu,
+		ID:        n.ParentID,
+		SpaceRoot: n.SpaceRoot,
 	}
 
 	parentPath := n.lu.InternalPath(n.ParentID)
@@ -608,11 +617,18 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// quota
 	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
 		var quotaPath string
-		if r, err := n.lu.HomeOrRootNode(ctx); err == nil {
-			quotaPath = r.InternalPath()
-			readQuotaIntoOpaque(ctx, quotaPath, ri)
+		if n.SpaceRoot == nil {
+			root, err := n.lu.HomeOrRootNode(ctx)
+			if err == nil {
+				quotaPath = root.InternalPath()
+			} else {
+				sublog.Debug().Err(err).Msg("error determining the space root node for quota")
+			}
 		} else {
-			sublog.Error().Err(err).Msg("error determining home or root node for quota")
+			quotaPath = n.SpaceRoot.InternalPath()
+		}
+		if quotaPath != "" {
+			readQuotaIntoOpaque(ctx, quotaPath, ri)
 		}
 	}
 
@@ -921,4 +937,61 @@ func parseMTime(v string) (t time.Time, err error) {
 		}
 	}
 	return time.Unix(sec, nsec), err
+}
+
+// FindStorageSpaceRoot calls n.Parent() and climbs the tree
+// until it finds the space root node and adds it to the node
+func (n *Node) FindStorageSpaceRoot() error {
+	var err error
+	// remember the node we ask for and use parent to climb the tree
+	parent := n
+	for parent.ParentID != "" {
+		if parent, err = parent.Parent(); err != nil {
+			return err
+		}
+		if IsSpaceRoot(parent) {
+			n.SpaceRoot = parent
+			break
+		}
+	}
+	return nil
+}
+
+// IsSpaceRoot checks if the node is a space root
+func IsSpaceRoot(r *Node) bool {
+	path := r.InternalPath()
+	if spaceNameBytes, err := xattr.Get(path, xattrs.SpaceNameAttr); err == nil {
+		if string(spaceNameBytes) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// CheckQuota checks if both disk space and available quota are sufficient
+var CheckQuota = func(spaceRoot *Node, fileSize uint64) (quotaSufficient bool, err error) {
+	used, _ := spaceRoot.GetTreeSize()
+	if !enoughDiskSpace(spaceRoot.InternalPath(), fileSize) {
+		return false, errtypes.InsufficientStorage("disk full")
+	}
+	quotaByte, _ := xattr.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
+	var total uint64
+	if quotaByte == nil {
+		// if quota is not set, it means unlimited
+		return true, nil
+	}
+	total, _ = strconv.ParseUint(string(quotaByte), 10, 64)
+	// if total is smaller than used, total-used could overflow and be bigger than fileSize
+	if fileSize > total-used || total < used {
+		return false, errtypes.InsufficientStorage("quota exceeded")
+	}
+	return true, nil
+}
+
+func enoughDiskSpace(path string, fileSize uint64) bool {
+	avalB, err := GetAvailableSize(path)
+	if err != nil {
+		return false
+	}
+	return avalB > fileSize
 }

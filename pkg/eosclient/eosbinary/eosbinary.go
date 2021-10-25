@@ -462,7 +462,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 		info.Inode = inode
 	}
 
-	return info, nil
+	return c.mergeParentACLsForFiles(ctx, auth, info), nil
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal
@@ -472,7 +472,13 @@ func (c *Client) GetFileInfoByFXID(ctx context.Context, auth eosclient.Authoriza
 	if err != nil {
 		return nil, err
 	}
-	return c.parseFileInfo(stdout)
+
+	info, err := c.parseFileInfo(stdout)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.mergeParentACLsForFiles(ctx, auth, info), nil
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path
@@ -493,7 +499,19 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 		}
 	}
 
-	return info, nil
+	return c.mergeParentACLsForFiles(ctx, auth, info), nil
+}
+
+func (c *Client) mergeParentACLsForFiles(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
+	// We need to inherit the ACLs for the parent directory as these are not available for files
+	if !info.IsDir {
+		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
+		// Even if this call fails, at least return the current file object
+		if err == nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
+		}
+	}
+	return info
 }
 
 // SetAttr sets an extended attributes on a path.
@@ -857,6 +875,8 @@ func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
 	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
 		return c == '\n'
 	})
+
+	var parent *eosclient.FileInfo
 	for _, rl := range rawLines {
 		if rl == "" {
 			continue
@@ -869,10 +889,20 @@ func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
 		// we skip the current directory as eos find will return the directory we
 		// ask to find
 		if fi.File == path.Clean(dirPath) {
+			parent = fi
 			continue
 		}
+
 		finfos = append(finfos, fi)
 	}
+
+	for _, fi := range finfos {
+		// For files, inherit ACLs from the parent
+		if !fi.IsDir && parent != nil {
+			fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+		}
+	}
+
 	return finfos, nil
 }
 

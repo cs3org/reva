@@ -58,11 +58,14 @@ const (
 	HeaderOCFileID             = "OC-FileId"
 	HeaderOCETag               = "OC-ETag"
 	HeaderOCChecksum           = "OC-Checksum"
+	HeaderOCPermissions        = "OC-Perm"
 	HeaderDepth                = "Depth"
 	HeaderDav                  = "DAV"
 	HeaderTusResumable         = "Tus-Resumable"
 	HeaderTusVersion           = "Tus-Version"
 	HeaderTusExtension         = "Tus-Extension"
+	HeaderTusChecksumAlgorithm = "Tus-Checksum-Algorithm"
+	HeaderTusUploadExpires     = "Upload-Expires"
 	HeaderDestination          = "Destination"
 	HeaderOverwrite            = "Overwrite"
 	HeaderUploadChecksum       = "Upload-Checksum"
@@ -113,7 +116,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case http.MethodPost:
 			s.handlePathTusPost(w, r, ns)
 		case http.MethodOptions:
-			s.handleOptions(w, r, ns)
+			s.handleOptions(w, r)
 		case http.MethodHead:
 			s.handlePathHead(w, r, ns)
 		case http.MethodDelete:

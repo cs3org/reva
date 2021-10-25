@@ -45,6 +45,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"google.golang.org/genproto/protobuf/field_mask"
 )
 
 const createOCMCoreShareEndpoint = "shares"
@@ -634,8 +635,8 @@ func (m *mgr) getReceived(ctx context.Context, ref *ocm.ShareReference) (*ocm.Re
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *ocm.ShareReference, f *ocm.UpdateReceivedOCMShareRequest_UpdateField) (*ocm.ReceivedShare, error) {
-	rs, err := m.getReceived(ctx, ref)
+func (m *mgr) UpdateReceivedShare(ctx context.Context, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error) {
+	rs, err := m.getReceived(ctx, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: share.Share.Id}})
 	if err != nil {
 		return nil, err
 	}
@@ -643,12 +644,21 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *ocm.ShareReference, 
 	m.Lock()
 	defer m.Unlock()
 
+	for i := range fieldMask.Paths {
+		switch fieldMask.Paths[i] {
+		case "state":
+			rs.State = share.State
+		// TODO case "mount_point":
+		default:
+			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
+		}
+	}
+
 	if err := m.model.ReadFile(); err != nil {
 		err = errors.Wrap(err, "error reading model")
 		return nil, err
 	}
 
-	rs.State = f.GetState()
 	encShare, err := utils.MarshalProtoV1ToJSON(rs)
 	if err != nil {
 		return nil, err

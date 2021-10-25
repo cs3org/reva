@@ -67,12 +67,13 @@ func setCapabilitiesForChunkProtocol(cp chunkProtocol, c *data.CapabilitiesData)
 		c.Capabilities.Dav.Chunking = ""
 
 		// TODO: infer from various TUS handlers from all known storages
-		c.Capabilities.Files.TusSupport = &data.CapabilitiesFilesTusSupport{
-			Version:            "1.0.0",
-			Resumable:          "1.0.0",
-			Extension:          "creation,creation-with-upload",
-			MaxChunkSize:       0,
-			HTTPMethodOverride: "",
-		}
+		// until now we take the manually configured tus options
+		// c.Capabilities.Files.TusSupport = &data.CapabilitiesFilesTusSupport{
+		// 	Version:            "1.0.0",
+		// 	Resumable:          "1.0.0",
+		// 	Extension:          "creation,creation-with-upload",
+		// 	MaxChunkSize:       0,
+		// 	HTTPMethodOverride: "",
+		// }
 	}
 }

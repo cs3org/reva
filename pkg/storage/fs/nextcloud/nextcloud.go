@@ -79,9 +79,16 @@ func New(m map[string]interface{}) (storage.FS, error) {
 func NewStorageDriver(c *StorageDriverConfig) (*StorageDriver, error) {
 	var client *http.Client
 	if c.MockHTTP {
+		// called := make([]string, 0)
+		// nextcloudServerMock := GetNextcloudServerMock(&called)
+		// client, _ = TestingHTTPClient(nextcloudServerMock)
+
+		// This is only used by the integration tests:
+		// (unit tests will call SetHTTPClient later):
 		called := make([]string, 0)
-		nextcloudServerMock := GetNextcloudServerMock(&called)
-		client, _ = TestingHTTPClient(nextcloudServerMock)
+		h := GetNextcloudServerMock(&called)
+		client, _ = TestingHTTPClient(h)
+		// FIXME: defer teardown()
 	} else {
 		client = &http.Client{}
 	}
@@ -192,7 +199,7 @@ func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) 
 		return 0, nil, err
 	}
 	url := nc.endPoint + "~" + user.Username + "/api/storage/" + a.verb
-	log.Info().Msgf("nc.do %s", url)
+	log.Info().Msgf("nc.do req %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
 		return 0, nil, err
@@ -206,11 +213,12 @@ func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) 
 
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
+
 	if err != nil {
 		return 0, nil, err
 	}
+	log.Info().Msgf("nc.do res %s %s", url, string(body))
 
-	// fmt.Printf("nc.do response %d %s\n", resp.StatusCode, body)
 	return resp.StatusCode, body, nil
 }
 
@@ -318,11 +326,14 @@ func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference
 	}
 	bodyStr, err := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("LisfFolder %s", bodyStr)
+	log.Info().Msgf("ListFolder %s", bodyStr)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("calling!")
+	fmt.Println(string(bodyStr))
 	status, body, err := nc.do(ctx, Action{"ListFolder", string(bodyStr)})
+	fmt.Println(string(body))
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +398,6 @@ func (nc *StorageDriver) ListRevisions(ctx context.Context, ref *provider.Refere
 	log.Info().Msgf("ListRevisions %s", bodyStr)
 
 	_, respBody, err := nc.do(ctx, Action{"ListRevisions", string(bodyStr)})
-	// fmt.Printf("ListRevisions respBody %s", respBody)
 
 	if err != nil {
 		return nil, err
@@ -432,7 +442,7 @@ func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Refe
 }
 
 // ListRecycle as defined in the storage.FS interface
-func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path string) ([]*provider.RecycleItem, error) {
+func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key string, relativePath string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("ListRecycle")
 	type paramsObj struct {
@@ -441,7 +451,7 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path strin
 	}
 	bodyObj := &paramsObj{
 		Key:  key,
-		Path: path,
+		Path: relativePath,
 	}
 	bodyStr, _ := json.Marshal(bodyObj)
 
@@ -463,8 +473,7 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, key string, path strin
 }
 
 // RestoreRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, key string, path string, restoreRef *provider.Reference) error {
-	// fmt.Printf("RestoreRecycleItem! %s %s\n\n", key, path)
+func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	type paramsObj struct {
 		Key        string              `json:"key"`
 		Path       string              `json:"path"`
@@ -472,7 +481,7 @@ func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, key string, pat
 	}
 	bodyObj := &paramsObj{
 		Key:        key,
-		Path:       path,
+		Path:       relativePath,
 		RestoreRef: restoreRef,
 	}
 	bodyStr, _ := json.Marshal(bodyObj)
@@ -486,14 +495,14 @@ func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, key string, pat
 }
 
 // PurgeRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, key string, path string) error {
+func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
 	type paramsObj struct {
 		Key  string `json:"key"`
 		Path string `json:"path"`
 	}
 	bodyObj := &paramsObj{
 		Key:  key,
-		Path: path,
+		Path: relativePath,
 	}
 	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
@@ -670,7 +679,7 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 }
 
 // GetQuota as defined in the storage.FS interface
-func (nc *StorageDriver) GetQuota(ctx context.Context) (uint64, uint64, error) {
+func (nc *StorageDriver) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("GetQuota")
 
@@ -777,6 +786,21 @@ func (nc *StorageDriver) CreateStorageSpace(ctx context.Context, req *provider.C
 		return nil, err
 	}
 	var respObj provider.CreateStorageSpaceResponse
+	err = json.Unmarshal(respBody, &respObj)
+	if err != nil {
+		return nil, err
+	}
+	return &respObj, nil
+}
+
+// UpdateStorageSpace updates a storage space
+func (nc *StorageDriver) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	bodyStr, _ := json.Marshal(req)
+	_, respBody, err := nc.do(ctx, Action{"UpdateStorageSpace", string(bodyStr)})
+	if err != nil {
+		return nil, err
+	}
+	var respObj provider.UpdateStorageSpaceResponse
 	fmt.Println(string(respBody))
 	err = json.Unmarshal(respBody, &respObj)
 	if err != nil {

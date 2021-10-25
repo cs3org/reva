@@ -19,9 +19,9 @@
 package decomposedfs_test
 
 import (
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -41,10 +41,9 @@ var _ = Describe("Lookup", func() {
 		if env != nil {
 			env.Cleanup()
 		}
-
 	})
 
-	Describe("Path", func() {
+	Describe("Node from path", func() {
 		It("returns the path including a leading slash", func() {
 			n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1", false)
 			Expect(err).ToNot(HaveOccurred())
@@ -52,6 +51,57 @@ var _ = Describe("Lookup", func() {
 			path, err := env.Lookup.Path(env.Ctx, n)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/file1"))
+		})
+	})
+
+	Describe("Node From Resource only by path", func() {
+		It("returns the path including a leading slash and the space root is set", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "/dir1/subdir1/file2"})
+			Expect(err).ToNot(HaveOccurred())
+
+			path, err := env.Lookup.Path(env.Ctx, n)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(path).To(Equal("/dir1/subdir1/file2"))
+			Expect(n.SpaceRoot.Name).To(Equal("userid"))
+			Expect(n.SpaceRoot.ParentID).To(Equal("root"))
+		})
+	})
+
+	Describe("Node From Resource only by id", func() {
+		It("returns the path including a leading slash and the space root is set", func() {
+			// do a node lookup by path
+			nRef, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1", false)
+			Expect(err).ToNot(HaveOccurred())
+
+			// try to find the same node by id
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: &provider.ResourceId{OpaqueId: nRef.ID}})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check if we got the right node and spaceRoot
+			path, err := env.Lookup.Path(env.Ctx, n)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(path).To(Equal("/dir1/file1"))
+			Expect(n.SpaceRoot.Name).To(Equal("userid"))
+			Expect(n.SpaceRoot.ParentID).To(Equal("root"))
+		})
+	})
+
+	Describe("Node From Resource by id and relative path", func() {
+		It("returns the path including a leading slash and the space root is set", func() {
+			// do a node lookup by path for the parent
+			nRef, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1", false)
+			Expect(err).ToNot(HaveOccurred())
+
+			// try to find the child node by parent id and relative path
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: &provider.ResourceId{OpaqueId: nRef.ID}, Path: "./file1"})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check if we got the right node and spaceRoot
+			path, err := env.Lookup.Path(env.Ctx, n)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(path).To(Equal("/dir1/file1"))
+			Expect(n.SpaceRoot.Name).To(Equal("userid"))
+			Expect(n.SpaceRoot.ParentID).To(Equal("root"))
 		})
 	})
 
