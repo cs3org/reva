@@ -688,7 +688,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
               "/drone/src/cmd/revad/revad -c storage-oc-ocis.toml &",
               "/drone/src/cmd/revad/revad -c storage-publiclink-ocis.toml &",
               "/drone/src/cmd/revad/revad -c storage-shares-ocis.toml &",
-              "/drone/src/cmd/revad/revad -c ldap-users.toml",
+              "/drone/src/cmd/revad/revad -c ldap-users.toml &",
               "/drone/src/cmd/revad/revad -c machine-auth.toml",
             ],
           },
