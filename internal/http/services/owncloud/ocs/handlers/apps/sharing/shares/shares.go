@@ -848,12 +848,12 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.ItemSource = wrapResourceID(info.Id)
 		s.FileSource = s.ItemSource
 		switch {
-		case s.ShareType == conversions.ShareTypePublicLink:
-			s.FileTarget = info.Path
-			s.Path = info.Path
 		case h.sharePrefix == "/":
 			s.FileTarget = info.Path
 			s.Path = info.Path
+		case s.ShareType == conversions.ShareTypePublicLink:
+			s.FileTarget = path.Join("/", path.Base(info.Path))
+			s.Path = path.Join("/", path.Base(info.Path))
 		default:
 			s.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
 			s.Path = path.Join("/", path.Base(info.Path))
