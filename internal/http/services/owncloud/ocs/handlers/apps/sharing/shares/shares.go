@@ -225,10 +225,10 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			share, ocsErr = h.createUserShare(w, r, statRes.Info, role, val)
 		} else {
 			share, ocsErr = h.createGroupShare(w, r, statRes.Info, role, val)
-			if ocsErr != nil {
-				response.WriteOCSError(w, r, ocsErr.Code, ocsErr.Message, ocsErr.Error)
-				return
-			}
+		}
+		if ocsErr != nil {
+			response.WriteOCSError(w, r, ocsErr.Code, ocsErr.Message, ocsErr.Error)
+			return
 		}
 
 		s, err := conversions.CS3Share2ShareData(ctx, share)
@@ -311,9 +311,26 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSSuccess(w, r, s)
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
-		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
-			h.createPublicLinkShare(w, r, statRes.Info)
+		_, _, ocsErr := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole())
+		if ocsErr != nil {
+			response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
+			return
 		}
+		share, ocsErr := h.createPublicLinkShare(w, r, statRes.Info)
+		if ocsErr != nil {
+			response.WriteOCSError(w, r, ocsErr.Code, ocsErr.Message, ocsErr.Error)
+			return
+		}
+
+		s := conversions.PublicShare2ShareData(share, r, h.publicURL)
+		err = h.addFileInfo(ctx, s, statRes.Info)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
+			return
+		}
+		h.mapUserIds(ctx, client, s)
+
+		response.WriteOCSSuccess(w, r, s)
 	case int(conversions.ShareTypeFederatedCloudShare):
 		// federated shares default to read only
 		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
