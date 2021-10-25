@@ -341,7 +341,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		}
 
 		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
+		if (resp.StatusCode != http.StatusCreated) && (resp.StatusCode != http.StatusOK) {
 			respBody, e := ioutil.ReadAll(resp.Body)
 			if e != nil {
 				e = errors.Wrap(e, "json: error reading request body")
