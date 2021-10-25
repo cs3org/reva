@@ -1945,7 +1945,10 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 	if ref.ResourceId != nil {
 		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
 		res, err := s.stat(ctx, req)
-		if (res != nil && res.Status.Code != rpc.Code_CODE_OK) || err != nil {
+		if err != nil {
+			return "", status.NewStatusFromErrType(ctx, "getPath ref="+ref.String(), err)
+		}
+		if res != nil && res.Status.Code != rpc.Code_CODE_OK {
 			return "", res.Status
 		}
 
