@@ -186,7 +186,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 		// We mint a token as the owner of the public share and try to stat the reference
 		// TODO(ishank011): We need to find a better alternative to this
 
-		userResp, err := client.GetUser(ctx, &userpb.GetUserRequest{UserId: statResponse.Info.Owner})
+		userResp, err := client.GetUser(ctx, &userpb.GetUserRequest{UserId: statResponse.Info.Owner, SkipFetchingUserGroups: true})
 		if err != nil || userResp.Status.Code != rpc.Code_CODE_OK {
 			return false, err
 		}
