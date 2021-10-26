@@ -1551,7 +1551,7 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 	return fs.c.RestoreDeletedEntry(ctx, auth, key)
 }
 
-func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, _ map[string]struct{}) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 

@@ -20,6 +20,7 @@ package storageprovider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -449,7 +450,20 @@ func hasNodeID(s *provider.StorageSpace) bool {
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	log := appctx.GetLogger(ctx)
-	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters)
+
+	// This is just a quick hack to get the users permission into reva.
+	// Replace this as soon as we have a proper system to check the users permissions.
+	opaque := req.Opaque
+	var permissions map[string]struct{}
+	if opaque != nil {
+		entry := opaque.Map["permissions"]
+		err := json.Unmarshal(entry.Value, &permissions)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters, permissions)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
