@@ -70,6 +70,7 @@ type Handler struct {
 	homeNamespace          string
 	additionalInfoTemplate *template.Template
 	userIdentifierCache    *ttlcache.Cache
+	userIdentifierCacheTTL time.Duration
 	resourceInfoCache      gcache.Cache
 	resourceInfoCacheTTL   time.Duration
 }
@@ -100,7 +101,7 @@ func (h *Handler) Init(c *config.Config) {
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 
 	h.userIdentifierCache = ttlcache.NewCache()
-	_ = h.userIdentifierCache.SetTTL(24 * time.Hour)
+	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))
 
 	if h.resourceInfoCacheTTL > 0 {
 		cwm, err := getCacheWarmupManager(c)

@@ -38,6 +38,7 @@ type Config struct {
 	CacheWarmupDrivers      map[string]map[string]interface{} `mapstructure:"cache_warmup_drivers"`
 	ResourceInfoCacheSize   int                               `mapstructure:"resource_info_cache_size"`
 	ResourceInfoCacheTTL    int                               `mapstructure:"resource_info_cache_ttl"`
+	UserIdentifierCacheTTL  int                               `mapstructure:"user_identifier_cache_ttl"`
 }
 
 // Init sets sane defaults
@@ -64,6 +65,10 @@ func (c *Config) Init() {
 
 	if c.ResourceInfoCacheSize == 0 {
 		c.ResourceInfoCacheSize = 1000000
+	}
+
+	if c.UserIdentifierCacheTTL == 0 {
+		c.UserIdentifierCacheTTL = 60
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
