@@ -1377,6 +1377,8 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	if utils.IsAbsolutePathReference(req.Ref) {
 		p = req.Ref.Path
 	} else {
+		// Reference by just resource ID
+		// Stat it and store for future use
 		res, err = s.stat(ctx, req)
 		if err != nil {
 			return &provider.StatResponse{
@@ -1406,6 +1408,24 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 
 	// we need to provide the info of the target, not the reference.
 	if s.isShareName(ctx, p) {
+		// If we haven't returned an error by now and res is nil, it means that
+		// req is an absolute path based ref, so we didn't stat it previously.
+		// So stat it now
+		if res == nil {
+			res, err = s.stat(ctx, req)
+			if err != nil {
+				return &provider.StatResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+				}, nil
+			}
+
+			if res.Status.Code != rpc.Code_CODE_OK {
+				return &provider.StatResponse{
+					Status: res.Status,
+				}, nil
+			}
+		}
+
 		ri, protocol, err := s.checkRef(ctx, res.Info)
 		if err != nil {
 			return &provider.StatResponse{
