@@ -1045,6 +1045,25 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
+	sourceProviderInfo, err := s.findProviders(ctx, req.Ref)
+	if err != nil {
+		return &provider.RestoreRecycleItemResponse{
+			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem ref="+req.Ref.String(), err),
+		}, nil
+	}
+	destinationProviderInfo, err := s.findProviders(ctx, req.RestoreRef)
+	if err != nil {
+		return &provider.RestoreRecycleItemResponse{
+			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem ref="+req.Ref.String(), err),
+		}, nil
+	}
+	if sourceProviderInfo[0].ProviderId != destinationProviderInfo[0].ProviderId ||
+		sourceProviderInfo[0].ProviderPath != destinationProviderInfo[0].ProviderPath {
+		return &provider.RestoreRecycleItemResponse{
+			Status: status.NewPermissionDenied(ctx, err, "gateway: cross-storage restores are forbidden"),
+		}, nil
+	}
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{

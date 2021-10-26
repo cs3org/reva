@@ -145,7 +145,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			dst = path.Clean(dst)
+			dst = path.Join(basePath, dst)
 
 			log.Debug().Str("key", key).Str("dst", dst).Msg("restore")
 
@@ -465,7 +465,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	}
 
 	dstRef := &provider.Reference{
-		Path: path.Join(basePath, dst),
+		Path: dst,
 	}
 
 	dstStatReq := &provider.StatRequest{
@@ -488,7 +488,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	// restore location exists, and if it doesn't returns a conflict error code.
 	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst) {
 		parentStatReq := &provider.StatRequest{
-			Ref: &provider.Reference{Path: path.Join(basePath, filepath.Dir(dst))},
+			Ref: &provider.Reference{Path: filepath.Dir(dst)},
 		}
 
 		parentStatResponse, err := client.Stat(ctx, parentStatReq)
