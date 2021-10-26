@@ -34,6 +34,10 @@ func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 		tkn := ctxpkg.ContextMustGetToken(r.Context())
 		log := appctx.GetLogger(r.Context())
 
+		// We make a copy of the context because the original one comes with its cancel channel,
+		// so once the initial request is finished, this ctx gets cancelled as well.
+		// And in most of the cases, the warmup takes a longer amount of time to complete than the original request.
+		// TODO: Check if we can come up with a better solution, eg, https://stackoverflow.com/a/54132324
 		ctx := context.Background()
 		ctx = appctx.WithLogger(ctx, log)
 		ctx = ctxpkg.ContextSetUser(ctx, u)

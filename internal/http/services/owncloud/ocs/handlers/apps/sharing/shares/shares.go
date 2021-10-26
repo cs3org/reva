@@ -70,7 +70,6 @@ type Handler struct {
 	homeNamespace          string
 	additionalInfoTemplate *template.Template
 	userIdentifierCache    *ttlcache.Cache
-	userIdentifierCacheTTL time.Duration
 	resourceInfoCache      gcache.Cache
 	resourceInfoCacheTTL   time.Duration
 }
