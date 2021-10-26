@@ -40,6 +40,8 @@ const (
 	EndpointCreate = "/create"
 	// EndpointUpdate is the endpoint path for account updates.
 	EndpointUpdate = "/update"
+	// EndpointConfigure is the endpoint path for account configuration.
+	EndpointConfigure = "/configure"
 	// EndpointRemove is the endpoint path for account removal.
 	EndpointRemove = "/remove"
 
@@ -65,4 +67,7 @@ const (
 
 	// EndpointUnregisterSite is the endpoint path for site unregistration.
 	EndpointUnregisterSite = "/unregister-site"
+
+	// EndpointDispatchAlert is the endpoint path for dispatching alerts from Prometheus.
+	EndpointDispatchAlert = "/dispatch-alert"
 )

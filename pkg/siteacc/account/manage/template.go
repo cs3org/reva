@@ -19,6 +19,11 @@
 package manage
 
 const tplJavaScript = `
+function handleSettings() {
+	setState(STATE_STATUS, "Redirecting to the account settings...");
+	window.location.replace("{{getServerAddress}}/account/?path=settings");
+}
+
 function handleEditAccount() {
 	setState(STATE_STATUS, "Redirecting to the account editor...");
 	window.location.replace("{{getServerAddress}}/account/?path=edit");
@@ -78,7 +83,7 @@ const tplBody = `
 	<ul style="margin-top: 0em;">
 		<li>Name: <em>{{.Account.Title}}. {{.Account.FirstName}} {{.Account.LastName}}</em></li>
 		<li>Email: <em><a href="mailto:{{.Account.Email}}">{{.Account.Email}}</a></em></li>
-		<li>Organization/company: <em>{{.Account.Organization}} {{if .Account.Website}}(<a href="{{.Account.Website}}">{{.Account.Website}}</a>){{end}}</em></li>
+		<li>ScienceMesh Site: <em>{{getSiteName .Account.Site false}} ({{getSiteName .Account.Site true}})</em></li>
 		<li>Role: <em>{{.Account.Role}}</em></li>
 		{{if .Account.PhoneNumber}}
 		<li>Phone: <em>{{.Account.PhoneNumber}}</em></li>
@@ -94,6 +99,7 @@ const tplBody = `
 </div>
 <div>
 	<form id="form" method="POST" class="box" style="width: 100%;">
+		<button type="button" onClick="handleSettings();">Settings</button>
 		<button type="button" onClick="handleEditAccount();">Edit account</button>
 		<span style="width: 25px;">&nbsp;</span>
 		<button type="button" onClick="handleRequestKey();" {{if .Account.Data.APIKey}}disabled{{end}}>Request API Key</button>

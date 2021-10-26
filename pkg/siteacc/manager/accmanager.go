@@ -19,6 +19,7 @@
 package manager
 
 import (
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -164,7 +165,7 @@ func (mngr *AccountsManager) CreateAccount(accountData *data.Account) error {
 		return errors.Errorf("an account with the specified email address already exists")
 	}
 
-	if account, err := data.NewAccount(accountData.Email, accountData.Title, accountData.FirstName, accountData.LastName, accountData.Organization, accountData.Website, accountData.Role, accountData.PhoneNumber, accountData.Password.Value); err == nil {
+	if account, err := data.NewAccount(accountData.Email, accountData.Title, accountData.FirstName, accountData.LastName, accountData.Site, accountData.Role, accountData.PhoneNumber, accountData.Password.Value); err == nil {
 		mngr.accounts = append(mngr.accounts, account)
 		mngr.storage.AccountAdded(account)
 		mngr.writeAllAccounts()
@@ -197,6 +198,30 @@ func (mngr *AccountsManager) UpdateAccount(accountData *data.Account, setPasswor
 		mngr.callListeners(account, AccountsListener.AccountUpdated)
 	} else {
 		return errors.Wrap(err, "error while updating account")
+	}
+
+	return nil
+}
+
+// ConfigureAccount configures the account identified by the account email; if no such account exists, an error is returned.
+func (mngr *AccountsManager) ConfigureAccount(accountData *data.Account) error {
+	mngr.mutex.Lock()
+	defer mngr.mutex.Unlock()
+
+	account, err := mngr.findAccount(FindByEmail, accountData.Email)
+	if err != nil {
+		return errors.Wrap(err, "user to configure not found")
+	}
+
+	if err := account.Configure(accountData); err == nil {
+		account.DateModified = time.Now()
+
+		mngr.storage.AccountUpdated(account)
+		mngr.writeAllAccounts()
+
+		mngr.callListeners(account, AccountsListener.AccountUpdated)
+	} else {
+		return errors.Wrap(err, "error while configuring account")
 	}
 
 	return nil
@@ -345,7 +370,7 @@ func (mngr *AccountsManager) UnregisterAccountSite(accountData *data.Account) er
 		return errors.Wrap(err, "unable to get site ID")
 	}
 
-	if err := sitereg.UnregisterSite(mngr.conf.SiteRegistration.URL, account.Data.APIKey, siteID, salt); err != nil {
+	if err := sitereg.UnregisterSite(path.Join(mngr.conf.Mentix.URL, mngr.conf.Mentix.SiteRegistrationEndpoint), account.Data.APIKey, siteID, salt); err != nil {
 		return errors.Wrap(err, "error while unregistering the site")
 	}
 
