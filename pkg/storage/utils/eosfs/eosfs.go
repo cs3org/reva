@@ -771,10 +771,29 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
-	p, err := fs.resolve(ctx, ref)
+	u, err := getUser(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error resolving reference")
+		return nil, err
 	}
+	auth, err := fs.getUserAuth(ctx, u, "")
+	if err != nil {
+		return nil, err
+	}
+
+	if ref.ResourceId != nil {
+		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("error converting string to int for eos fileid: %s", ref.ResourceId.OpaqueId)
+		}
+
+		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
+		if err != nil {
+			return nil, err
+		}
+		return fs.convertToResourceInfo(ctx, eosFileInfo)
+	}
+
+	p := ref.Path
 
 	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
@@ -784,16 +803,6 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	}
 
 	fn := fs.wrap(ctx, p)
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
-	if err != nil {
-		return nil, err
-	}
-
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
 	if err != nil {
 		return nil, err

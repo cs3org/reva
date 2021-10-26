@@ -1367,16 +1367,26 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-
 	if utils.IsRelativeReference(req.Ref) {
 		return s.stat(ctx, req)
 	}
 
-	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
-	if st.Code != rpc.Code_CODE_OK {
-		return &provider.StatResponse{
-			Status: st,
-		}, nil
+	p := ""
+	var res *provider.StatResponse
+	var err error
+	if utils.IsAbsolutePathReference(req.Ref) {
+		p = req.Ref.Path
+	} else {
+		res, err = s.stat(ctx, req)
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+			}, nil
+		}
+		if res != nil && res.Status.Code != rpc.Code_CODE_OK {
+			return res, nil
+		}
+		p = res.Info.Path
 	}
 
 	if path.Clean(p) == s.getHome(ctx) {
@@ -1388,33 +1398,23 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	}
 
 	if !s.inSharedFolder(ctx, p) {
+		if res != nil {
+			return res, nil
+		}
 		return s.stat(ctx, req)
 	}
 
 	// we need to provide the info of the target, not the reference.
 	if s.isShareName(ctx, p) {
-		statRes, err := s.stat(ctx, req)
+		ri, protocol, err := s.checkRef(ctx, res.Info)
 		if err != nil {
 			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
-			}, nil
-		}
-
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &provider.StatResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+res.Info.Target, err),
 			}, nil
 		}
 
 		if protocol == "webdav" {
-			ri, err = s.webdavRefStat(ctx, statRes.Info.Target)
+			ri, err = s.webdavRefStat(ctx, res.Info.Target)
 			if err != nil {
 				return &provider.StatResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+p),
@@ -1426,10 +1426,10 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		// information. For example, if requests comes to: /home/MyShares/photos and photos
 		// is reference to /user/peter/Holidays/photos, we need to still return to the user
 		// /home/MyShares/photos
-		orgPath := statRes.Info.Path
-		statRes.Info = ri
-		statRes.Info.Path = orgPath
-		return statRes, nil
+		orgPath := res.Info.Path
+		res.Info = ri
+		res.Info.Path = orgPath
+		return res, nil
 
 	}
 
