@@ -100,7 +100,7 @@ func (h *Handler) Init(c *config.Config) {
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 
 	h.userIdentifierCache = ttlcache.NewCache()
-	_ = h.userIdentifierCache.SetTTL(time.Second * 60)
+	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))
 
 	if h.resourceInfoCacheTTL > 0 {
 		cwm, err := getCacheWarmupManager(c)
@@ -111,13 +111,14 @@ func (h *Handler) Init(c *config.Config) {
 }
 
 func (h *Handler) startCacheWarmup(c cache.Warmup) {
+	time.Sleep(2 * time.Second)
 	infos, err := c.GetResourceInfos()
 	if err != nil {
 		return
 	}
 	for _, r := range infos {
 		key := wrapResourceID(r.Id)
-		_ = h.resourceInfoCache.SetWithExpire(key, r, time.Second*h.resourceInfoCacheTTL)
+		_ = h.resourceInfoCache.SetWithExpire(key, r, h.resourceInfoCacheTTL)
 	}
 }
 
@@ -511,6 +512,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
 	stateFilter := getStateFilter(r.FormValue("state"))
 
+	log := appctx.GetLogger(r.Context())
 	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
@@ -1021,6 +1023,7 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 		pinfo = infoIf.(*provider.ResourceInfo)
 		status = &rpc.Status{Code: rpc.Code_CODE_OK}
 	} else {
+		logger.Debug().Msgf("cache miss for resource %+v, statting", key)
 		statReq := &provider.StatRequest{
 			Ref: ref,
 		}
