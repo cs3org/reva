@@ -1,0 +1,28 @@
+[
+	{
+		"id": {
+			"opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+			"idp": "cesnet.cz"
+		},
+		"username": "marie",
+		"secret": "radioactivity",
+		"mail": "marie@cesnet.cz",
+		"display_name": "Marie Curie",
+		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"],
+		"uid_number": 456,
+		"gid_number": 987
+	},
+	{
+		"id": {
+			"opaque_id": "932b4522-139b-4815-8ef4-42cdf82c3d51",
+			"idp": "example.com"
+		},
+		"username": "test",
+		"secret": "test",
+		"mail": "test@example.com",
+		"display_name": "Test Testman",
+		"groups": ["quantum-lovers", "philosophy-haters", "physics-lovers"],
+		"uid_number": 468,
+		"gid_number": 135
+	}
+]

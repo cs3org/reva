@@ -30,16 +30,7 @@ import (
 )
 
 func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
-	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
-	if err != nil {
-		return err
-	}
-
-	p, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
@@ -71,7 +62,16 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	}
 
 	fn := fs.wrap(ctx, p)
-	return fs.c.Write(ctx, uid, gid, fn, r)
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
+	auth, err := fs.getUserAuth(ctx, u, fn)
+	if err != nil {
+		return err
+	}
+	return fs.c.Write(ctx, auth, fn, r)
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {

@@ -34,8 +34,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
 	"github.com/studio-b12/gowebdav"
@@ -176,8 +176,8 @@ func uploadCommand() *command {
 			if err != nil {
 				return err
 			}
-			if token, ok := tokenpkg.ContextGetToken(ctx); ok {
-				c.Header.Add(tokenpkg.TokenHeader, token)
+			if token, ok := ctxpkg.ContextGetToken(ctx); ok {
+				c.Header.Add(ctxpkg.TokenHeader, token)
 			}
 			c.Header.Add(datagateway.TokenTransportHeader, p.Token)
 			tusc, err := tus.NewClient(dataServerURL, c)
@@ -272,7 +272,7 @@ func checkUploadWebdavRef(protocols []*gateway.FileUploadProtocol, md os.FileInf
 	}
 
 	c := gowebdav.NewClient(p.UploadEndpoint, "", "")
-	c.SetHeader(tokenpkg.TokenHeader, token)
+	c.SetHeader(ctxpkg.TokenHeader, token)
 	c.SetHeader("Upload-Length", strconv.FormatInt(md.Size(), 10))
 
 	if err = c.WriteStream(filePath, fd, 0700); err != nil {

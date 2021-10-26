@@ -43,7 +43,7 @@ func TestEncodeDecode(t *testing.T) {
 		t.Fatal(err)
 	}
 	scope := map[string]*auth.Scope{
-		"user": &auth.Scope{
+		"user": {
 			Resource: &types.OpaqueEntry{
 				Decoder: "json",
 				Value:   val,

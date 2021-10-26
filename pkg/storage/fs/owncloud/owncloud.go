@@ -38,6 +38,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
@@ -48,7 +49,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/gomodule/redigo/redis"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -261,7 +261,7 @@ func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
 // TODO the path handed to a storage provider should not contain the username
 func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 	if fs.c.EnableHome {
-		u := user.ContextMustGetUser(ctx)
+		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
 		// The inner filepath.Join prevents the path from breaking out of
 		// <fs.c.DataDirectory>/<layout>/files/
@@ -301,7 +301,7 @@ func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 
 func (fs *ocfs) toInternalShadowPath(ctx context.Context, sp string) (internal string) {
 	if fs.c.EnableHome {
-		u := user.ContextMustGetUser(ctx)
+		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
 		internal = filepath.Join(fs.c.DataDirectory, layout, "shadow_files", sp)
 	} else {
@@ -373,7 +373,7 @@ func (fs *ocfs) getVersionsPath(ctx context.Context, ip string) string {
 
 // owncloud stores trashed items in the files_trashbin subfolder of a users home
 func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return "", err
@@ -383,7 +383,7 @@ func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 }
 
 func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return "", err
@@ -394,7 +394,7 @@ func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
 
 func (fs *ocfs) toStoragePath(ctx context.Context, ip string) (sp string) {
 	if fs.c.EnableHome {
-		u := user.ContextMustGetUser(ctx)
+		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
 		trim := filepath.Join(fs.c.DataDirectory, layout, "files")
 		sp = strings.TrimPrefix(ip, trim)
@@ -431,7 +431,7 @@ func (fs *ocfs) toStoragePath(ctx context.Context, ip string) (sp string) {
 
 func (fs *ocfs) toStorageShadowPath(ctx context.Context, ip string) (sp string) {
 	if fs.c.EnableHome {
-		u := user.ContextMustGetUser(ctx)
+		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
 		trim := filepath.Join(fs.c.DataDirectory, layout, "shadow_files")
 		sp = strings.TrimPrefix(ip, trim)
@@ -473,7 +473,7 @@ func (fs *ocfs) getOwner(ip string) string {
 
 // TODO cache user lookup
 func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.User, err error) {
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	// check if username matches and id is set
 	if u.Username == usernameOrID && u.Id != nil && u.Id.OpaqueId != "" {
 		return u, nil
@@ -535,7 +535,7 @@ func (fs *ocfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provid
 			Stat: true,
 		}
 	}
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return &provider.ResourcePermissions{
 			// no permissions
@@ -619,7 +619,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip st
 
 	if _, ok := mdKeysMap[favoriteKey]; returnAllKeys || ok {
 		favorite := ""
-		if u, ok := user.ContextGetUser(ctx); ok {
+		if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 			// the favorite flag is specific to the user, so we need to incorporate the userid
 			if uid := u.GetId(); uid != nil {
 				fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
@@ -703,6 +703,11 @@ func getResourceType(isDir bool) provider.ResourceType {
 		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
 	}
 	return provider.ResourceType_RESOURCE_TYPE_FILE
+}
+
+// CreateStorageSpace creates a storage space
+func (fs *ocfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
 func readOrCreateID(ctx context.Context, ip string, conn redis.Conn) string {
@@ -809,6 +814,10 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 
 }
 
+func (fs *ocfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	return errtypes.NotSupported("ocfs: deny grant not supported")
+}
+
 func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -868,7 +877,7 @@ func extractACEsFromAttrs(ctx context.Context, ip string, attrs []string) (entri
 // for the node based on all acls in the tree up to the root
 func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
 
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("no user in context, returning default permissions")
 		return defaultPermissions, nil
@@ -1115,12 +1124,8 @@ func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pro
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *ocfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
-	return 0, 0, nil
-}
-
 func (fs *ocfs) CreateHome(ctx context.Context) error {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return err
@@ -1152,8 +1157,12 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
-	ip := fs.toInternalPath(ctx, sp)
+func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
+
+	ip, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return err
+	}
 
 	// check permissions of parent dir
 	if perm, err := fs.readPermissions(ctx, filepath.Dir(ip)); err == nil {
@@ -1162,17 +1171,17 @@ func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
 		}
 	} else {
 		if isNotFound(err) {
-			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+			return errtypes.NotFound(ref.Path)
 		}
 		return errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
 	if err = os.Mkdir(ip, 0700); err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(sp)
+			return errtypes.NotFound(ref.Path)
 		}
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
-		return errors.Wrap(err, "ocfs: error creating dir "+ip)
+		return errors.Wrap(err, "ocfs: error creating dir "+ref.Path)
 	}
 	return fs.propagate(ctx, ip)
 }
@@ -1311,7 +1320,7 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 			// 5. app? = a:<aid>: for apps?
 			// obviously this only is secure when the u/s/g/a namespaces are not accessible by users in the filesystem
 			// public tags can be mapped to extended attributes
-			if u, ok := user.ContextGetUser(ctx); ok {
+			if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 				// the favorite flag is specific to the user, so we need to incorporate the userid
 				if uid := u.GetId(); uid != nil {
 					fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
@@ -1405,7 +1414,7 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 	for _, k := range keys {
 		switch k {
 		case "http://owncloud.org/ns/favorite":
-			if u, ok := user.ContextGetUser(ctx); ok {
+			if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 				// the favorite flag is specific to the user, so we need to incorporate the userid
 				if uid := u.GetId(); uid != nil {
 					fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
@@ -1526,15 +1535,19 @@ func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) 
 	// move to trash location
 	dtime := time.Now().Unix()
 	tgt := filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
+
+	// The condition reads: "if the file exists"
+	// I know this check is hard to read because of the double negation
+	// but this way we avoid to duplicate the code following the if block.
+	// If two deletes happen fast consecutively they will have the same `dtime`,
+	// therefore we have to increase the 'dtime' to avoid collisions.
+	if _, err := os.Stat(tgt); !errors.Is(err, os.ErrNotExist) {
+		// timestamp collision, try again with higher value:
+		dtime++
+		tgt = filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
+	}
 	if err := os.Rename(ip, tgt); err != nil {
-		if os.IsExist(err) {
-			// timestamp collision, try again with higher value:
-			dtime++
-			tgt := filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
-			if err := os.Rename(ip, tgt); err != nil {
-				return errors.Wrap(err, "ocfs: could not move item to trash")
-			}
-		}
+		return errors.Wrap(err, "ocfs: could not move item to trash")
 	}
 
 	return fs.propagate(ctx, filepath.Dir(ip))
@@ -2056,7 +2069,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *ocfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
@@ -2149,7 +2162,7 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 	}
 }
 
-func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -2157,7 +2170,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 	}
 
 	// list files folder
-	mds, err := ioutil.ReadDir(rp)
+	mds, err := ioutil.ReadDir(filepath.Join(rp, key))
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")
@@ -2176,7 +2189,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 	return items, nil
 }
 
-func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
+func (fs *ocfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
@@ -2215,6 +2228,15 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string, restoreRef *
 	// TODO(jfd) restore versions
 
 	return fs.propagate(ctx, tgt)
+}
+
+func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	return nil, errtypes.NotSupported("list storage spaces")
+}
+
+// UpdateStorageSpace updates a storage space
+func (fs *ocfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
 }
 
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {

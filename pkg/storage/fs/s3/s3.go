@@ -115,11 +115,11 @@ func (fs *s3FS) addRoot(p string) string {
 }
 
 func (fs *s3FS) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-	if ref.Path != "" {
+	if strings.HasPrefix(ref.Path, "/") {
 		return fs.addRoot(ref.GetPath()), nil
 	}
 
-	if ref.ResourceId != nil {
+	if ref.ResourceId != nil && ref.ResourceId.OpaqueId != "" {
 		fn := path.Join("/", strings.TrimPrefix(ref.ResourceId.OpaqueId, "fileid-"))
 		fn = fs.addRoot(fn)
 		return fn, nil
@@ -252,6 +252,10 @@ func (fs *s3FS) AddGrant(ctx context.Context, ref *provider.Reference, g *provid
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
+func (fs *s3FS) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	return errtypes.NotSupported("s3: operation not supported")
+}
+
 func (fs *s3FS) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
 	return nil, errtypes.NotSupported("s3: operation not supported")
 }
@@ -264,7 +268,7 @@ func (fs *s3FS) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pro
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
-func (fs *s3FS) GetQuota(ctx context.Context) (uint64, uint64, error) {
+func (fs *s3FS) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
 	return 0, 0, nil
 }
 
@@ -289,8 +293,14 @@ func (fs *s3FS) CreateHome(ctx context.Context) error {
 	return errtypes.NotSupported("s3fs: not supported")
 }
 
-func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {
+func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
+
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil
+	}
+
 	fn = fs.addRoot(fn) + "/" // append / to indicate folder // TODO only if fn does not end in /
 
 	input := &s3.PutObjectInput{
@@ -305,11 +315,11 @@ func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {
 		log.Error().Err(err)
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == s3.ErrCodeNoSuchBucket {
-				return errtypes.NotFound(fn)
+				return errtypes.NotFound(ref.Path)
 			}
 		}
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
-		return errors.Wrap(err, "s3fs: error creating dir "+fn)
+		return errors.Wrap(err, "s3fs: error creating dir "+ref.Path)
 	}
 
 	log.Debug().Interface("result", result) // todo cache etag?
@@ -371,6 +381,11 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 
 	log.Debug().Interface("result", result)
 	return nil
+}
+
+// CreateStorageSpace creates a storage space
+func (fs *s3FS) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
 func (fs *s3FS) moveObject(ctx context.Context, oldKey string, newKey string) error {
@@ -646,7 +661,7 @@ func (fs *s3FS) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return errtypes.NotSupported("restore revision")
 }
 
-func (fs *s3FS) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *s3FS) PurgeRecycleItem(ctx context.Context, kbasePath, key, relativePath string) error {
 	return errtypes.NotSupported("purge recycle item")
 }
 
@@ -654,10 +669,19 @@ func (fs *s3FS) EmptyRecycle(ctx context.Context) error {
 	return errtypes.NotSupported("empty recycle")
 }
 
-func (fs *s3FS) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (fs *s3FS) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 	return nil, errtypes.NotSupported("list recycle")
 }
 
-func (fs *s3FS) RestoreRecycleItem(ctx context.Context, key string, restoreRef *provider.Reference) error {
+func (fs *s3FS) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	return errtypes.NotSupported("restore recycle")
+}
+
+func (fs *s3FS) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	return nil, errtypes.NotSupported("list storage spaces")
+}
+
+// UpdateStorageSpace updates a storage space
+func (fs *s3FS) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
 }

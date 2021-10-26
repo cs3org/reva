@@ -23,12 +23,13 @@ import (
 	"net/http"
 	"path"
 
+	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"go.opencensus.io/trace"
 )
 
 // VersionsHandler handles version requests
@@ -59,14 +60,14 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 		var key string
 		key, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if r.Method == http.MethodOptions {
-			s.handleOptions(w, r, "versions")
+			s.handleOptions(w, r)
 			return
 		}
-		if key == "" && r.Method == "PROPFIND" {
+		if key == "" && r.Method == MethodPropfind {
 			h.doListVersions(w, r, s, rid)
 			return
 		}
-		if key != "" && r.Method == "COPY" {
+		if key != "" && r.Method == MethodCopy {
 			// TODO(jfd) it seems we cannot directly GET version content with cs3 ...
 			// TODO(jfd) cs3api has no delete file version call
 			// TODO(jfd) restore version to given Destination, but cs3api has no destination
@@ -79,8 +80,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 }
 
 func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "listVersions")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "listVersions")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Logger()
@@ -107,6 +107,15 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			w.WriteHeader(http.StatusNotFound)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: "Resource not found",
+			})
+			HandleWebdavError(&sublog, w, b, err)
+			return
+		}
 		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
@@ -155,14 +164,14 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		infos = append(infos, vi)
 	}
 
-	propRes, err := s.formatPropfind(ctx, &pf, infos, "")
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, "")
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("DAV", "1, 3, extended-mkcol")
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	_, err = w.Write([]byte(propRes))
 	if err != nil {
@@ -173,8 +182,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 }
 
 func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "restore")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "restore")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Str("key", key).Logger()

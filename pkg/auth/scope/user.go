@@ -19,32 +19,37 @@
 package scope
 
 import (
+	"context"
+
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/rs/zerolog"
 )
 
-func userScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+func userScope(_ context.Context, scope *authpb.Scope, resource interface{}, _ *zerolog.Logger) (bool, error) {
 	// Always return true. Registered users can access all paths.
 	// TODO(ishank011): Add checks for read/write permissions.
 	return true, nil
 }
 
-// GetOwnerScope returns the default owner scope with access to all resources.
-func GetOwnerScope() (map[string]*authpb.Scope, error) {
+// AddOwnerScope adds the default owner scope with access to all resources.
+func AddOwnerScope(scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
 	ref := &provider.Reference{Path: "/"}
 	val, err := utils.MarshalProtoV1ToJSON(ref)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]*authpb.Scope{
-		"user": &authpb.Scope{
-			Resource: &types.OpaqueEntry{
-				Decoder: "json",
-				Value:   val,
-			},
-			Role: authpb.Role_ROLE_OWNER,
+	if scopes == nil {
+		scopes = make(map[string]*authpb.Scope)
+	}
+	scopes["user"] = &authpb.Scope{
+		Resource: &types.OpaqueEntry{
+			Decoder: "json",
+			Value:   val,
 		},
-	}, nil
+		Role: authpb.Role_ROLE_OWNER,
+	}
+	return scopes, nil
 }

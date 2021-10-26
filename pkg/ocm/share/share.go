@@ -25,6 +25,7 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"google.golang.org/genproto/protobuf/field_mask"
 )
 
 // Manager is the interface that manipulates the OCM shares.
@@ -53,5 +54,15 @@ type Manager interface {
 	GetReceivedShare(ctx context.Context, ref *ocm.ShareReference) (*ocm.ReceivedShare, error)
 
 	// UpdateReceivedShare updates the received share with share state.
-	UpdateReceivedShare(ctx context.Context, ref *ocm.ShareReference, f *ocm.UpdateReceivedOCMShareRequest_UpdateField) (*ocm.ReceivedShare, error)
+	UpdateReceivedShare(ctx context.Context, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error)
+}
+
+// ResourceIDFilter is an abstraction for creating filter by resource id.
+func ResourceIDFilter(id *provider.ResourceId) *ocm.ListOCMSharesRequest_Filter {
+	return &ocm.ListOCMSharesRequest_Filter{
+		Type: ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID,
+		Term: &ocm.ListOCMSharesRequest_Filter_ResourceId{
+			ResourceId: id,
+		},
+	}
 }

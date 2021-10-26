@@ -40,10 +40,14 @@ func New(c map[string]interface{}) (auth.Manager, error) {
 	return &mgr{}, nil
 }
 
+func (m *mgr) Configure(ml map[string]interface{}) error {
+	return nil
+}
+
 func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	// allow passing in uid as <opaqueid>@<idp>
 	at := strings.LastIndex(clientID, "@")
-	uid := &user.UserId{}
+	uid := &user.UserId{Type: user.UserType_USER_TYPE_PRIMARY}
 	if at < 0 {
 		uid.OpaqueId = clientID
 	} else {
@@ -51,7 +55,7 @@ func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (
 		uid.Idp = clientID[at+1:]
 	}
 
-	scope, err := scope.GetOwnerScope()
+	scope, err := scope.AddOwnerScope(nil)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
 )
 
 func init() {
@@ -387,7 +386,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		} else {
 			for i := range filters {
 				if filters[i].Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
-					if utils.ResourceEqual(&provider.Reference{ResourceId: local.ResourceId}, &provider.Reference{ResourceId: filters[i].GetResourceId()}) {
+					if utils.ResourceIDEqual(local.ResourceId, filters[i].GetResourceId()) {
 						if notExpired(&local.PublicShare) {
 							shares = append(shares, &local.PublicShare)
 						} else if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {
@@ -437,12 +436,6 @@ func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicSh
 
 	m.mutex.Unlock()
 	defer m.mutex.Lock()
-
-	span := trace.FromContext(ctx)
-	span.AddAttributes(
-		trace.StringAttribute("operation", "delete expired share"),
-		trace.StringAttribute("opaqueId", s.Id.OpaqueId),
-	)
 
 	err := m.RevokePublicShare(ctx, u, &link.PublicShareReference{
 		Spec: &link.PublicShareReference_Id{

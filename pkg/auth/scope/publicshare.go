@@ -19,19 +19,23 @@
 package scope
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/rs/zerolog"
 )
 
-func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
+func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
 	var share link.PublicShare
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
@@ -41,39 +45,52 @@ func publicshareScope(scope *authpb.Scope, resource interface{}) (bool, error) {
 	switch v := resource.(type) {
 	// Viewer role
 	case *registry.GetStorageProvidersRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.StatRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.ListContainerRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.InitiateFileDownloadRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
 
 		// Editor role
 		// TODO(ishank011): Add role checks,
 		// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.DeleteRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.MoveRequest:
-		return checkStorageRef(&share, v.GetSource()) && checkStorageRef(&share, v.GetDestination()), nil
+		return checkStorageRef(ctx, &share, v.GetSource()) && checkStorageRef(ctx, &share, v.GetDestination()), nil
 	case *provider.InitiateFileUploadRequest:
-		return checkStorageRef(&share, v.GetRef()), nil
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.SetArbitraryMetadataRequest:
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.UnsetArbitraryMetadataRequest:
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
+
+	// App provider requests
+	case *appregistry.GetDefaultAppProviderForMimeTypeRequest:
+		return true, nil
+
+	case *userv1beta1.GetUserByClaimRequest:
+		return true, nil
 
 	case *link.GetPublicShareRequest:
 		return checkPublicShareRef(&share, v.GetRef()), nil
 	case string:
-		return checkPath(v), nil
+		return checkResourcePath(v), nil
 	}
 
-	return false, errtypes.InternalError(fmt.Sprintf("resource type assertion failed: %+v", resource))
+	msg := fmt.Sprintf("resource type assertion failed: %+v", resource)
+	logger.Debug().Str("scope", "publicshareScope").Msg(msg)
+	return false, errtypes.InternalError(msg)
 }
 
-func checkStorageRef(s *link.PublicShare, r *provider.Reference) bool {
-	// r: <id:<storage_id:$storageID node_id:$nodeID path:$path > >
+func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Reference) bool {
+	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> path:$path > >
 	if r.ResourceId != nil && r.Path == "" { // path must be empty
-		return s.ResourceId.StorageId == r.ResourceId.StorageId && s.ResourceId.OpaqueId == r.ResourceId.OpaqueId
+		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId())
 	}
 
 	// r: <path:"/public/$token" >
@@ -88,20 +105,24 @@ func checkPublicShareRef(s *link.PublicShare, ref *link.PublicShareReference) bo
 	return ref.GetToken() == s.Token
 }
 
-// GetPublicShareScope returns the scope to allow access to a public share and
+// AddPublicShareScope adds the scope to allow access to a public share and
 // the shared resource.
-func GetPublicShareScope(share *link.PublicShare, role authpb.Role) (map[string]*authpb.Scope, error) {
-	val, err := utils.MarshalProtoV1ToJSON(share)
+func AddPublicShareScope(share *link.PublicShare, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
+	// Create a new "scope share" to only expose the required fields `ResourceId` and `Token` to the scope.
+	scopeShare := &link.PublicShare{ResourceId: share.ResourceId, Token: share.Token}
+	val, err := utils.MarshalProtoV1ToJSON(scopeShare)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]*authpb.Scope{
-		"publicshare:" + share.Id.OpaqueId: &authpb.Scope{
-			Resource: &types.OpaqueEntry{
-				Decoder: "json",
-				Value:   val,
-			},
-			Role: role,
+	if scopes == nil {
+		scopes = make(map[string]*authpb.Scope)
+	}
+	scopes["publicshare:"+share.Id.OpaqueId] = &authpb.Scope{
+		Resource: &types.OpaqueEntry{
+			Decoder: "json",
+			Value:   val,
 		},
-	}, nil
+		Role: role,
+	}
+	return scopes, nil
 }

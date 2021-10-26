@@ -79,13 +79,22 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an auth manager implementation that verifies the oidc token and obtains the user claims.
 func New(m map[string]interface{}) (auth.Manager, error) {
-	c, err := parseConfig(m)
+	manager := &mgr{}
+	err := manager.Configure(m)
 	if err != nil {
 		return nil, err
 	}
-	c.init()
+	return manager, nil
+}
 
-	return &mgr{c: c}, nil
+func (am *mgr) Configure(m map[string]interface{}) error {
+	c, err := parseConfig(m)
+	if err != nil {
+		return err
+	}
+	c.init()
+	am.c = c
+	return nil
 }
 
 // the clientID it would be empty as we only need to validate the clientSecret variable
@@ -141,6 +150,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	userID := &user.UserId{
 		OpaqueId: claims[am.c.IDClaim].(string), // a stable non reassignable id
 		Idp:      claims["issuer"].(string),     // in the scope of this issuer
+		Type:     user.UserType_USER_TYPE_PRIMARY,
 	}
 	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
 	if err != nil {
@@ -171,12 +181,20 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		GidNumber:    int64(gid),
 	}
 
-	scope, err := scope.GetOwnerScope()
-	if err != nil {
-		return nil, nil, err
+	var scopes map[string]*authpb.Scope
+	if userID != nil && userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
+		scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		scopes, err = scope.AddOwnerScope(nil)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
-	return u, scope, nil
+	return u, scopes, nil
 }
 
 func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {

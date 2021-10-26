@@ -62,7 +62,7 @@ func (h *configHandler) init(c *Config) {
 	}
 	h.c.Enabled = true
 	h.c.Endpoint = fmt.Sprintf("https://%s/%s", h.c.Host, c.Prefix)
-	h.c.ResourceTypes = []resourceTypes{resourceTypes{
+	h.c.ResourceTypes = []resourceTypes{{
 		Name:       "file",
 		ShareTypes: []string{"user"},
 		Protocols: resourceTypesProtocols{

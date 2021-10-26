@@ -31,6 +31,7 @@ imports: off
 	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
 
 build: imports test-go-version
+	gofmt -s -w .
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
@@ -44,7 +45,7 @@ build-reva: imports
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 test: off
-	go test -race $$(go list ./... | grep -v /tests/integration)
+	go test -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration)
 
 test-integration: build-ci
 	cd tests/integration && go test -race ./...
@@ -77,7 +78,7 @@ test-go-version:
 
 # for manual building only
 deps:
-	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.38.0' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
+	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.42.1' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
 	cd /tmp && go get golang.org/x/tools/cmd/goimports
 
 build-ci: off
@@ -104,7 +105,7 @@ ci: build-ci test  lint-ci
 build-revad-docker: off
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 build-reva-docker: off
-	env CGO_ENABLED=0 go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 clean:
 	rm -rf dist
 

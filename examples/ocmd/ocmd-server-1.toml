@@ -76,22 +76,18 @@ providers = "providers.demo.json"
 [grpc.services.publicshareprovider]
 driver = "memory"
 
-[grpc.services.appprovider]
-driver = "demo"
-iopsecret = "testsecret"
-wopiurl = "http://0.0.0.0:8880/"
-wopibridgeurl = "http://localhost:8000/wopib"
-
 [grpc.services.appregistry]
 driver = "static"
 
-[grpc.services.appregistry.static.rules]
-"text/plain" = "localhost:19000"
-"text/markdown" = "localhost:19000"
-"application/compressed-markdown" = "localhost:19000"
-"application/vnd.oasis.opendocument.text" = "localhost:19000"
-"application/vnd.oasis.opendocument.spreadsheet" = "localhost:19000"
-"application/vnd.oasis.opendocument.presentation" = "localhost:19000"
+[grpc.services.appprovider]
+driver = "demo"
+app_provider_url = "localhost:19000"
+
+[grpc.services.appprovider.drivers.wopi]
+iop_secret = "hello"
+wopi_url = "http://0.0.0.0:8880/"
+app_name = "Collabora"
+app_url = "https://your-collabora-server.org:9980"
 
 [grpc.services.storageprovider]
 driver = "localhome"
@@ -146,5 +142,7 @@ providers = "providers.demo.json"
 prefix = "ocs"
 
 [http.services.ocdav]
+
+[http.services.appprovider]
 
 [http.middlewares.cors]

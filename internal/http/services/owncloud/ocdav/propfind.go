@@ -32,8 +32,6 @@ import (
 	"strings"
 	"time"
 
-	"go.opencensus.io/trace"
-
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -41,8 +39,11 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxuser "github.com/cs3org/reva/pkg/user"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -61,25 +62,15 @@ const (
 )
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
-func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "propfind")
+func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
 
+	span.SetAttributes(attribute.String("component", "ocdav"))
+
 	fn := path.Join(ns, r.URL.Path)
-	depth := r.Header.Get("Depth")
-	if depth == "" {
-		depth = "1"
-	}
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
-
-	// see https://tools.ietf.org/html/rfc4918#section-9.1
-	if depth != "0" && depth != "1" && depth != "infinity" {
-		sublog.Debug().Str("depth", depth).Msgf("invalid Depth header value")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
 
 	pf, status, err := readPropfind(r.Body)
 	if err != nil {
@@ -88,14 +79,110 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	client, err := s.getClient()
+	ref := &provider.Reference{Path: fn}
+
+	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, false, sublog)
+	if !ok {
+		// getResourceInfos handles responses in case of an error so we can just return here.
+		return
+	}
+	s.propfindResponse(ctx, w, r, ns, pf, parentInfo, resourceInfos, sublog)
+}
+
+func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_propfind")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
+
+	pf, status, err := readPropfind(r.Body)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
+		sublog.Debug().Err(err).Msg("error reading propfind request")
+		w.WriteHeader(status)
+		return
+	}
+
+	// retrieve a specific storage space
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	metadataKeys := []string{}
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
+
+	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, true, sublog)
+	if !ok {
+		// getResourceInfos handles responses in case of an error so we can just return here.
+		return
+	}
+
+	// parentInfo Path is the name but we need /
+	parentInfo.Path = "/"
+
+	// prefix space id to paths
+	for i := range resourceInfos {
+		resourceInfos[i].Path = path.Join("/", spaceID, r.URL.Path, resourceInfos[i].Path)
+	}
+
+	s.propfindResponse(ctx, w, r, "", pf, parentInfo, resourceInfos, sublog)
+
+}
+
+func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, namespace)
+	if err != nil {
+		log.Error().Err(err).Msg("error formatting propfind")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+
+	var disableTus bool
+	// let clients know this collection supports tus.io POST requests to start uploads
+	if parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		if parentInfo.Opaque != nil {
+			_, disableTus = parentInfo.Opaque.Map["disable_tus"]
+		}
+		if !disableTus {
+			w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderTusVersion, HeaderTusExtension}, ", "))
+			w.Header().Set(HeaderTusResumable, "1.0.0")
+			w.Header().Set(HeaderTusVersion, "1.0.0")
+			w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
+		}
+	}
+	w.WriteHeader(http.StatusMultiStatus)
+	if _, err := w.Write([]byte(propRes)); err != nil {
+		log.Err(err).Msg("error writing response")
+	}
+}
+
+func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, ref *provider.Reference, spacesPropfind bool, log zerolog.Logger) (*provider.ResourceInfo, []*provider.ResourceInfo, bool) {
+	depth := r.Header.Get(HeaderDepth)
+	if depth == "" {
+		depth = "1"
+	}
+	// see https://tools.ietf.org/html/rfc4918#section-9.1
+	if depth != "0" && depth != "1" && depth != "infinity" {
+		log.Debug().Str("depth", depth).Msgf("invalid Depth header value")
+		w.WriteHeader(http.StatusBadRequest)
+		return nil, nil, false
+	}
+
+	client, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil, nil, false
+	}
+
+	var metadataKeys []string
+
 	if pf.Allprop != nil {
 		// TODO this changes the behavior and returns all properties if allprops has been set,
 		// but allprops should only return some default properties
@@ -110,46 +197,85 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			}
 		}
 	}
-	ref := &provider.Reference{Path: fn}
 	req := &provider.StatRequest{
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,
 	}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
-		sublog.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
+		log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return nil, nil, false
+	} else if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			m := fmt.Sprintf("Resource %v not found", ref.Path)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: m,
+			})
+			HandleWebdavError(&log, w, b, err)
+			return nil, nil, false
+		}
+		HandleErrorStatus(&log, w, res.Status)
+		return nil, nil, false
 	}
 
-	if res.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, res.Status)
-		return
-	}
+	parentInfo := res.Info
+	resourceInfos := []*provider.ResourceInfo{parentInfo}
 
-	info := res.Info
-	infos := []*provider.ResourceInfo{info}
-	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
+	switch {
+	case !spacesPropfind && parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		// The propfind is requested for a file that exists
+		// In this case, we can stat the parent directory and return both
+		parentPath := path.Dir(parentInfo.Path)
+		resourceInfos = append(resourceInfos, parentInfo)
+		parentRes, err := client.Stat(ctx, &provider.StatRequest{
+			Ref:                   &provider.Reference{Path: parentPath},
+			ArbitraryMetadataKeys: metadataKeys,
+		})
+		if err != nil {
+			log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return nil, nil, false
+		} else if parentRes.Status.Code != rpc.Code_CODE_OK {
+			if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				w.WriteHeader(http.StatusNotFound)
+				m := fmt.Sprintf("Resource %v not found", parentPath)
+				b, err := Marshal(exception{
+					code:    SabredavNotFound,
+					message: m,
+				})
+				HandleWebdavError(&log, w, b, err)
+				return nil, nil, false
+			}
+			HandleErrorStatus(&log, w, parentRes.Status)
+			return nil, nil, false
+		}
+		parentInfo = parentRes.Info
+
+	case parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
 		req := &provider.ListContainerRequest{
 			Ref:                   ref,
 			ArbitraryMetadataKeys: metadataKeys,
 		}
 		res, err := client.ListContainer(ctx, req)
 		if err != nil {
-			sublog.Error().Err(err).Msg("error sending list container grpc request")
+			log.Error().Err(err).Msg("error sending list container grpc request")
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return nil, nil, false
 		}
 
 		if res.Status.Code != rpc.Code_CODE_OK {
-			HandleErrorStatus(&sublog, w, res.Status)
-			return
+			HandleErrorStatus(&log, w, res.Status)
+			return nil, nil, false
 		}
-		infos = append(infos, res.Infos...)
-	} else if depth == "infinity" {
+		resourceInfos = append(resourceInfos, res.Infos...)
+
+	case depth == "infinity":
 		// FIXME: doesn't work cross-storage as the results will have the wrong paths!
 		// use a stack to explore sub-containers breadth-first
-		stack := []string{info.Path}
+		stack := []string{parentInfo.Path}
 		for len(stack) > 0 {
 			// retrieve path on top of stack
 			path := stack[len(stack)-1]
@@ -160,16 +286,16 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			}
 			res, err := client.ListContainer(ctx, req)
 			if err != nil {
-				sublog.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
+				log.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
 				w.WriteHeader(http.StatusInternalServerError)
-				return
+				return nil, nil, false
 			}
 			if res.Status.Code != rpc.Code_CODE_OK {
-				HandleErrorStatus(&sublog, w, res.Status)
-				return
+				HandleErrorStatus(&log, w, res.Status)
+				return nil, nil, false
 			}
 
-			infos = append(infos, res.Infos...)
+			resourceInfos = append(resourceInfos, res.Infos...)
 
 			if depth != "infinity" {
 				break
@@ -190,32 +316,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		}
 	}
 
-	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error formatting propfind")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("DAV", "1, 3, extended-mkcol")
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-
-	var disableTus bool
-	// let clients know this collection supports tus.io POST requests to start uploads
-	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		if info.Opaque != nil {
-			_, disableTus = info.Opaque.Map["disable_tus"]
-		}
-		if !disableTus {
-			w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
-			w.Header().Set("Tus-Resumable", "1.0.0")
-			w.Header().Set("Tus-Version", "1.0.0")
-			w.Header().Set("Tus-Extension", "creation,creation-with-upload")
-		}
-	}
-	w.WriteHeader(http.StatusMultiStatus)
-	if _, err := w.Write([]byte(propRes)); err != nil {
-		sublog.Err(err).Msg("error writing response")
-	}
+	return parentInfo, resourceInfos, true
 }
 
 func requiresExplicitFetching(n *xml.Name) bool {
@@ -273,7 +374,7 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 	return pf, 0, nil
 }
 
-func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string) (string, error) {
+func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string) (string, error) {
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
 		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns)
@@ -405,7 +506,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			// etags must be enclosed in double quotes and cannot contain them.
 			// See https://tools.ietf.org/html/rfc7232#section-2.3 for details
 			// TODO(jfd) handle weak tags that start with 'W/'
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", md.Etag))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", quoteEtag(md.Etag)))
 		}
 
 		if md.PermissionSet != nil {
@@ -544,10 +645,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "public-link-share-owner":
 					if ls != nil && ls.Owner != nil {
 						if isCurrentUserOwner(ctx, ls.Owner) {
-							u := ctxuser.ContextMustGetUser(ctx)
+							u := ctxpkg.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-owner", u.Username))
 						} else {
-							u, _ := ctxuser.ContextGetUser(ctx)
+							u, _ := ctxpkg.ContextGetUser(ctx)
 							sublog.Error().Interface("share", ls).Interface("user", u).Msg("the current user in the context should be the owner of a public link share")
 							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-owner", ""))
 						}
@@ -576,7 +677,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "owner-id": // phoenix only
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
-							u := ctxuser.ContextMustGetUser(ctx)
+							u := ctxpkg.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", u.Username))
 						} else {
 							sublog.Debug().Msg("TODO fetch user username")
@@ -649,7 +750,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "owner-display-name": // phoenix only
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
-							u := ctxuser.ContextMustGetUser(ctx)
+							u := ctxpkg.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", u.DisplayName))
 						} else {
 							sublog.Debug().Msg("TODO fetch user displayname")
@@ -698,7 +799,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				switch pf.Prop[i].Local {
 				case "getetag": // both
 					if md.Etag != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", md.Etag))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", quoteEtag(md.Etag)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getetag", ""))
 					}
@@ -802,9 +903,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	return &response, nil
 }
 
+// be defensive about wrong encoded etags
+func quoteEtag(etag string) string {
+	if strings.HasPrefix(etag, "W/") {
+		return `W/"` + strings.Trim(etag[2:], `"`) + `"`
+	}
+	return `"` + strings.Trim(etag, `"`) + `"`
+}
+
 // a file is only yours if you are the owner
 func isCurrentUserOwner(ctx context.Context, owner *userv1beta1.UserId) bool {
-	contextUser, ok := ctxuser.ContextGetUser(ctx)
+	contextUser, ok := ctxpkg.ContextGetUser(ctx)
 	if ok && contextUser.Id != nil && owner != nil &&
 		contextUser.Id.Idp == owner.Idp &&
 		contextUser.Id.OpaqueId == owner.OpaqueId {

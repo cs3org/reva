@@ -35,11 +35,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -204,7 +205,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving upload path")
 	}
-	usr := user.ContextMustGetUser(ctx)
+	usr := ctxpkg.ContextMustGetUser(ctx)
 	info.Storage = map[string]string{
 		"Type":                "OwnCloudStore",
 		"BinPath":             binPath,
@@ -212,6 +213,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
+		"UserType": utils.UserTypeToString(usr.Id.Type),
 		"UserName": usr.Username,
 
 		"LogLevel": log.GetLevel().String(),
@@ -252,7 +254,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 }
 
 func (fs *ocfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return "", err
@@ -285,11 +287,12 @@ func (fs *ocfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 		Id: &userpb.UserId{
 			Idp:      info.Storage["Idp"],
 			OpaqueId: info.Storage["UserId"],
+			Type:     utils.UserTypeMap(info.Storage["UserType"]),
 		},
 		Username: info.Storage["UserName"],
 	}
 
-	ctx = user.ContextSetUser(ctx, u)
+	ctx = ctxpkg.ContextSetUser(ctx, u)
 	// TODO configure the logger the same way ... store and add traceid in file info
 
 	var opts []logger.Option

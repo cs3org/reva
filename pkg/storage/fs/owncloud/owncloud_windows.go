@@ -16,6 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+//go:build windows
 // +build windows
 
 package owncloud
@@ -28,7 +29,9 @@ import (
 	"os"
 	"strings"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"golang.org/x/sys/windows"
 )
 
 // calcEtag will create an etag based on the md5 of
@@ -51,4 +54,23 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	}
 	etag := fmt.Sprintf(`"%x"`, h.Sum(nil))
 	return fmt.Sprintf("\"%s\"", strings.Trim(etag, "\""))
+}
+
+func (fs *ocfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
+	// TODO quota of which storage space?
+	// we could use the logged in user, but when a user has access to multiple storages this falls short
+	// for now return quota of root
+	var free, total, avail uint64
+
+	pathPtr, err := windows.UTF16PtrFromString(fs.toInternalPath(ctx, "/"))
+	if err != nil {
+		return 0, 0, err
+	}
+	err = windows.GetDiskFreeSpaceEx(pathPtr, &avail, &total, &free)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	used := total - free
+	return total, used, nil
 }

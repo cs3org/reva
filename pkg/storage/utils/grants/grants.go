@@ -24,11 +24,17 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/google/go-cmp/cmp"
 )
 
 // GetACLPerm generates a string representation of CS3APIs' ResourcePermissions
 // TODO(labkode): fine grained permission controls.
 func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
+	// resource permission is denied
+	if cmp.Equal(provider.ResourcePermissions{}, *set) {
+		return "!r!w!x!m!u!d", nil
+	}
+
 	var b strings.Builder
 
 	if set.Stat || set.InitiateFileDownload {
@@ -61,7 +67,7 @@ func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 // EOS acls are a mix of ACLs and POSIX permissions. More details can be found in
 // https://github.com/cern-eos/eos/blob/master/doc/configuration/permission.rst
 func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermissions {
-	var rp provider.ResourcePermissions
+	var rp provider.ResourcePermissions // default to 0 == all denied
 
 	if strings.Contains(perm, "r") && !strings.Contains(perm, "!r") {
 		rp.GetPath = true
@@ -72,8 +78,10 @@ func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermission
 	if strings.Contains(perm, "w") && !strings.Contains(perm, "!w") {
 		rp.Move = true
 		rp.Delete = true
+		rp.PurgeRecycle = true
 		rp.InitiateFileUpload = true
 		rp.RestoreFileVersion = true
+		rp.RestoreRecycleItem = true
 		if isDir {
 			rp.CreateContainer = true
 		}
@@ -81,6 +89,7 @@ func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermission
 
 	if strings.Contains(perm, "x") && !strings.Contains(perm, "!x") {
 		rp.ListFileVersions = true
+		rp.ListRecycle = true
 		if isDir {
 			rp.ListContainer = true
 		}
@@ -88,6 +97,7 @@ func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermission
 
 	if strings.Contains(perm, "!d") {
 		rp.Delete = false
+		rp.PurgeRecycle = false
 	}
 
 	if strings.Contains(perm, "m") && !strings.Contains(perm, "!m") {
@@ -125,4 +135,14 @@ func GetGranteeType(aclType string) provider.GranteeType {
 	default:
 		return provider.GranteeType_GRANTEE_TYPE_INVALID
 	}
+}
+
+// PermissionsEqual returns true if the permissions are equal
+func PermissionsEqual(p1, p2 *provider.ResourcePermissions) bool {
+	return p1 != nil && p2 != nil && cmp.Equal(*p1, *p2)
+}
+
+// GranteeEqual returns true if the grantee are equal
+func GranteeEqual(g1, g2 *provider.Grantee) bool {
+	return g1 != nil && g2 != nil && cmp.Equal(*g1, *g2)
 }

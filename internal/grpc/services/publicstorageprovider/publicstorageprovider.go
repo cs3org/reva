@@ -34,11 +34,13 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
-	codes "google.golang.org/grpc/codes"
+	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
 )
 
@@ -78,7 +80,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new Public Storage Provider service.
+// New creates a new IsPublic Storage Provider service.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
@@ -304,12 +306,13 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "CreateContainer")
+	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "CreateContainer")
 	defer span.End()
 
-	span.AddAttributes(
-		trace.StringAttribute("ref", req.Ref.String()),
-	)
+	span.SetAttributes(attribute.KeyValue{
+		Key:   "reference",
+		Value: attribute.StringValue(req.Ref.String()),
+	})
 
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
@@ -343,12 +346,13 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "Delete")
+	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Delete")
 	defer span.End()
 
-	span.AddAttributes(
-		trace.StringAttribute("ref", req.Ref.String()),
-	)
+	span.SetAttributes(attribute.KeyValue{
+		Key:   "reference",
+		Value: attribute.StringValue(req.Ref.String()),
+	})
 
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
@@ -382,12 +386,18 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "Move")
+	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Move")
 	defer span.End()
 
-	span.AddAttributes(
-		trace.StringAttribute("source", req.Source.String()),
-		trace.StringAttribute("destination", req.Destination.String()),
+	span.SetAttributes(
+		attribute.KeyValue{
+			Key:   "source",
+			Value: attribute.StringValue(req.Source.String()),
+		},
+		attribute.KeyValue{
+			Key:   "destination",
+			Value: attribute.StringValue(req.Destination.String()),
+		},
 	)
 
 	cs3RefSource, tknSource, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Source)
@@ -439,12 +449,14 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "Stat")
+	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Stat")
 	defer span.End()
 
-	span.AddAttributes(
-		trace.StringAttribute("ref", req.Ref.String()),
-	)
+	span.SetAttributes(
+		attribute.KeyValue{
+			Key:   "source",
+			Value: attribute.StringValue(req.Ref.String()),
+		})
 
 	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -577,7 +589,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token st
 		return "", "", errtypes.BadRequest("need absolute path ref: got " + ref.String())
 	}
 
-	if ref.GetPath() == "" {
+	if !utils.IsAbsolutePathReference(ref) {
 		// abort, no valid id nor path
 		return "", "", errtypes.BadRequest("invalid ref: " + ref.String())
 	}
@@ -628,6 +640,10 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
+func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 

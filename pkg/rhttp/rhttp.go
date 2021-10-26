@@ -33,11 +33,11 @@ import (
 	"github.com/cs3org/reva/internal/http/interceptors/providerauthorizer"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/plugin/ochttp"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // New returns a new server
@@ -289,22 +289,18 @@ func (s *Server) getHandler() (http.Handler, error) {
 		handler = triple.Middleware(traceHandler(triple.Name, handler))
 	}
 
-	// use opencensus handler to trace endpoints.
-	// TODO(labkode): enable also opencensus telemetry.
-	handler = &ochttp.Handler{
-		Handler: handler,
-		//IsPublicEndpoint: true,
-	}
-
 	return handler, nil
 }
 
 func traceHandler(name string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, span := trace.StartSpan(r.Context(), name)
-		r = r.WithContext(ctx)
-		h.ServeHTTP(w, r)
-		span.End()
+		ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+		t := rtrace.Provider.Tracer("reva")
+		ctx, span := t.Start(ctx, name)
+		defer span.End()
+
+		rtrace.Propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))
+		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

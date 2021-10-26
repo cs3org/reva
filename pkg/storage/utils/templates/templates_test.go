@@ -31,21 +31,21 @@ type testUnit struct {
 }
 
 var tests = []*testUnit{
-	&testUnit{
+	{
 		expected: "alabasta",
 		user: &userpb.User{
 			Username: "alabasta",
 		},
 		template: "{{.Username}}",
 	},
-	&testUnit{
+	{
 		expected: "a/alabasta",
 		user: &userpb.User{
 			Username: "alabasta",
 		},
 		template: "{{substr 0 1 .Username}}/{{.Username}}",
 	},
-	&testUnit{
+	{
 		expected: "idp@opaque",
 		user: &userpb.User{
 			Id: &userpb.UserId{
@@ -55,35 +55,35 @@ var tests = []*testUnit{
 		},
 		template: "{{.Id.Idp}}@{{.Id.OpaqueId}}",
 	},
-	&testUnit{ // test path clean
+	{ // test path clean
 		expected: "/alabasta",
 		user: &userpb.User{
 			Username: "alabasta",
 		},
 		template: "///{{.Username}}",
 	},
-	&testUnit{
+	{
 		expected: "michael",
 		user: &userpb.User{
 			Username: "MICHAEL",
 		},
 		template: "{{lower .Username}}",
 	},
-	&testUnit{
+	{
 		expected: "somewhere.com/michael@somewhere.com",
 		user: &userpb.User{
 			Username: "michael@somewhere.com",
 		},
 		template: "{{.Email.Domain}}/{{.Username}}",
 	},
-	&testUnit{
+	{
 		expected: "somewhere.com/michael",
 		user: &userpb.User{
 			Username: "michael@somewhere.com",
 		},
 		template: "{{.Email.Domain}}/{{.Email.Local}}",
 	},
-	&testUnit{
+	{
 		expected: "_unknown/michael",
 		user: &userpb.User{
 			Username: "michael",

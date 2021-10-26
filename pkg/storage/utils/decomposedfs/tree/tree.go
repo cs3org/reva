@@ -31,10 +31,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -42,6 +44,11 @@ import (
 )
 
 // go:generate mockery -name Blobstore
+
+const (
+	spaceTypePersonal = "personal"
+	spaceTypeShare    = "share"
+)
 
 // Blobstore defines an interface for storing blobs in a blobstore
 type Blobstore interface {
@@ -52,7 +59,7 @@ type Blobstore interface {
 
 // PathLookup defines the interface for the lookup component
 type PathLookup interface {
-	NodeFromPath(ctx context.Context, fn string) (*node.Node, error)
+	NodeFromPath(ctx context.Context, fn string, followReferences bool) (*node.Node, error)
 	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error)
 	RootNode(ctx context.Context) (node *node.Node, err error)
 	HomeOrRootNode(ctx context.Context) (node *node.Node, err error)
@@ -60,6 +67,7 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(ID string) string
 	Path(ctx context.Context, n *node.Node) (path string, err error)
+	ShareFolder() string
 }
 
 // Tree manages a hierarchical tree
@@ -115,7 +123,99 @@ func (t *Tree) Setup(owner string) error {
 	if err != nil {
 		return err
 	}
+
+	// create spaces folder and iterate over existing nodes to populate it
+	spacesPath := filepath.Join(t.root, "spaces")
+	fi, err := os.Stat(spacesPath)
+	if os.IsNotExist(err) {
+		// create personal spaces dir
+		if err := os.MkdirAll(filepath.Join(spacesPath, spaceTypePersonal), 0700); err != nil {
+			return err
+		}
+		// create share spaces dir
+		if err := os.MkdirAll(filepath.Join(spacesPath, spaceTypeShare), 0700); err != nil {
+			return err
+		}
+
+		f, err := os.Open(filepath.Join(t.root, "nodes"))
+		if err != nil {
+			return err
+		}
+		nodes, err := f.Readdir(0)
+		if err != nil {
+			return err
+		}
+
+		for i := range nodes {
+			nodePath := filepath.Join(t.root, "nodes", nodes[i].Name())
+
+			// is it a user root? -> create personal space
+			if isRootNode(nodePath) {
+				// we can reuse the node id as the space id
+				t.linkSpace(spaceTypePersonal, nodes[i].Name(), nodes[i].Name())
+			}
+
+			// is it a shared node? -> create share space
+			if isSharedNode(nodePath) {
+				// we can reuse the node id as the space id
+				t.linkSpace(spaceTypeShare, nodes[i].Name(), nodes[i].Name())
+			}
+		}
+	} else if !fi.IsDir() {
+		// check if it is a directory
+		return fmt.Errorf("%s is not a directory", spacesPath)
+	}
+
 	return nil
+}
+
+// linkSpace creates a new symbolic link for a space with the given type st, and node id
+func (t *Tree) linkSpace(spaceType, spaceID, nodeID string) {
+	spacesPath := filepath.Join(t.root, "spaces", spaceType, spaceID)
+	expectedTarget := "../../nodes/" + nodeID
+	linkTarget, err := os.Readlink(spacesPath)
+	if errors.Is(err, os.ErrNotExist) {
+		err = os.Symlink(expectedTarget, spacesPath)
+		if err != nil {
+			logger.New().Error().Err(err).
+				Str("space_type", spaceType).
+				Str("space", spaceID).
+				Str("node", nodeID).
+				Msg("could not create symlink")
+		}
+	} else {
+		if err != nil {
+			logger.New().Error().Err(err).
+				Str("space_type", spaceType).
+				Str("space", spaceID).
+				Str("node", nodeID).
+				Msg("could not read symlink")
+		}
+		if linkTarget != expectedTarget {
+			logger.New().Warn().
+				Str("space_type", spaceType).
+				Str("space", spaceID).
+				Str("node", nodeID).
+				Str("expected", expectedTarget).
+				Str("actual", linkTarget).
+				Msg("expected a different link target")
+		}
+	}
+}
+
+func isRootNode(nodePath string) bool {
+	attrBytes, err := xattr.Get(nodePath, xattrs.ParentidAttr)
+	return err == nil && string(attrBytes) == "root"
+}
+func isSharedNode(nodePath string) bool {
+	if attrs, err := xattr.List(nodePath); err == nil {
+		for i := range attrs {
+			if strings.HasPrefix(attrs[i], xattrs.GrantPrefix) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // GetMD returns the metadata of a node in the tree
@@ -274,7 +374,12 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 
 // Delete deletes a node in the tree by moving it to the trash
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
+	deletingSharedResource := ctx.Value(appctx.DeletingSharedResource)
 
+	if deletingSharedResource != nil && deletingSharedResource.(bool) {
+		src := filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name)
+		return os.Remove(src)
+	}
 	// Prepare the trash
 	// TODO use layout?, but it requires resolving the owners user if the username is used instead of the id.
 	// the node knows the owner id so we use that for now
@@ -338,32 +443,38 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 
-	p, err := n.Parent()
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error getting parent "+n.ParentID)
-	}
-	return t.Propagate(ctx, p)
+	return t.Propagate(ctx, n)
 }
 
-// RestoreRecycleItemFunc returns a node and a function to restore it from the trash
-func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, restorePath string) (*node.Node, func() error, error) {
-	rn, trashItem, deletedNodePath, origin, err := t.readRecycleItem(ctx, key)
+// RestoreRecycleItemFunc returns a node and a function to restore it from the trash.
+func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, restorePath string) (*node.Node, *node.Node, func() error, error) {
+	rn, trashItem, deletedNodePath, origin, err := t.readRecycleItem(ctx, key, trashPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if restorePath == "" {
 		restorePath = origin
 	}
 
+	var target *node.Node
+	target, err = t.lookup.NodeFromPath(ctx, restorePath, true)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	p, err := target.Parent()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	fn := func() error {
 		// link to origin
 		var n *node.Node
-		n, err = t.lookup.NodeFromPath(ctx, restorePath)
+		n, err = t.lookup.NodeFromPath(ctx, restorePath, true)
 		if err != nil {
 			return err
 		}
-
 		if n.Exists {
 			return errtypes.AlreadyExists("origin already exists")
 		}
@@ -376,8 +487,27 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, restorePath stri
 
 		// rename to node only name, so it is picked up by id
 		nodePath := rn.InternalPath()
-		err = os.Rename(deletedNodePath, nodePath)
+
+		// attempt to rename only if we're not in a subfolder
+		if deletedNodePath != nodePath {
+			err = os.Rename(deletedNodePath, nodePath)
+			if err != nil {
+				return err
+			}
+		}
+
+		// the new node will inherit the permissions of its parent
+		p, err := n.Parent()
 		if err != nil {
+			return err
+		}
+
+		po, err := p.Owner()
+		if err != nil {
+			return err
+		}
+
+		if err := rn.ChangeOwner(po); err != nil {
 			return err
 		}
 
@@ -387,18 +517,25 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, restorePath stri
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
+		// set ParentidAttr to restorePath's node parent id
+		if trashPath != "" {
+			if err := xattr.Set(nodePath, xattrs.ParentidAttr, []byte(n.ParentID)); err != nil {
+				return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+			}
+		}
+
 		// delete item link in trash
 		if err = os.Remove(trashItem); err != nil {
 			log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trashitem")
 		}
 		return t.Propagate(ctx, n)
 	}
-	return rn, fn, nil
+	return rn, p, fn, nil
 }
 
 // PurgeRecycleItemFunc returns a node and a function to purge it from the trash
-func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error) {
-	rn, trashItem, deletedNodePath, _, err := t.readRecycleItem(ctx, key)
+func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, key string, path string) (*node.Node, func() error, error) {
+	rn, trashItem, deletedNodePath, _, err := t.readRecycleItem(ctx, key, path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -441,8 +578,12 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 	// is propagation enabled for the parent node?
 
 	var root *node.Node
-	if root, err = t.lookup.HomeOrRootNode(ctx); err != nil {
-		return
+	if n.SpaceRoot == nil {
+		if root, err = t.lookup.HomeOrRootNode(ctx); err != nil {
+			return
+		}
+	} else {
+		root = n.SpaceRoot
 	}
 
 	// use a sync time and don't rely on the mtime of the current node, as the stat might not change when a rename happened too quickly
@@ -632,13 +773,13 @@ func (t *Tree) createNode(n *node.Node, owner *userpb.UserId) (err error) {
 }
 
 // TODO refactor the returned params into Node properties? would make all the path transformations go away...
-func (t *Tree) readRecycleItem(ctx context.Context, key string) (n *node.Node, trashItem string, deletedNodePath string, origin string, err error) {
+func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.Node, trashItem string, deletedNodePath string, origin string, err error) {
 	if key == "" {
 		return nil, "", "", "", errtypes.InternalError("key is empty")
 	}
 
-	u := user.ContextMustGetUser(ctx)
-	trashItem = filepath.Join(t.lookup.InternalRoot(), "trash", u.Id.OpaqueId, key)
+	u := ctxpkg.ContextMustGetUser(ctx)
+	trashItem = filepath.Join(t.lookup.InternalRoot(), "trash", u.Id.OpaqueId, key, path)
 
 	var link string
 	link, err = os.Readlink(trashItem)
@@ -646,10 +787,15 @@ func (t *Tree) readRecycleItem(ctx context.Context, key string) (n *node.Node, t
 		appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
 		return
 	}
-	parts := strings.SplitN(filepath.Base(link), ".T.", 2)
-	if len(parts) != 2 {
-		appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
-		return
+
+	nodeID := filepath.Base(link)
+	if path == "" || path == "/" {
+		parts := strings.SplitN(filepath.Base(link), ".T.", 2)
+		if len(parts) != 2 {
+			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
+			return
+		}
+		nodeID = parts[0]
 	}
 
 	var attrBytes []byte
@@ -668,8 +814,14 @@ func (t *Tree) readRecycleItem(ctx context.Context, key string) (n *node.Node, t
 	} else {
 		return
 	}
+	// lookup ownerType in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.OwnerTypeAttr); err == nil {
+		owner.Type = utils.UserTypeMap(string(attrBytes))
+	} else {
+		return
+	}
 
-	n = node.New(parts[0], "", "", 0, "", owner, t.lookup)
+	n = node.New(nodeID, "", "", 0, "", owner, t.lookup)
 	// lookup blobID in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.BlobIDAttr); err == nil {
 		n.BlobID = string(attrBytes)
@@ -693,9 +845,20 @@ func (t *Tree) readRecycleItem(ctx context.Context, key string) (n *node.Node, t
 	// get origin node
 	origin = "/"
 
+	deletedNodeRootPath := deletedNodePath
+	if path != "" && path != "/" {
+		trashItemRoot := filepath.Join(t.lookup.InternalRoot(), "trash", u.Id.OpaqueId, key)
+		var rootLink string
+		rootLink, err = os.Readlink(trashItemRoot)
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
+			return
+		}
+		deletedNodeRootPath = t.lookup.InternalPath(filepath.Base(rootLink))
+	}
 	// lookup origin path in extended attributes
-	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.TrashOriginAttr); err == nil {
-		origin = string(attrBytes)
+	if attrBytes, err = xattr.Get(deletedNodeRootPath, xattrs.TrashOriginAttr); err == nil {
+		origin = filepath.Join(string(attrBytes), path)
 	} else {
 		log.Error().Err(err).Str("trashItem", trashItem).Str("link", link).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
 	}

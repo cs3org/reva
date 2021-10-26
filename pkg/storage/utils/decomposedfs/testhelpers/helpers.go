@@ -23,10 +23,14 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/google/uuid"
+	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ruser "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
@@ -34,7 +38,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
-	ruser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/tests/helpers"
 )
 
@@ -79,6 +82,7 @@ func NewTestEnv() (*TestEnv, error) {
 		Id: &userpb.UserId{
 			Idp:      "idp",
 			OpaqueId: "userid",
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		},
 		Username: "username",
 	}
@@ -110,8 +114,17 @@ func NewTestEnv() (*TestEnv, error) {
 		return nil, err
 	}
 
+	// the space name attribute is the stop condition in the lookup
+	h, err := lookup.HomeNode(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username")); err != nil {
+		return nil, err
+	}
+
 	// Create dir1
-	dir1, err := env.CreateTestDir("dir1")
+	dir1, err := env.CreateTestDir("/dir1")
 	if err != nil {
 		return nil, err
 	}
@@ -123,13 +136,23 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	// Create subdir1 in dir1
-	err = fs.CreateDir(ctx, "dir1/subdir1")
+	err = fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "/dir1/subdir1"})
+	if err != nil {
+		return nil, err
+	}
+
+	dir2, err := dir1.Child(ctx, "subdir1")
+	if err != nil {
+		return nil, err
+	}
+	// Create file1 in dir1
+	_, err = env.CreateTestFile("file2", "file2-blobid", 12345, dir2.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create emptydir
-	err = fs.CreateDir(ctx, "emptydir")
+	err = fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "/emptydir"})
 	if err != nil {
 		return nil, err
 	}
@@ -144,11 +167,11 @@ func (t *TestEnv) Cleanup() {
 
 // CreateTestDir create a directory and returns a corresponding Node
 func (t *TestEnv) CreateTestDir(name string) (*node.Node, error) {
-	err := t.Fs.CreateDir(t.Ctx, name)
+	err := t.Fs.CreateDir(t.Ctx, &providerv1beta1.Reference{Path: name})
 	if err != nil {
 		return nil, err
 	}
-	n, err := t.Lookup.NodeFromPath(t.Ctx, name)
+	n, err := t.Lookup.NodeFromPath(t.Ctx, name, false)
 	if err != nil {
 		return nil, err
 	}

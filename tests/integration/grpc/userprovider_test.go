@@ -24,10 +24,9 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/token"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-	ruser "github.com/cs3org/reva/pkg/user"
 	"google.golang.org/grpc/metadata"
 
 	. "github.com/onsi/ginkgo"
@@ -54,17 +53,18 @@ var _ = Describe("user providers", func() {
 			Id: &userpb.UserId{
 				Idp:      existingIdp,
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 		}
 		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
-		scope, err := scope.GetOwnerScope()
+		scope, err := scope.AddOwnerScope(nil)
 		Expect(err).ToNot(HaveOccurred())
 		t, err := tokenManager.MintToken(ctx, user, scope)
 		Expect(err).ToNot(HaveOccurred())
-		ctx = token.ContextSetToken(ctx, t)
-		ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)
-		ctx = ruser.ContextSetUser(ctx, user)
+		ctx = ctxpkg.ContextSetToken(ctx, t)
+		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, t)
+		ctx = ctxpkg.ContextSetUser(ctx, user)
 
 		revads, err = startRevads(dependencies, map[string]string{})
 		Expect(err).ToNot(HaveOccurred())
@@ -107,6 +107,7 @@ var _ = Describe("user providers", func() {
 					userID: &userpb.UserId{
 						Idp:      existingIdp,
 						OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+						Type:     userpb.UserType_USER_TYPE_PRIMARY,
 					},
 					want: &userpb.GetUserResponse{
 						Status: &rpc.Status{
@@ -129,6 +130,7 @@ var _ = Describe("user providers", func() {
 					userID: &userpb.UserId{
 						Idp:      existingIdp,
 						OpaqueId: "doesnote-xist-4376-b307-cf0a8c2d0d9c",
+						Type:     userpb.UserType_USER_TYPE_PRIMARY,
 					},
 					want: &userpb.GetUserResponse{
 						Status: &rpc.Status{
@@ -141,6 +143,7 @@ var _ = Describe("user providers", func() {
 					userID: &userpb.UserId{
 						Idp:      existingIdp,
 						OpaqueId: "",
+						Type:     userpb.UserType_USER_TYPE_PRIMARY,
 					},
 					want: &userpb.GetUserResponse{
 						Status: &rpc.Status{
@@ -153,6 +156,7 @@ var _ = Describe("user providers", func() {
 					userID: &userpb.UserId{
 						Idp:      "http://does-not-exist:12345",
 						OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+						Type:     userpb.UserType_USER_TYPE_PRIMARY,
 					},
 					want: &userpb.GetUserResponse{
 						Status: &rpc.Status{

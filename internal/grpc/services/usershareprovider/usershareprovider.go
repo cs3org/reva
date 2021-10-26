@@ -25,12 +25,12 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -109,10 +109,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && req.Grant.Grantee.GetUserId().Idp == "" {
 		// use logged in user Idp as default.
-		g := &userpb.UserId{OpaqueId: req.Grant.Grantee.GetUserId().OpaqueId, Idp: u.Id.Idp}
+		g := &userpb.UserId{OpaqueId: req.Grant.Grantee.GetUserId().OpaqueId, Idp: u.Id.Idp, Type: userpb.UserType_USER_TYPE_PRIMARY}
 		req.Grant.Grantee.Id = &provider.Grantee_UserId{UserId: g}
 	}
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)
@@ -187,7 +187,18 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 }
 
 func (s *service) ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*collaboration.ListReceivedSharesResponse, error) {
-	shares, err := s.sm.ListReceivedShares(ctx) // TODO(labkode): check what to update
+	// For the UI add a filter to not display the denial shares
+	foundExclude := false
+	for _, f := range req.Filters {
+		if f.Type == collaboration.Filter_TYPE_EXCLUDE_DENIALS {
+			foundExclude = true
+			break
+		}
+	}
+	if !foundExclude {
+		req.Filters = append(req.Filters, &collaboration.Filter{Type: collaboration.Filter_TYPE_EXCLUDE_DENIALS})
+	}
+	shares, err := s.sm.ListReceivedShares(ctx, req.Filters) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.ListReceivedSharesResponse{
 			Status: status.NewInternal(ctx, err, "error listing received shares"),
@@ -220,7 +231,7 @@ func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetRe
 }
 
 func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
-	share, err := s.sm.UpdateReceivedShare(ctx, req.Ref, req.Field) // TODO(labkode): check what to update
+	share, err := s.sm.UpdateReceivedShare(ctx, req.Share, req.UpdateMask) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateReceivedShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating received share"),

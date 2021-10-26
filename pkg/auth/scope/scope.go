@@ -19,31 +19,34 @@
 package scope
 
 import (
+	"context"
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/rs/zerolog"
 )
 
 // Verifier is the function signature which every scope verifier should implement.
-type Verifier func(*authpb.Scope, interface{}) (bool, error)
+type Verifier func(context.Context, *authpb.Scope, interface{}, *zerolog.Logger) (bool, error)
 
 var supportedScopes = map[string]Verifier{
-	"user":         userScope,
-	"publicshare":  publicshareScope,
-	"resourceinfo": resourceinfoScope,
+	"user":          userScope,
+	"publicshare":   publicshareScope,
+	"resourceinfo":  resourceinfoScope,
+	"share":         shareScope,
+	"receivedshare": receivedShareScope,
+	"lightweight":   lightweightAccountScope,
 }
 
 // VerifyScope is the function to be called when dismantling tokens to check if
 // the token has access to a particular resource.
-func VerifyScope(scopeMap map[string]*authpb.Scope, resource interface{}) (bool, error) {
+func VerifyScope(ctx context.Context, scopeMap map[string]*authpb.Scope, resource interface{}) (bool, error) {
+	logger := appctx.GetLogger(ctx)
 	for k, scope := range scopeMap {
 		for s, f := range supportedScopes {
 			if strings.HasPrefix(k, s) {
-				valid, err := f(scope, resource)
-				if err != nil {
-					continue
-				}
-				if valid {
+				if valid, err := f(ctx, scope, resource, logger); err == nil && valid {
 					return true, nil
 				}
 			}

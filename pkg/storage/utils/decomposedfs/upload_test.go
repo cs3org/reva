@@ -21,21 +21,26 @@ package decomposedfs_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
+	ruser "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
-	ruser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
@@ -61,6 +66,7 @@ var _ = Describe("File uploads", func() {
 			Id: &userpb.UserId{
 				Idp:      "idp",
 				OpaqueId: "userid",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username: "username",
 		}
@@ -92,6 +98,20 @@ var _ = Describe("File uploads", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
+	Context("quota exceeded", func() {
+		Describe("InitiateUpload", func() {
+			It("fails", func() {
+				var originalFunc = node.CheckQuota
+				node.CheckQuota = func(spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
+					return false, errtypes.InsufficientStorage("quota exceeded")
+				}
+				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				Expect(err).To(MatchError(errtypes.InsufficientStorage("quota exceeded")))
+				node.CheckQuota = originalFunc
+			})
+		})
+	})
+
 	Context("with insufficient permissions", func() {
 		BeforeEach(func() {
 			permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
@@ -101,6 +121,35 @@ var _ = Describe("File uploads", func() {
 			It("fails", func() {
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).To(MatchError("error: permission denied: root/foo"))
+			})
+		})
+	})
+
+	Context("with insufficient permissions, home node", func() {
+		BeforeEach(func() {
+			var err error
+			// recreate the fs with home enabled
+			o.EnableHome = true
+			tree := tree.New(o.Root, true, true, lookup, bs)
+			fs, err = decomposedfs.New(o, lookup, permissions, tree)
+			Expect(err).ToNot(HaveOccurred())
+			err = fs.CreateHome(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			// the space name attribute is the stop condition in the lookup
+			h, err := lookup.HomeNode(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username"))
+			Expect(err).ToNot(HaveOccurred())
+			permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+		})
+
+		Describe("InitiateUpload", func() {
+			It("fails", func() {
+				h, err := lookup.HomeNode(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				msg := fmt.Sprintf("error: permission denied: %s/foo", h.ID)
+				_, err = fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				Expect(err).To(MatchError(msg))
 			})
 		})
 	})

@@ -29,6 +29,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/jedib0t/go-pretty/table"
 )
 
@@ -60,14 +61,7 @@ func ocmShareListCommand() *command {
 				StorageId: tokens[0],
 				OpaqueId:  tokens[1],
 			}
-			shareRequest.Filters = []*ocm.ListOCMSharesRequest_Filter{
-				&ocm.ListOCMSharesRequest_Filter{
-					Type: ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID,
-					Term: &ocm.ListOCMSharesRequest_Filter_ResourceId{
-						ResourceId: id,
-					},
-				},
-			}
+			shareRequest.Filters = []*ocm.ListOCMSharesRequest_Filter{share.ResourceIDFilter(id)}
 		}
 
 		shareRes, err := shareClient.ListOCMShares(ctx, shareRequest)

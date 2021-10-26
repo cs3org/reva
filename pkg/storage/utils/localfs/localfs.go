@@ -35,6 +35,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
@@ -42,7 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -152,7 +153,7 @@ func (fs *localfs) resolve(ctx context.Context, ref *provider.Reference) (p stri
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "local: error getting user from ctx")
 		return nil, err
@@ -272,7 +273,7 @@ func (fs *localfs) isShareFolderChild(ctx context.Context, p string) bool {
 
 // permissionSet returns the permission set for the current user
 func (fs *localfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provider.ResourcePermissions {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return &provider.ResourcePermissions{
 			// no permissions
@@ -434,6 +435,10 @@ func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.ResourceId) (s
 	return url.QueryUnescape(strings.TrimPrefix(ref.OpaqueId, "fileid-"+layout))
 }
 
+func (fs *localfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	return errtypes.NotSupported("localfs: deny grant not supported")
+}
+
 func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -452,9 +457,9 @@ func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 	}
 	var grantee string
 	if granteeType == acl.TypeUser {
-		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, g.Grantee.GetUserId().Idp)
+		grantee = fmt.Sprintf("%s:%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, utils.UserTypeToString(g.Grantee.GetUserId().Type), g.Grantee.GetUserId().Idp)
 	} else if granteeType == acl.TypeGroup {
-		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetGroupId().OpaqueId, g.Grantee.GetGroupId().Idp)
+		grantee = fmt.Sprintf("%s::%s@%s", granteeType, g.Grantee.GetGroupId().OpaqueId, g.Grantee.GetGroupId().Idp)
 	}
 
 	err = fs.addToACLDB(ctx, fn, grantee, role)
@@ -486,9 +491,9 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 		}
 		grantSplit := strings.Split(granteeID, ":")
 		grantee := &provider.Grantee{Type: grants.GetGranteeType(grantSplit[0])}
-		parts := strings.Split(grantSplit[1], "@")
+		parts := strings.Split(grantSplit[2], "@")
 		if grantSplit[0] == acl.TypeUser {
-			grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: parts[0], Idp: parts[1]}}
+			grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: parts[0], Idp: parts[1], Type: utils.UserTypeMap(grantSplit[1])}}
 		} else if grantSplit[0] == acl.TypeGroup {
 			grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: parts[0], Idp: parts[1]}}
 		}
@@ -557,6 +562,11 @@ func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *
 	}
 
 	return fs.propagate(ctx, fn)
+}
+
+// CreateStorageSpace creates a storage space
+func (fs *localfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
 func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
@@ -746,7 +756,12 @@ func (fs *localfs) createHomeInternal(ctx context.Context, fn string) error {
 	return nil
 }
 
-func (fs *localfs) CreateDir(ctx context.Context, fn string) error {
+func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil
+	}
 
 	if fs.isShareFolder(ctx, fn) {
 		return errtypes.PermissionDenied("localfs: cannot create folder under the share folder")
@@ -756,7 +771,7 @@ func (fs *localfs) CreateDir(ctx context.Context, fn string) error {
 	if _, err := os.Stat(fn); err == nil {
 		return errtypes.AlreadyExists(fn)
 	}
-	err := os.Mkdir(fn, 0700)
+	err = os.Mkdir(fn, 0700)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(fn)
@@ -1131,7 +1146,7 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 	return fs.propagate(ctx, np)
 }
 
-func (fs *localfs) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *localfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
 	rp := fs.wrapRecycleBin(ctx, key)
 
 	if err := os.Remove(rp); err != nil {
@@ -1181,7 +1196,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 }
 
-func (fs *localfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (fs *localfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 
 	rp := fs.wrapRecycleBin(ctx, "/")
 
@@ -1199,14 +1214,14 @@ func (fs *localfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, er
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string, restoreRef *provider.Reference) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 
-	suffix := path.Ext(restoreKey)
+	suffix := path.Ext(key)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
 		return errors.New("localfs: invalid trash item suffix")
 	}
 
-	filePath, err := fs.getRecycledEntry(ctx, restoreKey)
+	filePath, err := fs.getRecycledEntry(ctx, key)
 	if err != nil {
 		return errors.Wrap(err, "localfs: invalid key")
 	}
@@ -1225,10 +1240,10 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string, re
 		return errors.New("localfs: can't restore - file already exists at original path")
 	}
 
-	rp := fs.wrapRecycleBin(ctx, restoreKey)
+	rp := fs.wrapRecycleBin(ctx, key)
 	if _, err = os.Stat(rp); err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(restoreKey)
+			return errtypes.NotFound(key)
 		}
 		return errors.Wrap(err, "localfs: error stating "+rp)
 	}
@@ -1237,12 +1252,21 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string, re
 		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 
-	err = fs.removeFromRecycledDB(ctx, restoreKey)
+	err = fs.removeFromRecycledDB(ctx, key)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error adding entry to DB")
 	}
 
 	return fs.propagate(ctx, localRestorePath)
+}
+
+func (fs *localfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	return nil, errtypes.NotSupported("list storage spaces")
+}
+
+// UpdateStorageSpace updates a storage space
+func (fs *localfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
 }
 
 func (fs *localfs) propagate(ctx context.Context, leafPath string) error {

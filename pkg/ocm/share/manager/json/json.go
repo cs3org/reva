@@ -36,16 +36,16 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/rhttp"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"google.golang.org/genproto/protobuf/field_mask"
 )
 
 const createOCMCoreShareEndpoint = "shares"
@@ -225,14 +225,14 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		userID = owner
 		g.Grantee.Opaque = &typespb.Opaque{
 			Map: map[string]*typespb.OpaqueEntry{
-				"token": &typespb.OpaqueEntry{
+				"token": {
 					Decoder: "plain",
 					Value:   []byte(token),
 				},
 			},
 		}
 	} else {
-		userID = user.ContextMustGetUser(ctx).GetId()
+		userID = ctxpkg.ContextMustGetUser(ctx).GetId()
 	}
 
 	// do not allow share to myself if share is for a user
@@ -269,7 +269,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	}
 
 	if isOwnersMeshProvider {
-		token, ok := tokenpkg.ContextGetToken(ctx)
+		token, ok := ctxpkg.ContextGetToken(ctx)
 		if !ok {
 			return nil, errors.New("Could not get token from context")
 		}
@@ -295,7 +295,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 					"name": "webdav",
 					"options": map[string]string{
 						"permissions": pm,
-						"token":       tokenpkg.ContextMustGetToken(ctx),
+						"token":       ctxpkg.ContextMustGetToken(ctx),
 					},
 				},
 			)
@@ -416,7 +416,7 @@ func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, erro
 			continue
 		}
 		if (utils.UserEqual(key.Owner, share.Owner) || utils.UserEqual(key.Owner, share.Creator)) &&
-			utils.ResourceEqual(&provider.Reference{ResourceId: key.ResourceId}, &provider.Reference{ResourceId: share.ResourceId}) && utils.GranteeEqual(key.Grantee, share.Grantee) {
+			utils.ResourceIDEqual(key.ResourceId, share.ResourceId) && utils.GranteeEqual(key.Grantee, share.Grantee) {
 			return &share, nil
 		}
 	}
@@ -438,7 +438,7 @@ func (m *mgr) get(ctx context.Context, ref *ocm.ShareReference) (s *ocm.Share, e
 	}
 
 	// check if we are the owner
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 		return s, nil
 	}
@@ -465,7 +465,7 @@ func (m *mgr) Unshare(ctx context.Context, ref *ocm.ShareReference) error {
 		return err
 	}
 
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	for id, s := range m.model.Shares {
 		var share ocm.Share
 		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
@@ -492,7 +492,7 @@ func sharesEqual(ref *ocm.ShareReference, s *ocm.Share) bool {
 		}
 	} else if ref.GetKey() != nil {
 		if (utils.UserEqual(ref.GetKey().Owner, s.Owner) || utils.UserEqual(ref.GetKey().Owner, s.Creator)) &&
-			utils.ResourceEqual(&provider.Reference{ResourceId: ref.GetKey().ResourceId}, &provider.Reference{ResourceId: s.ResourceId}) && utils.GranteeEqual(ref.GetKey().Grantee, s.Grantee) {
+			utils.ResourceIDEqual(ref.GetKey().ResourceId, s.ResourceId) && utils.GranteeEqual(ref.GetKey().Grantee, s.Grantee) {
 			return true
 		}
 	}
@@ -508,7 +508,7 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *ocm.ShareReference, p *ocm.S
 		return nil, err
 	}
 
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	for id, s := range m.model.Shares {
 		var share ocm.Share
 		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
@@ -548,7 +548,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*ocm.ListOCMSharesReques
 		return nil, err
 	}
 
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
 		var share ocm.Share
 		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
@@ -563,7 +563,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*ocm.ListOCMSharesReques
 				// TODO(labkode): add the rest of filters.
 				for _, f := range filters {
 					if f.Type == ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID {
-						if utils.ResourceEqual(&provider.Reference{ResourceId: share.ResourceId}, &provider.Reference{ResourceId: f.GetResourceId()}) {
+						if utils.ResourceIDEqual(share.ResourceId, f.GetResourceId()) {
 							ss = append(ss, &share)
 						}
 					}
@@ -584,7 +584,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 		return nil, err
 	}
 
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, s := range m.model.ReceivedShares {
 		var rs ocm.ReceivedShare
 		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &rs); err != nil {
@@ -597,14 +597,6 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 		}
 		if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, share.Grantee.GetUserId()) {
 			rss = append(rss, &rs)
-		} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-			// check if all user groups match this share; TODO(labkode): filter shares created by us.
-			for _, g := range user.Groups {
-				if g == share.Grantee.GetGroupId().OpaqueId {
-					rss = append(rss, &rs)
-					break
-				}
-			}
 		}
 	}
 	return rss, nil
@@ -623,7 +615,7 @@ func (m *mgr) getReceived(ctx context.Context, ref *ocm.ShareReference) (*ocm.Re
 		return nil, err
 	}
 
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, s := range m.model.ReceivedShares {
 		var rs ocm.ReceivedShare
 		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &rs); err != nil {
@@ -633,20 +625,14 @@ func (m *mgr) getReceived(ctx context.Context, ref *ocm.ShareReference) (*ocm.Re
 		if sharesEqual(ref, share) {
 			if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, share.Grantee.GetUserId()) {
 				return &rs, nil
-			} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-				for _, g := range user.Groups {
-					if share.Grantee.GetGroupId().OpaqueId == g {
-						return &rs, nil
-					}
-				}
 			}
 		}
 	}
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *ocm.ShareReference, f *ocm.UpdateReceivedOCMShareRequest_UpdateField) (*ocm.ReceivedShare, error) {
-	rs, err := m.getReceived(ctx, ref)
+func (m *mgr) UpdateReceivedShare(ctx context.Context, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error) {
+	rs, err := m.getReceived(ctx, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: share.Share.Id}})
 	if err != nil {
 		return nil, err
 	}
@@ -654,12 +640,21 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *ocm.ShareReference, 
 	m.Lock()
 	defer m.Unlock()
 
+	for i := range fieldMask.Paths {
+		switch fieldMask.Paths[i] {
+		case "state":
+			rs.State = share.State
+		// TODO case "mount_point":
+		default:
+			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
+		}
+	}
+
 	if err := m.model.ReadFile(); err != nil {
 		err = errors.Wrap(err, "error reading model")
 		return nil, err
 	}
 
-	rs.State = f.GetState()
 	encShare, err := utils.MarshalProtoV1ToJSON(rs)
 	if err != nil {
 		return nil, err
