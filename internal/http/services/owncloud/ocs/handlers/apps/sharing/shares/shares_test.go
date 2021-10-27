@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"strings"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -107,13 +108,22 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
+			user := &userpb.User{
+				Id: &userpb.UserId{
+					OpaqueId: "admin",
+				},
+			}
+
 			client.On("GetUserByClaim", mock.Anything, mock.Anything).Return(&userpb.GetUserByClaimResponse{
 				Status: status.NewOK(context.Background()),
-				User: &userpb.User{
-					Id: &userpb.UserId{
-						OpaqueId: "admin",
-					},
-				},
+				User:   user,
+			}, nil)
+			client.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+				Status: status.NewOK(context.Background()),
+				User:   user,
+			}, nil)
+			client.On("Authenticate", mock.Anything, mock.Anything).Return(&gateway.AuthenticateResponse{
+				Status: status.NewOK(context.Background()),
 			}, nil)
 
 			client.On("GetShare", mock.Anything, mock.Anything).Return(&collaboration.GetShareResponse{
