@@ -1071,6 +1071,8 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 		}, nil
 	}
 
+	// TODO: HELP?!?
+	req.RestoreRef.Path = strings.TrimPrefix(req.RestoreRef.Path, destinationProviderInfo[0].ProviderPath)
 	res, err := c.RestoreRecycleItem(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RestoreRecycleItem")
