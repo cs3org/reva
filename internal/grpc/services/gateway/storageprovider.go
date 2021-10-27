@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
-	"grpc.go4.org/codes"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -48,6 +47,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
 )
 
@@ -685,6 +685,9 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 	storageRes, err := c.InitiateFileUpload(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &gateway.InitiateFileUploadResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling InitiateFileUpload")
 	}
 
@@ -995,6 +998,9 @@ func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 
 	res, err := c.Delete(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.DeleteResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling Delete")
 	}
 

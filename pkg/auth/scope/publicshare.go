@@ -54,7 +54,6 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
 
 		// Editor role
-		// TODO(ishank011): Add role checks,
 		// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
 		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetRef()), nil
