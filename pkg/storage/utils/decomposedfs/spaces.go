@@ -156,7 +156,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 // The list can be filtered by space type or space id.
 // Spaces are persisted with symlinks in /spaces/<type>/<spaceid> pointing to ../../nodes/<nodeid>, the root node of the space
 // The spaceid is a concatenation of storageid + "!" + nodeid
-func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, permissions map[string]struct{}) ([]*provider.StorageSpace, error) {
 	// TODO check filters
 
 	// TODO when a space symlink is broken delete the space for cleanup
@@ -226,7 +226,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			}
 
 			// TODO apply more filters
-			space, err := fs.storageSpaceFromNode(ctx, n, matches[i], spaceType)
+			space, err := fs.storageSpaceFromNode(ctx, n, matches[i], spaceType, permissions)
 			if err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
 				continue
@@ -318,7 +318,7 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeI
 	return nil
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Node, nodePath, spaceType string) (*provider.StorageSpace, error) {
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Node, nodePath, spaceType string, permissions map[string]struct{}) (*provider.StorageSpace, error) {
 	owner, err := node.Owner()
 	if err != nil {
 		return nil, err
@@ -346,11 +346,12 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 	user := ctxpkg.ContextMustGetUser(ctx)
 
 	// filter out spaces user cannot access (currently based on stat permission)
+	_, canListAllSpaces := permissions["list-all-spaces"]
 	p, err := node.ReadUserPermissions(ctx, user)
 	if err != nil {
 		return nil, err
 	}
-	if !p.Stat {
+	if !(canListAllSpaces || p.Stat) {
 		return nil, errors.New("user is not allowed to Stat the space")
 	}
 
