@@ -403,10 +403,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 	// to the same resource. Leave the more explicit and hide the more explicit. In this case we hide the group shares
 	// and return the user share to the user.
 	filtered := make([]*collaboration.ReceivedShare, 0)
-
-	for _, s := range rss {
-		filtered = append(filtered, s)
-	}
+	filtered = append(filtered, rss...)
 
 	for i := range rss {
 		for j := range rss {

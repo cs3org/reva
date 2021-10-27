@@ -280,7 +280,6 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "machine authentication failed", nil)
 				return
 			}
-			//granteeCtx = revactx.ContextSetToken(granteeCtx, authRes.Token)
 			granteeCtx = metadata.AppendToOutgoingContext(granteeCtx, revactx.TokenHeader, authRes.Token)
 
 			lrs, ocsResponse := getSharesList(granteeCtx, client)
@@ -370,12 +369,11 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 						Message: err.Error(),
 						Error:   err,
 					}
-				} else {
-					return nil, nil, &ocsError{
-						Code:    response.MetaBadRequest.StatusCode,
-						Message: err.Error(),
-						Error:   err,
-					}
+				}
+				return nil, nil, &ocsError{
+					Code:    response.MetaBadRequest.StatusCode,
+					Message: err.Error(),
+					Error:   err,
 				}
 			}
 			role = conversions.RoleFromOCSPermissions(perm)

@@ -149,7 +149,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	}
 	defer l.Close()
 
-	userEntry, err := m.getLDAPUserById(ctx, l, uid)
+	userEntry, err := m.getLDAPUserByID(ctx, l, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -350,11 +350,14 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	}
 	defer l.Close()
 
-	userEntry, err := m.getLDAPUserById(ctx, l, uid)
+	userEntry, err := m.getLDAPUserByID(ctx, l, uid)
+	if err != nil {
+		return []string{}, err
+	}
 	return m.getLDAPUserGroups(ctx, l, userEntry)
 }
 
-func (m *manager) getLDAPUserById(ctx context.Context, conn *ldap.Conn, uid *userpb.UserId) (*ldap.Entry, error) {
+func (m *manager) getLDAPUserByID(ctx context.Context, conn *ldap.Conn, uid *userpb.UserId) (*ldap.Entry, error) {
 	log := appctx.GetLogger(ctx)
 	// Search for the given clientID, use a sizeLimit of 1 to be able
 	// to error out early when the userid is not unique

@@ -299,6 +299,7 @@ var _ = Describe("SQL manager", func() {
 					31,               // permissions,
 					0,                // accepted
 				)
+				Expect(err).ToNot(HaveOccurred())
 
 				shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
 				Expect(err).ToNot(HaveOccurred())
@@ -436,6 +437,7 @@ var _ = Describe("SQL manager", func() {
 					31,               // permissions,
 					0,                // accepted
 				)
+				Expect(err).ToNot(HaveOccurred())
 				parentRef := &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{
 					Id: &collaboration.ShareId{
 						OpaqueId: strconv.Itoa(parentID),

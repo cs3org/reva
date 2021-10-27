@@ -53,16 +53,6 @@ var _ = Describe("The ocs API", func() {
 	})
 
 	Describe("AcceptReceivedShare", func() {
-		type responseShare struct {
-			ID string `xml:"id"`
-		}
-		type listSharesData struct {
-			Shares []responseShare `xml:"element"`
-		}
-		type listSharesResponse struct {
-			Data listSharesData `xml:"data"`
-		}
-
 		var (
 			resID = &provider.ResourceId{
 				StorageId: "share1-storageid",
