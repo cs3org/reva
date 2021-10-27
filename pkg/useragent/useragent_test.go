@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package static
+package useragent
 
 import (
 	"testing"
@@ -111,7 +111,7 @@ func TestUserAgentIsAllowed(t *testing.T) {
 
 			ua := ua.Parse(tt.userAgent)
 
-			res := userAgentIsAllowed(&ua, tt.userAgents)
+			res := IsAllowed(&ua, tt.userAgents)
 
 			if res != tt.expected {
 				t.Fatalf("result does not match with expected. got=%+v expected=%+v", res, tt.expected)

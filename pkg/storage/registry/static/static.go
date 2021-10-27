@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/useragent"
-	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -113,23 +112,7 @@ func getProviderAddr(ctx context.Context, r rule) string {
 
 func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
 	providers := []*registrypb.ProviderInfo{}
-	for k, v := range b.c.Rules {
-
-		// check if the provider is allowed to be shown according to the
-		// user agent that made the request
-		// if the list of AllowedUserAgents is empty, this means that
-		// every agents that made the request could see the provider
-
-		if len(v.AllowedUserAgents) != 0 {
-			ua, ok := ctxpkg.ContextGetUserAgent(ctx)
-			if !ok {
-				continue
-			}
-			if !userAgentIsAllowed(ua, v.AllowedUserAgents) {
-				continue // skip this provider
-			}
-		}
-
+	for k, v := range rulesFilteredByUserAgent(ctx, b.c.Rules) {
 		if addr := getProviderAddr(ctx, v); addr != "" {
 			combs := generateRegexCombinations(k)
 			for _, c := range combs {
@@ -157,28 +140,22 @@ func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 	return nil, errors.New("static: home not found")
 }
 
-func userAgentIsAllowed(ua *ua.UserAgent, userAgents []string) bool {
-	for _, userAgent := range userAgents {
-		switch userAgent {
-		case "web":
-			if useragent.IsWeb(ua) {
-				return true
-			}
-		case "mobile":
-			if useragent.IsMobile(ua) {
-				return true
-			}
-		case "desktop":
-			if useragent.IsDesktop(ua) {
-				return true
-			}
-		case "grpc":
-			if useragent.IsGRPC(ua) {
-				return true
+func rulesFilteredByUserAgent(ctx context.Context, rules map[string]rule) map[string]rule {
+	filtered := make(map[string]rule)
+	for prefix, rule := range rules {
+		// check if the provider is allowed to be shown according to the
+		// user agent that made the request
+		// if the list of AllowedUserAgents is empty, this means that
+		// every agents that made the request could see the provider
+
+		if len(rule.AllowedUserAgents) != 0 {
+			if ua, ok := ctxpkg.ContextGetUserAgent(ctx); !ok || !useragent.IsAllowed(ua, rule.AllowedUserAgents) {
+				continue
 			}
 		}
+		filtered[prefix] = rule
 	}
-	return false
+	return filtered
 }
 
 func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
@@ -189,7 +166,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	// If the reference has a resource id set, use it to route
 	if ref.ResourceId != nil {
 		if ref.ResourceId.StorageId != "" {
-			for prefix, rule := range b.c.Rules {
+			for prefix, rule := range rulesFilteredByUserAgent(ctx, b.c.Rules) {
 				addr := getProviderAddr(ctx, rule)
 				r, err := regexp.Compile("^" + prefix + "$")
 				if err != nil {
@@ -215,22 +192,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	// TODO this needs to be reevaluated once all clients query the storage registry for a list of storage providers
 	fn := path.Clean(ref.GetPath())
 	if fn != "" {
-		for prefix, rule := range b.c.Rules {
-
-			// check if the provider is allowed to be shown according to the
-			// user agent that made the request
-			// if the list of AllowedUserAgents is empty, this means that
-			// every agents that made the request could see the provider
-
-			if len(rule.AllowedUserAgents) != 0 {
-				ua, ok := ctxpkg.ContextGetUserAgent(ctx)
-				if !ok {
-					continue
-				}
-				if !userAgentIsAllowed(ua, rule.AllowedUserAgents) {
-					continue // skip this provider
-				}
-			}
+		for prefix, rule := range rulesFilteredByUserAgent(ctx, b.c.Rules) {
 
 			addr := getProviderAddr(ctx, rule)
 			r, err := regexp.Compile("^" + prefix)
