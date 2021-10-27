@@ -141,15 +141,26 @@ func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 }
 
 func userAgentIsAllowed(ua *ua.UserAgent, userAgents []string) bool {
+	isWeb := ua.IsChrome() || ua.IsEdge() || ua.IsFirefox() || ua.IsSafari() ||
+		ua.IsInternetExplorer() || ua.IsOpera() || ua.IsOperaMini()
+	// workaround as the library does not recognise iOS string inside the user agent
+	isIOS := ua.IsIOS() || strings.Contains(ua.String, "iOS")
+	isMobile := !isWeb && (ua.IsAndroid() || isIOS)
+	isDesktop := ua.Desktop && !isWeb
+
 	for _, userAgent := range userAgents {
+
 		switch userAgent {
 		case "web":
-			if ua.IsChrome() || ua.IsEdge() || ua.IsFirefox() || ua.IsSafari() ||
-				ua.IsInternetExplorer() || ua.IsOpera() || ua.IsOperaMini() {
+			if isWeb {
+				return true
+			}
+		case "mobile":
+			if isMobile {
 				return true
 			}
 		case "desktop":
-			if ua.Desktop {
+			if isDesktop {
 				return true
 			}
 		case "grpc":
