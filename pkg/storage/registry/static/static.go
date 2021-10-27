@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/useragent"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -141,30 +142,22 @@ func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 }
 
 func userAgentIsAllowed(ua *ua.UserAgent, userAgents []string) bool {
-	isWeb := ua.IsChrome() || ua.IsEdge() || ua.IsFirefox() || ua.IsSafari() ||
-		ua.IsInternetExplorer() || ua.IsOpera() || ua.IsOperaMini()
-	// workaround as the library does not recognise iOS string inside the user agent
-	isIOS := ua.IsIOS() || strings.Contains(ua.String, "iOS")
-	isMobile := !isWeb && (ua.IsAndroid() || isIOS)
-	isDesktop := ua.Desktop && !isWeb
-
 	for _, userAgent := range userAgents {
-
 		switch userAgent {
 		case "web":
-			if isWeb {
+			if useragent.IsWeb(ua) {
 				return true
 			}
 		case "mobile":
-			if isMobile {
+			if useragent.IsMobile(ua) {
 				return true
 			}
 		case "desktop":
-			if isDesktop {
+			if useragent.IsDesktop(ua) {
 				return true
 			}
 		case "grpc":
-			if strings.HasPrefix(ua.Name, "grpc") {
+			if useragent.IsGRPC(ua) {
 				return true
 			}
 		}
