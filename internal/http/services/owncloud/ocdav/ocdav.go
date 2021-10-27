@@ -262,7 +262,7 @@ func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool
 		}
 
 		// If it's not a userid try if it is a user name
-		if userRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		if userRes.Status.Code != rpc.Code_CODE_OK {
 			res, err := gatewayClient.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
 				Claim: "username",
 				Value: requestUsernameOrID,
@@ -275,7 +275,7 @@ func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool
 		}
 
 		// If still didn't find a user, fallback
-		if userRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		if userRes.Status.Code != rpc.Code_CODE_OK {
 			userRes.User = &userpb.User{
 				Username: requestUsernameOrID,
 				Id:       &userpb.UserId{OpaqueId: requestUsernameOrID},
