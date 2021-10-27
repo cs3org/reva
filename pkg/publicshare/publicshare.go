@@ -30,6 +30,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 // Manager manipulates public shares.
@@ -92,4 +93,53 @@ func ResourceIDFilter(id *provider.ResourceId) *link.ListPublicSharesRequest_Fil
 			ResourceId: id,
 		},
 	}
+}
+
+// MatchesFilter tests if the share passes the filter.
+func MatchesFilter(share *link.PublicShare, filter *link.ListPublicSharesRequest_Filter) bool {
+	switch filter.Type {
+	case link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID:
+		return utils.ResourceIDEqual(share.ResourceId, filter.GetResourceId())
+	default:
+		return false
+	}
+}
+
+// MatchesAnyFilter checks if the share passes at least one of the given filters.
+func MatchesAnyFilter(share *link.PublicShare, filters []*link.ListPublicSharesRequest_Filter) bool {
+	for _, f := range filters {
+		if MatchesFilter(share, f) {
+			return true
+		}
+	}
+	return false
+}
+
+// MatchesFilters checks if the share passes the given filters.
+// Filters of the same type form a disjuntion, a logical OR. Filters of separate type form a conjunction, a logical AND.
+// Here is an example:
+// (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP)
+func MatchesFilters(share *link.PublicShare, filters []*link.ListPublicSharesRequest_Filter) bool {
+	grouped := GroupFiltersByType(filters)
+	for _, f := range grouped {
+		if !MatchesAnyFilter(share, f) {
+			return false
+		}
+	}
+	return true
+}
+
+// GroupFiltersByType groups the given filters and returns a map using the filter type as the key.
+func GroupFiltersByType(filters []*link.ListPublicSharesRequest_Filter) map[link.ListPublicSharesRequest_Filter_Type][]*link.ListPublicSharesRequest_Filter {
+	grouped := make(map[link.ListPublicSharesRequest_Filter_Type][]*link.ListPublicSharesRequest_Filter)
+	for _, f := range filters {
+		grouped[f.Type] = append(grouped[f.Type], f)
+	}
+	return grouped
+}
+
+// IsExpired tests whether a public share is expired
+func IsExpired(s *link.PublicShare) bool {
+	expiration := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos()))
+	return s.Expiration != nil && expiration.Before(time.Now())
 }
