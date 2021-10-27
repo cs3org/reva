@@ -114,6 +114,22 @@ func getProviderAddr(ctx context.Context, r rule) string {
 func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
 	providers := []*registrypb.ProviderInfo{}
 	for k, v := range b.c.Rules {
+
+		// check if the provider is allowed to be shown according to the
+		// user agent that made the request
+		// if the list of AllowedUserAgents is empty, this means that
+		// every agents that made the request could see the provider
+
+		if len(v.AllowedUserAgents) != 0 {
+			ua, ok := ctxpkg.ContextGetUserAgent(ctx)
+			if !ok {
+				continue
+			}
+			if !userAgentIsAllowed(ua, v.AllowedUserAgents) {
+				continue // skip this provider
+			}
+		}
+
 		if addr := getProviderAddr(ctx, v); addr != "" {
 			combs := generateRegexCombinations(k)
 			for _, c := range combs {
