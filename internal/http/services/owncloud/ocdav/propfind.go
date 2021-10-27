@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -550,7 +551,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// return all known properties
 
 		if md.Id != nil {
-			id := wrapResourceID(md.Id)
+			id := resourceid.OwnCloudResourceIDWrap(md.Id)
 			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("oc:id", id),
 				s.newProp("oc:fileid", id),
@@ -649,13 +650,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
 				case "fileid": // phoenix only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", wrapResourceID(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", resourceid.OwnCloudResourceIDWrap(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 					}
 				case "id": // desktop client only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", wrapResourceID(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", resourceid.OwnCloudResourceIDWrap(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
 					}

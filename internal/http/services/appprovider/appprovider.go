@@ -19,13 +19,9 @@
 package appprovider
 
 import (
-	"context"
-	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"strings"
-	"unicode/utf8"
+	"path"
 
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -33,8 +29,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
-	"github.com/cs3org/reva/internal/http/services/ocmd"
-	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -42,15 +36,11 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-)
-
-const (
-	idDelimiter string = ":"
 )
 
 func init() {
@@ -61,6 +51,7 @@ func init() {
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
+	Insecure   bool   `mapstructure:"insecure"`
 }
 
 func (c *Config) init() {
@@ -115,17 +106,17 @@ func (s *svc) Handler() http.Handler {
 			case "open":
 				s.handleOpen(w, r)
 			default:
-				ocmd.WriteError(w, r, ocmd.APIErrorServerError, "unsupported POST endpoint", nil)
+				writeError(w, r, appErrorUnimplemented, "unsupported POST endpoint", nil)
 			}
 		case "GET":
 			switch head {
 			case "list":
 				s.handleList(w, r)
 			default:
-				ocmd.WriteError(w, r, ocmd.APIErrorServerError, "unsupported GET endpoint", nil)
+				writeError(w, r, appErrorUnimplemented, "unsupported GET endpoint", nil)
 			}
 		default:
-			ocmd.WriteError(w, r, ocmd.APIErrorServerError, "unsupported method", nil)
+			writeError(w, r, appErrorUnimplemented, "unsupported method", nil)
 		}
 	})
 }
@@ -135,21 +126,81 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error getting grpc gateway client", err)
+		writeError(w, r, appErrorServerError, "error getting grpc gateway client", err)
 		return
 	}
 
 	if r.URL.Query().Get("template") != "" {
 		// TODO in the future we want to create a file out of the given template
-		ocmd.WriteError(w, r, ocmd.APIErrorInvalidParameter, "Template not implemented",
-			errtypes.NotSupported("Templates are not yet supported"))
+		writeError(w, r, appErrorUnimplemented, "template is not implemented", nil)
 		return
 	}
 
-	target := r.URL.Query().Get("filename")
-	if target == "" {
-		ocmd.WriteError(w, r, ocmd.APIErrorInvalidParameter, "Missing filename",
-			errtypes.UserRequired("Missing filename"))
+	parentContainerID := r.URL.Query().Get("parent_container_id")
+	if parentContainerID == "" {
+		writeError(w, r, appErrorInvalidParameter, "missing parent container ID", nil)
+		return
+	}
+
+	parentContainerRef := resourceid.OwnCloudResourceIDUnwrap(parentContainerID)
+	if parentContainerRef == nil {
+		writeError(w, r, appErrorInvalidParameter, "invalid parent container ID", nil)
+		return
+	}
+
+	filename := r.URL.Query().Get("filename")
+	if filename == "" {
+		writeError(w, r, appErrorInvalidParameter, "missing filename", nil)
+		return
+	}
+
+	dirPart, filePart := path.Split(filename)
+	if dirPart != "" || filePart != filename {
+		writeError(w, r, appErrorInvalidParameter, "the filename must not contain a path segment", nil)
+		return
+	}
+
+	statParentContainerReq := &provider.StatRequest{
+		Ref: &provider.Reference{
+			ResourceId: parentContainerRef,
+		},
+	}
+	parentContainer, err := client.Stat(ctx, statParentContainerReq)
+	if err != nil {
+		writeError(w, r, appErrorServerError, "error sending a grpc stat request", err)
+		return
+	}
+
+	if parentContainer.Status.Code != rpc.Code_CODE_OK {
+		writeError(w, r, appErrorNotFound, "the parent container is not accessible or does not exist", err)
+		return
+	}
+
+	if parentContainer.Info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		writeError(w, r, appErrorInvalidParameter, "the parent container id does not point to a container", nil)
+		return
+	}
+
+	fileRef := &provider.Reference{
+		ResourceId: parentContainer.Info.Id,
+		Path:       utils.MakeRelativePath(filename),
+	}
+
+	statFileReq := &provider.StatRequest{
+		Ref: fileRef,
+	}
+	statFileRes, err := client.Stat(ctx, statFileReq)
+	if err != nil {
+		writeError(w, r, appErrorServerError, "failed to stat the file", err)
+		return
+	}
+
+	if statFileRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+		if statFileRes.Status.Code == rpc.Code_CODE_OK {
+			writeError(w, r, appErrorAlreadyExists, "the file already exists", nil)
+			return
+		}
+		writeError(w, r, appErrorServerError, "statting the file returned unexpected status code", err)
 		return
 	}
 
@@ -162,7 +213,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	// Create empty file via storageprovider
 	createReq := &provider.InitiateFileUploadRequest{
-		Ref: &provider.Reference{Path: target},
+		Ref: fileRef,
 		Opaque: &typespb.Opaque{
 			Map: map[string]*typespb.OpaqueEntry{
 				"Upload-Length": {
@@ -172,13 +223,16 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	}
+
+	// having a client.CreateFile() function would come in handy here...
+
 	createRes, err := client.InitiateFileUpload(ctx, createReq)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error calling InitiateFileUpload", err)
+		writeError(w, r, appErrorServerError, "error calling InitiateFileUpload", err)
 		return
 	}
 	if createRes.Status.Code != rpc.Code_CODE_OK {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error creating resource", status.NewErrorFromCode(createRes.Status.Code, "appprovider"))
+		writeError(w, r, appErrorServerError, "error calling InitiateFileUpload", nil)
 		return
 	}
 
@@ -191,44 +245,55 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	}
 	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, ep, nil)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error executing PUT", err)
+		writeError(w, r, appErrorServerError, "failed to create the file", err)
 		return
 	}
 
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
-	httpRes, err := rhttp.GetHTTPClient().Do(httpReq)
+	httpRes, err := rhttp.GetHTTPClient(
+		rhttp.Context(ctx),
+		rhttp.Insecure(s.conf.Insecure),
+	).Do(httpReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error doing PUT request to data service")
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error executing PUT", err)
+		writeError(w, r, appErrorServerError, "failed to create the file", err)
 		return
 	}
 	defer httpRes.Body.Close()
 	if httpRes.StatusCode != http.StatusOK {
-		log.Error().Msg("PUT request to data server failed")
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error executing PUT",
-			errtypes.InternalError(fmt.Sprint(httpRes.StatusCode)))
+		writeError(w, r, appErrorServerError, "failed to create the file", nil)
 		return
 	}
 
 	// Stat the newly created file
-	statRes, ocmderr, err := statRef(ctx, provider.Reference{Path: target}, client)
+	statRes, err := client.Stat(ctx, statFileReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error statting created file")
-		ocmd.WriteError(w, r, ocmderr, "Created file not found", errtypes.NotFound("Created file not found"))
+		writeError(w, r, appErrorServerError, "statting the created file failed", err)
 		return
 	}
 
-	// Base64-encode the fileid for the web to consume it
-	b64id := base64.StdEncoding.EncodeToString([]byte(statRes.Id.StorageId + idDelimiter + statRes.Id.OpaqueId))
-	js, err := json.Marshal(map[string]interface{}{"file_id": b64id})
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		writeError(w, r, appErrorServerError, "statting the created file failed", nil)
+		return
+	}
+
+	if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
+		return
+	}
+
+	js, err := json.Marshal(
+		map[string]interface{}{
+			"file_id": resourceid.OwnCloudResourceIDWrap(statRes.Info.Id),
+		},
+	)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
+		writeError(w, r, appErrorServerError, "error marshalling JSON response", err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error writing JSON response", err)
+		writeError(w, r, appErrorServerError, "error writing JSON response", err)
 		return
 	}
 }
@@ -237,31 +302,30 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error getting grpc gateway client", err)
+		writeError(w, r, appErrorServerError, "error getting grpc gateway client", err)
 		return
 	}
 
 	listRes, err := client.ListSupportedMimeTypes(ctx, &appregistry.ListSupportedMimeTypesRequest{})
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error listing supported mime types", err)
+		writeError(w, r, appErrorServerError, "error listing supported mime types", err)
 		return
 	}
 	if listRes.Status.Code != rpc.Code_CODE_OK {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error listing supported mime types",
-			status.NewErrorFromCode(listRes.Status.Code, "appprovider"))
+		writeError(w, r, appErrorServerError, "error listing supported mime types", nil)
 		return
 	}
 
 	res := filterAppsByUserAgent(listRes.MimeTypes, r.UserAgent())
 	js, err := json.Marshal(map[string]interface{}{"mime-types": res})
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
+		writeError(w, r, appErrorServerError, "error marshalling JSON response", err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error writing JSON response", err)
+		writeError(w, r, appErrorServerError, "error writing JSON response", err)
 		return
 	}
 }
@@ -271,43 +335,83 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 
 	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "Internal error with the gateway, please try again later", err)
+		writeError(w, r, appErrorServerError, "Internal error with the gateway, please try again later", err)
 		return
 	}
 
-	info, errCode, err := s.getStatInfo(ctx, r.URL.Query().Get("file_id"), client)
+	fileID := r.URL.Query().Get("file_id")
+
+	if fileID == "" {
+		writeError(w, r, appErrorInvalidParameter, "missing file ID", nil)
+		return
+	}
+
+	resourceID := resourceid.OwnCloudResourceIDUnwrap(fileID)
+	if resourceID == nil {
+		writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
+		return
+	}
+
+	fileRef := &provider.Reference{
+		ResourceId: resourceID,
+	}
+
+	statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: fileRef})
 	if err != nil {
-		ocmd.WriteError(w, r, errCode, "Internal error accessing the file, please try again later", err)
+		writeError(w, r, appErrorServerError, "Internal error accessing the file, please try again later", err)
+		return
+	}
+
+	if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		writeError(w, r, appErrorNotFound, "file does not exist", nil)
+		return
+	} else if statRes.Status.Code != rpc.Code_CODE_OK {
+		writeError(w, r, appErrorServerError, "failed to stat the file", nil)
+		return
+	}
+
+	if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
+		return
+	}
+
+	viewMode := getViewMode(statRes.Info, r.URL.Query().Get("view_mode"))
+	if viewMode == gateway.OpenInAppRequest_VIEW_MODE_INVALID {
+		writeError(w, r, appErrorInvalidParameter, "invalid view mode", err)
 		return
 	}
 
 	openReq := gateway.OpenInAppRequest{
-		Ref:      &provider.Reference{ResourceId: info.Id},
-		ViewMode: getViewMode(info, r.URL.Query().Get("view_mode")),
+		Ref:      fileRef,
+		ViewMode: viewMode,
 		App:      r.URL.Query().Get("app_name"),
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError,
+		writeError(w, r, appErrorServerError,
 			"Error contacting the requested application, please use a different one or try again later", err)
 		return
 	}
 	if openRes.Status.Code != rpc.Code_CODE_OK {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, openRes.Status.Message,
-			status.NewErrorFromCode(openRes.Status.Code, "Error calling OpenInApp"))
+		if openRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			writeError(w, r, appErrorNotFound, openRes.Status.Message, nil)
+			return
+		}
+		writeError(w, r, appErrorServerError, openRes.Status.Message,
+			status.NewErrorFromCode(openRes.Status.Code, "error calling OpenInApp"))
 		return
 	}
 
 	js, err := json.Marshal(openRes.AppUrl)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "Internal error with JSON payload",
+		writeError(w, r, appErrorServerError, "Internal error with JSON payload",
 			errors.Wrap(err, "error marshalling JSON response"))
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "Internal error with JSON payload",
+		writeError(w, r, appErrorServerError, "Internal error with JSON payload",
 			errors.Wrap(err, "error writing JSON response"))
 		return
 	}
@@ -332,43 +436,6 @@ func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent stri
 		}
 	}
 	return res
-}
-
-func (s *svc) getStatInfo(ctx context.Context, fileID string, client gateway.GatewayAPIClient) (*provider.ResourceInfo, ocmd.APIErrorCode, error) {
-	if fileID == "" {
-		return nil, ocmd.APIErrorInvalidParameter, errors.New("fileID parameter missing in request")
-	}
-
-	decodedID, err := base64.URLEncoding.DecodeString(fileID)
-	if err != nil {
-		return nil, ocmd.APIErrorInvalidParameter, errors.Wrap(err, fmt.Sprintf("fileID %s doesn't follow the required format", fileID))
-	}
-
-	parts := strings.Split(string(decodedID), idDelimiter)
-	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
-		return nil, ocmd.APIErrorInvalidParameter, errtypes.BadRequest(fmt.Sprintf("fileID %s contains illegal characters", fileID))
-	}
-	res := &provider.ResourceId{
-		StorageId: parts[0],
-		OpaqueId:  parts[1],
-	}
-
-	return statRef(ctx, provider.Reference{ResourceId: res}, client)
-}
-
-func statRef(ctx context.Context, ref provider.Reference, client gateway.GatewayAPIClient) (*provider.ResourceInfo, ocmd.APIErrorCode, error) {
-	statReq := provider.StatRequest{Ref: &ref}
-	statRes, err := client.Stat(ctx, &statReq)
-	if err != nil {
-		return nil, ocmd.APIErrorServerError, err
-	}
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return nil, ocmd.APIErrorServerError, status.NewErrorFromCode(statRes.Status.Code, "appprovider")
-	}
-	if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-		return nil, ocmd.APIErrorServerError, errors.New("unsupported resource type")
-	}
-	return statRes.Info, ocmd.APIErrorCode(""), nil
 }
 
 func getViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {

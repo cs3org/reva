@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
@@ -126,7 +127,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	w.Header().Set(HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
 		path.Base(r.RequestURI)+"; filename=\""+path.Base(r.RequestURI)+"\"")
 	w.Header().Set(HeaderETag, info.Etag)
-	w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
+	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
 	w.Header().Set(HeaderOCETag, info.Etag)
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
