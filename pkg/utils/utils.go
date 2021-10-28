@@ -134,6 +134,14 @@ func TSToTime(ts *types.Timestamp) time.Time {
 	return time.Unix(int64(ts.Seconds), int64(ts.Nanos))
 }
 
+// LaterTS returns the timestamp which occurs later.
+func LaterTS(t1 *types.Timestamp, t2 *types.Timestamp) *types.Timestamp {
+	if TSToUnixNano(t1) > TSToUnixNano(t2) {
+		return t1
+	}
+	return t2
+}
+
 // ExtractGranteeID returns the ID, user or group, set in the GranteeId object
 func ExtractGranteeID(grantee *provider.Grantee) (*userpb.UserId, *grouppb.GroupId) {
 	switch t := grantee.Id.(type) {

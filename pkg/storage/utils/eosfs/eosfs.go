@@ -215,6 +215,7 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 
 func (fs *eosfs) userIDcacheWarmup() {
 	if !fs.conf.EnableHome {
+		time.Sleep(2 * time.Second)
 		ctx := context.Background()
 		paths := []string{fs.wrap(ctx, "/")}
 		auth, _ := fs.getRootAuth(ctx)
