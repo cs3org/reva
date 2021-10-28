@@ -1304,6 +1304,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 
 func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest, providers []*registry.ProviderInfo) (*provider.StatResponse, error) {
 	// TODO(ishank011): aggregrate properties such as etag, checksum, etc.
+	log := appctx.GetLogger(ctx)
 	info := &provider.ResourceInfo{
 		Id: &provider.ResourceId{
 			StorageId: "/",
@@ -1319,14 +1320,17 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 	for _, p := range providers {
 		c, err := s.getStorageProviderClient(ctx, p)
 		if err != nil {
-			return nil, errors.Wrap(err, "error connecting to storage provider="+p.Address)
+			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
+			continue
 		}
 		resp, err := c.Stat(ctx, req)
 		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("gateway: error calling Stat %s: %+v", req.Ref.String(), p))
+			log.Err(err).Msgf("gateway: error calling Stat %s: %+v", req.Ref.String(), p)
+			continue
 		}
-		if err != nil || resp.Status.Code != rpc.Code_CODE_OK {
-			return resp, err
+		if resp.Status.Code != rpc.Code_CODE_OK {
+			log.Err(status.NewErrorFromCode(rpc.Code_CODE_OK, "gateway"))
+			continue
 		}
 		if resp.Info != nil {
 			info.Size += resp.Info.Size
@@ -1653,18 +1657,22 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 
 func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.ListContainerRequest, providers []*registry.ProviderInfo) (*provider.ListContainerResponse, error) {
 	nestedInfos := make(map[string]*provider.ResourceInfo)
+	log := appctx.GetLogger(ctx)
 
 	for _, p := range providers {
 		c, err := s.getStorageProviderClient(ctx, p)
 		if err != nil {
-			return nil, errors.Wrap(err, "error connecting to storage provider="+p.Address)
+			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
+			continue
 		}
 		resp, err := c.ListContainer(ctx, req)
 		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("gateway: error calling ListContainer %s: %+v", req.Ref.String(), p))
+			log.Err(err).Msgf("gateway: error calling Stat %s: %+v", req.Ref.String(), p)
+			continue
 		}
-		if err != nil || resp.Status.Code != rpc.Code_CODE_OK {
-			return resp, err
+		if resp.Status.Code != rpc.Code_CODE_OK {
+			log.Err(status.NewErrorFromCode(rpc.Code_CODE_OK, "gateway"))
+			continue
 		}
 
 		for _, info := range resp.Infos {
