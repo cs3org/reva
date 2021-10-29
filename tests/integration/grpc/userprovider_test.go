@@ -246,7 +246,7 @@ var _ = Describe("user providers", func() {
 			dependencies = map[string]string{
 				"users": "userprovider-json.toml",
 			}
-			existingIdp = "localhost:20080"
+			existingIdp = "http://localhost:20080"
 		})
 
 		assertFindUsersResponses()
