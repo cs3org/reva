@@ -30,8 +30,6 @@ const (
 	PropertyMetricsPath = "metrics_path"
 	// PropertyGRPCPort identifies the gRPC port property.
 	PropertyGRPCPort = "grpc_port"
-	// PropertyEnableHealthChecks identifies the enable health checks property.
-	PropertyEnableHealthChecks = "enable_health_checks"
 	// PropertyAPIVersion identifies the API version property.
 	PropertyAPIVersion = "api_version"
 )

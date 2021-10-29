@@ -25,7 +25,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/rs/zerolog"
 
@@ -71,11 +70,6 @@ func createBlackboxSDScrapeConfig(site *meshdata.Site, host string, endpoint *me
 	// The URL of the service is used as the actual target; it must be configured properly
 	target := endpoint.URL
 	if target == "" {
-		return nil
-	}
-
-	// Check if health checks are enabled for the endpoint; if they aren't, skip this endpoint
-	if enableHealthChecks := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyEnableHealthChecks, "false"); !strings.EqualFold(enableHealthChecks, "true") {
 		return nil
 	}
 
