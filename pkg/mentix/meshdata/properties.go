@@ -25,6 +25,7 @@ const (
 	PropertySiteID = "site_id"
 	// PropertyOrganization identifies the organization property.
 	PropertyOrganization = "organization"
+
 	// PropertyMetricsPath identifies the metrics path property.
 	PropertyMetricsPath = "metrics_path"
 	// PropertyGRPCPort identifies the gRPC port property.
