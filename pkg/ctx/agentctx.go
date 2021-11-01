@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// UserAgentHeader is the header used for the user agent
 const UserAgentHeader = "x-user-agent"
 
 // ContextGetUserAgent returns the user agent if set in the given context.

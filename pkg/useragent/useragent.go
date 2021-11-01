@@ -47,6 +47,8 @@ func isGRPC(ua *ua.UserAgent) bool {
 	return strings.HasPrefix(ua.Name, "grpc")
 }
 
+// GetCategory returns the category of the user agent
+// (i.e. if it is a web, mobile, desktop or grpc user agent)
 func GetCategory(ua *ua.UserAgent) string {
 	switch {
 	case isWeb(ua):
