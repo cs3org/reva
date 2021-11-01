@@ -50,7 +50,21 @@ func NewStream() grpc.StreamServerInterceptor {
 				ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, lst[0])
 			}
 		}
-		return handler(srv, ss)
+		wrapped := newWrappedServerStream(ctx, ss)
+		return handler(srv, wrapped)
 	}
 	return interceptor
+}
+
+func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {
+	return &wrappedServerStream{ServerStream: ss, newCtx: ctx}
+}
+
+type wrappedServerStream struct {
+	grpc.ServerStream
+	newCtx context.Context
+}
+
+func (ss *wrappedServerStream) Context() context.Context {
+	return ss.newCtx
 }
