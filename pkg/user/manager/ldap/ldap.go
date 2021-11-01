@@ -359,12 +359,14 @@ func (m *manager) getLDAPUserByFilter(ctx context.Context, conn *ldap.Conn, filt
 
 	sr, err := conn.Search(searchRequest)
 	if err != nil {
+		errmsg := filter
 		if lerr, ok := err.(*ldap.Error); ok {
 			if lerr.ResultCode == ldap.LDAPResultSizeLimitExceeded {
-				log.Error().Err(lerr).Msg(fmt.Sprintf("too many results for user filter '%s'", filter))
+				errmsg = fmt.Sprintf("too many results for user filter '%s'", filter)
+				log.Error().Err(lerr).Msg(errmsg)
 			}
 		}
-		return nil, errtypes.NotFound(filter)
+		return nil, errtypes.NotFound(errmsg)
 	}
 
 	if len(sr.Entries) == 0 {
