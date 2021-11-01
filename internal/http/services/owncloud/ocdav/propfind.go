@@ -167,6 +167,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	if depth == "" {
 		depth = "1"
 	}
+	log.Error().Msgf("***** getResourceInfos depth=%s *****", depth)
 	// see https://tools.ietf.org/html/rfc4918#section-9.1
 	if depth != "0" && depth != "1" && depth != "infinity" {
 		log.Debug().Str("depth", depth).Msgf("invalid Depth header value")
@@ -261,7 +262,6 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 		res, err := client.ListContainer(ctx, req)
 		if err != nil {
-			log.Error().Err(err).Msg("error sending list container grpc request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return nil, nil, false
 		}

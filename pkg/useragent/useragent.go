@@ -47,32 +47,17 @@ func isGRPC(ua *ua.UserAgent) bool {
 	return strings.HasPrefix(ua.Name, "grpc")
 }
 
-// IsAllowed returns true if the user agent category is one in the user agents list
-func IsAllowed(ua *ua.UserAgent, userAgents []string) bool {
-	isWeb := isWeb(ua)
-	isMobile := isMobile(ua)
-	isDesktop := isDesktop(ua)
-	isGRPC := isGRPC(ua)
-
-	for _, userAgent := range userAgents {
-		switch userAgent {
-		case "web":
-			if isWeb {
-				return true
-			}
-		case "mobile":
-			if isMobile {
-				return true
-			}
-		case "desktop":
-			if isDesktop {
-				return true
-			}
-		case "grpc":
-			if isGRPC {
-				return true
-			}
-		}
+func GetCategory(ua *ua.UserAgent) string {
+	switch {
+	case isWeb(ua):
+		return "web"
+	case isMobile(ua):
+		return "mobile"
+	case isDesktop(ua):
+		return "desktop"
+	case isGRPC(ua):
+		return "grpc"
+	default:
+		return ""
 	}
-	return false
 }

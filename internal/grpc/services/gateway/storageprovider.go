@@ -35,6 +35,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -42,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
+	"github.com/cs3org/reva/pkg/useragent"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -1655,6 +1657,31 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 	return lcr, nil
 }
 
+func (s *svc) isFolderHidden(ua, path string) bool {
+	uaSet, ok := s.hiddenRootFolders[ua]
+	if !ok {
+		return false
+	}
+	_, ok = uaSet[path]
+	return ok
+}
+
+func (s *svc) filterProvidersByUserAgent(ctx context.Context, providers []*registry.ProviderInfo) []*registry.ProviderInfo {
+	ua, ok := ctxpkg.ContextGetUserAgent(ctx)
+	if !ok {
+		return providers
+	}
+	cat := useragent.GetCategory(ua)
+
+	filters := []*registry.ProviderInfo{}
+	for _, p := range providers {
+		if !s.isFolderHidden(cat, p.ProviderPath) {
+			filters = append(filters, p)
+		}
+	}
+	return filters
+}
+
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
@@ -1677,6 +1704,18 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 			return rsp, err
 		}
 		return rsp, nil
+	}
+
+	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
+	if st.Code != rpc.Code_CODE_OK {
+		return &provider.ListContainerResponse{
+			Status: st,
+		}, nil
+	}
+
+	// check if the path is the root folder
+	if path.Clean(p) == "/" {
+		providers = s.filterProvidersByUserAgent(ctx, providers)
 	}
 
 	return s.listContainerAcrossProviders(ctx, req, providers)

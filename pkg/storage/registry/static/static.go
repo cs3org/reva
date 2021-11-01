@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -44,10 +43,9 @@ func init() {
 var bracketRegex = regexp.MustCompile(`\[(.*?)\]`)
 
 type rule struct {
-	Mapping           string            `mapstructure:"mapping"`
-	Address           string            `mapstructure:"address"`
-	Aliases           map[string]string `mapstructure:"aliases"`
-	AllowedUserAgents []string          `mapstructure:"allowed_user_agents"`
+	Mapping string            `mapstructure:"mapping"`
+	Address string            `mapstructure:"address"`
+	Aliases map[string]string `mapstructure:"aliases"`
 }
 
 type config struct {
@@ -112,7 +110,7 @@ func getProviderAddr(ctx context.Context, r rule) string {
 
 func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
 	providers := []*registrypb.ProviderInfo{}
-	for k, v := range rulesFilteredByUserAgent(ctx, b.c.Rules) {
+	for k, v := range b.c.Rules {
 		if addr := getProviderAddr(ctx, v); addr != "" {
 			combs := generateRegexCombinations(k)
 			for _, c := range combs {
@@ -140,24 +138,6 @@ func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 	return nil, errors.New("static: home not found")
 }
 
-func rulesFilteredByUserAgent(ctx context.Context, rules map[string]rule) map[string]rule {
-	filtered := make(map[string]rule)
-	for prefix, rule := range rules {
-		// check if the provider is allowed to be shown according to the
-		// user agent that made the request
-		// if the list of AllowedUserAgents is empty, this means that
-		// every agents that made the request could see the provider
-
-		if len(rule.AllowedUserAgents) != 0 {
-			if ua, ok := ctxpkg.ContextGetUserAgent(ctx); !ok || !useragent.IsAllowed(ua, rule.AllowedUserAgents) {
-				continue
-			}
-		}
-		filtered[prefix] = rule
-	}
-	return filtered
-}
-
 func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
 	// find longest match
 	var match *registrypb.ProviderInfo
@@ -166,7 +146,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	// If the reference has a resource id set, use it to route
 	if ref.ResourceId != nil {
 		if ref.ResourceId.StorageId != "" {
-			for prefix, rule := range rulesFilteredByUserAgent(ctx, b.c.Rules) {
+			for prefix, rule := range b.c.Rules {
 				addr := getProviderAddr(ctx, rule)
 				r, err := regexp.Compile("^" + prefix + "$")
 				if err != nil {
@@ -192,7 +172,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	// TODO this needs to be reevaluated once all clients query the storage registry for a list of storage providers
 	fn := path.Clean(ref.GetPath())
 	if fn != "" {
-		for prefix, rule := range rulesFilteredByUserAgent(ctx, b.c.Rules) {
+		for prefix, rule := range b.c.Rules {
 
 			addr := getProviderAddr(ctx, rule)
 			r, err := regexp.Compile("^" + prefix)
