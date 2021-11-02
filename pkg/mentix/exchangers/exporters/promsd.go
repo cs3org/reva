@@ -55,6 +55,7 @@ func createMetricsSDScrapeConfig(site *meshdata.Site, host string, endpoint *mes
 			labels["__scheme__"] = url.Scheme
 		}
 	}
+
 	// If a metrics path was specified as a property, use that one by setting the corresponding label
 	if metricsPath := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyMetricsPath, ""); len(metricsPath) > 0 {
 		labels["__metrics_path__"] = metricsPath

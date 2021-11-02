@@ -200,6 +200,7 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 			endpoints = append(endpoints, &meshdata.ServiceEndpoint{
 				Type:        connector.findServiceType(meshData, endpoint.Type),
 				Name:        endpoint.Name,
+				RawURL:      endpoint.URL,
 				URL:         getServiceURLString(service, endpoint, host),
 				IsMonitored: strings.EqualFold(endpoint.IsMonitored, "Y"),
 				Properties:  connector.extensionsToMap(&endpoint.Extensions),
@@ -211,6 +212,7 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 			ServiceEndpoint: &meshdata.ServiceEndpoint{
 				Type:        connector.findServiceType(meshData, service.Type),
 				Name:        fmt.Sprintf("%v - %v", service.Host, service.Type),
+				RawURL:      service.URL,
 				URL:         getServiceURLString(service, nil, host),
 				IsMonitored: strings.EqualFold(service.IsMonitored, "Y"),
 				Properties:  connector.extensionsToMap(&service.Extensions),
