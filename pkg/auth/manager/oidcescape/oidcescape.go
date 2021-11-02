@@ -69,9 +69,6 @@ func (c *config) init() {
 	if c.IDClaim == "" {
 		c.IDClaim = "sub"
 	}
-	if c.Users == "" {
-		c.Users = "/etc/revad/iam-escape-users.json"
-	}
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -104,14 +101,14 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 	am.iamUsers = map[string]*iamUser{}
 	f, err := ioutil.ReadFile(c.Users)
 	if err != nil {
-		return fmt.Errorf("oidcescape: error reading iam users file: +%v", err)
+		return fmt.Errorf("oidcescape: error reading escape iam users file: +%v", err)
 	}
 
 	iamUsers := []*iamUser{}
 
 	err = json.Unmarshal(f, &iamUsers)
 	if err != nil {
-		return fmt.Errorf("oidcescape: error unmarshalling iam users file: +%v", err)
+		return fmt.Errorf("oidcescape: error unmarshalling escape iam users file: +%v", err)
 	}
 
 	for _, u := range iamUsers {
