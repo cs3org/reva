@@ -61,7 +61,11 @@ func (h *configHandler) init(c *Config) {
 		h.c.Provider = "cernbox"
 	}
 	h.c.Enabled = true
-	h.c.Endpoint = fmt.Sprintf("https://%s/%s", h.c.Host, c.Prefix)
+	if len(c.Prefix) > 0 {
+		h.c.Endpoint = fmt.Sprintf("https://%s/%s", h.c.Host, c.Prefix)
+	} else {
+		h.c.Endpoint = fmt.Sprintf("https://%s", h.c.Host)
+	}
 	h.c.ResourceTypes = []resourceTypes{{
 		Name:       "file",
 		ShareTypes: []string{"user"},
