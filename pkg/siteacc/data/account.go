@@ -31,21 +31,21 @@ import (
 
 // Account represents a single site account.
 type Account struct {
-	Email        string `json:"email"`
-	Title        string `json:"title"`
-	FirstName    string `json:"firstName"`
-	LastName     string `json:"lastName"`
-	Organization string `json:"organization"`
-	Website      string `json:"website"`
-	Role         string `json:"role"`
-	PhoneNumber  string `json:"phoneNumber"`
+	Email       string `json:"email"`
+	Title       string `json:"title"`
+	FirstName   string `json:"firstName"`
+	LastName    string `json:"lastName"`
+	Site        string `json:"site"`
+	Role        string `json:"role"`
+	PhoneNumber string `json:"phoneNumber"`
 
 	Password password.Password `json:"password"`
 
 	DateCreated  time.Time `json:"dateCreated"`
 	DateModified time.Time `json:"dateModified"`
 
-	Data AccountData `json:"data"`
+	Data     AccountData     `json:"data"`
+	Settings AccountSettings `json:"settings"`
 }
 
 // AccountData holds additional data for a site account.
@@ -53,6 +53,11 @@ type AccountData struct {
 	APIKey      key.APIKey `json:"apiKey"`
 	GOCDBAccess bool       `json:"gocdbAccess"`
 	Authorized  bool       `json:"authorized"`
+}
+
+// AccountSettings holds additional settings for a site account.
+type AccountSettings struct {
+	ReceiveAlerts bool `json:"receiveAlerts"`
 }
 
 // Accounts holds an array of site accounts.
@@ -69,7 +74,7 @@ func (acc *Account) GetSiteID() key.SiteIdentifier {
 
 // Update copies the data of the given account to this account.
 func (acc *Account) Update(other *Account, setPassword bool, copyData bool) error {
-	if err := other.verify(false); err != nil {
+	if err := other.verify(false, false); err != nil {
 		return errors.Wrap(err, "unable to update account data")
 	}
 
@@ -77,8 +82,6 @@ func (acc *Account) Update(other *Account, setPassword bool, copyData bool) erro
 	acc.Title = other.Title
 	acc.FirstName = other.FirstName
 	acc.LastName = other.LastName
-	acc.Organization = other.Organization
-	acc.Website = other.Website
 	acc.Role = other.Role
 	acc.PhoneNumber = other.PhoneNumber
 
@@ -92,6 +95,14 @@ func (acc *Account) Update(other *Account, setPassword bool, copyData bool) erro
 	if copyData {
 		acc.Data = other.Data
 	}
+
+	return nil
+}
+
+// Configure copies the settings of the given account to this account.
+func (acc *Account) Configure(other *Account) error {
+	// Simply copy the stored settings
+	acc.Settings = other.Settings
 
 	return nil
 }
@@ -136,13 +147,12 @@ func (acc *Account) Cleanup() {
 	acc.Title = strings.TrimSpace(acc.Title)
 	acc.FirstName = strings.TrimSpace(acc.FirstName)
 	acc.LastName = strings.TrimSpace(acc.LastName)
-	acc.Organization = strings.TrimSpace(acc.Organization)
-	acc.Website = strings.TrimSpace(acc.Website)
+	acc.Site = strings.TrimSpace(acc.Site)
 	acc.Role = strings.TrimSpace(acc.Role)
 	acc.PhoneNumber = strings.TrimSpace(acc.PhoneNumber)
 }
 
-func (acc *Account) verify(verifyPassword bool) error {
+func (acc *Account) verify(isNewAccount, verifyPassword bool) error {
 	if acc.Email == "" {
 		return errors.Errorf("no email address provided")
 	} else if !utils.IsEmailValid(acc.Email) {
@@ -161,14 +171,8 @@ func (acc *Account) verify(verifyPassword bool) error {
 		return errors.Errorf("last name contains invalid characters: %v", acc.LastName)
 	}
 
-	if acc.Organization == "" {
-		return errors.Errorf("no organization provided")
-	} else if !utils.IsValidName(acc.Organization) {
-		return errors.Errorf("organization contains invalid characters: %v", acc.Organization)
-	}
-
-	if acc.Website != "" && !utils.IsValidWebAddress(acc.Website) {
-		return errors.Errorf("invalid website provided")
+	if isNewAccount && acc.Site == "" {
+		return errors.Errorf("no site provided")
 	}
 
 	if acc.Role == "" {
@@ -191,7 +195,7 @@ func (acc *Account) verify(verifyPassword bool) error {
 }
 
 // NewAccount creates a new site account.
-func NewAccount(email string, title, firstName, lastName string, organization, website string, role string, phoneNumber string, password string) (*Account, error) {
+func NewAccount(email string, title, firstName, lastName string, site, role string, phoneNumber string, password string) (*Account, error) {
 	t := time.Now()
 
 	acc := &Account{
@@ -199,8 +203,7 @@ func NewAccount(email string, title, firstName, lastName string, organization, w
 		Title:        title,
 		FirstName:    firstName,
 		LastName:     lastName,
-		Organization: organization,
-		Website:      website,
+		Site:         site,
 		Role:         role,
 		PhoneNumber:  phoneNumber,
 		DateCreated:  t,
@@ -210,6 +213,9 @@ func NewAccount(email string, title, firstName, lastName string, organization, w
 			GOCDBAccess: false,
 			Authorized:  false,
 		},
+		Settings: AccountSettings{
+			ReceiveAlerts: false,
+		},
 	}
 
 	// Set the user password, which also makes sure that the given password is strong enough
@@ -217,7 +223,7 @@ func NewAccount(email string, title, firstName, lastName string, organization, w
 		return nil, err
 	}
 
-	if err := acc.verify(true); err != nil {
+	if err := acc.verify(true, true); err != nil {
 		return nil, err
 	}
 

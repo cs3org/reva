@@ -24,6 +24,7 @@ import (
 
 	accpanel "github.com/cs3org/reva/pkg/siteacc/account"
 	"github.com/cs3org/reva/pkg/siteacc/admin"
+	"github.com/cs3org/reva/pkg/siteacc/alerting"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/html"
 	"github.com/cs3org/reva/pkg/siteacc/manager"
@@ -40,6 +41,8 @@ type SiteAccounts struct {
 
 	accountsManager *manager.AccountsManager
 	usersManager    *manager.UsersManager
+
+	alertsDispatcher *alerting.Dispatcher
 
 	adminPanel   *admin.Panel
 	accountPanel *accpanel.Panel
@@ -76,6 +79,13 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 		return errors.Wrap(err, "error creating the users manager")
 	}
 	siteacc.usersManager = umngr
+
+	// Create the alerts dispatcher instance
+	dispatcher, err := alerting.NewDispatcher(conf, log)
+	if err != nil {
+		return errors.Wrap(err, "error creating the alerts dispatcher")
+	}
+	siteacc.alertsDispatcher = dispatcher
 
 	// Create the admin panel
 	if pnl, err := admin.NewPanel(conf, log); err == nil {
@@ -144,6 +154,11 @@ func (siteacc *SiteAccounts) UsersManager() *manager.UsersManager {
 	return siteacc.usersManager
 }
 
+// AlertsDispatcher returns the central alerts dispatcher instance.
+func (siteacc *SiteAccounts) AlertsDispatcher() *alerting.Dispatcher {
+	return siteacc.alertsDispatcher
+}
+
 // GetPublicEndpoints returns a list of all public endpoints.
 func (siteacc *SiteAccounts) GetPublicEndpoints() []string {
 	// TODO: Only for local testing!
@@ -163,7 +178,7 @@ func New(conf *config.Configuration, log *zerolog.Logger) (*SiteAccounts, error)
 	// Configure the accounts service
 	siteacc := new(SiteAccounts)
 	if err := siteacc.initialize(conf, log); err != nil {
-		return nil, fmt.Errorf("unable to initialize SiteAccounts: %v", err)
+		return nil, fmt.Errorf("unable to initialize site accounts: %v", err)
 	}
 	return siteacc, nil
 }

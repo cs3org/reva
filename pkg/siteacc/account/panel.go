@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/siteacc/account/login"
 	"github.com/cs3org/reva/pkg/siteacc/account/manage"
 	"github.com/cs3org/reva/pkg/siteacc/account/registration"
+	"github.com/cs3org/reva/pkg/siteacc/account/settings"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
@@ -39,18 +40,26 @@ import (
 type Panel struct {
 	html.PanelProvider
 
+	conf *config.Configuration
+
 	htmlPanel *html.Panel
 }
 
 const (
 	templateLogin        = "login"
 	templateManage       = "manage"
+	templateSettings     = "settings"
 	templateEdit         = "edit"
 	templateContact      = "contact"
 	templateRegistration = "register"
 )
 
 func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
+	if conf == nil {
+		return errors.Errorf("no configuration provided")
+	}
+	panel.conf = conf
+
 	// Create the internal HTML panel
 	htmlPanel, err := html.NewPanel("account-panel", panel, conf, log)
 	if err != nil {
@@ -65,6 +74,10 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 
 	if err := panel.htmlPanel.AddTemplate(templateManage, &manage.PanelTemplate{}); err != nil {
 		return errors.Wrap(err, "unable to create the account management template")
+	}
+
+	if err := panel.htmlPanel.AddTemplate(templateSettings, &settings.PanelTemplate{}); err != nil {
+		return errors.Wrap(err, "unable to create the account settings template")
 	}
 
 	if err := panel.htmlPanel.AddTemplate(templateEdit, &edit.PanelTemplate{}); err != nil {
@@ -84,7 +97,7 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 
 // GetActiveTemplate returns the name of the active template.
 func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string {
-	validPaths := []string{templateLogin, templateManage, templateEdit, templateContact, templateRegistration}
+	validPaths := []string{templateLogin, templateManage, templateSettings, templateEdit, templateContact, templateRegistration}
 	template := templateLogin
 
 	// Only allow valid template paths; redirect to the login page otherwise
@@ -100,7 +113,7 @@ func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string
 
 // PreExecute is called before the actual template is being executed.
 func (panel *Panel) PreExecute(session *html.Session, path string, w http.ResponseWriter, r *http.Request) (html.ExecutionResult, error) {
-	protectedPaths := []string{templateManage, templateEdit, templateContact}
+	protectedPaths := []string{templateManage, templateSettings, templateEdit, templateContact}
 
 	if session.LoggedInUser == nil {
 		// If no user is logged in, redirect protected paths to the login page
@@ -125,17 +138,24 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 			flatValues[strings.Title(k)] = v[0]
 		}
 
+		availSites, err := data.QueryAvailableSites(panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+		if err != nil {
+			return errors.Wrap(err, "unable to query available sites")
+		}
+
 		type TemplateData struct {
 			Account *data.Account
 			Params  map[string]string
 
 			Titles []string
+			Sites  []data.SiteInformation
 		}
 
 		return TemplateData{
 			Account: session.LoggedInUser,
 			Params:  flatValues,
 			Titles:  []string{"Mr", "Mrs", "Ms", "Prof", "Dr"},
+			Sites:   availSites,
 		}
 	}
 	return panel.htmlPanel.Execute(w, r, session, dataProvider)

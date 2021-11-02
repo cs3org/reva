@@ -89,6 +89,14 @@ func applyDefaultConfig(conf *config.Configuration) {
 		conf.Storage.Driver = "file"
 	}
 
+	if conf.Mentix.DataEndpoint == "" {
+		conf.Mentix.DataEndpoint = "/sites"
+	}
+
+	if conf.Mentix.SiteRegistrationEndpoint == "" {
+		conf.Mentix.SiteRegistrationEndpoint = "/sitereg"
+	}
+
 	// Enforce a minimum session timeout of 1 minute (and default to 5 minutes)
 	if conf.Webserver.SessionTimeout < 60 {
 		conf.Webserver.SessionTimeout = 5 * 60

@@ -87,3 +87,29 @@ const contactFormTemplate = `
 
 {{.Params.Message}}
 `
+
+const alertFiringNotificationTemplate = `
+Site {{.Params.Site}} has generated an alert:
+
+  Type:     {{.Params.Name}}
+  Instance: {{.Params.Instance}}
+  Job:      {{.Params.Job}}
+  Severity: {{.Params.Severity}}
+
+{{.Params.Description | indent 2}}
+
+{{.Params.StartDate}} ({{.Params.Fingerprint}})
+`
+
+const alertResolvedNotificationTemplate = `
+Site {{.Params.Site}} has resolved an alert:
+
+  Type:     {{.Params.Name}}
+  Instance: {{.Params.Instance}}
+  Job:      {{.Params.Job}}
+  Severity: {{.Params.Severity}}
+
+{{.Params.Description | indent 2}}
+
+{{.Params.StartDate}} - {{.Params.EndDate}} ({{.Params.Fingerprint}})
+`

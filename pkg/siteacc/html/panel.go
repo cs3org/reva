@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/pkg/siteacc/config"
+	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -147,6 +148,10 @@ func (panel *Panel) prepareTemplate(tpl *template.Template) {
 	tpl.Funcs(template.FuncMap{
 		"getServerAddress": func() string {
 			return strings.TrimRight(panel.conf.Webserver.URL, "/")
+		},
+		"getSiteName": func(siteID string, fullName bool) string {
+			siteName, _ := data.QuerySiteName(siteID, fullName, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+			return siteName
 		},
 	})
 }
