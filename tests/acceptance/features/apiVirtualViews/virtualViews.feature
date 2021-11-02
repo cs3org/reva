@@ -6,7 +6,7 @@ Feature: virtual views
 
   Background:
     Given user "einstein" deletes everything from folder "virtual/" using the WebDAV API
-    Given user "einstein" has created the following folders
+    And user "einstein" has created the following folders
       | path      |
       | virtual/a |
       | virtual/a/alice |
