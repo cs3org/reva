@@ -1334,7 +1334,14 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 		}
 		if resp.Info != nil {
 			info.Size += resp.Info.Size
-			info.Mtime = utils.LaterTS(info.Mtime, resp.Info.Mtime)
+			if utils.TSToUnixNano(resp.Info.Mtime) > utils.TSToUnixNano(info.Mtime) {
+				info.Mtime = resp.Info.Mtime
+				info.Etag = resp.Info.Etag
+				info.Checksum = resp.Info.Checksum
+			}
+			if info.Etag == "" && info.Etag != resp.Info.Etag {
+				info.Etag = resp.Info.Etag
+			}
 		}
 	}
 
@@ -1705,7 +1712,14 @@ func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.Li
 				}
 				// TODO(ishank011): aggregrate properties such as etag, checksum, etc.
 				p.Size += info.Size
-				p.Mtime = utils.LaterTS(p.Mtime, info.Mtime)
+				if utils.TSToUnixNano(info.Mtime) > utils.TSToUnixNano(p.Mtime) {
+					p.Mtime = info.Mtime
+					p.Etag = info.Etag
+					p.Checksum = info.Checksum
+				}
+				if p.Etag == "" && p.Etag != info.Etag {
+					p.Etag = info.Etag
+				}
 				p.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 				p.MimeType = "httpd/unix-directory"
 			} else {

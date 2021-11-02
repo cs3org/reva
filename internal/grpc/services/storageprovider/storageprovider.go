@@ -852,7 +852,13 @@ func (s *service) listVirtualView(ctx context.Context, ref *provider.Reference) 
 
 		if p, ok := nestedInfos[parent]; ok {
 			p.Size += info.Size
-			p.Mtime = utils.LaterTS(p.Mtime, info.Mtime)
+			if utils.TSToUnixNano(info.Mtime) > utils.TSToUnixNano(p.Mtime) {
+				p.Mtime = info.Mtime
+				p.Etag = info.Etag
+			}
+			if p.Etag == "" && p.Etag != info.Etag {
+				p.Etag = info.Etag
+			}
 		} else {
 			nestedInfos[parent] = &provider.ResourceInfo{
 				Path: parent,
@@ -862,6 +868,7 @@ func (s *service) listVirtualView(ctx context.Context, ref *provider.Reference) 
 				},
 				Size:     info.Size,
 				Mtime:    info.Mtime,
+				Etag:     info.Etag,
 				MimeType: "httpd/unix-directory",
 			}
 		}
