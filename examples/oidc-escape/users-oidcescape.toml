@@ -1,0 +1,23 @@
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+
+# This toml config file will start a reva service that:
+# - handles user metadata and user preferences
+# - serves the grpc services on port 13000
+[grpc]
+address = "0.0.0.0:13000"
+
+[grpc.services.authprovider]
+auth_manager = "oidcescape"
+[grpc.services.authprovider.auth_managers.json]
+users = "users.json"
+[grpc.services.authprovider.auth_managers.oidcescape]
+issuer = "http://iam-login-service:8080/"
+userprovidersvc = "0.0.0.0:13000"
+# The ESCAPE IAM users mapping file path
+users = "/etc/revad/iam-escape-users.json"
+
+[grpc.services.userprovider]
+driver = "json"
+[grpc.services.userprovider.drivers.json]
+users = "users.json"
