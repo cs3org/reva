@@ -527,6 +527,7 @@ def virtualViews():
           "make test-acceptance-api",
         ],
         "environment": {
+          "UPLOAD_DELETE_WAIT_TIME": "1",
           "PATH_TO_CORE": "/drone/src/tmp/testrunner",
           "TEST_SERVER_URL": "http://revad-services:20180",
           "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
