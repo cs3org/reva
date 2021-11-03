@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
-type prometheusSDScrapeCreatorCallback = func(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig
+type prometheusSDScrapeCreatorCallback = func(site *meshdata.Site, service *meshdata.Service, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig
 type prometheusSDScrapeCreator struct {
 	outputFilename  string
 	creatorCallback prometheusSDScrapeCreatorCallback
@@ -48,56 +48,42 @@ type PrometheusSDExporter struct {
 	scrapeCreators map[string]prometheusSDScrapeCreator
 }
 
-func createMetricsSDScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
-	labels := getScrapeTargetLabels(site, host, endpoint)
+const (
+	labelSiteName    = "__meta_mentix_site"
+	labelSiteType    = "__meta_mentix_site_type"
+	labelSiteID      = "__meta_mentix_site_id"
+	labelSiteCountry = "__meta_mentix_site_country"
+	labelType        = "__meta_mentix_type"
+	labelScheme      = "__meta_mentix_scheme"
+	labelHost        = "__meta_mentix_host"
+	labelPort        = "__meta_mentix_port"
+	labelPath        = "__meta_mentix_path"
+	labelServiceHost = "__meta_mentix_service_host"
+	labelServiceURL  = "__meta_mentix_service_url"
+)
 
-	// Support both HTTP and HTTPS endpoints by setting the scheme label accordingly
-	if len(endpoint.URL) > 0 {
-		if url, err := url.Parse(endpoint.URL); err == nil && (url.Scheme == "http" || url.Scheme == "https") {
-			labels["__scheme__"] = url.Scheme
-		}
-	}
-
-	// Set the metrics path from the endpoint URL
+func createGenericScrapeConfig(site *meshdata.Site, service *meshdata.Service, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
 	endpointURL, _ := url.Parse(endpoint.URL)
-	labels["__metrics_path__"] = endpointURL.Path
-
+	labels := getScrapeTargetLabels(site, service, endpoint)
 	return &prometheus.ScrapeConfig{
-		Targets: []string{host},
+		Targets: []string{endpointURL.Host},
 		Labels:  labels,
 	}
 }
-
-func createBlackboxSDScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
-	// The URL of the service is used as the actual target; it must be configured properly
-	target := endpoint.URL
-	if target == "" {
-		return nil
-	}
-
-	labels := getScrapeTargetLabels(site, host, endpoint)
-
-	// Extract the gRPC port from the (raw) endpoint URL; the URL _must_ contain the port number, even if it is the default one
-	tokens := strings.Split(endpoint.RawURL, ":")
-	if len(tokens) != 2 {
-		return nil
-	}
-	labels["__meta_mentix_grpc_port"] = tokens[1]
-
-	return &prometheus.ScrapeConfig{
-		Targets: []string{target},
-		Labels:  labels,
-	}
-}
-
-func getScrapeTargetLabels(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) map[string]string {
+func getScrapeTargetLabels(site *meshdata.Site, service *meshdata.Service, endpoint *meshdata.ServiceEndpoint) map[string]string {
+	endpointURL, _ := url.Parse(endpoint.URL)
 	labels := map[string]string{
-		"__meta_mentix_site":         site.Name,
-		"__meta_mentix_site_type":    meshdata.GetSiteTypeName(site.Type),
-		"__meta_mentix_site_id":      site.ID,
-		"__meta_mentix_host":         host,
-		"__meta_mentix_country":      site.CountryCode,
-		"__meta_mentix_service_type": endpoint.Type.Name,
+		labelSiteName:    site.Name,
+		labelSiteType:    meshdata.GetSiteTypeName(site.Type),
+		labelSiteID:      site.ID,
+		labelSiteCountry: site.CountryCode,
+		labelType:        endpoint.Type.Name,
+		labelScheme:      endpointURL.Scheme,
+		labelHost:        endpointURL.Hostname(),
+		labelPort:        endpointURL.Port(),
+		labelPath:        endpointURL.Path,
+		labelServiceHost: service.Host,
+		labelServiceURL:  service.URL,
 	}
 
 	return labels
@@ -124,11 +110,11 @@ func (exporter *PrometheusSDExporter) registerScrapeCreators(conf *config.Config
 	}
 
 	// Register all scrape creators
-	if err := registerCreator("metrics", conf.Exporters.PrometheusSD.MetricsOutputFile, createMetricsSDScrapeConfig, []string{meshdata.EndpointMetrics}); err != nil {
+	if err := registerCreator("metrics", conf.Exporters.PrometheusSD.MetricsOutputFile, createGenericScrapeConfig, []string{meshdata.EndpointMetrics}); err != nil {
 		return fmt.Errorf("unable to register the 'metrics' scrape config creator: %v", err)
 	}
 
-	if err := registerCreator("blackbox", conf.Exporters.PrometheusSD.BlackboxOutputFile, createBlackboxSDScrapeConfig, []string{meshdata.EndpointGateway}); err != nil {
+	if err := registerCreator("blackbox", conf.Exporters.PrometheusSD.BlackboxOutputFile, createGenericScrapeConfig, []string{meshdata.EndpointGateway}); err != nil {
 		return fmt.Errorf("unable to register the 'blackbox' scrape config creator: %v", err)
 	}
 
@@ -186,7 +172,7 @@ func (exporter *PrometheusSDExporter) exportMeshData() {
 
 func (exporter *PrometheusSDExporter) createScrapeConfigs(creatorCallback prometheusSDScrapeCreatorCallback, serviceFilter []string) []*prometheus.ScrapeConfig {
 	var scrapes []*prometheus.ScrapeConfig
-	var addScrape = func(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) {
+	var addScrape = func(site *meshdata.Site, service *meshdata.Service, endpoint *meshdata.ServiceEndpoint) {
 		skipScrape := len(serviceFilter) > 0
 		if skipScrape {
 			for _, filter := range serviceFilter {
@@ -198,7 +184,7 @@ func (exporter *PrometheusSDExporter) createScrapeConfigs(creatorCallback promet
 		}
 
 		if !skipScrape {
-			if scrape := creatorCallback(site, host, endpoint); scrape != nil {
+			if scrape := creatorCallback(site, service, endpoint); scrape != nil {
 				scrapes = append(scrapes, scrape)
 			}
 		}
@@ -212,12 +198,12 @@ func (exporter *PrometheusSDExporter) createScrapeConfigs(creatorCallback promet
 			}
 
 			// Add the "main" service to the scrapes
-			addScrape(site, service.Host, service.ServiceEndpoint)
+			addScrape(site, service, service.ServiceEndpoint)
 
 			// Add all additional endpoints as well
 			for _, endpoint := range service.AdditionalEndpoints {
 				if endpoint.IsMonitored {
-					addScrape(site, service.Host, endpoint)
+					addScrape(site, service, endpoint)
 				}
 			}
 		}
