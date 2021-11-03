@@ -537,6 +537,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		)
 		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
+	owner, err := s.getOwnerInfo(ctx, md.Owner)
+	if err != nil {
+		sublog.Err(err).Interface("owner", owner).Msg("error getting owner info")
+		return nil, err
+	}
 
 	propstatOK := propstatXML{
 		Status: "HTTP/1.1 200 OK",
@@ -732,13 +737,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 				case "owner-id": // phoenix only
 					if md.Owner != nil {
-						if isCurrentUserOwner(ctx, md.Owner) {
-							u := ctxpkg.ContextMustGetUser(ctx)
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", u.Username))
-						} else {
-							sublog.Debug().Msg("TODO fetch user username")
-							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
-						}
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", owner.Username))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
 					}
@@ -817,13 +816,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 				case "owner-display-name": // phoenix only
 					if md.Owner != nil {
-						if isCurrentUserOwner(ctx, md.Owner) {
-							u := ctxpkg.ContextMustGetUser(ctx)
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", u.DisplayName))
-						} else {
-							sublog.Debug().Msg("TODO fetch user displayname")
-							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-display-name", ""))
-						}
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", owner.DisplayName))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-display-name", ""))
 					}
@@ -995,6 +988,40 @@ func quoteEtag(etag string) string {
 		return `W/"` + strings.Trim(etag[2:], `"`) + `"`
 	}
 	return `"` + strings.Trim(etag, `"`) + `"`
+}
+
+func (s *svc) getOwnerInfo(ctx context.Context, owner *userv1beta1.UserId) (*userv1beta1.User, error) {
+	if isCurrentUserOwner(ctx, owner) {
+		return ctxpkg.ContextMustGetUser(ctx), nil
+	}
+
+	log := appctx.GetLogger(ctx)
+	if idIf, err := s.userIdentifierCache.Get(owner.OpaqueId); err == nil {
+		log.Debug().Msg("cache hit")
+		return idIf.(*userv1beta1.User), nil
+	}
+
+	client, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		return nil, err
+	}
+
+	res, err := client.GetUser(ctx, &userv1beta1.GetUserRequest{UserId: owner})
+	if err != nil {
+		log.Err(err).Msg("could not look up user")
+		return nil, err
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		log.Err(err).Msg("get user call failed")
+		return nil, err
+	}
+	if res.User == nil {
+		log.Debug().Msg("user not found")
+		return nil, err
+	}
+	_ = s.userIdentifierCache.Set(owner.OpaqueId, res.User)
+	return res.User, nil
 }
 
 // a file is only yours if you are the owner
