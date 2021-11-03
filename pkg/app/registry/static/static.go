@@ -227,13 +227,14 @@ func (m *manager) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.Mim
 		mime := pair.Value.(*mimeTypeConfig)
 
 		res = append(res, &registrypb.MimeTypeInfo{
-			MimeType:      mime.MimeType,
-			Ext:           mime.Extension,
-			Name:          mime.Name,
-			Description:   mime.Description,
-			Icon:          mime.Icon,
-			AppProviders:  mime.apps,
-			AllowCreation: mime.AllowCreation,
+			MimeType:           mime.MimeType,
+			Ext:                mime.Extension,
+			Name:               mime.Name,
+			Description:        mime.Description,
+			Icon:               mime.Icon,
+			AppProviders:       mime.apps,
+			AllowCreation:      mime.AllowCreation,
+			DefaultApplication: mime.DefaultApp,
 		})
 
 	}
@@ -300,10 +301,19 @@ func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType st
 	m.RLock()
 	defer m.RUnlock()
 
-	mime, ok := m.mimetypes.Get(mimeType)
+	mimeInterface, ok := m.mimetypes.Get(mimeType)
 	if ok {
-		if p, ok := m.providers[mime.(*mimeTypeConfig).DefaultApp]; ok {
+		mime := mimeInterface.(*mimeTypeConfig)
+		// default by provider address
+		if p, ok := m.providers[mime.DefaultApp]; ok {
 			return p, nil
+		}
+
+		// default by provider name
+		for _, p := range m.providers {
+			if p.Name == mime.DefaultApp {
+				return p, nil
+			}
 		}
 	}
 
