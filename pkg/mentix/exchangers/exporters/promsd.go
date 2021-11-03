@@ -25,8 +25,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/cs3org/reva/pkg/mentix/utils"
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -173,17 +173,7 @@ func (exporter *PrometheusSDExporter) exportMeshData() {
 func (exporter *PrometheusSDExporter) createScrapeConfigs(creatorCallback prometheusSDScrapeCreatorCallback, serviceFilter []string) []*prometheus.ScrapeConfig {
 	var scrapes []*prometheus.ScrapeConfig
 	var addScrape = func(site *meshdata.Site, service *meshdata.Service, endpoint *meshdata.ServiceEndpoint) {
-		skipScrape := len(serviceFilter) > 0
-		if skipScrape {
-			for _, filter := range serviceFilter {
-				if strings.EqualFold(filter, endpoint.Type.Name) {
-					skipScrape = false
-					break
-				}
-			}
-		}
-
-		if !skipScrape {
+		if len(serviceFilter) == 0 || utils.FindInStringArray(endpoint.Type.Name, serviceFilter, false) != -1 {
 			if scrape := creatorCallback(site, service, endpoint); scrape != nil {
 				scrapes = append(scrapes, scrape)
 			}

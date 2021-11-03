@@ -17,3 +17,15 @@
 // or submit itself to any jurisdiction.
 
 package utils
+
+import "strings"
+
+// FindInStringArray searches for the given string in the given string array.
+func FindInStringArray(s string, arr []string, caseSensitive bool) int {
+	for i, a := range arr {
+		if (caseSensitive && a == s) || (!caseSensitive && strings.EqualFold(a, s)) {
+			return i
+		}
+	}
+	return -1
+}

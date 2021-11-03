@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/pkg/mentix/utils"
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -241,10 +242,8 @@ func (connector *GOCDBConnector) queryDowntimes(meshData *meshdata.MeshData, sit
 		services := make([]string, 0, len(dt.AffectedServices.Services))
 		for _, service := range dt.AffectedServices.Services {
 			// Only add critical services to the list of affected services
-			for _, svcType := range connector.conf.Services.CriticalTypes {
-				if strings.EqualFold(svcType, service.Type) {
-					services = append(services, service.Type)
-				}
+			if utils.FindInStringArray(service.Type, connector.conf.Services.CriticalTypes, false) != -1 {
+				services = append(services, service.Type)
 			}
 		}
 
