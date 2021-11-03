@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
@@ -537,10 +538,12 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		)
 		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
+
+	var ownerUsername, ownerDisplayName string
 	owner, err := s.getOwnerInfo(ctx, md.Owner)
-	if err != nil {
-		sublog.Err(err).Interface("owner", owner).Msg("error getting owner info")
-		return nil, err
+	if err == nil {
+		ownerUsername = owner.Username
+		ownerDisplayName = owner.DisplayName
 	}
 
 	propstatOK := propstatXML{
@@ -736,8 +739,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:size", ""))
 					}
 				case "owner-id": // phoenix only
-					if md.Owner != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", owner.Username))
+					if ownerUsername != "" {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", ownerUsername))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
 					}
@@ -815,8 +818,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 					}
 				case "owner-display-name": // phoenix only
-					if md.Owner != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", owner.DisplayName))
+					if ownerDisplayName != "" {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", ownerDisplayName))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-display-name", ""))
 					}
@@ -991,6 +994,10 @@ func quoteEtag(etag string) string {
 }
 
 func (s *svc) getOwnerInfo(ctx context.Context, owner *userv1beta1.UserId) (*userv1beta1.User, error) {
+	if owner == nil {
+		return nil, errtypes.NotFound("owner is nil")
+	}
+
 	if isCurrentUserOwner(ctx, owner) {
 		return ctxpkg.ContextMustGetUser(ctx), nil
 	}
