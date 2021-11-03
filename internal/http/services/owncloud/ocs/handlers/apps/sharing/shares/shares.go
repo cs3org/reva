@@ -1051,10 +1051,15 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	var pinfo *provider.ResourceInfo
 	var status *rpc.Status
 	var err error
-	if pinfo, err = h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
-		logger.Debug().Msgf("cache hit for resource %+v", key)
-		status = &rpc.Status{Code: rpc.Code_CODE_OK}
-	} else {
+	var foundInCache bool
+	if h.resourceInfoCacheTTL > 0 && h.resourceInfoCache != nil {
+		if pinfo, err = h.resourceInfoCache.Get(key); err == nil {
+			logger.Debug().Msgf("cache hit for resource %+v", key)
+			status = &rpc.Status{Code: rpc.Code_CODE_OK}
+			foundInCache = true
+		}
+	}
+	if !foundInCache {
 		logger.Debug().Msgf("cache miss for resource %+v, statting", key)
 		statReq := &provider.StatRequest{
 			Ref: ref,
