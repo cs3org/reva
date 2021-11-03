@@ -55,6 +55,8 @@ home_provider = "/home"
 
 [grpc.services.storageregistry.drivers.static.rules]
 
+"/spaces" = {"address" = "localhost:11500"}
+
 # mount a home storage provider that uses a context based path wrapper
 # to jail users into their home dir
 "/home" = {"address" = "localhost:12000"}
