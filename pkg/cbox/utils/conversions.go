@@ -101,9 +101,9 @@ func ResourceTypeToItem(r provider.ResourceType) string {
 // SharePermToInt maps read/write permissions to an integer
 func SharePermToInt(p *provider.ResourcePermissions) int {
 	var perm int
-	if p.CreateContainer {
+	if p.CreateContainer || p.InitiateFileUpload {
 		perm = 15
-	} else if p.ListContainer {
+	} else if p.ListContainer || p.InitiateFileDownload {
 		perm = 1
 	}
 	// TODO map denials and resharing; currently, denials are mapped to 0
