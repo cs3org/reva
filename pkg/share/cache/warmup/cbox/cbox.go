@@ -69,7 +69,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New returns a new implementation of the storage.FS interface that connects to EOS.
+// New returns an implementation of cache warmup that connects to the cbox share db and stats resources on EOS
 func New(m map[string]interface{}) (cache.Warmup, error) {
 	c, err := parseConfig(m)
 	if err != nil {
