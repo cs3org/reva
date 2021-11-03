@@ -53,11 +53,11 @@ Feature: virtual views
       | virtual/l    |
       | virtual/z    |
 
-  Scenario: etag changes when adding a file
+  Scenario: etag changes when adding a folder
     Given user "einstein" has stored etag of element "/"
     And user "einstein" has stored etag of element "/virtual"
     And user "einstein" has stored etag of element "/virtual/b"
-    And user "einstein" has uploaded file with content "some data" to "/virtual/b/bar.txt"
+    When user "einstein" creates folder "/virtual/b/bar" using the WebDAV API
     Then these etags should have changed:
       | user     | path       |
       | einstein | /          |
