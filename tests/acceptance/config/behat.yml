@@ -2,6 +2,20 @@ default:
   autoload:
     '': '%paths.base%/../features/bootstrap'
 
+  suites:
+    apiVirtualViews:
+      paths:
+        - '%paths.base%/../features/apiVirtualViews'
+      contexts:
+        - RevaContext:
+        - FeatureContext: &common_feature_context_params
+            baseUrl:  http://localhost:20180
+            adminUsername: admin
+            adminPassword: admin
+            regularUserPassword: relativity
+            ocPath: apps/testing/api/v1/occ
+        - WebDavPropertiesContext:
+
   extensions:
     jarnaiz\JUnitFormatter\JUnitFormatterExtension:
       filename: report.xml

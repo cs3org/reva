@@ -778,7 +778,8 @@ func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 		}
 		return errors.Wrap(err, "localfs: error creating dir "+fn)
 	}
-	return nil
+
+	return fs.propagate(ctx, path.Dir(fn))
 }
 
 func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {

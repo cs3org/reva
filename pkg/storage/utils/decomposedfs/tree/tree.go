@@ -95,7 +95,7 @@ func New(root string, tta bool, tsa bool, lu PathLookup, bs Blobstore) *Tree {
 }
 
 // Setup prepares the tree structure
-func (t *Tree) Setup(owner string) error {
+func (t *Tree) Setup(owner *userpb.UserId, propagateToRoot bool) error {
 	// create data paths for internal layout
 	dataPaths := []string{
 		filepath.Join(t.root, "nodes"),
@@ -114,13 +114,17 @@ func (t *Tree) Setup(owner string) error {
 	// the root node has an empty name
 	// the root node has no parent
 	n := node.New("root", "", "", 0, "", nil, t.lookup)
-	err := t.createNode(
-		n,
-		&userpb.UserId{
-			OpaqueId: owner,
-		},
-	)
+	err := t.createNode(n, owner)
 	if err != nil {
+		return err
+	}
+
+	// set propagation flag
+	v := []byte("0")
+	if propagateToRoot {
+		v = []byte("1")
+	}
+	if err = xattr.Set(n.InternalPath(), xattrs.PropagationAttr, v); err != nil {
 		return err
 	}
 

@@ -2,7 +2,8 @@
 	{
 		"id": {
 			"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
-			"idp": "cernbox.cern.ch"
+			"idp": "https://cernbox.cern.ch",
+			"type": 1
 		},
 		"username": "einstein",
 		"secret": "relativity",
