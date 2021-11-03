@@ -30,7 +30,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share/cache"
-	"github.com/cs3org/reva/pkg/share/cache/registry"
+	"github.com/cs3org/reva/pkg/share/cache/warmup/registry"
 	"github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
