@@ -212,7 +212,7 @@ func (s *svc) Handler() http.Handler {
 		if err != nil {
 			s.log.Error().Msg(err.Error())
 			rw.WriteHeader(http.StatusBadRequest)
-			rw.Write([]byte(err.Error()))
+			_, _ = rw.Write([]byte(err.Error()))
 			return
 		}
 
@@ -223,7 +223,7 @@ func (s *svc) Handler() http.Handler {
 		if err != nil {
 			s.log.Error().Msg(err.Error())
 			rw.WriteHeader(http.StatusInternalServerError)
-			rw.Write([]byte(err.Error()))
+			_, _ = rw.Write([]byte(err.Error()))
 			return
 		}
 
