@@ -57,9 +57,10 @@ type Configuration struct {
 		} `mapstructure:"webapi"`
 
 		CS3API struct {
-			Endpoint          string   `mapstructure:"endpoint"`
-			EnabledConnectors []string `mapstructure:"enabled_connectors"`
-			IsProtected       bool     `mapstructure:"is_protected"`
+			Endpoint             string   `mapstructure:"endpoint"`
+			EnabledConnectors    []string `mapstructure:"enabled_connectors"`
+			IsProtected          bool     `mapstructure:"is_protected"`
+			ElevatedServiceTypes []string `mapstructure:"elevated_service_types"`
 		} `mapstructure:"cs3api"`
 
 		SiteLocations struct {
