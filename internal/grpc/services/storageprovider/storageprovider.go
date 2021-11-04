@@ -637,6 +637,10 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		if utils.IsAbsolutePathReference(req.Ref) && strings.HasPrefix(s.mountPath, req.Ref.Path) {
 			return s.statVirtualView(ctx, req.Ref)
 		}
+
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "error statting: "+req.Ref.String()),
+		}, nil
 	}
 
 	md, err := s.storage.GetMD(ctx, newRef, req.ArbitraryMetadataKeys)

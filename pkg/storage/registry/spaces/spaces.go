@@ -20,17 +20,22 @@ package spaces
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"regexp"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rstatus "github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	pkgregistry "github.com/cs3org/reva/pkg/storage/registry/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -87,34 +92,54 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 		return nil, err
 	}
 	c.init()
-	return &registry{c: c}, nil
+	return &registry{c: c, spaces: make(map[string]*spaceAndProvider), aliases: make(map[string]map[string]*spaceAndProvider)}, nil
+}
+
+type spaceAndProvider struct {
+	*provider.StorageSpace
+	providers []*registrypb.ProviderInfo
 }
 
 type registry struct {
 	c *config
+	// a map of all space ids to spaces
+	spaces  map[string]*spaceAndProvider
+	aliases map[string]map[string]*spaceAndProvider
 }
 
+// ListProviders lists all storage spaces, which is *very* different from the static provider, which lists provider ids
 func (r *registry) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
 	// after init we have a list of storage provider addresses
-	// 1. lazily fetch all storage spaces by directly calling the provider
+	// 1. lazily fetch all storage spaces the current user can access by directly calling the provider
 	providers := []*registrypb.ProviderInfo{}
 	for _, rule := range r.c.Rules {
 		c, err := pool.GetStorageProviderServiceClient(rule.Address)
 		if err != nil {
-			return nil, err
+			appctx.GetLogger(ctx).Warn().Err(err).Str("maping", rule.Mapping).Str("addr", rule.Address).Msg("GetStorageProviderServiceClient failed, continuing")
+			continue
 		}
-		lSSRes, err := c.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{})
+		// TODO add filter to only query spaces the current user has access to? or leave permissions to the gateway?
+		lSSRes, err := c.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{ /*Filters: []*provider.ListStorageSpacesRequest_Filter{
+				&provider.ListStorageSpacesRequest_Filter{
+					Type: provider.ListStorageSpacesRequest_Filter_TYPE_ACCESS, ?
+				},
+			}*/})
 		if err != nil {
-			return nil, err
+			appctx.GetLogger(ctx).Warn().Err(err).Msg("ListStorageSpaces failed, continuing")
+			continue
 		}
 		if lSSRes.Status.Code != rpc.Code_CODE_OK {
-			return nil, rstatus.NewErrorFromCode(lSSRes.Status.Code, "spaces registry")
+			appctx.GetLogger(ctx).Debug().Interface("status", lSSRes.Status).Msg("ListStorageSpaces was not OK, continuing")
+			continue
 		}
 		for _, space := range lSSRes.StorageSpaces {
-			providers = append(providers, &registrypb.ProviderInfo{
-				ProviderPath: filepath.Join(space.SpaceType, space.Name),
+			pi := &registrypb.ProviderInfo{
+				ProviderId:   space.Id.OpaqueId,
+				ProviderPath: filepath.Join("/", space.SpaceType, space.Name), // TODO do we need to guarantee these are unique?
 				Address:      rule.Address,
-			})
+			}
+			providers = append(providers, pi)
+			r.spaces[space.Id.OpaqueId] = &spaceAndProvider{space, []*registrypb.ProviderInfo{pi}}
 		}
 	}
 	return providers, nil
@@ -122,9 +147,166 @@ func (r *registry) ListProviders(ctx context.Context) ([]*registrypb.ProviderInf
 
 // returns the the root path of the first provider in the list.
 func (r *registry) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method not implemented")
+	if rule, ok := r.c.Rules[r.c.HomeProvider]; ok {
+		return &registrypb.ProviderInfo{
+			ProviderPath: r.c.HomeProvider,
+			Address:      rule.Address,
+		}, nil
+	}
+	return nil, errors.New("static: home not found")
 }
 
 func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
+	if utils.IsRelativeReference(ref) {
+		// check if the spaceid is known
+		if spaceAndAddr, ok := r.spaces[ref.ResourceId.StorageId]; ok {
+			// best case, just return cached provider
+			return spaceAndAddr.providers, nil
+		}
+
+		for _, rule := range r.c.Rules {
+			p := &registrypb.ProviderInfo{
+				Address: rule.Address,
+			}
+			space, err := r.findStorageSpaceOnProvider(ctx, p, ref.ResourceId.StorageId)
+			if err == nil {
+				p.ProviderId = space.Id.OpaqueId
+				path, err := r.findNameForRoot(ctx, p, space.Root)
+				if err != nil {
+					return nil, err
+				}
+				p.ProviderPath = filepath.Join("/", space.SpaceType, filepath.Base(path))
+				// cache result, TODO only for 30sec?
+				r.spaces[ref.ResourceId.StorageId] = &spaceAndProvider{
+					space, []*registrypb.ProviderInfo{p},
+				}
+				// TODO continue iterating to collect all providers that have access
+				return []*registrypb.ProviderInfo{p}, nil
+			}
+		}
+	}
+	if utils.IsAbsolutePathReference(ref) {
+		u := ctxpkg.ContextMustGetUser(ctx)
+		// check if the alias is known for this user
+		spaceType, rest := router.ShiftPath(ref.Path)
+		spaceName, _ := router.ShiftPath(rest)
+		alias := filepath.Join("/", spaceType, spaceName)
+		if _, ok := r.aliases[u.Id.OpaqueId]; !ok {
+			r.aliases[u.Id.OpaqueId] = make(map[string]*spaceAndProvider)
+		}
+		if spaceAndAddr, ok := r.aliases[u.Id.OpaqueId][alias]; ok {
+			// best case, just return cached provider
+			return spaceAndAddr.providers, nil
+		}
+
+		// TODO  instead of replacing home with personal to reduce the amount of storage spaces returned by a storage provider
+		// we should add a filter that allows storage providers to only return storage spaces the current user has access to
+		if spaceType == "home" {
+			spaceType = "personal"
+		}
+
+		for _, rule := range r.c.Rules {
+			p := &registrypb.ProviderInfo{
+				Address: rule.Address,
+			}
+			spaces, err := r.findStorageSpaceOnProviderByType(ctx, p, spaceType) // TODO filter by access, not type
+			if err == nil {
+				for _, space := range spaces {
+					p := &registrypb.ProviderInfo{
+						ProviderId: space.Id.OpaqueId,
+						Address:    rule.Address,
+					}
+					path, err := r.findNameForRoot(ctx, p, space.Root)
+					if err != nil {
+						return nil, err
+					}
+					// assume a personal storage where the current user is owner is his /home
+					if space.SpaceType == "personal" && space.Owner != nil && utils.UserEqual(space.Owner.Id, u.Id) {
+						p.ProviderPath = "/home"
+					} else {
+						p.ProviderPath = filepath.Join("/", space.SpaceType, filepath.Base(path))
+					}
+					// cache result, TODO only for 30sec?
+					//if _, ok := r.aliases[u.Id.OpaqueId][p.ProviderPath]; !ok {
+					r.aliases[u.Id.OpaqueId][p.ProviderPath] = &spaceAndProvider{
+						space, []*registrypb.ProviderInfo{p},
+					}
+					/*} /*else {
+						// add an additional storage provider, eg for load balancing
+						r.aliases[u.Id.OpaqueId][p.ProviderPath].providers = append(r.aliases[u.Id.OpaqueId][p.ProviderPath].providers, p)
+					}*/
+				}
+
+				if spaceAndAddr, ok := r.aliases[u.Id.OpaqueId][alias]; ok {
+					return spaceAndAddr.providers, nil
+				}
+			}
+		}
+		// TODO return not found
+	}
+	// find path in kv map
 	return nil, status.Errorf(codes.Unimplemented, "method not implemented")
+}
+
+func (r *registry) findStorageSpaceOnProvider(ctx context.Context, p *registrypb.ProviderInfo, spaceid string) (*provider.StorageSpace, error) {
+	c, err := pool.GetStorageProviderServiceClient(p.Address)
+	if err != nil {
+		return nil, err
+	}
+	req := &provider.ListStorageSpacesRequest{
+		Filters: []*provider.ListStorageSpacesRequest_Filter{{
+			Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
+			Term: &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: spaceid}},
+		}},
+	}
+
+	res, err := c.ListStorageSpaces(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, rstatus.NewErrorFromCode(res.Status.Code, "spaces registry")
+	}
+	return res.StorageSpaces[0], nil
+}
+
+func (r *registry) findStorageSpaceOnProviderByType(ctx context.Context, p *registrypb.ProviderInfo, spacetype string) ([]*provider.StorageSpace, error) {
+	c, err := pool.GetStorageProviderServiceClient(p.Address)
+	if err != nil {
+		return nil, err
+	}
+	req := &provider.ListStorageSpacesRequest{
+		Filters: []*provider.ListStorageSpacesRequest_Filter{{
+			Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+			Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{SpaceType: spacetype},
+		}},
+	}
+
+	res, err := c.ListStorageSpaces(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, rstatus.NewErrorFromCode(res.Status.Code, "spaces registry")
+	}
+	return res.StorageSpaces, nil
+}
+
+func (r *registry) findNameForRoot(ctx context.Context, p *registrypb.ProviderInfo, root *provider.ResourceId) (string, error) {
+	c, err := pool.GetStorageProviderServiceClient(p.Address)
+	if err != nil {
+		return "", err
+	}
+
+	req := &provider.StatRequest{
+		Ref: &provider.Reference{ResourceId: root},
+	}
+	res, err := c.Stat(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return "", rstatus.NewErrorFromCode(res.Status.Code, "spaces registry")
+	}
+	return res.Info.Path, nil
 }

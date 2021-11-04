@@ -35,6 +35,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -80,22 +81,63 @@ func (s *svc) sign(_ context.Context, target string) (string, error) {
 func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
 	log := appctx.GetLogger(ctx)
 
-	home := s.getHome(ctx)
-	c, err := s.findByPath(ctx, home)
+	// ask registry for home provider
+	storageRegistryClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
+	}
+	gHRes, err := storageRegistryClient.GetHome(ctx, &registry.GetHomeRequest{})
+	if err != nil {
+		log.Err(err).Msg("gateway: error getting home from storage registry")
 		return &provider.CreateHomeResponse{
-			Status: status.NewStatusFromErrType(ctx, "error finding home", err),
+			Status: status.NewInternal(ctx, err, "error calling CreateHome"),
+		}, nil
+	}
+	if gHRes.Status.Code != rpc.Code_CODE_OK {
+		return &provider.CreateHomeResponse{
+			Status: gHRes.Status,
 		}, nil
 	}
 
-	res, err := c.CreateHome(ctx, req)
+	storageProviderClient, err := s.getStorageProviderClient(ctx, gHRes.Provider)
+	if err != nil {
+		log.Err(err).Msg("gateway: error getting storage provider cllient")
+		return &provider.CreateHomeResponse{
+			Status: status.NewInternal(ctx, err, "error calling CreateHome"),
+		}, nil
+	}
+
+	u := ctxpkg.ContextMustGetUser(ctx)
+	res, err := storageProviderClient.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
+		Type:  "personal",
+		Owner: u,
+		Name:  u.DisplayName,
+	})
+	if err != nil {
+		log.Err(err).Msg("gateway: error creating personal storage space")
+		return &provider.CreateHomeResponse{
+			Status: status.NewInternal(ctx, err, "error calling CreateHome"),
+		}, nil
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return &provider.CreateHomeResponse{
+			Status: res.Status,
+		}, nil
+	}
+
+	/* TODO faill back to old CreateHome
+
+	res, err := storageProviderClient.CreateHome(ctx, req)
 	if err != nil {
 		log.Err(err).Msg("gateway: error creating home on storage provider")
 		return &provider.CreateHomeResponse{
 			Status: status.NewInternal(ctx, err, "error calling CreateHome"),
 		}, nil
 	}
-	return res, nil
+	*/
+	return &provider.CreateHomeResponse{
+		Status: res.Status,
+	}, nil
 }
 
 func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
@@ -138,17 +180,20 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 	if id != nil {
 		// query that specific storage provider
-		storageid, opaqeid, err := utils.SplitStorageSpaceID(id.OpaqueId)
+		/*storageid, opaqeid, err := utils.SplitStorageSpaceID(id.OpaqueId)
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{
 				Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
 			}, nil
 		}
+		*/
+
+		// TODO This actually returns spaces when using the space registry
 		res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
 			Ref: &provider.Reference{ResourceId: &provider.ResourceId{
-				StorageId: storageid,
-				OpaqueId:  opaqeid,
-			}},
+				StorageId: id.OpaqueId,
+			},
+			/*Path: "./"*/},
 		})
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{
@@ -163,6 +208,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		providers = res.Providers
 	} else {
 		// get list of all storage providers
+		// TODO This actually returns spaces when using the space registry
 		res, err := c.ListStorageProviders(ctx, &registry.ListStorageProvidersRequest{})
 
 		if err != nil {
@@ -303,6 +349,9 @@ func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provide
 }
 
 func (s *svc) getHome(_ context.Context) string {
+	//u := ctxpkg.ContextMustGetUser(ctx)
+	//return filepath.Join("/personal", u.Id.OpaqueId)
+	// TODO use user layout
 	// TODO(labkode): issue #601, /home will be hardcoded.
 	return "/home"
 }

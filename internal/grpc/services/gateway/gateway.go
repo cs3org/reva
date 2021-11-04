@@ -69,6 +69,8 @@ type config struct {
 	HomeMapping         string                            `mapstructure:"home_mapping"`
 	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
 	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
+	// TODO use user layout for GetHome / personal space ?
+	// UserLayout          string                            `mapstructure:"user_layout" docs:"{{.Username}};Template for user home directories"`
 }
 
 // sets defaults
