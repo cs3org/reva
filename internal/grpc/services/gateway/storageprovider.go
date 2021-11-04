@@ -33,7 +33,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	"github.com/gogo/protobuf/types"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -722,7 +722,7 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 		Path:     req.Ref.GetPath(),
 		MimeType: "httpd/unix-directory",
 		Size:     0,
-		Mtime:    &types.Timestamp{},
+		Mtime:    &typesv1beta1.Timestamp{},
 	}
 
 	for _, p := range providers {
