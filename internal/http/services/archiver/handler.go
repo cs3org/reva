@@ -31,6 +31,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
+	"regexp"
+
 	"github.com/cs3org/reva/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -52,17 +54,20 @@ type svc struct {
 	log        *zerolog.Logger
 	walker     walker.Walker
 	downloader downloader.Downloader
+
+	allowedFolders []*regexp.Regexp
 }
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix      string `mapstructure:"prefix"`
-	GatewaySvc  string `mapstructure:"gatewaysvc"`
-	Timeout     int64  `mapstructure:"timeout"`
-	Insecure    bool   `mapstructure:"insecure"`
-	Name        string `mapstructure:"name"`
-	MaxNumFiles int64  `mapstructure:"max_num_files"`
-	MaxSize     int64  `mapstructure:"max_size"`
+	Prefix         string   `mapstructure:"prefix"`
+	GatewaySvc     string   `mapstructure:"gatewaysvc"`
+	Timeout        int64    `mapstructure:"timeout"`
+	Insecure       bool     `mapstructure:"insecure"`
+	Name           string   `mapstructure:"name"`
+	MaxNumFiles    int64    `mapstructure:"max_num_files"`
+	MaxSize        int64    `mapstructure:"max_size"`
+	AllowedFolders []string `mapstructure:"allowed_folders"`
 }
 
 func init() {
@@ -84,12 +89,23 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 		return nil, err
 	}
 
+	// compile all the regex for filtering folders
+	allowedFolderRegex := make([]*regexp.Regexp, 0, len(c.AllowedFolders))
+	for _, s := range c.AllowedFolders {
+		regex, err := regexp.Compile(s)
+		if err != nil {
+			return nil, err
+		}
+		allowedFolderRegex = append(allowedFolderRegex, regex)
+	}
+
 	return &svc{
-		config:     c,
-		gtwClient:  gtw,
-		downloader: downloader.NewDownloader(gtw, rhttp.Insecure(c.Insecure), rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second)))),
-		walker:     walker.NewWalker(gtw),
-		log:        log,
+		config:         c,
+		gtwClient:      gtw,
+		downloader:     downloader.NewDownloader(gtw, rhttp.Insecure(c.Insecure), rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second)))),
+		walker:         walker.NewWalker(gtw),
+		log:            log,
+		allowedFolders: allowedFolderRegex,
 	}, nil
 }
 
@@ -110,7 +126,7 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 		return nil, errtypes.BadRequest("file and id lists are both empty")
 	}
 
-	f := []string{}
+	f := make([]string, 0, len(files)+len(ids))
 
 	for _, id := range ids {
 		// id is base64 encoded and after decoding has the form <storage_id>:<resource_id>
@@ -142,7 +158,39 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 
 	}
 
-	return append(f, files...), nil
+	total := append(f, files...)
+
+	// check if all the folders are allowed to be archived
+	err := s.allAllowed(total)
+	if err != nil {
+		return nil, err
+	}
+
+	return total, nil
+}
+
+// return true if path match with at least with one allowed folder regex
+func (s *svc) isPathAllowed(path string) bool {
+	for _, reg := range s.allowedFolders {
+		if reg.MatchString(path) {
+			return true
+		}
+	}
+	return false
+}
+
+// return nil if all the paths in the slide match with at least one allowed folder regex
+func (s *svc) allAllowed(paths []string) error {
+	if len(s.allowedFolders) == 0 {
+		return nil
+	}
+
+	for _, f := range paths {
+		if !s.isPathAllowed(f) {
+			return errtypes.BadRequest(fmt.Sprintf("resource at %s not allowed to be archived", f))
+		}
+	}
+	return nil
 }
 
 func (s *svc) Handler() http.Handler {
