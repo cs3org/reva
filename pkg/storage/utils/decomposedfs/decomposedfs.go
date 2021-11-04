@@ -32,6 +32,7 @@ import (
 	"strings"
 	"syscall"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -59,7 +60,7 @@ type PermissionsChecker interface {
 
 // Tree is used to manage a tree hierarchy
 type Tree interface {
-	Setup(owner string) error
+	Setup(owner *userpb.UserId, propagateToRoot bool) error
 
 	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
 	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
@@ -103,10 +104,19 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 	return New(o, lu, p, tp)
 }
 
+// when enable home is false we want propagation to root if tree size or mtime accounting is enabled
+func enablePropagationForRoot(o *options.Options) bool {
+	return (!o.EnableHome && (o.TreeSizeAccounting || o.TreeTimeAccounting))
+}
+
 // New returns an implementation of the storage.FS interface that talks to
 // a local filesystem.
 func New(o *options.Options, lu *Lookup, p PermissionsChecker, tp Tree) (storage.FS, error) {
-	err := tp.Setup(o.Owner)
+	err := tp.Setup(&userpb.UserId{
+		OpaqueId: o.Owner,
+		Idp:      o.OwnerIDP,
+		Type:     userpb.UserType(userpb.UserType_value[o.OwnerType]),
+	}, enablePropagationForRoot(o))
 	if err != nil {
 		logger.New().Error().Err(err).
 			Msg("could not setup tree")

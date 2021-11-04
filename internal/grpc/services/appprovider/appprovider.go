@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/juliangruber/go-intersect"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
@@ -53,6 +54,7 @@ type config struct {
 	Drivers        map[string]map[string]interface{} `mapstructure:"drivers"`
 	AppProviderURL string                            `mapstructure:"app_provider_url"`
 	GatewaySvc     string                            `mapstructure:"gatewaysvc"`
+	MimeTypes      []string                          `mapstructure:"mime_types"`
 }
 
 func (c *config) init() {
@@ -105,6 +107,15 @@ func (s *service) registerProvider() {
 		return
 	}
 	pInfo.Address = s.conf.AppProviderURL
+
+	if len(s.conf.MimeTypes) != 0 {
+		mimeTypesIf := intersect.Simple(pInfo.MimeTypes, s.conf.MimeTypes)
+		var mimeTypes []string
+		for _, m := range mimeTypesIf.([]interface{}) {
+			mimeTypes = append(mimeTypes, m.(string))
+		}
+		pInfo.MimeTypes = mimeTypes
+	}
 
 	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
 	if err != nil {
