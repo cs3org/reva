@@ -539,13 +539,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
 
-	var ownerUsername, ownerDisplayName string
-	owner, err := s.getOwnerInfo(ctx, md.Owner)
-	if err == nil {
-		ownerUsername = owner.Username
-		ownerDisplayName = owner.DisplayName
-	}
-
 	propstatOK := propstatXML{
 		Status: "HTTP/1.1 200 OK",
 		Prop:   []*propertyXML{},
@@ -650,6 +643,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
 		// otherwise return only the requested properties
+		var ownerUsername, ownerDisplayName string
+		owner, err := s.getOwnerInfo(ctx, md.Owner)
+		if err == nil {
+			ownerUsername = owner.Username
+			ownerDisplayName = owner.DisplayName
+		}
+
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
 			case _nsOwncloud:
