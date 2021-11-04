@@ -549,7 +549,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// if target exists create new version
 	if fi, err = os.Stat(targetPath); err == nil {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := upload.fs.lu.InternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath := upload.fs.lu.InternalPath(n.ID+".REV."+fi.ModTime().UTC().Format(time.RFC3339Nano), "", "")
 
 		if err = os.Rename(targetPath, versionsPath); err != nil {
 			sublog.Err(err).
@@ -600,7 +600,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(upload.fs.lu.InternalPath(n.ParentID), n.Name)
+	childNameLink := filepath.Join(upload.fs.lu.InternalPath(n.ParentID, "", ""), n.Name)
 	var link string
 	link, err = os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {

@@ -83,7 +83,7 @@ type PathLookup interface {
 	HomeOrRootNode(ctx context.Context) (node *Node, err error)
 
 	InternalRoot() string
-	InternalPath(ID string) string
+	InternalPath(ID string, spaceType string, spaceID string) string
 	Path(ctx context.Context, n *Node) (path string, err error)
 	ShareFolder() string
 }
@@ -218,7 +218,7 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	}
 
 	// Check if parent exists. Otherwise this node is part of a deleted subtree
-	_, err = os.Stat(lu.InternalPath(n.ParentID))
+	_, err = os.Stat(lu.InternalPath(n.ParentID, "", ""))
 	if err != nil {
 		if isNotFound(err) {
 			return nil, errtypes.NotFound(err.Error())
@@ -281,7 +281,7 @@ func (n *Node) Parent() (p *Node, err error) {
 		SpaceRoot: n.SpaceRoot,
 	}
 
-	parentPath := n.lu.InternalPath(n.ParentID)
+	parentPath := n.lu.InternalPath(n.ParentID, "", "")
 
 	// lookup parent id in extended attributes
 	var attrBytes []byte
@@ -379,7 +379,7 @@ func (n *Node) PermissionSet(ctx context.Context) provider.ResourcePermissions {
 
 // InternalPath returns the internal path of the Node
 func (n *Node) InternalPath() string {
-	return n.lu.InternalPath(n.ID)
+	return n.lu.InternalPath(n.ID, "", "")
 }
 
 // CalculateEtag returns a hash of fileid + tmtime (or mtime)
@@ -407,7 +407,7 @@ func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
 func (n *Node) SetMtime(ctx context.Context, mtime string) error {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 	if mt, err := parseMTime(mtime); err == nil {
-		nodePath := n.lu.InternalPath(n.ID)
+		nodePath := n.InternalPath()
 		// updating mtime also updates atime
 		if err := os.Chtimes(nodePath, mt, mt); err != nil {
 			sublog.Error().Err(err).
@@ -427,7 +427,7 @@ func (n *Node) SetMtime(ctx context.Context, mtime string) error {
 // SetEtag sets the temporary etag of a node if it differs from the current etag
 func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
-	nodePath := n.lu.InternalPath(n.ID)
+	nodePath := n.lu.InternalPath(n.ID, "", "")
 	var tmTime time.Time
 	if tmTime, err = n.GetTMTime(); err != nil {
 		// no tmtime, use mtime
@@ -472,7 +472,7 @@ func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 // obviously this only is secure when the u/s/g/a namespaces are not accessible by users in the filesystem
 // public tags can be mapped to extended attributes
 func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
-	nodePath := n.lu.InternalPath(n.ID)
+	nodePath := n.lu.InternalPath(n.ID, "", "")
 	// the favorite flag is specific to the user, so we need to incorporate the userid
 	fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
 	return xattr.Set(nodePath, fa, []byte(val))
@@ -483,7 +483,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 
 	var fn string
-	nodePath := n.lu.InternalPath(n.ID)
+	nodePath := n.InternalPath()
 
 	var fi os.FileInfo
 
@@ -740,7 +740,7 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 
 // HasPropagation checks if the propagation attribute exists and is set to "1"
 func (n *Node) HasPropagation() (propagation bool) {
-	if b, err := xattr.Get(n.lu.InternalPath(n.ID), xattrs.PropagationAttr); err == nil {
+	if b, err := xattr.Get(n.InternalPath(), xattrs.PropagationAttr); err == nil {
 		return string(b) == "1"
 	}
 	return false
@@ -749,7 +749,7 @@ func (n *Node) HasPropagation() (propagation bool) {
 // GetTMTime reads the tmtime from the extended attributes
 func (n *Node) GetTMTime() (tmTime time.Time, err error) {
 	var b []byte
-	if b, err = xattr.Get(n.lu.InternalPath(n.ID), xattrs.TreeMTimeAttr); err != nil {
+	if b, err = xattr.Get(n.InternalPath(), xattrs.TreeMTimeAttr); err != nil {
 		return
 	}
 	return time.Parse(time.RFC3339Nano, string(b))
@@ -757,7 +757,7 @@ func (n *Node) GetTMTime() (tmTime time.Time, err error) {
 
 // SetTMTime writes the tmtime to the extended attributes
 func (n *Node) SetTMTime(t time.Time) (err error) {
-	return xattr.Set(n.lu.InternalPath(n.ID), xattrs.TreeMTimeAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
+	return xattr.Set(n.InternalPath(), xattrs.TreeMTimeAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
 }
 
 // GetTreeSize reads the treesize from the extended attributes
@@ -776,12 +776,12 @@ func (n *Node) SetTreeSize(ts uint64) (err error) {
 
 // SetChecksum writes the checksum with the given checksum type to the extended attributes
 func (n *Node) SetChecksum(csType string, h hash.Hash) (err error) {
-	return xattr.Set(n.lu.InternalPath(n.ID), xattrs.ChecksumPrefix+csType, h.Sum(nil))
+	return xattr.Set(n.InternalPath(), xattrs.ChecksumPrefix+csType, h.Sum(nil))
 }
 
 // UnsetTempEtag removes the temporary etag attribute
 func (n *Node) UnsetTempEtag() (err error) {
-	if err = xattr.Remove(n.lu.InternalPath(n.ID), xattrs.TmpEtagAttr); err != nil {
+	if err = xattr.Remove(n.InternalPath(), xattrs.TmpEtagAttr); err != nil {
 		if e, ok := err.(*xattr.Error); ok && (e.Err.Error() == "no data available" ||
 			// darwin
 			e.Err.Error() == "attribute not found") {

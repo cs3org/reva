@@ -122,7 +122,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
-	contentPath := fs.lu.InternalPath(revisionKey)
+	contentPath := fs.lu.InternalPath(revisionKey, "", "")
 
 	r, err := os.Open(contentPath)
 	if err != nil {
@@ -166,11 +166,11 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	// move current version to new revision
-	nodePath := fs.lu.InternalPath(kp[0])
+	nodePath := fs.lu.InternalPath(kp[0], "", "")
 	var fi os.FileInfo
 	if fi, err = os.Stat(nodePath); err == nil {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := fs.lu.InternalPath(kp[0] + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath := fs.lu.InternalPath(kp[0]+".REV."+fi.ModTime().UTC().Format(time.RFC3339Nano), "", "")
 
 		err = os.Rename(nodePath, versionsPath)
 		if err != nil {
@@ -179,7 +179,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 		// copy old revision to current location
 
-		revisionPath := fs.lu.InternalPath(revisionKey)
+		revisionPath := fs.lu.InternalPath(revisionKey, "", "")
 		var revision, destination *os.File
 		revision, err = os.Open(revisionPath)
 		if err != nil {

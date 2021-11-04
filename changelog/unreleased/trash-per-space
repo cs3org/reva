@@ -1,0 +1,6 @@
+Change: Trashcan per space
+
+Before there was one trashcan per user, which is obviously not working with project spaces.
+This also includes storing "nodes" within the specific space when using decomposedfs
+
+https://github.com/cs3org/reva/pull/????

@@ -64,7 +64,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	np := fs.lu.InternalPath(node.ID)
+	np := fs.lu.InternalPath(node.ID, "", "")
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
 	if err := xattr.Set(np, xattrs.GrantPrefix+principal, value); err != nil {
@@ -104,7 +104,7 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 	}
 
 	log := appctx.GetLogger(ctx)
-	np := fs.lu.InternalPath(node.ID)
+	np := node.InternalPath()
 	var attrs []string
 	if attrs, err = xattr.List(np); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
@@ -151,7 +151,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		attr = xattrs.GrantPrefix + xattrs.UserAcePrefix + g.Grantee.GetUserId().OpaqueId
 	}
 
-	np := fs.lu.InternalPath(node.ID)
+	np := node.InternalPath()
 	if err = xattr.Remove(np, attr); err != nil {
 		return
 	}

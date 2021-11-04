@@ -65,7 +65,7 @@ type PathLookup interface {
 	HomeOrRootNode(ctx context.Context) (node *node.Node, err error)
 
 	InternalRoot() string
-	InternalPath(ID string) string
+	InternalPath(ID string, spaceType string, spaceID string) string
 	Path(ctx context.Context, n *node.Node) (path string, err error)
 	ShareFolder() string
 }
@@ -98,7 +98,6 @@ func New(root string, tta bool, tsa bool, lu PathLookup, bs Blobstore) *Tree {
 func (t *Tree) Setup(owner string) error {
 	// create data paths for internal layout
 	dataPaths := []string{
-		filepath.Join(t.root, "nodes"),
 		// notes contain symlinks from nodes/<u-u-i-d>/uploads/<uploadid> to ../../uploads/<uploadid>
 		// better to keep uploads on a fast / volatile storage before a workflow finally moves them to the nodes dir
 		filepath.Join(t.root, "uploads"),
@@ -113,7 +112,7 @@ func (t *Tree) Setup(owner string) error {
 
 	// the root node has an empty name
 	// the root node has no parent
-	n := node.New("root", "", "", 0, "", nil, t.lookup)
+	n := node.New("default", "", "", 0, "", nil, t.lookup)
 	err := t.createNode(
 		n,
 		&userpb.UserId{
@@ -137,7 +136,7 @@ func (t *Tree) Setup(owner string) error {
 			return err
 		}
 
-		f, err := os.Open(filepath.Join(t.root, "nodes"))
+		f, err := os.Open(filepath.Join(t.root, "spaces"))
 		if err != nil {
 			return err
 		}
@@ -147,7 +146,7 @@ func (t *Tree) Setup(owner string) error {
 		}
 
 		for i := range nodes {
-			nodePath := filepath.Join(t.root, "nodes", nodes[i].Name())
+			nodePath := filepath.Join(t.root, "spaces", nodes[i].Name())
 
 			// is it a user root? -> create personal space
 			if isRootNode(nodePath) {
@@ -172,7 +171,7 @@ func (t *Tree) Setup(owner string) error {
 // linkSpace creates a new symbolic link for a space with the given type st, and node id
 func (t *Tree) linkSpace(spaceType, spaceID, nodeID string) {
 	spacesPath := filepath.Join(t.root, "spaces", spaceType, spaceID)
-	expectedTarget := "../../nodes/" + nodeID
+	expectedTarget := "../../spaces/" + nodeID
 	linkTarget, err := os.Readlink(spacesPath)
 	if errors.Is(err, os.ErrNotExist) {
 		err = os.Symlink(expectedTarget, spacesPath)
@@ -259,7 +258,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 	}
 
 	// make child appear in listings
-	err = os.Symlink("../"+n.ID, filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name))
+	err = os.Symlink("../"+n.ID, filepath.Join(t.lookup.InternalPath(n.ParentID, "", ""), n.Name))
 	if err != nil {
 		return
 	}
@@ -284,7 +283,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	// are we just renaming (parent stays the same)?
 	if oldNode.ParentID == newNode.ParentID {
 
-		parentPath := t.lookup.InternalPath(oldNode.ParentID)
+		parentPath := t.lookup.InternalPath(oldNode.ParentID, "", "")
 
 		// rename child
 		err = os.Rename(
@@ -308,8 +307,8 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 
 	// rename child
 	err = os.Rename(
-		filepath.Join(t.lookup.InternalPath(oldNode.ParentID), oldNode.Name),
-		filepath.Join(t.lookup.InternalPath(newNode.ParentID), newNode.Name),
+		filepath.Join(t.lookup.InternalPath(oldNode.ParentID, "", ""), oldNode.Name),
+		filepath.Join(t.lookup.InternalPath(newNode.ParentID, "", ""), newNode.Name),
 	)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not move child")
@@ -377,7 +376,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	deletingSharedResource := ctx.Value(appctx.DeletingSharedResource)
 
 	if deletingSharedResource != nil && deletingSharedResource.(bool) {
-		src := filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name)
+		src := filepath.Join(t.lookup.InternalPath(n.ParentID, "", ""), n.Name)
 		return os.Remove(src)
 	}
 	// Prepare the trash
@@ -413,7 +412,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	// first make node appear in the owners (or root) trash
 	// parent id and name are stored as extended attributes in the node itself
 	trashLink := filepath.Join(t.root, "trash", o.OpaqueId, n.ID)
-	err = os.Symlink("../../nodes/"+n.ID+".T."+deletionTime, trashLink)
+	err = os.Symlink("../../spaces/"+n.ID+".T."+deletionTime, trashLink)
 	if err != nil {
 		// To roll back changes
 		// TODO unset trashOriginAttr
@@ -433,7 +432,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	}
 
 	// finally remove the entry from the parent dir
-	src := filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name)
+	src := filepath.Join(t.lookup.InternalPath(n.ParentID, "", ""), n.Name)
 	err = os.Remove(src)
 	if err != nil {
 		// To roll back changes
@@ -480,7 +479,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 		}
 
 		// add the entry for the parent dir
-		err = os.Symlink("../"+rn.ID, filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name))
+		err = os.Symlink("../"+rn.ID, filepath.Join(t.lookup.InternalPath(n.ParentID, "", ""), n.Name))
 		if err != nil {
 			return err
 		}
@@ -799,7 +798,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 	}
 
 	var attrBytes []byte
-	deletedNodePath = t.lookup.InternalPath(filepath.Base(link))
+	deletedNodePath = t.lookup.InternalPath(filepath.Base(link), "", "")
 
 	owner := &userpb.UserId{}
 	// lookup ownerId in extended attributes
@@ -854,7 +853,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
 			return
 		}
-		deletedNodeRootPath = t.lookup.InternalPath(filepath.Base(rootLink))
+		deletedNodeRootPath = t.lookup.InternalPath(filepath.Base(rootLink), "", "")
 	}
 	// lookup origin path in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodeRootPath, xattrs.TrashOriginAttr); err == nil {

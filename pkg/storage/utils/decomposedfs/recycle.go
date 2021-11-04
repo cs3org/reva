@@ -123,7 +123,7 @@ func (fs *Decomposedfs) createTrashItem(ctx context.Context, parentNode, interme
 		return nil, errors.New("malformed trash link")
 	}
 
-	nodePath := fs.lu.InternalPath(filepath.Base(trashnode))
+	nodePath := fs.lu.InternalPath(filepath.Base(trashnode), "", "")
 	md, err := os.Stat(nodePath)
 	if err != nil {
 		log.Error().Err(err).Str("trashRoot", trashRoot).Str("trashnode", trashnode).Msg("could not stat trash item, skipping")
@@ -145,7 +145,7 @@ func (fs *Decomposedfs) createTrashItem(ctx context.Context, parentNode, interme
 	}
 
 	// lookup origin path in extended attributes
-	parentPath := fs.lu.InternalPath(filepath.Base(parentNode))
+	parentPath := fs.lu.InternalPath(filepath.Base(parentNode), "", "")
 	if attrBytes, err := xattr.Get(parentPath, xattrs.TrashOriginAttr); err == nil {
 		item.Ref = &provider.Reference{Path: filepath.Join(string(attrBytes), intermediatePath, filepath.Base(itemPath))}
 	} else {
@@ -205,7 +205,7 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context) ([]*provider.RecycleI
 			continue
 		}
 
-		nodePath := fs.lu.InternalPath(filepath.Base(trashnode))
+		nodePath := fs.lu.InternalPath(filepath.Base(trashnode), "", "")
 		md, err := os.Stat(nodePath)
 		if err != nil {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("trashnode", trashnode). /*.Interface("parts", parts)*/ Msg("could not stat trash item, skipping")

@@ -138,7 +138,7 @@ func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) 
 
 // RootNode returns the root node of the storage
 func (lu *Lookup) RootNode(ctx context.Context) (*node.Node, error) {
-	n := node.New("root", "", "", 0, "", nil, lu)
+	n := node.New("default", "", "", 0, "", nil, lu)
 	n.Exists = true
 	return n, nil
 }
@@ -212,8 +212,10 @@ func (lu *Lookup) InternalRoot() string {
 }
 
 // InternalPath returns the internal path for a given ID
-func (lu *Lookup) InternalPath(id string) string {
-	return filepath.Join(lu.Options.Root, "nodes", id)
+func (lu *Lookup) InternalPath(id string, spaceType string, spaceID string) string {
+	fp := filepath.Join(lu.Options.Root, "spaces", spaceType, spaceID, id)
+	return fp
+
 }
 
 func (lu *Lookup) mustGetUserLayout(ctx context.Context) string {

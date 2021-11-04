@@ -305,7 +305,7 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeI
 	}
 
 	// we can reuse the node id as the space id
-	err := os.Symlink("../../nodes/"+nodeID, filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
+	err := os.Symlink("../../spaces/"+nodeID, filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
 	if err != nil {
 		if isAlreadyExists(err) {
 			appctx.GetLogger(ctx).Debug().Err(err).Str("node", nodeID).Str("spacetype", spaceType).Msg("symlink already exists")
