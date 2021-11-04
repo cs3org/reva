@@ -932,7 +932,30 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	}
 
 	if path.Clean(p) == s.getHome(ctx) {
-		return s.listHome(ctx, req)
+		res, err := s.listHome(ctx, req)
+		if err != nil {
+			return &provider.ListContainerResponse{
+				Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), err),
+			}, nil
+		}
+
+		// Inject mountpoints if they do not exist on disk
+		embeddedMounts := s.findEmbeddedMounts(path.Clean(req.Ref.GetPath()))
+		for _, mount := range embeddedMounts {
+			for _, info := range res.Infos {
+				if info.Path == mount { // hmm this makes existing folders hide a mount, right?
+					continue
+				}
+			}
+			childStatRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: mount}})
+			if err != nil {
+				return &provider.ListContainerResponse{
+					Status: status.NewStatusFromErrType(ctx, "ListContainer ref: "+req.Ref.String(), err),
+				}, nil
+			}
+			res.Infos = append(res.Infos, childStatRes.Info)
+		}
+		return res, nil
 	}
 
 	return s.listContainer(ctx, req)
