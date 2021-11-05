@@ -186,15 +186,15 @@ func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) (
 		}
 	}
 	if utils.IsAbsolutePathReference(ref) {
-		u := ctxpkg.ContextMustGetUser(ctx)
+		currentUser := ctxpkg.ContextMustGetUser(ctx)
 		// check if the alias is known for this user
 		spaceType, rest := router.ShiftPath(ref.Path)
 		spaceName, _ := router.ShiftPath(rest)
 		alias := filepath.Join("/", spaceType, spaceName)
-		if _, ok := r.aliases[u.Id.OpaqueId]; !ok {
-			r.aliases[u.Id.OpaqueId] = make(map[string]*spaceAndProvider)
+		if _, ok := r.aliases[currentUser.Id.OpaqueId]; !ok {
+			r.aliases[currentUser.Id.OpaqueId] = make(map[string]*spaceAndProvider)
 		}
-		if spaceAndAddr, ok := r.aliases[u.Id.OpaqueId][alias]; ok {
+		if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
 			// best case, just return cached provider
 			return spaceAndAddr.providers, nil
 		}
@@ -221,23 +221,23 @@ func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) (
 						return nil, err
 					}
 					// assume a personal storage where the current user is owner is his /home
-					if space.SpaceType == "personal" && space.Owner != nil && utils.UserEqual(space.Owner.Id, u.Id) {
+					if space.SpaceType == "personal" && space.Owner != nil && utils.UserEqual(space.Owner.Id, currentUser.Id) {
 						p.ProviderPath = "/home"
 					} else {
 						p.ProviderPath = filepath.Join("/", space.SpaceType, filepath.Base(path))
 					}
 					// cache result, TODO only for 30sec?
-					//if _, ok := r.aliases[u.Id.OpaqueId][p.ProviderPath]; !ok {
-					r.aliases[u.Id.OpaqueId][p.ProviderPath] = &spaceAndProvider{
+					//if _, ok := r.aliases[currentUser.Id.OpaqueId][p.ProviderPath]; !ok {
+					r.aliases[currentUser.Id.OpaqueId][p.ProviderPath] = &spaceAndProvider{
 						space, []*registrypb.ProviderInfo{p},
 					}
 					/*} /*else {
 						// add an additional storage provider, eg for load balancing
-						r.aliases[u.Id.OpaqueId][p.ProviderPath].providers = append(r.aliases[u.Id.OpaqueId][p.ProviderPath].providers, p)
+						r.aliases[currentUser.Id.OpaqueId][p.ProviderPath].providers = append(r.aliases[currentUser.Id.OpaqueId][p.ProviderPath].providers, p)
 					}*/
 				}
 
-				if spaceAndAddr, ok := r.aliases[u.Id.OpaqueId][alias]; ok {
+				if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
 					return spaceAndAddr.providers, nil
 				}
 			}

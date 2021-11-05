@@ -437,8 +437,24 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 // CreateStorageSpace creates a storage space
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	resp, err := s.storage.CreateStorageSpace(ctx, req)
+
 	if err != nil {
-		return nil, err
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "not found when listing spaces")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.NotSupported:
+			st = status.NewUnimplemented(ctx, err, "not implemented")
+		case errtypes.AlreadyExists:
+			st = status.NewAlreadyExists(ctx, err, "already exists")
+		default:
+			st = status.NewInternal(ctx, err, "error listing spaces")
+		}
+		return &provider.CreateStorageSpaceResponse{
+			Status: st,
+		}, nil
 	}
 
 	resp.StorageSpace.Root = &provider.ResourceId{StorageId: s.mountID, OpaqueId: resp.StorageSpace.Id.OpaqueId}

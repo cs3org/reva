@@ -34,6 +34,7 @@ import (
 	ocsconv "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
@@ -57,6 +58,11 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 
 	// "everything is a resource" this is the unique ID for the Space resource.
 	spaceID := uuid.New().String()
+	// TODO clarify if we want to enforce a single personal storage space or if we want to allow sending the spaceid
+	// TODO enforce a uuid?
+	if req.Type == "personal" {
+		spaceID = req.Owner.Id.OpaqueId
+	}
 
 	n, err := r.Child(ctx, spaceID)
 	if err != nil {
@@ -64,7 +70,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	}
 
 	if n.Exists {
-		return nil, fmt.Errorf("decomposedfs: spaces: invalid duplicated node with id `%s`", n.ID)
+		return nil, errtypes.AlreadyExists("decomposedfs: spaces: space already exists")
 	}
 
 	if err := fs.tp.CreateDir(ctx, n); err != nil {
@@ -92,7 +98,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	}
 
-	err = fs.createStorageSpace(ctx, req.Type, n.ID)
+	err = fs.createStorageSpace(ctx, req.Type, spaceID, n.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -298,20 +304,20 @@ func (fs *Decomposedfs) createHiddenSpaceFolder(ctx context.Context, r *node.Nod
 	return fs.tp.CreateDir(ctx, hiddenSpace)
 }
 
-func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeID string) error {
+func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, spaceID, rootID string) error {
 	// create space type dir
 	if err := os.MkdirAll(filepath.Join(fs.o.Root, "spaces", spaceType), 0700); err != nil {
 		return err
 	}
 
 	// we can reuse the node id as the space id
-	err := os.Symlink("../../nodes/"+nodeID, filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
+	err := os.Symlink("../../nodes/"+rootID, filepath.Join(fs.o.Root, "spaces", spaceType, spaceID))
 	if err != nil {
 		if isAlreadyExists(err) {
-			appctx.GetLogger(ctx).Debug().Err(err).Str("node", nodeID).Str("spacetype", spaceType).Msg("symlink already exists")
+			appctx.GetLogger(ctx).Debug().Err(err).Str("space", spaceID).Str("node", rootID).Str("spacetype", spaceType).Msg("symlink already exists")
 		} else {
 			// TODO how should we handle error cases here?
-			appctx.GetLogger(ctx).Error().Err(err).Str("node", nodeID).Str("spacetype", spaceType).Msg("could not create symlink")
+			appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("node", rootID).Str("spacetype", spaceType).Msg("could not create symlink")
 		}
 	}
 

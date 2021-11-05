@@ -42,7 +42,6 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/storage/utils/etag"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -109,7 +108,8 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 
 	u := ctxpkg.ContextMustGetUser(ctx)
 	res, err := storageProviderClient.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
-		Type:  "personal",
+		Type: "personal",
+		// TODO sendt Id = u.Id.Opaqueid
 		Owner: u,
 		Name:  u.DisplayName,
 	})
@@ -119,7 +119,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 			Status: status.NewInternal(ctx, err, "error calling CreateHome"),
 		}, nil
 	}
-	if res.Status.Code != rpc.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK && res.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
 		return &provider.CreateHomeResponse{
 			Status: res.Status,
 		}, nil
@@ -1247,80 +1247,6 @@ func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
 		}, nil
 	}
 
-	statSharedFolder, err := s.statSharesFolder(ctx)
-	if err != nil {
-		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
-		}, nil
-	}
-	if statSharedFolder.Status.Code != rpc.Code_CODE_OK {
-		// If shares folder is not found, skip updating the etag
-		if statSharedFolder.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			return statRes, nil
-		}
-		// otherwise return stat of share folder
-		return &provider.StatResponse{
-			Status: statSharedFolder.Status,
-		}, nil
-	}
-
-	if etagIface, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
-		resMtime := utils.TSToTime(statRes.Info.Mtime)
-		resEtag := etagIface.(etagWithTS)
-		// Use the updated etag if the home folder has been modified
-		if resMtime.Before(resEtag.Timestamp) {
-			statRes.Info.Etag = resEtag.Etag
-		}
-	} else {
-		statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, []*provider.ResourceInfo{statSharedFolder.Info})
-		if s.c.EtagCacheTTL > 0 {
-			_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, etagWithTS{statRes.Info.Etag, time.Now()})
-		}
-	}
-
-	return statRes, nil
-}
-
-func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, error) {
-	statRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: s.getSharedFolder(ctx)}})
-	if err != nil {
-		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
-		}, nil
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return &provider.StatResponse{
-			Status: statRes.Status,
-		}, nil
-	}
-
-	lsRes, err := s.listSharesFolder(ctx)
-	if err != nil {
-		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error listing shares folder"),
-		}, nil
-	}
-	if lsRes.Status.Code != rpc.Code_CODE_OK {
-		return &provider.StatResponse{
-			Status: lsRes.Status,
-		}, nil
-	}
-
-	if etagIface, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
-		resMtime := utils.TSToTime(statRes.Info.Mtime)
-		resEtag := etagIface.(etagWithTS)
-		// Use the updated etag if the shares folder has been modified, i.e., a new
-		// reference has been created.
-		if resMtime.Before(resEtag.Timestamp) {
-			statRes.Info.Etag = resEtag.Etag
-		}
-	} else {
-		statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, lsRes.Infos)
-		if s.c.EtagCacheTTL > 0 {
-			_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, etagWithTS{statRes.Info.Etag, time.Now()})
-		}
-	}
 	return statRes, nil
 }
 
@@ -1427,10 +1353,6 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 
 	if path.Clean(p) == s.getHome(ctx) {
 		return s.statHome(ctx)
-	}
-
-	if s.isSharedFolder(ctx, p) {
-		return s.statSharesFolder(ctx)
 	}
 
 	if !s.inSharedFolder(ctx, p) {
@@ -1641,24 +1563,6 @@ func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) 
 		return &provider.ListContainerResponse{
 			Status: lcr.Status,
 		}, nil
-	}
-
-	for i := range lcr.Infos {
-		if s.isSharedFolder(ctx, lcr.Infos[i].GetPath()) {
-			statSharedFolder, err := s.statSharesFolder(ctx)
-			if err != nil {
-				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
-				}, nil
-			}
-			if statSharedFolder.Status.Code != rpc.Code_CODE_OK {
-				return &provider.ListContainerResponse{
-					Status: statSharedFolder.Status,
-				}, nil
-			}
-			lcr.Infos[i] = statSharedFolder.Info
-			break
-		}
 	}
 
 	return lcr, nil
@@ -1994,16 +1898,19 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 
 // /home/MyShares/
 func (s *svc) isSharedFolder(ctx context.Context, p string) bool {
+	return false
 	return s.split(ctx, p, 2)
 }
 
 // /home/MyShares/photos/
 func (s *svc) isShareName(ctx context.Context, p string) bool {
+	return false
 	return s.split(ctx, p, 3)
 }
 
 // /home/MyShares/photos/Ibiza/beach.png
 func (s *svc) isShareChild(ctx context.Context, p string) bool {
+	return false
 	return s.split(ctx, p, 4)
 }
 

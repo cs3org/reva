@@ -52,7 +52,7 @@ bearer = "localhost:20099" # started with the frontend.toml
 driver = "spaces"
 
 [grpc.services.storageregistry.drivers.spaces]
-home_provider = "/personal"
+home_provider = "/home"
 
 [grpc.services.storageregistry.drivers.spaces.rules]
 
@@ -60,11 +60,11 @@ home_provider = "/personal"
 
 # mount a home storage provider that uses a context based path wrapper
 # to jail users into their home dir
-#"/home" = {"address" = "localhost:12000"}
+"/home" = {"address" = "localhost:12000"}
 
 # mount a storage provider without a path wrapper for direct access to users.
-"/personal" = {"address" = "localhost:11000"}
-"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:11000"}
+#"/personal" = {"address" = "localhost:11000"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:12000"}
 
 # the /virtual namespace is only accessible via the frontend-global service
 #"/virtual/[a-k]" = {"address" = "localhost:11100"}
