@@ -65,6 +65,7 @@ const (
 // Handler implements the shares part of the ownCloud sharing API
 type Handler struct {
 	gatewayAddr            string
+	storageRegistryAddr    string
 	publicURL              string
 	sharePrefix            string
 	homeNamespace          string
@@ -91,6 +92,7 @@ func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
+	h.storageRegistryAddr = c.StorageregistrySvc
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
@@ -122,6 +124,20 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 	}
 }
 
+func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) {
+	var ref provider.Reference
+	if p := r.FormValue("path"); p != "" {
+		ref = provider.Reference{Path: path.Join(h.homeNamespace, p)}
+	} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
+		var err error
+		ref, err = utils.ParseStorageSpaceReference(spaceRef)
+		if err != nil {
+			return provider.Reference{}, err
+		}
+	}
+	return ref, nil
+}
+
 // CreateShare handles POST requests on /apps/files_sharing/api/v1/shares
 func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -138,14 +154,17 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// prefix the path with the owners home, because ocs share requests are relative to the home dir
-	fn := path.Join(h.homeNamespace, r.FormValue("path"))
-
-	statReq := provider.StatRequest{
-		Ref: &provider.Reference{Path: fn},
+	ref, err := h.extractReference(r)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "could not parse the reference", fmt.Errorf("could not parse the reference"))
+		return
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	statReq := provider.StatRequest{
+		Ref: &ref,
+	}
+
+	sublog := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
 
 	statRes, err := client.Stat(ctx, &statReq)
 	if err != nil {
@@ -185,6 +204,10 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		// federated shares default to read only
 		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
 			h.createFederatedCloudShare(w, r, statRes.Info, role, val)
+		}
+	case int(conversions.ShareTypeSpaceMembership):
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+			h.addSpaceMember(w, r, statRes.Info, role, val)
 		}
 	default:
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "unknown share type", nil)
