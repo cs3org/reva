@@ -50,7 +50,9 @@ type Options struct {
 	TreeSizeAccounting bool `mapstructure:"treesize_accounting"`
 
 	// set an owner for the root node
-	Owner string `mapstructure:"owner"`
+	Owner     string `mapstructure:"owner"`
+	OwnerIDP  string `mapstructure:"owner_idp"`
+	OwnerType string `mapstructure:"owner_type"`
 }
 
 // New returns a new Options instance for the given configuration

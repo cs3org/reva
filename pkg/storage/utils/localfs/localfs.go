@@ -778,7 +778,8 @@ func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 		}
 		return errors.Wrap(err, "localfs: error creating dir "+fn)
 	}
-	return nil
+
+	return fs.propagate(ctx, path.Dir(fn))
 }
 
 func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
@@ -1260,7 +1261,7 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, basePath, key, relati
 	return fs.propagate(ctx, localRestorePath)
 }
 
-func (fs *localfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+func (fs *localfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, _ map[string]struct{}) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
