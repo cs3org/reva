@@ -32,6 +32,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -99,6 +100,7 @@ type Config struct {
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
+	SharesNamespace string `mapstructure:"shares_namespace"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
 	Timeout         int64  `mapstructure:"timeout"`
 	Insecure        bool   `mapstructure:"insecure"`
@@ -235,7 +237,7 @@ func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(s.c.GatewaySvc)
 }
 
-func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {
+func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) (string, string, error) {
 	// If useLoggedInUserNS is false, that implies that the request is coming from
 	// the FilesHandler method invoked by a /dav/files/fileOwner where fileOwner
 	// is not the same as the logged in user. In that case, we'll treat fileOwner
@@ -243,12 +245,47 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 	// namespace template.
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok || !useLoggedInUserNS {
-		requestUserID, _ := router.ShiftPath(requestPath)
-		u = &userpb.User{
-			Username: requestUserID,
+		var requestUsernameOrID string
+		requestUsernameOrID, requestPath = router.ShiftPath(requestPath)
+
+		gatewayClient, err := s.getClient()
+		if err != nil {
+			return "", "", err
 		}
+
+		// Check if this is a Userid
+		userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: &userpb.UserId{OpaqueId: requestUsernameOrID},
+		})
+		if err != nil {
+			return "", "", err
+		}
+
+		// If it's not a userid try if it is a user name
+		if userRes.Status.Code != rpc.Code_CODE_OK {
+			res, err := gatewayClient.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+				Claim: "username",
+				Value: requestUsernameOrID,
+			})
+			if err != nil {
+				return "", "", err
+			}
+			userRes.Status = res.Status
+			userRes.User = res.User
+		}
+
+		// If still didn't find a user, fallback
+		if userRes.Status.Code != rpc.Code_CODE_OK {
+			userRes.User = &userpb.User{
+				Username: requestUsernameOrID,
+				Id:       &userpb.UserId{OpaqueId: requestUsernameOrID},
+			}
+		}
+
+		u = userRes.User
 	}
-	return templates.WithUser(u, ns)
+
+	return templates.WithUser(u, ns), requestPath, nil
 }
 
 func wrapResourceID(r *provider.ResourceId) string {

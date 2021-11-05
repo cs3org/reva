@@ -30,21 +30,26 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) (*collaboration.Share, *ocsError) {
 	ctx := r.Context()
-	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	c, err := h.getClient()
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaServerError.StatusCode,
+			Message: "error getting grpc gateway client",
+			Error:   err,
+		}
 	}
 
 	shareWith := r.FormValue("shareWith")
 	if shareWith == "" {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing shareWith", nil)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaBadRequest.StatusCode,
+			Message: "missing shareWith",
+			Error:   err,
+		}
 	}
 
 	userRes, err := c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
@@ -52,13 +57,19 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		Value: shareWith,
 	})
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaServerError.StatusCode,
+			Message: "error searching recipient",
+			Error:   err,
+		}
 	}
 
 	if userRes.Status.Code != rpc.Code_CODE_OK {
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "user not found", err)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaNotFound.StatusCode,
+			Message: "user not found",
+			Error:   err,
+		}
 	}
 
 	createShareReq := &collaboration.CreateShareRequest{
@@ -82,13 +93,17 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		},
 	}
 
-	h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
+	share, ocsErr := h.createCs3Share(ctx, w, r, c, createShareReq)
+	if ocsErr != nil {
+		return nil, ocsErr
+	}
+	return share, nil
 }
 
 func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
-	uClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	uClient, err := h.getClient()
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -152,7 +167,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 	ocsDataPayload := make([]*conversions.ShareData, 0)
 	if h.gatewayAddr != "" {
 		// get a connection to the users share provider
-		client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		client, err := h.getClient()
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}

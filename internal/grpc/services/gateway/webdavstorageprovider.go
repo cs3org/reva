@@ -20,18 +20,11 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"path"
-	"strings"
 
-	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/pkg/errors"
-	"github.com/studio-b12/gowebdav"
 )
 
 type webdavEndpoint struct {
@@ -40,6 +33,10 @@ type webdavEndpoint struct {
 	token    string
 }
 
+// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+// old logic readable.
+/*
 func (s *svc) webdavRefStat(ctx context.Context, targetURL string, nameQueries ...string) (*provider.ResourceInfo, error) {
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
@@ -211,7 +208,7 @@ func (s *svc) webdavRefTransferEndpoint(ctx context.Context, targetURL string, n
 		},
 	}, nil
 }
-
+*/
 func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webdavEndpoint, error) {
 	if targetURL == "" {
 		return nil, errtypes.BadRequest("gateway: ref target is an empty uri")
@@ -237,6 +234,10 @@ func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webda
 	}, nil
 }
 
+// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+// old logic readable.
+/*
 func (s *svc) getWebdavEndpoint(ctx context.Context, domain string) (string, error) {
 	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
 		Domain: domain,
@@ -272,6 +273,7 @@ func getResourceType(isDir bool) provider.ResourceType {
 	}
 	return provider.ResourceType_RESOURCE_TYPE_FILE
 }
+*/
 
 func appendNameQuery(targetURL string, nameQueries ...string) (string, error) {
 	uri, err := url.Parse(targetURL)

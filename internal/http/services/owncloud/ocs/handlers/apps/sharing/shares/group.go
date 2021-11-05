@@ -29,21 +29,25 @@ import (
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) (*collaboration.Share, *ocsError) {
 	ctx := r.Context()
-	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	c, err := h.getClient()
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaServerError.StatusCode,
+			Message: "error getting grpc gateway client",
+			Error:   err,
+		}
 	}
 
 	shareWith := r.FormValue("shareWith")
 	if shareWith == "" {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing shareWith", nil)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaBadRequest.StatusCode,
+			Message: "missing shareWith",
+		}
 	}
 
 	groupRes, err := c.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
@@ -51,12 +55,18 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 		Value: shareWith,
 	})
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaServerError.StatusCode,
+			Message: "error searching recipient",
+			Error:   err,
+		}
 	}
 	if groupRes.Status.Code != rpc.Code_CODE_OK {
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "group not found", err)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaNotFound.StatusCode,
+			Message: "group not found",
+			Error:   err,
+		}
 	}
 
 	createShareReq := &collaboration.CreateShareRequest{
@@ -80,5 +90,10 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 		},
 	}
 
-	h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
+	share, ocsErr := h.createCs3Share(ctx, w, r, c, createShareReq)
+	if ocsErr != nil {
+		return nil, ocsErr
+	}
+
+	return share, nil
 }

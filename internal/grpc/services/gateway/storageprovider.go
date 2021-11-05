@@ -20,25 +20,23 @@ package gateway
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
+	"io"
 	"net/url"
 	"path"
 	"strings"
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -357,166 +355,183 @@ func (s *svc) getHome(_ context.Context) string {
 }
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	if utils.IsRelativeReference(req.Ref) {
 		return s.initiateFileDownload(ctx, req)
 	}
 
-	p, st := s.getPath(ctx, req.Ref)
+	_, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileDownloadResponse{
 			Status: st,
 		}, nil
 	}
 
-	if !s.inSharedFolder(ctx, p) {
-		statReq := &provider.StatRequest{Ref: req.Ref}
-		statRes, err := s.stat(ctx, statReq)
-		if err != nil {
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-			}, nil
-		}
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &gateway.InitiateFileDownloadResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-		return s.initiateFileDownload(ctx, req)
-	}
-
-	if s.isSharedFolder(ctx, p) {
-		log.Debug().Str("path", p).Msg("path points to shared folder")
-		err := errtypes.PermissionDenied("gateway: cannot download share folder: path=" + p)
-		log.Err(err).Msg("gateway: error downloading")
+	statReq := &provider.StatRequest{Ref: req.Ref}
+	statRes, err := s.stat(ctx, statReq)
+	if err != nil {
 		return &gateway.InitiateFileDownloadResponse{
-			Status: status.NewInvalidArg(ctx, "path points to share folder"),
+			Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 		}, nil
-
 	}
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		return &gateway.InitiateFileDownloadResponse{
+			Status: statRes.Status,
+		}, nil
+	}
+	return s.initiateFileDownload(ctx, req)
 
-	if s.isShareName(ctx, p) {
-		statReq := &provider.StatRequest{Ref: req.Ref}
-		statRes, err := s.stat(ctx, statReq)
-		if err != nil {
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-			}, nil
-		}
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &gateway.InitiateFileDownloadResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errtypes.BadRequest(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
-			log.Err(err).Msg("gateway: error stating share name")
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error initiating download"),
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
-			}, nil
-		}
-
-		if protocol == "webdav" {
-			// TODO(ishank011): pass this through the datagateway service
-			// For now, we just expose the file server to the user
-			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
+	// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+	// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+	// old logic readable.
+	/*
+		if !s.inSharedFolder(ctx, p) {
+			statReq := &provider.StatRequest{Ref: req.Ref}
+			statRes, err := s.stat(ctx, statReq)
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 				}, nil
 			}
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewOK(ctx),
-				Protocols: []*gateway.FileDownloadProtocol{
-					{
-						Opaque:           opaque,
-						Protocol:         "simple",
-						DownloadEndpoint: ep,
-					},
-				},
-			}, nil
-		}
-
-		// if it is a file allow download
-		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
-			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
-			req.Ref.Path = ri.Path
-			log.Debug().Str("path", ri.Path).Msg("download")
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: statRes.Status,
+				}, nil
+			}
 			return s.initiateFileDownload(ctx, req)
 		}
 
-		log.Debug().Str("path", p).Interface("statRes", statRes).Msg("path:%s points to share name")
-		err = errtypes.PermissionDenied("gateway: cannot download share name: path=" + p)
-		log.Err(err).Str("path", p).Msg("gateway: error downloading")
-		return &gateway.InitiateFileDownloadResponse{
-			Status: status.NewInvalidArg(ctx, "path points to share name"),
-		}, nil
-	}
-
-	if s.isShareChild(ctx, p) {
-		log.Debug().Msgf("shared child: %s", p)
-		shareName, shareChild := s.splitShare(ctx, p)
-
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{Path: shareName},
-		}
-		statRes, err := s.stat(ctx, statReq)
-		if err != nil {
+		if s.isSharedFolder(ctx, p) {
+			log.Debug().Str("path", p).Msg("path points to shared folder")
+			err := errtypes.PermissionDenied("gateway: cannot download share folder: path=" + p)
+			log.Err(err).Msg("gateway: error downloading")
 			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+				Status: status.NewInvalidArg(ctx, "path points to share folder"),
 			}, nil
+
 		}
 
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &gateway.InitiateFileDownloadResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
-			}, nil
-		}
-
-		if protocol == "webdav" {
-			// TODO(ishank011): pass this through the datagateway service
-			// For now, we just expose the file server to the user
-			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
+		if s.isShareName(ctx, p) {
+			statReq := &provider.StatRequest{Ref: req.Ref}
+			statRes, err := s.stat(ctx, statReq)
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 				}, nil
 			}
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewOK(ctx),
-				Protocols: []*gateway.FileDownloadProtocol{
-					{
-						Opaque:           opaque,
-						Protocol:         "simple",
-						DownloadEndpoint: ep,
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: statRes.Status,
+				}, nil
+			}
+
+			if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+				err := errtypes.BadRequest(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+				log.Err(err).Msg("gateway: error stating share name")
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error initiating download"),
+				}, nil
+			}
+
+			ri, protocol, err := s.checkRef(ctx, statRes.Info)
+			if err != nil {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				}, nil
+			}
+
+			if protocol == "webdav" {
+				// TODO(ishank011): pass this through the datagateway service
+				// For now, we just expose the file server to the user
+				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
+				if err != nil {
+					return &gateway.InitiateFileDownloadResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+					}, nil
+				}
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewOK(ctx),
+					Protocols: []*gateway.FileDownloadProtocol{
+						{
+							Opaque:           opaque,
+							Protocol:         "simple",
+							DownloadEndpoint: ep,
+						},
 					},
-				},
+				}, nil
+			}
+
+			// if it is a file allow download
+			if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+				log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
+				req.Ref.Path = ri.Path
+				log.Debug().Str("path", ri.Path).Msg("download")
+				return s.initiateFileDownload(ctx, req)
+			}
+
+			log.Debug().Str("path", p).Interface("statRes", statRes).Msg("path:%s points to share name")
+			err = errtypes.PermissionDenied("gateway: cannot download share name: path=" + p)
+			log.Err(err).Str("path", p).Msg("gateway: error downloading")
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInvalidArg(ctx, "path points to share name"),
 			}, nil
 		}
 
-		// append child to target
-		req.Ref.Path = path.Join(ri.Path, shareChild)
-		log.Debug().Str("path", req.Ref.Path).Msg("download")
-		return s.initiateFileDownload(ctx, req)
-	}
+		if s.isShareChild(ctx, p) {
+			log.Debug().Msgf("shared child: %s", p)
+			shareName, shareChild := s.splitShare(ctx, p)
 
-	panic("gateway: download: unknown path:" + p)
+			statReq := &provider.StatRequest{
+				Ref: &provider.Reference{Path: shareName},
+			}
+			statRes, err := s.stat(ctx, statReq)
+			if err != nil {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+				}, nil
+			}
+
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: statRes.Status,
+				}, nil
+			}
+
+			ri, protocol, err := s.checkRef(ctx, statRes.Info)
+			if err != nil {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				}, nil
+			}
+
+			if protocol == "webdav" {
+				// TODO(ishank011): pass this through the datagateway service
+				// For now, we just expose the file server to the user
+				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
+				if err != nil {
+					return &gateway.InitiateFileDownloadResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+					}, nil
+				}
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewOK(ctx),
+					Protocols: []*gateway.FileDownloadProtocol{
+						{
+							Opaque:           opaque,
+							Protocol:         "simple",
+							DownloadEndpoint: ep,
+						},
+					},
+				}, nil
+			}
+
+			// append child to target
+			req.Ref.Path = path.Join(ri.Path, shareChild)
+			log.Debug().Str("path", req.Ref.Path).Msg("download")
+			return s.initiateFileDownload(ctx, req)
+		}
+
+		panic("gateway: download: unknown path:" + p)
+	*/
 }
 
 func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
@@ -572,150 +587,157 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
-	log := appctx.GetLogger(ctx)
 	if utils.IsRelativeReference(req.Ref) {
 		return s.initiateFileUpload(ctx, req)
 	}
-	p, st := s.getPath(ctx, req.Ref)
+	_, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileUploadResponse{
 			Status: st,
 		}, nil
 	}
 
-	if !s.inSharedFolder(ctx, p) {
+	return s.initiateFileUpload(ctx, req)
+
+	// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+	// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+	// old logic readable.
+	/*
 		return s.initiateFileUpload(ctx, req)
-	}
-
-	if s.isSharedFolder(ctx, p) {
-		log.Debug().Str("path", p).Msg("path points to shared folder")
-		err := errtypes.PermissionDenied("gateway: cannot upload to share folder: path=" + p)
-		log.Err(err).Msg("gateway: error downloading")
-		return &gateway.InitiateFileUploadResponse{
-			Status: status.NewInvalidArg(ctx, "path points to share folder"),
-		}, nil
-
-	}
-
-	if s.isShareName(ctx, p) {
-		log.Debug().Str("path", p).Msg("path points to share name")
-		statReq := &provider.StatRequest{Ref: req.Ref}
-		statRes, err := s.stat(ctx, statReq)
-		if err != nil {
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-			}, nil
-		}
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &gateway.InitiateFileUploadResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errtypes.BadRequest(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
-			log.Err(err).Msg("gateway: error stating share name")
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error initiating upload"),
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
-			}, nil
-		}
-
-		if protocol == "webdav" {
-			// TODO(ishank011): pass this through the datagateway service
-			// For now, we just expose the file server to the user
-			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
-			if err != nil {
-				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
-				}, nil
-			}
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewOK(ctx),
-				Protocols: []*gateway.FileUploadProtocol{
-					{
-						Opaque:         opaque,
-						Protocol:       "simple",
-						UploadEndpoint: ep,
-					},
-				},
-			}, nil
-		}
-
-		// if it is a file allow upload
-		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
-			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
-			req.Ref.Path = ri.Path
-			log.Debug().Str("path", ri.Path).Msg("upload")
+		if !s.inSharedFolder(ctx, p) {
 			return s.initiateFileUpload(ctx, req)
 		}
 
-		err = errtypes.PermissionDenied("gateway: cannot upload to share name: path=" + p)
-		log.Err(err).Msg("gateway: error uploading")
-		return &gateway.InitiateFileUploadResponse{
-			Status: status.NewInvalidArg(ctx, "path points to share name"),
-		}, nil
-
-	}
-
-	if s.isShareChild(ctx, p) {
-		log.Debug().Msgf("shared child: %s", p)
-		shareName, shareChild := s.splitShare(ctx, p)
-
-		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
-		statRes, err := s.stat(ctx, statReq)
-		if err != nil {
+		if s.isSharedFolder(ctx, p) {
+			log.Debug().Str("path", p).Msg("path points to shared folder")
+			err := errtypes.PermissionDenied("gateway: cannot upload to share folder: path=" + p)
+			log.Err(err).Msg("gateway: error downloading")
 			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+				Status: status.NewInvalidArg(ctx, "path points to share folder"),
 			}, nil
+
 		}
 
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &gateway.InitiateFileUploadResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
-			}, nil
-		}
-
-		if protocol == "webdav" {
-			// TODO(ishank011): pass this through the datagateway service
-			// For now, we just expose the file server to the user
-			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
+		if s.isShareName(ctx, p) {
+			log.Debug().Str("path", p).Msg("path points to share name")
+			statReq := &provider.StatRequest{Ref: req.Ref}
+			statRes, err := s.stat(ctx, statReq)
 			if err != nil {
 				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error uploading to webdav host: "+p),
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 				}, nil
 			}
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewOK(ctx),
-				Protocols: []*gateway.FileUploadProtocol{
-					{
-						Opaque:         opaque,
-						Protocol:       "simple",
-						UploadEndpoint: ep,
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				return &gateway.InitiateFileUploadResponse{
+					Status: statRes.Status,
+				}, nil
+			}
+
+			if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+				err := errtypes.BadRequest(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+				log.Err(err).Msg("gateway: error stating share name")
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error initiating upload"),
+				}, nil
+			}
+
+			ri, protocol, err := s.checkRef(ctx, statRes.Info)
+			if err != nil {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				}, nil
+			}
+
+			if protocol == "webdav" {
+				// TODO(ishank011): pass this through the datagateway service
+				// For now, we just expose the file server to the user
+				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
+				if err != nil {
+					return &gateway.InitiateFileUploadResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+					}, nil
+				}
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewOK(ctx),
+					Protocols: []*gateway.FileUploadProtocol{
+						{
+							Opaque:         opaque,
+							Protocol:       "simple",
+							UploadEndpoint: ep,
+						},
 					},
-				},
+				}, nil
+			}
+
+			// if it is a file allow upload
+			if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+				log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
+				req.Ref.Path = ri.Path
+				log.Debug().Str("path", ri.Path).Msg("upload")
+				return s.initiateFileUpload(ctx, req)
+			}
+
+			err = errtypes.PermissionDenied("gateway: cannot upload to share name: path=" + p)
+			log.Err(err).Msg("gateway: error uploading")
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewInvalidArg(ctx, "path points to share name"),
 			}, nil
+
 		}
 
-		// append child to target
-		req.Ref.Path = path.Join(ri.Path, shareChild)
-		return s.initiateFileUpload(ctx, req)
-	}
+		if s.isShareChild(ctx, p) {
+			log.Debug().Msgf("shared child: %s", p)
+			shareName, shareChild := s.splitShare(ctx, p)
 
-	panic("gateway: upload: unknown path:" + p)
+			statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
+			statRes, err := s.stat(ctx, statReq)
+			if err != nil {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+				}, nil
+			}
+
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				return &gateway.InitiateFileUploadResponse{
+					Status: statRes.Status,
+				}, nil
+			}
+
+			ri, protocol, err := s.checkRef(ctx, statRes.Info)
+			if err != nil {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				}, nil
+			}
+
+			if protocol == "webdav" {
+				// TODO(ishank011): pass this through the datagateway service
+				// For now, we just expose the file server to the user
+				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
+				if err != nil {
+					return &gateway.InitiateFileUploadResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error uploading to webdav host: "+p),
+					}, nil
+				}
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewOK(ctx),
+					Protocols: []*gateway.FileUploadProtocol{
+						{
+							Opaque:         opaque,
+							Protocol:       "simple",
+							UploadEndpoint: ep,
+						},
+					},
+				}, nil
+			}
+
+			// append child to target
+			req.Ref.Path = path.Join(ri.Path, shareChild)
+			return s.initiateFileUpload(ctx, req)
+		}
+
+		panic("gateway: upload: unknown path:" + p)
+	*/
 }
 
 func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
@@ -797,76 +819,81 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	if utils.IsRelativeReference(req.Ref) {
 		return s.createContainer(ctx, req)
 	}
 
-	p, st := s.getPath(ctx, req.Ref)
+	_, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.CreateContainerResponse{
 			Status: st,
 		}, nil
 	}
 
-	if !s.inSharedFolder(ctx, p) {
-		return s.createContainer(ctx, req)
-	}
+	return s.createContainer(ctx, req)
 
-	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
-		log.Debug().Msgf("path:%s points to shared folder or share name", p)
-		err := errtypes.PermissionDenied("gateway: cannot create container on share folder or share name: path=" + p)
-		log.Err(err).Msg("gateway: error creating container")
-		return &provider.CreateContainerResponse{
-			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
-		}, nil
-
-	}
-
-	if s.isShareChild(ctx, p) {
-		log.Debug().Msgf("shared child: %s", p)
-		shareName, shareChild := s.splitShare(ctx, p)
-
-		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
-		statRes, err := s.stat(ctx, statReq)
-		if err != nil {
-			return &provider.CreateContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-			}, nil
+	// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+	// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+	// old logic readable.
+	/*
+		if !s.inSharedFolder(ctx, p) {
+			return s.createContainer(ctx, req)
 		}
 
-		if statRes.Status.Code != rpc.Code_CODE_OK {
+		if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
+			log.Debug().Msgf("path:%s points to shared folder or share name", p)
+			err := errtypes.PermissionDenied("gateway: cannot create container on share folder or share name: path=" + p)
+			log.Err(err).Msg("gateway: error creating container")
 			return &provider.CreateContainerResponse{
-				Status: statRes.Status,
+				Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
 			}, nil
+
 		}
 
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &provider.CreateContainerResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
-			}, nil
-		}
+		if s.isShareChild(ctx, p) {
+			log.Debug().Msgf("shared child: %s", p)
+			shareName, shareChild := s.splitShare(ctx, p)
 
-		if protocol == "webdav" {
-			err = s.webdavRefMkdir(ctx, statRes.Info.Target, shareChild)
+			statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
+			statRes, err := s.stat(ctx, statReq)
 			if err != nil {
 				return &provider.CreateContainerResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error creating container on webdav host: "+p),
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 				}, nil
 			}
-			return &provider.CreateContainerResponse{
-				Status: status.NewOK(ctx),
-			}, nil
+
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				return &provider.CreateContainerResponse{
+					Status: statRes.Status,
+				}, nil
+			}
+
+			ri, protocol, err := s.checkRef(ctx, statRes.Info)
+			if err != nil {
+				return &provider.CreateContainerResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				}, nil
+			}
+
+			if protocol == "webdav" {
+				err = s.webdavRefMkdir(ctx, statRes.Info.Target, shareChild)
+				if err != nil {
+					return &provider.CreateContainerResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error creating container on webdav host: "+p),
+					}, nil
+				}
+				return &provider.CreateContainerResponse{
+					Status: status.NewOK(ctx),
+				}, nil
+			}
+
+			// append child to target
+			req.Ref.Path = path.Join(ri.Path, shareChild)
+			return s.createContainer(ctx, req)
 		}
 
-		// append child to target
-		req.Ref.Path = path.Join(ri.Path, shareChild)
-		return s.createContainer(ctx, req)
-	}
-
-	panic("gateway: create container on unknown path:" + p)
+		panic("gateway: create container on unknown path:" + p)
+	*/
 }
 
 func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
@@ -885,143 +912,143 @@ func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainer
 	return res, nil
 }
 
-// check if the path contains the prefix of the shared folder
-func (s *svc) inSharedFolder(ctx context.Context, p string) bool {
-	sharedFolder := s.getSharedFolder(ctx)
-	return strings.HasPrefix(p, sharedFolder)
-}
-
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	log := appctx.GetLogger(ctx)
-	p, st := s.getPath(ctx, req.Ref)
+	_, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.DeleteResponse{
 			Status: st,
 		}, nil
 	}
 
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "Delete")
-	defer span.End()
+	return s.delete(ctx, req)
 
-	if !s.inSharedFolder(ctx, p) {
-		return s.delete(ctx, req)
-	}
+	// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+	// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+	// old logic readable.
+	/*
+		ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "Delete")
+		defer span.End()
 
-	if s.isSharedFolder(ctx, p) {
-		// TODO(labkode): deleting share names should be allowed, means unmounting.
-		err := errtypes.BadRequest("gateway: cannot delete share folder or share name: path=" + p)
-		span.RecordError(err)
-		return &provider.DeleteResponse{
-			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
-		}, nil
-
-	}
-
-	if s.isShareName(ctx, p) {
-		log.Debug().Msgf("path:%s points to share name", p)
-
-		sRes, err := s.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-		if err != nil {
-			return nil, err
+		if !s.inSharedFolder(ctx, p) {
+			return s.delete(ctx, req)
 		}
 
-		statRes, err := s.Stat(ctx, &provider.StatRequest{
-			Ref: &provider.Reference{
-				Path: p,
-			},
-		})
-		if err != nil {
-			return nil, err
+		if s.isSharedFolder(ctx, p) {
+			// TODO(labkode): deleting share names should be allowed, means unmounting.
+			err := errtypes.BadRequest("gateway: cannot delete share folder or share name: path=" + p)
+			span.RecordError(err)
+			return &provider.DeleteResponse{
+				Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
+			}, nil
+
 		}
 
-		// the following will check that:
-		// - the resource to delete is a share the current user received
-		// - signal the storage the delete must not land in the trashbin
-		// - delete the resource and update the share status to "rejected"
-		for _, share := range sRes.Shares {
-			if statRes != nil && (share.Share.ResourceId.OpaqueId == statRes.Info.Id.OpaqueId) && (share.Share.ResourceId.StorageId == statRes.Info.Id.StorageId) {
-				// this opaque needs explanation. It signals the storage the resource we're about to delete does not
-				// belong to the current user because it was share to her, thus delete the "node" and don't send it to
-				// the trash bin, since the share can be mounted as many times as desired.
-				req.Opaque = &types.Opaque{
-					Map: map[string]*types.OpaqueEntry{
-						"deleting_shared_resource": {
-							Value:   []byte("true"),
-							Decoder: "plain",
+		if s.isShareName(ctx, p) {
+			log.Debug().Msgf("path:%s points to share name", p)
+
+			sRes, err := s.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+			if err != nil {
+				return nil, err
+			}
+
+			statRes, err := s.Stat(ctx, &provider.StatRequest{
+				Ref: &provider.Reference{
+					Path: p,
+				},
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			// the following will check that:
+			// - the resource to delete is a share the current user received
+			// - signal the storage the delete must not land in the trashbin
+			// - delete the resource and update the share status to "rejected"
+			for _, share := range sRes.Shares {
+				if statRes != nil && (share.Share.ResourceId.OpaqueId == statRes.Info.Id.OpaqueId) && (share.Share.ResourceId.StorageId == statRes.Info.Id.StorageId) {
+					// this opaque needs explanation. It signals the storage the resource we're about to delete does not
+					// belong to the current user because it was share to her, thus delete the "node" and don't send it to
+					// the trash bin, since the share can be mounted as many times as desired.
+					req.Opaque = &types.Opaque{
+						Map: map[string]*types.OpaqueEntry{
+							"deleting_shared_resource": {
+								Value:   []byte("true"),
+								Decoder: "plain",
+							},
 						},
-					},
-				}
+					}
 
-				// the following block takes care of updating the state of the share to "rejected". This will ensure the user
-				// can "Accept" the share once again.
-				// TODO should this be pending? If so, update the two comments above as well. If not, get rid of this comment.
-				share.State = collaboration.ShareState_SHARE_STATE_REJECTED
-				r := &collaboration.UpdateReceivedShareRequest{
-					Share:      share,
-					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
-				}
+					// the following block takes care of updating the state of the share to "rejected". This will ensure the user
+					// can "Accept" the share once again.
+					// TODO should this be pending? If so, update the two comments above as well. If not, get rid of this comment.
+					share.State = collaboration.ShareState_SHARE_STATE_REJECTED
+					r := &collaboration.UpdateReceivedShareRequest{
+						Share:      share,
+						UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
+					}
 
-				_, err := s.UpdateReceivedShare(ctx, r)
+					_, err := s.UpdateReceivedShare(ctx, r)
+					if err != nil {
+						return nil, err
+					}
+
+					return &provider.DeleteResponse{
+						Status: status.NewOK(ctx),
+					}, nil
+				}
+			}
+
+			return &provider.DeleteResponse{
+				Status: status.NewNotFound(ctx, "could not find share"),
+			}, nil
+		}
+
+		if s.isShareChild(ctx, p) {
+			shareName, shareChild := s.splitShare(ctx, p)
+			log.Debug().Msgf("path:%s sharename:%s sharechild: %s", p, shareName, shareChild)
+
+			ref := &provider.Reference{Path: shareName}
+
+			statReq := &provider.StatRequest{Ref: ref}
+			statRes, err := s.stat(ctx, statReq)
+			if err != nil {
+				return &provider.DeleteResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+				}, nil
+			}
+
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				return &provider.DeleteResponse{
+					Status: statRes.Status,
+				}, nil
+			}
+
+			ri, protocol, err := s.checkRef(ctx, statRes.Info)
+			if err != nil {
+				return &provider.DeleteResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				}, nil
+			}
+
+			if protocol == "webdav" {
+				err = s.webdavRefDelete(ctx, statRes.Info.Target, shareChild)
 				if err != nil {
-					return nil, err
+					return &provider.DeleteResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error deleting resource on webdav host: "+p),
+					}, nil
 				}
-
 				return &provider.DeleteResponse{
 					Status: status.NewOK(ctx),
 				}, nil
 			}
+
+			// append child to target
+			req.Ref.Path = path.Join(ri.Path, shareChild)
+			return s.delete(ctx, req)
 		}
 
-		return &provider.DeleteResponse{
-			Status: status.NewNotFound(ctx, "could not find share"),
-		}, nil
-	}
-
-	if s.isShareChild(ctx, p) {
-		shareName, shareChild := s.splitShare(ctx, p)
-		log.Debug().Msgf("path:%s sharename:%s sharechild: %s", p, shareName, shareChild)
-
-		ref := &provider.Reference{Path: shareName}
-
-		statReq := &provider.StatRequest{Ref: ref}
-		statRes, err := s.stat(ctx, statReq)
-		if err != nil {
-			return &provider.DeleteResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-			}, nil
-		}
-
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &provider.DeleteResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &provider.DeleteResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
-			}, nil
-		}
-
-		if protocol == "webdav" {
-			err = s.webdavRefDelete(ctx, statRes.Info.Target, shareChild)
-			if err != nil {
-				return &provider.DeleteResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error deleting resource on webdav host: "+p),
-				}, nil
-			}
-			return &provider.DeleteResponse{
-				Status: status.NewOK(ctx),
-			}, nil
-		}
-
-		// append child to target
-		req.Ref.Path = path.Join(ri.Path, shareChild)
-		return s.delete(ctx, req)
-	}
-
-	panic("gateway: delete called on unknown path:" + p)
+		panic("gateway: delete called on unknown path:" + p)
+	*/
 }
 
 func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
@@ -1042,118 +1069,124 @@ func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 }
 
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	log := appctx.GetLogger(ctx)
-	p, st := s.getPath(ctx, req.Source)
+	_, st := s.getPath(ctx, req.Source)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.MoveResponse{
 			Status: st,
 		}, nil
 	}
 
-	dp, st := s.getPath(ctx, req.Destination)
-	if st.Code != rpc.Code_CODE_OK && st.Code != rpc.Code_CODE_NOT_FOUND {
+	_, st2 := s.getPath(ctx, req.Destination)
+	if st2.Code != rpc.Code_CODE_OK && st2.Code != rpc.Code_CODE_NOT_FOUND {
 		return &provider.MoveResponse{
-			Status: st,
+			Status: st2,
 		}, nil
 	}
 
-	if !s.inSharedFolder(ctx, p) && !s.inSharedFolder(ctx, dp) {
-		return s.move(ctx, req)
-	}
+	return s.move(ctx, req)
 
-	// allow renaming the share folder, the mount point, not the target.
-	if s.isShareName(ctx, p) && s.isShareName(ctx, dp) {
-		log.Info().Msgf("gateway: move: renaming share mountpoint: from:%s to:%s", p, dp)
-		return s.move(ctx, req)
-	}
-
-	// resolve references and check the ref points to the same base path, paranoia check.
-	if s.isShareChild(ctx, p) && s.isShareChild(ctx, dp) {
-		shareName, shareChild := s.splitShare(ctx, p)
-		dshareName, dshareChild := s.splitShare(ctx, dp)
-		log.Debug().Msgf("srcpath:%s dstpath:%s srcsharename:%s srcsharechild: %s dstsharename:%s dstsharechild:%s ", p, dp, shareName, shareChild, dshareName, dshareChild)
-
-		srcStatReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
-		srcStatRes, err := s.stat(ctx, srcStatReq)
-		if err != nil {
-			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+srcStatReq.Ref.String()),
-			}, nil
+	// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+	// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+	// old logic readable.
+	/*
+		if !s.inSharedFolder(ctx, p) && !s.inSharedFolder(ctx, dp) {
+			return s.move(ctx, req)
 		}
 
-		if srcStatRes.Status.Code != rpc.Code_CODE_OK {
-			return &provider.MoveResponse{
-				Status: srcStatRes.Status,
-			}, nil
+		// allow renaming the share folder, the mount point, not the target.
+		if s.isShareName(ctx, p) && s.isShareName(ctx, dp) {
+			log.Info().Msgf("gateway: move: renaming share mountpoint: from:%s to:%s", p, dp)
+			return s.move(ctx, req)
 		}
 
-		dstStatReq := &provider.StatRequest{Ref: &provider.Reference{Path: dshareName}}
-		dstStatRes, err := s.stat(ctx, dstStatReq)
-		if err != nil {
-			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+srcStatReq.Ref.String()),
-			}, nil
-		}
+		// resolve references and check the ref points to the same base path, paranoia check.
+		if s.isShareChild(ctx, p) && s.isShareChild(ctx, dp) {
+			shareName, shareChild := s.splitShare(ctx, p)
+			dshareName, dshareChild := s.splitShare(ctx, dp)
+			log.Debug().Msgf("srcpath:%s dstpath:%s srcsharename:%s srcsharechild: %s dstsharename:%s dstsharechild:%s ", p, dp, shareName, shareChild, dshareName, dshareChild)
 
-		if dstStatRes.Status.Code != rpc.Code_CODE_OK {
-			return &provider.MoveResponse{
-				Status: srcStatRes.Status,
-			}, nil
-		}
-
-		srcRi, srcProtocol, err := s.checkRef(ctx, srcStatRes.Info)
-		if err != nil {
-			return &provider.MoveResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+srcStatRes.Info.Target, err),
-			}, nil
-		}
-
-		if srcProtocol == "webdav" {
-			err = s.webdavRefMove(ctx, dstStatRes.Info.Target, shareChild, dshareChild)
+			srcStatReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
+			srcStatRes, err := s.stat(ctx, srcStatReq)
 			if err != nil {
 				return &provider.MoveResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error moving resource on webdav host: "+p),
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+srcStatReq.Ref.String()),
 				}, nil
 			}
-			return &provider.MoveResponse{
-				Status: status.NewOK(ctx),
-			}, nil
-		}
-		dstRi, dstProtocol, err := s.checkRef(ctx, dstStatRes.Info)
-		if err != nil {
-			return &provider.MoveResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+srcStatRes.Info.Target, err),
-			}, nil
-		}
 
-		if dstProtocol == "webdav" {
-			err = s.webdavRefMove(ctx, dstStatRes.Info.Target, shareChild, dshareChild)
+			if srcStatRes.Status.Code != rpc.Code_CODE_OK {
+				return &provider.MoveResponse{
+					Status: srcStatRes.Status,
+				}, nil
+			}
+
+			dstStatReq := &provider.StatRequest{Ref: &provider.Reference{Path: dshareName}}
+			dstStatRes, err := s.stat(ctx, dstStatReq)
 			if err != nil {
 				return &provider.MoveResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error moving resource on webdav host: "+p),
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+srcStatReq.Ref.String()),
 				}, nil
 			}
-			return &provider.MoveResponse{
-				Status: status.NewOK(ctx),
-			}, nil
+
+			if dstStatRes.Status.Code != rpc.Code_CODE_OK {
+				return &provider.MoveResponse{
+					Status: srcStatRes.Status,
+				}, nil
+			}
+
+			srcRi, srcProtocol, err := s.checkRef(ctx, srcStatRes.Info)
+			if err != nil {
+				return &provider.MoveResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+srcStatRes.Info.Target, err),
+				}, nil
+			}
+
+			if srcProtocol == "webdav" {
+				err = s.webdavRefMove(ctx, dstStatRes.Info.Target, shareChild, dshareChild)
+				if err != nil {
+					return &provider.MoveResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error moving resource on webdav host: "+p),
+					}, nil
+				}
+				return &provider.MoveResponse{
+					Status: status.NewOK(ctx),
+				}, nil
+			}
+			dstRi, dstProtocol, err := s.checkRef(ctx, dstStatRes.Info)
+			if err != nil {
+				return &provider.MoveResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+srcStatRes.Info.Target, err),
+				}, nil
+			}
+
+			if dstProtocol == "webdav" {
+				err = s.webdavRefMove(ctx, dstStatRes.Info.Target, shareChild, dshareChild)
+				if err != nil {
+					return &provider.MoveResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error moving resource on webdav host: "+p),
+					}, nil
+				}
+				return &provider.MoveResponse{
+					Status: status.NewOK(ctx),
+				}, nil
+			}
+
+			src := &provider.Reference{
+				Path: path.Join(srcRi.Path, shareChild),
+			}
+			dst := &provider.Reference{
+				Path: path.Join(dstRi.Path, dshareChild),
+			}
+
+			req.Source = src
+			req.Destination = dst
+
+			return s.move(ctx, req)
 		}
 
-		src := &provider.Reference{
-			Path: path.Join(srcRi.Path, shareChild),
-		}
-		dst := &provider.Reference{
-			Path: path.Join(dstRi.Path, dshareChild),
-		}
-
-		req.Source = src
-		req.Destination = dst
-
-		return s.move(ctx, req)
-	}
-
-	return &provider.MoveResponse{
-		Status: status.NewStatusFromErrType(ctx, "move", errtypes.BadRequest("gateway: move called on unknown path: "+p)),
-	}, nil
+		return &provider.MoveResponse{
+			Status: status.NewStatusFromErrType(ctx, "move", errtypes.BadRequest("gateway: move called on unknown path: "+p)),
+		}, nil
+	*/
 }
 
 func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
@@ -1247,6 +1280,17 @@ func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
 		}, nil
 	}
 
+	if etagIface, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
+		resMtime := utils.TSToTime(statRes.Info.Mtime)
+		resEtag := etagIface.(etagWithTS)
+		// Use the updated etag if the home folder has been modified
+		if resMtime.Before(resEtag.Timestamp) {
+			statRes.Info.Etag = resEtag.Etag
+		}
+	} else if s.c.EtagCacheTTL > 0 {
+		_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, etagWithTS{statRes.Info.Etag, time.Now()})
+	}
+
 	return statRes, nil
 }
 
@@ -1267,11 +1311,37 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
 			}, nil
 		}
-		rsp, err := c.Stat(ctx, req)
-		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
-			return rsp, err
+
+		res, err := c.Stat(ctx, req)
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
+			}, nil
 		}
-		return rsp, nil
+
+		embeddedMounts := s.findEmbeddedMounts(resPath)
+		if len(embeddedMounts) > 0 {
+			etagHash := md5.New()
+			if res.Info != nil {
+				_, _ = io.WriteString(etagHash, res.Info.Etag)
+			}
+			for _, child := range embeddedMounts {
+				childStatRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: child}})
+				if err != nil {
+					return &provider.StatResponse{
+						Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), err),
+					}, nil
+				}
+				_, _ = io.WriteString(etagHash, childStatRes.Info.Etag)
+			}
+
+			if res.Info == nil {
+				res.Info = &provider.ResourceInfo{}
+			}
+			res.Info.Etag = fmt.Sprintf("%x", etagHash.Sum(nil))
+		}
+
+		return res, nil
 	}
 
 	return s.statAcrossProviders(ctx, req, providers)
@@ -1289,7 +1359,7 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 		Path:     req.Ref.GetPath(),
 		MimeType: "httpd/unix-directory",
 		Size:     0,
-		Mtime:    &types.Timestamp{},
+		Mtime:    &typesv1beta1.Timestamp{},
 	}
 
 	for _, p := range providers {
@@ -1355,121 +1425,136 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		return s.statHome(ctx)
 	}
 
-	if !s.inSharedFolder(ctx, p) {
-		if res != nil {
-			return res, nil
-		}
-		return s.stat(ctx, req)
-	}
+	return s.stat(ctx, req)
 
-	// we need to provide the info of the target, not the reference.
-	if s.isShareName(ctx, p) {
-		// If we haven't returned an error by now and res is nil, it means that
-		// req is an absolute path based ref, so we didn't stat it previously.
-		// So stat it now
-		if res == nil {
-			res, err = s.stat(ctx, req)
+	// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+	// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+	// old logic readable.
+	/*
+		if s.isSharedFolder(ctx, p) {
+			return s.statSharesFolder(ctx)
+		}
+
+		if !s.inSharedFolder(ctx, p) {
+			if res != nil {
+				return res, nil
+			}
+			return s.stat(ctx, req)
+		}
+
+		// we need to provide the info of the target, not the reference.
+		if s.isShareName(ctx, p) {
+			// If we haven't returned an error by now and res is nil, it means that
+			// req is an absolute path based ref, so we didn't stat it previously.
+			// So stat it now
+			if res == nil {
+				res, err = s.stat(ctx, req)
+				if err != nil {
+					return &provider.StatResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+					}, nil
+				}
+
+				if res.Status.Code != rpc.Code_CODE_OK {
+					return &provider.StatResponse{
+						Status: res.Status,
+					}, nil
+				}
+			}
+
+			ri, protocol, err := s.checkRef(ctx, res.Info)
+			if err != nil {
+				return &provider.StatResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+res.Info.Target, err),
+				}, nil
+			}
+
+			if protocol == "webdav" {
+				ri, err = s.webdavRefStat(ctx, res.Info.Target)
+				if err != nil {
+					return &provider.StatResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+p),
+					}, nil
+				}
+			}
+
+			// we need to make sure we don't expose the reference target in the resource
+			// information. For example, if requests comes to: /home/MyShares/photos and photos
+			// is reference to /user/peter/Holidays/photos, we need to still return to the user
+			// /home/MyShares/photos
+			orgPath := res.Info.Path
+			res.Info = ri
+			res.Info.Path = orgPath
+			return res, nil
+
+		}
+
+		if s.isShareChild(ctx, p) {
+			shareName, shareChild := s.splitShare(ctx, p)
+
+			statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
+			statRes, err := s.stat(ctx, statReq)
+			if err != nil {
+				return &provider.StatResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+				}, nil
+			}
+
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				return &provider.StatResponse{
+					Status: statRes.Status,
+				}, nil
+			}
+
+			ri, protocol, err := s.checkRef(ctx, statRes.Info)
+			if err != nil {
+				return &provider.StatResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				}, nil
+			}
+
+			if protocol == "webdav" {
+				ri, err = s.webdavRefStat(ctx, statRes.Info.Target, shareChild)
+				if err != nil {
+					return &provider.StatResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+p),
+					}, nil
+				}
+				ri.Path = p
+				return &provider.StatResponse{
+					Status: status.NewOK(ctx),
+					Info:   ri,
+				}, nil
+			}
+
+			// append child to target
+			req.Ref.Path = path.Join(ri.Path, shareChild)
+			res, err := s.stat(ctx, req)
 			if err != nil {
 				return &provider.StatResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
 				}, nil
 			}
-
 			if res.Status.Code != rpc.Code_CODE_OK {
 				return &provider.StatResponse{
 					Status: res.Status,
 				}, nil
 			}
+
+			// we need to make sure we don't expose the reference target in the resource
+			// information.
+			res.Info.Path = p
+			return res, nil
 		}
 
-		ri, protocol, err := s.checkRef(ctx, res.Info)
-		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+res.Info.Target, err),
-			}, nil
-		}
-
-		if protocol == "webdav" {
-			ri, err = s.webdavRefStat(ctx, res.Info.Target)
-			if err != nil {
-				return &provider.StatResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+p),
-				}, nil
-			}
-		}
-
-		// we need to make sure we don't expose the reference target in the resource
-		// information. For example, if requests comes to: /home/MyShares/photos and photos
-		// is reference to /user/peter/Holidays/photos, we need to still return to the user
-		// /home/MyShares/photos
-		orgPath := res.Info.Path
-		res.Info = ri
-		res.Info.Path = orgPath
-		return res, nil
-
-	}
-
-	if s.isShareChild(ctx, p) {
-		shareName, shareChild := s.splitShare(ctx, p)
-
-		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
-		statRes, err := s.stat(ctx, statReq)
-		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-			}, nil
-		}
-
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &provider.StatResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
-			}, nil
-		}
-
-		if protocol == "webdav" {
-			ri, err = s.webdavRefStat(ctx, statRes.Info.Target, shareChild)
-			if err != nil {
-				return &provider.StatResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+p),
-				}, nil
-			}
-			ri.Path = p
-			return &provider.StatResponse{
-				Status: status.NewOK(ctx),
-				Info:   ri,
-			}, nil
-		}
-
-		// append child to target
-		req.Ref.Path = path.Join(ri.Path, shareChild)
-		res, err := s.stat(ctx, req)
-		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
-			}, nil
-		}
-		if res.Status.Code != rpc.Code_CODE_OK {
-			return &provider.StatResponse{
-				Status: res.Status,
-			}, nil
-		}
-
-		// we need to make sure we don't expose the reference target in the resource
-		// information.
-		res.Info.Path = p
-		return res, nil
-	}
-
-	panic("gateway: stating an unknown path:" + p)
+		panic("gateway: stating an unknown path:" + p)
+	*/
 }
 
+// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+// old logic readable.
+/*
 func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, string, error) {
 	if ri.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
 		panic("gateway: calling checkRef on a non reference type:" + ri.String())
@@ -1544,6 +1629,7 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 
 	return res.Info, nil
 }
+*/
 
 func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gateway.GatewayAPI_ListContainerStreamServer) error {
 	return errtypes.NotSupported("Unimplemented")
@@ -1568,6 +1654,10 @@ func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) 
 	return lcr, nil
 }
 
+// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+// old logic readable.
+/*
 func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResponse, error) {
 	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{Ref: &provider.Reference{Path: s.getSharedFolder(ctx)}})
 	if err != nil {
@@ -1607,6 +1697,7 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 
 	return lcr, nil
 }
+*/
 
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	providers, err := s.findProviders(ctx, req.Ref)
@@ -1686,6 +1777,27 @@ func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.Li
 		infos = append(infos, info)
 	}
 
+	// Inject mountpoints if they do not exist on disk
+	embeddedMounts := s.findEmbeddedMounts(path.Clean(req.Ref.GetPath()))
+	for _, mount := range embeddedMounts {
+		for _, info := range infos {
+			if info.Path == mount {
+				continue
+			}
+		}
+		infos = append(infos,
+			&provider.ResourceInfo{
+				Id: &provider.ResourceId{
+					StorageId: "/",
+					OpaqueId:  uuid.New().String(),
+				},
+				Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				Etag: uuid.New().String(),
+				Path: mount,
+				Size: 0,
+			})
+	}
+
 	return &provider.ListContainerResponse{
 		Status: status.NewOK(ctx),
 		Infos:  infos,
@@ -1693,8 +1805,6 @@ func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.Li
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	if utils.IsRelativeReference(req.Ref) {
 		return s.listContainer(ctx, req)
 	}
@@ -1707,171 +1817,205 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	}
 
 	if path.Clean(p) == s.getHome(ctx) {
-		return s.listHome(ctx, req)
-	}
-
-	if s.isSharedFolder(ctx, p) {
-		return s.listSharesFolder(ctx)
-	}
-
-	if !s.inSharedFolder(ctx, p) {
-		return s.listContainer(ctx, req)
-	}
-
-	// we need to provide the info of the target, not the reference.
-	if s.isShareName(ctx, p) {
-		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: p}}
-		statRes, err := s.stat(ctx, statReq)
+		res, err := s.listHome(ctx, req)
 		if err != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating share:"+statReq.Ref.String()),
+				Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), err),
 			}, nil
 		}
 
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &provider.ListContainerResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
-			}, nil
-		}
-
-		if protocol == "webdav" {
-			infos, err := s.webdavRefLs(ctx, statRes.Info.Target)
+		// Inject mountpoints if they do not exist on disk
+		embeddedMounts := s.findEmbeddedMounts(path.Clean(req.Ref.GetPath()))
+		for _, mount := range embeddedMounts {
+			for _, info := range res.Infos {
+				if info.Path == mount { // hmm this makes existing folders hide a mount, right?
+					continue
+				}
+			}
+			childStatRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: mount}})
 			if err != nil {
 				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error listing webdav reference: "+p),
+					Status: status.NewStatusFromErrType(ctx, "ListContainer ref: "+req.Ref.String(), err),
+				}, nil
+			}
+			res.Infos = append(res.Infos, childStatRes.Info)
+		}
+		return res, nil
+	}
+
+	return s.listContainer(ctx, req)
+
+	// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+	// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+	// old logic readable.
+	/*
+		if path.Clean(p) == s.getHome(ctx) {
+			return s.listHome(ctx, req)
+		}
+
+		if s.isSharedFolder(ctx, p) {
+			return s.listSharesFolder(ctx)
+		}
+
+		if !s.inSharedFolder(ctx, p) {
+			return s.listContainer(ctx, req)
+		}
+
+		// we need to provide the info of the target, not the reference.
+		if s.isShareName(ctx, p) {
+			statReq := &provider.StatRequest{Ref: &provider.Reference{Path: p}}
+			statRes, err := s.stat(ctx, statReq)
+			if err != nil {
+				return &provider.ListContainerResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error stating share:"+statReq.Ref.String()),
 				}, nil
 			}
 
-			for _, info := range infos {
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				return &provider.ListContainerResponse{
+					Status: statRes.Status,
+				}, nil
+			}
+
+			ri, protocol, err := s.checkRef(ctx, statRes.Info)
+			if err != nil {
+				return &provider.ListContainerResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				}, nil
+			}
+
+			if protocol == "webdav" {
+				infos, err := s.webdavRefLs(ctx, statRes.Info.Target)
+				if err != nil {
+					return &provider.ListContainerResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error listing webdav reference: "+p),
+					}, nil
+				}
+
+				for _, info := range infos {
+					base := path.Base(info.Path)
+					info.Path = path.Join(p, base)
+				}
+				return &provider.ListContainerResponse{
+					Status: status.NewOK(ctx),
+					Infos:  infos,
+				}, nil
+			}
+
+			if ri.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				err := errtypes.NotSupported("gateway: list container: cannot list non-container type:" + ri.Path)
+				log.Err(err).Msg("gateway: error listing")
+				return &provider.ListContainerResponse{
+					Status: status.NewInvalidArg(ctx, "resource is not a container"),
+				}, nil
+			}
+
+			newReq := &provider.ListContainerRequest{
+				Ref:                   &provider.Reference{Path: ri.Path},
+				ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+			}
+			newRes, err := s.listContainer(ctx, newReq)
+			if err != nil {
+				return &provider.ListContainerResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error listing "+newReq.Ref.String()),
+				}, nil
+			}
+
+			if newRes.Status.Code != rpc.Code_CODE_OK {
+				return &provider.ListContainerResponse{
+					Status: newRes.Status,
+				}, nil
+			}
+
+			// paths needs to be converted
+			for _, info := range newRes.Infos {
 				base := path.Base(info.Path)
 				info.Path = path.Join(p, base)
 			}
-			return &provider.ListContainerResponse{
-				Status: status.NewOK(ctx),
-				Infos:  infos,
-			}, nil
+
+			return newRes, nil
+
 		}
 
-		if ri.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			err := errtypes.NotSupported("gateway: list container: cannot list non-container type:" + ri.Path)
-			log.Err(err).Msg("gateway: error listing")
-			return &provider.ListContainerResponse{
-				Status: status.NewInvalidArg(ctx, "resource is not a container"),
-			}, nil
-		}
+		if s.isShareChild(ctx, p) {
+			shareName, shareChild := s.splitShare(ctx, p)
 
-		newReq := &provider.ListContainerRequest{
-			Ref:                   &provider.Reference{Path: ri.Path},
-			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-		}
-		newRes, err := s.listContainer(ctx, newReq)
-		if err != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error listing "+newReq.Ref.String()),
-			}, nil
-		}
-
-		if newRes.Status.Code != rpc.Code_CODE_OK {
-			return &provider.ListContainerResponse{
-				Status: newRes.Status,
-			}, nil
-		}
-
-		// paths needs to be converted
-		for _, info := range newRes.Infos {
-			base := path.Base(info.Path)
-			info.Path = path.Join(p, base)
-		}
-
-		return newRes, nil
-
-	}
-
-	if s.isShareChild(ctx, p) {
-		shareName, shareChild := s.splitShare(ctx, p)
-
-		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
-		statRes, err := s.stat(ctx, statReq)
-		if err != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating share child "+statReq.Ref.String()),
-			}, nil
-		}
-
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &provider.ListContainerResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
-			}, nil
-		}
-
-		if protocol == "webdav" {
-			infos, err := s.webdavRefLs(ctx, statRes.Info.Target, shareChild)
+			statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
+			statRes, err := s.stat(ctx, statReq)
 			if err != nil {
 				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error listing webdav reference: "+p),
+					Status: status.NewInternal(ctx, err, "gateway: error stating share child "+statReq.Ref.String()),
 				}, nil
 			}
 
-			for _, info := range infos {
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				return &provider.ListContainerResponse{
+					Status: statRes.Status,
+				}, nil
+			}
+
+			ri, protocol, err := s.checkRef(ctx, statRes.Info)
+			if err != nil {
+				return &provider.ListContainerResponse{
+					Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				}, nil
+			}
+
+			if protocol == "webdav" {
+				infos, err := s.webdavRefLs(ctx, statRes.Info.Target, shareChild)
+				if err != nil {
+					return &provider.ListContainerResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error listing webdav reference: "+p),
+					}, nil
+				}
+
+				for _, info := range infos {
+					base := path.Base(info.Path)
+					info.Path = path.Join(shareName, shareChild, base)
+				}
+				return &provider.ListContainerResponse{
+					Status: status.NewOK(ctx),
+					Infos:  infos,
+				}, nil
+			}
+
+			if ri.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				err := errtypes.NotSupported("gateway: list container: cannot list non-container type:" + ri.Path)
+				log.Err(err).Msg("gateway: error listing")
+				return &provider.ListContainerResponse{
+					Status: status.NewInvalidArg(ctx, "resource is not a container"),
+				}, nil
+			}
+
+			newReq := &provider.ListContainerRequest{
+				Ref:                   &provider.Reference{Path: path.Join(ri.Path, shareChild)},
+				ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+			}
+			newRes, err := s.listContainer(ctx, newReq)
+			if err != nil {
+				return &provider.ListContainerResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error listing "+newReq.Ref.String()),
+				}, nil
+			}
+
+			if newRes.Status.Code != rpc.Code_CODE_OK {
+				return &provider.ListContainerResponse{
+					Status: newRes.Status,
+				}, nil
+			}
+
+			// paths needs to be converted
+			for _, info := range newRes.Infos {
 				base := path.Base(info.Path)
 				info.Path = path.Join(shareName, shareChild, base)
 			}
-			return &provider.ListContainerResponse{
-				Status: status.NewOK(ctx),
-				Infos:  infos,
-			}, nil
+
+			return newRes, nil
+
 		}
 
-		if ri.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			err := errtypes.NotSupported("gateway: list container: cannot list non-container type:" + ri.Path)
-			log.Err(err).Msg("gateway: error listing")
-			return &provider.ListContainerResponse{
-				Status: status.NewInvalidArg(ctx, "resource is not a container"),
-			}, nil
-		}
-
-		newReq := &provider.ListContainerRequest{
-			Ref:                   &provider.Reference{Path: path.Join(ri.Path, shareChild)},
-			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-		}
-		newRes, err := s.listContainer(ctx, newReq)
-		if err != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error listing "+newReq.Ref.String()),
-			}, nil
-		}
-
-		if newRes.Status.Code != rpc.Code_CODE_OK {
-			return &provider.ListContainerResponse{
-				Status: newRes.Status,
-			}, nil
-		}
-
-		// paths needs to be converted
-		for _, info := range newRes.Infos {
-			base := path.Base(info.Path)
-			info.Path = path.Join(shareName, shareChild, base)
-		}
-
-		return newRes, nil
-
-	}
-
-	panic("gateway: stating an unknown path:" + p)
+		panic("gateway: stating an unknown path:" + p)
+	*/
 }
 
 func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
@@ -1896,6 +2040,10 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
 }
 
+// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+// old logic readable.
+/*
 // /home/MyShares/
 func (s *svc) isSharedFolder(ctx context.Context, p string) bool {
 	return false
@@ -1967,6 +2115,7 @@ func (s *svc) getSharedFolder(ctx context.Context) string {
 	shareFolder := path.Join(home, s.c.ShareFolder)
 	return shareFolder
 }
+*/
 
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return &provider.CreateSymlinkResponse{
@@ -2028,6 +2177,25 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
+	sourceProviderInfo, err := s.findProviders(ctx, req.Ref)
+	if err != nil {
+		return &provider.RestoreRecycleItemResponse{
+			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem ref="+req.Ref.String(), err),
+		}, nil
+	}
+	destinationProviderInfo, err := s.findProviders(ctx, req.RestoreRef)
+	if err != nil {
+		return &provider.RestoreRecycleItemResponse{
+			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem ref="+req.Ref.String(), err),
+		}, nil
+	}
+	if sourceProviderInfo[0].ProviderId != destinationProviderInfo[0].ProviderId ||
+		sourceProviderInfo[0].ProviderPath != destinationProviderInfo[0].ProviderPath {
+		return &provider.RestoreRecycleItemResponse{
+			Status: status.NewPermissionDenied(ctx, err, "gateway: cross-storage restores are forbidden"),
+		}, nil
+	}
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
@@ -2035,6 +2203,8 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 		}, nil
 	}
 
+	// TODO: HELP?!?
+	req.RestoreRef.Path = strings.TrimPrefix(req.RestoreRef.Path, destinationProviderInfo[0].ProviderPath)
 	res, err := c.RestoreRecycleItem(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RestoreRecycleItem")
@@ -2097,6 +2267,19 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 	}
 
 	return c, nil
+}
+
+func (s *svc) findEmbeddedMounts(basePath string) []string {
+	if basePath == "" {
+		return []string{}
+	}
+	mounts := []string{}
+	for mountPath := range s.c.StorageRules {
+		if strings.HasPrefix(mountPath, basePath) && mountPath != basePath {
+			mounts = append(mounts, mountPath)
+		}
+	}
+	return mounts
 }
 
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {

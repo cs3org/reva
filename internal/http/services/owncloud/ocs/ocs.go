@@ -96,7 +96,7 @@ func (s *svc) routerInit() error {
 	capabilitiesHandler.Init(s.c)
 	usersHandler.Init(s.c)
 	configHandler.Init(s.c)
-	sharesHandler.Init(s.c)
+	sharesHandler.InitDefault(s.c)
 	shareesHandler.Init(s.c)
 
 	s.router.Route("/v{version:(1|2)}.php", func(r chi.Router) {

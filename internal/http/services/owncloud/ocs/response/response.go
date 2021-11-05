@@ -45,6 +45,17 @@ type Response struct {
 	OCS *Payload `json:"ocs"`
 }
 
+// NewResponse returns an empty response
+func NewResponse() Response {
+	return Response{
+		OCS: &Payload{
+			XMLName: struct{}{},
+			Meta:    Meta{},
+			Data:    nil,
+		},
+	}
+}
+
 // Payload combines response metadata and data
 type Payload struct {
 	XMLName struct{}    `json:"-" xml:"ocs"`

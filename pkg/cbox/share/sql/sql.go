@@ -465,6 +465,8 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.Rece
 		switch fieldMask.Paths[i] {
 		case "state":
 			rs.State = share.State
+		case "mount_point":
+			rs.MountPoint = share.MountPoint
 		default:
 			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
 		}
@@ -472,7 +474,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.Rece
 
 	var query, queryAccept string
 	params := []interface{}{rs.Share.Id.OpaqueId, conversions.FormatUserID(user.Id)}
-	switch rs.GetState() {
+	switch rs.State {
 	case collaboration.ShareState_SHARE_STATE_REJECTED:
 		query = "insert into oc_share_acl(id, rejected_by) values(?, ?)"
 	case collaboration.ShareState_SHARE_STATE_ACCEPTED:

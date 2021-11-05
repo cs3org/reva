@@ -38,26 +38,35 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) {
+func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) (*link.PublicShare, *ocsError) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaServerError.StatusCode,
+			Message: "error getting grpc gateway client",
+			Error:   err,
+		}
 	}
 
 	err = r.ParseForm()
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Could not parse form from request", err)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaBadRequest.StatusCode,
+			Message: "Could not parse form from request",
+			Error:   err,
+		}
 	}
 
 	newPermissions, err := permissionFromRequest(r, h)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Could not read permission from request", err)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaBadRequest.StatusCode,
+			Message: "Could not read permission from request",
+			Error:   err,
+		}
 	}
 
 	if newPermissions == nil {
@@ -65,8 +74,11 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		// TODO: the default might change depending on allowed permissions and configs
 		newPermissions, err = ocPublicPermToCs3(1, h)
 		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "Could not convert default permissions", err)
-			return
+			return nil, &ocsError{
+				Code:    response.MetaServerError.StatusCode,
+				Message: "Could not convert default permissions",
+				Error:   err,
+			}
 		}
 	}
 
@@ -94,8 +106,11 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		if expireTimeString[0] != "" {
 			expireTime, err := conversions.ParseTimestamp(expireTimeString[0])
 			if err != nil {
-				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid datetime format", err)
-				return
+				return nil, &ocsError{
+					Code:    response.MetaServerError.StatusCode,
+					Message: "invalid datetime format",
+					Error:   err,
+				}
 			}
 			if expireTime != nil {
 				req.Grant.Expiration = expireTime
@@ -114,25 +129,22 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	createRes, err := c.CreatePublicShare(ctx, &req)
 	if err != nil {
 		log.Debug().Err(err).Str("createShare", "shares").Msgf("error creating a public share to resource id: %v", statInfo.GetId())
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error creating public share", fmt.Errorf("error creating a public share to resource id: %v", statInfo.GetId()))
-		return
+		return nil, &ocsError{
+			Code:    response.MetaServerError.StatusCode,
+			Message: "error creating public share",
+			Error:   fmt.Errorf("error creating a public share to resource id: %v", statInfo.GetId()),
+		}
 	}
 
 	if createRes.Status.Code != rpc.Code_CODE_OK {
 		log.Debug().Err(errors.New("create public share failed")).Str("shares", "createShare").Msgf("create public share failed with status code: %v", createRes.Status.Code.String())
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create public share request failed", err)
-		return
+		return nil, &ocsError{
+			Code:    response.MetaServerError.StatusCode,
+			Message: "grpc create public share request failed",
+			Error:   nil,
+		}
 	}
-
-	s := conversions.PublicShare2ShareData(createRes.Share, r, h.publicURL)
-	err = h.addFileInfo(ctx, s, statInfo)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
-		return
-	}
-	h.mapUserIds(ctx, c, s)
-
-	response.WriteOCSSuccess(w, r, s)
+	return createRes.Share, nil
 }
 
 func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSharesRequest_Filter) ([]*conversions.ShareData, *rpc.Status, error) {

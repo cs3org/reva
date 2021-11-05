@@ -20,8 +20,9 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 	"path"
+
+	rtrace "github.com/cs3org/reva/pkg/trace"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -37,11 +38,6 @@ import (
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
-
-	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
-		return nil, errtypes.AlreadyExists("gateway: can't share the share folder itself")
-	}
-
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
@@ -275,7 +271,9 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceiv
 //   1) if received share is mounted: we also do a rename in the storage
 //   2) if received share is not mounted: we only rename in user share provider.
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
-	log := appctx.GetLogger(ctx)
+	t := rtrace.Provider.Tracer("reva")
+	ctx, span := t.Start(ctx, "Gateway.UpdateReceivedShare")
+	defer span.End()
 
 	// sanity checks
 	switch {
@@ -305,64 +303,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		}, nil
 	}
 
-	res, err := c.UpdateReceivedShare(ctx, req)
-	if err != nil {
-		log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
-		return &collaboration.UpdateReceivedShareResponse{
-			Status: &rpc.Status{
-				Code: rpc.Code_CODE_INTERNAL,
-			},
-		}, nil
-	}
-
-	// error failing to update share state.
-	if res.Status.Code != rpc.Code_CODE_OK {
-		return res, nil
-	}
-
-	// if we don't need to create/delete references then we return early.
-	if !s.c.CommitShareToStorageRef {
-		return res, nil
-	}
-
-	// check if we have a resource id in the update response that we can use to update references
-	if res.GetShare().GetShare().GetResourceId() == nil {
-		log.Err(err).Msg("gateway: UpdateReceivedShare must return a ResourceId")
-		return &collaboration.UpdateReceivedShareResponse{
-			Status: &rpc.Status{
-				Code: rpc.Code_CODE_INTERNAL,
-			},
-		}, nil
-	}
-
-	// properties are updated in the order they appear in the field mask
-	// when an error occurs the request ends and no further fields are updated
-	for i := range req.UpdateMask.Paths {
-		switch req.UpdateMask.Paths[i] {
-		case "state":
-			switch req.GetShare().GetState() {
-			case collaboration.ShareState_SHARE_STATE_ACCEPTED:
-				rpcStatus := s.createReference(ctx, res.GetShare().GetShare().GetResourceId())
-				if rpcStatus.Code != rpc.Code_CODE_OK {
-					return &collaboration.UpdateReceivedShareResponse{Status: rpcStatus}, nil
-				}
-			case collaboration.ShareState_SHARE_STATE_REJECTED:
-				rpcStatus := s.removeReference(ctx, res.GetShare().GetShare().ResourceId)
-				if rpcStatus.Code != rpc.Code_CODE_OK && rpcStatus.Code != rpc.Code_CODE_NOT_FOUND {
-					return &collaboration.UpdateReceivedShareResponse{Status: rpcStatus}, nil
-				}
-			}
-		case "mount_point":
-			// TODO(labkode): implementing updating mount point
-			err = errtypes.NotSupported("gateway: update of mount point is not yet implemented")
-			return &collaboration.UpdateReceivedShareResponse{
-				Status: status.NewUnimplemented(ctx, err, "error updating received share"),
-			}, nil
-		default:
-			return nil, errtypes.NotSupported("updating " + req.UpdateMask.Paths[i] + " is not supported")
-		}
-	}
-	return res, nil
+	return c.UpdateReceivedShare(ctx, req)
 }
 
 func (s *svc) removeReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
@@ -432,85 +373,6 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	}
 
 	log.Debug().Str("share_path", sharePath).Msg("share reference successfully removed")
-
-	return status.NewOK(ctx)
-}
-
-func (s *svc) createReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
-	ref := &provider.Reference{
-		ResourceId: resourceID,
-	}
-	log := appctx.GetLogger(ctx)
-
-	// get the metadata about the share
-	c, err := s.find(ctx, ref)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
-	}
-
-	statReq := &provider.StatRequest{
-		Ref: ref,
-	}
-
-	statRes, err := c.Stat(ctx, statReq)
-	if err != nil {
-		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		log.Err(err).Msg("gateway: Stat failed on the share resource id: " + resourceID.String())
-		return status.NewInternal(ctx, err, "error updating received share")
-	}
-
-	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		err := errors.Wrap(err, "gateway: error calling GetHome")
-		return status.NewInternal(ctx, err, "error updating received share")
-	}
-
-	// reference path is the home path + some name
-	// CreateReferene(cs3://home/MyShares/x)
-	// that can end up in the storage provider like:
-	// /eos/user/.shadow/g/gonzalhu/MyShares/x
-	// A reference can point to any place, for that reason the namespace starts with cs3://
-	// For example, a reference can point also to a dropbox resource:
-	// CreateReference(dropbox://x/y/z)
-	// It is the responsibility of the gateway to resolve these references and merge the response back
-	// from the main request.
-	// TODO(labkode): the name of the share should be the filename it points to by default.
-	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
-	log.Info().Msg("mount path will be:" + refPath)
-
-	createRefReq := &provider.CreateReferenceRequest{
-		Ref: &provider.Reference{Path: refPath},
-		// cs3 is the Scheme and %s/%s is the Opaque parts of a net.URL.
-		TargetUri: fmt.Sprintf("cs3:%s/%s", resourceID.GetStorageId(), resourceID.GetOpaqueId()),
-	}
-
-	c, err = s.findByPath(ctx, refPath)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
-	}
-
-	createRefRes, err := c.CreateReference(ctx, createRefReq)
-	if err != nil {
-		log.Err(err).Msg("gateway: error calling GetHome")
-		return &rpc.Status{
-			Code: rpc.Code_CODE_INTERNAL,
-		}
-	}
-
-	if createRefRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(createRefRes.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "error updating received share")
-	}
 
 	return status.NewOK(ctx)
 }
