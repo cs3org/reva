@@ -9,11 +9,11 @@
 
 [shared]
 jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:19000"
+gatewaysvc = "localhost:39000"
 
 
 [grpc]
-address = "0.0.0.0:12000"
+address = "0.0.0.0:32000"
 
 # This is a storage provider that grants direct access to the wrapped storage
 # the context path wrapper reads the username from the context and prefixes the relative storage path with it
@@ -37,7 +37,7 @@ treesize_accounting = true
 
 # we have a locally running dataprovider
 [http]
-address = "0.0.0.0:12001"
+address = "0.0.0.0:32001"
 
 [http.services.dataprovider]
 driver = "ocis"

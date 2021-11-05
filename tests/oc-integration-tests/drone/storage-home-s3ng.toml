@@ -1,16 +1,15 @@
-# This storage-home.toml config file will start a reva service that:
-[shared]
-jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:19000"
-
-# - authenticates grpc storage provider requests using the internal jwt token
-# - authenticates http upload and download requests requests using basic auth
+# This config file will start a reva service that:
+# - uses the s3ng driver to serve users, jailed into their home (/home)
 # - serves the home storage provider on grpc port 12000
 # - serves http dataprovider for this storage on port 12001
 #   - /data - dataprovider: file up and download
 #
 # The home storage will inject the username into the path and jail users into
 # their home directory
+
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
 
 [grpc]
 address = "0.0.0.0:12000"
