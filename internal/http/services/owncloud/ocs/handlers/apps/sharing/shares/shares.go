@@ -207,7 +207,13 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 	case int(conversions.ShareTypeSpaceMembership):
 		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
-			h.addSpaceMember(w, r, statRes.Info, role, val)
+			switch role.Name {
+			case conversions.RoleManager, conversions.RoleEditor, conversions.RoleViewer:
+				h.addSpaceMember(w, r, statRes.Info, role, val)
+			default:
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid role for space member", nil)
+				return
+			}
 		}
 	default:
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "unknown share type", nil)
