@@ -33,6 +33,182 @@ type webdavEndpoint struct {
 	token    string
 }
 
+// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+// old logic readable.
+/*
+func (s *svc) webdavRefStat(ctx context.Context, targetURL string, nameQueries ...string) (*provider.ResourceInfo, error) {
+	targetURL, err := appendNameQuery(targetURL, nameQueries...)
+	if err != nil {
+		return nil, err
+	}
+
+	ep, err := s.extractEndpointInfo(ctx, targetURL)
+	if err != nil {
+		return nil, err
+	}
+	webdavEP, err := s.getWebdavEndpoint(ctx, ep.endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	c := gowebdav.NewClient(webdavEP, "", "")
+	c.SetHeader(ctxpkg.TokenHeader, ep.token)
+
+	// TODO(ishank011): We need to call PROPFIND ourselves as we need to retrieve
+	// ownloud-specific fields to get the resource ID and permissions.
+	info, err := c.Stat(ep.filePath)
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("gateway: error statting %s at the webdav endpoint: %s", ep.filePath, webdavEP))
+	}
+	return normalize(info.(*gowebdav.File)), nil
+}
+
+func (s *svc) webdavRefLs(ctx context.Context, targetURL string, nameQueries ...string) ([]*provider.ResourceInfo, error) {
+	targetURL, err := appendNameQuery(targetURL, nameQueries...)
+	if err != nil {
+		return nil, err
+	}
+
+	ep, err := s.extractEndpointInfo(ctx, targetURL)
+	if err != nil {
+		return nil, err
+	}
+	webdavEP, err := s.getWebdavEndpoint(ctx, ep.endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	c := gowebdav.NewClient(webdavEP, "", "")
+	c.SetHeader(ctxpkg.TokenHeader, ep.token)
+
+	// TODO(ishank011): We need to call PROPFIND ourselves as we need to retrieve
+	// ownloud-specific fields to get the resource ID and permissions.
+	infos, err := c.ReadDir(ep.filePath)
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("gateway: error listing %s at the webdav endpoint: %s", ep.filePath, webdavEP))
+	}
+
+	mds := []*provider.ResourceInfo{}
+	for _, fi := range infos {
+		info := fi.(gowebdav.File)
+		mds = append(mds, normalize(&info))
+	}
+	return mds, nil
+}
+
+func (s *svc) webdavRefMkdir(ctx context.Context, targetURL string, nameQueries ...string) error {
+	targetURL, err := appendNameQuery(targetURL, nameQueries...)
+	if err != nil {
+		return err
+	}
+
+	ep, err := s.extractEndpointInfo(ctx, targetURL)
+	if err != nil {
+		return err
+	}
+	webdavEP, err := s.getWebdavEndpoint(ctx, ep.endpoint)
+	if err != nil {
+		return err
+	}
+
+	c := gowebdav.NewClient(webdavEP, "", "")
+	c.SetHeader(ctxpkg.TokenHeader, ep.token)
+
+	err = c.Mkdir(ep.filePath, 0700)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("gateway: error creating dir %s at the webdav endpoint: %s", ep.filePath, webdavEP))
+	}
+	return nil
+}
+
+func (s *svc) webdavRefMove(ctx context.Context, targetURL, src, destination string) error {
+	srcURL, err := appendNameQuery(targetURL, src)
+	if err != nil {
+		return err
+	}
+	srcEP, err := s.extractEndpointInfo(ctx, srcURL)
+	if err != nil {
+		return err
+	}
+	srcWebdavEP, err := s.getWebdavEndpoint(ctx, srcEP.endpoint)
+	if err != nil {
+		return err
+	}
+
+	destURL, err := appendNameQuery(targetURL, destination)
+	if err != nil {
+		return err
+	}
+	destEP, err := s.extractEndpointInfo(ctx, destURL)
+	if err != nil {
+		return err
+	}
+
+	c := gowebdav.NewClient(srcWebdavEP, "", "")
+	c.SetHeader(ctxpkg.TokenHeader, srcEP.token)
+
+	err = c.Rename(srcEP.filePath, destEP.filePath, true)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("gateway: error renaming %s to %s at the webdav endpoint: %s", srcEP.filePath, destEP.filePath, srcWebdavEP))
+	}
+	return nil
+}
+
+func (s *svc) webdavRefDelete(ctx context.Context, targetURL string, nameQueries ...string) error {
+	targetURL, err := appendNameQuery(targetURL, nameQueries...)
+	if err != nil {
+		return err
+	}
+
+	ep, err := s.extractEndpointInfo(ctx, targetURL)
+	if err != nil {
+		return err
+	}
+	webdavEP, err := s.getWebdavEndpoint(ctx, ep.endpoint)
+	if err != nil {
+		return err
+	}
+
+	c := gowebdav.NewClient(webdavEP, "", "")
+	c.SetHeader(ctxpkg.TokenHeader, ep.token)
+
+	err = c.Remove(ep.filePath)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("gateway: error removing %s at the webdav endpoint: %s", ep.filePath, webdavEP))
+	}
+	return nil
+}
+
+func (s *svc) webdavRefTransferEndpoint(ctx context.Context, targetURL string, nameQueries ...string) (string, *types.Opaque, error) {
+	targetURL, err := appendNameQuery(targetURL, nameQueries...)
+	if err != nil {
+		return "", nil, err
+	}
+
+	ep, err := s.extractEndpointInfo(ctx, targetURL)
+	if err != nil {
+		return "", nil, err
+	}
+	webdavEP, err := s.getWebdavEndpoint(ctx, ep.endpoint)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return webdavEP, &types.Opaque{
+		Map: map[string]*types.OpaqueEntry{
+			"webdav-file-path": {
+				Decoder: "plain",
+				Value:   []byte(ep.filePath),
+			},
+			"webdav-token": {
+				Decoder: "plain",
+				Value:   []byte(ep.token),
+			},
+		},
+	}, nil
+}
+*/
 func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webdavEndpoint, error) {
 	if targetURL == "" {
 		return nil, errtypes.BadRequest("gateway: ref target is an empty uri")
@@ -57,6 +233,47 @@ func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webda
 		token:    uri.User.String(),
 	}, nil
 }
+
+// The old logic had to check if a path pointed to the share folder a share mount point or a share child
+// It also dealt with webdav references for OCM shares. The code below is commented en bloc to keep the
+// old logic readable.
+/*
+func (s *svc) getWebdavEndpoint(ctx context.Context, domain string) (string, error) {
+	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		Domain: domain,
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "gateway: error calling GetInfoByDomain")
+	}
+	for _, s := range meshProvider.ProviderInfo.Services {
+		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
+			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errtypes.NotFound(domain)
+}
+
+func normalize(info *gowebdav.File) *provider.ResourceInfo {
+	return &provider.ResourceInfo{
+		// TODO(ishank011): Add Id, PermissionSet, Owner
+		Path:     info.Path(),
+		Type:     getResourceType(info.IsDir()),
+		Etag:     info.ETag(),
+		MimeType: info.ContentType(),
+		Size:     uint64(info.Size()),
+		Mtime: &types.Timestamp{
+			Seconds: uint64(info.ModTime().Unix()),
+		},
+	}
+}
+
+func getResourceType(isDir bool) provider.ResourceType {
+	if isDir {
+		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
+	}
+	return provider.ResourceType_RESOURCE_TYPE_FILE
+}
+*/
 
 func appendNameQuery(targetURL string, nameQueries ...string) (string, error) {
 	uri, err := url.Parse(targetURL)
