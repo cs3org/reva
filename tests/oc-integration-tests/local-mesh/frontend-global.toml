@@ -7,10 +7,10 @@
 
 [shared]
 jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:19000"
+gatewaysvc = "localhost:39000"
 
 [http]
-address = "0.0.0.0:20180"
+address = "0.0.0.0:40180"
 
 [http.middlewares.cors]
 allow_credentials = true
@@ -18,7 +18,7 @@ allow_credentials = true
 [http.services.ocdav]
 # serve ocdav on the root path
 prefix = ""
-chunk_folder = "/drone/src/tmp/reva/chunks"
+chunk_folder = "/var/tmp/reva/chunks"
 # for user lookups
 # prefix the path of requests to /dav/files with this namespace
 # While owncloud has only listed usernames at this endpoint CERN has
@@ -102,13 +102,3 @@ resumable = "1.0.0"
 extension = "creation,creation-with-upload"
 http_method_override = ""
 max_chunk_size = 0
-
-# serve /ocm
-[http.services.ocmd]
-prefix = "ocm"
-
-[http.middlewares.providerauthorizer]
-driver = "json"
-
-[http.middlewares.providerauthorizer.drivers.json]
-providers = "providers.demo.json"

@@ -1,9 +1,10 @@
+# This config file will start a reva service that:
+# - handles user metadata and user preferences
+# - serves the grpc services on port 18000
+
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
-# This users.toml config file will start a reva service that:
-# - handles user metadata and user preferences
-# - serves the grpc services on port 18000
 [grpc]
 address = "0.0.0.0:18000"
 
@@ -18,7 +19,7 @@ base_dn="dc=owncloud,dc=com"
 loginfilter="(&(objectclass=posixAccount)(|(cn={{login}}))(uid={{login}}))"
 bind_username="cn=admin,dc=owncloud,dc=com"
 bind_password="admin"
-idp="http://localhost:18000"
+idp="http://localhost:20080"
 [grpc.services.authprovider.auth_managers.ldap.schema]
 uid="uid"
 displayName="displayName"
@@ -39,7 +40,7 @@ attributefilter="(&(objectclass=posixAccount)({{attr}}={{value}}))"
 groupfilter="(&(objectclass=posixGroup)(cn=*)(memberuid={{.OpaqueId}}))"
 bind_username="cn=admin,dc=owncloud,dc=com"
 bind_password="admin"
-idp="http://localhost:18000"
+idp="http://localhost:20080"
 
 [grpc.services.userprovider.drivers.ldap.schema]
 uid="uid"
@@ -61,7 +62,7 @@ attributefilter="(&(objectclass=posixGroup)({{attr}}={{value}}))"
 memberfilter="(&(objectclass=posixAccount)(cn={{.OpaqueId}}))"
 bind_username="cn=admin,dc=owncloud,dc=com"
 bind_password="admin"
-idp="http://localhost:18000"
+idp="http://localhost:20080"
 
 [grpc.services.groupprovider.drivers.ldap.schema]
 gid="cn"

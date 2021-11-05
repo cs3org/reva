@@ -66,7 +66,6 @@ var (
 		ocmShareUpdateReceivedCommand(),
 		openInAppCommand(),
 		preferencesCommand(),
-		genCommand(),
 		publicShareCreateCommand(),
 		publicShareListCommand(),
 		publicShareRemoveCommand(),

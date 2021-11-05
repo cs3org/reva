@@ -1,14 +1,15 @@
-[shared]
-jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:19000"
-
-# This gateway.toml config file will start a reva service that:
-# - serves as a gateway for all requests
+# This config file will start a reva service that:
+# - serves as a gateway for all CS3 requests
 # - looks up the storageprovider using a storageregistry
 # - looks up the authprovider using an authregistry
 # - serves the gateway on grpc port 19000
 # - serves http datagateway on port 19001
 #   - /data - datagateway: file up and download
+
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
+
 [grpc]
 address = "0.0.0.0:19000"
 
@@ -25,10 +26,10 @@ groupprovidersvc = "localhost:18000"
 usershareprovidersvc = "localhost:17000"
 publicshareprovidersvc = "localhost:17000"
 # ocm
-ocmcoresvc = "localhost:13000"
-ocmshareprovidersvc = "localhost:13000"
-ocminvitemanagersvc = "localhost:13000"
-ocmproviderauthorizersvc = "localhost:13000"
+ocmcoresvc = "localhost:14000"
+ocmshareprovidersvc = "localhost:14000"
+ocminvitemanagersvc = "localhost:14000"
+ocmproviderauthorizersvc = "localhost:14000"
 # other
 commit_share_to_storage_grant = true
 commit_share_to_storage_ref = true
@@ -45,7 +46,6 @@ driver = "static"
 [grpc.services.authregistry.drivers.static.rules]
 publicshares = "localhost:17000" # started with the shares.toml
 basic = "localhost:18000" # started with the users.toml
-bearer = "localhost:20099" # started with the frontend.toml
 
 [grpc.services.storageregistry]
 driver = "static"
