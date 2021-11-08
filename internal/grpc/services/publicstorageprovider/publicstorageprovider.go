@@ -49,14 +49,12 @@ func init() {
 }
 
 type config struct {
-	MountPath   string `mapstructure:"mount_path"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
 type service struct {
-	conf      *config
-	mountPath string
-	gateway   gateway.GatewayAPIClient
+	conf    *config
+	gateway gateway.GatewayAPIClient
 }
 
 func (s *service) Close() error {
@@ -87,17 +85,14 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	mountPath := c.MountPath
-
 	gateway, err := pool.GetGatewayServiceClient(c.GatewayAddr)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
-		conf:      c,
-		mountPath: mountPath,
-		gateway:   gateway,
+		conf:    c,
+		gateway: gateway,
 	}
 
 	return service, nil
@@ -495,7 +490,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		if err := addShare(statResponse.Info, ls); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("share", ls).Interface("info", statResponse.Info).Msg("error when adding share")
 		}
-		statResponse.Info.Path = path.Join(s.mountPath, "/", tkn, relativePath)
+		statResponse.Info.Path = path.Join("/", tkn, relativePath)
 		filterPermissions(statResponse.Info.PermissionSet, ls.GetPermissions().Permissions)
 	}
 
@@ -554,7 +549,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 	for i := range listContainerR.Infos {
 		filterPermissions(listContainerR.Infos[i].PermissionSet, ls.GetPermissions().Permissions)
-		listContainerR.Infos[i].Path = path.Join(s.mountPath, "/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
+		listContainerR.Infos[i].Path = path.Join("/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
 		if err := addShare(listContainerR.Infos[i], ls); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("share", ls).Interface("info", listContainerR.Infos[i]).Msg("error when adding share")
 		}
@@ -594,15 +589,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token st
 		return "", "", errtypes.BadRequest("invalid ref: " + ref.String())
 	}
 
-	// i.e path: /public/{token}/path/to/subfolders
-	fn := ref.GetPath()
-	// fsfn: /{token}/path/to/subfolders
-	fsfn, err := s.trimMountPrefix(fn)
-	if err != nil {
-		return "", "", err
-	}
-
-	parts := strings.SplitN(fsfn, "/", 3)
+	parts := strings.SplitN(ref.Path, "/", 3)
 	token = parts[1]
 	if len(parts) > 2 {
 		relativePath = parts[2]
@@ -665,13 +652,6 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
-}
-
-func (s *service) trimMountPrefix(fn string) (string, error) {
-	if strings.HasPrefix(fn, s.mountPath) {
-		return path.Join("/", strings.TrimPrefix(fn, s.mountPath)), nil
-	}
-	return "", errors.Errorf("path=%q does not belong to this storage provider mount path=%q"+fn, s.mountPath)
 }
 
 // resolveToken returns the path and share for the publicly shared resource.

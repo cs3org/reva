@@ -31,7 +31,7 @@ home_provider = "/personal"
 
 [grpc.services.storageregistry.drivers.spaces.rules]
 "/personal" = {"address" = "localhost:19000"}
-"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:19000"}
+#"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:19000", , "provider_id" = "123e4567-e89b-12d3-a456-426655440000", "provider_path" = "/personal"}
 
 # needs a publicauthprovider but we can only start one authporvider in a combined config
 #"/public" = {"address" = "localhost:13000"}
@@ -39,7 +39,7 @@ home_provider = "/personal"
 
 [grpc.services.gateway.storage_rules]
 "/personal" = {"address" = "localhost:19000"}
-"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:19000"}
+#"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:19000"}
 "/shares" = {"address" = "localhost:19002"}
 
 [grpc.services.authprovider]

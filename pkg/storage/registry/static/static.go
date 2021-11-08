@@ -46,6 +46,8 @@ var bracketRegex = regexp.MustCompile(`\[(.*?)\]`)
 type rule struct {
 	Mapping           string            `mapstructure:"mapping"`
 	Address           string            `mapstructure:"address"`
+	ProviderID        string            `mapstructure:"provider_id"`
+	ProviderPath      string            `mapstructure:"provider_path"`
 	Aliases           map[string]string `mapstructure:"aliases"`
 	AllowedUserAgents []string          `mapstructure:"allowed_user_agents"`
 }
@@ -178,8 +180,9 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 				// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
 				if m := r.FindString(ref.ResourceId.StorageId); m != "" {
 					return []*registrypb.ProviderInfo{{
-						ProviderId: ref.ResourceId.StorageId,
-						Address:    addr,
+						ProviderId:   ref.ResourceId.StorageId,
+						Address:      addr,
+						ProviderPath: rule.ProviderPath,
 					}}, nil
 				}
 			}
@@ -223,6 +226,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 					continue
 				}
 				match = &registrypb.ProviderInfo{
+					ProviderId:   rule.ProviderID,
 					ProviderPath: m,
 					Address:      addr,
 				}
@@ -232,6 +236,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 				combs := generateRegexCombinations(prefix)
 				for _, c := range combs {
 					shardedMatches = append(shardedMatches, &registrypb.ProviderInfo{
+						ProviderId:   rule.ProviderID,
 						ProviderPath: c,
 						Address:      addr,
 					})
