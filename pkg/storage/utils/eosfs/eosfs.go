@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient/eosgrpc"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
@@ -1796,6 +1797,12 @@ func (fs *eosfs) extractUIDAndGID(u *userpb.User) (eosclient.Authorization, erro
 }
 
 func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient.Authorization, error) {
+	log := appctx.GetLogger(ctx)
+	if userIDInterface, err := fs.userIDCache.Get(u.OpaqueId); err == nil {
+		log.Debug().Msg("eosfs: found cached user " + u.OpaqueId)
+		return fs.extractUIDAndGID(userIDInterface.(*userpb.User))
+	}
+
 	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
 	if err != nil {
 		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting gateway grpc client")
@@ -1804,11 +1811,15 @@ func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 		UserId: u,
 	})
 	if err != nil {
+		_ = fs.userIDCache.SetWithExpire(u.OpaqueId, &userpb.User{}, 12*time.Hour)
 		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting user")
 	}
 	if getUserResp.Status.Code != rpc.Code_CODE_OK {
-		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: grpc get user failed")
+		_ = fs.userIDCache.SetWithExpire(u.OpaqueId, &userpb.User{}, 12*time.Hour)
+		return eosclient.Authorization{}, status.NewErrorFromCode(getUserResp.Status.Code, "eosfs")
 	}
+
+	_ = fs.userIDCache.Set(u.OpaqueId, getUserResp.User)
 	return fs.extractUIDAndGID(getUserResp.User)
 }
 
@@ -1834,10 +1845,16 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 		Value: uid,
 	})
 	if err != nil {
+		// Insert an empty object in the cache so that we don't make another call
+		// for a specific amount of time
+		_ = fs.userIDCache.SetWithExpire(uid, &userpb.UserId{}, 12*time.Hour)
 		return nil, errors.Wrap(err, "eosfs: error getting user")
 	}
 	if getUserResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, errors.Wrap(err, "eosfs: grpc get user failed")
+		// Insert an empty object in the cache so that we don't make another call
+		// for a specific amount of time
+		_ = fs.userIDCache.SetWithExpire(uid, &userpb.UserId{}, 12*time.Hour)
+		return nil, status.NewErrorFromCode(getUserResp.Status.Code, "eosfs")
 	}
 
 	_ = fs.userIDCache.Set(uid, getUserResp.User.Id)
