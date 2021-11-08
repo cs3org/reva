@@ -771,7 +771,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	}
 
 	if info == nil {
-		return nil, errtypes.NotFound("not found")
+		return &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
 	}
 	return &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: info}, nil
 }
