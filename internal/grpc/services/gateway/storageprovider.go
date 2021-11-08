@@ -37,13 +37,14 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/useragent"
+	ua "github.com/mileusna/useragent"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
-	"github.com/cs3org/reva/pkg/useragent"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -1657,13 +1658,13 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 	return lcr, nil
 }
 
-func (s *svc) isFolderHidden(ua, path string) bool {
-	uaSet, ok := s.hiddenRootFolders[ua]
+func (s *svc) isPathAllowed(ua *ua.UserAgent, path string) bool {
+	uaLst, ok := s.c.AllowedUserAgents[path]
 	if !ok {
-		return false
+		// if no user agent is defined for a path, all user agents are allowed
+		return true
 	}
-	_, ok = uaSet[path]
-	return ok
+	return useragent.IsUserAgentAllowed(ua, uaLst)
 }
 
 func (s *svc) filterProvidersByUserAgent(ctx context.Context, providers []*registry.ProviderInfo) []*registry.ProviderInfo {
@@ -1671,11 +1672,10 @@ func (s *svc) filterProvidersByUserAgent(ctx context.Context, providers []*regis
 	if !ok {
 		return providers
 	}
-	cat := useragent.GetCategory(ua)
 
 	filters := []*registry.ProviderInfo{}
 	for _, p := range providers {
-		if !s.isFolderHidden(cat, p.ProviderPath) {
+		if s.isPathAllowed(ua, p.ProviderPath) {
 			filters = append(filters, p)
 		}
 	}
@@ -1691,19 +1691,9 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	}
 	providers = getUniqueProviders(providers)
 
-	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
-	if st.Code != rpc.Code_CODE_OK {
-		return &provider.ListContainerResponse{
-			Status: st,
-		}, nil
-	}
+	resPath := req.Ref.GetPath()
 
-	// check if the path is the root folder
-	if path.Clean(p) == "/" {
-		providers = s.filterProvidersByUserAgent(ctx, providers)
-	}
-
-	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || p == "" || strings.HasPrefix(p, providers[0].ProviderPath)) {
+	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
 		c, err := s.getStorageProviderClient(ctx, providers[0])
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1724,7 +1714,7 @@ func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.Li
 	nestedInfos := make(map[string]*provider.ResourceInfo)
 	log := appctx.GetLogger(ctx)
 
-	for _, p := range providers {
+	for _, p := range s.filterProvidersByUserAgent(ctx, providers) {
 		c, err := s.getStorageProviderClient(ctx, p)
 		if err != nil {
 			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
