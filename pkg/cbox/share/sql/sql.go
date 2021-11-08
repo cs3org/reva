@@ -397,7 +397,7 @@ func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*
 	} else {
 		query += "AND (share_with=?  AND share_type = 0)"
 	}
-	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemType, &s.Prefix, &s.ItemSource, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.RejectedBy); err != nil {
+	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.RejectedBy); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(id.OpaqueId)
 		}
