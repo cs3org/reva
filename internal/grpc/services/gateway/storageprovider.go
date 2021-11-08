@@ -527,29 +527,19 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	if utils.IsRelativeReference(req.Ref) {
-		return s.createContainer(ctx, req)
-	}
-
-	_, st := s.getPath(ctx, req.Ref)
-	if st.Code != rpc.Code_CODE_OK {
-		return &provider.CreateContainerResponse{
-			Status: st,
-		}, nil
-	}
-
-	return s.createContainer(ctx, req)
-}
-
-func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	c, p, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateContainerResponse{
 			Status: status.NewStatusFromErrType(ctx, "createContainer ref="+req.Ref.String(), err),
 		}, nil
 	}
-	if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-		return nil, err
+
+	if utils.IsAbsolutePathReference(req.Ref) {
+		if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
+			return nil, err
+		}
+		req.Ref.Path = utils.MakeRelativePath(req.Ref.Path)
+		req.Ref.ResourceId = &provider.ResourceId{StorageId: p.ProviderId}
 	}
 	res, err := c.CreateContainer(ctx, req)
 	if err != nil {
