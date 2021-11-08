@@ -44,21 +44,10 @@ import (
 )
 
 func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-	p, st := s.getPath(ctx, req.Ref)
-	if st.Code != rpc.Code_CODE_OK {
-		if st.Code == rpc.Code_CODE_NOT_FOUND {
-			return &providerpb.OpenInAppResponse{
-				Status: status.NewNotFound(ctx, "gateway: resource not found:"+req.Ref.String()),
-			}, nil
-		}
-		return &providerpb.OpenInAppResponse{
-			Status: st,
-		}, nil
-	}
 
-	resName, resChild := p, ""
+	resChild := ""
 	statRes, err := s.Stat(ctx, &storageprovider.StatRequest{
-		Ref: &storageprovider.Reference{Path: resName},
+		Ref: req.Ref,
 	})
 	if err != nil {
 		return &providerpb.OpenInAppResponse{
@@ -66,9 +55,8 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		}, nil
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
 		return &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
+			Status: statRes.Status,
 		}, nil
 	}
 

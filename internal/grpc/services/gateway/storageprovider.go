@@ -352,43 +352,16 @@ func (s *svc) getHome(_ context.Context) string {
 }
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
-	if utils.IsRelativeReference(req.Ref) {
-		return s.initiateFileDownload(ctx, req)
-	}
-
-	_, st := s.getPath(ctx, req.Ref)
-	if st.Code != rpc.Code_CODE_OK {
-		return &gateway.InitiateFileDownloadResponse{
-			Status: st,
-		}, nil
-	}
-
-	statReq := &provider.StatRequest{Ref: req.Ref}
-	statRes, err := s.Stat(ctx, statReq)
-	if err != nil {
-		return &gateway.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-		}, nil
-	}
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return &gateway.InitiateFileDownloadResponse{
-			Status: statRes.Status,
-		}, nil
-	}
-	return s.initiateFileDownload(ctx, req)
-}
-
-func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
 	// TODO(ishank011): enable downloading references spread across storage providers, eg. /eos
-	c, p, err := s.find(ctx, req.Ref)
+	var c provider.ProviderAPIClient
+	var err error
+	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileDownloadResponse{
 			Status: status.NewStatusFromErrType(ctx, "error initiating download ref="+req.Ref.String(), err),
 		}, nil
 	}
-	if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-		return nil, err
-	}
+
 	storageRes, err := c.InitiateFileDownload(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling InitiateFileDownload")
@@ -433,29 +406,15 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
-	if utils.IsRelativeReference(req.Ref) {
-		return s.initiateFileUpload(ctx, req)
-	}
-	_, st := s.getPath(ctx, req.Ref)
-	if st.Code != rpc.Code_CODE_OK {
-		return &gateway.InitiateFileUploadResponse{
-			Status: st,
-		}, nil
-	}
-
-	return s.initiateFileUpload(ctx, req)
-}
-
-func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
-	c, p, err := s.find(ctx, req.Ref)
+	var c provider.ProviderAPIClient
+	var err error
+	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileUploadResponse{
 			Status: status.NewStatusFromErrType(ctx, "initiateFileUpload ref="+req.Ref.String(), err),
 		}, nil
 	}
-	if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-		return nil, err
-	}
+
 	storageRes, err := c.InitiateFileUpload(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling InitiateFileUpload")
@@ -527,20 +486,15 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	c, p, err := s.find(ctx, req.Ref)
+	var c provider.ProviderAPIClient
+	var err error
+	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateContainerResponse{
 			Status: status.NewStatusFromErrType(ctx, "createContainer ref="+req.Ref.String(), err),
 		}, nil
 	}
 
-	if utils.IsAbsolutePathReference(req.Ref) {
-		if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-			return nil, err
-		}
-		req.Ref.Path = utils.MakeRelativePath(req.Ref.Path)
-		req.Ref.ResourceId = &provider.ResourceId{StorageId: p.ProviderId}
-	}
 	res, err := c.CreateContainer(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
@@ -550,27 +504,16 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 }
 
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	_, st := s.getPath(ctx, req.Ref)
-	if st.Code != rpc.Code_CODE_OK {
-		return &provider.DeleteResponse{
-			Status: st,
-		}, nil
-	}
-
-	return s.delete(ctx, req)
-}
-
-func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	// TODO(ishank011): enable deleting references spread across storage providers, eg. /eos
-	c, p, err := s.find(ctx, req.Ref)
+	var c provider.ProviderAPIClient
+	var err error
+	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.DeleteResponse{
 			Status: status.NewStatusFromErrType(ctx, "delete ref="+req.Ref.String(), err),
 		}, nil
 	}
-	if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-		return nil, err
-	}
+
 	res, err := c.Delete(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling Delete")
@@ -580,67 +523,29 @@ func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 }
 
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	_, st := s.getPath(ctx, req.Source)
-	if st.Code != rpc.Code_CODE_OK {
-		return &provider.MoveResponse{
-			Status: st,
-		}, nil
-	}
-
-	_, st2 := s.getPath(ctx, req.Destination)
-	if st2.Code != rpc.Code_CODE_OK && st2.Code != rpc.Code_CODE_NOT_FOUND {
-		return &provider.MoveResponse{
-			Status: st2,
-		}, nil
-	}
-
-	return s.move(ctx, req)
-}
-
-func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	srcProviders, err := s.findProviders(ctx, req.Source)
+	var c provider.ProviderAPIClient
+	var err error
+	c, req.Source, err = s.findAndUnwrap(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewStatusFromErrType(ctx, "move src="+req.Source.String(), err),
+			Status: status.NewStatusFromErrType(ctx, "Move ref="+req.Source.String(), err),
 		}, nil
 	}
 
-	dstProviders, err := s.findProviders(ctx, req.Destination)
+	_, req.Source, err = s.findAndUnwrap(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewStatusFromErrType(ctx, "move dst="+req.Destination.String(), err),
+			Status: status.NewStatusFromErrType(ctx, "Move ref="+req.Destination.String(), err),
 		}, nil
 	}
 
-	// if providers are not the same we do not implement cross storage move yet.
-	if len(srcProviders) != 1 || len(dstProviders) != 1 {
+	// if spaces are not the same we do not implement cross storage copy yet.
+	// TODO allow for spaces on the same provider
+	if !utils.ResourceIDEqual(req.Source.ResourceId, req.Destination.ResourceId) {
 		res := &provider.MoveResponse{
 			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
 		}
 		return res, nil
-	}
-
-	srcProvider, dstProvider := srcProviders[0], dstProviders[0]
-
-	// if providers are not the same we do not implement cross storage copy yet.
-	if srcProvider.Address != dstProvider.Address {
-		res := &provider.MoveResponse{
-			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
-		}
-		return res, nil
-	}
-
-	c, err := s.getStorageProviderClient(ctx, srcProvider)
-	if err != nil {
-		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error connecting to storage provider="+srcProvider.Address),
-		}, nil
-	}
-	if req.Source, err = unwrap(req.Source, srcProvider.ProviderPath); err != nil {
-		return nil, err
-	}
-	if req.Destination, err = unwrap(req.Destination, dstProvider.ProviderPath); err != nil {
-		return nil, err
 	}
 
 	return c.Move(ctx, req)
@@ -648,15 +553,15 @@ func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 
 func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
-	c, p, err := s.find(ctx, req.Ref)
+	var c provider.ProviderAPIClient
+	var err error
+	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.SetArbitraryMetadataResponse{
 			Status: status.NewStatusFromErrType(ctx, "SetArbitraryMetadata ref="+req.Ref.String(), err),
 		}, nil
 	}
-	if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-		return nil, err
-	}
+
 	res, err := c.SetArbitraryMetadata(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling Stat")
@@ -667,15 +572,15 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 
 func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
-	c, p, err := s.find(ctx, req.Ref)
+	var c provider.ProviderAPIClient
+	var err error
+	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.UnsetArbitraryMetadataResponse{
 			Status: status.NewStatusFromErrType(ctx, "UnsetArbitraryMetadata ref="+req.Ref.String(), err),
 		}, nil
 	}
-	if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-		return nil, err
-	}
+
 	res, err := c.UnsetArbitraryMetadata(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling Stat")
@@ -883,28 +788,6 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	}, nil
 }
 
-func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
-
-	// check if it is an id based or combined reference first
-	if ref.ResourceId != nil {
-		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
-		res, err := s.Stat(ctx, req)
-		if err != nil {
-			return "", status.NewStatusFromErrType(ctx, "getPath ref="+ref.String(), err)
-		}
-		if res != nil && res.Status.Code != rpc.Code_CODE_OK {
-			return "", res.Status
-		}
-
-		return res.Info.Path, res.Status
-	}
-
-	if utils.IsAbsolutePathReference(ref) {
-		return ref.Path, &rpc.Status{Code: rpc.Code_CODE_OK}
-	}
-	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
-}
-
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return &provider.CreateSymlinkResponse{
 		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateSymlink not implemented"), "CreateSymlink not implemented"),
@@ -912,16 +795,15 @@ func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequ
 }
 
 func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
-	c, p, err := s.find(ctx, req.Ref)
+	var c provider.ProviderAPIClient
+	var err error
+	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListFileVersionsResponse{
 			Status: status.NewStatusFromErrType(ctx, "ListFileVersions ref="+req.Ref.String(), err),
 		}, nil
 	}
-	req.Ref, err = unwrap(req.Ref, p.ProviderPath)
-	if err != nil {
-		return nil, err
-	}
+
 	res, err := c.ListFileVersions(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListFileVersions")
@@ -931,15 +813,15 @@ func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersio
 }
 
 func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
-	c, p, err := s.find(ctx, req.Ref)
+	var c provider.ProviderAPIClient
+	var err error
+	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreFileVersionResponse{
 			Status: status.NewStatusFromErrType(ctx, "RestoreFileVersion ref="+req.Ref.String(), err),
 		}, nil
 	}
-	if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-		return nil, err
-	}
+
 	res, err := c.RestoreFileVersion(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RestoreFileVersion")
@@ -954,20 +836,18 @@ func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.
 
 // TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
 func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	c, p, err := s.find(ctx, req.GetRef())
+	c, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListRecycleResponse{
 			Status: status.NewStatusFromErrType(ctx, "ListFileVersions ref="+req.Ref.String(), err),
 		}, nil
 	}
-	if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-		return nil, err
-	}
+
 	res, err := c.ListRecycle(ctx, &provider.ListRecycleRequest{
 		Opaque: req.Opaque,
 		FromTs: req.FromTs,
 		ToTs:   req.ToTs,
-		Ref:    req.Ref,
+		Ref:    relativeReference,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListRecycleRequest")
@@ -1014,18 +894,16 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
-	c, p, err := s.find(ctx, req.Ref)
+	c, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.PurgeRecycleResponse{
 			Status: status.NewStatusFromErrType(ctx, "PurgeRecycle ref="+req.Ref.String(), err),
 		}, nil
 	}
-	if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-		return nil, err
-	}
+
 	res, err := c.PurgeRecycle(ctx, &provider.PurgeRecycleRequest{
 		Opaque: req.GetOpaque(),
-		Ref:    req.GetRef(),
+		Ref:    relativeReference,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
@@ -1034,18 +912,16 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 }
 
 func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
-	c, p, err := s.find(ctx, req.Ref)
+	c, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.GetQuotaResponse{
 			Status: status.NewStatusFromErrType(ctx, "GetQuota ref="+req.Ref.String(), err),
 		}, nil
 	}
-	if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-		return nil, err
-	}
+
 	res, err := c.GetQuota(ctx, &provider.GetQuotaRequest{
 		Opaque: req.GetOpaque(),
-		Ref:    req.GetRef(),
+		Ref:    relativeReference,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetQuota")
@@ -1066,6 +942,24 @@ func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.Provi
 
 	client, err := s.getStorageProviderClient(ctx, p[0])
 	return client, p[0], err
+}
+
+func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *provider.Reference, error) {
+	c, p, err := s.find(ctx, ref)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	relativeReference := ref
+	if utils.IsAbsolutePathReference(ref) {
+		if relativeReference, err = unwrap(ref, p.ProviderPath); err != nil {
+			return nil, nil, err
+		}
+		relativeReference.Path = utils.MakeRelativePath(relativeReference.Path)
+		relativeReference.ResourceId = &provider.ResourceId{StorageId: p.ProviderId}
+	}
+
+	return c, relativeReference, nil
 }
 
 func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
