@@ -121,7 +121,7 @@ func (h *Handler) Init(c *config.Config) {
 		h.c.Capabilities.Dav.Trashbin = "1.0"
 	}
 	if h.c.Capabilities.Dav.Reports == nil {
-		h.c.Capabilities.Dav.Reports = []string{"search-files"}
+		h.c.Capabilities.Dav.Reports = []string{}
 	}
 
 	// sharing

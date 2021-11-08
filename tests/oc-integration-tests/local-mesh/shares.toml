@@ -1,0 +1,20 @@
+# This config file will start a reva service that:
+# - serves user and public link shares
+
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+
+[grpc]
+address = "0.0.0.0:37000"
+
+[grpc.services.usershareprovider]
+driver = "memory"
+
+[grpc.services.authprovider]
+auth_manager = "publicshares"
+
+[grpc.services.authprovider.auth_managers.publicshares]
+gateway_addr = "0.0.0.0:39000"
+
+[grpc.services.publicshareprovider.drivers.json]
+file = "/var/tmp/reva/publicshares.json"
