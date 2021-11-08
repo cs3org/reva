@@ -10,7 +10,6 @@ address = "0.0.0.0:13000"
 # we have a locally running dataprovider
 [grpc.services.publicstorageprovider]
 driver = "ocis"
-mount_path = "/public/"
 mount_id = "e1a73ede-549b-4226-abdf-40e69ca8230d"
 expose_data_server = true
 data_server_url = "http://revad-services:13001/data"

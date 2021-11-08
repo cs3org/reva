@@ -15,7 +15,6 @@ address = "0.0.0.0:11110"
 # we have a locally running dataprovider
 [grpc.services.storageprovider]
 driver = "ocis"
-mount_path = "/virtual"
 mount_id = "virtual-l-z"
 expose_data_server = true
 data_server_url = "http://localhost:11111/data"

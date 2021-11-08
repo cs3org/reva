@@ -9,6 +9,5 @@ address = "0.0.0.0:19002"
 # This is a storage provider that grants direct access to the wrapped storage
 # we have a locally running dataprovider
 [grpc.services.sharesstorageprovider]
-mount_path = "/shares"
 gateway_addr = "0.0.0.0:19000"
 usershareprovidersvc = "0.0.0.0:19000"
