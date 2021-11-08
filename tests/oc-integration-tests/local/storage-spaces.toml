@@ -1,0 +1,12 @@
+# This storage-spaces.toml config file will start a reva service that:
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
+
+
+[grpc]
+address = "0.0.0.0:11500"
+
+
+[grpc.services.spacesprovider]
+gateway_addr = "localhost:19000"

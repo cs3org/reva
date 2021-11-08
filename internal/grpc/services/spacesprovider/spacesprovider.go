@@ -168,7 +168,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	}
 
 	infos := make([]*provider.ResourceInfo, len(spaces))
-	for t, _ := range spaces {
+	for t := range spaces {
 		infos = append(infos, &provider.ResourceInfo{
 			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 			//Id: ?,

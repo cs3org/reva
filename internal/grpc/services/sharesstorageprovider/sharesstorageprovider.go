@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -120,12 +121,13 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error)
 		return nil, err
 	}
 
-	gateway, err := pool.GetGatewayServiceClient(c.GatewayAddr)
+	// TODO use
+	gateway, err := pool.GetGatewayServiceClient(sharedconf.GetGatewaySVC(c.GatewayAddr))
 	if err != nil {
 		return nil, err
 	}
 
-	client, err := pool.GetUserShareProviderClient(c.UserShareProviderEndpoint)
+	client, err := pool.GetUserShareProviderClient(sharedconf.GetGatewaySVC(c.UserShareProviderEndpoint))
 	if err != nil {
 		return nil, errors.Wrap(err, "sharesstorageprovider: error getting UserShareProvider client")
 	}

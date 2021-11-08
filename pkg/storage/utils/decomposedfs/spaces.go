@@ -25,7 +25,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -183,10 +182,13 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			spaceType = filter[i].GetSpaceType()
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			parts := strings.SplitN(filter[i].GetId().OpaqueId, "!", 2)
-			if len(parts) == 2 {
-				spaceID = parts[1]
-			}
+			spaceID = filter[i].GetId().OpaqueId
+			/*
+				parts := strings.SplitN(filter[i].GetId().OpaqueId, "!", 2)
+				if len(parts) == 2 {
+					spaceID = parts[1]
+				}
+			*/
 		}
 	}
 
@@ -338,11 +340,11 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 	}
 	space := &provider.StorageSpace{
 		// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
-		//Id: &provider.StorageSpaceId{OpaqueId: "1284d238-aa92-42ce-bdc4-0b0000009157!" + n.ID},
+		Id: &provider.StorageSpaceId{OpaqueId: node.Name},
 		Root: &provider.ResourceId{
 			// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
-			//StorageId: "1284d238-aa92-42ce-bdc4-0b0000009157",
-			OpaqueId: node.ID,
+			StorageId: node.Name,
+			OpaqueId:  node.ID,
 		},
 		Name:      string(sname),
 		SpaceType: spaceType,

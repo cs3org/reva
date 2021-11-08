@@ -23,13 +23,15 @@ import (
 	"errors"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	rstatus "github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -37,8 +39,6 @@ import (
 	pkgregistry "github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func init() {
@@ -205,7 +205,16 @@ func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) (
 			spaceType = "personal"
 		}
 
-		for _, rule := range r.c.Rules {
+		for path, rule := range r.c.Rules {
+			if strings.HasPrefix(ref.Path, path) {
+				// we found a manual path config in the rules
+				return []*registrypb.ProviderInfo{
+					{
+						Address:      rule.Address,
+						ProviderPath: path,
+					},
+				}, nil
+			}
 			p := &registrypb.ProviderInfo{
 				Address: rule.Address,
 			}
@@ -220,12 +229,11 @@ func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) (
 					if err != nil {
 						return nil, err
 					}
-					// assume a personal storage where the current user is owner is his /home
-					if space.SpaceType == "personal" && space.Owner != nil && utils.UserEqual(space.Owner.Id, currentUser.Id) {
-						p.ProviderPath = "/home"
-					} else {
-						p.ProviderPath = filepath.Join("/", space.SpaceType, filepath.Base(path))
-					}
+					p.ProviderPath = filepath.Join("/", space.SpaceType, filepath.Base(path))
+					// TODO also registor a personal storage where the current user is owner as his /home
+					//if space.SpaceType == "personal" && space.Owner != nil && utils.UserEqual(space.Owner.Id, currentUser.Id) {
+					//	p.ProviderPath = "/home"
+					//}
 					// cache result, TODO only for 30sec?
 					//if _, ok := r.aliases[currentUser.Id.OpaqueId][p.ProviderPath]; !ok {
 					r.aliases[currentUser.Id.OpaqueId][p.ProviderPath] = &spaceAndProvider{
@@ -245,7 +253,7 @@ func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) (
 		// TODO return not found
 	}
 	// find path in kv map
-	return nil, status.Errorf(codes.Unimplemented, "method not implemented")
+	return nil, errtypes.NotFound("not found")
 }
 
 func (r *registry) findStorageSpaceOnProvider(ctx context.Context, p *registrypb.ProviderInfo, spaceid string) (*provider.StorageSpace, error) {
@@ -265,7 +273,7 @@ func (r *registry) findStorageSpaceOnProvider(ctx context.Context, p *registrypb
 		return nil, err
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, rstatus.NewErrorFromCode(res.Status.Code, "spaces registry")
+		return nil, status.NewErrorFromCode(res.Status.Code, "spaces registry")
 	}
 	return res.StorageSpaces[0], nil
 }
@@ -287,7 +295,7 @@ func (r *registry) findStorageSpaceOnProviderByType(ctx context.Context, p *regi
 		return nil, err
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, rstatus.NewErrorFromCode(res.Status.Code, "spaces registry")
+		return nil, status.NewErrorFromCode(res.Status.Code, "spaces registry")
 	}
 	return res.StorageSpaces, nil
 }
@@ -306,7 +314,7 @@ func (r *registry) findNameForRoot(ctx context.Context, p *registrypb.ProviderIn
 		return "", err
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return "", rstatus.NewErrorFromCode(res.Status.Code, "spaces registry")
+		return "", status.NewErrorFromCode(res.Status.Code, "spaces registry")
 	}
 	return res.Info.Path, nil
 }

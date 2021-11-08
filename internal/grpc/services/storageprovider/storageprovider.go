@@ -503,6 +503,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		if hasNodeID(spaces[i]) {
 			// fill in storagespace id if it is not set
 			if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
+				// TODO get rid of this here: no concatenating. the nodeid is the storageid
 				spaces[i].Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "!" + spaces[i].Root.OpaqueId}
 			}
 			// fill in storage id if it is not set
