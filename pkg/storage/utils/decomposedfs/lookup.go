@@ -120,6 +120,7 @@ func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *n
 	return n, n.FindStorageSpaceRoot()
 }
 
+// NodeFromSpaceID converts a resource id without an opaque id into a Node
 func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
 
 	matches, err := filepath.Glob(filepath.Join(lu.Options.Root, "spaces", spaceTypeAny, id.StorageId))
