@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package oidcescape
+package oidcmapping
 
 import (
 	"context"
@@ -41,7 +41,7 @@ import (
 )
 
 func init() {
-	registry.Register("oidcescape", New)
+	registry.Register("oidcmapping", New)
 }
 
 type mgr struct {
@@ -101,14 +101,14 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 	am.iamUsers = map[string]*iamUser{}
 	f, err := ioutil.ReadFile(c.Users)
 	if err != nil {
-		return fmt.Errorf("oidcescape: error reading escape iam users file: +%v", err)
+		return fmt.Errorf("oidcmapping: error reading escape iam users file: +%v", err)
 	}
 
 	iamUsers := []*iamUser{}
 
 	err = json.Unmarshal(f, &iamUsers)
 	if err != nil {
-		return fmt.Errorf("oidcescape: error unmarshalling escape iam users file: +%v", err)
+		return fmt.Errorf("oidcmapping: error unmarshalling escape iam users file: +%v", err)
 	}
 
 	for _, u := range iamUsers {
@@ -127,7 +127,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	oidcProvider, err := am.getOIDCProvider(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("oidcescape: error creating oidc provider: +%v", err)
+		return nil, nil, fmt.Errorf("oidcmapping: error creating oidc provider: +%v", err)
 	}
 
 	oauth2Token := &oauth2.Token{
@@ -137,14 +137,14 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	// query the oidc provider for user info
 	userInfo, err := oidcProvider.UserInfo(ctx, oauth2.StaticTokenSource(oauth2Token))
 	if err != nil {
-		return nil, nil, fmt.Errorf("oidcescape: error getting userinfo: +%v", err)
+		return nil, nil, fmt.Errorf("oidcmapping: error getting userinfo: +%v", err)
 	}
 
 	// claims contains the standard OIDC claims like issuer, iat, aud, ... and any other non-standard one.
 	// TODO(labkode): make claims configuration dynamic from the config file so we can add arbitrary mappings from claims to user struct.
 	var claims map[string]interface{}
 	if err := userInfo.Claims(&claims); err != nil {
-		return nil, nil, fmt.Errorf("oidcescape: error unmarshaling userinfo claims: %v", err)
+		return nil, nil, fmt.Errorf("oidcmapping: error unmarshaling userinfo claims: %v", err)
 	}
 
 	if claims["issuer"] == nil { // This is not set in simplesamlphp
@@ -155,11 +155,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 
 	if claims["email"] == nil {
-		return nil, nil, fmt.Errorf("oidcescape: no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
+		return nil, nil, fmt.Errorf("oidcmapping: no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
 	}
 
 	if claims["preferred_username"] == nil || claims["name"] == nil {
-		return nil, nil, fmt.Errorf("oidcescape: no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
+		return nil, nil, fmt.Errorf("oidcmapping: no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
 	}
 	log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
 
@@ -169,7 +169,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		opaqueID = iamUser.OpaqueID
 	}
 	if opaqueID == "" {
-		return nil, nil, errors.Wrap(err, "oidcescape: unable to retrieve local user from claims")
+		return nil, nil, errors.Wrap(err, "oidcmapping: unable to retrieve local user from claims")
 	}
 
 	var uid, gid float64
@@ -187,24 +187,24 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 	gwc, err := pool.GetUserProviderServiceClient(am.c.UserProviderSvc)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "oidcescape: error getting gateway grpc client")
+		return nil, nil, errors.Wrap(err, "oidcmapping: error getting gateway grpc client")
 	}
 
 	getUserResp, err := gwc.GetUser(ctx, &user.GetUserRequest{
 		UserId: &user.UserId{OpaqueId: opaqueID},
 	})
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "oidcescape: error getting user")
+		return nil, nil, errors.Wrap(err, "oidcmapping: error getting user")
 	}
 
 	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
 		UserId: userID,
 	})
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "oidcescape: error getting user groups")
+		return nil, nil, errors.Wrap(err, "oidcmapping: error getting user groups")
 	}
 	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, nil, errors.Wrap(err, "oidcescape: grpc getting user groups failed")
+		return nil, nil, errors.Wrap(err, "oidcmapping: grpc getting user groups failed")
 	}
 
 	userID.Idp = getUserResp.GetUser().GetId().Idp
@@ -249,6 +249,9 @@ func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
 
 // getOIDCProvider returns a singleton OIDC provider
 func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
+	ctx = am.getOAuthCtx(ctx)
+	log := appctx.GetLogger(ctx)
+
 	if am.provider != nil {
 		return am.provider, nil
 	}
@@ -260,8 +263,8 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	provider, err := oidc.NewProvider(ctx, am.c.Issuer)
 
 	if err != nil {
-		fmt.Printf("oidcescape: error creating a new oidc provider: %+v\n", err)
-		return nil, fmt.Errorf("oidcescape: error creating a new oidc provider: %+v", err)
+		log.Error().Err(err).Msg("oidcmapping: error creating a new oidc provider")
+		return nil, fmt.Errorf("oidcmapping: error creating a new oidc provider: %+v", err)
 	}
 
 	am.provider = provider
