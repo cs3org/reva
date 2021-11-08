@@ -21,6 +21,7 @@ package decomposedfs
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -104,8 +105,12 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string, followReferences 
 
 // NodeFromID returns the internal path for the id
 func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
-	if id == nil || id.OpaqueId == "" {
+	if id == nil {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
+	}
+	if id.OpaqueId == "" {
+		// The Resource references the root of a space
+		return lu.NodeFromSpaceID(ctx, id)
 	}
 	n, err = node.ReadNode(ctx, lu, id.OpaqueId)
 	if err != nil {
@@ -113,6 +118,29 @@ func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *n
 	}
 
 	return n, n.FindStorageSpaceRoot()
+}
+
+func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
+
+	matches, err := filepath.Glob(filepath.Join(lu.Options.Root, "spaces", spaceTypeAny, id.StorageId))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(matches) != 1 {
+		return nil, fmt.Errorf("update space failed: found %d matching spaces", len(matches))
+	}
+
+	target, err := os.Readlink(matches[0])
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[0]).Msg("could not read link, skipping")
+	}
+
+	node, err := node.ReadNode(ctx, lu, filepath.Base(target))
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
 }
 
 // Path returns the path for node

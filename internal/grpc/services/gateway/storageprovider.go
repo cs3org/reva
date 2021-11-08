@@ -730,6 +730,9 @@ func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
 
 func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	providers, err := s.findProviders(ctx, req.Ref)
+	if _, ok := err.(errtypes.IsNotFound); !ok {
+		// find embedded mounts and calculate metadata for node
+	}
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), err),
@@ -747,6 +750,10 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}
 
 		sRef, err := unwrap(req.Ref, providers[0].ProviderPath)
+		// tell storage provider which storage space to use when resolving the path
+		sRef.ResourceId = &provider.ResourceId{StorageId: providers[0].ProviderId}
+		// make path relative:
+		sRef.Path = path.Join("./", sRef.Path)
 		if err != nil {
 			return &provider.StatResponse{
 				Status: status.NewInternal(ctx, err, "error unwrapping reference"),
@@ -935,6 +942,10 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 				Status: status.NewInternal(ctx, err, "error unwrapping reference"),
 			}, nil
 		}
+		// tell storage provider which storage space to use when resolving the path
+		lcRef.ResourceId = &provider.ResourceId{StorageId: providers[0].ProviderId}
+		// make path relative:
+		lcRef.Path = path.Join("./", lcRef.Path)
 		rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
 			Opaque:                req.Opaque,
 			Ref:                   lcRef,

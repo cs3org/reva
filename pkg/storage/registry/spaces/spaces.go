@@ -229,16 +229,23 @@ func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) (
 					if err != nil {
 						return nil, err
 					}
+					// cache entry
 					p.ProviderPath = filepath.Join("/", space.SpaceType, filepath.Base(path))
-					// TODO also registor a personal storage where the current user is owner as his /home
-					//if space.SpaceType == "personal" && space.Owner != nil && utils.UserEqual(space.Owner.Id, currentUser.Id) {
-					//	p.ProviderPath = "/home"
-					//}
-					// cache result, TODO only for 30sec?
-					//if _, ok := r.aliases[currentUser.Id.OpaqueId][p.ProviderPath]; !ok {
 					r.aliases[currentUser.Id.OpaqueId][p.ProviderPath] = &spaceAndProvider{
 						space, []*registrypb.ProviderInfo{p},
 					}
+					// also registor a personal storage where the current user is owner as his /home
+					if space.SpaceType == "personal" && space.Owner != nil && utils.UserEqual(space.Owner.Id, currentUser.Id) {
+						r.aliases[currentUser.Id.OpaqueId]["/home"] = &spaceAndProvider{
+							space, []*registrypb.ProviderInfo{{
+								ProviderPath: "/home",
+								ProviderId:   space.Id.OpaqueId,
+								Address:      rule.Address,
+							}},
+						}
+					}
+					// cache result, TODO only for 30sec?
+					//if _, ok := r.aliases[currentUser.Id.OpaqueId][p.ProviderPath]; !ok {
 					/*} /*else {
 						// add an additional storage provider, eg for load balancing
 						r.aliases[currentUser.Id.OpaqueId][p.ProviderPath].providers = append(r.aliases[currentUser.Id.OpaqueId][p.ProviderPath].providers, p)
