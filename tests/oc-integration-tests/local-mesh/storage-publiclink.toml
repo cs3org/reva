@@ -6,9 +6,10 @@ jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
 [grpc]
-address = "0.0.0.0:13000"
+address = "0.0.0.0:33000"
 
 # This is a storage provider that grants direct access to the wrapped storage
 # we have a locally running dataprovider
 [grpc.services.publicstorageprovider]
-gateway_addr = "0.0.0.0:19000"
+mount_path = "/public/"
+gateway_addr = "0.0.0.0:39000"

@@ -1,26 +1,13 @@
-[shared]
-jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:19000"
-
-# This frontend-global.toml config file will start a reva service that:
+# This config file will start a reva service that:
 # - serves as the entrypoint for owncloud APIs but with a globally accessible namespace.
 # - serves http endpoints on port 20180
 #   - / --------------- ocdav
 #   - /ocs ------------ ocs
-#   - /oauth2 --------- oidcprovider
-#   - /.well-known ---- wellknown service to announce openid-configuration
 #   - TODO(diocas): ocm
-# - authenticates requests using oidc bearer auth and basic auth as fallback
-# - serves the grpc services on port 20199
-[grpc]
-address = "0.0.0.0:20199"
 
-[grpc.services.authprovider]
-auth_manager = "oidc"
-
-# If you want to use your own openid provider change this config
-[grpc.services.authprovider.auth_managers.oidc]
-issuer = "http://localhost:20180"
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
 
 [http]
 address = "0.0.0.0:20180"
@@ -115,3 +102,13 @@ resumable = "1.0.0"
 extension = "creation,creation-with-upload"
 http_method_override = ""
 max_chunk_size = 0
+
+# serve /ocm
+[http.services.ocmd]
+prefix = "ocm"
+
+[http.middlewares.providerauthorizer]
+driver = "json"
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "providers.demo.json"
