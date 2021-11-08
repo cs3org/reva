@@ -69,7 +69,7 @@ type config struct {
 	HomeMapping         string                            `mapstructure:"home_mapping"`
 	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
 	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
-	HiddenRootFolders   map[string][]string               `mapstructure:"hidden_root_folders"`
+	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
 }
 
 // sets defaults
@@ -117,11 +117,10 @@ func (c *config) init() {
 }
 
 type svc struct {
-	c                 *config
-	dataGatewayURL    url.URL
-	tokenmgr          token.Manager
-	etagCache         *ttlcache.Cache `mapstructure:"etag_cache"`
-	hiddenRootFolders map[string]map[string]struct{}
+	c              *config
+	dataGatewayURL url.URL
+	tokenmgr       token.Manager
+	etagCache      *ttlcache.Cache `mapstructure:"etag_cache"`
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -150,23 +149,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	_ = etagCache.SetTTL(time.Duration(c.EtagCacheTTL) * time.Second)
 	etagCache.SkipTTLExtensionOnHit(true)
 
-	// create set of hidden root folders
-	hiddenRootFolders := make(map[string]map[string]struct{})
-	for agent, folders := range c.HiddenRootFolders {
-		if _, ok := hiddenRootFolders[agent]; !ok {
-			hiddenRootFolders[agent] = make(map[string]struct{})
-		}
-		for _, f := range folders {
-			hiddenRootFolders[agent][f] = struct{}{}
-		}
-	}
-
 	s := &svc{
-		c:                 c,
-		dataGatewayURL:    *u,
-		tokenmgr:          tokenManager,
-		etagCache:         etagCache,
-		hiddenRootFolders: hiddenRootFolders,
+		c:              c,
+		dataGatewayURL: *u,
+		tokenmgr:       tokenManager,
+		etagCache:      etagCache,
 	}
 
 	return s, nil
