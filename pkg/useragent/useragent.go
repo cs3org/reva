@@ -49,7 +49,7 @@ func isGRPC(ua *ua.UserAgent) bool {
 
 // GetCategory returns the category of the user agent
 // (i.e. if it is a web, mobile, desktop or grpc user agent)
-func GetCategory(ua *ua.UserAgent) string {
+func getCategory(ua *ua.UserAgent) string {
 	switch {
 	case isWeb(ua):
 		return "web"
@@ -62,4 +62,14 @@ func GetCategory(ua *ua.UserAgent) string {
 	default:
 		return ""
 	}
+}
+
+func IsUserAgentAllowed(ua *ua.UserAgent, allowedUserAgents []string) bool {
+	cat := getCategory(ua)
+	for _, userAgent := range allowedUserAgents {
+		if userAgent == cat {
+			return true
+		}
+	}
+	return false
 }
