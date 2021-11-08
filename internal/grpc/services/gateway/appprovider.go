@@ -57,7 +57,7 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 	}
 
 	resName, resChild := p, ""
-	statRes, err := s.stat(ctx, &storageprovider.StatRequest{
+	statRes, err := s.Stat(ctx, &storageprovider.StatRequest{
 		Ref: &storageprovider.Reference{Path: resName},
 	})
 	if err != nil {

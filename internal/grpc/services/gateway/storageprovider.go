@@ -20,9 +20,6 @@ package gateway
 
 import (
 	"context"
-	"crypto/md5"
-	"fmt"
-	"io"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -34,7 +31,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -370,7 +366,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 	}
 
 	statReq := &provider.StatRequest{Ref: req.Ref}
-	statRes, err := s.stat(ctx, statReq)
+	statRes, err := s.Stat(ctx, statReq)
 	if err != nil {
 		return &gateway.InitiateFileDownloadResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
@@ -514,7 +510,7 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
 	statReq := &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.ResourceId}}
-	statRes, err := s.stat(ctx, statReq)
+	statRes, err := s.Stat(ctx, statReq)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error stating ref:"+statReq.Ref.String())
 		return nil, err
@@ -700,199 +696,86 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 	return res, nil
 }
 
-func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
-	statRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: s.getHome(ctx)}})
-	if err != nil {
-		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating home"),
-		}, nil
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return &provider.StatResponse{
-			Status: statRes.Status,
-		}, nil
-	}
-
-	if etagIface, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
-		resMtime := utils.TSToTime(statRes.Info.Mtime)
-		resEtag := etagIface.(etagWithTS)
-		// Use the updated etag if the home folder has been modified
-		if resMtime.Before(resEtag.Timestamp) {
-			statRes.Info.Etag = resEtag.Etag
-		}
-	} else if s.c.EtagCacheTTL > 0 {
-		_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, etagWithTS{statRes.Info.Etag, time.Now()})
-	}
-
-	return statRes, nil
-}
-
-func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+// Stat returns the Resoure info for a given resource by forwarding the request to all responsible providers.
+// In the simplest case there is only one provider, eg. when statting a relative or id based reference
+// However the registry can return multiple providers for a reference and the stat needs to take them all into account:
+// The registry returns multiple providers when
+// 1. embedded providers need to be taken into account, eg: there aro two providers /foo and /bar and / is being statted
+// 2. multiple providers form a virtual view, eg: there are twe providers /users/[a-k] and /users/[l-z] ind /users is being statted
+// In contrast to ListContainer Stat can treat these cases equally by forwarding the request to all providers and aggregating the metadata:
+// - The most recent mtime determines the etag
+// - The size is summed up for all providers
+// TODO cache info
+func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	// find the providers
 	providers, err := s.findProviders(ctx, req.Ref)
-	if _, ok := err.(errtypes.IsNotFound); !ok {
-		// find embedded mounts and calculate metadata for node
-	}
 	if err != nil {
+		// we have no provider -> not found
 		return &provider.StatResponse{
-			Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), err),
+			Status: status.NewStatusFromErrType(ctx, "could not find provider", err),
 		}, nil
 	}
-	providers = getUniqueProviders(providers)
 
-	resPath := req.Ref.GetPath()
-	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
-		c, err := s.getStorageProviderClient(ctx, providers[0])
-		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
-			}, nil
-		}
+	var info *provider.ResourceInfo
+	for i := range providers {
 
-		sRef, err := unwrap(req.Ref, providers[0].ProviderPath)
-		// tell storage provider which storage space to use when resolving the path
-		sRef.ResourceId = &provider.ResourceId{StorageId: providers[0].ProviderId}
-		// make path relative:
-		sRef.Path = path.Join("./", sRef.Path)
-		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "error unwrapping reference"),
-			}, nil
-		}
-		res, err := c.Stat(ctx, &provider.StatRequest{
-			Opaque:                req.Opaque,
-			Ref:                   sRef,
-			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-		})
-		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
-			}, nil
-		}
-
-		embeddedMounts := s.findEmbeddedMounts(resPath)
-		if len(embeddedMounts) > 0 {
-			etagHash := md5.New()
-			if res.Info != nil {
-				_, _ = io.WriteString(etagHash, res.Info.Etag)
+		sRef := req.Ref
+		if utils.IsAbsolutePathReference(req.Ref) {
+			sRef, err = unwrap(req.Ref, providers[i].ProviderPath)
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not unwrap reference, skipping")
+				continue
 			}
-			for _, child := range embeddedMounts {
-				mountPointRef := &provider.Reference{Path: child}
-				mountPointRef, err = unwrap(mountPointRef, providers[0].ProviderPath)
-				if err != nil {
-					return nil, err
-				}
-
-				childStatRes, err := s.stat(ctx, &provider.StatRequest{
-					Opaque:                req.Opaque,
-					Ref:                   mountPointRef,
-					ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-				})
-				if err != nil || childStatRes.Status.Code != rpc.Code_CODE_OK {
-					return &provider.StatResponse{
-						Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), err),
-					}, nil
-				}
-				_, _ = io.WriteString(etagHash, childStatRes.Info.Etag)
-			}
-
-			if res.Info == nil {
-				res.Info = &provider.ResourceInfo{}
-			}
-			res.Info.Etag = fmt.Sprintf("%x", etagHash.Sum(nil))
+			sRef.ResourceId = &provider.ResourceId{StorageId: providers[i].ProviderId}
+			sRef.Path = path.Join("./", sRef.Path)
 		}
 
-		if res.Info != nil && utils.IsAbsoluteReference(req.Ref) {
-			wrap(res.Info, providers[0])
-		}
-
-		return res, nil
-	}
-
-	return s.statAcrossProviders(ctx, req, providers)
-}
-
-func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest, providers []*registry.ProviderInfo) (*provider.StatResponse, error) {
-	// TODO(ishank011): aggregrate properties such as etag, checksum, etc.
-	log := appctx.GetLogger(ctx)
-	info := &provider.ResourceInfo{
-		Id: &provider.ResourceId{
-			StorageId: "/",
-			OpaqueId:  uuid.New().String(),
-		},
-		Type:     provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-		Path:     req.Ref.GetPath(),
-		MimeType: "httpd/unix-directory",
-		Size:     0,
-		Mtime:    &typesv1beta1.Timestamp{},
-	}
-
-	for _, p := range providers {
-		c, err := s.getStorageProviderClient(ctx, p)
+		c, err := s.getStorageProviderClient(ctx, providers[i])
 		if err != nil {
-			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
+			appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not get storage provider client, skipping")
 			continue
 		}
 
-		resp, err := c.Stat(ctx, &provider.StatRequest{Opaque: req.Opaque, Ref: &provider.Reference{Path: "/"}, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
+		resp, err := c.Stat(ctx, &provider.StatRequest{Opaque: req.Opaque, Ref: sRef, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
 		if err != nil {
-			log.Err(err).Msgf("gateway: error calling Stat %s: %+v", req.Ref.String(), p)
+			appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not stat embedded mount, skipping")
 			continue
 		}
 		if resp.Status.Code != rpc.Code_CODE_OK {
-			log.Err(status.NewErrorFromCode(rpc.Code_CODE_OK, "gateway"))
+			appctx.GetLogger(ctx).Debug().Interface("status", resp.Status).Msg("gateway: could not stat embedded mount, skipping")
 			continue
 		}
-		if resp.Info != nil {
-			wrap(resp.Info, p)
+		if resp.Info == nil {
+			appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response carried no info, skipping")
+			continue
+		}
+
+		if info == nil {
+			if utils.IsAbsolutePathReference(req.Ref) {
+				resp.Info.Path = req.Ref.Path
+			}
+			info = resp.Info
+		} else {
+			// aggregate metadata
+
 			info.Size += resp.Info.Size
 			if utils.TSToUnixNano(resp.Info.Mtime) > utils.TSToUnixNano(info.Mtime) {
 				info.Mtime = resp.Info.Mtime
 				info.Etag = resp.Info.Etag
-				info.Checksum = resp.Info.Checksum
+				//info.Checksum = resp.Info.Checksum
 			}
 			if info.Etag == "" && info.Etag != resp.Info.Etag {
 				info.Etag = resp.Info.Etag
 			}
+			//info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+			//info.MimeType = "httpd/unix-directory"
 		}
 	}
 
-	return &provider.StatResponse{
-		Status: status.NewOK(ctx),
-		Info:   info,
-	}, nil
-}
-
-func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	if utils.IsRelativeReference(req.Ref) {
-		return s.stat(ctx, req)
+	if info == nil {
+		return nil, errtypes.NotFound("not found")
 	}
-
-	p := ""
-	var res *provider.StatResponse
-	var err error
-	if utils.IsAbsolutePathReference(req.Ref) {
-		p = req.Ref.Path
-	} else {
-		// Reference by just resource ID
-		// Stat it and store for future use
-		res, err = s.stat(ctx, req)
-		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
-			}, nil
-		}
-		if res != nil && res.Status.Code != rpc.Code_CODE_OK {
-			return res, nil
-		}
-		p = res.Info.Path
-	}
-
-	if path.Clean(p) == s.getHome(ctx) {
-		return s.statHome(ctx)
-	}
-
-	return s.stat(ctx, req)
+	return &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: info}, nil
 }
 
 func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gateway.GatewayAPI_ListContainerStreamServer) error {
@@ -928,6 +811,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	providers = getUniqueProviders(providers)
 
 	resPath := req.Ref.GetPath()
+	// did we find a single provider and is the reference relative, id based or does the path match the storage provider prefix
 	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
 		c, err := s.getStorageProviderClient(ctx, providers[0])
 		if err != nil {
@@ -942,10 +826,12 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 				Status: status.NewInternal(ctx, err, "error unwrapping reference"),
 			}, nil
 		}
-		// tell storage provider which storage space to use when resolving the path
-		lcRef.ResourceId = &provider.ResourceId{StorageId: providers[0].ProviderId}
-		// make path relative:
-		lcRef.Path = path.Join("./", lcRef.Path)
+		if providers[0].ProviderId != "" {
+			// tell storage provider which storage space to use when resolving the path
+			lcRef.ResourceId = &provider.ResourceId{StorageId: providers[0].ProviderId}
+			// make path relative:
+			lcRef.Path = path.Join("./", lcRef.Path)
+		}
 		rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
 			Opaque:                req.Opaque,
 			Ref:                   lcRef,
@@ -1122,7 +1008,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 					continue
 				}
 			}
-			childStatRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: mount}})
+			childStatRes, err := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: mount}})
 			if err != nil {
 				return &provider.ListContainerResponse{
 					Status: status.NewStatusFromErrType(ctx, "ListContainer ref: "+req.Ref.String(), err),
@@ -1141,7 +1027,7 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 	// check if it is an id based or combined reference first
 	if ref.ResourceId != nil {
 		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
-		res, err := s.stat(ctx, req)
+		res, err := s.Stat(ctx, req)
 		if err != nil {
 			return "", status.NewStatusFromErrType(ctx, "getPath ref="+ref.String(), err)
 		}

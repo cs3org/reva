@@ -25,6 +25,7 @@ import (
 	"regexp"
 	"strings"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -205,20 +206,28 @@ func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) (
 			spaceType = "personal"
 		}
 
-		for path, rule := range r.c.Rules {
-			if strings.HasPrefix(ref.Path, path) {
-				// we found a manual path config in the rules
-				return []*registrypb.ProviderInfo{
-					{
-						Address:      rule.Address,
-						ProviderPath: path,
-					},
-				}, nil
-			}
+		for _, rule := range r.c.Rules {
+			/*
+				if strings.HasPrefix(ref.Path, path) {
+					// we found a manual path config in the rules
+					return []*registrypb.ProviderInfo{
+						{
+							Address:      rule.Address,
+							ProviderPath: path,
+						},
+					}, nil
+				}
+			*/
 			p := &registrypb.ProviderInfo{
 				Address: rule.Address,
 			}
-			spaces, err := r.findStorageSpaceOnProviderByType(ctx, p, spaceType) // TODO filter by access, not type
+			var spaces []*provider.StorageSpace
+			var err error
+			if spaceType == "" {
+				spaces, err = r.findStorageSpaceOnProviderByAccess(ctx, p, currentUser)
+			} else {
+				spaces, err = r.findStorageSpaceOnProviderByType(ctx, p, spaceType) // TODO also filter by access
+			}
 			if err == nil {
 				for _, space := range spaces {
 					p := &registrypb.ProviderInfo{
@@ -252,12 +261,24 @@ func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) (
 					}*/
 				}
 
-				if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
-					return spaceAndAddr.providers, nil
-				}
+				/*
+					if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
+						return spaceAndAddr.providers, nil
+					}
+				*/
 			}
 		}
-		// TODO return not found
+		providers := make([]*registrypb.ProviderInfo, 0, len(r.aliases[currentUser.Id.OpaqueId]))
+		for path, spaceAndProvider := range r.aliases[currentUser.Id.OpaqueId] {
+			if strings.HasPrefix(path, alias) {
+				providers = append(providers, spaceAndProvider.providers...)
+			}
+		}
+
+		if len(providers) == 0 {
+			return nil, errtypes.NotFound("not found")
+		}
+		return providers, nil
 	}
 	// find path in kv map
 	return nil, errtypes.NotFound("not found")
@@ -283,6 +304,25 @@ func (r *registry) findStorageSpaceOnProvider(ctx context.Context, p *registrypb
 		return nil, status.NewErrorFromCode(res.Status.Code, "spaces registry")
 	}
 	return res.StorageSpaces[0], nil
+}
+
+func (r *registry) findStorageSpaceOnProviderByAccess(ctx context.Context, p *registrypb.ProviderInfo, u *userv1beta1.User) ([]*provider.StorageSpace, error) {
+	c, err := pool.GetStorageProviderServiceClient(p.Address)
+	if err != nil {
+		return nil, err
+	}
+	req := &provider.ListStorageSpacesRequest{
+		// TODO
+	}
+
+	res, err := c.ListStorageSpaces(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, status.NewErrorFromCode(res.Status.Code, "spaces registry")
+	}
+	return res.StorageSpaces, nil
 }
 
 func (r *registry) findStorageSpaceOnProviderByType(ctx context.Context, p *registrypb.ProviderInfo, spacetype string) ([]*provider.StorageSpace, error) {

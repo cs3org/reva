@@ -16,7 +16,7 @@ jwt_secret = "Pive-Fumkiu4"
 # other
 commit_share_to_storage_grant = true
 commit_share_to_storage_ref = true
-share_folder = "Shares"
+#share_folder = "Shares"
 transfer_expires = 6 # give it a moment
 #disable_home_creation_on_login = true
 
@@ -35,12 +35,12 @@ home_provider = "/personal"
 
 # needs a publicauthprovider but we can only start one authporvider in a combined config
 #"/public" = {"address" = "localhost:13000"}
-"/shares" = {"address" = "localhost:19002"}
+#"/shares" = {"address" = "localhost:19002"}
 
 [grpc.services.gateway.storage_rules]
 "/personal" = {"address" = "localhost:19000"}
 #"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:19000"}
-"/shares" = {"address" = "localhost:19002"}
+#"/shares" = {"address" = "localhost:19002"}
 
 [grpc.services.authprovider]
 [grpc.services.authprovider.auth_managers.json]
