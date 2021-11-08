@@ -31,20 +31,27 @@ const UserAgentHeader = "x-user-agent"
 // ContextGetUserAgent returns the user agent if set in the given context.
 // see https://github.com/grpc/grpc-go/issues/1100
 func ContextGetUserAgent(ctx context.Context) (*ua.UserAgent, bool) {
+	if userAgentStr, ok := ContextGetUserAgentString(ctx); ok {
+		userAgent := ua.Parse(userAgentStr)
+		return &userAgent, true
+	}
+	return nil, false
+}
+
+func ContextGetUserAgentString(ctx context.Context) (string, bool) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, false
+		return "", false
 	}
 	userAgentLst, ok := md[UserAgentHeader]
 	if !ok {
 		userAgentLst, ok = md["user-agent"]
 		if !ok {
-			return nil, false
+			return "", false
 		}
 	}
 	if len(userAgentLst) == 0 {
-		return nil, false
+		return "", false
 	}
-	userAgent := ua.Parse(userAgentLst[0])
-	return &userAgent, true
+	return userAgentLst[0], true
 }
