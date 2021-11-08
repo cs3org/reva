@@ -28,7 +28,6 @@ import (
 	oidc "github.com/coreos/go-oidc"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -147,21 +146,23 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, fmt.Errorf("oidcmapping: error unmarshaling userinfo claims: %v", err)
 	}
 
+	log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
+
 	if claims["issuer"] == nil { // This is not set in simplesamlphp
 		claims["issuer"] = am.c.Issuer
 	}
 	if claims["email_verified"] == nil { // This is not set in simplesamlphp
 		claims["email_verified"] = false
 	}
-
 	if claims["email"] == nil {
 		return nil, nil, fmt.Errorf("oidcmapping: no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
 	}
-
 	if claims["preferred_username"] == nil || claims["name"] == nil {
 		return nil, nil, fmt.Errorf("oidcmapping: no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
 	}
-	log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
+	if claims["groups"] == nil {
+		return nil, nil, fmt.Errorf("oidcmapping: no \"groups\" attribute found in userinfo")
+	}
 
 	// find local user opaqueID
 	var opaqueID string
@@ -197,26 +198,24 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, errors.Wrap(err, "oidcmapping: error getting user")
 	}
 
-	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
-		UserId: userID,
-	})
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "oidcmapping: error getting user groups")
-	}
-	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, nil, errors.Wrap(err, "oidcmapping: grpc getting user groups failed")
-	}
-
 	userID.Idp = getUserResp.GetUser().GetId().Idp
 	userID.Type = getUserResp.GetUser().GetId().Type
+
+	groups := make([]string, 0, len(claims["groups"].([]interface{})))
+	for _, v := range claims["groups"].([]interface{}) {
+		switch g := v.(type) {
+		case string:
+			groups = append(groups, v.(string))
+		default:
+			// TODO should we fail here?
+			log.Debug().Msgf("oidcmapping: retrieved group from token, expected type string, found: %T", g)
+		}
+	}
+
 	u := &user.User{
-		Id:       userID,
-		Username: getUserResp.GetUser().GetUsername(),
-		// TODO(labkode) if we can get groups from the claim we need to give the possibility
-		// to the admin to choose what claim provides the groups.
-		// TODO(labkode) ... use all claims from oidc?
-		// TODO(labkode): do like K8s does it: https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/plugin/pkg/authenticator/token/oidc/oidc.go
-		Groups:       getUserResp.GetUser().GetGroups(),
+		Id:           userID,
+		Username:     getUserResp.GetUser().GetUsername(),
+		Groups:       groups,
 		Mail:         claims["email"].(string),
 		MailVerified: claims["email_verified"].(bool),
 		DisplayName:  claims["name"].(string),
