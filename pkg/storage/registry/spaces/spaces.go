@@ -270,7 +270,7 @@ func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) (
 		}
 		providers := make([]*registrypb.ProviderInfo, 0, len(r.aliases[currentUser.Id.OpaqueId]))
 		for path, spaceAndProvider := range r.aliases[currentUser.Id.OpaqueId] {
-			if strings.HasPrefix(path, alias) {
+			if strings.HasPrefix(alias, path) {
 				providers = append(providers, spaceAndProvider.providers...)
 			}
 		}

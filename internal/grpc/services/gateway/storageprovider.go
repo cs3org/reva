@@ -22,7 +22,6 @@ import (
 	"context"
 	"net/url"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -39,7 +38,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -698,10 +696,10 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 
 // Stat returns the Resoure info for a given resource by forwarding the request to all responsible providers.
 // In the simplest case there is only one provider, eg. when statting a relative or id based reference
-// However the registry can return multiple providers for a reference and the stat needs to take them all into account:
+// However the registry can return multiple providers for a reference and Stat needs to take them all into account:
 // The registry returns multiple providers when
 // 1. embedded providers need to be taken into account, eg: there aro two providers /foo and /bar and / is being statted
-// 2. multiple providers form a virtual view, eg: there are twe providers /users/[a-k] and /users/[l-z] ind /users is being statted
+// 2. multiple providers form a virtual view, eg: there are twe providers /users/[a-k] and /users/[l-z] and /users is being statted
 // In contrast to ListContainer Stat can treat these cases equally by forwarding the request to all providers and aggregating the metadata:
 // - The most recent mtime determines the etag
 // - The size is summed up for all providers
@@ -727,7 +725,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				continue
 			}
 			sRef.ResourceId = &provider.ResourceId{StorageId: providers[i].ProviderId}
-			sRef.Path = path.Join("./", sRef.Path)
+			sRef.Path = utils.MakeRelativePath(sRef.Path)
 		}
 
 		c, err := s.getStorageProviderClient(ctx, providers[i])
@@ -782,244 +780,117 @@ func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gate
 	return errtypes.NotSupported("Unimplemented")
 }
 
-func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
-		Ref:                   &provider.Reference{Path: "/"},
-		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-	})
-	if err != nil {
-		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error listing home"),
-		}, nil
-	}
-	if lcr.Status.Code != rpc.Code_CODE_OK {
-		return &provider.ListContainerResponse{
-			Status: lcr.Status,
-		}, nil
-	}
-
-	return lcr, nil
-}
-
-func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+// ListContainer lists the Resoure infos for a given resource by forwarding the request to all responsible providers.
+// In the simplest case there is only one provider, eg. when listing a relative or id based reference
+// However the registry can return multiple providers for a reference and ListContainer needs to take them all into account:
+// The registry returns multiple providers when
+// 1. embedded providers need to be taken into account, eg: there aro two providers /foo and /bar and / is being listed
+//    /foo and /bar need to be added to the listing of /
+// 2. multiple providers form a virtual view, eg: there are twe providers /users/[a-k] and /users/[l-z] and /users is being listed
+// In contrast to Stat ListContainer has to forward the request to all providers, collect the results and aggregate the metadata:
+// - The most recent mtime determines the etag of the listed collection
+// - The size of the root ... is summed up for all providers
+// TODO cache info
+func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	// find the providers
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
+		// we have no provider -> not found
 		return &provider.ListContainerResponse{
-			Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), err),
+			Status: status.NewStatusFromErrType(ctx, "could not find provider", err),
 		}, nil
 	}
-	providers = getUniqueProviders(providers)
+	// list /foo, mount points at /foo/bar, /foo/bif, /foo/bar/bam
+	// 1. which provider needs to be listed
+	// 2. which providers need to be statted
+	// result:
+	// + /foo/bif -> stat  /foo/bif
+	// + /foo/bar -> stat  /foo/bar && /foo/bar/bif (and take the youngest metadata)
 
-	resPath := req.Ref.GetPath()
-	// did we find a single provider and is the reference relative, id based or does the path match the storage provider prefix
-	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
-		c, err := s.getStorageProviderClient(ctx, providers[0])
+	// list /foo, mount points at /foo, /foo/bif, /foo/bar/bam
+	// 1. which provider needs to be listed -> /foo listen
+	// 2. which providers need to be statted
+	// result:
+	// + /foo/fil.txt   -> list /foo
+	// + /foo/blarg.md  -> list /foo
+	// + /foo/bif       -> stat  /foo/bif
+	// + /foo/bar       -> stat  /foo/bar/bam (and construct metadata for /foo/bar)
+
+	var infos []*provider.ResourceInfo
+	for i := range providers {
+
+		c, err := s.getStorageProviderClient(ctx, providers[i])
 		if err != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
-			}, nil
-		}
-
-		lcRef, err := unwrap(req.Ref, providers[0].ProviderPath)
-		if err != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "error unwrapping reference"),
-			}, nil
-		}
-		if providers[0].ProviderId != "" {
-			// tell storage provider which storage space to use when resolving the path
-			lcRef.ResourceId = &provider.ResourceId{StorageId: providers[0].ProviderId}
-			// make path relative:
-			lcRef.Path = path.Join("./", lcRef.Path)
-		}
-		rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
-			Opaque:                req.Opaque,
-			Ref:                   lcRef,
-			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-		})
-		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
-			return rsp, err
-		}
-
-		if utils.IsAbsoluteReference(req.Ref) {
-			for i := range rsp.Infos {
-				wrap(rsp.Infos[i], providers[0])
-			}
-		}
-
-		return rsp, nil
-	}
-
-	return s.listContainerAcrossProviders(ctx, req, providers)
-}
-
-func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.ListContainerRequest, providers []*registry.ProviderInfo) (*provider.ListContainerResponse, error) {
-	nestedInfos := make(map[string]*provider.ResourceInfo)
-	log := appctx.GetLogger(ctx)
-
-	for _, p := range providers {
-		c, err := s.getStorageProviderClient(ctx, p)
-		if err != nil {
-			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
+			appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not get storage provider client, skipping")
 			continue
 		}
 
-		resp, err := c.ListContainer(ctx, &provider.ListContainerRequest{Opaque: req.Opaque, Ref: &provider.Reference{Path: "/"}, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
-		if err != nil {
-			log.Err(err).Msgf("gateway: error calling Stat %s: %+v", req.Ref.String(), p)
-			continue
-		}
-		if resp.Status.Code != rpc.Code_CODE_OK {
-			log.Err(status.NewErrorFromCode(rpc.Code_CODE_OK, "gateway"))
-			continue
-		}
-
-		infos := s.listVirtualView(ctx, req.Ref, resp.Infos, p)
-		for i := range infos {
-			if p, ok := nestedInfos[infos[i].Path]; ok {
-				// Since more than one providers contribute to this path,
-				// use a generic ID
-				p.Id = &provider.ResourceId{
-					StorageId: "/",
-					OpaqueId:  uuid.New().String(),
-				}
-				// TODO(ishank011): aggregrate properties such as etag, checksum, etc.
-				p.Size += infos[i].Size
-				if utils.TSToUnixNano(infos[i].Mtime) > utils.TSToUnixNano(p.Mtime) {
-					p.Mtime = infos[i].Mtime
-					p.Etag = infos[i].Etag
-					p.Checksum = infos[i].Checksum
-				}
-				if p.Etag == "" && p.Etag != infos[i].Etag {
-					p.Etag = infos[i].Etag
-				}
-				p.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-				p.MimeType = "httpd/unix-directory"
-			} else {
-				nestedInfos[infos[i].Path] = infos[i]
-			}
-		}
-	}
-
-	infos := make([]*provider.ResourceInfo, 0, len(nestedInfos))
-	for _, info := range nestedInfos {
-		infos = append(infos, info)
-	}
-
-	// Inject mountpoints if they do not exist on disk
-	embeddedMounts := s.findEmbeddedMounts(path.Clean(req.Ref.GetPath()))
-	for _, mount := range embeddedMounts {
-		for _, info := range infos {
-			if info.Path == mount {
+		lcRef := req.Ref
+		if utils.IsAbsolutePathReference(req.Ref) {
+			lcRef, err = unwrap(req.Ref, providers[i].ProviderPath)
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not unwrap reference, skipping")
 				continue
 			}
+			lcRef.ResourceId = &provider.ResourceId{StorageId: providers[i].ProviderId}
+			lcRef.Path = utils.MakeRelativePath(lcRef.Path)
 		}
-		infos = append(infos,
-			&provider.ResourceInfo{
-				Id: &provider.ResourceId{
-					StorageId: "/",
-					OpaqueId:  uuid.New().String(),
-				},
-				Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Etag: uuid.New().String(),
-				Path: mount,
-				Size: 0,
+
+		// ref Path: ., Id: a-b-c-d, provider path: /personal/a-b-c-d, provider id: a-b-c-d ->
+		// ref Path: ., Id: a-b-c-d, provider path: /home, provider id: a-b-c-d ->
+		// ref path: /foo/mop, provider path: /foo -> list(spaceid, ./mop)
+		// ref path: /foo, provider path: /foo
+		//if strings.HasPrefix(lcRef.Path, providers[i].ProviderPath) {
+		if lcRef.ResourceId.StorageId == providers[i].ProviderId {
+			// -> list
+			rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
+				Opaque:                req.Opaque,
+				Ref:                   lcRef,
+				ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 			})
+			if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not list provider, skipping")
+				continue
+			}
+
+			if utils.IsAbsoluteReference(req.Ref) {
+				for j := range rsp.Infos {
+					rsp.Infos[j].Path = path.Join(lcRef.Path, rsp.Infos[j].Path)
+					wrap(rsp.Infos[j], providers[i])
+				}
+			}
+			infos = append(infos, rsp.Infos...)
+		} else {
+			// ref path: /foo, provider path: /foo/bar
+			// -> stat
+			sRef := &provider.Reference{
+				ResourceId: &provider.ResourceId{StorageId: providers[i].ProviderId},
+				Path:       ".",
+			}
+			statResp, err := c.Stat(ctx, &provider.StatRequest{Opaque: req.Opaque, Ref: sRef, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not stat embedded mount, skipping")
+				continue
+			}
+			if statResp.Status.Code != rpc.Code_CODE_OK {
+				appctx.GetLogger(ctx).Debug().Interface("status", statResp.Status).Msg("gateway: could not stat embedded mount, skipping")
+				continue
+			}
+			if statResp.Info == nil {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response carried no info, skipping")
+				continue
+			}
+
+			// TODO verify the path is the name in the collection? should be covered by Stat
+			infos = append(infos, statResp.Info)
+		}
+
 	}
 
 	return &provider.ListContainerResponse{
-		Status: status.NewOK(ctx),
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 		Infos:  infos,
 	}, nil
-}
-
-func (s *svc) listVirtualView(ctx context.Context, ref *provider.Reference, mds []*provider.ResourceInfo, p *registry.ProviderInfo) []*provider.ResourceInfo {
-	nestedInfos := make(map[string]*provider.ResourceInfo)
-	infos := make([]*provider.ResourceInfo, 0, len(mds))
-
-	for _, info := range mds {
-		// Get the path prefixed with the mount point
-		wrap(info, p)
-
-		// If info is an immediate child of the path in request, just use that
-		if path.Dir(info.Path) == path.Clean(ref.Path) {
-			infos = append(infos, info)
-			continue
-		}
-
-		// info is a nested resource, so link it to its parent closest to the path in request
-		rel, err := filepath.Rel(ref.Path, info.Path)
-		if err != nil {
-			continue
-		}
-
-		parent := path.Join(ref.Path, strings.Split(rel, "/")[0])
-
-		if p, ok := nestedInfos[parent]; ok {
-			p.Size += info.Size
-			p.Mtime = utils.LaterTS(p.Mtime, info.Mtime)
-		} else {
-			nestedInfos[parent] = &provider.ResourceInfo{
-				Path: parent,
-				Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Id: &provider.ResourceId{
-					OpaqueId: uuid.New().String(),
-				},
-				Size:     info.Size,
-				Mtime:    info.Mtime,
-				MimeType: "httpd/unix-directory",
-			}
-		}
-	}
-
-	for _, info := range nestedInfos {
-		infos = append(infos, info)
-	}
-
-	return infos
-}
-
-func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	if utils.IsAbsolutePathReference(req.Ref) || utils.IsRelativeReference(req.Ref) {
-		// look up provider in space registry
-		return s.listContainer(ctx, req)
-	}
-
-	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
-	if st.Code != rpc.Code_CODE_OK {
-		return &provider.ListContainerResponse{
-			Status: st,
-		}, nil
-	}
-
-	if path.Clean(p) == s.getHome(ctx) {
-		res, err := s.listHome(ctx, req)
-		if err != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), err),
-			}, nil
-		}
-
-		// Inject mountpoints if they do not exist on disk
-		embeddedMounts := s.findEmbeddedMounts(path.Clean(req.Ref.GetPath()))
-		for _, mount := range embeddedMounts {
-			for _, info := range res.Infos {
-				if info.Path == mount { // hmm this makes existing folders hide a mount, right?
-					continue
-				}
-			}
-			childStatRes, err := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: mount}})
-			if err != nil {
-				return &provider.ListContainerResponse{
-					Status: status.NewStatusFromErrType(ctx, "ListContainer ref: "+req.Ref.String(), err),
-				}, nil
-			}
-			res.Infos = append(res.Infos, childStatRes.Info)
-		}
-		return res, nil
-	}
-
-	return s.listContainer(ctx, req)
 }
 
 func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
@@ -1217,19 +1088,6 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 	return c, nil
 }
 
-func (s *svc) findEmbeddedMounts(basePath string) []string {
-	if basePath == "" {
-		return []string{}
-	}
-	mounts := []string{}
-	for mountPath := range s.c.StorageRules {
-		if strings.HasPrefix(mountPath, basePath) && mountPath != basePath {
-			mounts = append(mounts, mountPath)
-		}
-	}
-	return mounts
-}
-
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
@@ -1264,23 +1122,6 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	}
 
 	return res.Providers, nil
-}
-
-func getUniqueProviders(providers []*registry.ProviderInfo) []*registry.ProviderInfo {
-	unique := make(map[string]*registry.ProviderInfo)
-	for _, p := range providers {
-		unique[p.Address] = p
-	}
-	p := make([]*registry.ProviderInfo, 0, len(unique))
-	for _, providerInfo := range unique {
-		p = append(p, providerInfo)
-	}
-	return p
-}
-
-type etagWithTS struct {
-	Etag      string
-	Timestamp time.Time
 }
 
 func unwrap(ref *provider.Reference, providerPath string) (*provider.Reference, error) {
