@@ -283,14 +283,20 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.BadRequest("Invalid path")
 	}
 	ref.Path = path.Dir(ref.Path)
+
+	// verify parent exists
 	var n *node.Node
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
+	if !n.Exists {
+		return errtypes.NotFound(ref.Path)
+	}
+
+	// verify child does not exist, yet
 	if n, err = n.Child(ctx, name); err != nil {
 		return
 	}
-
 	if n.Exists {
 		return errtypes.AlreadyExists(ref.Path)
 	}
