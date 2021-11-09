@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -122,11 +123,15 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 	}
 
 	// parentInfo Path is the name but we need /
-	parentInfo.Path = "/"
+	if r.URL.Path != "" {
+		parentInfo.Path = r.URL.Path
+	} else {
+		parentInfo.Path = "/"
+	}
 
 	// prefix space id to paths
 	for i := range resourceInfos {
-		resourceInfos[i].Path = path.Join("/", spaceID, r.URL.Path, resourceInfos[i].Path)
+		resourceInfos[i].Path = path.Join("/", spaceID, resourceInfos[i].Path)
 	}
 
 	s.propfindResponse(ctx, w, r, "", pf, parentInfo, resourceInfos, sublog)
@@ -221,6 +226,10 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		return nil, nil, false
 	}
 
+	if spacesPropfind {
+		res.Info.Path = ref.Path
+	}
+
 	parentInfo := res.Info
 	resourceInfos := []*provider.ResourceInfo{parentInfo}
 
@@ -279,9 +288,18 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		for len(stack) > 0 {
 			// retrieve path on top of stack
 			path := stack[len(stack)-1]
-			ref = &provider.Reference{Path: path}
+
+			var nRef *provider.Reference
+			if spacesPropfind {
+				nRef = &provider.Reference{
+					ResourceId: ref.ResourceId,
+					Path:       path,
+				}
+			} else {
+				nRef = &provider.Reference{Path: path}
+			}
 			req := &provider.ListContainerRequest{
-				Ref:                   ref,
+				Ref:                   nRef,
 				ArbitraryMetadataKeys: metadataKeys,
 			}
 			res, err := client.ListContainer(ctx, req)
@@ -295,6 +313,19 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				return nil, nil, false
 			}
 
+			stack = stack[:len(stack)-1]
+
+			// check sub-containers in reverse order and add them to the stack
+			// the reversed order here will produce a more logical sorting of results
+			for i := len(res.Infos) - 1; i >= 0; i-- {
+				if spacesPropfind {
+					res.Infos[i].Path = utils.MakeRelativePath(filepath.Join(nRef.Path, res.Infos[i].Path))
+				}
+				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+					stack = append(stack, res.Infos[i].Path)
+				}
+			}
+
 			resourceInfos = append(resourceInfos, res.Infos...)
 
 			if depth != "infinity" {
@@ -302,17 +333,6 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			}
 
 			// TODO: stream response to avoid storing too many results in memory
-
-			stack = stack[:len(stack)-1]
-
-			// check sub-containers in reverse order and add them to the stack
-			// the reversed order here will produce a more logical sorting of results
-			for i := len(res.Infos) - 1; i >= 0; i-- {
-				// for i := range res.Infos {
-				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-					stack = append(stack, res.Infos[i].Path)
-				}
-			}
 		}
 	}
 
