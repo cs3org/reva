@@ -507,11 +507,15 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 // RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid)
 func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
-	if h.isPublicShare(r, shareID) {
+	switch {
+	case h.isPublicShare(r, shareID):
 		h.removePublicShare(w, r, shareID)
-		return
+	case h.isUserShare(r, shareID):
+		h.removeUserShare(w, r, shareID)
+	default:
+		// The request is a remove space member request.
+		h.removeSpaceMember(w, r, shareID)
 	}
-	h.removeUserShare(w, r, shareID)
 }
 
 // ListShares handles GET requests on /apps/files_sharing/api/v1/shares

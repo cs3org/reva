@@ -20,27 +20,59 @@ package shares
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
+	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
-func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
-	ctx := r.Context()
+func (h *Handler) getGrantee(ctx context.Context, name string) (provider.Grantee, error) {
+	log := appctx.GetLogger(ctx)
 	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-		return
+		return provider.Grantee{}, err
 	}
+	userRes, err := client.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+		Claim: "username",
+		Value: name,
+	})
+	if err == nil && userRes.Status.Code == rpc.Code_CODE_OK {
+		return provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			Id:   &provider.Grantee_UserId{UserId: userRes.User.Id},
+		}, nil
+	}
+	log.Debug().Str("name", name).Msg("no user found")
+
+	groupRes, err := client.GetGroupByClaim(ctx, &groupv1beta1.GetGroupByClaimRequest{
+		Claim: "group_name",
+		Value: name,
+	})
+	if err == nil && groupRes.Status.Code == rpc.Code_CODE_OK {
+		return provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+			Id:   &provider.Grantee_GroupId{GroupId: groupRes.Group.Id},
+		}, nil
+	}
+	log.Debug().Str("name", name).Msg("no group found")
+
+	return provider.Grantee{}, fmt.Errorf("no grantee found with name %s", name)
+}
+
+func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+	ctx := r.Context()
 
 	shareWith := r.FormValue("shareWith")
 	if shareWith == "" {
@@ -48,17 +80,9 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 		return
 	}
 
-	userRes, err := client.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-		Claim: "username",
-		Value: shareWith,
-	})
+	grantee, err := h.getGrantee(ctx, shareWith)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)
-		return
-	}
-
-	if userRes.Status.Code != rpc.Code_CODE_OK {
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "user not found", err)
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting grantee", err)
 		return
 	}
 
@@ -79,15 +103,63 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 	addGrantRes, err := providerClient.AddGrant(ctx, &provider.AddGrantRequest{
 		Ref: ref,
 		Grant: &provider.Grant{
-			Grantee: &provider.Grantee{
-				Type: provider.GranteeType_GRANTEE_TYPE_USER,
-				Id:   &provider.Grantee_UserId{UserId: userRes.User.Id},
-			},
+			Grantee:     &grantee,
 			Permissions: role.CS3ResourcePermissions(),
 		},
 	})
 	if err != nil || addGrantRes.Status.Code != rpc.Code_CODE_OK {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not add space member", err)
+		return
+	}
+
+	response.WriteOCSSuccess(w, r, nil)
+}
+
+func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx := r.Context()
+
+	shareWith := r.URL.Query().Get("shareWith")
+	if shareWith == "" {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing shareWith", nil)
+		return
+	}
+
+	grantee, err := h.getGrantee(ctx, shareWith)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting grantee", err)
+		return
+	}
+
+	ref, err := utils.ParseStorageSpaceReference(spaceID)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "could not parse space id", err)
+		return
+	}
+
+	providers, err := h.findProviders(ctx, &ref)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider", err)
+		return
+	}
+
+	providerClient, err := h.getStorageProviderClient(providers[0])
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider", err)
+		return
+	}
+
+	removeGrantRes, err := providerClient.RemoveGrant(ctx, &provider.RemoveGrantRequest{
+		Ref: &ref,
+		Grant: &provider.Grant{
+			Grantee: &grantee,
+		},
+	})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error removing grant", err)
+		return
+	}
+	if removeGrantRes.Status.Code != rpc.Code_CODE_OK {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error removing grant", err)
 		return
 	}
 

@@ -51,7 +51,9 @@ const (
 
 	// ShareTypeFederatedCloudShare represents a federated share
 	ShareTypeFederatedCloudShare ShareType = 6
-	ShareTypeSpaceMembership     ShareType = 7
+
+	// ShareTypeSpaceMembership represents an action regarding space members
+	ShareTypeSpaceMembership ShareType = 7
 )
 
 // ResourceType indicates the OCS type of the resource
