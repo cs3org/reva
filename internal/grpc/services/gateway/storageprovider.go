@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
@@ -726,9 +727,14 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		// ref Path: ., Id: a-b-c-d, provider path: /home, provider id: a-b-c-d ->
 		// ref path: /foo/mop, provider path: /foo -> list(spaceid, ./mop)
 		// ref path: /foo, provider path: /foo
-		//if strings.HasPrefix(lcRef.Path, providers[i].ProviderPath) {
-		if lcRef.ResourceId.StorageId == providers[i].ProviderId {
-			// -> list
+		// if the requested path matches or is below a mount point we can list on that provider
+		//           requested path   provider path
+		// above   = /foo           <=> /foo/bar        -> stat(spaceid, .)    -> add metadata for /foo/bar
+		// above   = /foo           <=> /foo/bar/bif    -> stat(spaceid, .)    -> add metadata for /foo/bar
+		// matches = /foo/bar       <=> /foo/bar        -> list(spaceid, .)
+		// below   = /foo/bar/bif   <=> /foo/bar        -> list(spaceid, ./bif)
+		switch {
+		case providers[i].ProviderPath == req.Ref.Path: // matches
 			rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
 				Opaque:                req.Opaque,
 				Ref:                   lcRef,
@@ -746,9 +752,28 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				}
 			}
 			infos = append(infos, rsp.Infos...)
-		} else {
-			// ref path: /foo, provider path: /foo/bar
-			// -> stat
+		case strings.HasPrefix(req.Ref.Path, providers[i].ProviderPath): // below
+			rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
+				Opaque:                req.Opaque,
+				Ref:                   lcRef,
+				ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+			})
+			if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not list provider, skipping")
+				continue
+			}
+
+			if utils.IsAbsoluteReference(req.Ref) {
+				for j := range rsp.Infos {
+					rsp.Infos[j].Path = path.Join(lcRef.Path, rsp.Infos[j].Path)
+					wrap(rsp.Infos[j], providers[i])
+				}
+			}
+			infos = append(infos, rsp.Infos...)
+		case strings.HasPrefix(providers[i].ProviderPath, req.Ref.Path): // above
+			//  requested path   provider path
+			//  /foo           <=> /foo/bar        -> stat(spaceid, .)    -> add metadata for /foo/bar
+			//  /foo           <=> /foo/bar/bif    -> stat(spaceid, .)    -> add metadata for /foo/bar
 			sRef := &provider.Reference{
 				ResourceId: &provider.ResourceId{StorageId: providers[i].ProviderId},
 				Path:       ".",
@@ -766,9 +791,20 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response carried no info, skipping")
 				continue
 			}
+			// -> update metadata for /foo/bar -> set path to './bar'?
+			statResp.Info.Path = strings.TrimPrefix(providers[i].ProviderPath, req.Ref.Path)
+			statResp.Info.Path, _ = router.ShiftPath(statResp.Info.Path)
+			statResp.Info.Path = utils.MakeRelativePath(statResp.Info.Path)
+			// TODO invent resourceid?
 
-			// TODO verify the path is the name in the collection? should be covered by Stat
+			if utils.IsAbsoluteReference(req.Ref) {
+				statResp.Info.Path = path.Join(req.Ref.Path, statResp.Info.Path)
+			}
 			infos = append(infos, statResp.Info)
+		default:
+
+			log := appctx.GetLogger(ctx)
+			log.Err(err).Msg("gateway: unhandled ListContainer case")
 		}
 
 	}
