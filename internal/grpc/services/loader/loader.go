@@ -37,7 +37,6 @@ import (
 	_ "github.com/cs3org/reva/internal/grpc/services/publicshareprovider"
 	_ "github.com/cs3org/reva/internal/grpc/services/publicstorageprovider"
 	_ "github.com/cs3org/reva/internal/grpc/services/sharesstorageprovider"
-	_ "github.com/cs3org/reva/internal/grpc/services/spacesprovider"
 	_ "github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	_ "github.com/cs3org/reva/internal/grpc/services/storageregistry"
 	_ "github.com/cs3org/reva/internal/grpc/services/userprovider"
