@@ -493,7 +493,11 @@ func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, in
 	// Append the ACLs that are described by the xattr sys.acl entry
 	a, err := acl.Parse(info.Attrs["sys.acl"], acl.ShortTextForm)
 	if err == nil {
-		info.SysACL.Entries = append(info.SysACL.Entries, a.Entries...)
+		if info.SysACL != nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, a.Entries...)
+		} else {
+			info.SysACL = a
+		}
 	}
 
 	// We need to inherit the ACLs for the parent directory as these are not available for files
