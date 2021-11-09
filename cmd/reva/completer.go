@@ -79,15 +79,7 @@ func (c *Completer) argumentCompleter(args ...string) []prompt.Suggest {
 		return []prompt.Suggest{}
 	}
 
-	var suggests []prompt.Suggest
-
 	switch args[0] {
-	case "gen":
-		suggests = convertCmdToSuggests([]*command{
-			genConfigSubCommand(),
-			genUsersSubCommand(),
-		})
-		return prompt.FilterHasPrefix(suggests, args[1], true)
 
 	case "login":
 		if len(args) == 2 {

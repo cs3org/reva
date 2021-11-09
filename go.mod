@@ -53,7 +53,7 @@ require (
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus/alertmanager v0.23.0
 	github.com/rs/cors v1.8.0
-	github.com/rs/zerolog v1.25.0
+	github.com/rs/zerolog v1.26.0
 	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
 	github.com/stretchr/objx v0.3.0 // indirect
@@ -65,7 +65,7 @@ require (
 	github.com/wk8/go-ordered-map v0.2.0
 	go.mongodb.org/mongo-driver v1.7.2 // indirect
 	go.opencensus.io v0.23.0
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.26.0
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.26.1
 	go.opentelemetry.io/otel v1.1.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.1.0
 	go.opentelemetry.io/otel/sdk v1.1.0
