@@ -217,16 +217,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 			}, nil
 		}
 
-		providers = make([]*registry.ProviderInfo, 0, len(res.Providers))
-		// FIXME filter only providers that have an id set ... currently none have?
-		// bug? only ProviderPath is set
-		for i := range res.Providers {
-			// use only providers whose path does not start with a /?
-			if strings.HasPrefix(res.Providers[i].ProviderPath, "/") {
-				continue
-			}
-			providers = append(providers, res.Providers[i])
-		}
+		providers = res.Providers
 	}
 
 	spacesFromProviders := make([][]*provider.StorageSpace, len(providers))
