@@ -37,6 +37,7 @@ type DBShare struct {
 	UIDInitiator string
 	Prefix       string
 	ItemSource   string
+	ItemType     string
 	ShareWith    string
 	Token        string
 	Expiration   string
@@ -111,7 +112,7 @@ func SharePermToInt(p *provider.ResourcePermissions) int {
 }
 
 // IntTosharePerm retrieves read/write permissions from an integer
-func IntTosharePerm(p int) *provider.ResourcePermissions {
+func IntTosharePerm(p int, itemType string) *provider.ResourcePermissions {
 	switch p {
 	case 1:
 		return &provider.ResourcePermissions{
@@ -125,7 +126,7 @@ func IntTosharePerm(p int) *provider.ResourcePermissions {
 			InitiateFileDownload: true,
 		}
 	case 15:
-		return &provider.ResourcePermissions{
+		perm := &provider.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -135,14 +136,17 @@ func IntTosharePerm(p int) *provider.ResourcePermissions {
 			GetQuota:             true,
 			InitiateFileDownload: true,
 
-			Move:               true,
 			InitiateFileUpload: true,
 			RestoreFileVersion: true,
 			RestoreRecycleItem: true,
-			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
 		}
+		if itemType == "folder" {
+			perm.CreateContainer = true
+			perm.Delete = true
+			perm.Move = true
+			perm.PurgeRecycle = true
+		}
+		return perm
 	default:
 		// TODO we may have other options, for now this is a denial
 		return &provider.ResourcePermissions{}
@@ -199,7 +203,7 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 			StorageId: s.Prefix,
 			OpaqueId:  s.ItemSource,
 		},
-		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions)},
+		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
 		Grantee:     ExtractGrantee(s.ShareType, s.ShareWith),
 		Owner:       ExtractUserID(s.UIDOwner),
 		Creator:     ExtractUserID(s.UIDInitiator),
@@ -249,7 +253,7 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 			StorageId: s.Prefix,
 			OpaqueId:  s.ItemSource,
 		},
-		Permissions:       &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions)},
+		Permissions:       &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
 		Owner:             ExtractUserID(s.UIDOwner),
 		Creator:           ExtractUserID(s.UIDInitiator),
 		Token:             s.Token,
