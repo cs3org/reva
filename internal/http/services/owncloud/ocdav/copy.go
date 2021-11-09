@@ -171,7 +171,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		var downloadEP, downloadToken string
 		for _, p := range dRes.Protocols {
-			if p.Protocol == "simple" {
+			if p.Protocol == "spaces" {
 				downloadEP, downloadToken = p.DownloadEndpoint, p.Token
 			}
 		}
