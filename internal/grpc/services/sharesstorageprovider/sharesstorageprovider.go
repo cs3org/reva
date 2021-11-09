@@ -30,6 +30,7 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -370,7 +371,30 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 }
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+	if err != nil {
+		return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
+	}
+	if lsRes.Status.Code != rpc.Code_CODE_OK {
+		return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
+	}
+
+	res := &provider.ListStorageSpacesResponse{}
+	for i := range lsRes.Shares {
+		space := &provider.StorageSpace{
+			Id:        &provider.StorageSpaceId{OpaqueId: lsRes.Shares[i].Share.ResourceId.StorageId},
+			SpaceType: "share",
+			Owner:     &userv1beta1.User{Id: lsRes.Shares[i].Share.Owner},
+			Root:      lsRes.Shares[i].Share.ResourceId,
+			Name:      lsRes.Shares[i].MountPoint.Path,
+			//Quota: ,
+			//Mtime: ,
+		}
+		res.StorageSpaces = append(res.StorageSpaces, space)
+	}
+	res.Status = status.NewOK(ctx)
+
+	return res, nil
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
@@ -626,17 +650,18 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		return res, nil
 	}
 
-	shares, err := s.getReceivedShares(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	res := &provider.StatResponse{
 		Info: &provider.ResourceInfo{
 			Path: filepath.Join(s.mountPath),
 			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 		},
 	}
+
+	shares, err := s.getReceivedShares(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	childInfos := []*provider.ResourceInfo{}
 	for _, shares := range shares {
 		if shares.ReceivedShare.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
