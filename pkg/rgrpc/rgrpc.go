@@ -291,9 +291,9 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
 		appctx.NewUnary(s.log),
 		token.NewUnary(),
+		useragent.NewUnary(),
 		log.NewUnary(),
 		recovery.NewUnary(),
-		useragent.NewUnary(),
 	}, unaryInterceptors...)
 	unaryChain := grpc_middleware.ChainUnaryServer(unaryInterceptors...)
 
@@ -333,9 +333,9 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 		authStream,
 		appctx.NewStream(s.log),
 		token.NewStream(),
+		useragent.NewStream(),
 		log.NewStream(),
 		recovery.NewStream(),
-		useragent.NewStream(),
 	}, streamInterceptors...)
 	streamChain := grpc_middleware.ChainStreamServer(streamInterceptors...)
 
