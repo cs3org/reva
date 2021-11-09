@@ -38,6 +38,7 @@ func ContextGetUserAgent(ctx context.Context) (*ua.UserAgent, bool) {
 	return nil, false
 }
 
+// ContextGetUserAgentString returns the user agent string if set in the given context.
 func ContextGetUserAgentString(ctx context.Context) (string, bool) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {

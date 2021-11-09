@@ -47,7 +47,7 @@ func isGRPC(ua *ua.UserAgent) bool {
 	return strings.HasPrefix(ua.Name, "grpc")
 }
 
-// GetCategory returns the category of the user agent
+// getCategory returns the category of the user agent
 // (i.e. if it is a web, mobile, desktop or grpc user agent)
 func getCategory(ua *ua.UserAgent) string {
 	switch {
@@ -64,6 +64,8 @@ func getCategory(ua *ua.UserAgent) string {
 	}
 }
 
+// IsUserAgentAllowed return true if the user agent corresponds
+// to one in the allowed user agents list
 func IsUserAgentAllowed(ua *ua.UserAgent, allowedUserAgents []string) bool {
 	cat := getCategory(ua)
 	for _, userAgent := range allowedUserAgents {
