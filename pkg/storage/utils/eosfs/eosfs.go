@@ -1571,6 +1571,11 @@ func (fs *eosfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSto
 	return nil, errtypes.NotSupported("update storage space")
 }
 
+// DeleteStorageSpace deletes a storage space
+func (fs *eosfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	return errtypes.NotSupported("delete storage space")
+}
+
 func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) (*provider.RecycleItem, error) {
 	path, err := fs.unwrap(ctx, eosDeletedItem.RestorePath)
 	if err != nil {

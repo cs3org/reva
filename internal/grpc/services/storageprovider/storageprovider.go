@@ -484,9 +484,25 @@ func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
-	return &provider.DeleteStorageSpaceResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("DeleteStorageSpace not implemented"), "DeleteStorageSpace not implemented"),
-	}, nil
+	if err := s.storage.DeleteStorageSpace(ctx, req); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "not found when deleting space")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error deleting space: "+req.Id.String())
+		}
+		return &provider.DeleteStorageSpaceResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.DeleteStorageSpaceResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {

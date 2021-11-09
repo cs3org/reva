@@ -685,3 +685,8 @@ func (fs *s3FS) ListStorageSpaces(ctx context.Context, filter []*provider.ListSt
 func (fs *s3FS) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
 }
+
+// DeleteStorageSpace deletes a storage space
+func (fs *s3FS) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	return errtypes.NotSupported("delete storage space")
+}

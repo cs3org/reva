@@ -1935,6 +1935,11 @@ func (fs *owncloudsqlfs) UpdateStorageSpace(ctx context.Context, req *provider.U
 	return nil, errtypes.NotSupported("update storage space")
 }
 
+// DeleteStorageSpace deletes a storage space
+func (fs *owncloudsqlfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	return errtypes.NotSupported("delete storage space")
+}
+
 func readChecksumIntoResourceChecksum(ctx context.Context, checksums, algo string, ri *provider.ResourceInfo) {
 	re := regexp.MustCompile(strings.ToUpper(algo) + `:(.*)`)
 	matches := re.FindStringSubmatch(checksums)

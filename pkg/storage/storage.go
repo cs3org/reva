@@ -60,6 +60,7 @@ type FS interface {
 	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, permissions map[string]struct{}) ([]*provider.StorageSpace, error)
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)
+	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error
 }
 
 // Registry is the interface that storage registries implement

@@ -2239,6 +2239,11 @@ func (fs *ocfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStor
 	return nil, errtypes.NotSupported("update storage space")
 }
 
+// DeleteStorageSpace deletes a storage space
+func (fs *ocfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	return errtypes.NotSupported("delete storage space")
+}
+
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 	var root string
 	if fs.c.EnableHome {

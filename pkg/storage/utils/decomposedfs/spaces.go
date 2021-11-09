@@ -293,6 +293,41 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}, nil
 }
 
+// DeleteStorageSpace deletes a storage space
+func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	spaceID := req.Id.OpaqueId
+
+	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
+	if err != nil {
+		return err
+	}
+
+	if len(matches) != 1 {
+		return fmt.Errorf("update space failed: found %d matching spaces", len(matches))
+	}
+
+	target, err := os.Readlink(matches[0])
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[0]).Msg("could not read link, skipping")
+	}
+
+	node, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
+	if err != nil {
+		return err
+	}
+
+	err = fs.tp.Delete(ctx, node)
+	if err != nil {
+		return err
+	}
+
+	err = os.RemoveAll(matches[0])
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // createHiddenSpaceFolder bootstraps a storage space root with a hidden ".space" folder used to store space related
 // metadata such as a description or an image.
 // Internally createHiddenSpaceFolder leverages the use of node.Child() to create a new node under the space root.

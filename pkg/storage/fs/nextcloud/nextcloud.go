@@ -808,3 +808,18 @@ func (nc *StorageDriver) UpdateStorageSpace(ctx context.Context, req *provider.U
 	}
 	return &respObj, nil
 }
+
+// DeleteStorageSpace deletes a storage space
+func (nc *StorageDriver) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	bodyStr, _ := json.Marshal(req)
+	_, respBody, err := nc.do(ctx, Action{"DeleteStorageSpace", string(bodyStr)})
+	if err != nil {
+		return err
+	}
+	var respObj provider.DeleteStorageSpaceResponse
+	err = json.Unmarshal(respBody, &respObj)
+	if err != nil {
+		return err
+	}
+	return nil
+}
