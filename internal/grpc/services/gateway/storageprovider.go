@@ -532,7 +532,7 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}, nil
 	}
 
-	_, req.Source, err = s.findAndUnwrap(ctx, req.Destination)
+	_, req.Destination, err = s.findAndUnwrap(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, "Move ref="+req.Destination.String(), err),
