@@ -697,7 +697,7 @@ def litmusOcisSpacesDav():
         "commands": [
           # The spaceid is randomly generated during the first login so we need this hack to construct the correct url.
           "curl -s -k -u einstein:relativity -I http://revad-services:20080/remote.php/dav/files/einstein",
-          "export LITMUS_URL=http://revad-services:20080/remote.php/dav/spaces/123e4567-e89b-12d3-a456-426655440000!$(ls /drone/src/tmp/reva/data/spaces/personal/)",
+          "export LITMUS_URL=http://revad-services:20080/remote.php/dav/spaces/$(ls /drone/src/tmp/reva/data/spaces/personal/)",
           "/usr/local/bin/litmus-wrapper",
         ]
       },
