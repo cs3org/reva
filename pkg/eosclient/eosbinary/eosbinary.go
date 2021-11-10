@@ -45,6 +45,7 @@ import (
 const (
 	versionPrefix  = ".sys.v#."
 	lwShareAttrKey = "reva.lwshare"
+	userACLEvalKey = "eval.useracl"
 )
 
 const (
@@ -296,7 +297,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 
 	if a.Type == acl.TypeLightweight {
 		sysACL := ""
-		aclStr, ok := finfo.Attrs[lwShareAttrKey]
+		aclStr, ok := finfo.Attrs["sys."+lwShareAttrKey]
 		if ok {
 			acls, err := acl.Parse(aclStr, acl.ShortTextForm)
 			if err != nil {
@@ -330,7 +331,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 		args = append(args, "--user")
 		userACLAttr := &eosclient.Attribute{
 			Type: SystemAttr,
-			Key:  "eval.useracl",
+			Key:  userACLEvalKey,
 			Val:  "1",
 		}
 		if err = c.SetAttr(ctx, auth, userACLAttr, false, path); err != nil {
@@ -360,7 +361,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 
 	if a.Type == acl.TypeLightweight {
 		sysACL := ""
-		aclStr, ok := finfo.Attrs[lwShareAttrKey]
+		aclStr, ok := finfo.Attrs["sys."+lwShareAttrKey]
 		if ok {
 			acls, err := acl.Parse(aclStr, acl.ShortTextForm)
 			if err != nil {
@@ -979,7 +980,10 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 			// handle xattrn and xattrv special cases
 			switch {
 			case partsByEqual[0] == "xattrn":
-				previousXAttr = strings.Replace(partsByEqual[1], "user.", "", 1)
+				previousXAttr = partsByEqual[1]
+				if previousXAttr != "user.acl" {
+					previousXAttr = strings.Replace(previousXAttr, "user.", "", 1)
+				}
 			case partsByEqual[0] == "xattrv":
 				attrs[previousXAttr] = partsByEqual[1]
 				previousXAttr = ""
@@ -1090,8 +1094,25 @@ func (c *Client) mapToFileInfo(kv, attrs map[string]string) (*eosclient.FileInfo
 	if err != nil {
 		return nil, err
 	}
-	lwACLStr, ok := attrs[lwShareAttrKey]
-	if ok {
+
+	// Read user ACLs if sys.eval.useracl is set
+	if userACLEval, ok := attrs["sys."+userACLEvalKey]; ok && userACLEval == "1" {
+		if userACL, ok := attrs["user.acl"]; ok {
+			userAcls, err := acl.Parse(userACL, acl.ShortTextForm)
+			if err != nil {
+				return nil, err
+			}
+			for _, e := range userAcls.Entries {
+				err = sysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	// Read lightweight ACLs recognized by the sys.reva.lwshare attr
+	if lwACLStr, ok := attrs["sys."+lwShareAttrKey]; ok {
 		lwAcls, err := acl.Parse(lwACLStr, acl.ShortTextForm)
 		if err != nil {
 			return nil, err

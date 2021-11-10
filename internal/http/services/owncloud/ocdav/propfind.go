@@ -40,10 +40,12 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/publicshare"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const (
@@ -134,7 +136,34 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 }
 
 func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
-	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, namespace)
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(ctx, "propfind_response")
+	defer span.End()
+
+	filters := make([]*link.ListPublicSharesRequest_Filter, 0, len(resourceInfos))
+	for i := range resourceInfos {
+		filters = append(filters, publicshare.ResourceIDFilter(resourceInfos[i].Id))
+	}
+
+	client, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	var linkshares map[string]struct{}
+	listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
+	if err == nil {
+		linkshares := make(map[string]struct{})
+		for i := range listResp.Share {
+			linkshares[listResp.Share[i].ResourceId.OpaqueId] = struct{}{}
+		}
+	} else {
+		log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
+		span.SetStatus(codes.Error, err.Error())
+	}
+
+	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, namespace, linkshares)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -374,10 +403,10 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 	return pf, 0, nil
 }
 
-func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string) (string, error) {
+func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string, linkshares map[string]struct{}) (string, error) {
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
-		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns)
+		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns, linkshares)
 		if err != nil {
 			return "", err
 		}
@@ -429,7 +458,7 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
-func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string) (*responseXML, error) {
+func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
@@ -739,11 +768,23 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:checksums", ""))
 					}
 				case "share-types": // desktop
+					var types strings.Builder
 					k := md.GetArbitraryMetadata()
 					amd := k.GetMetadata()
 					if amdv, ok := amd[metadataKeyOf(&pf.Prop[i])]; ok {
-						st := fmt.Sprintf("<oc:share-type>%s</oc:share-type>", amdv)
-						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:share-types", st))
+						types.WriteString("<oc:share-type>")
+						types.WriteString(amdv)
+						types.WriteString("</oc:share-type>")
+					}
+
+					if md.Id != nil {
+						if _, ok := linkshares[md.Id.OpaqueId]; ok {
+							types.WriteString("<oc:share-type>3</oc:share-type>")
+						}
+					}
+
+					if types.Len() != 0 {
+						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:share-types", types.String()))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 					}

@@ -70,8 +70,7 @@ type config struct {
 	HomeMapping         string                            `mapstructure:"home_mapping"`
 	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
 	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
-	// TODO use user layout for GetHome / personal space ?
-	// UserLayout          string                            `mapstructure:"user_layout" docs:"{{.Username}};Template for user home directories"`
+	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
 }
 
 // sets defaults
@@ -119,10 +118,11 @@ func (c *config) init() {
 }
 
 type svc struct {
-	c              *config
-	dataGatewayURL url.URL
-	tokenmgr       token.Manager
-	etagCache      *ttlcache.Cache `mapstructure:"etag_cache"`
+	c               *config
+	dataGatewayURL  url.URL
+	tokenmgr        token.Manager
+	etagCache       *ttlcache.Cache `mapstructure:"etag_cache"`
+	createHomeCache *ttlcache.Cache `mapstructure:"create_home_cache"`
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -151,11 +151,16 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	_ = etagCache.SetTTL(time.Duration(c.EtagCacheTTL) * time.Second)
 	etagCache.SkipTTLExtensionOnHit(true)
 
+	createHomeCache := ttlcache.NewCache()
+	_ = createHomeCache.SetTTL(time.Duration(c.CreateHomeCacheTTL) * time.Second)
+	createHomeCache.SkipTTLExtensionOnHit(true)
+
 	s := &svc{
-		c:              c,
-		dataGatewayURL: *u,
-		tokenmgr:       tokenManager,
-		etagCache:      etagCache,
+		c:               c,
+		dataGatewayURL:  *u,
+		tokenmgr:        tokenManager,
+		etagCache:       etagCache,
+		createHomeCache: createHomeCache,
 	}
 
 	return s, nil
