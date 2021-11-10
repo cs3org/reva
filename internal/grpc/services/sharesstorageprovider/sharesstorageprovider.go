@@ -960,8 +960,12 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
+// GetQuota returns 0 free quota. It is virtual ... the shares may have a different quota ...
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	// FIXME use req.Ref to get real quota
+	return &provider.GetQuotaResponse{
+		Status: status.NewOK(ctx),
+	}, nil
 }
 
 func (s *service) resolveReference(ref *provider.Reference) (string, string, error) {
