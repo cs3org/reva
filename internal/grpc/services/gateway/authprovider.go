@@ -154,20 +154,25 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
-	createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
-	if err != nil {
-		log.Err(err).Msg("error calling CreateHome")
-		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error creating user home"),
-		}, nil
-	}
+	if _, err = s.createHomeCache.Get(res.User.Id.OpaqueId); err != nil {
+		createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
+		if err != nil {
+			log.Err(err).Msg("error calling CreateHome")
+			return &gateway.AuthenticateResponse{
+				Status: status.NewInternal(ctx, err, "error creating user home"),
+			}, nil
+		}
 
-	if createHomeRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
-		log.Err(err).Msg("error calling Createhome")
-		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error creating user home"),
-		}, nil
+		if createHomeRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
+			log.Err(err).Msg("error calling Createhome")
+			return &gateway.AuthenticateResponse{
+				Status: status.NewInternal(ctx, err, "error creating user home"),
+			}, nil
+		}
+		if s.c.CreateHomeCacheTTL > 0 {
+			_ = s.createHomeCache.Set(res.User.Id.OpaqueId, true)
+		}
 	}
 
 	gwRes := &gateway.AuthenticateResponse{
