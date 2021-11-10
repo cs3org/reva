@@ -171,6 +171,12 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	if depth != "0" && depth != "1" && depth != "infinity" {
 		log.Debug().Str("depth", depth).Msgf("invalid Depth header value")
 		w.WriteHeader(http.StatusBadRequest)
+		m := fmt.Sprintf("Invalid Depth header value: %v", depth)
+		b, err := Marshal(exception{
+			code:    SabredavBadRequest,
+			message: m,
+		})
+		HandleWebdavError(&log, w, b, err)
 		return nil, nil, false
 	}
 
