@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,26 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package exporters
+package utils
 
-import (
-	"github.com/cs3org/reva/pkg/mentix/exchangers"
-	"github.com/cs3org/reva/pkg/mentix/meshdata"
-)
+import "strings"
 
-// Exporter is the interface that all exporters must implement.
-type Exporter interface {
-	exchangers.Exchanger
-}
-
-// BaseExporter implements basic exporter functionality common to all exporters.
-type BaseExporter struct {
-	exchangers.BaseExchanger
-}
-
-// Start starts the exporter.
-func (exporter *BaseExporter) Start() error {
-	// Initialize the exporter with empty data
-	_ = exporter.Update(meshdata.Map{})
-	return nil
+// FindInStringArray searches for the given string in the given string array.
+func FindInStringArray(s string, arr []string, caseSensitive bool) int {
+	for i, a := range arr {
+		if (caseSensitive && a == s) || (!caseSensitive && strings.EqualFold(a, s)) {
+			return i
+		}
+	}
+	return -1
 }

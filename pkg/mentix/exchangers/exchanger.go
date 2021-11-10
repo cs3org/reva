@@ -76,7 +76,7 @@ func (exchanger *BaseExchanger) Activate(conf *config.Configuration, log *zerolo
 	return nil
 }
 
-// Start starts the exchanger; only exchanger which perform periodical background tasks should do something here.
+// Start starts the exchanger; only exchangers which perform periodical background tasks should do something here.
 func (exchanger *BaseExchanger) Start() error {
 	return nil
 }

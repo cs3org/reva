@@ -25,6 +25,7 @@ import (
 	"net/url"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/mentix/utils"
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -32,9 +33,9 @@ import (
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (int, []byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, conf *config.Configuration, _ *zerolog.Logger) (int, []byte, error) {
 	// Convert the mesh data
-	ocmData, err := convertMeshDataToOCMData(meshData)
+	ocmData, err := convertMeshDataToOCMData(meshData, conf.Exporters.CS3API.ElevatedServiceTypes)
 	if err != nil {
 		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to convert the mesh data to OCM data structures: %v", err)
 	}
@@ -48,25 +49,37 @@ func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, _ *confi
 	return http.StatusOK, data, nil
 }
 
-func convertMeshDataToOCMData(meshData *meshdata.MeshData) ([]*ocmprovider.ProviderInfo, error) {
+func convertMeshDataToOCMData(meshData *meshdata.MeshData, elevatedServiceTypes []string) ([]*ocmprovider.ProviderInfo, error) {
 	// Convert the mesh data into the corresponding OCM data structures
 	providers := make([]*ocmprovider.ProviderInfo, 0, len(meshData.Sites))
 	for _, site := range meshData.Sites {
 		// Gather all services from the site
 		services := make([]*ocmprovider.Service, 0, len(site.Services))
+
+		addService := func(host string, endpoint *meshdata.ServiceEndpoint, addEndpoints []*ocmprovider.ServiceEndpoint, apiVersion string) {
+			services = append(services, &ocmprovider.Service{
+				Host:                host,
+				Endpoint:            convertServiceEndpointToOCMData(endpoint),
+				AdditionalEndpoints: addEndpoints,
+				ApiVersion:          apiVersion,
+			})
+		}
+
 		for _, service := range site.Services {
+			apiVersion := meshdata.GetPropertyValue(service.Properties, meshdata.PropertyAPIVersion, "")
+
 			// Gather all additional endpoints of the service
 			addEndpoints := make([]*ocmprovider.ServiceEndpoint, 0, len(service.AdditionalEndpoints))
 			for _, endpoint := range service.AdditionalEndpoints {
-				addEndpoints = append(addEndpoints, convertServiceEndpointToOCMData(endpoint))
+				if utils.FindInStringArray(endpoint.Type.Name, elevatedServiceTypes, false) != -1 {
+					endpointURL, _ := url.Parse(endpoint.URL)
+					addService(endpointURL.Host, endpoint, nil, apiVersion)
+				} else {
+					addEndpoints = append(addEndpoints, convertServiceEndpointToOCMData(endpoint))
+				}
 			}
 
-			services = append(services, &ocmprovider.Service{
-				Host:                service.Host,
-				Endpoint:            convertServiceEndpointToOCMData(service.ServiceEndpoint),
-				AdditionalEndpoints: addEndpoints,
-				ApiVersion:          meshdata.GetPropertyValue(service.Properties, meshdata.PropertyAPIVersion, ""),
-			})
+			addService(service.Host, service.ServiceEndpoint, addEndpoints, apiVersion)
 		}
 
 		// Copy the site info into a ProviderInfo
