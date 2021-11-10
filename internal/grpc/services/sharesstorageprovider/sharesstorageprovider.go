@@ -33,11 +33,14 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	revactx "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
 	"github.com/mitchellh/mapstructure"
@@ -143,12 +146,14 @@ func New(gateway GatewayClient, c SharesProviderClient) (rgrpc.Service, error) {
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
-	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	reqShare, reqPath, err := s.resolveReference(req.Ref)
 	appctx.GetLogger(ctx).Debug().
-		Interface("reqPath", reqPath).
-		Interface("reqShare", reqShare).
+		Str("reqPath", reqPath).
+		Str("reqShare", reqShare).
 		Msg("sharesstorageprovider: Got SetArbitraryMetadata request")
-
+	if err != nil {
+		return nil, err
+	}
 	if reqShare == "" {
 		return &provider.SetArbitraryMetadataResponse{
 			Status: status.NewNotFound(ctx, "sharesstorageprovider: file not found"),
@@ -183,11 +188,14 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
-	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	reqShare, reqPath, err := s.resolveReference(req.Ref)
 	appctx.GetLogger(ctx).Debug().
-		Interface("reqPath", reqPath).
-		Interface("reqShare", reqShare).
+		Str("reqPath", reqPath).
+		Str("reqShare", reqShare).
 		Msg("sharesstorageprovider: Got UnsetArbitraryMetadata request")
+	if err != nil {
+		return nil, err
+	}
 
 	if reqShare == "" {
 		return &provider.UnsetArbitraryMetadataResponse{
@@ -224,11 +232,14 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
-	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	reqShare, reqPath, err := s.resolveReference(req.Ref)
 	appctx.GetLogger(ctx).Debug().
-		Interface("reqPath", reqPath).
-		Interface("reqShare", reqShare).
+		Str("reqPath", reqPath).
+		Str("reqShare", reqShare).
 		Msg("sharesstorageprovider: Got InitiateFileDownload request")
+	if err != nil {
+		return nil, err
+	}
 
 	if reqShare == "" {
 		return &provider.InitiateFileDownloadResponse{
@@ -287,11 +298,14 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
-	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	reqShare, reqPath, err := s.resolveReference(req.Ref)
 	appctx.GetLogger(ctx).Debug().
-		Interface("reqPath", reqPath).
-		Interface("reqShare", reqShare).
+		Str("reqPath", reqPath).
+		Str("reqShare", reqShare).
 		Msg("sharesstorageprovider: Got InitiateFileUpload request")
+	if err != nil {
+		return nil, err
+	}
 
 	if reqShare == "" {
 		return &provider.InitiateFileUploadResponse{
@@ -372,8 +386,17 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 
 	return &provider.ListStorageSpacesResponse{
-		Status:        &rpc.Status{Code: rpc.Code_CODE_OK},
-		StorageSpaces: []*provider.StorageSpace{},
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+		StorageSpaces: []*provider.StorageSpace{{
+			Id: &provider.StorageSpaceId{OpaqueId: "fbbe869d-a1b4-4bd2-8f1b-87281fe673c6"}, // TODO make configurable
+			Root: &provider.ResourceId{
+				StorageId: "fbbe869d-a1b4-4bd2-8f1b-87281fe673c6",
+				OpaqueId:  "fbbe869d-a1b4-4bd2-8f1b-87281fe673c6",
+			},
+			Name:      "shares jail",
+			SpaceType: "Shares",                  // TODO make configurable
+			Mtime:     &typesv1beta1.Timestamp{}, // TODO fetch from shares
+		}},
 	}, nil
 	/*
 		for i := range req.Filters {
@@ -425,11 +448,14 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	reqShare, reqPath, err := s.resolveReference(req.Ref)
 	appctx.GetLogger(ctx).Debug().
-		Interface("reqPath", reqPath).
-		Interface("reqShare", reqShare).
+		Str("reqPath", reqPath).
+		Str("reqShare", reqShare).
 		Msg("sharesstorageprovider: Got CreateContainer request")
+	if err != nil {
+		return nil, err
+	}
 
 	if reqShare == "" || reqPath == "" {
 		return &provider.CreateContainerResponse{
@@ -471,11 +497,14 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	reqShare, reqPath, err := s.resolveReference(req.Ref)
 	appctx.GetLogger(ctx).Debug().
-		Interface("reqPath", reqPath).
-		Interface("reqShare", reqShare).
+		Str("reqPath", reqPath).
+		Str("reqShare", reqShare).
 		Msg("sharesstorageprovider: Got Delete request")
+	if err != nil {
+		return nil, err
+	}
 
 	if reqShare == "" {
 		return &provider.DeleteResponse{
@@ -529,13 +558,30 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	reqShare, reqPath := s.resolvePath(req.Source.GetPath())
-	destinationShare, destinationPath := s.resolvePath(req.Destination.GetPath())
+	reqShare, reqPath, err := s.resolveReference(req.Source)
+	destinationShare, destinationPath, err2 := s.resolveReference(req.Destination)
+	if err != nil {
+		appctx.GetLogger(ctx).Debug().
+			Interface("reqRef", req.Source).
+			Interface("reqDest", req.Destination).
+			Err(err).
+			Msg("sharesstorageprovider: Got Move request")
+		return nil, err
+	}
+	if err2 != nil {
+		appctx.GetLogger(ctx).Debug().
+			Interface("reqRef", req.Source).
+			Interface("reqDest", req.Destination).
+			Err(err2).
+			Msg("sharesstorageprovider: Got Move request")
+		return nil, err2
+	}
 	appctx.GetLogger(ctx).Debug().
-		Interface("reqPath", reqPath).
-		Interface("reqShare", reqShare).
-		Interface("destinationPath", destinationPath).
-		Interface("destinationShare", destinationShare).
+		Str("reqPath", reqPath).
+		Str("reqShare", reqShare).
+		Str("destinationPath", destinationPath).
+		Str("destinationShare", destinationShare).
+		Err(err).
 		Msg("sharesstorageprovider: Got Move request")
 
 	stattedShare, err := s.statShare(ctx, reqShare)
@@ -611,68 +657,81 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	reqShare, reqPath, err := s.resolveReference(req.Ref)
 	appctx.GetLogger(ctx).Debug().
-		Interface("reqPath", reqPath).
-		Interface("reqShare", reqShare).
-		Msg("sharesstorageprovider: Got Stat request")
-
-	_, ok := revactx.ContextGetUser(ctx)
-	if !ok {
-		return &provider.StatResponse{
-			Status: status.NewNotFound(ctx, "sharesstorageprovider: shares requested for empty user"),
-		}, nil
+		Str("reqPath", reqPath).
+		Str("reqShare", reqShare).
+		Msg("sharesstorageprovider: Got Delete request")
+	if err != nil {
+		return nil, err
 	}
-
-	if reqShare != "" {
-		stattedShare, err := s.statShare(ctx, reqShare)
-		if err != nil {
-			if isShareNotFoundError(err) {
-				return &provider.StatResponse{
-					Status: status.NewNotFound(ctx, "sharesstorageprovider: file not found"),
-				}, nil
-			}
-			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "sharesstorageprovider: error stating share"),
-			}, nil
+	// stat
+	/*
 		}
-		res := &provider.StatResponse{
-			Info:   stattedShare.Stat,
-			Status: status.NewOK(ctx),
-		}
-		if reqPath != "" {
-			res, err = s.gateway.Stat(ctx, &provider.StatRequest{
-				Ref: &provider.Reference{
-					Path: filepath.Join(stattedShare.Stat.Path, reqPath),
-				},
-			})
-			if err != nil {
-				return &provider.StatResponse{
-					Status: status.NewInternal(ctx, err, "sharesstorageprovider: error getting stat from gateway"),
-				}, nil
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return res, nil
-			}
-		}
-
-		origReqShare := filepath.Base(stattedShare.Stat.Path)
-		relPath := strings.SplitAfterN(res.Info.Path, origReqShare, 2)[1]
-		res.Info.Path = filepath.Join(reqShare, relPath)
-
+		reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
 		appctx.GetLogger(ctx).Debug().
 			Interface("reqPath", reqPath).
 			Interface("reqShare", reqShare).
-			Interface("res", res).
 			Msg("sharesstorageprovider: Got Stat request")
 
-		return res, nil
-	}
+		_, ok := revactx.ContextGetUser(ctx)
+		if !ok {
+			return &provider.StatResponse{
+				Status: status.NewNotFound(ctx, "sharesstorageprovider: shares requested for empty user"),
+			}, nil
+		}
+
+		if reqShare != "" {
+			stattedShare, err := s.statShare(ctx, reqShare)
+			if err != nil {
+				if isShareNotFoundError(err) {
+					return &provider.StatResponse{
+						Status: status.NewNotFound(ctx, "sharesstorageprovider: file not found"),
+					}, nil
+				}
+				return &provider.StatResponse{
+					Status: status.NewInternal(ctx, err, "sharesstorageprovider: error stating share"),
+				}, nil
+			}
+			res := &provider.StatResponse{
+				Info:   stattedShare.Stat,
+				Status: status.NewOK(ctx),
+			}
+			if reqPath != "" {
+				res, err = s.gateway.Stat(ctx, &provider.StatRequest{
+					Ref: &provider.Reference{
+						Path: filepath.Join(stattedShare.Stat.Path, reqPath),
+					},
+				})
+				if err != nil {
+					return &provider.StatResponse{
+						Status: status.NewInternal(ctx, err, "sharesstorageprovider: error getting stat from gateway"),
+					}, nil
+				}
+				if res.Status.Code != rpc.Code_CODE_OK {
+					return res, nil
+				}
+			}
+
+			origReqShare := filepath.Base(stattedShare.Stat.Path)
+			relPath := strings.SplitAfterN(res.Info.Path, origReqShare, 2)[1]
+			res.Info.Path = filepath.Join(reqShare, relPath)
+
+			appctx.GetLogger(ctx).Debug().
+				Interface("reqPath", reqPath).
+				Interface("reqShare", reqShare).
+				Interface("res", res).
+				Msg("sharesstorageprovider: Got Stat request")
+
+			return res, nil
+		}
+	*/
 
 	res := &provider.StatResponse{
 		Info: &provider.ResourceInfo{
-			Path: ".",
-			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			Path:  ".",
+			Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			Mtime: &typesv1beta1.Timestamp{},
 		},
 	}
 
@@ -700,11 +759,14 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	reqShare, reqPath, err := s.resolveReference(req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("reqPath", reqPath).
 		Interface("reqShare", reqShare).
 		Msg("sharesstorageprovider: Got ListContainer request")
+	if err != nil {
+		return nil, err
+	}
 
 	stattedShares, err := s.getReceivedShares(ctx)
 	if err != nil {
@@ -768,11 +830,14 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	return res, nil
 }
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
-	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	reqShare, reqPath, err := s.resolveReference(req.Ref)
 	appctx.GetLogger(ctx).Debug().
-		Interface("reqPath", reqPath).
-		Interface("reqShare", reqShare).
+		Str("reqPath", reqPath).
+		Str("reqShare", reqShare).
 		Msg("sharesstorageprovider: Got ListFileVersions request")
+	if err != nil {
+		return nil, err
+	}
 
 	if reqShare == "" || reqPath == "" {
 		return &provider.ListFileVersionsResponse{
@@ -809,11 +874,15 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 }
 
 func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
-	reqShare, reqPath := s.resolvePath(req.Ref.GetPath())
+	reqShare, reqPath, err := s.resolveReference(req.Ref)
 	appctx.GetLogger(ctx).Debug().
-		Interface("reqPath", reqPath).
-		Interface("reqShare", reqShare).
+		Str("reqPath", reqPath).
+		Str("reqShare", reqShare).
+		Err(err).
 		Msg("sharesstorageprovider: Got RestoreFileVersion request")
+	if err != nil {
+		return nil, err
+	}
 
 	if reqShare == "" || reqPath == "" {
 		return &provider.RestoreFileVersionResponse{
@@ -895,17 +964,13 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) resolvePath(path string) (string, string) {
-	// /share/path/to/something
-	parts := strings.SplitN(path, "/", 2)
-	var reqShare, reqPath string
-	if len(parts) >= 2 {
-		reqPath = parts[1]
+func (s *service) resolveReference(ref *provider.Reference) (string, string, error) {
+	if ref.ResourceId != nil && ref.ResourceId.StorageId != "fbbe869d-a1b4-4bd2-8f1b-87281fe673c6" {
+		return "", "", errtypes.BadRequest(ref.ResourceId.StorageId + " not part of the shares provider")
 	}
-	if len(parts) >= 1 {
-		reqShare = parts[0]
-	}
-	return reqShare, reqPath
+	//  ./{share}/path/to/something
+	reqShare, reqPath := router.ShiftPath(strings.TrimPrefix(ref.Path, "."))
+	return reqShare, reqPath, nil
 }
 
 func (s *service) statShare(ctx context.Context, share string) (*stattedReceivedShare, error) {

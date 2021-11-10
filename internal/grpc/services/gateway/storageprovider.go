@@ -644,7 +644,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			// aggregate metadata
 
 			info.Size += resp.Info.Size
-			if utils.TSToUnixNano(resp.Info.Mtime) > utils.TSToUnixNano(info.Mtime) {
+			if info.Mtime == nil || (resp.Info.Mtime != nil && utils.TSToUnixNano(resp.Info.Mtime) > utils.TSToUnixNano(info.Mtime)) {
 				info.Mtime = resp.Info.Mtime
 				info.Etag = resp.Info.Etag
 				//info.Checksum = resp.Info.Checksum
@@ -703,7 +703,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	// + /foo/bif       -> stat  /foo/bif
 	// + /foo/bar       -> stat  /foo/bar/bam (and construct metadata for /foo/bar)
 
-	var infos []*provider.ResourceInfo
+	infos := map[string]*provider.ResourceInfo{}
 	for i := range providers {
 
 		c, err := s.getStorageProviderClient(ctx, providers[i])
@@ -751,7 +751,15 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 					wrap(rsp.Infos[j], providers[i])
 				}
 			}
-			infos = append(infos, rsp.Infos...)
+			for i := range rsp.Infos {
+				if info, ok := infos[rsp.Infos[i].Path]; ok {
+					if info.Mtime != nil && rsp.Infos[i].Mtime != nil && utils.TSToUnixNano(rsp.Infos[i].Mtime) > utils.TSToUnixNano(info.Mtime) {
+						continue
+					}
+				}
+				// replace with younger info
+				infos[rsp.Infos[i].Path] = rsp.Infos[i]
+			}
 		case strings.HasPrefix(req.Ref.Path, providers[i].ProviderPath): //  requested path is below mount point
 			rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
 				Opaque:                req.Opaque,
@@ -769,7 +777,15 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 					wrap(rsp.Infos[j], providers[i])
 				}
 			}
-			infos = append(infos, rsp.Infos...)
+			for i := range rsp.Infos {
+				if info, ok := infos[rsp.Infos[i].Path]; ok {
+					if info.Mtime != nil && rsp.Infos[i].Mtime != nil && utils.TSToUnixNano(rsp.Infos[i].Mtime) > utils.TSToUnixNano(info.Mtime) {
+						continue
+					}
+				}
+				// replace with younger info
+				infos[rsp.Infos[i].Path] = rsp.Infos[i]
+			}
 		case strings.HasPrefix(providers[i].ProviderPath, req.Ref.Path): // requested path is above mount point
 			//  requested path   provider path
 			//  /foo           <=> /foo/bar        -> stat(spaceid, .)    -> add metadata for /foo/bar
@@ -800,7 +816,15 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			if utils.IsAbsoluteReference(req.Ref) {
 				statResp.Info.Path = path.Join(req.Ref.Path, statResp.Info.Path)
 			}
-			infos = append(infos, statResp.Info)
+			if info, ok := infos[statResp.Info.Path]; !ok {
+				// replace with younger info
+				infos[statResp.Info.Path] = statResp.Info
+			} else {
+				if info.Mtime == nil || (statResp.Info.Mtime != nil && utils.TSToUnixNano(statResp.Info.Mtime) > utils.TSToUnixNano(info.Mtime)) {
+					// replace with younger info
+					infos[statResp.Info.Path] = statResp.Info
+				}
+			}
 		default:
 
 			log := appctx.GetLogger(ctx)
@@ -809,9 +833,13 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 
 	}
 
+	returnInfos := make([]*provider.ResourceInfo, len(infos))
+	for path := range infos {
+		returnInfos = append(returnInfos, infos[path])
+	}
 	return &provider.ListContainerResponse{
 		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-		Infos:  infos,
+		Infos:  returnInfos,
 	}, nil
 }
 
