@@ -8,22 +8,6 @@ description: >
 
 # _struct: config_
 
-{{% dir name="mount_path" type="string" default="/" %}}
-The path where the file system would be mounted. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L54)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-mount_path = "/"
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="mount_id" type="string" default="-" %}}
-The ID of the mounted file system. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L55)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-mount_id = "-"
-{{< /highlight >}}
-{{% /dir %}}
-
 {{% dir name="driver" type="string" default="localhome" %}}
 The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L56)
 {{< highlight toml >}}

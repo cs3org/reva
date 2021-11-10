@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	pkgregistry "github.com/cs3org/reva/pkg/storage/registry/registry"
@@ -90,7 +89,12 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 		return nil, err
 	}
 	c.init()
-	return &registry{c: c, spaces: make(map[string]*spaceAndProvider), aliases: make(map[string]map[string]*spaceAndProvider)}, nil
+	return &registry{
+		c:                 c,
+		spaces:            make(map[string]*spaceAndProvider),
+		aliases:           make(map[string]map[string]*spaceAndProvider),
+		resourceNameCache: make(map[string]string),
+	}, nil
 }
 
 type spaceAndProvider struct {
@@ -101,8 +105,9 @@ type spaceAndProvider struct {
 type registry struct {
 	c *config
 	// a map of all space ids to spaces
-	spaces  map[string]*spaceAndProvider
-	aliases map[string]map[string]*spaceAndProvider
+	spaces            map[string]*spaceAndProvider
+	aliases           map[string]map[string]*spaceAndProvider
+	resourceNameCache map[string]string
 }
 
 // ListProviders lists all storage spaces, which is *very* different from the static provider, which lists provider ids
@@ -226,22 +231,24 @@ func (r *registry) findProvidersForSpace(ctx context.Context, spaceid string) ([
 func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 	// check if the alias is known for this user
-	spaceType, rest := router.ShiftPath(ref.Path)
-	spaceName, _ := router.ShiftPath(rest)
-	alias := filepath.Join("/", spaceType, spaceName)
+	//spaceType, rest := router.ShiftPath(ref.Path)
+	//spaceName, _ := router.ShiftPath(rest)
+	//alias := filepath.Join("/", spaceType, spaceName)
 	if _, ok := r.aliases[currentUser.Id.OpaqueId]; !ok {
 		r.aliases[currentUser.Id.OpaqueId] = make(map[string]*spaceAndProvider)
 	}
-	if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
-		// best case, just return cached provider
-		return spaceAndAddr.providers, nil
-	}
+	/*
+		if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
+			// best case, just return cached provider
+			return spaceAndAddr.providers, nil
+		}
+	*/
 
 	// TODO  instead of replacing home with personal to reduce the amount of storage spaces returned by a storage provider
 	// we should add a filter that allows storage providers to only return storage spaces the current user has access to
-	if spaceType == "home" {
-		spaceType = "personal"
-	}
+	//if spaceType == "home" && spaceName != "Shares" { // FIXME get rid of special /home/Shares folder. Might require testsuite changes ... a lot
+	//	spaceType = "personal"
+	//}
 
 	for _, rule := range r.c.Rules {
 		/*
@@ -260,11 +267,11 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 		}
 		var spaces []*provider.StorageSpace
 		var err error
-		if spaceType == "" {
-			spaces, err = r.findStorageSpaceOnProviderByAccess(ctx, p, currentUser)
-		} else {
-			spaces, err = r.findStorageSpaceOnProviderByType(ctx, p, spaceType) // TODO also filter by access
-		}
+		//if spaceType == "" {
+		spaces, err = r.findStorageSpaceOnProviderByAccess(ctx, p, currentUser)
+		//} else {
+		//	spaces, err = r.findStorageSpaceOnProviderByType(ctx, p, spaceType) // TODO also filter by access
+		//}
 		if err == nil {
 			for _, space := range spaces {
 				p := &registrypb.ProviderInfo{
@@ -392,6 +399,9 @@ func (r *registry) findStorageSpaceOnProviderByType(ctx context.Context, p *regi
 }
 
 func (r *registry) findNameForRoot(ctx context.Context, p *registrypb.ProviderInfo, root *provider.ResourceId) (string, error) {
+	if name, ok := r.resourceNameCache[root.StorageId+":"+root.OpaqueId]; ok {
+		return name, nil
+	}
 	c, err := pool.GetStorageProviderServiceClient(p.Address)
 	if err != nil {
 		return "", err
@@ -407,5 +417,7 @@ func (r *registry) findNameForRoot(ctx context.Context, p *registrypb.ProviderIn
 	if res.Status.Code != rpc.Code_CODE_OK {
 		return "", status.NewErrorFromCode(res.Status.Code, "spaces registry")
 	}
+	// TODO implement proper concurrency safe cache
+	r.resourceNameCache[root.StorageId+":"+root.OpaqueId] = res.Info.Path
 	return res.Info.Path, nil
 }

@@ -366,12 +366,15 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 			continue
 		}
 
-		n, err := node.ReadNode(ctx, t.lookup, filepath.Base(link))
+		child, err := node.ReadNode(ctx, t.lookup, filepath.Base(link))
 		if err != nil {
 			// TODO log
 			continue
 		}
-		nodes = append(nodes, n)
+		if child.SpaceRoot == nil {
+			child.SpaceRoot = n.SpaceRoot
+		}
+		nodes = append(nodes, child)
 	}
 	return nodes, nil
 }

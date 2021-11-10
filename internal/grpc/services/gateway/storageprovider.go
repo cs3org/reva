@@ -752,7 +752,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				}
 			}
 			infos = append(infos, rsp.Infos...)
-		case strings.HasPrefix(req.Ref.Path, providers[i].ProviderPath): // below
+		case strings.HasPrefix(req.Ref.Path, providers[i].ProviderPath): //  requested path is below mount point
 			rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
 				Opaque:                req.Opaque,
 				Ref:                   lcRef,
@@ -770,7 +770,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				}
 			}
 			infos = append(infos, rsp.Infos...)
-		case strings.HasPrefix(providers[i].ProviderPath, req.Ref.Path): // above
+		case strings.HasPrefix(providers[i].ProviderPath, req.Ref.Path): // requested path is above mount point
 			//  requested path   provider path
 			//  /foo           <=> /foo/bar        -> stat(spaceid, .)    -> add metadata for /foo/bar
 			//  /foo           <=> /foo/bar/bif    -> stat(spaceid, .)    -> add metadata for /foo/bar

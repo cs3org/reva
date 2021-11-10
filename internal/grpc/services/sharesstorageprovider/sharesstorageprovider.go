@@ -30,7 +30,6 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -73,13 +72,11 @@ func init() {
 }
 
 type config struct {
-	MountPath                 string `mapstructure:"mount_path"`
 	GatewayAddr               string `mapstructure:"gateway_addr"`
 	UserShareProviderEndpoint string `mapstructure:"usershareprovidersvc"`
 }
 
 type service struct {
-	mountPath            string
 	gateway              GatewayClient
 	sharesProviderClient SharesProviderClient
 }
@@ -133,13 +130,12 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error)
 		return nil, errors.Wrap(err, "sharesstorageprovider: error getting UserShareProvider client")
 	}
 
-	return New(c.MountPath, gateway, client)
+	return New(gateway, client)
 }
 
 // New returns a new instance of the SharesStorageProvider service
-func New(mountpath string, gateway GatewayClient, c SharesProviderClient) (rgrpc.Service, error) {
+func New(gateway GatewayClient, c SharesProviderClient) (rgrpc.Service, error) {
 	s := &service{
-		mountPath:            mountpath,
 		gateway:              gateway,
 		sharesProviderClient: c,
 	}
@@ -370,31 +366,54 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
+// ListStorageSpaces ruturns a list storage spaces with type space. However, when the space registry tries
+// to find a storage provider for a specific space it returns an empty list, so the actual storage provider
+// should be found.
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-	if err != nil {
-		return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
-	}
-	if lsRes.Status.Code != rpc.Code_CODE_OK {
-		return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
-	}
 
-	res := &provider.ListStorageSpacesResponse{}
-	for i := range lsRes.Shares {
-		space := &provider.StorageSpace{
-			Id:        &provider.StorageSpaceId{OpaqueId: lsRes.Shares[i].Share.ResourceId.StorageId},
-			SpaceType: "share",
-			Owner:     &userv1beta1.User{Id: lsRes.Shares[i].Share.Owner},
-			Root:      lsRes.Shares[i].Share.ResourceId,
-			Name:      lsRes.Shares[i].MountPoint.Path,
-			//Quota: ,
-			//Mtime: ,
+	return &provider.ListStorageSpacesResponse{
+		Status:        &rpc.Status{Code: rpc.Code_CODE_OK},
+		StorageSpaces: []*provider.StorageSpace{},
+	}, nil
+	/*
+		for i := range req.Filters {
+			if req.Filters[i].Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
+				return &provider.ListStorageSpacesResponse{
+					Status:        &rpc.Status{Code: rpc.Code_CODE_OK},
+					StorageSpaces: []*provider.StorageSpace{},
+				}, nil
+			}
 		}
-		res.StorageSpaces = append(res.StorageSpaces, space)
-	}
-	res.Status = status.NewOK(ctx)
+		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+		if err != nil {
+			return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
+		}
+		if lsRes.Status.Code != rpc.Code_CODE_OK {
+			return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
+		}
 
-	return res, nil
+		res := &provider.ListStorageSpacesResponse{}
+		for i := range lsRes.Shares {
+			space := &provider.StorageSpace{
+				Id:        &provider.StorageSpaceId{OpaqueId: lsRes.Shares[i].Share.ResourceId.OpaqueId},
+				SpaceType: "share",
+				Owner:     &userv1beta1.User{Id: lsRes.Shares[i].Share.Owner},
+				// use the opaqueid as the spaceid
+				Root: &provider.ResourceId{StorageId: lsRes.Shares[i].Share.ResourceId.OpaqueId, OpaqueId: lsRes.Shares[i].Share.ResourceId.OpaqueId},
+				//Root:      lsRes.Shares[i].Share.ResourceId,
+				//Name:      lsRes.Shares[i].,
+				//Quota: ,
+				//Mtime: ,
+			}
+			if lsRes.Shares[i].MountPoint != nil {
+				space.Name = lsRes.Shares[i].MountPoint.Path
+			}
+			res.StorageSpaces = append(res.StorageSpaces, space)
+		}
+		res.Status = status.NewOK(ctx)
+
+		return res, nil
+	*/
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
@@ -639,7 +658,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 		origReqShare := filepath.Base(stattedShare.Stat.Path)
 		relPath := strings.SplitAfterN(res.Info.Path, origReqShare, 2)[1]
-		res.Info.Path = filepath.Join(s.mountPath, reqShare, relPath)
+		res.Info.Path = filepath.Join(reqShare, relPath)
 
 		appctx.GetLogger(ctx).Debug().
 			Interface("reqPath", reqPath).
@@ -652,7 +671,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 	res := &provider.StatResponse{
 		Info: &provider.ResourceInfo{
-			Path: filepath.Join(s.mountPath),
+			Path: ".",
 			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 		},
 	}
@@ -731,7 +750,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			}
 			for _, info := range gwListRes.Infos {
 				relPath := strings.SplitAfterN(info.Path, origReqShare, 2)[1]
-				info.Path = filepath.Join(s.mountPath, reqShare, relPath)
+				info.Path = filepath.Join(reqShare, relPath)
 				info.PermissionSet = stattedShare.Stat.PermissionSet
 			}
 			return gwListRes, nil
@@ -740,7 +759,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			if stattedShare.ReceivedShare.MountPoint != nil {
 				path = stattedShare.ReceivedShare.MountPoint.Path
 			}
-			stattedShare.Stat.Path = filepath.Join(s.mountPath, filepath.Base(path))
+			stattedShare.Stat.Path = filepath.Join(filepath.Base(path))
 			res.Infos = append(res.Infos, stattedShare.Stat)
 		}
 	}
@@ -877,8 +896,8 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 }
 
 func (s *service) resolvePath(path string) (string, string) {
-	// /<mountpath>/share/path/to/something
-	parts := strings.SplitN(strings.TrimLeft(strings.TrimPrefix(path, s.mountPath), "/"), "/", 2)
+	// /share/path/to/something
+	parts := strings.SplitN(path, "/", 2)
 	var reqShare, reqPath string
 	if len(parts) >= 2 {
 		reqPath = parts[1]

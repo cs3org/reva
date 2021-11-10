@@ -508,7 +508,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	}
 
-	id := &provider.ResourceId{OpaqueId: n.ID}
+	// TODO ensure we always have a space root
+	id := &provider.ResourceId{StorageId: n.SpaceRoot.Name, OpaqueId: n.ID}
 
 	if returnBasename {
 		fn = n.Name

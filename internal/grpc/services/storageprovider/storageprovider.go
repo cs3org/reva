@@ -51,7 +51,6 @@ func init() {
 }
 
 type config struct {
-	MountID          string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
 	Driver           string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
 	Drivers          map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
 	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
@@ -64,10 +63,6 @@ type config struct {
 func (c *config) init() {
 	if c.Driver == "" {
 		c.Driver = "localhome"
-	}
-
-	if c.MountID == "" {
-		c.MountID = "00000000-0000-0000-0000-000000000000"
 	}
 
 	if c.TmpFolder == "" {
@@ -96,7 +91,6 @@ func (c *config) init() {
 type service struct {
 	conf          *config
 	storage       storage.FS
-	mountID       string
 	tmpFolder     string
 	dataServerURL *url.URL
 	availableXS   []*provider.ResourceChecksumPriority
@@ -151,8 +145,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	mountID := c.MountID
-
 	fs, err := getFS(c)
 	if err != nil {
 		return nil, err
@@ -180,7 +172,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		conf:          c,
 		storage:       fs,
 		tmpFolder:     c.TmpFolder,
-		mountID:       mountID,
 		dataServerURL: u,
 		availableXS:   xsTypes,
 	}
@@ -415,13 +406,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 		}, nil
 	}
 
-	resp.StorageSpace.Root = &provider.ResourceId{StorageId: s.mountID, OpaqueId: resp.StorageSpace.Id.OpaqueId}
-	resp.StorageSpace.Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "!" + resp.StorageSpace.Id.OpaqueId}
 	return resp, nil
-}
-
-func hasNodeID(s *provider.StorageSpace) bool {
-	return s != nil && s.Root != nil && s.Root.OpaqueId != ""
 }
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
@@ -458,18 +443,8 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	}
 
 	for i := range spaces {
-		if hasNodeID(spaces[i]) {
-			// fill in storagespace id if it is not set
-			if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
-				// TODO get rid of this here: no concatenating. the nodeid is the storageid
-				spaces[i].Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "!" + spaces[i].Root.OpaqueId}
-			}
-			// fill in storage id if it is not set
-			if spaces[i].Root.StorageId == "" {
-				spaces[i].Root.StorageId = s.mountID
-			}
-		} else if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
-			log.Warn().Str("service", "storageprovider").Str("driver", s.conf.Driver).Interface("space", spaces[i]).Msg("space is missing space id and root id")
+		if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
+			log.Error().Str("service", "storageprovider").Str("driver", s.conf.Driver).Interface("space", spaces[i]).Msg("space is missing space id and root id")
 		}
 	}
 
@@ -612,7 +587,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Status: st,
 		}, nil
 	}
-	md.Id.StorageId = s.mountID
 
 	res := &provider.StatResponse{
 		Status: status.NewOK(ctx),
@@ -647,7 +621,6 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 	}
 
 	for _, md := range mds {
-		md.Id.StorageId = s.mountID
 		res := &provider.ListContainerStreamResponse{
 			Info:   md,
 			Status: status.NewOK(ctx),
@@ -676,10 +649,6 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		return &provider.ListContainerResponse{
 			Status: st,
 		}, nil
-	}
-
-	for i := range mds {
-		mds[i].Id.StorageId = s.mountID
 	}
 
 	res := &provider.ListContainerResponse{

@@ -141,6 +141,8 @@ func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) 
 	if err != nil {
 		return nil, err
 	}
+
+	node.SpaceRoot = node
 	return node, nil
 }
 
