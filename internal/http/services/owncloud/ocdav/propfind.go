@@ -777,8 +777,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						types.WriteString("</oc:share-type>")
 					}
 
-					if _, ok := linkshares[md.Id.OpaqueId]; ok {
-						types.WriteString("<oc:share-type>3</oc:share-type>")
+					if md.Id != nil {
+						if _, ok := linkshares[md.Id.OpaqueId]; ok {
+							types.WriteString("<oc:share-type>3</oc:share-type>")
+						}
 					}
 
 					if types.Len() != 0 {
