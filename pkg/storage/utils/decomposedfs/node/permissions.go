@@ -284,14 +284,6 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 	}
 	return u, nil
 }
-func isNoData(err error) bool {
-	if xerr, ok := err.(*xattr.Error); ok {
-		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.ENODATA
-		}
-	}
-	return false
-}
 
 // The os not exists error is buried inside the xattr error,
 // so we cannot just use os.IsNotExists().
