@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -45,8 +44,6 @@ import (
 func init() {
 	pkgregistry.Register("spaces", New)
 }
-
-var bracketRegex = regexp.MustCompile(`\[(.*?)\]`)
 
 type rule struct {
 	Mapping           string            `mapstructure:"mapping"`
@@ -157,131 +154,175 @@ func (r *registry) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error
 	return nil, errors.New("static: home not found")
 }
 
-func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
-	if utils.IsRelativeReference(ref) {
-		// check if the spaceid is known
-		if spaceAndAddr, ok := r.spaces[ref.ResourceId.StorageId]; ok {
-			// best case, just return cached provider
-			return spaceAndAddr.providers, nil
-		}
+// FindProviders will return all providers
+// Given providers mounted at /home, /personal, /public, /shares, /foo and /foo/sub
+// When a stat for / arrives
+// Then the gateway needs all providers below /
+// -> all providers
+//
+// When a stat for /home arrives
+// Then the gateway needs all providers below /home
+// -> only the /home provider
+//
+// When a stat for /foo arrives
+// Then the gateway needs all providers below /foo
+// -> the /foo and /foo/sub providers
+//
+// Given providers mounted at /foo, /foo/sub and /foo/sub/bar
+// When a MKCOL for /foo/bif arrives
+// Then the ocdav will make a stat for /foo/bif
+// Then the gateway only needs the provider /foo
+// -> only the /foo provider
 
-		for _, rule := range r.c.Rules {
-			p := &registrypb.ProviderInfo{
-				Address: rule.Address,
+// When a MKCOL for /foo/sub/mob arrives
+// Then the ocdav will make a stat for /foo/sub/mob
+// Then the gateway needs all providers below /foo/sub
+// -> only the /foo/sub provider
+//
+//           requested path   provider path
+// above   = /foo           <=> /foo/bar        -> stat(spaceid, .)    -> add metadata for /foo/bar
+// above   = /foo           <=> /foo/bar/bif    -> stat(spaceid, .)    -> add metadata for /foo/bar
+// matches = /foo/bar       <=> /foo/bar        -> list(spaceid, .)
+// below   = /foo/bar/bif   <=> /foo/bar        -> list(spaceid, ./bif)
+func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
+	switch {
+	case ref.ResourceId != nil && ref.ResourceId.StorageId != "":
+		return r.findProvidersForSpace(ctx, ref.ResourceId.StorageId)
+	case utils.IsAbsolutePathReference(ref):
+		return r.findProvidersForAbsolutePathReference(ctx, ref)
+	default:
+		return nil, errtypes.NotSupported("unsupported reference type")
+	}
+}
+func (r *registry) findProvidersForSpace(ctx context.Context, spaceid string) ([]*registrypb.ProviderInfo, error) {
+	// check if the spaceid is known
+	if spaceAndAddr, ok := r.spaces[spaceid]; ok {
+		// best case, just return cached provider
+		return spaceAndAddr.providers, nil
+	}
+
+	for _, rule := range r.c.Rules {
+		p := &registrypb.ProviderInfo{
+			Address: rule.Address,
+		}
+		space, err := r.findStorageSpaceOnProvider(ctx, p, spaceid)
+		if err == nil {
+			p.ProviderId = space.Id.OpaqueId
+			path, err := r.findNameForRoot(ctx, p, space.Root)
+			if err != nil {
+				return nil, err
 			}
-			space, err := r.findStorageSpaceOnProvider(ctx, p, ref.ResourceId.StorageId)
-			if err == nil {
-				p.ProviderId = space.Id.OpaqueId
+			p.ProviderPath = filepath.Join("/", space.SpaceType, filepath.Base(path))
+			// cache result, TODO only for 30sec?
+			r.spaces[spaceid] = &spaceAndProvider{
+				space, []*registrypb.ProviderInfo{p},
+			}
+			// TODO continue iterating to collect all providers that have access
+			return []*registrypb.ProviderInfo{p}, nil
+		}
+	}
+	return []*registrypb.ProviderInfo{}, nil
+}
+func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
+	currentUser := ctxpkg.ContextMustGetUser(ctx)
+	// check if the alias is known for this user
+	spaceType, rest := router.ShiftPath(ref.Path)
+	spaceName, _ := router.ShiftPath(rest)
+	alias := filepath.Join("/", spaceType, spaceName)
+	if _, ok := r.aliases[currentUser.Id.OpaqueId]; !ok {
+		r.aliases[currentUser.Id.OpaqueId] = make(map[string]*spaceAndProvider)
+	}
+	if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
+		// best case, just return cached provider
+		return spaceAndAddr.providers, nil
+	}
+
+	// TODO  instead of replacing home with personal to reduce the amount of storage spaces returned by a storage provider
+	// we should add a filter that allows storage providers to only return storage spaces the current user has access to
+	if spaceType == "home" {
+		spaceType = "personal"
+	}
+
+	for _, rule := range r.c.Rules {
+		/*
+			if strings.HasPrefix(ref.Path, path) {
+				// we found a manual path config in the rules
+				return []*registrypb.ProviderInfo{
+					{
+						Address:      rule.Address,
+						ProviderPath: path,
+					},
+				}, nil
+			}
+		*/
+		p := &registrypb.ProviderInfo{
+			Address: rule.Address,
+		}
+		var spaces []*provider.StorageSpace
+		var err error
+		if spaceType == "" {
+			spaces, err = r.findStorageSpaceOnProviderByAccess(ctx, p, currentUser)
+		} else {
+			spaces, err = r.findStorageSpaceOnProviderByType(ctx, p, spaceType) // TODO also filter by access
+		}
+		if err == nil {
+			for _, space := range spaces {
+				p := &registrypb.ProviderInfo{
+					ProviderId: space.Id.OpaqueId,
+					Address:    rule.Address,
+				}
 				path, err := r.findNameForRoot(ctx, p, space.Root)
 				if err != nil {
 					return nil, err
 				}
+				// cache entry
 				p.ProviderPath = filepath.Join("/", space.SpaceType, filepath.Base(path))
-				// cache result, TODO only for 30sec?
-				r.spaces[ref.ResourceId.StorageId] = &spaceAndProvider{
+				r.aliases[currentUser.Id.OpaqueId][p.ProviderPath] = &spaceAndProvider{
 					space, []*registrypb.ProviderInfo{p},
 				}
-				// TODO continue iterating to collect all providers that have access
-				return []*registrypb.ProviderInfo{p}, nil
-			}
-		}
-	}
-	if utils.IsAbsolutePathReference(ref) {
-		currentUser := ctxpkg.ContextMustGetUser(ctx)
-		// check if the alias is known for this user
-		spaceType, rest := router.ShiftPath(ref.Path)
-		spaceName, _ := router.ShiftPath(rest)
-		alias := filepath.Join("/", spaceType, spaceName)
-		if _, ok := r.aliases[currentUser.Id.OpaqueId]; !ok {
-			r.aliases[currentUser.Id.OpaqueId] = make(map[string]*spaceAndProvider)
-		}
-		if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
-			// best case, just return cached provider
-			return spaceAndAddr.providers, nil
-		}
-
-		// TODO  instead of replacing home with personal to reduce the amount of storage spaces returned by a storage provider
-		// we should add a filter that allows storage providers to only return storage spaces the current user has access to
-		if spaceType == "home" {
-			spaceType = "personal"
-		}
-
-		for _, rule := range r.c.Rules {
-			/*
-				if strings.HasPrefix(ref.Path, path) {
-					// we found a manual path config in the rules
-					return []*registrypb.ProviderInfo{
-						{
+				// also registor a personal storage where the current user is owner as his /home
+				if space.SpaceType == "personal" && space.Owner != nil && utils.UserEqual(space.Owner.Id, currentUser.Id) {
+					r.aliases[currentUser.Id.OpaqueId]["/home"] = &spaceAndProvider{
+						space, []*registrypb.ProviderInfo{{
+							ProviderPath: "/home",
+							ProviderId:   space.Id.OpaqueId,
 							Address:      rule.Address,
-							ProviderPath: path,
-						},
-					}, nil
+						}},
+					}
+				}
+				// cache result, TODO only for 30sec?
+				//if _, ok := r.aliases[currentUser.Id.OpaqueId][p.ProviderPath]; !ok {
+				/*} /*else {
+					// add an additional storage provider, eg for load balancing
+					r.aliases[currentUser.Id.OpaqueId][p.ProviderPath].providers = append(r.aliases[currentUser.Id.OpaqueId][p.ProviderPath].providers, p)
+				}*/
+			}
+
+			/*
+				if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
+					return spaceAndAddr.providers, nil
 				}
 			*/
-			p := &registrypb.ProviderInfo{
-				Address: rule.Address,
-			}
-			var spaces []*provider.StorageSpace
-			var err error
-			if spaceType == "" {
-				spaces, err = r.findStorageSpaceOnProviderByAccess(ctx, p, currentUser)
-			} else {
-				spaces, err = r.findStorageSpaceOnProviderByType(ctx, p, spaceType) // TODO also filter by access
-			}
-			if err == nil {
-				for _, space := range spaces {
-					p := &registrypb.ProviderInfo{
-						ProviderId: space.Id.OpaqueId,
-						Address:    rule.Address,
-					}
-					path, err := r.findNameForRoot(ctx, p, space.Root)
-					if err != nil {
-						return nil, err
-					}
-					// cache entry
-					p.ProviderPath = filepath.Join("/", space.SpaceType, filepath.Base(path))
-					r.aliases[currentUser.Id.OpaqueId][p.ProviderPath] = &spaceAndProvider{
-						space, []*registrypb.ProviderInfo{p},
-					}
-					// also registor a personal storage where the current user is owner as his /home
-					if space.SpaceType == "personal" && space.Owner != nil && utils.UserEqual(space.Owner.Id, currentUser.Id) {
-						r.aliases[currentUser.Id.OpaqueId]["/home"] = &spaceAndProvider{
-							space, []*registrypb.ProviderInfo{{
-								ProviderPath: "/home",
-								ProviderId:   space.Id.OpaqueId,
-								Address:      rule.Address,
-							}},
-						}
-					}
-					// cache result, TODO only for 30sec?
-					//if _, ok := r.aliases[currentUser.Id.OpaqueId][p.ProviderPath]; !ok {
-					/*} /*else {
-						// add an additional storage provider, eg for load balancing
-						r.aliases[currentUser.Id.OpaqueId][p.ProviderPath].providers = append(r.aliases[currentUser.Id.OpaqueId][p.ProviderPath].providers, p)
-					}*/
-				}
-
-				/*
-					if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
-						return spaceAndAddr.providers, nil
-					}
-				*/
-			}
 		}
-		providers := make([]*registrypb.ProviderInfo, 0, len(r.aliases[currentUser.Id.OpaqueId]))
-		for mountPath, spaceAndProvider := range r.aliases[currentUser.Id.OpaqueId] {
-			if strings.HasPrefix(mountPath, alias) {
-				providers = append(providers, spaceAndProvider.providers...)
-			}
-		}
-
-		if len(providers) == 0 {
-			return nil, errtypes.NotFound("not found")
-		}
-		return providers, nil
 	}
-	// find path in kv map
-	return nil, errtypes.NotFound("not found")
+	providers := make([]*registrypb.ProviderInfo, 0, len(r.aliases[currentUser.Id.OpaqueId]))
+	deepestMountPath := ""
+	for mountPath, spaceAndProvider := range r.aliases[currentUser.Id.OpaqueId] {
+		switch {
+		case strings.HasPrefix(mountPath, ref.Path):
+			// and add all providers below and exactly matching the path
+			// requested /foo, mountPath /foo/sub
+			providers = append(providers, spaceAndProvider.providers...)
+		case strings.HasPrefix(ref.Path, mountPath) && len(mountPath) > len(deepestMountPath):
+			// eg. three providers: /foo, /foo/sub, /foo/sub/bar
+			// requested /foo/sub/mob
+			deepestMountPath = mountPath
+		}
+	}
+	if deepestMountPath != "" {
+		providers = append(providers, r.aliases[currentUser.Id.OpaqueId][deepestMountPath].providers...)
+	}
+	return providers, nil
 }
 
 func (r *registry) findStorageSpaceOnProvider(ctx context.Context, p *registrypb.ProviderInfo, spaceid string) (*provider.StorageSpace, error) {
