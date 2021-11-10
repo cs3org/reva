@@ -499,6 +499,8 @@ func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermi
 var ocPublicPermToRole = map[int]string{
 	// Recipients can view and download contents.
 	1: "viewer",
+	// Recipients can view, download and edit single files.
+	3: "file-editor",
 	// Recipients can view, download, edit, delete and upload contents
 	15: "editor",
 	// Recipients can upload but existing contents are not revealed
