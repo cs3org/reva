@@ -33,3 +33,12 @@ A list of all enabled connectors for the exporter.
 enabled_connectors = ["gocdb"]
 {{< /highlight >}}
 {{% /dir %}}
+
+{{% dir name="elevated_service_types" type="[]string" default="[GATEWAY,OCM,WEBDAV]" %}}
+When processing additional endpoints of a service, any service type listed here will be elevated to a standalone service.
+{{< highlight toml >}}
+[http.services.mentix.exporters.cs3api]
+elevated_service_types = ["METRICS", "WEBDAV"]
+{{< /highlight >}}
+{{% /dir %}}
+
