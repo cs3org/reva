@@ -1,4 +1,5 @@
 *				@labkode @ishank011
+internal/http/services/owncloud @cs3org/owncloud-team
 pkg/auth/manager/owncloudsql	  @cs3org/owncloud-team
 pkg/storage/fs/owncloudsql      @cs3org/owncloud-team
 pkg/storage/fs/owncloud   	  @cs3org/owncloud-team
