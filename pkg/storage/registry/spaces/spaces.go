@@ -287,11 +287,22 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 				r.aliases[currentUser.Id.OpaqueId][p.ProviderPath] = &spaceAndProvider{
 					space, []*registrypb.ProviderInfo{p},
 				}
-				// also registor a personal storage where the current user is owner as his /home
+				// also register a personal storage where the current user is owner as his /home
 				if space.SpaceType == "personal" && space.Owner != nil && utils.UserEqual(space.Owner.Id, currentUser.Id) {
 					r.aliases[currentUser.Id.OpaqueId]["/home"] = &spaceAndProvider{
 						space, []*registrypb.ProviderInfo{{
 							ProviderPath: "/home",
+							ProviderId:   space.Id.OpaqueId,
+							Address:      rule.Address,
+						}},
+					}
+				}
+				// also register a Shares storage containing all shares at /home/Shares
+				// FIXME make mount point of Shares storageprovider configurable
+				if space.SpaceType == "Shares" {
+					r.aliases[currentUser.Id.OpaqueId]["/home/Shares"] = &spaceAndProvider{
+						space, []*registrypb.ProviderInfo{{
+							ProviderPath: "/home/Shares",
 							ProviderId:   space.Id.OpaqueId,
 							Address:      rule.Address,
 						}},

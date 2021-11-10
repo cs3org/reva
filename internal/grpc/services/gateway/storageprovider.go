@@ -833,7 +833,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 
 	}
 
-	returnInfos := make([]*provider.ResourceInfo, len(infos))
+	returnInfos := make([]*provider.ResourceInfo, 0, len(infos))
 	for path := range infos {
 		returnInfos = append(returnInfos, infos[path])
 	}
