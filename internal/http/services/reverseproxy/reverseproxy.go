@@ -41,11 +41,11 @@ type proxyRule struct {
 	Backend  string `mapstructure:"backend" json:"backend"`
 }
 
-type Config struct {
+type config struct {
 	ProxyRulesJSON string `mapstructure:"proxy_rules_json"`
 }
 
-func (c *Config) init() {
+func (c *config) init() {
 	if c.ProxyRulesJSON == "" {
 		c.ProxyRulesJSON = "/etc/revad/proxy_rules.json"
 	}
@@ -55,8 +55,9 @@ type svc struct {
 	router *chi.Mux
 }
 
+// New returns an instance of the reverse proxy service
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &Config{}
+	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
