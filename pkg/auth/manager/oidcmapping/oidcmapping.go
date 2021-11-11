@@ -28,12 +28,14 @@ import (
 	oidc "github.com/coreos/go-oidc"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/juliangruber/go-intersect"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
@@ -44,9 +46,9 @@ func init() {
 }
 
 type mgr struct {
-	provider *oidc.Provider // cached on first request
-	c        *config
-	iamUsers map[string]*iamUser
+	provider         *oidc.Provider // cached on first request
+	c                *config
+	oidcUsersMapping map[string]*oidcUserMapping
 }
 
 type config struct {
@@ -56,12 +58,13 @@ type config struct {
 	UIDClaim        string `mapstructure:"uid_claim" docs:";The claim containing the UID of the user."`
 	GIDClaim        string `mapstructure:"gid_claim" docs:";The claim containing the GID of the user."`
 	UserProviderSvc string `mapstructure:"userprovidersvc" docs:";The endpoint at which the GRPC userprovider is exposed."`
-	Users           string `mapstructure:"users" docs:"; The IAM users mapping file path"`
+	UsersMapping    string `mapstructure:"usersmapping" docs:"; The OIDC users mapping file path"`
 }
 
-type iamUser struct {
-	OpaqueID string `mapstructure:"opaque_id" json:"opaque_id"`
-	Sub      string `mapstructure:"sub" json:"sub"`
+type oidcUserMapping struct {
+	OIDCIssuer string `mapstructure:"oidc_issuer" json:"oidc_issuer"`
+	OIDCGroup  string `mapstructure:"oidc_group" json:"oidc_group"`
+	OpaqueID   string `mapstructure:"opaque_id" json:"opaque_id"`
 }
 
 func (c *config) init() {
@@ -97,21 +100,21 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 	c.init()
 	am.c = c
 
-	am.iamUsers = map[string]*iamUser{}
-	f, err := ioutil.ReadFile(c.Users)
+	am.oidcUsersMapping = map[string]*oidcUserMapping{}
+	f, err := ioutil.ReadFile(c.UsersMapping)
 	if err != nil {
-		return fmt.Errorf("oidcmapping: error reading escape iam users file: +%v", err)
+		return fmt.Errorf("oidcmapping: error reading oidc users mapping file: +%v", err)
 	}
 
-	iamUsers := []*iamUser{}
+	oidcUsers := []*oidcUserMapping{}
 
-	err = json.Unmarshal(f, &iamUsers)
+	err = json.Unmarshal(f, &oidcUsers)
 	if err != nil {
-		return fmt.Errorf("oidcmapping: error unmarshalling escape iam users file: +%v", err)
+		return fmt.Errorf("oidcmapping: error unmarshalling oidc users mapping file: +%v", err)
 	}
 
-	for _, u := range iamUsers {
-		am.iamUsers[u.Sub] = u
+	for _, u := range oidcUsers {
+		am.oidcUsersMapping[u.OIDCGroup] = u
 	}
 
 	return nil
@@ -164,12 +167,27 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, fmt.Errorf("oidcmapping: no \"groups\" attribute found in userinfo")
 	}
 
-	// find local user opaqueID
+	// discover the user opaqueID
 	var opaqueID string
-	if iamUser, ok := am.iamUsers[claims[am.c.IDClaim].(string)]; ok {
-		opaqueID = iamUser.OpaqueID
+
+	mappings := make([]string, 0, len(am.oidcUsersMapping))
+	for _, v := range am.oidcUsersMapping {
+		if v.OIDCIssuer == claims["issuer"] {
+			mappings = append(mappings, v.OIDCGroup)
+		}
+	}
+	intersection := intersect.Simple(claims["groups"], mappings)
+	if len(intersection.([]interface{})) > 1 {
+		// multiple mappings is not implemented, we don't know which one to choose
+		return nil, nil, errors.New("oidcmapping: mapping failed, more than one mapping found")
+	}
+	if len(intersection.([]interface{})) == 1 {
+		for _, m := range intersection.([]interface{}) {
+			opaqueID = am.oidcUsersMapping[m.(string)].OpaqueID
+		}
 	}
 	if opaqueID == "" {
+		// no mappings found
 		return nil, nil, errors.Wrap(err, "oidcmapping: unable to retrieve local user from claims")
 	}
 
@@ -201,21 +219,20 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	userID.Idp = getUserResp.GetUser().GetId().Idp
 	userID.Type = getUserResp.GetUser().GetId().Type
 
-	groups := make([]string, 0, len(claims["groups"].([]interface{})))
-	for _, v := range claims["groups"].([]interface{}) {
-		switch g := v.(type) {
-		case string:
-			groups = append(groups, v.(string))
-		default:
-			// TODO should we fail here?
-			log.Debug().Msgf("oidcmapping: retrieved group from token, expected type string, found: %T", g)
-		}
+	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
+		UserId: userID,
+	})
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "oidcmapping: error getting user groups")
+	}
+	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
+		return nil, nil, errors.Wrap(err, "oidcmapping: grpc getting user groups failed")
 	}
 
 	u := &user.User{
 		Id:           userID,
 		Username:     getUserResp.GetUser().GetUsername(),
-		Groups:       groups,
+		Groups:       getUserResp.GetUser().GetGroups(),
 		Mail:         claims["email"].(string),
 		MailVerified: claims["email_verified"].(bool),
 		DisplayName:  claims["name"].(string),
