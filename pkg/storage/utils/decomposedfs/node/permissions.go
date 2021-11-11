@@ -239,7 +239,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 				if check(g.GetPermissions()) {
 					return true, nil
 				}
-			case isNoData(err):
+			case isAttrUnset(err):
 				err = nil
 				appctx.GetLogger(ctx).Error().Interface("node", cn).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 			default:

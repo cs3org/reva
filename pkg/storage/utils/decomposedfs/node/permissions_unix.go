@@ -27,7 +27,7 @@ import (
 	"github.com/pkg/xattr"
 )
 
-func isNoData(err error) bool {
+func isAttrUnset(err error) bool {
 	if xerr, ok := err.(*xattr.Error); ok {
 		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
 			return serr == syscall.ENODATA

@@ -185,7 +185,7 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	switch {
 	case err == nil:
 		n.ParentID = string(attrBytes)
-	case isNoData(err):
+	case isAttrUnset(err):
 		return nil, errtypes.InternalError(err.Error())
 	case isNotFound(err):
 		return n, nil // swallow not found, the node defaults to exists = false
@@ -326,7 +326,7 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.OpaqueId = string(attrBytes)
-	case isNoData(err), isNotFound(err):
+	case isAttrUnset(err), isNotFound(err):
 		fallthrough
 	default:
 		return nil, err
@@ -337,7 +337,7 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.Idp = string(attrBytes)
-	case isNoData(err), isNotFound(err):
+	case isAttrUnset(err), isNotFound(err):
 		fallthrough
 	default:
 		return nil, err
@@ -348,7 +348,7 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.Type = utils.UserTypeMap(string(attrBytes))
-	case isNoData(err), isNotFound(err):
+	case isAttrUnset(err), isNotFound(err):
 		fallthrough
 	default:
 		// TODO the user type defaults to invalid, which is the case
@@ -675,7 +675,7 @@ func readChecksumIntoResourceChecksum(ctx context.Context, nodePath, algo string
 			Type: storageprovider.PKG2GRPCXS(algo),
 			Sum:  hex.EncodeToString(v),
 		}
-	case isNoData(err):
+	case isAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("checksum not set")
 	case isNotFound(err):
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("file not fount")
@@ -697,7 +697,7 @@ func readChecksumIntoOpaque(ctx context.Context, nodePath, algo string, ri *prov
 			Decoder: "plain",
 			Value:   []byte(hex.EncodeToString(v)),
 		}
-	case isNoData(err):
+	case isAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("checksum not set")
 	case isNotFound(err):
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("file not fount")
@@ -729,7 +729,7 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 		} else {
 			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("quota", string(v)).Msg("malformed quota")
 		}
-	case isNoData(err):
+	case isAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Msg("quota not set")
 	case isNotFound(err):
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("file not found when reading quota")
@@ -856,7 +856,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 		switch {
 		case err == nil:
 			AddPermissions(&ap, g.GetPermissions())
-		case isNoData(err):
+		case isAttrUnset(err):
 			err = nil
 			appctx.GetLogger(ctx).Error().Interface("node", n).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 			// continue with next segment
