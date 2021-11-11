@@ -604,6 +604,14 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	var info *provider.ResourceInfo
 	for i := range providers {
 
+		// get client for storage provider
+		c, err := s.getStorageProviderClient(ctx, providers[i])
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not get storage provider client, skipping")
+			continue
+		}
+
+		// build relative reference
 		sRef := req.Ref
 		if utils.IsAbsolutePathReference(req.Ref) {
 			sRef, err = unwrap(req.Ref, providers[i].ProviderPath)
@@ -611,46 +619,88 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not unwrap reference, skipping")
 				continue
 			}
-			sRef.ResourceId = &provider.ResourceId{StorageId: providers[i].ProviderId}
+			parts := strings.SplitN(providers[i].ProviderId, "!", 2)
+			if len(parts) != 2 {
+				appctx.GetLogger(ctx).Error().Msg("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + providers[i].ProviderId)
+				continue
+			}
+			sRef.ResourceId = &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
 			sRef.Path = utils.MakeRelativePath(sRef.Path)
 		}
 
-		c, err := s.getStorageProviderClient(ctx, providers[i])
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not get storage provider client, skipping")
-			continue
-		}
+		var currentInfo *provider.ResourceInfo
+		switch {
+		case providers[i].ProviderPath == req.Ref.Path: // matches
+			fallthrough
+		case strings.HasPrefix(req.Ref.Path, providers[i].ProviderPath): //  requested path is below mount point
+			resp, err := c.Stat(ctx, &provider.StatRequest{Opaque: req.Opaque, Ref: sRef, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not stat embedded mount, skipping")
+				continue
+			}
+			if resp.Status.Code != rpc.Code_CODE_OK {
+				appctx.GetLogger(ctx).Debug().Interface("status", resp.Status).Msg("gateway: stating embedded mount was not ok, skipping")
+				continue
+			}
+			if resp.Info == nil {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response for embedded mount carried no info, skipping")
+				continue
+			}
+			currentInfo = resp.Info
+		case strings.HasPrefix(providers[i].ProviderPath, req.Ref.Path): // requested path is above mount point
+			parts := strings.SplitN(providers[i].ProviderId, "!", 2)
+			if len(parts) != 2 {
+				appctx.GetLogger(ctx).Error().Msg("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + providers[i].ProviderId)
+				continue
+			}
+			sRef := &provider.Reference{
+				ResourceId: &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]},
+				Path:       ".",
+			}
+			statResp, err := c.Stat(ctx, &provider.StatRequest{Opaque: req.Opaque, Ref: sRef, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not stat parent mount, skipping")
+				continue
+			}
+			if statResp.Status.Code != rpc.Code_CODE_OK {
+				appctx.GetLogger(ctx).Debug().Interface("status", statResp.Status).Msg("gateway: stating parent mount was not ok, skipping")
+				continue
+			}
+			if statResp.Info == nil {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response for parent mount carried no info, skipping")
+				continue
+			}
+			// -> update metadata for /foo/bar -> set path to './bar'?
+			statResp.Info.Path = strings.TrimPrefix(providers[i].ProviderPath, req.Ref.Path)
+			statResp.Info.Path, _ = router.ShiftPath(statResp.Info.Path)
+			statResp.Info.Path = utils.MakeRelativePath(statResp.Info.Path)
+			// TODO invent resourceid?
 
-		resp, err := c.Stat(ctx, &provider.StatRequest{Opaque: req.Opaque, Ref: sRef, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not stat embedded mount, skipping")
-			continue
-		}
-		if resp.Status.Code != rpc.Code_CODE_OK {
-			appctx.GetLogger(ctx).Debug().Interface("status", resp.Status).Msg("gateway: could not stat embedded mount, skipping")
-			continue
-		}
-		if resp.Info == nil {
-			appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response carried no info, skipping")
-			continue
+			if utils.IsAbsoluteReference(req.Ref) {
+				statResp.Info.Path = path.Join(req.Ref.Path, statResp.Info.Path)
+			}
+			currentInfo = statResp.Info
+		default:
+			log := appctx.GetLogger(ctx)
+			log.Err(err).Msg("gateway: unhandled Stat case")
 		}
 
 		if info == nil {
 			if utils.IsAbsolutePathReference(req.Ref) {
-				resp.Info.Path = req.Ref.Path
+				currentInfo.Path = req.Ref.Path
 			}
-			info = resp.Info
+			info = currentInfo
 		} else {
 			// aggregate metadata
 
-			info.Size += resp.Info.Size
-			if info.Mtime == nil || (resp.Info.Mtime != nil && utils.TSToUnixNano(resp.Info.Mtime) > utils.TSToUnixNano(info.Mtime)) {
-				info.Mtime = resp.Info.Mtime
-				info.Etag = resp.Info.Etag
+			info.Size += currentInfo.Size
+			if info.Mtime == nil || (currentInfo.Mtime != nil && utils.TSToUnixNano(currentInfo.Mtime) > utils.TSToUnixNano(info.Mtime)) {
+				info.Mtime = currentInfo.Mtime
+				info.Etag = currentInfo.Etag
 				//info.Checksum = resp.Info.Checksum
 			}
-			if info.Etag == "" && info.Etag != resp.Info.Etag {
-				info.Etag = resp.Info.Etag
+			if info.Etag == "" && info.Etag != currentInfo.Etag {
+				info.Etag = currentInfo.Etag
 			}
 			//info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 			//info.MimeType = "httpd/unix-directory"
@@ -706,12 +756,14 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	infos := map[string]*provider.ResourceInfo{}
 	for i := range providers {
 
+		// get client for storage provider
 		c, err := s.getStorageProviderClient(ctx, providers[i])
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not get storage provider client, skipping")
 			continue
 		}
 
+		// build relative reference
 		lcRef := req.Ref
 		if utils.IsAbsolutePathReference(req.Ref) {
 			lcRef, err = unwrap(req.Ref, providers[i].ProviderPath)
@@ -719,7 +771,12 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not unwrap reference, skipping")
 				continue
 			}
-			lcRef.ResourceId = &provider.ResourceId{StorageId: providers[i].ProviderId}
+			parts := strings.SplitN(providers[i].ProviderId, "!", 2)
+			if len(parts) != 2 {
+				appctx.GetLogger(ctx).Error().Msg("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + providers[i].ProviderId)
+				continue
+			}
+			lcRef.ResourceId = &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
 			lcRef.Path = utils.MakeRelativePath(lcRef.Path)
 		}
 
@@ -735,31 +792,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		// below   = /foo/bar/bif   <=> /foo/bar        -> list(spaceid, ./bif)
 		switch {
 		case providers[i].ProviderPath == req.Ref.Path: // matches
-			rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
-				Opaque:                req.Opaque,
-				Ref:                   lcRef,
-				ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-			})
-			if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
-				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not list provider, skipping")
-				continue
-			}
-
-			if utils.IsAbsoluteReference(req.Ref) {
-				for j := range rsp.Infos {
-					rsp.Infos[j].Path = path.Join(lcRef.Path, rsp.Infos[j].Path)
-					wrap(rsp.Infos[j], providers[i])
-				}
-			}
-			for i := range rsp.Infos {
-				if info, ok := infos[rsp.Infos[i].Path]; ok {
-					if info.Mtime != nil && rsp.Infos[i].Mtime != nil && utils.TSToUnixNano(rsp.Infos[i].Mtime) > utils.TSToUnixNano(info.Mtime) {
-						continue
-					}
-				}
-				// replace with younger info
-				infos[rsp.Infos[i].Path] = rsp.Infos[i]
-			}
+			fallthrough
 		case strings.HasPrefix(req.Ref.Path, providers[i].ProviderPath): //  requested path is below mount point
 			rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
 				Opaque:                req.Opaque,
@@ -790,21 +823,26 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			//  requested path   provider path
 			//  /foo           <=> /foo/bar        -> stat(spaceid, .)    -> add metadata for /foo/bar
 			//  /foo           <=> /foo/bar/bif    -> stat(spaceid, .)    -> add metadata for /foo/bar
+			parts := strings.SplitN(providers[i].ProviderId, "!", 2)
+			if len(parts) != 2 {
+				appctx.GetLogger(ctx).Error().Msg("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + providers[i].ProviderId)
+				continue
+			}
 			sRef := &provider.Reference{
-				ResourceId: &provider.ResourceId{StorageId: providers[i].ProviderId},
+				ResourceId: &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]},
 				Path:       ".",
 			}
 			statResp, err := c.Stat(ctx, &provider.StatRequest{Opaque: req.Opaque, Ref: sRef, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
 			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not stat embedded mount, skipping")
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not stat parent mount for list, skipping")
 				continue
 			}
 			if statResp.Status.Code != rpc.Code_CODE_OK {
-				appctx.GetLogger(ctx).Debug().Interface("status", statResp.Status).Msg("gateway: could not stat embedded mount, skipping")
+				appctx.GetLogger(ctx).Debug().Interface("status", statResp.Status).Msg("gateway: stating parent mount for list was not ok, skipping")
 				continue
 			}
 			if statResp.Info == nil {
-				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response carried no info, skipping")
+				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response for list carried no info, skipping")
 				continue
 			}
 			// -> update metadata for /foo/bar -> set path to './bar'?
@@ -826,7 +864,6 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				}
 			}
 		default:
-
 			log := appctx.GetLogger(ctx)
 			log.Err(err).Msg("gateway: unhandled ListContainer case")
 		}
@@ -1011,7 +1048,11 @@ func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provi
 			return nil, nil, err
 		}
 		relativeReference.Path = utils.MakeRelativePath(relativeReference.Path)
-		relativeReference.ResourceId = &provider.ResourceId{StorageId: p.ProviderId}
+		parts := strings.SplitN(p.ProviderId, "!", 2)
+		if len(parts) != 2 {
+			return nil, nil, errtypes.BadRequest("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + p.ProviderId)
+		}
+		relativeReference.ResourceId = &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
 	}
 
 	return c, relativeReference, nil
