@@ -91,7 +91,7 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 	c.init()
 	return &registry{
 		c:                 c,
-		spaces:            make(map[string]*spaceAndProvider),
+		resources:         make(map[string][]*registrypb.ProviderInfo),
 		aliases:           make(map[string]map[string]*spaceAndProvider),
 		resourceNameCache: make(map[string]string),
 	}, nil
@@ -104,8 +104,9 @@ type spaceAndProvider struct {
 
 type registry struct {
 	c *config
-	// a map of all space ids to spaces
-	spaces            map[string]*spaceAndProvider
+	// a map of resources to providers
+	resources map[string][]*registrypb.ProviderInfo
+	// a map of paths/aliases to spaces and providers
 	aliases           map[string]map[string]*spaceAndProvider
 	resourceNameCache map[string]string
 }
@@ -137,12 +138,12 @@ func (r *registry) ListProviders(ctx context.Context) ([]*registrypb.ProviderInf
 		}
 		for _, space := range lSSRes.StorageSpaces {
 			pi := &registrypb.ProviderInfo{
-				ProviderId:   space.Id.OpaqueId,
+				ProviderId:   space.Root.StorageId + "!" + space.Root.OpaqueId,
 				ProviderPath: filepath.Join("/", space.SpaceType, space.Name), // TODO do we need to guarantee these are unique?
 				Address:      rule.Address,
 			}
 			providers = append(providers, pi)
-			r.spaces[space.Id.OpaqueId] = &spaceAndProvider{space, []*registrypb.ProviderInfo{pi}}
+			r.resources[space.Root.StorageId+"!"+space.Root.OpaqueId] = []*registrypb.ProviderInfo{pi}
 		}
 	}
 	return providers, nil
@@ -192,42 +193,43 @@ func (r *registry) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error
 func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
 	switch {
 	case ref.ResourceId != nil && ref.ResourceId.StorageId != "":
-		return r.findProvidersForSpace(ctx, ref.ResourceId.StorageId)
+		return r.findProvidersForResource(ctx, ref.ResourceId)
 	case utils.IsAbsolutePathReference(ref):
 		return r.findProvidersForAbsolutePathReference(ctx, ref)
 	default:
 		return nil, errtypes.NotSupported("unsupported reference type")
 	}
 }
-func (r *registry) findProvidersForSpace(ctx context.Context, spaceid string) ([]*registrypb.ProviderInfo, error) {
-	// check if the spaceid is known
-	if spaceAndAddr, ok := r.spaces[spaceid]; ok {
+func (r *registry) findProvidersForResource(ctx context.Context, res *provider.ResourceId) ([]*registrypb.ProviderInfo, error) {
+	// check if the resource is known
+	if providers, ok := r.resources[res.StorageId+"!"+res.OpaqueId]; ok {
 		// best case, just return cached provider
-		return spaceAndAddr.providers, nil
+		return providers, nil
 	}
 
 	for _, rule := range r.c.Rules {
 		p := &registrypb.ProviderInfo{
 			Address: rule.Address,
 		}
-		space, err := r.findStorageSpaceOnProvider(ctx, p, spaceid)
-		if err == nil {
-			p.ProviderId = space.Id.OpaqueId
-			path, err := r.findNameForRoot(ctx, p, space.Root)
-			if err != nil {
-				return nil, err
-			}
-			p.ProviderPath = filepath.Join("/", space.SpaceType, filepath.Base(path))
+		resource, err := r.findResourceOnProvider(ctx, p, res)
+		if err == nil && resource.Id != nil {
+			p.ProviderId = resource.Id.StorageId + "!" + resource.Id.OpaqueId
+			/*
+				name := space.Name
+				if name == "" {
+					name = space.Id.OpaqueId
+				}
+				p.ProviderPath = filepath.Join("/", space.SpaceType, name) // TODO deduplicate name
+			*/
 			// cache result, TODO only for 30sec?
-			r.spaces[spaceid] = &spaceAndProvider{
-				space, []*registrypb.ProviderInfo{p},
-			}
+			r.resources[p.ProviderId] = []*registrypb.ProviderInfo{p}
 			// TODO continue iterating to collect all providers that have access
 			return []*registrypb.ProviderInfo{p}, nil
 		}
 	}
 	return []*registrypb.ProviderInfo{}, nil
 }
+
 func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 	// check if the alias is known for this user
@@ -275,15 +277,15 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 		if err == nil {
 			for _, space := range spaces {
 				p := &registrypb.ProviderInfo{
-					ProviderId: space.Id.OpaqueId,
+					ProviderId: space.Root.StorageId + "!" + space.Root.OpaqueId,
 					Address:    rule.Address,
 				}
-				path, err := r.findNameForRoot(ctx, p, space.Root)
-				if err != nil {
-					return nil, err
-				}
 				// cache entry
-				p.ProviderPath = filepath.Join("/", space.SpaceType, filepath.Base(path))
+				name := space.Name
+				if name == "" {
+					name = space.Id.OpaqueId
+				}
+				p.ProviderPath = filepath.Join("/", space.SpaceType, name) // TODO deduplicate name
 				r.aliases[currentUser.Id.OpaqueId][p.ProviderPath] = &spaceAndProvider{
 					space, []*registrypb.ProviderInfo{p},
 				}
@@ -292,7 +294,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 					r.aliases[currentUser.Id.OpaqueId]["/home"] = &spaceAndProvider{
 						space, []*registrypb.ProviderInfo{{
 							ProviderPath: "/home",
-							ProviderId:   space.Id.OpaqueId,
+							ProviderId:   space.Root.StorageId + "!" + space.Root.OpaqueId,
 							Address:      rule.Address,
 						}},
 					}
@@ -303,7 +305,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 					r.aliases[currentUser.Id.OpaqueId]["/home/Shares"] = &spaceAndProvider{
 						space, []*registrypb.ProviderInfo{{
 							ProviderPath: "/home/Shares",
-							ProviderId:   space.Id.OpaqueId,
+							ProviderId:   space.Root.StorageId + "!" + space.Root.OpaqueId,
 							Address:      rule.Address,
 						}},
 					}
@@ -343,29 +345,23 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 	return providers, nil
 }
 
-func (r *registry) findStorageSpaceOnProvider(ctx context.Context, p *registrypb.ProviderInfo, spaceid string) (*provider.StorageSpace, error) {
+func (r *registry) findResourceOnProvider(ctx context.Context, p *registrypb.ProviderInfo, res *provider.ResourceId) (*provider.ResourceInfo, error) {
 	c, err := pool.GetStorageProviderServiceClient(p.Address)
 	if err != nil {
 		return nil, err
 	}
-	req := &provider.ListStorageSpacesRequest{
-		Filters: []*provider.ListStorageSpacesRequest_Filter{{
-			Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
-			Term: &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: spaceid}},
-		}},
+	req := &provider.StatRequest{
+		Ref: &provider.Reference{ResourceId: res},
 	}
 
-	res, err := c.ListStorageSpaces(ctx, req)
+	statResponse, err := c.Stat(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, status.NewErrorFromCode(res.Status.Code, "spaces registry")
+	if statResponse.Status.Code != rpc.Code_CODE_OK {
+		return nil, status.NewErrorFromCode(statResponse.Status.Code, "spaces registry")
 	}
-	if len(res.StorageSpaces) == 0 {
-		return nil, errtypes.NotFound("can't find space on storage provider")
-	}
-	return res.StorageSpaces[0], nil
+	return statResponse.Info, nil
 }
 
 func (r *registry) findStorageSpaceOnProviderByAccess(ctx context.Context, p *registrypb.ProviderInfo, u *userv1beta1.User) ([]*provider.StorageSpace, error) {
@@ -387,6 +383,7 @@ func (r *registry) findStorageSpaceOnProviderByAccess(ctx context.Context, p *re
 	return res.StorageSpaces, nil
 }
 
+/*
 func (r *registry) findStorageSpaceOnProviderByType(ctx context.Context, p *registrypb.ProviderInfo, spacetype string) ([]*provider.StorageSpace, error) {
 	c, err := pool.GetStorageProviderServiceClient(p.Address)
 	if err != nil {
@@ -432,3 +429,4 @@ func (r *registry) findNameForRoot(ctx context.Context, p *registrypb.ProviderIn
 	r.resourceNameCache[root.StorageId+":"+root.OpaqueId] = res.Info.Path
 	return res.Info.Path, nil
 }
+*/
