@@ -20,6 +20,7 @@ package usershareprovider
 
 import (
 	"context"
+	"regexp"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -41,8 +42,9 @@ func init() {
 }
 
 type config struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+	Driver                string                            `mapstructure:"driver"`
+	Drivers               map[string]map[string]interface{} `mapstructure:"drivers"`
+	AllowedPathsForShares []string                          `mapstructure:"allowed_paths_for_shares"`
 }
 
 func (c *config) init() {
@@ -52,8 +54,9 @@ func (c *config) init() {
 }
 
 type service struct {
-	conf *config
-	sm   share.Manager
+	conf                  *config
+	sm                    share.Manager
+	allowedPathsForShares []*regexp.Regexp
 }
 
 func getShareManager(c *config) (share.Manager, error) {
@@ -100,12 +103,34 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	allowedPathsForShares := make([]*regexp.Regexp, 0, len(c.AllowedPathsForShares))
+	for _, s := range c.AllowedPathsForShares {
+		regex, err := regexp.Compile(s)
+		if err != nil {
+			return nil, err
+		}
+		allowedPathsForShares = append(allowedPathsForShares, regex)
+	}
+
 	service := &service{
-		conf: c,
-		sm:   sm,
+		conf:                  c,
+		sm:                    sm,
+		allowedPathsForShares: allowedPathsForShares,
 	}
 
 	return service, nil
+}
+
+func (s *service) isPathAllowed(path string) bool {
+	if len(s.allowedPathsForShares) == 0 {
+		return true
+	}
+	for _, reg := range s.allowedPathsForShares {
+		if reg.MatchString(path) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
@@ -115,6 +140,13 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 		g := &userpb.UserId{OpaqueId: req.Grant.Grantee.GetUserId().OpaqueId, Idp: u.Id.Idp, Type: userpb.UserType_USER_TYPE_PRIMARY}
 		req.Grant.Grantee.Id = &provider.Grantee_UserId{UserId: g}
 	}
+
+	if !s.isPathAllowed(req.ResourceInfo.Path) {
+		return &collaboration.CreateShareResponse{
+			Status: status.NewInvalidArg(ctx, "share creation is not allowed for the specified path"),
+		}, nil
+	}
+
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
