@@ -301,10 +301,11 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 				}
 				// also register a Shares storage containing all shares at /home/Shares
 				// FIXME make mount point of Shares storageprovider configurable
-				if space.SpaceType == "Shares" {
-					r.aliases[currentUser.Id.OpaqueId]["/home/Shares"] = &spaceAndProvider{
+				if space.SpaceType == "share" {
+					alias := filepath.Join("/home/Shares", space.Name)
+					r.aliases[currentUser.Id.OpaqueId][alias] = &spaceAndProvider{
 						space, []*registrypb.ProviderInfo{{
-							ProviderPath: "/home/Shares",
+							ProviderPath: alias,
 							ProviderId:   space.Root.StorageId + "!" + space.Root.OpaqueId,
 							Address:      rule.Address,
 						}},
