@@ -214,7 +214,9 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 	eosfs.userIDCache.SetExpirationReasonCallback(func(key string, reason ttlcache.EvictionReason, value interface{}) {
 		// We only set those keys with TTL which we weren't able to retrieve the last time
 		// For those keys, try to contact the userprovider service again when they expire
-		_, _ = eosfs.getUserIDGateway(context.Background(), key)
+		if reason == ttlcache.Expired {
+			_, _ = eosfs.getUserIDGateway(context.Background(), key)
+		}
 	})
 
 	go eosfs.userIDcacheWarmup()
@@ -1759,6 +1761,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		Size:          size,
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
 		Checksum:      &xs,
+		Type:          getResourceType(eosFileInfo.IsDir),
 		Mtime: &types.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,
 			Nanos:   eosFileInfo.MTimeNanos,
@@ -1783,7 +1786,6 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		}
 	}
 
-	info.Type = getResourceType(eosFileInfo.IsDir)
 	return info, nil
 }
 
