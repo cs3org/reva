@@ -670,9 +670,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 				}, nil
 			}
 		}
-		return &provider.StatResponse{
-			Status: status.NewNotFound(ctx, "sharesstorageprovider: not found "+req.Ref.String()),
-		}, nil
 	}
 
 	return &provider.StatResponse{
@@ -685,56 +682,89 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	reqShare, reqPath, err := s.resolveReference(req.Ref)
-	appctx.GetLogger(ctx).Debug().
-		Interface("reqPath", reqPath).
-		Interface("reqShare", reqShare).
-		Msg("sharesstorageprovider: Got ListContainer request")
-	if err != nil {
-		return nil, err
-	}
-
-	stattedShares, err := s.getReceivedShares(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	res := &provider.ListContainerResponse{}
-	for name, stattedShare := range stattedShares {
-		if stattedShare.ReceivedShare.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
-			continue
+	if utils.IsRelativeReference(req.Ref) {
+		// look up share for this resourceid
+		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+		if err != nil {
+			return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
 		}
-
-		if reqShare != "" && (name == reqShare || (stattedShare.ReceivedShare.MountPoint != nil && stattedShare.ReceivedShare.MountPoint.Path == reqShare)) {
-			origReqShare := filepath.Base(stattedShare.Stat.Path)
-			gwListRes, err := s.gateway.ListContainer(ctx, &provider.ListContainerRequest{
-				Ref: &provider.Reference{
-					Path: filepath.Join(filepath.Dir(stattedShare.Stat.Path), origReqShare, reqPath),
-				},
-			})
-			if err != nil {
+		if lsRes.Status.Code != rpc.Code_CODE_OK {
+			return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
+		}
+		for _, rs := range lsRes.Shares {
+			// match the opaqueid
+			if utils.ResourceIDEqual(rs.Share.ResourceId, req.Ref.ResourceId) {
+				// use the resource id from the share, it contains the real spaceid and opaqueid
+				// this stat request should now hit the real storage provider
+				infos, st, err := s.listResource(ctx, rs.Share.ResourceId, req.Ref.Path)
+				if err != nil {
+					return nil, err
+				}
+				//info.Path = utils.MakeRelativePath(info.Path) // TODO joun path from relative request
+				// TODO override storageid & path in info?
 				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "sharesstorageprovider: error getting listing from gateway"),
+					Status: st,
+					Infos:  infos,
 				}, nil
 			}
-			for _, info := range gwListRes.Infos {
-				relPath := strings.SplitAfterN(info.Path, origReqShare, 2)[1]
-				info.Path = filepath.Join(reqShare, relPath)
-				info.PermissionSet = stattedShare.Stat.PermissionSet
-			}
-			return gwListRes, nil
-		} else if reqShare == "" {
-			path := stattedShare.Stat.Path
-			if stattedShare.ReceivedShare.MountPoint != nil {
-				path = stattedShare.ReceivedShare.MountPoint.Path
-			}
-			stattedShare.Stat.Path = filepath.Join(filepath.Base(path))
-			res.Infos = append(res.Infos, stattedShare.Stat)
 		}
 	}
-	res.Status = status.NewOK(ctx)
 
-	return res, nil
+	return &provider.ListContainerResponse{
+		Status: status.NewNotFound(ctx, "sharesstorageprovider: not found "+req.Ref.String()),
+	}, nil
+	/*
+		reqShare, reqPath, err := s.resolveReference(req.Ref)
+		appctx.GetLogger(ctx).Debug().
+			Interface("reqPath", reqPath).
+			Interface("reqShare", reqShare).
+			Msg("sharesstorageprovider: Got ListContainer request")
+		if err != nil {
+			return nil, err
+		}
+
+		stattedShares, err := s.getReceivedShares(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		res := &provider.ListContainerResponse{}
+		for name, stattedShare := range stattedShares {
+			if stattedShare.ReceivedShare.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
+				continue
+			}
+
+			if reqShare != "" && (name == reqShare || (stattedShare.ReceivedShare.MountPoint != nil && stattedShare.ReceivedShare.MountPoint.Path == reqShare)) {
+				origReqShare := filepath.Base(stattedShare.Stat.Path)
+				gwListRes, err := s.gateway.ListContainer(ctx, &provider.ListContainerRequest{
+					Ref: &provider.Reference{
+						Path: filepath.Join(filepath.Dir(stattedShare.Stat.Path), origReqShare, reqPath),
+					},
+				})
+				if err != nil {
+					return &provider.ListContainerResponse{
+						Status: status.NewInternal(ctx, err, "sharesstorageprovider: error getting listing from gateway"),
+					}, nil
+				}
+				for _, info := range gwListRes.Infos {
+					relPath := strings.SplitAfterN(info.Path, origReqShare, 2)[1]
+					info.Path = filepath.Join(reqShare, relPath)
+					info.PermissionSet = stattedShare.Stat.PermissionSet
+				}
+				return gwListRes, nil
+			} else if reqShare == "" {
+				path := stattedShare.Stat.Path
+				if stattedShare.ReceivedShare.MountPoint != nil {
+					path = stattedShare.ReceivedShare.MountPoint.Path
+				}
+				stattedShare.Stat.Path = filepath.Join(filepath.Base(path))
+				res.Infos = append(res.Infos, stattedShare.Stat)
+			}
+		}
+		res.Status = status.NewOK(ctx)
+
+		return res, nil
+	*/
 }
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
 	reqShare, reqPath, err := s.resolveReference(req.Ref)
@@ -879,6 +909,7 @@ func (s *service) resolveReference(ref *provider.Reference) (string, string, err
 	//if utils.IsRelativeReference(ref) {
 	//	resourceid, shareId := strings.SplitN(ref.ResourceId.OpaqueId, "!", 2)
 	//}
+	// FIXME
 	if ref.ResourceId != nil {
 		//ref.ResourceId.StorageId != "fbbe869d-a1b4-4bd2-8f1b-87281fe673c6" {
 		return "", "", errtypes.BadRequest(ref.ResourceId.StorageId + " not part of the shares provider")
@@ -971,6 +1002,18 @@ func (s *service) statResource(ctx context.Context, res *provider.ResourceId, pa
 		return nil, nil, err
 	}
 	return statRes.Info, statRes.Status, nil
+}
+func (s *service) listResource(ctx context.Context, res *provider.ResourceId, path string) ([]*provider.ResourceInfo, *rpc.Status, error) {
+	listRes, err := s.gateway.ListContainer(ctx, &provider.ListContainerRequest{
+		Ref: &provider.Reference{
+			ResourceId: res,
+			Path:       path,
+		},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return listRes.Infos, listRes.Status, nil
 }
 
 func (s *service) rejectReceivedShare(ctx context.Context, share string) error {
