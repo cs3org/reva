@@ -193,6 +193,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	}
 
 	// build the glob path, eg.
+	// /path/to/root/spaces/{spaceType}/{spaceId}
 	// /path/to/root/spaces/personal/nodeid
 	// /path/to/root/spaces/shared/nodeid
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, spaceID))
@@ -208,6 +209,17 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return spaces, nil
 	}
 
+	// FIXME if the space does not exist try a node as the space root.
+
+	// But then the whole /spaces/{spaceType}/{spaceid} becomes obsolete
+	// we can alway just look up by nodeid
+	// -> no. The /spaces folder is used for efficient lookup by type, otherwise we would have
+	//    to iterate over all nodes and read the type from extended attributes
+	// -> but for lookup by id we can use the node directly.
+	// But what about sharding nodes by space?
+	// an efficient lookup would be possible if we received a spaceid&opaqueid in the request
+	// the personal spaces must also use the nodeid and not the name
+
 	for i := range matches {
 		// always read link in case storage space id != node id
 		if target, err := os.Readlink(matches[i]); err != nil {
@@ -221,6 +233,11 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			}
 
 			spaceType := filepath.Base(filepath.Dir(matches[i]))
+
+			if spaceType == "share" {
+				// do not list shares at all. the sharesstorageprovider is responsible for it
+				continue
+			}
 
 			owner, err := n.Owner()
 			if err != nil {
@@ -374,20 +391,22 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 		sname = string(bytes)
 	}
 	space := &provider.StorageSpace{
-		Id: &provider.StorageSpaceId{OpaqueId: node.Name},
+		Id: &provider.StorageSpaceId{OpaqueId: node.ID},
 		Root: &provider.ResourceId{
-			StorageId: node.Name,
+			StorageId: node.ID,
 			OpaqueId:  node.ID,
 		},
 		Name:      sname,
 		SpaceType: spaceType,
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
+	/* all spaces must use the node id as the space id
 	if spaceType == "share" {
 		// use node id as spaceid and storage id
 		space.Id.OpaqueId = node.ID
 		space.Root.StorageId = node.ID
 	}
+	*/
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 
