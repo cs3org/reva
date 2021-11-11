@@ -346,7 +346,9 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		if !ok {
 			return nil, errors.New("rest: error in type assertion")
 		}
-		users = append(users, &userpb.UserId{OpaqueId: userInfo["upn"].(string), Idp: m.conf.IDProvider})
+		if id, ok := userInfo["upn"].(string); ok {
+			users = append(users, &userpb.UserId{OpaqueId: id, Idp: m.conf.IDProvider})
+		}
 	}
 
 	if err = m.cacheGroupMembers(gid, users); err != nil {
