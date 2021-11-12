@@ -65,12 +65,6 @@ home_provider = "/personal"
 "/virtual/[l-z]" = {"address" = "localhost:11110"}
 "virtual-l-z" = {"address" = "localhost:11110"}
 
-
-"/public" = {"address" = "localhost:13000"}
-"/home/Shares" = {"address" = "localhost:14000"}
-
-[grpc.services.gateway.storage_rules]
-"/personal" = {"address" = "localhost:11000"}
 "/public" = {"address" = "localhost:13000"}
 "/home/Shares" = {"address" = "localhost:14000"}
 

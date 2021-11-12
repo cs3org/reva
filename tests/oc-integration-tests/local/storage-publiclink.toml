@@ -11,4 +11,5 @@ address = "0.0.0.0:13000"
 # This is a storage provider that grants direct access to the wrapped storage
 # we have a locally running dataprovider
 [grpc.services.publicstorageprovider]
+mount_id = "7993447f-687f-490d-875c-ac95e89a62a4"
 gateway_addr = "0.0.0.0:19000"

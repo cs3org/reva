@@ -22,7 +22,6 @@ data_server_url = "http://revad-services:11001/data"
 root = "/drone/src/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
-userprovidersvc = "localhost:18000"
 
 # we have a locally running dataprovider
 [http]

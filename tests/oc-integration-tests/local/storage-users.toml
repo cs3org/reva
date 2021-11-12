@@ -20,10 +20,10 @@ data_server_url = "http://localhost:11001/data"
 
 [grpc.services.storageprovider.drivers.ocis]
 root = "/var/tmp/reva/data"
-enable_home = false
 treetime_accounting = true
 treesize_accounting = true
 
+# we have a locally running dataprovider
 [http]
 address = "0.0.0.0:11001"
 
@@ -33,6 +33,5 @@ temp_folder = "/var/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.ocis]
 root = "/var/tmp/reva/data"
-enable_home = false
 treetime_accounting = true
 treesize_accounting = true

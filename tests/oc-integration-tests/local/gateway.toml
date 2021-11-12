@@ -61,18 +61,13 @@ home_provider = "/personal"
 "/personal" = {"address" = "localhost:11000", "description" = "personal spaces"}
 
 # the /virtual namespace is only accessible via the frontend-global service
-#"/virtual/[a-k]" = {"address" = "localhost:11100"}
-#"virtual-a-k" = {"address" = "localhost:11100"}
-#"/virtual/[l-z]" = {"address" = "localhost:11110"}
-#"virtual-l-z" = {"address" = "localhost:11110"}
+"/virtual/[a-k]" = {"address" = "localhost:11100"}
+"virtual-a-k" = {"address" = "localhost:11100"}
+"/virtual/[l-z]" = {"address" = "localhost:11110"}
+"virtual-l-z" = {"address" = "localhost:11110"}
 
 "/public" = {"address" = "localhost:13000", "description" = "public links"}
 "/home/Shares" = {"address" = "localhost:14000", "description" = "shares"}
-
-[grpc.services.gateway.storage_rules]
-"/personal" = {"address" = "localhost:11000"}
-"/public" = {"address" = "localhost:13000"}
-"/home/Shares" = {"address" = "localhost:14000"}
 
 [http]
 address = "0.0.0.0:19001"

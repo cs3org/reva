@@ -21,7 +21,6 @@ data_server_url = "http://revad-services:11001/data"
 root = "/drone/src/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
-userprovidersvc = "localhost:18000"
 "s3.endpoint" = "http://ceph:8080"
 "s3.region" = "default"
 "s3.bucket" = "test"
