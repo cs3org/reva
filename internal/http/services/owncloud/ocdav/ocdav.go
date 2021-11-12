@@ -112,6 +112,10 @@ type Config struct {
 func (c *Config) init() {
 	// note: default c.Prefix is an empty string
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
+	if c.FavoriteStorageDriver == "" {
+		c.FavoriteStorageDriver = "memory"
+	}
 }
 
 type svc struct {

@@ -33,7 +33,7 @@ import (
 )
 
 func init() {
-	registry.Register("cbox", New)
+	registry.Register("sql", New)
 }
 
 type config struct {
@@ -70,7 +70,6 @@ func New(m map[string]interface{}) (favorite.Manager, error) {
 func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provider.ResourceId, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	infos := []*provider.ResourceId{}
-	info := provider.ResourceId{}
 	query := `SELECT fileid_prefix, fileid FROM cbox_metadata WHERE uid=? AND tag_key="fav"`
 	rows, err := m.db.Query(query, user.Id.OpaqueId)
 	if err != nil {
@@ -79,6 +78,7 @@ func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provid
 	defer rows.Close()
 
 	for rows.Next() {
+		var info provider.ResourceId
 		if err := rows.Scan(&info.StorageId, &info.OpaqueId); err != nil {
 			return nil, err
 		}

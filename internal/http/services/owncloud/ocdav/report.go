@@ -22,7 +22,6 @@ import (
 	"encoding/xml"
 	"io"
 	"net/http"
-	"strings"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -106,16 +105,6 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 				log.Error().Interface("stat_response", statRes).Msg("error getting resource info")
 				continue
 			}
-
-			// The paths we receive have the format /user/<username>/<filepath>
-			// We only want the `<filepath>` part. Thus we remove the /user/<username>/ part.
-			parts := strings.SplitN(statRes.Info.Path, "/", 4)
-			if len(parts) != 4 {
-				log.Error().Str("path", statRes.Info.Path).Msg("path doesn't have the expected format")
-				continue
-			}
-			statRes.Info.Path = parts[3]
-
 			infos = append(infos, statRes.Info)
 		}
 
