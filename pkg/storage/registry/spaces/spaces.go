@@ -207,9 +207,10 @@ func (r *registry) findProvidersForResource(ctx context.Context, res *provider.R
 		return providers, nil
 	}
 
-	for _, rule := range r.c.Rules {
+	for path, rule := range r.c.Rules {
 		p := &registrypb.ProviderInfo{
-			Address: rule.Address,
+			Address:      rule.Address,
+			ProviderPath: path,
 		}
 		resource, err := r.findResourceOnProvider(ctx, p, res)
 		if err == nil && resource.Id != nil {
