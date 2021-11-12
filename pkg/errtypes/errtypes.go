@@ -192,6 +192,7 @@ type IsInsufficientStorage interface {
 	IsInsufficientStorage()
 }
 
+// NewErrtypeFromStatus maps an rpc status to an errtype
 func NewErrtypeFromStatus(status *rpc.Status) error {
 	switch status.Code {
 	case rpc.Code_CODE_OK:
