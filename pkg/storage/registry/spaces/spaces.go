@@ -90,9 +90,9 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 	}
 	c.init()
 	return &registry{
-		c:                 c,
-		resources:         make(map[string][]*registrypb.ProviderInfo),
-		aliases:           make(map[string]map[string]*spaceAndProvider),
+		c:         c,
+		resources: make(map[string][]*registrypb.ProviderInfo),
+		//aliases:           make(map[string]map[string]*spaceAndProvider),
 		resourceNameCache: make(map[string]string),
 	}, nil
 }
@@ -107,7 +107,7 @@ type registry struct {
 	// a map of resources to providers
 	resources map[string][]*registrypb.ProviderInfo
 	// a map of paths/aliases to spaces and providers
-	aliases           map[string]map[string]*spaceAndProvider
+	//aliases           map[string]map[string]*spaceAndProvider
 	resourceNameCache map[string]string
 }
 
@@ -237,14 +237,15 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 	//spaceType, rest := router.ShiftPath(ref.Path)
 	//spaceName, _ := router.ShiftPath(rest)
 	//alias := filepath.Join("/", spaceType, spaceName)
-	if _, ok := r.aliases[currentUser.Id.OpaqueId]; !ok {
-		r.aliases[currentUser.Id.OpaqueId] = make(map[string]*spaceAndProvider)
-	}
+	aliases := map[string]*spaceAndProvider{}
 	/*
-		if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
-			// best case, just return cached provider
-			return spaceAndAddr.providers, nil
+		if _, ok := r.aliases[currentUser.Id.OpaqueId]; !ok {
+			r.aliases[currentUser.Id.OpaqueId] = make(map[string]*spaceAndProvider)
 		}
+			if spaceAndAddr, ok := r.aliases[currentUser.Id.OpaqueId][alias]; ok {
+				// best case, just return cached provider
+				return spaceAndAddr.providers, nil
+			}
 	*/
 
 	// TODO  instead of replacing home with personal to reduce the amount of storage spaces returned by a storage provider
@@ -287,12 +288,12 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 					name = space.Id.OpaqueId
 				}
 				p.ProviderPath = filepath.Join("/", space.SpaceType, name) // TODO deduplicate name
-				r.aliases[currentUser.Id.OpaqueId][p.ProviderPath] = &spaceAndProvider{
+				/*r.*/ aliases /*[currentUser.Id.OpaqueId]*/ [p.ProviderPath] = &spaceAndProvider{
 					space, []*registrypb.ProviderInfo{p},
 				}
 				// also register a personal storage where the current user is owner as his /home
 				if space.SpaceType == "personal" && space.Owner != nil && utils.UserEqual(space.Owner.Id, currentUser.Id) {
-					r.aliases[currentUser.Id.OpaqueId]["/home"] = &spaceAndProvider{
+					/*r.*/ aliases /*[currentUser.Id.OpaqueId]*/ ["/home"] = &spaceAndProvider{
 						space, []*registrypb.ProviderInfo{{
 							ProviderPath: "/home",
 							ProviderId:   space.Root.StorageId + "!" + space.Root.OpaqueId,
@@ -304,7 +305,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 				// FIXME make mount point of Shares storageprovider configurable
 				if space.SpaceType == "share" {
 					alias := filepath.Join("/home/Shares", space.Name)
-					r.aliases[currentUser.Id.OpaqueId][alias] = &spaceAndProvider{
+					/*r.*/ aliases /*[currentUser.Id.OpaqueId]*/ [alias] = &spaceAndProvider{
 						space, []*registrypb.ProviderInfo{{
 							ProviderPath: alias,
 							ProviderId:   space.Root.StorageId + "!" + space.Root.OpaqueId,
@@ -327,9 +328,9 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 			*/
 		}
 	}
-	providers := make([]*registrypb.ProviderInfo, 0, len(r.aliases[currentUser.Id.OpaqueId]))
+	providers := make([]*registrypb.ProviderInfo, 0, len( /*r.*/ aliases /*[currentUser.Id.OpaqueId]*/))
 	deepestMountPath := ""
-	for mountPath, spaceAndProvider := range r.aliases[currentUser.Id.OpaqueId] {
+	for mountPath, spaceAndProvider := range /*r.*/ aliases /*[currentUser.Id.OpaqueId]*/ {
 		switch {
 		case strings.HasPrefix(mountPath, ref.Path):
 			// and add all providers below and exactly matching the path
@@ -342,7 +343,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 		}
 	}
 	if deepestMountPath != "" {
-		providers = append(providers, r.aliases[currentUser.Id.OpaqueId][deepestMountPath].providers...)
+		providers = append(providers /*r.*/, aliases /*[currentUser.Id.OpaqueId]*/ [deepestMountPath].providers...)
 	}
 	return providers, nil
 }
