@@ -854,6 +854,10 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			if utils.IsAbsoluteReference(req.Ref) {
 				statResp.Info.Path = path.Join(req.Ref.Path, statResp.Info.Path)
 			}
+
+			// the stated path is above a mountpoint, so it must be a folder
+			statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+
 			if info, ok := infos[statResp.Info.Path]; !ok {
 				// replace with younger info
 				infos[statResp.Info.Path] = statResp.Info
