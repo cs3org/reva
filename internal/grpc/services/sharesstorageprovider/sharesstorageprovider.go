@@ -119,7 +119,6 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error)
 		return nil, err
 	}
 
-	// TODO use
 	gateway, err := pool.GetGatewayServiceClient(sharedconf.GetGatewaySVC(c.GatewayAddr))
 	if err != nil {
 		return nil, err
