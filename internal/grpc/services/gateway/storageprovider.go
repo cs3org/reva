@@ -40,6 +40,9 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
+
+	"google.golang.org/grpc/codes"
+	gstatus "google.golang.org/grpc/status"
 )
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -356,6 +359,9 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 	storageRes, err := c.InitiateFileDownload(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &gateway.InitiateFileDownloadResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling InitiateFileDownload")
 	}
 
@@ -409,6 +415,9 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 	storageRes, err := c.InitiateFileUpload(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &gateway.InitiateFileUploadResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling InitiateFileUpload")
 	}
 
@@ -556,7 +565,10 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 
 	res, err := c.SetArbitraryMetadata(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling Stat")
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.SetArbitraryMetadataResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling SetArbitraryMetadata")
 	}
 
 	return res, nil
@@ -575,7 +587,10 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 
 	res, err := c.UnsetArbitraryMetadata(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling Stat")
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.UnsetArbitraryMetadataResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling UnsetArbitraryMetadata")
 	}
 
 	return res, nil

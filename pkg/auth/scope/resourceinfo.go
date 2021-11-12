@@ -52,20 +52,19 @@ func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interfac
 		return checkResourceInfo(&r, v.GetRef()), nil
 
 		// Editor role
-		// TODO(ishank011): Add role checks,
 		// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
-		return checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.DeleteRequest:
-		return checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.MoveRequest:
-		return checkResourceInfo(&r, v.GetSource()) && checkResourceInfo(&r, v.GetDestination()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetSource()) && checkResourceInfo(&r, v.GetDestination()), nil
 	case *provider.InitiateFileUploadRequest:
-		return checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.SetArbitraryMetadataRequest:
-		return checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.UnsetArbitraryMetadataRequest:
-		return checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
 
 	case string:
 		return checkResourcePath(v), nil

@@ -50,7 +50,14 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 		return err
 	}
 
-	if ref, ok := extractRef(req); ok {
+	hasEditorRole := false
+	for _, v := range tokenScope {
+		if v.Role == authpb.Role_ROLE_EDITOR {
+			hasEditorRole = true
+		}
+	}
+
+	if ref, ok := extractRef(req, hasEditorRole); ok {
 		// Check if req is of type *provider.Reference_Path
 		// If yes, the request might be coming from a share where the accessor is
 		// trying to impersonate the owner, since the share manager doesn't know the
@@ -225,36 +232,46 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 	// return false, nil
 }
 
-func extractRef(req interface{}) (*provider.Reference, bool) {
+func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool) {
 	switch v := req.(type) {
+	// Read requests
 	case *registry.GetStorageProvidersRequest:
 		return v.GetRef(), true
 	case *provider.StatRequest:
 		return v.GetRef(), true
 	case *provider.ListContainerRequest:
 		return v.GetRef(), true
+	case *provider.InitiateFileDownloadRequest:
+		return v.GetRef(), true
+	case *appprovider.OpenInAppRequest:
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
+	case *gateway.OpenInAppRequest:
+		return v.GetRef(), true
+
+		// App provider requests
+	case *appregistry.GetAppProvidersRequest:
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
+	}
+
+	if !hasEditorRole {
+		return nil, false
+	}
+
+	switch v := req.(type) {
+	// Write Requests
 	case *provider.CreateContainerRequest:
 		return v.GetRef(), true
 	case *provider.DeleteRequest:
 		return v.GetRef(), true
 	case *provider.MoveRequest:
 		return v.GetSource(), true
-	case *provider.InitiateFileDownloadRequest:
-		return v.GetRef(), true
 	case *provider.InitiateFileUploadRequest:
-		return v.GetRef(), true
-	case *appprovider.OpenInAppRequest:
-		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
-	case *gateway.OpenInAppRequest:
 		return v.GetRef(), true
 	case *provider.SetArbitraryMetadataRequest:
 		return v.GetRef(), true
 	case *provider.UnsetArbitraryMetadataRequest:
 		return v.GetRef(), true
 
-		// App provider requests
-	case *appregistry.GetAppProvidersRequest:
-		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	}
 	return nil, false
 }

@@ -239,7 +239,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 				if check(g.GetPermissions()) {
 					return true, nil
 				}
-			case isNoData(err):
+			case isAttrUnset(err):
 				err = nil
 				appctx.GetLogger(ctx).Error().Interface("node", cn).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 			default:
@@ -283,14 +283,6 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 		return u, &perms
 	}
 	return u, nil
-}
-func isNoData(err error) bool {
-	if xerr, ok := err.(*xattr.Error); ok {
-		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.ENODATA
-		}
-	}
-	return false
 }
 
 // The os not exists error is buried inside the xattr error,
