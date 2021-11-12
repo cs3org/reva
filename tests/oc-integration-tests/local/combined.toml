@@ -43,12 +43,6 @@ home_provider = "/personal"
 #"/shares" = {"address" = "localhost:19002"}
 "/home/Shares" = {"address" = "localhost:19000", "description" = "shares"}
 
-[grpc.services.gateway.storage_rules]
-#"/personal" = {"address" = "localhost:19000"}
-"/personal" = {"address" = "localhost:11000"}
-#"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:19000"}
-"/home/Shares" = {"address" = "localhost:19000", "description" = "shares"}
-
 [grpc.services.authprovider]
 [grpc.services.authprovider.auth_managers.json]
 users = "users.demo.json"
