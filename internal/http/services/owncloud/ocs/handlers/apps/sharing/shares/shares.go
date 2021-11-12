@@ -855,6 +855,11 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 				data.FileTarget = info.Path
 				data.Path = info.Path
 			}
+		} else {
+			// not accepted shares need their Path jailed to make the testsuite happy
+			if h.sharePrefix != "/" {
+				data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+			}
 		}
 
 		shares = append(shares, data)
