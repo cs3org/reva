@@ -37,7 +37,7 @@ type mgr struct {
 	favorites map[string]map[string]*provider.ResourceId
 }
 
-// NewInMemoryManager returns an instance of the in-memory favorites manager.
+// New returns an instance of the in-memory favorites manager.
 func New(m map[string]interface{}) (favorite.Manager, error) {
 	return &mgr{favorites: make(map[string]map[string]*provider.ResourceId)}, nil
 }

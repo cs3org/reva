@@ -49,7 +49,7 @@ type mgr struct {
 	db *sql.DB
 }
 
-// NewInMemoryManager returns an instance of the in-memory favorites manager.
+// New returns an instance of the cbox sql favorites manager.
 func New(m map[string]interface{}) (favorite.Manager, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
