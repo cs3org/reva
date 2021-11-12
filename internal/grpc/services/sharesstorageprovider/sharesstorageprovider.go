@@ -252,7 +252,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
-	if utils.IsRelativeReference(req.Ref) {
+	if utils.IsRelativeReference(req.Ref) { // FIXME also allow absolute?
 		// look up share for this resourceid
 		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 		if err != nil {
