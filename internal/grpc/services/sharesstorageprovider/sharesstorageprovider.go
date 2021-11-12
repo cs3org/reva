@@ -357,7 +357,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			space.Name = lsRes.Shares[i].MountPoint.Path
 		}
 
-		info, st, err := s.statResource(ctx, lsRes.Shares[i].Share.ResourceId, ".")
+		info, st, err := s.statResource(ctx, lsRes.Shares[i].Share.ResourceId, "")
 		if err != nil {
 			return nil, err
 		}

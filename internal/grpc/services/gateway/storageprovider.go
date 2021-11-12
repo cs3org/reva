@@ -645,7 +645,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 
 		var currentInfo *provider.ResourceInfo
 		switch {
-		case req.Ref.Path == "": // id based request
+		case req.Ref.Path == "", req.Ref.Path == ".": // id based or root of a space request
 			fallthrough
 		case providers[i].ProviderPath == req.Ref.Path: // matches
 			fallthrough
