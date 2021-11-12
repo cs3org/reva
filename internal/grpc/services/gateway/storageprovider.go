@@ -630,6 +630,8 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 
 		var currentInfo *provider.ResourceInfo
 		switch {
+		case req.Ref.Path == "": // id based request
+			fallthrough
 		case providers[i].ProviderPath == req.Ref.Path: // matches
 			fallthrough
 		case strings.HasPrefix(req.Ref.Path, providers[i].ProviderPath): //  requested path is below mount point
@@ -686,8 +688,13 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}
 
 		if info == nil {
-			if utils.IsAbsolutePathReference(req.Ref) {
+			switch {
+			case utils.IsAbsolutePathReference(req.Ref):
 				currentInfo.Path = req.Ref.Path
+			case utils.IsAbsoluteReference(req.Ref):
+				// an id based references needs to adjust the path in the response with the provider path
+				// TODO but the provider path is empty for
+				wrap(currentInfo, providers[i])
 			}
 			info = currentInfo
 		} else {
