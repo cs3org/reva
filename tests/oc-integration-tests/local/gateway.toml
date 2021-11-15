@@ -93,14 +93,14 @@ home_provider = "/home"
 
 
 "/home" = {"address" = "localhost:11000", "space_type" = "personal", "space_owner_self" = true}
-"/home/Shares" = {"address" = "localhost:14000", "space_type" = "share", "path_template" = "/home/Shares/{.Name}", "description" = "shares"}
-"/users" = {"address" = "localhost:11000", "space_type" = "personal", "path_template" = "/users/{.Owner.Id.OpaqueId}", "description" = "personal spaces"}
+"/home/Shares" = {"address" = "localhost:14000", "space_type" = "share", "path_template" = "/home/Shares/{{.Name}}", "description" = "shares"}
+"/users" = {"address" = "localhost:11000", "space_type" = "personal", "path_template" = "/users/{{.Owner.Id.OpaqueId}}", "description" = "personal spaces"}
 
 # the /virtual namespace is only accessible via the frontend-global service
 ##"/virtual/[a-k]" = {"address" = "localhost:11100", "path_template" = "/virtual/{.Owner.Id.OpaqueId}"}
 ##"/virtual/[l-z]" = {"address" = "localhost:11110", "path_template" = "/virtual/{.Owner.Id.OpaqueId}"}
 
-"/public" = {"address" = "localhost:13000",  "space_type" = "public", "path_template" = "/public/{.Name}", "description" = "public links"}
+"/public" = {"address" = "localhost:13000",  "space_type" = "public", "path_template" = "/public/{{.Name}}", "description" = "public links"}
 
 [http]
 address = "0.0.0.0:19001"

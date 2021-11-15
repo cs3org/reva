@@ -309,7 +309,11 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				}, nil
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			if f.GetId().OpaqueId != "a290698f-53e9-4318-aaf9-eace13d62f9c" {
+			spaceid, _, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			if err != nil {
+				return nil, err
+			}
+			if spaceid != s.mountID {
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 				}, nil
@@ -321,13 +325,13 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 		StorageSpaces: []*provider.StorageSpace{{
 			Id: &provider.StorageSpaceId{
-				OpaqueId: "a290698f-53e9-4318-aaf9-eace13d62f9c",
+				OpaqueId: s.mountID,
 			},
 			SpaceType: "public",
-			// return the actual resource id
+			// return the actual resource id?
 			Root: &provider.ResourceId{
-				StorageId: "a290698f-53e9-4318-aaf9-eace13d62f9c",
-				OpaqueId:  "a290698f-53e9-4318-aaf9-eace13d62f9c",
+				StorageId: s.mountID,
+				OpaqueId:  s.mountID,
 			},
 			Name:  "Public shares",
 			Mtime: &typesv1beta1.Timestamp{}, // do we need to update it?

@@ -177,20 +177,18 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 	if id != nil {
 		// query that specific storage provider
-		/*
-			storageid, opaqeid, err := utils.SplitStorageSpaceID(id.OpaqueId)
-			if err != nil {
-				return &provider.ListStorageSpacesResponse{
-					Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
-				}, nil
-			}
-		*/
+		storageid, opaqeid, err := utils.SplitStorageSpaceID(id.OpaqueId)
+		if err != nil {
+			return &provider.ListStorageSpacesResponse{
+				Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
+			}, nil
+		}
 
 		// TODO This actually returns spaces when using the space registry
 		res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
 			Ref: &provider.Reference{ResourceId: &provider.ResourceId{
-				StorageId: id.OpaqueId,
-				//OpaqueId:  opaqeid,
+				StorageId: storageid,
+				OpaqueId:  opaqeid,
 			},
 				Path: "./"}, // use a relative reference
 		})

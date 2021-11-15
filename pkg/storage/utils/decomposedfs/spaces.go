@@ -179,6 +179,8 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	var (
 		spaceType = spaceTypeAny
 		spaceID   = spaceIDAny
+		nodeID    string
+		err       error
 	)
 
 	for i := range filter {
@@ -186,13 +188,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			spaceType = filter[i].GetSpaceType()
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID = filter[i].GetId().OpaqueId
-			/*
-				parts := strings.SplitN(filter[i].GetId().OpaqueId, "!", 2)
-				if len(parts) == 2 {
-					spaceID = parts[1]
-				}
-			*/
+			spaceID, nodeID, err = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -238,10 +237,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 			spaceType := filepath.Base(filepath.Dir(matches[i]))
 
-			/*if spaceType == "share" {
-				// do not list shares at all. the sharesstorageprovider is responsible for it
-				continue
-			}*/
+			//if spaceType == "share" {
+			// do not list shares at all? the sharesstorageprovider is responsible for it
+			//	continue
+			//}
 
 			owner, err := n.Owner()
 			if err != nil {
@@ -264,15 +263,16 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 	}
 
-	// if we did not find a space try finding a child node
-	if len(matches) == 0 && spaceID != spaceIDAny && (spaceType == spaceTypeAny || spaceType == "share") {
+	// if we did not find a space try finding a node
+	if nodeID != "" && nodeID != spaceID {
 		// try node id
-		target := filepath.Join(fs.o.Root, "nodes", spaceID)
+		target := filepath.Join(fs.o.Root, "nodes", nodeID)
 		n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
 		if err != nil {
 			return nil, err
 		}
-		space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), "share", permissions)
+		// TODO do we have a bettor space type than "node" when looking up a space for a node?
+		space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), "node", permissions)
 		if err != nil {
 			return nil, err
 		}
@@ -425,13 +425,6 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 		SpaceType: spaceType,
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
-	/* all spaces must use the node id as the space id
-	if spaceType == "share" {
-		// use node id as spaceid and storage id
-		space.Id.OpaqueId = node.ID
-		space.Root.StorageId = node.ID
-	}
-	*/
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 

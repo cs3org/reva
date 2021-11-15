@@ -175,12 +175,12 @@ func (r *registry) ListProviders(ctx context.Context) ([]*registrypb.ProviderInf
 		}
 		for _, space := range lSSRes.StorageSpaces {
 			pi := &registrypb.ProviderInfo{
-				ProviderId:   space.Root.StorageId + "!" + space.Root.OpaqueId,
+				ProviderId:   spaceID(space.Root),
 				ProviderPath: filepath.Join("/", space.SpaceType, space.Name), // TODO do we need to guarantee these are unique?
 				Address:      rule.Address,
 			}
 			providers = append(providers, pi)
-			r.resources[space.Root.StorageId+"!"+space.Root.OpaqueId] = []*registrypb.ProviderInfo{pi}
+			r.resources[spaceID(space.Root)] = []*registrypb.ProviderInfo{pi}
 		}
 	}
 	return providers, nil
@@ -249,6 +249,13 @@ func (r *registry) FindProviders(ctx context.Context, ref *provider.Reference) (
 	}
 }
 
+// spaceID is a workaround te glue together a spaceid that can carry both: the spaceid AND the nodeid
+// the spaceid is needed for routing in the gateway AND for finding the correct storage space in the rpovider
+// the nodeid is needed by the provider to find the shared node
+func spaceID(res *provider.ResourceId) string {
+	return res.StorageId + "!" + res.OpaqueId
+}
+
 // findProvidersForResource looks up a storage provider based on a resource id
 // for the root of a space the res.StorageId is the same as the res.OpaqueId
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
@@ -258,37 +265,28 @@ func (r *registry) findProvidersForResource(ctx context.Context, res *provider.R
 	for _, rule := range r.c.Rules {
 		p := &registrypb.ProviderInfo{
 			Address:    rule.Address,
-			ProviderId: res.StorageId + "!" + res.OpaqueId, // assume res is a space
+			ProviderId: spaceID(res),
 		}
-
-		/*
-			ri, err := r.findResourceOnProvider(ctx, rule.Address, res)
-			if err != nil {
-				appctx.GetLogger(ctx).Debug().Err(err).Interface("rule", rule).Msg("findResourceOnProvider failed, continuing")
-				continue
-			}
-		*/
-
 		spaces, err := r.findStorageSpaceOnProvider(ctx, rule.Address, []*provider.ListStorageSpacesRequest_Filter{{
 			Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
 			Term: &provider.ListStorageSpacesRequest_Filter_Id{
 				Id: &provider.StorageSpaceId{
-					OpaqueId: res.StorageId, // find root of space
+					OpaqueId: spaceID(res),
 				},
 			},
 		}})
 		if err != nil {
-			appctx.GetLogger(ctx).Debug().Err(err).Interface("rule", rule).Msg("findStorageSpaceOnProviderByAccess failed, continuing")
+			appctx.GetLogger(ctx).Debug().Err(err).Interface("rule", rule).Msg("findStorageSpaceOnProvider by id failed, continuing")
 			continue
 		}
 
 		for _, space := range spaces {
-			space.Id.OpaqueId = res.OpaqueId // override with specific id
 			p.ProviderPath, err = rule.ProviderPath(space)
 			if err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("rule", rule).Interface("space", space).Msg("failed to execute template, continuing")
 				continue
 			}
+
 			providers = append(providers, p)
 		}
 	}
@@ -338,13 +336,13 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 
 		spaces, err = r.findStorageSpaceOnProvider(ctx, p.Address, filters)
 		if err != nil {
-			appctx.GetLogger(ctx).Debug().Err(err).Interface("rule", rule).Msg("findStorageSpaceOnProviderByAccess failed, continuing")
+			appctx.GetLogger(ctx).Debug().Err(err).Interface("rule", rule).Msg("findStorageSpaceOnProvider failed, continuing")
 			continue
 		}
 
 		for _, space := range spaces {
 			p := &registrypb.ProviderInfo{
-				ProviderId: space.Root.StorageId + "!" + space.Root.OpaqueId, // The registry uses this to build the root resourceID for the relative request to the provider
+				ProviderId: spaceID(space.Root), // The registry uses this to build the root resourceID for the relative request to the provider
 				Address:    rule.Address,
 			}
 			// cache entry
