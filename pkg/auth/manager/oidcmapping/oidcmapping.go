@@ -64,7 +64,7 @@ type config struct {
 type oidcUserMapping struct {
 	OIDCIssuer string `mapstructure:"oidc_issuer" json:"oidc_issuer"`
 	OIDCGroup  string `mapstructure:"oidc_group" json:"oidc_group"`
-	OpaqueID   string `mapstructure:"opaque_id" json:"opaque_id"`
+	Username   string `mapstructure:"username" json:"username"`
 }
 
 func (c *config) init() {
@@ -167,9 +167,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, fmt.Errorf("oidcmapping: no \"groups\" attribute found in userinfo")
 	}
 
-	// discover the user opaqueID
-	var opaqueID string
-
+	// discover the user username
+	var username string
 	mappings := make([]string, 0, len(am.oidcUsersMapping))
 	for _, v := range am.oidcUsersMapping {
 		if v.OIDCIssuer == claims["issuer"] {
@@ -183,12 +182,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 	if len(intersection.([]interface{})) == 1 {
 		for _, m := range intersection.([]interface{}) {
-			opaqueID = am.oidcUsersMapping[m.(string)].OpaqueID
+			username = am.oidcUsersMapping[m.(string)].Username
 		}
 	}
-	if opaqueID == "" {
-		// no mappings found
-		return nil, nil, errors.Wrap(err, "oidcmapping: unable to retrieve local user from claims")
+	if username == "" {
+		return nil, nil, errors.New("oidcmapping: unable to retrieve username from mappings")
 	}
 
 	var uid, gid float64
@@ -200,7 +198,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 
 	userID := &user.UserId{
-		OpaqueId: opaqueID,
+		OpaqueId: username,
 		Idp:      "",
 		Type:     user.UserType_USER_TYPE_PRIMARY,
 	}
@@ -209,15 +207,16 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, errors.Wrap(err, "oidcmapping: error getting gateway grpc client")
 	}
 
-	getUserResp, err := gwc.GetUser(ctx, &user.GetUserRequest{
-		UserId: &user.UserId{OpaqueId: opaqueID},
+	getUserByClaimResp, err := gwc.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
+		Claim: "username",
+		Value: username,
 	})
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "oidcmapping: error getting user")
 	}
 
-	userID.Idp = getUserResp.GetUser().GetId().Idp
-	userID.Type = getUserResp.GetUser().GetId().Type
+	userID.Idp = getUserByClaimResp.GetUser().GetId().Idp
+	userID.Type = getUserByClaimResp.GetUser().GetId().Type
 
 	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
 		UserId: userID,
@@ -231,8 +230,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	u := &user.User{
 		Id:           userID,
-		Username:     getUserResp.GetUser().GetUsername(),
-		Groups:       getUserResp.GetUser().GetGroups(),
+		Username:     getUserByClaimResp.GetUser().GetUsername(),
+		Groups:       getUserByClaimResp.GetUser().GetGroups(),
 		Mail:         claims["email"].(string),
 		MailVerified: claims["email_verified"].(bool),
 		DisplayName:  claims["name"].(string),

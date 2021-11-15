@@ -2,11 +2,11 @@
 	{
 		"oidc_issuer": "http://iam-login-service:8080/",
 		"oidc_group": "Analysis",
-		"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51"
+		"username": "einstein"
 	},
 	{
 		"oidc_issuer": "http://iam-login-service:8080/",
 		"oidc_group": "Sciencemesh",
-		"opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"
+		"username": "marie"
 	}
 ]
