@@ -256,7 +256,7 @@ func spaceID(res *provider.ResourceId) string {
 	return res.StorageId + "!" + res.OpaqueId
 }
 
-// findProvidersForResource looks up a storage provider based on a resource id
+// findProvidersForResource looks up storage providers based on a resource id
 // for the root of a space the res.StorageId is the same as the res.OpaqueId
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
 func (r *registry) findProvidersForResource(ctx context.Context, res *provider.ResourceId) ([]*registrypb.ProviderInfo, error) {

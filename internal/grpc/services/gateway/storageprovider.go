@@ -621,8 +621,9 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	}
 
 	var info *provider.ResourceInfo
-	for i := range providers {
 
+pLoop: // when we stat by id or relative ref we need to be able to end the loop to prevent summing up the size from multiple providers
+	for i := range providers {
 		// get client for storage provider
 		c, err := s.getStorageProviderClient(ctx, providers[i])
 		if err != nil {
@@ -718,6 +719,11 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				wrap(currentInfo, providers[i])
 			}
 			info = currentInfo
+			// when stating via id or relative reference
+			if req.Ref.Path == "" || strings.HasPrefix(req.Ref.Path, ".") {
+				break pLoop // stop stating when we have the first id
+				// otherwise we would be summing the size of multiple stat calls
+			}
 		} else {
 			// aggregate metadata
 
