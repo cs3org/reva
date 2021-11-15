@@ -36,7 +36,7 @@ var _ = Describe("Static", func() {
 	totalProviders, rootProviders, eosProviders := 33, 31, 29
 
 	handler, err := spaces.New(map[string]interface{}{
-		"home_provider": "/home",
+		"home_provider": "/personal",
 		"rules": map[string]interface{}{
 			"/home": map[string]interface{}{
 				"mapping": "/home-{{substr 0 1 .Id.OpaqueId}}",

@@ -293,8 +293,47 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
+// ListStorageSpaces returns a Storage spaces of type "public" when given a filter by id with  the public link token as spaceid.
+// The root node of every storag space is the real (spaceid, nodeid) of the publicly shared node
+// The ocdav service has to
+// 1. Authenticate / Log in at the gateway using the token and can then
+// 2. look up the storage space using ListStorageSpaces.
+// 3. make related requests to that (spaceid, nodeid)
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	for _, f := range req.Filters {
+		switch f.Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			if f.GetSpaceType() != "public" {
+				return &provider.ListStorageSpacesResponse{
+					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				}, nil
+			}
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			if f.GetId().OpaqueId != "a290698f-53e9-4318-aaf9-eace13d62f9c" {
+				return &provider.ListStorageSpacesResponse{
+					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				}, nil
+			}
+		}
+	}
+
+	return &provider.ListStorageSpacesResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+		StorageSpaces: []*provider.StorageSpace{{
+			Id: &provider.StorageSpaceId{
+				OpaqueId: "a290698f-53e9-4318-aaf9-eace13d62f9c",
+			},
+			SpaceType: "public",
+			// return the actual resource id
+			Root: &provider.ResourceId{
+				StorageId: "a290698f-53e9-4318-aaf9-eace13d62f9c",
+				OpaqueId:  "a290698f-53e9-4318-aaf9-eace13d62f9c",
+			},
+			Name:  "Public shares",
+			Mtime: &typesv1beta1.Timestamp{}, // do we need to update it?
+		}},
+	}, nil
+
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
@@ -464,12 +503,13 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		nodeID       string
 	)
 
+	// FIXME the token becomes the spaceid, spaceid -> storageid, opaqueid=nodeid, path relative
 	if req.Ref.ResourceId != nil {
 		// Id based request.
 		// The OpaqueId in the public storage has the format `{shareToken}/{uuid}`
 		parts := strings.Split(req.Ref.ResourceId.OpaqueId, "/")
 		tkn = parts[0]
-		nodeID = parts[1]
+		nodeID = parts[1] // FIXME npe here
 	} else if req.Ref.Path != "" {
 		var err error
 		tkn, relativePath, err = s.unwrap(ctx, req.Ref)
@@ -633,16 +673,16 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token string, relativePath string, err error) {
-	if ref.ResourceId != nil {
-		return "", "", errtypes.BadRequest("need absolute path ref: got " + ref.String())
+	if !utils.IsRelativeReference(ref) {
+		return "", "", errtypes.BadRequest("need relative path ref: got " + ref.String())
 	}
-
-	if !utils.IsAbsolutePathReference(ref) {
-		// abort, no valid id nor path
-		return "", "", errtypes.BadRequest("invalid ref: " + ref.String())
-	}
-
+	// path has the form "./{token}/relative/path/"
 	parts := strings.SplitN(ref.Path, "/", 3)
+	if len(parts) < 2 {
+		// FIXME ... we should expose every public link as a storage space
+		// but do we need to list them then?
+		return "", "", errtypes.BadRequest("need at least token in ref: got " + ref.String())
+	}
 	token = parts[1]
 	if len(parts) > 2 {
 		relativePath = parts[2]

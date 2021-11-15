@@ -5,6 +5,10 @@
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
+[log]
+#level = "warn"
+#mode = "json"
+
 [grpc]
 address = "0.0.0.0:18000"
 

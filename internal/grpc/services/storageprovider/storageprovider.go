@@ -577,6 +577,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
+			st = &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}
 			st = status.NewNotFound(ctx, "path not found when statting")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")

@@ -327,10 +327,35 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-// ListStorageSpaces ruturns a list storage spaces with type share. However, when the space registry tries
+// ListStorageSpaces ruturns a list storage spaces with type "share" the current user has acces to.
+// Do owners of shares see type "shared"? Do they see andyhing? They need to if the want a fast lookup of shared with others
+// -> but then a storage sprovider has to do everything? not everything but permissions (= shares) related operations, yes
+// The root node of every storag space is the (spaceid, nodeid) of the shared node.
+// Since real space roots have (spaceid=nodeid) shares can be correlated with the space using the (spaceid, ) part of the reference.
+
+// However, when the space registry tries
 // to find a storage provider for a specific space it returns an empty list, so the actual storage provider
 // should be found.
+
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+
+	for _, f := range req.Filters {
+		switch f.Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			if f.GetSpaceType() != "share" {
+				return &provider.ListStorageSpacesResponse{
+					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				}, nil
+			}
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			if f.GetId().OpaqueId != "a0ca6a90-a365-4782-871e-d44447bbc668" {
+				return &provider.ListStorageSpacesResponse{
+					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				}, nil
+			}
+		}
+	}
+
 	lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 	if err != nil {
 		return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
@@ -350,20 +375,27 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			SpaceType: "share",
 			Owner:     &userv1beta1.User{Id: lsRes.Shares[i].Share.Owner},
 			// return the actual resource id
-			Root: lsRes.Shares[i].Share.ResourceId,
+			//Root: lsRes.Shares[i].Share.ResourceId,
+			Root: &provider.ResourceId{
+				StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668",
+				OpaqueId:  lsRes.Shares[i].Share.ResourceId.OpaqueId,
+			},
 		}
 		if lsRes.Shares[i].MountPoint != nil {
 			space.Name = lsRes.Shares[i].MountPoint.Path
 		}
 
-		info, st, err := s.statResource(ctx, lsRes.Shares[i].Share.ResourceId, "")
-		if err != nil {
-			return nil, err
-		}
-		if st.Code != rpc.Code_CODE_OK {
-			continue
-		}
-		space.Mtime = info.Mtime
+		// TODO the gateway needs to stat if it needs the mtime
+		/*
+			info, st, err := s.statResource(ctx, lsRes.Shares[i].Share.ResourceId, "")
+			if err != nil {
+				return nil, err
+			}
+			if st.Code != rpc.Code_CODE_OK {
+				continue
+			}
+			space.Mtime = info.Mtime
+		*/
 
 		// what if we don't have a name?
 		res.StorageSpaces = append(res.StorageSpaces, space)
@@ -706,7 +738,7 @@ func (s *service) resolveReference(ctx context.Context, ref *provider.Reference)
 		}
 		for _, rs := range lsRes.Shares {
 			// match the opaque id
-			if utils.ResourceIDEqual(rs.Share.ResourceId, ref.ResourceId) {
+			if rs.Share.ResourceId.OpaqueId == ref.ResourceId.OpaqueId {
 				return rs.Share.ResourceId, nil, nil
 			}
 		}

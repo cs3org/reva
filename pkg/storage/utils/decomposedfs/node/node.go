@@ -943,6 +943,9 @@ func parseMTime(v string) (t time.Time, err error) {
 // FindStorageSpaceRoot calls n.Parent() and climbs the tree
 // until it finds the space root node and adds it to the node
 func (n *Node) FindStorageSpaceRoot() error {
+	if n.SpaceRoot != nil {
+		return nil
+	}
 	var err error
 	// remember the node we ask for and use parent to climb the tree
 	parent := n

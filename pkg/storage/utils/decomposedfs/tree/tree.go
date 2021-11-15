@@ -238,12 +238,19 @@ func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 // CreateDir creates a new directory entry in the tree
 func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 
-	if n.Exists || n.ID != "" {
+	if n.Exists {
 		return errtypes.AlreadyExists(n.ID) // path?
 	}
 
+	// Allow passing in the node id
+	//if n.ID != "" {
+	// TODO check if already exists
+	//}
+
 	// create a directory node
-	n.ID = uuid.New().String()
+	if n.ID == "" {
+		n.ID = uuid.New().String()
+	}
 
 	// who will become the owner? the owner of the parent node, not the current user
 	var p *node.Node

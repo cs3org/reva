@@ -73,7 +73,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 
 	// when a grant is added to a space, do not add a new space under "shares"
 	if spaceGrant := ctx.Value(SpaceGrant); spaceGrant == nil {
-		err := fs.createStorageSpace(ctx, "share", node.ID, node.ID)
+		err := fs.createStorageSpace(ctx, "share", node.ID)
 		if err != nil {
 			return err
 		}
