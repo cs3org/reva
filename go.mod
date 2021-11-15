@@ -66,10 +66,10 @@ require (
 	go.mongodb.org/mongo-driver v1.7.2 // indirect
 	go.opencensus.io v0.23.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.26.1
-	go.opentelemetry.io/otel v1.1.0
+	go.opentelemetry.io/otel v1.2.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.1.0
 	go.opentelemetry.io/otel/sdk v1.1.0
-	go.opentelemetry.io/otel/trace v1.1.0
+	go.opentelemetry.io/otel/trace v1.2.0
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f
 	golang.org/x/sys v0.0.0-20210921065528-437939a70204
