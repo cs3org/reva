@@ -57,7 +57,7 @@ type rule struct {
 	// filters
 	SpaceType      string `mapstructure:"space_type"`
 	SpaceOwnerSelf bool   `mapstructure:"space_owner_self"`
-	SpaceId        string `mapstructure:"space_id"`
+	SpaceID        string `mapstructure:"space_id"`
 }
 
 // WithSpace generates a layout based on space data.
@@ -325,11 +325,11 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 				},
 			})
 		}
-		if rule.SpaceId != "" {
+		if rule.SpaceID != "" {
 			filters = append(filters, &provider.ListStorageSpacesRequest_Filter{
 				Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
 				Term: &provider.ListStorageSpacesRequest_Filter_Id{
-					Id: &provider.StorageSpaceId{OpaqueId: rule.SpaceId},
+					Id: &provider.StorageSpaceId{OpaqueId: rule.SpaceID},
 				},
 			})
 		}
@@ -417,25 +417,6 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 		return nil, errtypes.NotFound("spaces registry: storage provider not found for path reference:" + ref.String())
 	}
 	return providers, nil
-}
-
-func (r *registry) findResourceOnProvider(ctx context.Context, addr string, res *provider.ResourceId) (*provider.ResourceInfo, error) {
-	c, err := pool.GetStorageProviderServiceClient(addr)
-	if err != nil {
-		return nil, err
-	}
-	req := &provider.StatRequest{
-		Ref: &provider.Reference{ResourceId: res},
-	}
-
-	statResponse, err := c.Stat(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if statResponse.Status.Code != rpc.Code_CODE_OK {
-		return nil, status.NewErrorFromCode(statResponse.Status.Code, "spaces registry")
-	}
-	return statResponse.Info, nil
 }
 
 func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, filters []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
