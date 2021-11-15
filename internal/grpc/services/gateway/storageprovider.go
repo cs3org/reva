@@ -159,13 +159,14 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 
 func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	log := appctx.GetLogger(ctx)
-	var id *provider.StorageSpaceId
+	var spaceID *provider.StorageSpaceId
 	for _, f := range req.Filters {
 		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
-			id = f.GetId()
+			spaceID = f.GetId()
 		}
 	}
 
+	// send
 	var (
 		providers []*registry.ProviderInfo
 		err       error
@@ -175,9 +176,14 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
 
-	if id != nil {
+	if spaceID != nil {
+		// only a spaceid given, assume root node of a real space
+		if len(strings.SplitN(spaceID.OpaqueId, "!", 2)) == 1 {
+			// this also updates the spaceid in the request
+			spaceID.OpaqueId = spaceID.OpaqueId + "!" + spaceID.OpaqueId
+		}
 		// query that specific storage provider
-		storageid, opaqeid, err := utils.SplitStorageSpaceID(id.OpaqueId)
+		storageid, opaqeid, err := utils.SplitStorageSpaceID(spaceID.OpaqueId)
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{
 				Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
@@ -813,6 +819,10 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		// matches = /foo/bar       <=> /foo/bar        -> list(spaceid, .)
 		// below   = /foo/bar/bif   <=> /foo/bar        -> list(spaceid, ./bif)
 		switch {
+		case req.Ref.Path == "": // id based request
+			fallthrough
+		case strings.HasPrefix(req.Ref.Path, "."): // space request
+			fallthrough
 		case providers[i].ProviderPath == req.Ref.Path: // matches
 			fallthrough
 		case strings.HasPrefix(req.Ref.Path, providers[i].ProviderPath): //  requested path is below mount point
