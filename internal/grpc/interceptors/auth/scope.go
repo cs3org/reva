@@ -120,6 +120,9 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 						if utils.ResourceIDEqual(share.Share.ResourceId, ref.GetResourceId()) {
 							return nil
 						}
+						if ok, err := checkIfNestedResource(ctx, ref, share.Share.ResourceId, client, mgr); err == nil && ok {
+							return nil
+						}
 					}
 				} else if strings.HasPrefix(k, "publicshare") {
 					var share link.PublicShare
