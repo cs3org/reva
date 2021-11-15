@@ -212,7 +212,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Value: username,
 	})
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "oidcmapping: error getting user")
+		return nil, nil, errors.Wrapf(err, "oidcmapping: error getting user by claim username (\"%v\")", username)
 	}
 
 	userID.Idp = getUserByClaimResp.GetUser().GetId().Idp
