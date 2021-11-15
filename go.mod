@@ -12,7 +12,6 @@ require (
 	github.com/aws/aws-sdk-go v1.41.9
 	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
-	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/c-bata/go-prompt v0.2.5
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
@@ -39,7 +38,7 @@ require (
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
-	github.com/juliangruber/go-intersect v1.0.0
+	github.com/juliangruber/go-intersect v1.1.0
 	github.com/mattn/go-sqlite3 v1.14.9
 	github.com/mileusna/useragent v1.0.2
 	github.com/minio/minio-go/v7 v7.0.15
