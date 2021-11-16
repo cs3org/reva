@@ -116,6 +116,8 @@ driver = "json"
 users = "users.demo.json"
 
 [http]
+enabled_services = ["ocmd"]
+enabled_middlewares = ["providerauthorizer", "cors"]
 address = "0.0.0.0:19001"
 
 [http.services.dataprovider]
