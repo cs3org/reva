@@ -652,7 +652,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path st
 	if err != nil {
 		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
 	}
-	return c.parseFind(path, stdout)
+	return c.parseFind(ctx, auth, path, stdout)
 }
 
 // Read reads a file from the mgm
@@ -871,7 +871,7 @@ func getMap(partsBySpace []string) map[string]string {
 	return kv
 }
 
-func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
+func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, dirPath, raw string) ([]*eosclient.FileInfo, error) {
 	finfos := []*eosclient.FileInfo{}
 	versionFolders := map[string]*eosclient.FileInfo{}
 	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
@@ -914,6 +914,10 @@ func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
 			versionFolderPath := getVersionFolder(fi.File)
 			if vf, ok := versionFolders[versionFolderPath]; ok {
 				fi.Inode = vf.Inode
+			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil {
+				if md, err := c.GetFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
+					fi.Inode = md.Inode
+				}
 			}
 		}
 	}
