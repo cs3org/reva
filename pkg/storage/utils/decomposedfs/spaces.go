@@ -179,7 +179,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	var (
 		spaceType = spaceTypeAny
 		spaceID   = spaceIDAny
-		nodeID    string
+		nodeID    = spaceIDAny
 		err       error
 	)
 
@@ -195,16 +195,15 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 	}
 
+	spaces := []*provider.StorageSpace{}
 	// build the glob path, eg.
 	// /path/to/root/spaces/{spaceType}/{spaceId}
 	// /path/to/root/spaces/personal/nodeid
 	// /path/to/root/spaces/shared/nodeid
-	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, spaceID))
+	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
 	if err != nil {
 		return nil, err
 	}
-
-	spaces := make([]*provider.StorageSpace, 0, len(matches))
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
@@ -266,22 +265,25 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			spaces = append(spaces, space)
 		}
 	}
-
-	// if we did not find a space try finding a node
-	if nodeID != "" && nodeID != spaceID {
+	if len(matches) == 0 && nodeID != spaceID {
 		// try node id
 		target := filepath.Join(fs.o.Root, "nodes", nodeID)
 		n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
 		if err != nil {
 			return nil, err
 		}
-		// TODO do we have a bettor space type than "node" when looking up a space for a node?
+		// TODO do we have a better space type than "node" when looking up a space for a node?
 		space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), "node", permissions)
 		if err != nil {
 			return nil, err
 		}
-		spaces = append(spaces, space)
-
+		if space.Id.OpaqueId == spaceID {
+			spaces = append(spaces, space)
+		} else {
+			appctx.GetLogger(ctx).Debug().Err(err).
+				Str("spaceid", spaceID).Str("nodeid", nodeID).
+				Interface("space", space).Msg("mismatching spaceid, skipping")
+		}
 	}
 
 	return spaces, nil
