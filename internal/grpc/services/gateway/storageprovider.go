@@ -343,12 +343,10 @@ func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provide
 	}, nil
 }
 
-func (s *svc) getHome(_ context.Context) string {
-	//u := ctxpkg.ContextMustGetUser(ctx)
-	//return filepath.Join("/personal", u.Id.OpaqueId)
+func (s *svc) getHome(ctx context.Context) string {
 	// TODO use user layout
-	// TODO(labkode): issue #601, /home will be hardcoded.
-	return "/home"
+	u := ctxpkg.ContextMustGetUser(ctx)
+	return filepath.Join("/users", u.Id.OpaqueId)
 }
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {

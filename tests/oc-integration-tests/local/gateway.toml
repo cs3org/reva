@@ -58,7 +58,7 @@ machine = "localhost:21000" # started with the machine-auth.toml
 driver = "spaces"
 
 [grpc.services.storageregistry.drivers.spaces]
-home_provider = "/home"
+home_provider = "/users"
 
 [grpc.services.storageregistry.drivers.spaces.rules]
 ## this is the bare function of the registry: map path to spaceid
@@ -91,10 +91,8 @@ home_provider = "/home"
 #"/users/[i-k]" = {"spacetype" = "personal", "mapping" ="{.Name}", "mount_point"="/users" }
 #"/users/[l-z]" = {"spacetype" = "personal", "mapping" ="{.Name}", "path_template" ="/users/{.Owner.Username}"}
 
-
-"/home" = {"address" = "localhost:11000", "space_type" = "personal", "space_owner_self" = true}
-"/home/Shares" = {"address" = "localhost:14000", "space_type" = "share", "path_template" = "/home/Shares/{{.Name}}", "description" = "shares"}
-"/users" = {"address" = "localhost:11000", "space_type" = "personal", "path_template" = "/users/{{.Owner.Id.OpaqueId}}", "description" = "personal spaces"}
+"/users" = {"address" = "localhost:11000", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces"}
+"/users/{{.CurrentUser.Id.OpaqueId}}/Shares" = {"address" = "localhost:14000", "space_type" = "share", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}", "description" = "shares"}
 
 # the /virtual namespace is only accessible via the frontend-global service
 ##"/virtual/[a-k]" = {"address" = "localhost:11100", "path_template" = "/virtual/{.Owner.Id.OpaqueId}"}
