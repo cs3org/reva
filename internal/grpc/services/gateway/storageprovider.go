@@ -631,7 +631,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}
 
 		// build relative reference
-		sRef := req.Ref
+		sRef := &provider.Reference{}
 		if utils.IsAbsolutePathReference(req.Ref) {
 			sRef, err = unwrap(req.Ref, providers[i].ProviderPath)
 			if err != nil {
@@ -644,7 +644,16 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				continue
 			}
 			sRef.ResourceId = &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
+			// always send relative requests to providers
 			sRef.Path = utils.MakeRelativePath(sRef.Path)
+		} else {
+			// relative or id based
+			sRef.ResourceId = &provider.ResourceId{
+				StorageId: req.Ref.ResourceId.StorageId,
+				OpaqueId:  req.Ref.ResourceId.OpaqueId,
+			}
+			// always send relative requests to providers
+			sRef.Path = utils.MakeRelativePath(req.Ref.Path)
 		}
 
 		var currentInfo *provider.ResourceInfo
