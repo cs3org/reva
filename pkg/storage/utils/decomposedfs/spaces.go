@@ -256,7 +256,11 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			// TODO apply more filters
 			space, err := fs.storageSpaceFromNode(ctx, n, matches[i], spaceType, permissions)
 			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
+				if _, ok := err.(errtypes.IsPermissionDenied); ok {
+					appctx.GetLogger(ctx).Debug().Err(err).Interface("node", n).Msg("could not convert to storage space")
+				} else {
+					appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
+				}
 				continue
 			}
 			spaces = append(spaces, space)
@@ -435,7 +439,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 		return nil, err
 	}
 	if !(canListAllSpaces || p.Stat) {
-		return nil, errors.New(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
+		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
 	}
 
 	space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object

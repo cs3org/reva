@@ -22,6 +22,7 @@ import (
 	"context"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -621,8 +622,6 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	}
 
 	var info *provider.ResourceInfo
-
-pLoop: // when we stat by id or relative ref we need to be able to end the loop to prevent summing up the size from multiple providers
 	for i := range providers {
 		// get client for storage provider
 		c, err := s.getStorageProviderClient(ctx, providers[i])
@@ -694,6 +693,11 @@ pLoop: // when we stat by id or relative ref we need to be able to end the loop 
 				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response for parent mount carried no info, skipping")
 				continue
 			}
+
+			// mountpoint is deeper than the statted path -> make child a folder
+			statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+			statResp.Info.MimeType = "httpd/unix-directory"
+
 			// -> update metadata for /foo/bar -> set path to './bar'?
 			statResp.Info.Path = strings.TrimPrefix(providers[i].ProviderPath, req.Ref.Path)
 			statResp.Info.Path, _ = router.ShiftPath(statResp.Info.Path)
@@ -719,15 +723,11 @@ pLoop: // when we stat by id or relative ref we need to be able to end the loop 
 				wrap(currentInfo, providers[i])
 			}
 			info = currentInfo
-			// when stating via id or relative reference
-			if req.Ref.Path == "" || strings.HasPrefix(req.Ref.Path, ".") {
-				break pLoop // stop stating when we have the first id
-				// otherwise we would be summing the size of multiple stat calls
-			}
 		} else {
 			// aggregate metadata
-
-			info.Size += currentInfo.Size
+			if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				info.Size += currentInfo.Size
+			}
 			if info.Mtime == nil || (currentInfo.Mtime != nil && utils.TSToUnixNano(currentInfo.Mtime) > utils.TSToUnixNano(info.Mtime)) {
 				info.Mtime = currentInfo.Mtime
 				info.Etag = currentInfo.Etag
@@ -858,9 +858,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				infos[rsp.Infos[i].Path] = rsp.Infos[i]
 			}
 		case strings.HasPrefix(providers[i].ProviderPath, req.Ref.Path): // requested path is above mount point
-			//  requested path   provider path
-			//  /foo           <=> /foo/bar        -> stat(spaceid, .)    -> add metadata for /foo/bar
-			//  /foo           <=> /foo/bar/bif    -> stat(spaceid, .)    -> add metadata for /foo/bar
+			//  requested path     provider path
+			//  /foo           <=> /foo/bar          -> stat(spaceid, .)    -> add metadata for /foo/bar
+			//  /foo           <=> /foo/bar/bif      -> stat(spaceid, .)    -> add metadata for /foo/bar, overwrite type with dir
 			parts := strings.SplitN(providers[i].ProviderId, "!", 2)
 			if len(parts) != 2 {
 				appctx.GetLogger(ctx).Error().Msg("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + providers[i].ProviderId)
@@ -883,18 +883,23 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response for list carried no info, skipping")
 				continue
 			}
+
+			// is the mount point a direct child of the requested resurce? only works for absolute paths ... hmmm
+			if filepath.Dir(providers[i].ProviderPath) != req.Ref.Path {
+				// mountpoint is deeper than one level, make child a folder
+				statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+				statResp.Info.MimeType = "httpd/unix-directory"
+			}
+
 			// -> update metadata for /foo/bar -> set path to './bar'?
 			statResp.Info.Path = strings.TrimPrefix(providers[i].ProviderPath, req.Ref.Path)
 			statResp.Info.Path, _ = router.ShiftPath(statResp.Info.Path)
 			statResp.Info.Path = utils.MakeRelativePath(statResp.Info.Path)
-			// TODO invent resourceid?
+			// TODO invent resourceid? or unset resourceid? derive from path?
 
 			if utils.IsAbsoluteReference(req.Ref) {
 				statResp.Info.Path = path.Join(req.Ref.Path, statResp.Info.Path)
 			}
-
-			// the stated path is above a mountpoint, so it must be a folder
-			statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 
 			if info, ok := infos[statResp.Info.Path]; !ok {
 				// replace with younger info
