@@ -57,7 +57,7 @@ func (c *Config) Init() {
 	}
 
 	if c.HomeNamespace == "" {
-		c.HomeNamespace = "/home"
+		c.HomeNamespace = "/users/{{.Id.OpaqueId}}"
 	}
 
 	if c.AdditionalInfoAttribute == "" {

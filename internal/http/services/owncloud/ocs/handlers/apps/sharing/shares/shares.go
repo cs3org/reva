@@ -58,6 +58,7 @@ import (
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/registry"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -185,7 +186,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// prefix the path with the owners home, because ocs share requests are relative to the home dir
-	fn := path.Join(h.homeNamespace, r.FormValue("path"))
+	fn := path.Join(h.getHomeNamespace(revactx.ContextMustGetUser(ctx)), r.FormValue("path"))
 
 	statReq := provider.StatRequest{
 		Ref: &provider.Reference{Path: fn},
@@ -693,7 +694,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// we need to lookup the resource id so we can filter the list of shares later
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		target := path.Join(h.homeNamespace, r.FormValue("path"))
+		target := path.Join(h.getHomeNamespace(revactx.ContextMustGetUser(ctx)), r.FormValue("path"))
 
 		var status *rpc.Status
 		pinfo, status, err = h.getResourceInfoByPath(ctx, client, target)
@@ -769,7 +770,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		if stateFilter == collaboration.ShareState_SHARE_STATE_ACCEPTED || stateFilter == ocsStateUnknown {
 			// only log errors. They may happen but we can continue trying to at least list the shares
 			lcRes, err := client.ListContainer(ctx, &provider.ListContainerRequest{
-				Ref: &provider.Reference{Path: path.Join(h.homeNamespace, h.sharePrefix)},
+				Ref: &provider.Reference{Path: path.Join(h.getHomeNamespace(revactx.ContextMustGetUser(ctx)), h.sharePrefix)},
 			})
 			if err != nil || lcRes.Status.Code != rpc.Code_CODE_OK {
 				h.logProblems(lcRes.GetStatus(), err, "could not list container, continuing without share jail path info")
@@ -891,7 +892,7 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		filters, linkFilters, e = h.addFilters(w, r, h.homeNamespace)
+		filters, linkFilters, e = h.addFilters(w, r, h.getHomeNamespace(revactx.ContextMustGetUser(r.Context())))
 		if e != nil {
 			// result has been written as part of addFilters
 			return
@@ -1281,4 +1282,8 @@ func getStateFilter(s string) collaboration.ShareState {
 
 func (h *Handler) getPoolClient() (GatewayClient, error) {
 	return pool.GetGatewayServiceClient(h.gatewayAddr)
+}
+
+func (h *Handler) getHomeNamespace(u *userpb.User) string {
+	return templates.WithUser(u, h.homeNamespace)
 }
