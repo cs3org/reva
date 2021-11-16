@@ -873,6 +873,7 @@ func getMap(partsBySpace []string) map[string]string {
 
 func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
 	finfos := []*eosclient.FileInfo{}
+	versionFolders := map[string]*eosclient.FileInfo{}
 	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
 		return c == '\n'
 	})
@@ -894,13 +895,26 @@ func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
 			continue
 		}
 
+		// If it's a version folder, store it in a map, so that for the corresponding file,
+		// we can return its inode instead
+		if isVersionFolder(fi.File) {
+			versionFolders[fi.File] = fi
+		}
+
 		finfos = append(finfos, fi)
 	}
 
 	for _, fi := range finfos {
 		// For files, inherit ACLs from the parent
-		if !fi.IsDir && parent != nil {
-			fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+		// And set the inode to that of their version folder
+		if !fi.IsDir {
+			if parent != nil {
+				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+			}
+			versionFolderPath := getVersionFolder(fi.File)
+			if vf, ok := versionFolders[versionFolderPath]; ok {
+				fi.Inode = vf.Inode
+			}
 		}
 	}
 
