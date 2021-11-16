@@ -661,19 +661,19 @@ func (fs *s3FS) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return errtypes.NotSupported("restore revision")
 }
 
-func (fs *s3FS) PurgeRecycleItem(ctx context.Context, kbasePath, key, relativePath string) error {
+func (fs *s3FS) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	return errtypes.NotSupported("purge recycle item")
 }
 
-func (fs *s3FS) EmptyRecycle(ctx context.Context) error {
+func (fs *s3FS) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 	return errtypes.NotSupported("empty recycle")
 }
 
-func (fs *s3FS) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *s3FS) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
 	return nil, errtypes.NotSupported("list recycle")
 }
 
-func (fs *s3FS) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *s3FS) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	return errtypes.NotSupported("restore recycle")
 }
 

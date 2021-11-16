@@ -712,7 +712,7 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 	log := appctx.GetLogger(ctx)
 
 	key, itemPath := router.ShiftPath(req.Key)
-	items, err := s.storage.ListRecycle(ctx, req.Ref.Path, key, itemPath)
+	items, err := s.storage.ListRecycle(ctx, req.Ref, key, itemPath)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -749,7 +749,7 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 
 func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
 	key, itemPath := router.ShiftPath(req.Ref.Path)
-	items, err := s.storage.ListRecycle(ctx, req.Ref.Path, key, itemPath)
+	items, err := s.storage.ListRecycle(ctx, req.Ref, key, itemPath)
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err != nil {
 		var st *rpc.Status
@@ -776,7 +776,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	key, itemPath := router.ShiftPath(req.Key)
-	if err := s.storage.RestoreRecycleItem(ctx, req.Ref.Path, key, itemPath, req.RestoreRef); err != nil {
+	if err := s.storage.RestoreRecycleItem(ctx, req.Ref, key, itemPath, req.RestoreRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -801,7 +801,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 	// if a key was sent as opaque id purge only that item
 	key, itemPath := router.ShiftPath(req.Key)
 	if key != "" {
-		if err := s.storage.PurgeRecycleItem(ctx, req.Ref.Path, key, itemPath); err != nil {
+		if err := s.storage.PurgeRecycleItem(ctx, req.Ref, key, itemPath); err != nil {
 			var st *rpc.Status
 			switch err.(type) {
 			case errtypes.IsNotFound:
@@ -815,7 +815,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 				Status: st,
 			}, nil
 		}
-	} else if err := s.storage.EmptyRecycle(ctx); err != nil {
+	} else if err := s.storage.EmptyRecycle(ctx, req.Ref); err != nil {
 		// otherwise try emptying the whole recycle bin
 		var st *rpc.Status
 		switch err.(type) {

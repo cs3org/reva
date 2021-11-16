@@ -442,7 +442,7 @@ func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Refe
 }
 
 // ListRecycle as defined in the storage.FS interface
-func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key string, relativePath string) ([]*provider.RecycleItem, error) {
+func (nc *StorageDriver) ListRecycle(ctx context.Context, ref *provider.Reference, key string, relativePath string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("ListRecycle")
 	type paramsObj struct {
@@ -473,7 +473,7 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key string, 
 }
 
 // RestoreRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	type paramsObj struct {
 		Key        string              `json:"key"`
 		Path       string              `json:"path"`
@@ -495,7 +495,7 @@ func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, basePath, key, 
 }
 
 // PurgeRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	type paramsObj struct {
 		Key  string `json:"key"`
 		Path string `json:"path"`
@@ -513,7 +513,7 @@ func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, basePath, key, re
 }
 
 // EmptyRecycle as defined in the storage.FS interface
-func (nc *StorageDriver) EmptyRecycle(ctx context.Context) error {
+func (nc *StorageDriver) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("EmptyRecycle")
 
