@@ -1,4 +1,4 @@
-Enhancement: OIDC auth driver for ESCAPE-IAM-group-to-REVA-user mapping based authentication
+Enhancement: OIDC auth driver for ESCAPE IAM
 
 This enhancement allows for oidc token authentication via the ESCAPE IAM service.
 Authentication relies on mappings of ESCAPE IAM groups to REVA users.
