@@ -180,25 +180,8 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		// copy old revision to current location
 
 		revisionPath := fs.lu.InternalPath(revisionKey)
-		var revision, destination *os.File
-		revision, err = os.Open(revisionPath)
-		if err != nil {
-			return
-		}
-		defer revision.Close()
 
-		destination, err = os.OpenFile(nodePath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
-		if err != nil {
-			return
-		}
-		defer destination.Close()
-		_, err = io.Copy(destination, revision)
-		if err != nil {
-			return
-		}
-
-		err = fs.copyMD(revisionPath, nodePath)
-		if err != nil {
+		if err = os.Rename(revisionPath, nodePath); err != nil {
 			return
 		}
 
