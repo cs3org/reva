@@ -111,7 +111,7 @@ func (s *service) registerProvider() {
 	if len(s.conf.MimeTypes) != 0 {
 		mimeTypesIf := intersect.Simple(pInfo.MimeTypes, s.conf.MimeTypes)
 		var mimeTypes []string
-		for _, m := range mimeTypesIf.([]interface{}) {
+		for _, m := range mimeTypesIf {
 			mimeTypes = append(mimeTypes, m.(string))
 		}
 		pInfo.MimeTypes = mimeTypes
