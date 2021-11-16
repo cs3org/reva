@@ -151,7 +151,10 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 		return nil, "", nil, st, nil
 	}
 
-	cs3Ref := &provider.Reference{Path: path.Join("/", shareInfo.Path, relativePath)}
+	cs3Ref := &provider.Reference{
+		ResourceId: shareInfo.Id,
+		Path:       utils.MakeRelativePath(relativePath),
+	}
 	log.Debug().
 		Interface("sourceRef", ref).
 		Interface("cs3Ref", cs3Ref).
@@ -505,7 +508,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	var (
 		tkn          string
 		relativePath string
-		nodeID       string
 	)
 
 	if req.Ref.Path != "" {
@@ -530,7 +532,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	if shareInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE || (relativePath == "" && nodeID == "") || shareInfo.Id.OpaqueId == nodeID {
+	if shareInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE || relativePath == "" {
 		res := &provider.StatResponse{
 			Status: status.NewOK(ctx),
 			Info:   shareInfo,
@@ -539,15 +541,9 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		return res, nil
 	}
 
-	var ref *provider.Reference
-	if req.Ref.ResourceId != nil {
-		ref = &provider.Reference{ResourceId: &provider.ResourceId{
-			StorageId: share.ResourceId.StorageId,
-			OpaqueId:  nodeID,
-		}}
-	} else if req.Ref.Path != "" {
-		p := path.Join("/", shareInfo.Path, relativePath)
-		ref = &provider.Reference{Path: p}
+	ref := &provider.Reference{
+		ResourceId: share.ResourceId,
+		Path:       utils.MakeRelativePath(relativePath),
 	}
 
 	statResponse, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: ref})
@@ -576,12 +572,13 @@ func (s *service) augmentStatResponse(ctx context.Context, res *provider.StatRes
 			sharePath = strings.TrimPrefix(res.Info.Path, shareInfo.Path)
 		}
 
-		res.Info.Path = path.Join("/", tkn, sharePath)
+		res.Info.Path = path.Join("/", sharePath)
 		s.setPublicStorageID(res.Info, tkn)
 		filterPermissions(res.Info.PermissionSet, share.GetPermissions().Permissions)
 	}
 }
 
+// setPublicStorageID encodes the actual spaceid and nodeid as an opaqueid in the publicstorageprovider space
 func (s *service) setPublicStorageID(info *provider.ResourceInfo, shareToken string) {
 	info.Id.StorageId = s.mountID
 	info.Id.OpaqueId = shareToken + "/" + info.Id.OpaqueId
@@ -645,7 +642,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 	for i := range listContainerR.Infos {
 		filterPermissions(listContainerR.Infos[i].PermissionSet, share.GetPermissions().Permissions)
-		listContainerR.Infos[i].Path = path.Join("/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
+		listContainerR.Infos[i].Path = path.Join("/", relativePath, path.Base(listContainerR.Infos[i].Path))
 		s.setPublicStorageID(listContainerR.Infos[i], tkn)
 		if err := addShare(listContainerR.Infos[i], share); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("share", share).Interface("info", listContainerR.Infos[i]).Msg("error when adding share")
