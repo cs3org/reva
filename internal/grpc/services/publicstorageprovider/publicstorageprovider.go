@@ -88,6 +88,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	mountID := c.MountID
+	// FIXME roll uuid for provider if not set
 
 	gateway, err := pool.GetGatewayServiceClient(c.GatewayAddr)
 	if err != nil {
@@ -507,14 +508,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		nodeID       string
 	)
 
-	// FIXME the token becomes the spaceid, spaceid -> storageid, opaqueid=nodeid, path relative
-	if req.Ref.ResourceId != nil {
-		// Id based request.
-		// The OpaqueId in the public storage has the format `{shareToken}/{uuid}`
-		parts := strings.Split(req.Ref.ResourceId.OpaqueId, "/")
-		tkn = parts[0]
-		nodeID = parts[1] // FIXME npe here
-	} else if req.Ref.Path != "" {
+	if req.Ref.Path != "" {
 		var err error
 		tkn, relativePath, err = s.unwrap(ctx, req.Ref)
 		if err != nil {
@@ -635,7 +629,13 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 	listContainerR, err := s.gateway.ListContainer(
 		ctx,
-		&provider.ListContainerRequest{Ref: &provider.Reference{Path: path.Join("/", shareInfo.Path, relativePath)}},
+		&provider.ListContainerRequest{
+			Ref: &provider.Reference{
+				ResourceId: shareInfo.Id,
+				// prefix relative path with './' to make it a CS3 relative path
+				Path: utils.MakeRelativePath(relativePath),
+			},
+		},
 	)
 	if err != nil {
 		return &provider.ListContainerResponse{

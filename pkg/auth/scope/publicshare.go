@@ -75,6 +75,8 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 	case *userv1beta1.GetUserByClaimRequest:
 		return true, nil
 
+	case *provider.ListStorageSpacesRequest:
+		return checkPublicListStorageSpacesFilter(v.Filters), nil
 	case *link.GetPublicShareRequest:
 		return checkPublicShareRef(&share, v.GetRef()), nil
 	case string:
@@ -88,13 +90,31 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 
 func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Reference) bool {
 	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> path:$path > >
-	if r.ResourceId != nil && r.Path == "" { // path must be empty
-		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId())
+	if utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) {
+		return true
 	}
 
 	// r: <path:"/public/$token" >
-	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) || strings.HasPrefix(r.GetPath(), "/"+s.Token) {
+	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) || strings.HasPrefix(r.GetPath(), "./"+s.Token) {
 		return true
+	}
+	return false
+}
+
+// public link access must send a filter with id or type
+func checkPublicListStorageSpacesFilter(filters []*provider.ListStorageSpacesRequest_Filter) bool {
+	return true
+	for _, f := range filters {
+		switch f.Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			if f.GetSpaceType() == "public" {
+				return true
+			}
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			if f.GetId().OpaqueId != "" {
+				return true
+			}
+		}
 	}
 	return false
 }
