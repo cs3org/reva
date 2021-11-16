@@ -26,6 +26,7 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -60,10 +61,15 @@ type rule struct {
 	SpaceID        string `mapstructure:"space_id"`
 }
 
+type templateData struct {
+	CurrentUser *userpb.User
+	Space       *provider.StorageSpace
+}
+
 // WithSpace generates a layout based on space data.
-func (r *rule) ProviderPath(s *provider.StorageSpace) (string, error) {
+func (r *rule) ProviderPath(u *userpb.User, s *provider.StorageSpace) (string, error) {
 	b := bytes.Buffer{}
-	if err := r.template.Execute(&b, s); err != nil {
+	if err := r.template.Execute(&b, templateData{CurrentUser: u, Space: s}); err != nil {
 		return "", err
 	}
 	return b.String(), nil
@@ -260,7 +266,7 @@ func spaceID(res *provider.ResourceId) string {
 // for the root of a space the res.StorageId is the same as the res.OpaqueId
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
 func (r *registry) findProvidersForResource(ctx context.Context, res *provider.ResourceId) ([]*registrypb.ProviderInfo, error) {
-
+	currentUser := ctxpkg.ContextMustGetUser(ctx)
 	providers := []*registrypb.ProviderInfo{}
 	for _, rule := range r.c.Rules {
 		p := &registrypb.ProviderInfo{
@@ -292,7 +298,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, res *provider.R
 		}
 
 		for _, space := range spaces {
-			p.ProviderPath, err = rule.ProviderPath(space)
+			p.ProviderPath, err = rule.ProviderPath(currentUser, space)
 			if err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("rule", rule).Interface("space", space).Msg("failed to execute template, continuing")
 				continue
@@ -396,7 +402,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 			//         -> append suffix?
 			//      - {.Owner.Id} or {.ID} or {.Root.Id.Opaqueid} for a uuid identifier, eg for the /spaces path
 
-			p.ProviderPath, err = rule.ProviderPath(space)
+			p.ProviderPath, err = rule.ProviderPath(currentUser, space)
 			if err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("rule", rule).Interface("space", space).Msg("failed to execute template, continuing")
 				continue
