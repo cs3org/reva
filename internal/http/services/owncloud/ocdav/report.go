@@ -107,8 +107,8 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 				continue
 			}
 
-			// The paths we receive have the format /user/<username>/<filepath>
-			// We only want the `<filepath>` part. Thus we remove the /user/<username>/ part.
+			// The paths we receive have the format /user/<userid>/<filepath>
+			// We only want the `<filepath>` part. Thus we remove the /user/<userid>/ part.
 			parts := strings.SplitN(statRes.Info.Path, "/", 4)
 			if len(parts) != 4 {
 				log.Error().Str("path", statRes.Info.Path).Msg("path doesn't have the expected format")
