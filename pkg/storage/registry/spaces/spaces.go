@@ -267,14 +267,25 @@ func (r *registry) findProvidersForResource(ctx context.Context, res *provider.R
 			Address:    rule.Address,
 			ProviderId: spaceID(res),
 		}
-		spaces, err := r.findStorageSpaceOnProvider(ctx, rule.Address, []*provider.ListStorageSpacesRequest_Filter{{
+		filters := []*provider.ListStorageSpacesRequest_Filter{}
+		if rule.SpaceType != "" {
+			// add filter to id based request if it is configured
+			filters = append(filters, &provider.ListStorageSpacesRequest_Filter{
+				Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
+					SpaceType: rule.SpaceType,
+				},
+			})
+		}
+		filters = append(filters, &provider.ListStorageSpacesRequest_Filter{
 			Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
 			Term: &provider.ListStorageSpacesRequest_Filter_Id{
 				Id: &provider.StorageSpaceId{
 					OpaqueId: spaceID(res),
 				},
 			},
-		}})
+		})
+		spaces, err := r.findStorageSpaceOnProvider(ctx, rule.Address, filters)
 		if err != nil {
 			appctx.GetLogger(ctx).Debug().Err(err).Interface("rule", rule).Msg("findStorageSpaceOnProvider by id failed, continuing")
 			continue
