@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -34,7 +33,6 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	revactx "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -79,24 +77,6 @@ type config struct {
 type service struct {
 	gateway              GatewayClient
 	sharesProviderClient SharesProviderClient
-}
-type stattedReceivedShare struct {
-	Stat              *provider.ResourceInfo
-	ReceivedShare     *collaboration.ReceivedShare
-	AllReceivedShares []*collaboration.ReceivedShare
-}
-
-type shareNotFoundError struct {
-	name string
-}
-
-func (e *shareNotFoundError) Error() string {
-	return "Unknown share:" + e.name
-}
-
-func isShareNotFoundError(e error) bool {
-	_, ok := e.(*shareNotFoundError)
-	return ok
 }
 
 func (s *service) Close() error {
@@ -201,7 +181,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 		}
 		for _, rs := range lsRes.Shares {
 			// match the opaque id
-			if utils.ResourceIDEqual(rs.Share.ResourceId, req.Ref.ResourceId) {
+			if rs.Share.ResourceId.OpaqueId == req.Ref.ResourceId.OpaqueId {
 				gwres, err := s.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
 					Ref: &provider.Reference{
 						ResourceId: req.Ref.ResourceId,
@@ -262,7 +242,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}
 		for _, rs := range lsRes.Shares {
 			// match the opaqueid
-			if utils.ResourceIDEqual(rs.Share.ResourceId, req.Ref.ResourceId) {
+			if rs.Share.ResourceId.OpaqueId == req.Ref.ResourceId.OpaqueId {
 				// use the resource id from the share, it contains the real spaceid and opaqueid
 				gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
 					Ref: &provider.Reference{
@@ -371,6 +351,11 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 
 	res := &provider.ListStorageSpacesResponse{}
 	for i := range lsRes.Shares {
+
+		if lsRes.Shares[i].MountPoint == nil {
+			// the gateway needs a name to use as the path segment in the dir listing
+			continue
+		}
 		space := &provider.StorageSpace{
 			Id: &provider.StorageSpaceId{
 				// Do we need a unique spaceid for every share?
@@ -385,9 +370,9 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668",
 				OpaqueId:  lsRes.Shares[i].Share.ResourceId.OpaqueId,
 			},
-		}
-		if lsRes.Shares[i].MountPoint != nil {
-			space.Name = lsRes.Shares[i].MountPoint.Path
+			// TODO in the future the spaces registry will handle the alias for share spaces.
+			// for now use the name
+			Name: lsRes.Shares[i].MountPoint.Path,
 		}
 
 		// TODO the gateway needs to stat if it needs the mtime
@@ -751,138 +736,4 @@ func (s *service) resolveReference(ctx context.Context, ref *provider.Reference)
 	}
 
 	return nil, status.NewInvalidArg(ctx, "sharesstorageprovider: can only handle relative references"), nil
-}
-
-func (s *service) statShare(ctx context.Context, share string) (*stattedReceivedShare, error) {
-	_, ok := revactx.ContextGetUser(ctx)
-	if !ok {
-		return nil, fmt.Errorf("sharesstorageprovider: shares requested for empty user")
-	}
-
-	shares, err := s.getReceivedShares(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("sharesstorageprovider: error getting received shares")
-	}
-	stattedShare, ok := shares[share]
-	if !ok {
-		for _, ss := range shares {
-			if ss.ReceivedShare.MountPoint != nil && ss.ReceivedShare.MountPoint.Path == share {
-				stattedShare, ok = ss, true
-			}
-		}
-	}
-	if !ok {
-		return nil, &shareNotFoundError{name: share}
-	}
-	return stattedShare, nil
-}
-
-func (s *service) getReceivedShares(ctx context.Context) (map[string]*stattedReceivedShare, error) {
-	ret := map[string]*stattedReceivedShare{}
-	lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-	if err != nil {
-		return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
-	}
-	if lsRes.Status.Code != rpc.Code_CODE_OK {
-		return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
-	}
-	appctx.GetLogger(ctx).Debug().
-		Interface("lsRes.Shares", lsRes.Shares).
-		Msg("sharesstorageprovider: Preparing statted share")
-
-	for _, rs := range lsRes.Shares {
-		if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
-			continue
-		}
-
-		info, st, err := s.statResource(ctx, rs.Share.ResourceId, "")
-		if err != nil || st.Code != rpc.Code_CODE_OK {
-			appctx.GetLogger(ctx).Debug().
-				Interface("info", info).
-				Interface("state", st).
-				Err(err).
-				Msg("sharesstorageprovider: skipping statted share")
-			continue
-		}
-
-		name := rs.GetMountPoint().GetPath()
-		if _, ok := ret[name]; !ok {
-			ret[name] = &stattedReceivedShare{
-				ReceivedShare:     rs,
-				AllReceivedShares: []*collaboration.ReceivedShare{rs},
-				Stat:              info,
-			}
-			ret[name].Stat.PermissionSet = rs.Share.Permissions.Permissions
-		} else {
-			ret[name].Stat.PermissionSet = s.mergePermissions(ret[name].Stat.PermissionSet, rs.Share.Permissions.Permissions)
-			ret[name].AllReceivedShares = append(ret[name].AllReceivedShares, rs)
-		}
-	}
-
-	appctx.GetLogger(ctx).Debug().
-		Interface("ret", ret).
-		Msg("sharesstorageprovider: Returning statted share")
-	return ret, nil
-}
-
-func (s *service) statResource(ctx context.Context, res *provider.ResourceId, path string) (*provider.ResourceInfo, *rpc.Status, error) {
-	statRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			ResourceId: res,
-			Path:       path,
-		},
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	return statRes.Info, statRes.Status, nil
-}
-func (s *service) listResource(ctx context.Context, res *provider.ResourceId, path string) ([]*provider.ResourceInfo, *rpc.Status, error) {
-	listRes, err := s.gateway.ListContainer(ctx, &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			ResourceId: res,
-			Path:       path,
-		},
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	return listRes.Infos, listRes.Status, nil
-}
-
-func (s *service) rejectReceivedShare(ctx context.Context, share string) error {
-	stattedShare, err := s.statShare(ctx, share)
-	if err != nil {
-		return err
-	}
-
-	stattedShare.ReceivedShare.State = collaboration.ShareState_SHARE_STATE_REJECTED
-
-	_, err = s.sharesProviderClient.UpdateReceivedShare(ctx, &collaboration.UpdateReceivedShareRequest{
-		Share:      stattedShare.ReceivedShare,
-		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
-	})
-	return err
-}
-
-func (s *service) mergePermissions(a, b *provider.ResourcePermissions) *provider.ResourcePermissions {
-	a.AddGrant = a.AddGrant || b.AddGrant
-	a.CreateContainer = a.CreateContainer || b.CreateContainer
-	a.Delete = a.Delete || b.Delete
-	a.GetPath = a.GetPath || b.GetPath
-	a.GetQuota = a.GetQuota || b.GetQuota
-	a.InitiateFileDownload = a.InitiateFileDownload || b.InitiateFileDownload
-	a.InitiateFileUpload = a.InitiateFileUpload || b.InitiateFileUpload
-	a.ListGrants = a.ListGrants || b.ListGrants
-	a.ListContainer = a.ListContainer || b.ListContainer
-	a.ListFileVersions = a.ListFileVersions || b.ListFileVersions
-	a.ListRecycle = a.ListRecycle || b.ListRecycle
-	a.Move = a.Move || b.Move
-	a.RemoveGrant = a.RemoveGrant || b.RemoveGrant
-	a.PurgeRecycle = a.PurgeRecycle || b.PurgeRecycle
-	a.RestoreFileVersion = a.RestoreFileVersion || b.RestoreFileVersion
-	a.RestoreRecycleItem = a.RestoreRecycleItem || b.RestoreRecycleItem
-	a.Stat = a.Stat || b.Stat
-	a.UpdateGrant = a.UpdateGrant || b.UpdateGrant
-	return a
 }
