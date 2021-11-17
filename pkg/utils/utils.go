@@ -104,12 +104,7 @@ func ResolvePath(path string) (string, error) {
 		path = filepath.Join(homeDir, path[2:])
 	}
 
-	path, err = filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-
-	return path, nil
+	return filepath.Abs(path)
 }
 
 // RandString is a helper to create tokens.
