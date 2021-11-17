@@ -540,22 +540,3 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 	}
 	return reader, nil
 }
-
-func (fs *Decomposedfs) copyMD(s string, t string) (err error) {
-	var attrs []string
-	if attrs, err = xattr.List(s); err != nil {
-		return err
-	}
-	for i := range attrs {
-		if strings.HasPrefix(attrs[i], xattrs.OcisPrefix) {
-			var d []byte
-			if d, err = xattr.Get(s, attrs[i]); err != nil {
-				return err
-			}
-			if err = xattr.Set(t, attrs[i], d); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
