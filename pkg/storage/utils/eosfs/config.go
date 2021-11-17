@@ -152,6 +152,15 @@ type Config struct {
 	// HTTP connections to EOS: idle conections TTL
 	IdleConnTimeout int `mapstructure:"idle_conn_timeout"`
 
+	// HTTP connections to EOS: client certificate (usually a X509 host certificate)
+	ClientCertFile string `mapstructure:"http_client_certfile"`
+	// HTTP connections to EOS: client certificate key (usually a X509 host certificate)
+	ClientKeyFile string `mapstructure:"http_client_certfile"`
+	// HTTP connections to EOS: CA directories
+	ClientCADirs string `mapstructure:"http_client_cadirs"`
+	// HTTP connections to EOS: CA files
+	ClientCAFiles string `mapstructure:"http_client_cafiles"`
+
 	// TokenExpiry stores in seconds the time after which generated tokens will expire
 	// Default is 3600
 	TokenExpiry int
