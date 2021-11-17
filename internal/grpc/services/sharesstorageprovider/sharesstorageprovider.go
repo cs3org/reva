@@ -170,124 +170,106 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
-	if utils.IsRelativeReference(req.Ref) {
-		// look up share for this resourceid
-		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-		if err != nil {
-			return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
-		}
-		if lsRes.Status.Code != rpc.Code_CODE_OK {
-			return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
-		}
-		for _, rs := range lsRes.Shares {
-			// match the opaque id
-			if rs.Share.ResourceId.OpaqueId == req.Ref.ResourceId.OpaqueId {
-				gwres, err := s.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
-					Ref: &provider.Reference{
-						ResourceId: req.Ref.ResourceId,
-						Path:       req.Ref.Path,
-					},
-					Opaque: req.Opaque,
-				})
-				if err != nil {
-					return nil, err
-				}
-				if gwres.Status.Code != rpc.Code_CODE_OK {
-					return &provider.InitiateFileDownloadResponse{
-						Status: gwres.Status,
-					}, nil
-				}
-
-				protocols := []*provider.FileDownloadProtocol{}
-				for p := range gwres.Protocols {
-					if !strings.HasSuffix(gwres.Protocols[p].DownloadEndpoint, "/") {
-						gwres.Protocols[p].DownloadEndpoint += "/"
-					}
-					gwres.Protocols[p].DownloadEndpoint += gwres.Protocols[p].Token
-
-					protocols = append(protocols, &provider.FileDownloadProtocol{
-						Opaque:           gwres.Protocols[p].Opaque,
-						Protocol:         gwres.Protocols[p].Protocol,
-						DownloadEndpoint: gwres.Protocols[p].DownloadEndpoint,
-						Expose:           true, // the gateway already has encoded the upload endpoint
-					})
-				}
-
-				return &provider.InitiateFileDownloadResponse{
-					Status:    gwres.Status,
-					Protocols: protocols,
-				}, nil
-			}
-		}
+	resource, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	appctx.GetLogger(ctx).Debug().
+		Interface("ref", req.Ref).
+		Interface("res", resource).
+		Msg("sharesstorageprovider: Got InitiateFileDownload request")
+	if err != nil {
+		return nil, err
+	}
+	if rpcStatus != nil {
 		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewNotFound(ctx, "sharesstorageprovider: not found "+req.Ref.String()),
+			Status: rpcStatus,
+		}, nil
+	}
+	gwres, err := s.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
+		Ref: &provider.Reference{
+			ResourceId: req.Ref.ResourceId,
+			Path:       req.Ref.Path,
+		},
+		Opaque: req.Opaque,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if gwres.Status.Code != rpc.Code_CODE_OK {
+		return &provider.InitiateFileDownloadResponse{
+			Status: gwres.Status,
 		}, nil
 	}
 
+	protocols := []*provider.FileDownloadProtocol{}
+	for p := range gwres.Protocols {
+		if !strings.HasSuffix(gwres.Protocols[p].DownloadEndpoint, "/") {
+			gwres.Protocols[p].DownloadEndpoint += "/"
+		}
+		gwres.Protocols[p].DownloadEndpoint += gwres.Protocols[p].Token
+
+		protocols = append(protocols, &provider.FileDownloadProtocol{
+			Opaque:           gwres.Protocols[p].Opaque,
+			Protocol:         gwres.Protocols[p].Protocol,
+			DownloadEndpoint: gwres.Protocols[p].DownloadEndpoint,
+			Expose:           true, // the gateway already has encoded the upload endpoint
+		})
+	}
+
 	return &provider.InitiateFileDownloadResponse{
-		Status: status.NewInvalidArg(ctx, "sharesstorageprovider: can only handle relative references"),
+		Status:    gwres.Status,
+		Protocols: protocols,
 	}, nil
 
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
-	if utils.IsRelativeReference(req.Ref) { // FIXME also allow absolute?
-		// look up share for this resourceid
-		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-		if err != nil {
-			return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
-		}
-		if lsRes.Status.Code != rpc.Code_CODE_OK {
-			return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
-		}
-		for _, rs := range lsRes.Shares {
-			// match the opaqueid
-			if rs.Share.ResourceId.OpaqueId == req.Ref.ResourceId.OpaqueId {
-				// use the resource id from the share, it contains the real spaceid and opaqueid
-				gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
-					Ref: &provider.Reference{
-						ResourceId: req.Ref.ResourceId,
-						Path:       req.Ref.Path,
-					},
-					Opaque: req.Opaque,
-				})
-				if err != nil {
-					return nil, err
-				}
-				if gwres.Status.Code != rpc.Code_CODE_OK {
-					return &provider.InitiateFileUploadResponse{
-						Status: gwres.Status,
-					}, nil
-				}
-
-				protocols := []*provider.FileUploadProtocol{}
-				for p := range gwres.Protocols {
-					if !strings.HasSuffix(gwres.Protocols[p].UploadEndpoint, "/") {
-						gwres.Protocols[p].UploadEndpoint += "/"
-					}
-					gwres.Protocols[p].UploadEndpoint += gwres.Protocols[p].Token
-
-					protocols = append(protocols, &provider.FileUploadProtocol{
-						Opaque:             gwres.Protocols[p].Opaque,
-						Protocol:           gwres.Protocols[p].Protocol,
-						UploadEndpoint:     gwres.Protocols[p].UploadEndpoint,
-						AvailableChecksums: gwres.Protocols[p].AvailableChecksums,
-						Expose:             true, // the gateway already has encoded the upload endpoint
-					})
-				}
-				return &provider.InitiateFileUploadResponse{
-					Status:    gwres.Status,
-					Protocols: protocols,
-				}, nil
-			}
-		}
+	resource, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	appctx.GetLogger(ctx).Debug().
+		Interface("ref", req.Ref).
+		Interface("res", resource).
+		Msg("sharesstorageprovider: Got InitiateFileUpload request")
+	if err != nil {
+		return nil, err
+	}
+	if rpcStatus != nil {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewNotFound(ctx, "sharesstorageprovider: not found "+req.Ref.String()),
+			Status: rpcStatus,
+		}, nil
+	}
+	gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
+		Opaque: req.Opaque,
+		Ref: &provider.Reference{
+			ResourceId: resource,
+			Path:       req.Ref.Path,
+		},
+		Options: req.Options,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if gwres.Status.Code != rpc.Code_CODE_OK {
+		return &provider.InitiateFileUploadResponse{
+			Status: gwres.Status,
 		}, nil
 	}
 
+	protocols := []*provider.FileUploadProtocol{}
+	for p := range gwres.Protocols {
+		if !strings.HasSuffix(gwres.Protocols[p].UploadEndpoint, "/") {
+			gwres.Protocols[p].UploadEndpoint += "/"
+		}
+		gwres.Protocols[p].UploadEndpoint += gwres.Protocols[p].Token
+
+		protocols = append(protocols, &provider.FileUploadProtocol{
+			Opaque:             gwres.Protocols[p].Opaque,
+			Protocol:           gwres.Protocols[p].Protocol,
+			UploadEndpoint:     gwres.Protocols[p].UploadEndpoint,
+			AvailableChecksums: gwres.Protocols[p].AvailableChecksums,
+			Expose:             true, // the gateway already has encoded the upload endpoint
+		})
+	}
 	return &provider.InitiateFileUploadResponse{
-		Status: status.NewInvalidArg(ctx, "sharesstorageprovider: can only handle relative references"),
+		Status:    gwres.Status,
+		Protocols: protocols,
 	}, nil
 }
 
