@@ -155,7 +155,7 @@ type Config struct {
 	// HTTP connections to EOS: client certificate (usually a X509 host certificate)
 	ClientCertFile string `mapstructure:"http_client_certfile"`
 	// HTTP connections to EOS: client certificate key (usually a X509 host certificate)
-	ClientKeyFile string `mapstructure:"http_client_certfile"`
+	ClientKeyFile string `mapstructure:"http_client_keyfile"`
 	// HTTP connections to EOS: CA directories
 	ClientCADirs string `mapstructure:"http_client_cadirs"`
 	// HTTP connections to EOS: CA files
