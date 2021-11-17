@@ -706,9 +706,14 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				continue
 			}
 
-			// mountpoint is deeper than the statted path -> make child a folder
+			// mountpoint is deeper than the statted path
+			// -> make child a folder
 			statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 			statResp.Info.MimeType = "httpd/unix-directory"
+			// -> unset checksums for a folder
+			statResp.Info.Checksum = nil
+			delete(statResp.Info.Opaque.Map, "md5")
+			delete(statResp.Info.Opaque.Map, "adler32")
 
 			// -> update metadata for /foo/bar -> set path to './bar'?
 			statResp.Info.Path = strings.TrimPrefix(providers[i].ProviderPath, req.Ref.Path)
@@ -897,9 +902,14 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 
 			// is the mount point a direct child of the requested resurce? only works for absolute paths ... hmmm
 			if filepath.Dir(providers[i].ProviderPath) != req.Ref.Path {
-				// mountpoint is deeper than one level, make child a folder
+				// mountpoint is deeper than one level
+				// -> make child a folder
 				statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 				statResp.Info.MimeType = "httpd/unix-directory"
+				// -> unset checksums for a folder
+				statResp.Info.Checksum = nil
+				delete(statResp.Info.Opaque.Map, "md5")
+				delete(statResp.Info.Opaque.Map, "adler32")
 			}
 
 			// -> update metadata for /foo/bar -> set path to './bar'?
