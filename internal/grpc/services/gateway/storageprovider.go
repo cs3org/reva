@@ -35,7 +35,10 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/useragent"
+	ua "github.com/mileusna/useragent"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -1676,6 +1679,30 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 	return lcr, nil
 }
 
+func (s *svc) isPathAllowed(ua *ua.UserAgent, path string) bool {
+	uaLst, ok := s.c.AllowedUserAgents[path]
+	if !ok {
+		// if no user agent is defined for a path, all user agents are allowed
+		return true
+	}
+	return useragent.IsUserAgentAllowed(ua, uaLst)
+}
+
+func (s *svc) filterProvidersByUserAgent(ctx context.Context, providers []*registry.ProviderInfo) []*registry.ProviderInfo {
+	ua, ok := ctxpkg.ContextGetUserAgent(ctx)
+	if !ok {
+		return providers
+	}
+
+	filters := []*registry.ProviderInfo{}
+	for _, p := range providers {
+		if s.isPathAllowed(ua, p.ProviderPath) {
+			filters = append(filters, p)
+		}
+	}
+	return filters
+}
+
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
@@ -1686,6 +1713,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	providers = getUniqueProviders(providers)
 
 	resPath := req.Ref.GetPath()
+
 	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
 		c, err := s.getStorageProviderClient(ctx, providers[0])
 		if err != nil {
@@ -1707,7 +1735,7 @@ func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.Li
 	nestedInfos := make(map[string]*provider.ResourceInfo)
 	log := appctx.GetLogger(ctx)
 
-	for _, p := range providers {
+	for _, p := range s.filterProvidersByUserAgent(ctx, providers) {
 		c, err := s.getStorageProviderClient(ctx, p)
 		if err != nil {
 			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
@@ -2201,15 +2229,15 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 }
 
 func getUniqueProviders(providers []*registry.ProviderInfo) []*registry.ProviderInfo {
-	unique := make(map[string]bool)
+	unique := make(map[string]*registry.ProviderInfo)
 	for _, p := range providers {
-		unique[p.Address] = true
+		unique[p.Address] = p
 	}
-	p := make([]*registry.ProviderInfo, 0, len(unique))
-	for addr := range unique {
-		p = append(p, &registry.ProviderInfo{Address: addr})
+	res := make([]*registry.ProviderInfo, 0, len(unique))
+	for _, provider := range unique {
+		res = append(res, provider)
 	}
-	return p
+	return res
 }
 
 type etagWithTS struct {
