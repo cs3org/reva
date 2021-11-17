@@ -628,6 +628,11 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			continue
 		}
 
+		// there are three cases:
+		// 1. id based references -> send to provider as is. must return the path in the space. space root can be determined by the spaceid
+		// 2. path based references -> replace mount point with space and forward relative reference
+		// 3. relative reference -> forward as is
+
 		// build relative reference
 		sRef := &provider.Reference{}
 		if utils.IsAbsolutePathReference(req.Ref) {
@@ -650,8 +655,8 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				StorageId: req.Ref.ResourceId.StorageId,
 				OpaqueId:  req.Ref.ResourceId.OpaqueId,
 			}
-			// always send relative requests to providers
-			sRef.Path = utils.MakeRelativePath(req.Ref.Path)
+			// always
+			sRef.Path = req.Ref.Path
 		}
 
 		var currentInfo *provider.ResourceInfo
