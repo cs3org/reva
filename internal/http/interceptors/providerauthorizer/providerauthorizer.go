@@ -89,7 +89,7 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 			if !(strings.Contains(userIdp, "://")) {
 				userIdp = "https://" + userIdp
 			}
-			userIdpUrl, err := url.Parse(userIdp)
+			userIdpURL, err := url.Parse(userIdp)
 			if err != nil {
 				log.Error().Err(err).Msg("error parsing user idp in provider authorizer")
 				w.WriteHeader(http.StatusUnauthorized)
@@ -97,7 +97,7 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 			}
 
 			err = authorizer.IsProviderAllowed(ctx, &ocmprovider.ProviderInfo{
-				Domain: userIdpUrl.Hostname(),
+				Domain: userIdpURL.Hostname(),
 			})
 			if err != nil {
 				log.Error().Err(err).Msg("provider not registered in OCM")

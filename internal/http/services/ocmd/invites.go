@@ -209,14 +209,14 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		recipientProvider = "https://" + recipientProvider
 	}
 
-	recipientProviderUrl, err := url.Parse(recipientProvider)
+	recipientProviderURL, err := url.Parse(recipientProvider)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error parseing recipientProvider URL: %s", recipientProvider), err)
 		return
 	}
 
 	providerInfo := ocmprovider.ProviderInfo{
-		Domain: recipientProviderUrl.Hostname(),
+		Domain: recipientProviderURL.Hostname(),
 		Services: []*ocmprovider.Service{
 			{
 				Host: clientIP,
