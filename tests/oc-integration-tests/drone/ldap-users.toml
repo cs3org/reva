@@ -19,7 +19,7 @@ base_dn="dc=owncloud,dc=com"
 loginfilter="(&(objectclass=posixAccount)(|(cn={{login}}))(uid={{login}}))"
 bind_username="cn=admin,dc=owncloud,dc=com"
 bind_password="admin"
-idp="http://localhost:18000"
+idp="http://localhost:20080"
 [grpc.services.authprovider.auth_managers.ldap.schema]
 uid="entryuuid"
 displayName="displayName"

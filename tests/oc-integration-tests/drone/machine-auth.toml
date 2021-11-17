@@ -11,4 +11,4 @@ auth_manager = "machine"
 
 [grpc.services.authprovider.auth_managers.machine]
 api_key="change-me-please"
-gateway_addr="0.0.0.0:19000"
+gateway_addr="localhost:19000"
