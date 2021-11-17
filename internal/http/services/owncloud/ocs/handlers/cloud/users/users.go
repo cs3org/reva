@@ -66,7 +66,7 @@ type Users struct {
 	Quota       *Quota `json:"quota" xml:"quota"`
 	Email       string `json:"email" xml:"email"`
 	DisplayName string `json:"displayname" xml:"displayname"`
-	UserType    string `json:"usertype" xml:"usertype"`
+	UserType    string `json:"user-type" xml:"user-type"`
 	// FIXME home should never be exposed ... even in oc 10
 	// home
 	TwoFactorAuthEnabled bool `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
