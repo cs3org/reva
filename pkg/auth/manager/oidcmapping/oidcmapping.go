@@ -176,12 +176,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		}
 	}
 	intersection := intersect.Simple(claims["groups"], mappings)
-	if len(intersection.([]interface{})) > 1 {
+	if len(intersection) > 1 {
 		// multiple mappings is not implemented, we don't know which one to choose
 		return nil, nil, errors.New("oidcmapping: mapping failed, more than one mapping found")
 	}
-	if len(intersection.([]interface{})) == 1 {
-		for _, m := range intersection.([]interface{}) {
+	if len(intersection) == 1 {
+		for _, m := range intersection {
 			username = am.oidcUsersMapping[m.(string)].Username
 		}
 	}
