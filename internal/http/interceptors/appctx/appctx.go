@@ -46,7 +46,7 @@ func handler(log zerolog.Logger, h http.Handler) http.Handler {
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = rtrace.Provider.Tracer("grpc").Start(ctx, "grpc unary")
+			ctx, span = rtrace.Provider.Tracer("http").Start(ctx, "http interceptor")
 		}
 
 		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
