@@ -83,13 +83,13 @@ home_provider = "/users"
 ## to make clear /users is a list of spaces:
 #"/users/*" = {"spacetype" = "personal", "mapping" ="{.Owner.Username}" }
 ## regexes
-#"/users/[i-k]" = {"spacetype" = "personal", "mapping" ="{.Name}" }
-#"/users/[l-z]" = {"spacetype" = "personal", "mapping" ="{.Name}" }
+#"/users/[i-k]" = {"spacetype" = "personal", "mapping" ="{{.Space.Name}}" }
+#"/users/[l-z]" = {"spacetype" = "personal", "mapping" ="{{.Space.Name}}" }
 ## regexes and wildcard hale the problem that they make it harder to tell the gateway what part of the path to truncate
 ## this would require an explicit mount point property in the rule
-#"/users/*" = {"spacetype" = "personal", "mapping" ="{.Name}", "mount_point"="/users" }
-#"/users/[i-k]" = {"spacetype" = "personal", "mapping" ="{.Name}", "mount_point"="/users" }
-#"/users/[l-z]" = {"spacetype" = "personal", "mapping" ="{.Name}", "path_template" ="/users/{.Owner.Username}"}
+#"/users/*" = {"spacetype" = "personal", "mapping" ="{{.Space.Name}}", "mount_point"="/users" }
+#"/users/[i-k]" = {"spacetype" = "personal", "mapping" ="{{.Space.Name}}", "mount_point"="/users" }
+#"/users/[l-z]" = {"spacetype" = "personal", "mapping" ="{{.Space.Name}}", "path_template" ="/users/{.Owner.Username}"}
 
 "/users" = {"address" = "localhost:11000", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces"}
 "/users/{{.CurrentUser.Id.OpaqueId}}/Shares" = {"address" = "localhost:14000", "space_type" = "share", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}", "description" = "shares"}
@@ -98,7 +98,7 @@ home_provider = "/users"
 ##"/virtual/[a-k]" = {"address" = "localhost:11100", "path_template" = "/virtual/{.Owner.Id.OpaqueId}"}
 ##"/virtual/[l-z]" = {"address" = "localhost:11110", "path_template" = "/virtual/{.Owner.Id.OpaqueId}"}
 
-"/public" = {"address" = "localhost:13000",  "space_type" = "public", "path_template" = "/public/{{.Name}}", "description" = "public links"}
+"/public" = {"address" = "localhost:13000",  "space_type" = "public", "path_template" = "/public/{{.Space.Name}}", "description" = "public links"}
 
 [http]
 address = "0.0.0.0:19001"
