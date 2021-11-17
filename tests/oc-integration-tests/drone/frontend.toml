@@ -59,6 +59,7 @@ files_namespace = "/users"
 webdav_namespace = "/home"
 
 [http.services.ocs]
+storage_registry_svc = "localhost:19000"
 
 [http.services.ocs.capabilities.capabilities.core.status]
 version = "10.0.11.5"
