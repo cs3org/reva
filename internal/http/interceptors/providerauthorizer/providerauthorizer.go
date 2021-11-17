@@ -21,6 +21,7 @@ package providerauthorizer
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -83,8 +84,18 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 				return
 			}
 
+			userIdp := ctxpkg.ContextMustGetUser(ctx).Id.Idp
+			// See https://github.com/cs3org/reva/issues/2288
+			// Remove protocol prefix, if present:
+			userIdp = strings.TrimPrefix(userIdp, "http://")
+			userIdp = strings.TrimPrefix(userIdp, "https://")
+			// Remove URL path, if present:
+			userIdp = strings.Split(userIdp, "/")[0]
+			// Remove port suffix, if present:
+			userIdp = strings.Split(userIdp, ":")[0]
+
 			err = authorizer.IsProviderAllowed(ctx, &ocmprovider.ProviderInfo{
-				Domain: ctxpkg.ContextMustGetUser(ctx).Id.Idp,
+				Domain: userIdp,
 			})
 			if err != nil {
 				log.Error().Err(err).Msg("provider not registered in OCM")
