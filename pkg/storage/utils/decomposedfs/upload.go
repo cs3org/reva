@@ -199,6 +199,10 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	n, err := fs.lu.NodeFromSpaceID(ctx, &provider.ResourceId{
 		StorageId: info.Storage["SpaceRoot"],
 	})
+	if err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: error getting space root node")
+	}
+
 	fn := info.MetaData["filename"]
 	if fn == "" {
 		return nil, errors.New("Decomposedfs: missing filename in metadata")
