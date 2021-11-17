@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -551,10 +552,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// defer writing the checksums until the node is in place
 
 	// if target exists create new version
+	versionsPath := ""
 	if fi, err = os.Stat(targetPath); err == nil {
+		// FIXME move versioning to blobs ... no need to copy all the metadata! well ... it does if we want to version metadata...
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := upload.fs.lu.InternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath = upload.fs.lu.InternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
 
+		//FIXME THIS move drops all grants!!!
 		if err = os.Rename(targetPath, versionsPath); err != nil {
 			sublog.Err(err).
 				Str("binPath", upload.binPath).
@@ -562,6 +566,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 				Msg("Decomposedfs: could not create version")
 			return
 		}
+
 	}
 
 	// upload the data to the blobstore
@@ -587,6 +592,19 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		sublog.Err(err).
 			Msg("Decomposedfs: could not rename")
 		return
+	}
+	if versionsPath != "" {
+		// copy grant and arbitrary metadata
+		xattrs.CopyMetadata(versionsPath, targetPath, func(attributeName string) bool {
+			return true
+			// TODO determine all attributes that must be copied, currently we just copy all and overwrite changed properties
+			/*
+				return strings.HasPrefix(attributeName, xattrs.GrantPrefix) || // for grants
+					strings.HasPrefix(attributeName, xattrs.MetadataPrefix) || // for arbitrary metadata
+					strings.HasPrefix(attributeName, xattrs.FavPrefix) || // for favorites
+					strings.HasPrefix(attributeName, xattrs.SpaceNameAttr) || // for a shared file
+			*/
+		})
 	}
 
 	// now try write all checksums
