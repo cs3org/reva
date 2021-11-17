@@ -23,8 +23,10 @@ import (
 	"fmt"
 	"strings"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -52,9 +54,13 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.InitiateFileDownloadRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *appprovider.OpenInAppRequest:
+		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.ResourceInfo.Id}), nil
+	case *gateway.OpenInAppRequest:
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
 
-		// Editor role
-		// need to return appropriate status codes in the ocs/ocdav layers.
+	// Editor role
+	// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
 		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.DeleteRequest:

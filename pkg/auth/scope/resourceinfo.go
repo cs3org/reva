@@ -23,7 +23,9 @@ import (
 	"fmt"
 	"strings"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/rs/zerolog"
@@ -50,9 +52,13 @@ func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interfac
 		return checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.InitiateFileDownloadRequest:
 		return checkResourceInfo(&r, v.GetRef()), nil
+	case *appprovider.OpenInAppRequest:
+		return checkResourceInfo(&r, &provider.Reference{ResourceId: v.ResourceInfo.Id}), nil
+	case *gateway.OpenInAppRequest:
+		return checkResourceInfo(&r, v.GetRef()), nil
 
-		// Editor role
-		// need to return appropriate status codes in the ocs/ocdav layers.
+	// Editor role
+	// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
 		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.DeleteRequest:
