@@ -83,7 +83,7 @@ func ExtractGrantee(t int, g string) *provider.Grantee {
 	return &grantee
 }
 
-// ResourceTypeToItem maps a resource type to an integer
+// ResourceTypeToItem maps a resource type to a string
 func ResourceTypeToItem(r provider.ResourceType) string {
 	switch r {
 	case provider.ResourceType_RESOURCE_TYPE_FILE:
@@ -96,6 +96,18 @@ func ResourceTypeToItem(r provider.ResourceType) string {
 		return "symlink"
 	default:
 		return ""
+	}
+}
+
+// ResourceTypeToItemInt maps a resource type to an integer
+func ResourceTypeToItemInt(r provider.ResourceType) int {
+	switch r {
+	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		return 0
+	case provider.ResourceType_RESOURCE_TYPE_FILE:
+		return 1
+	default:
+		return -1
 	}
 }
 
