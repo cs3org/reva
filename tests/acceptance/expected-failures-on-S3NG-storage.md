@@ -876,9 +876,6 @@ API, search, favorites, config, capabilities, not existing endpoints, CORS and o
 
 #### [Trying to access another user's file gives http 403 instead of 404](https://github.com/owncloud/ocis/issues/2175)
 _ocdav: api compatibility, return correct status code_
--   [apiAuthWebDav/webDavDELETEAuth.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L38) Scenario: send DELETE requests to another user's webDav endpoints as normal user
--   [apiAuthWebDav/webDavPROPFINDAuth.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPFINDAuth.feature#L39)  Scenario: send PROPFIND requests to another user's webDav endpoints as normal user
--   [apiAuthWebDav/webDavPROPPATCHAuth.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPPATCHAuth.feature#L40) Scenario: send PROPPATCH requests to another user's webDav endpoints as normal user
 -   [apiAuthWebDav/webDavMKCOLAuth.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMKCOLAuth.feature#L36) Scenario: send MKCOL requests to another user's webDav endpoints as normal user
 
 #### [trying to lock file of another user gives http 200](https://github.com/owncloud/ocis/issues/2176)
