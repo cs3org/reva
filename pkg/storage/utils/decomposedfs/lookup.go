@@ -55,9 +55,7 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 			p := filepath.Clean(ref.Path)
 			if p != "." {
 				// walk the relative path
-				n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error {
-					return nil
-				})
+				n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error { return nil })
 				if err != nil {
 					return nil, err
 				}
@@ -148,10 +146,7 @@ func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) 
 
 // Path returns the path for node
 func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) {
-	var root *node.Node
-	if root, err = lu.HomeOrRootNode(ctx); err != nil {
-		return
-	}
+	root := n.SpaceRoot
 	for n.ID != root.ID {
 		p = filepath.Join(n.Name, p)
 		if n, err = n.Parent(); err != nil {

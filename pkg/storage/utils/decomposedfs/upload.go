@@ -196,21 +196,21 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("Decomposedfs: NewUpload")
 
+	n, err := fs.lu.NodeFromSpaceID(ctx, &provider.ResourceId{
+		StorageId: info.Storage["SpaceRoot"],
+	})
 	fn := info.MetaData["filename"]
 	if fn == "" {
 		return nil, errors.New("Decomposedfs: missing filename in metadata")
 	}
-	info.MetaData["filename"] = filepath.Clean(info.MetaData["filename"])
-
 	dir := info.MetaData["dir"]
 	if dir == "" {
 		return nil, errors.New("Decomposedfs: missing dir in metadata")
 	}
-	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	n, err := fs.lookupNode(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	n, err = fs.lu.WalkPath(ctx, n, filepath.Join(dir, fn), true, func(ctx context.Context, n *node.Node) error { return nil })
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error wrapping filename")
+		return nil, errors.Wrap(err, "Decomposedfs: error walking path")
 	}
 
 	log.Debug().Interface("info", info).Interface("node", n).Msg("Decomposedfs: resolved filename")

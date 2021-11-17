@@ -38,7 +38,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
@@ -126,26 +125,20 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 			Id: &provider.StorageSpaceId{
 				OpaqueId: spaceID,
 			},
-			// TODO we have to omit Root information because the storage driver does not know its mount point.
-			// Root: &provider.ResourceId{
-			//	StorageId: "",
-			//	OpaqueId:  "",
-			// },
+			Root: &provider.ResourceId{
+				StorageId: spaceID,
+				OpaqueId:  spaceID,
+			},
 			Name:      req.GetName(),
 			Quota:     req.GetQuota(),
 			SpaceType: req.GetType(),
 		},
 	}
 
-	nPath, err := fs.lu.Path(ctx, n)
-	if err != nil {
-		return nil, errors.Wrap(err, "decomposedfs: spaces: could not create space. invalid node path")
-	}
-
 	ctx = context.WithValue(ctx, SpaceGrant, struct{}{})
 
 	if err := fs.AddGrant(ctx, &provider.Reference{
-		Path: nPath,
+		ResourceId: resp.StorageSpace.Root,
 	}, &provider.Grant{
 		Grantee: &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
