@@ -23,6 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -202,8 +204,19 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
 		return
 	}
+
+	if !(strings.Contains(recipientProvider, "://")) {
+		recipientProvider = "https://" + recipientProvider
+	}
+
+	recipientProviderUrl, err := url.Parse(recipientProvider)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error parseing recipientProvider URL: %s", recipientProvider), err)
+		return
+	}
+
 	providerInfo := ocmprovider.ProviderInfo{
-		Domain: recipientProvider,
+		Domain: recipientProviderUrl.Hostname(),
 		Services: []*ocmprovider.Service{
 			{
 				Host: clientIP,
