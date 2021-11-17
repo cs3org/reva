@@ -16,53 +16,42 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package appctx
+package useragent
 
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/trace"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
-// NewUnary returns a new unary interceptor that creates the application context.
-func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
+// NewUnary returns a new unary interceptor that adds
+// the useragent to the context.
+func NewUnary() grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		span := trace.SpanFromContext(ctx)
-		defer span.End()
-		if !span.SpanContext().HasTraceID() {
-			ctx, span = rtrace.Provider.Tracer("grpc").Start(ctx, "grpc unary")
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			if lst, ok := md[ctxpkg.UserAgentHeader]; ok && len(lst) != 0 {
+				ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, lst[0])
+			}
 		}
-
-		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
-		ctx = appctx.WithLogger(ctx, &sub)
-		res, err := handler(ctx, req)
-		return res, err
+		return handler(ctx, req)
 	}
 	return interceptor
 }
 
 // NewStream returns a new server stream interceptor
-// that creates the application context.
-func NewStream(log zerolog.Logger) grpc.StreamServerInterceptor {
+// that adds the user agent to the context.
+func NewStream() grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
-		span := trace.SpanFromContext(ctx)
-		defer span.End()
-
-		if !span.SpanContext().HasTraceID() {
-			ctx, span = rtrace.Provider.Tracer("grpc").Start(ctx, "grpc stream")
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			if lst, ok := md[ctxpkg.UserAgentHeader]; ok && len(lst) != 0 {
+				ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, lst[0])
+			}
 		}
-
-		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
-		ctx = appctx.WithLogger(ctx, &sub)
-
 		wrapped := newWrappedServerStream(ctx, ss)
-		err := handler(srv, wrapped)
-		return err
+		return handler(srv, wrapped)
 	}
 	return interceptor
 }

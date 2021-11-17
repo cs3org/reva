@@ -114,7 +114,6 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 				log.Error().Str("path", statRes.Info.Path).Msg("path doesn't have the expected format")
 				continue
 			}
-			statRes.Info.Path = parts[3]
 
 			infos = append(infos, statRes.Info)
 		}

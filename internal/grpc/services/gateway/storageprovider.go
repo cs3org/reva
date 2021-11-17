@@ -715,7 +715,6 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			statResp.Info.Path, _ = router.ShiftPath(statResp.Info.Path)
 			statResp.Info.Path = utils.MakeRelativePath(statResp.Info.Path)
 			// TODO invent resourceid?
-
 			if utils.IsAbsoluteReference(req.Ref) {
 				statResp.Info.Path = path.Join(req.Ref.Path, statResp.Info.Path)
 			}

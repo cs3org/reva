@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/bluele/gcache"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -140,7 +141,7 @@ type eosfs struct {
 	conf           *Config
 	chunkHandler   *chunking.ChunkHandler
 	singleUserAuth eosclient.Authorization
-	userIDCache    gcache.Cache
+	userIDCache    *ttlcache.Cache
 	tokenCache     gcache.Cache
 }
 
@@ -205,9 +206,18 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 		c:            eosClient,
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
-		userIDCache:  gcache.New(c.UserIDCacheSize).LFU().Build(),
+		userIDCache:  ttlcache.NewCache(),
 		tokenCache:   gcache.New(c.UserIDCacheSize).LFU().Build(),
 	}
+
+	eosfs.userIDCache.SetCacheSizeLimit(c.UserIDCacheSize)
+	eosfs.userIDCache.SetExpirationReasonCallback(func(key string, reason ttlcache.EvictionReason, value interface{}) {
+		// We only set those keys with TTL which we weren't able to retrieve the last time
+		// For those keys, try to contact the userprovider service again when they expire
+		if reason == ttlcache.Expired {
+			_, _ = eosfs.getUserIDGateway(context.Background(), key)
+		}
+	})
 
 	go eosfs.userIDcacheWarmup()
 
@@ -1756,6 +1766,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		Size:          size,
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
 		Checksum:      &xs,
+		Type:          getResourceType(eosFileInfo.IsDir),
 		Mtime: &types.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,
 			Nanos:   eosFileInfo.MTimeNanos,
@@ -1780,7 +1791,6 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		}
 	}
 
-	info.Type = getResourceType(eosFileInfo.IsDir)
 	return info, nil
 }
 
@@ -1816,11 +1826,11 @@ func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 		UserId: u,
 	})
 	if err != nil {
-		_ = fs.userIDCache.SetWithExpire(u.OpaqueId, &userpb.User{}, 12*time.Hour)
+		_ = fs.userIDCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
 		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting user")
 	}
 	if getUserResp.Status.Code != rpc.Code_CODE_OK {
-		_ = fs.userIDCache.SetWithExpire(u.OpaqueId, &userpb.User{}, 12*time.Hour)
+		_ = fs.userIDCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
 		return eosclient.Authorization{}, status.NewErrorFromCode(getUserResp.Status.Code, "eosfs")
 	}
 
@@ -1852,13 +1862,13 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	if err != nil {
 		// Insert an empty object in the cache so that we don't make another call
 		// for a specific amount of time
-		_ = fs.userIDCache.SetWithExpire(uid, &userpb.UserId{}, 12*time.Hour)
+		_ = fs.userIDCache.SetWithTTL(uid, &userpb.UserId{}, 12*time.Hour)
 		return nil, errors.Wrap(err, "eosfs: error getting user")
 	}
 	if getUserResp.Status.Code != rpc.Code_CODE_OK {
 		// Insert an empty object in the cache so that we don't make another call
 		// for a specific amount of time
-		_ = fs.userIDCache.SetWithExpire(uid, &userpb.UserId{}, 12*time.Hour)
+		_ = fs.userIDCache.SetWithTTL(uid, &userpb.UserId{}, 12*time.Hour)
 		return nil, status.NewErrorFromCode(getUserResp.Status.Code, "eosfs")
 	}
 

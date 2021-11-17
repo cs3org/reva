@@ -240,7 +240,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 						return nil, nil, false
 					}
 					currentUser := ctxpkg.ContextMustGetUser(ctx)
-					err = s.favoritesManager.UnsetFavorite(ctx, currentUser.Id, statRes.Info.Id)
+					err = s.favoritesManager.UnsetFavorite(ctx, currentUser.Id, statRes.Info)
 					if err != nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false
@@ -281,7 +281,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 						return nil, nil, false
 					}
 					currentUser := ctxpkg.ContextMustGetUser(ctx)
-					err = s.favoritesManager.SetFavorite(ctx, currentUser.Id, statRes.Info.Id)
+					err = s.favoritesManager.SetFavorite(ctx, currentUser.Id, statRes.Info)
 					if err != nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false
