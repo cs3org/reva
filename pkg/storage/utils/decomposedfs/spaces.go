@@ -56,6 +56,12 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 
 	// "everything is a resource" this is the unique ID for the Space resource.
 	spaceID := uuid.New().String()
+	// allow sending a space id
+	if req.Opaque != nil && req.Opaque.Map != nil {
+		if e, ok := req.Opaque.Map["spaceid"]; ok && e.Decoder == "plain" {
+			spaceID = string(e.Value)
+		}
+	}
 	// TODO enforce a uuid?
 	// TODO clarify if we want to enforce a single personal storage space or if we want to allow sending the spaceid
 	if req.Type == "personal" {
