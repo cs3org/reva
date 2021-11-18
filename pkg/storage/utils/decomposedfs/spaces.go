@@ -412,7 +412,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	// TODO apply more filters
 
 	sname := ""
-	if bytes, err := xattr.Get(n.InternalPath(), xattrs.SpaceNameAttr); err != nil {
+	if bytes, err := xattr.Get(n.InternalPath(), xattrs.SpaceNameAttr); err == nil {
 		sname = string(bytes)
 	}
 
