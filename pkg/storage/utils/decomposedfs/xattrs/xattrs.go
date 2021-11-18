@@ -104,6 +104,8 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 	}, nil
 }
 
+// CopyMetadata copies all extended attributes from source to target.
+// The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
 func CopyMetadata(s, t string, filter func(attributeName string) bool) error {
 	var attrs []string
 	var err error
