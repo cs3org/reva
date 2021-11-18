@@ -179,6 +179,10 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 			MaxConnsPerHost:     c.MaxConnsPerHost,
 			MaxIdleConnsPerHost: c.MaxIdleConnsPerHost,
 			IdleConnTimeout:     c.IdleConnTimeout,
+			ClientCertFile:      c.ClientCertFile,
+			ClientKeyFile:       c.ClientKeyFile,
+			ClientCADirs:        c.ClientCADirs,
+			ClientCAFiles:       c.ClientCAFiles,
 		}
 		eosClient, err = eosgrpc.New(eosClientOpts, eosHTTPOpts)
 	} else {
