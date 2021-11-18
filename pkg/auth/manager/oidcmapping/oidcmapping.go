@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/juliangruber/go-intersect"
@@ -213,6 +214,9 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	})
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "oidcmapping: error getting user by claim username (\"%v\")", username)
+	}
+	if getUserByClaimResp.Status.Code != rpc.Code_CODE_OK {
+		return nil, nil, status.NewErrorFromCode(getUserByClaimResp.Status.Code, "oidcmapping")
 	}
 
 	userID.Idp = getUserByClaimResp.GetUser().GetId().Idp
