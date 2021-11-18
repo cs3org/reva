@@ -748,9 +748,8 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 }
 
 func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	key, itemPath := router.ShiftPath(req.Ref.Path)
+	key, itemPath := router.ShiftPath(req.Key)
 	items, err := s.storage.ListRecycle(ctx, req.Ref, key, itemPath)
-	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
