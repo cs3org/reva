@@ -403,8 +403,8 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, space
 	return nil
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Node, nodePath, spaceType string, permissions map[string]struct{}) (*provider.StorageSpace, error) {
-	owner, err := node.Owner()
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, nodePath, spaceType string, permissions map[string]struct{}) (*provider.StorageSpace, error) {
+	owner, err := n.Owner()
 	if err != nil {
 		return nil, err
 	}
@@ -412,35 +412,44 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 	// TODO apply more filters
 
 	sname := ""
-	if bytes, err := xattr.Get(node.InternalPath(), xattrs.SpaceNameAttr); err != nil {
+	if bytes, err := xattr.Get(n.InternalPath(), xattrs.SpaceNameAttr); err != nil {
 		sname = string(bytes)
 	}
 
-	if err := node.FindStorageSpaceRoot(); err != nil {
+	if err := n.FindStorageSpaceRoot(); err != nil {
 		return nil, err
 	}
 
 	space := &provider.StorageSpace{
-		Id: &provider.StorageSpaceId{OpaqueId: node.SpaceRoot.ID},
+		Id: &provider.StorageSpaceId{OpaqueId: n.SpaceRoot.ID},
 		Root: &provider.ResourceId{
-			StorageId: node.SpaceRoot.ID,
-			OpaqueId:  node.ID,
+			StorageId: n.SpaceRoot.ID,
+			OpaqueId:  n.ID,
 		},
 		Name:      sname,
 		SpaceType: spaceType,
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
 
-	user := ctxpkg.ContextMustGetUser(ctx)
-
 	// filter out spaces user cannot access (currently based on stat permission)
+	//p, err := n.ReadUserPermissions(ctx, user)
+	//if err != nil {
+	//return nil, err
+	//}
+
+	//if !(canListAllSpaces || p.Stat) {
+	//return nil,
+	//}
+
+	user := ctxpkg.ContextMustGetUser(ctx)
 	_, canListAllSpaces := permissions["list-all-spaces"]
-	p, err := node.ReadUserPermissions(ctx, user)
-	if err != nil {
-		return nil, err
-	}
-	if !(canListAllSpaces || p.Stat) {
-		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
+	if !canListAllSpaces {
+		ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
+			return p.Stat
+		})
+		if err != nil || !ok {
+			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
+		}
 	}
 
 	space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
@@ -449,7 +458,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 
 	// we set the space mtime to the root item mtime
 	// override the stat mtime with a tmtime if it is present
-	if tmt, err := node.GetTMTime(); err == nil {
+	if tmt, err := n.GetTMTime(); err == nil {
 		un := tmt.UnixNano()
 		space.Mtime = &types.Timestamp{
 			Seconds: uint64(un / 1000000000),

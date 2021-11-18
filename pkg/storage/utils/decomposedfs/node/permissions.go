@@ -189,12 +189,9 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 	}
 
 	// determine root
-	var rn *Node
-	if rn, err = p.lu.RootNode(ctx); err != nil {
+	if err = n.FindStorageSpaceRoot(); err != nil {
 		return false, err
 	}
-
-	cn := n
 
 	// for an efficient group lookup convert the list of groups to a map
 	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
@@ -205,7 +202,8 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 
 	var g *provider.Grant
 	// for all segments, starting at the leaf
-	for cn.ID != rn.ID {
+	cn := n
+	for cn.ID != n.SpaceRoot.ID {
 
 		var grantees []string
 		if grantees, err = cn.ListGrantees(ctx); err != nil {
