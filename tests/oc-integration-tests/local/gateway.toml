@@ -98,7 +98,7 @@ home_provider = "/users"
 "/virtual/[a-k]" = {"address" = "localhost:11100", "path_template" = "/virtual/{{.Space.Owner.Id.OpaqueId}}"}
 "/virtual/[l-z]" = {"address" = "localhost:11110", "path_template" = "/virtual/{{.Space.Owner.Id.OpaqueId}}"}
 
-"/public" = {"address" = "localhost:13000",  "space_type" = "public", "path_template" = "/public/{{.Space.Name}}", "description" = "public links"}
+"/public" = {"address" = "localhost:13000",  "space_type" = "public", "path_template" = "/public", "description" = "public links"}
 
 [http]
 address = "0.0.0.0:19001"
