@@ -185,7 +185,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	}
 	gwres, err := s.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
 		Ref: &provider.Reference{
-			ResourceId: req.Ref.ResourceId,
+			ResourceId: resource,
 			Path:       req.Ref.Path,
 		},
 		Opaque: req.Opaque,
