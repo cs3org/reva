@@ -229,7 +229,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, errors.Wrap(err, "oidcmapping: error getting user groups")
 	}
 	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, nil, errors.Wrap(err, "oidcmapping: grpc getting user groups failed")
+		return nil, nil, status.NewErrorFromCode(getGroupsResp.Status.Code, "oidcmapping")
 	}
 
 	u := &user.User{
