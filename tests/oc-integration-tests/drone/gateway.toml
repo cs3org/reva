@@ -61,8 +61,8 @@ home_provider = "/users"
 "/users/{{.CurrentUser.Id.OpaqueId}}/Shares" = {"address" = "localhost:14000", "space_type" = "share", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}", "description" = "shares"}
 
 # the /virtual namespace is only accessible via the frontend-global service
-"/virtual/[a-k]" = {"address" = "localhost:11100", "path_template" = "/virtual/{{.Space.Owner.Id.OpaqueId}}"}
-"/virtual/[l-z]" = {"address" = "localhost:11110", "path_template" = "/virtual/{{.Space.Owner.Id.OpaqueId}}"}
+#"/virtual/[a-k]" = {"address" = "localhost:11100", "path_template" = "/virtual/{{.Space.Owner.Id.OpaqueId}}"}
+#"/virtual/[l-z]" = {"address" = "localhost:11110", "path_template" = "/virtual/{{.Space.Owner.Id.OpaqueId}}"}
 
 "/public" = {"address" = "localhost:13000",  "space_type" = "public", "path_template" = "/public", "description" = "public links"}
 
