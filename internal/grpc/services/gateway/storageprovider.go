@@ -1000,7 +1000,33 @@ func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.
 
 // TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
 func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	c, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
+	c, p, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.ListRecycleResponse{
+			Status: status.NewStatusFromErrType(ctx, "ListFileVersions ref="+req.Ref.String(), err),
+		}, nil
+	}
+	sRef := &provider.Reference{}
+	if utils.IsAbsolutePathReference(req.Ref) {
+		if sRef, err = unwrap(req.Ref, p.ProviderPath); err != nil {
+			return nil, err
+		}
+		sRef.Path = utils.MakeRelativePath(sRef.Path)
+		parts := strings.SplitN(p.ProviderId, "!", 2)
+		if len(parts) != 2 {
+			return nil, errtypes.BadRequest("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + p.ProviderId)
+		}
+		sRef.ResourceId = &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
+	} else {
+		// relative or id based
+		sRef.ResourceId = &provider.ResourceId{
+			StorageId: req.Ref.ResourceId.StorageId,
+			OpaqueId:  req.Ref.ResourceId.OpaqueId,
+		}
+		// always
+		sRef.Path = req.Ref.Path
+	}
+
 	if err != nil {
 		return &provider.ListRecycleResponse{
 			Status: status.NewStatusFromErrType(ctx, "ListFileVersions ref="+req.Ref.String(), err),
@@ -1011,12 +1037,19 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 		Opaque: req.Opaque,
 		FromTs: req.FromTs,
 		ToTs:   req.ToTs,
-		Ref:    relativeReference,
+		Ref:    sRef,
+		Key:    req.Key,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListRecycleRequest")
 	}
 
+	if utils.IsAbsoluteReference(req.Ref) {
+		for j := range res.RecycleItems {
+			//wrap(res.RecycleItems[j].Ref, p) only handles ResourceInfo
+			res.RecycleItems[j].Ref.Path = path.Join(p.ProviderPath, res.RecycleItems[j].Ref.Path)
+		}
+	}
 	return res, nil
 }
 
