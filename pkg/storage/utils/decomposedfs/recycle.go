@@ -41,10 +41,11 @@ import (
 // The deleted file is kept in the same location/dir as the original node. This prevents deletes
 // from triggering cross storage moves when the trash is accidentally stored on another partition,
 // because the admin mounted a different partition there.
-// TODO For an efficient listing of deleted nodes the ocis storages trash folder should have
-// contain a directory with symlinks to trash files for every userid/"root"
+// For an efficient listing of deleted nodes the ocis storage driver maintains a 'trash' folder
+// with symlinks to trash files for every storagespace.
 
 // ListRecycle returns the list of available recycle items
+// ref -> the space (= resourceid), key -> deleted node id, relativePath = relative to key
 func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -55,7 +56,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	}
 	spaceID := ref.ResourceId.OpaqueId
 
-	if key == "." && relativePath == "/" {
+	if key == "" && relativePath == "/" {
 		return fs.listTrashRoot(ctx, spaceID)
 	}
 
