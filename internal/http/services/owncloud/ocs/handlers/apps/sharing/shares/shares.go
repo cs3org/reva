@@ -530,6 +530,9 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// cut off configured home namespace, paths in ocs shares are relative to it
+	info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(revactx.ContextMustGetUser(ctx)))
+
 	err = h.addFileInfo(ctx, share, info)
 	if err != nil {
 		log.Error().Err(err).Msg("error mapping share data")
@@ -636,6 +639,9 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed for stat after updating user share", err)
 		return
 	}
+
+	// cut off configured home namespace, paths in ocs shares are relative to it
+	statRes.Info.Path = strings.TrimPrefix(statRes.Info.Path, h.getHomeNamespace(revactx.ContextMustGetUser(ctx)))
 
 	err = h.addFileInfo(r.Context(), share, statRes.Info)
 	if err != nil {
