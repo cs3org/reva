@@ -34,6 +34,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -424,7 +425,20 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 			Status: rpcStatus,
 		}, nil
 	}
-	// TODO unshare?
+
+	// the root of a share always has the path "."
+	if req.Ref.ResourceId.StorageId == "a0ca6a90-a365-4782-871e-d44447bbc668" && req.Ref.Path == "." {
+		err := s.rejectReceivedShare(ctx, receivedShare)
+		if err != nil {
+			return &provider.DeleteResponse{
+				Status: status.NewInternal(ctx, err, "sharesstorageprovider: error rejecting share"),
+			}, nil
+		}
+		return &provider.DeleteResponse{
+			Status: status.NewOK(ctx),
+		}, nil
+	}
+
 	return s.gateway.Delete(ctx, &provider.DeleteRequest{
 		Ref: &provider.Reference{
 			ResourceId: receivedShare.Share.ResourceId,
@@ -685,4 +699,19 @@ func (s *service) resolveReference(ctx context.Context, ref *provider.Reference)
 	}
 
 	return nil, status.NewInvalidArg(ctx, "sharesstorageprovider: can only handle relative references"), nil
+}
+
+func (s *service) rejectReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare) error {
+	receivedShare.State = collaboration.ShareState_SHARE_STATE_REJECTED
+	receivedShare.MountPoint = nil
+
+	res, err := s.sharesProviderClient.UpdateReceivedShare(ctx, &collaboration.UpdateReceivedShareRequest{
+		Share:      receivedShare,
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}},
+	})
+	if err != nil {
+		return err
+	}
+
+	return errtypes.NewErrtypeFromStatus(res.Status)
 }
