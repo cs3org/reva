@@ -25,7 +25,9 @@ import (
 	"path"
 	"sort"
 	"strconv"
+	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -158,6 +160,16 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 	if err != nil || status.Code != rpc.Code_CODE_OK {
 		h.logProblems(status, err, "could not stat, skipping")
 	}
+
+	// cut off configured home namespace, paths in ocs shares are relative to it
+	identifier := h.mustGetIdentifiers(ctx, client, info.Owner.OpaqueId, false)
+	u := &userpb.User{
+		Id:          info.Owner,
+		Username:    identifier.Username,
+		DisplayName: identifier.DisplayName,
+		Mail:        identifier.Mail,
+	}
+	info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(u))
 
 	data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
 	if err != nil {
