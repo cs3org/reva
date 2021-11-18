@@ -712,8 +712,10 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			statResp.Info.MimeType = "httpd/unix-directory"
 			// -> unset checksums for a folder
 			statResp.Info.Checksum = nil
-			delete(statResp.Info.Opaque.Map, "md5")
-			delete(statResp.Info.Opaque.Map, "adler32")
+			if statResp.Info.Opaque != nil {
+				delete(statResp.Info.Opaque.Map, "md5")
+				delete(statResp.Info.Opaque.Map, "adler32")
+			}
 
 			// -> update metadata for /foo/bar -> set path to './bar'?
 			statResp.Info.Path = strings.TrimPrefix(providers[i].ProviderPath, req.Ref.Path)
@@ -908,8 +910,10 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				statResp.Info.MimeType = "httpd/unix-directory"
 				// -> unset checksums for a folder
 				statResp.Info.Checksum = nil
-				delete(statResp.Info.Opaque.Map, "md5")
-				delete(statResp.Info.Opaque.Map, "adler32")
+				if statResp.Info.Opaque != nil {
+					delete(statResp.Info.Opaque.Map, "md5")
+					delete(statResp.Info.Opaque.Map, "adler32")
+				}
 			}
 
 			// -> update metadata for /foo/bar -> set path to './bar'?
