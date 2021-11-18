@@ -811,6 +811,16 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// cut off configured home namespace, paths in ocs shares are relative to it
+		identifier := h.mustGetIdentifiers(ctx, client, info.Owner.OpaqueId, false)
+		u := &userpb.User{
+			Id:          info.Owner,
+			Username:    identifier.Username,
+			DisplayName: identifier.DisplayName,
+			Mail:        identifier.Mail,
+		}
+		info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(u))
+
 		data.State = mapState(rs.GetState())
 
 		if err := h.addFileInfo(ctx, data, info); err != nil {
@@ -860,7 +870,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// not accepted shares need their Path jailed to make the testsuite happy
 			/*
 				if h.sharePrefix != "/" {
-					data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+					data.Path = path.Base(info.Path)
 				}
 			*/
 		}
