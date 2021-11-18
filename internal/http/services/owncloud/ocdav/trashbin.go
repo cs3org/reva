@@ -269,6 +269,11 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		}
 	}
 
+	// TODO when using space based requests we should be able to get rid of this path unprefixing
+	for i := range items {
+		items[i].Ref.Path = strings.TrimPrefix(items[i].Ref.Path, basePath)
+	}
+
 	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, items)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
