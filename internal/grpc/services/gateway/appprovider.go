@@ -129,10 +129,8 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 
 	conn, err := getConn(gatewayEP, insecure, skipVerify)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error connecting to remote reva")
-		return &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, err, "error error connecting to remote reva"),
-		}, nil
+		log.Err(err).Msg("error connecting to remote reva")
+		return nil, errors.Wrap(err, "gateway: error connecting to remote reva")
 	}
 
 	gatewayClient := gateway.NewGatewayAPIClient(conn)
@@ -141,7 +139,7 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 
 	res, err := gatewayClient.OpenInApp(remoteCtx, appProviderReq)
 	if err != nil {
-		log.Err(err).Msg("error reaching remote reva")
+		log.Err(err).Msg("error returned by remote OpenInApp call")
 		return nil, errors.Wrap(err, "gateway: error calling OpenInApp")
 	}
 	return res, nil
@@ -160,23 +158,17 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 	provider, err := s.findAppProvider(ctx, ri, app)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling findAppProvider")
-		var st *rpc.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
-			st = status.NewNotFound(ctx, "app provider not found")
-		} else {
-			st = status.NewInternal(ctx, err, "error searching for app provider")
+			return &providerpb.OpenInAppResponse{
+				Status: status.NewNotFound(ctx, "Could not find the requested app provider"),
+			}, nil
 		}
-		return &providerpb.OpenInAppResponse{
-			Status: st,
-		}, nil
+		return nil, err
 	}
 
 	appProviderClient, err := pool.GetAppProviderClient(provider.Address)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppProviderClient")
-		return &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, err, "error getting appprovider client"),
-		}, nil
+		return nil, errors.Wrap(err, "gateway: error calling GetAppProviderClient")
 	}
 
 	appProviderReq := &providerpb.OpenInAppRequest{

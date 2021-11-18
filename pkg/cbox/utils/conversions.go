@@ -46,7 +46,6 @@ type DBShare struct {
 	ShareName    string
 	STime        int
 	FileTarget   string
-	RejectedBy   string
 	State        int
 }
 
@@ -172,6 +171,8 @@ func IntToShareState(g int) collaboration.ShareState {
 		return collaboration.ShareState_SHARE_STATE_PENDING
 	case 1:
 		return collaboration.ShareState_SHARE_STATE_ACCEPTED
+	case -1:
+		return collaboration.ShareState_SHARE_STATE_REJECTED
 	default:
 		return collaboration.ShareState_SHARE_STATE_INVALID
 	}
@@ -226,16 +227,9 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 
 // ConvertToCS3ReceivedShare converts a DBShare to a CS3API collaboration received share
 func ConvertToCS3ReceivedShare(s DBShare) *collaboration.ReceivedShare {
-	share := ConvertToCS3Share(s)
-	var state collaboration.ShareState
-	if s.RejectedBy != "" {
-		state = collaboration.ShareState_SHARE_STATE_REJECTED
-	} else {
-		state = IntToShareState(s.State)
-	}
 	return &collaboration.ReceivedShare{
-		Share: share,
-		State: state,
+		Share: ConvertToCS3Share(s),
+		State: IntToShareState(s.State),
 	}
 }
 
