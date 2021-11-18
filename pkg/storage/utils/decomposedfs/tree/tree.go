@@ -395,17 +395,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		return os.Remove(src)
 	}
 	// Prepare the trash
-	// TODO use layout?, but it requires resolving the owners user if the username is used instead of the id.
-	// the node knows the owner id so we use that for now
-	o, err := n.Owner()
-	if err != nil {
-		return
-	}
-	if o.OpaqueId == "" {
-		// fall back to root trash
-		o.OpaqueId = "root"
-	}
-	err = os.MkdirAll(filepath.Join(t.root, "trash", o.OpaqueId), 0700)
+	err = os.MkdirAll(filepath.Join(t.root, "trash", n.SpaceRoot.ID), 0700)
 	if err != nil {
 		return
 	}
@@ -424,9 +414,9 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
 
-	// first make node appear in the owners (or root) trash
+	// first make node appear in the space trash
 	// parent id and name are stored as extended attributes in the node itself
-	trashLink := filepath.Join(t.root, "trash", o.OpaqueId, n.ID)
+	trashLink := filepath.Join(t.root, "trash", n.SpaceRoot.ID, n.ID)
 	err = os.Symlink("../../nodes/"+n.ID+".T."+deletionTime, trashLink)
 	if err != nil {
 		// To roll back changes
@@ -792,6 +782,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 		return nil, "", "", "", errtypes.InternalError("key is empty")
 	}
 
+	// FIXME use spaceid instead of userid
 	u := ctxpkg.ContextMustGetUser(ctx)
 	trashItem = filepath.Join(t.lookup.InternalRoot(), "trash", u.Id.OpaqueId, key, path)
 
@@ -861,6 +852,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, key, path string) (n *node.N
 
 	deletedNodeRootPath := deletedNodePath
 	if path != "" && path != "/" {
+		// FIXME use spaceid instead of userid
 		trashItemRoot := filepath.Join(t.lookup.InternalRoot(), "trash", u.Id.OpaqueId, key)
 		var rootLink string
 		rootLink, err = os.Readlink(trashItemRoot)
