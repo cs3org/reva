@@ -1032,8 +1032,8 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 			s.FileTarget = path.Join("/", path.Base(info.Path))
 			s.Path = path.Join("/", path.Base(info.Path))
 		default:
-			s.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
-			s.Path = path.Join("/", path.Base(info.Path))
+			s.FileTarget = path.Join(h.sharePrefix, info.Path)
+			s.Path = info.Path
 		}
 		s.StorageID = storageIDPrefix + s.FileTarget
 		// TODO FileParent:
