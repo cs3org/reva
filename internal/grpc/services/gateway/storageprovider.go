@@ -529,6 +529,11 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
+
+	rename := utils.IsAbsolutePathReference(req.Source) &&
+		utils.IsAbsolutePathReference(req.Destination) &&
+		filepath.Dir(req.Source.Path) == filepath.Dir(req.Destination.Path)
+
 	c, req.Source, err = s.findAndUnwrap(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
@@ -536,20 +541,27 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}, nil
 	}
 
-	_, req.Destination, err = s.findAndUnwrap(ctx, req.Destination)
-	if err != nil {
-		return &provider.MoveResponse{
-			Status: status.NewStatusFromErrType(ctx, "Move ref="+req.Destination.String(), err),
-		}, nil
-	}
-
-	// if spaces are not the same we do not implement cross storage copy yet.
-	// TODO allow for spaces on the same provider
-	if !utils.ResourceIDEqual(req.Source.ResourceId, req.Destination.ResourceId) {
-		res := &provider.MoveResponse{
-			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
+	// do we try to rename the root of a mountpoint?
+	// TODO how do we determine if the destination resides on the same storage space?
+	if rename && req.Source.Path == "." {
+		req.Destination.ResourceId = req.Source.ResourceId
+		req.Destination.Path = utils.MakeRelativePath(filepath.Base(req.Destination.Path))
+	} else {
+		_, req.Destination, err = s.findAndUnwrap(ctx, req.Destination)
+		if err != nil {
+			return &provider.MoveResponse{
+				Status: status.NewStatusFromErrType(ctx, "Move ref="+req.Destination.String(), err),
+			}, nil
 		}
-		return res, nil
+
+		// if spaces are not the same we do not implement cross storage copy yet.
+		// TODO allow for spaces on the same provider
+		if !utils.ResourceIDEqual(req.Source.ResourceId, req.Destination.ResourceId) {
+			res := &provider.MoveResponse{
+				Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage move not yet implemented"),
+			}
+			return res, nil
+		}
 	}
 
 	return c.Move(ctx, req)

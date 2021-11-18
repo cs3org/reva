@@ -21,6 +21,7 @@ package sharesstorageprovider
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -469,15 +470,17 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		}, nil
 	}
 
+	// can we do a rename
 	if utils.ResourceIDEqual(req.Source.ResourceId, req.Destination.ResourceId) &&
+		// only if we are responsible for the space
 		req.Source.ResourceId.StorageId == "a0ca6a90-a365-4782-871e-d44447bbc668" &&
-		// only if the path has a single path segment
-		len(strings.SplitN(req.Source.Path, "/", 3)) == 2 &&
-		// FIXME if either path length is two we cannot do a rename if the other one is not two
+		// only if the source path has no path segment
+		req.Source.Path == "." &&
+		// only if the destination is a dot followed by a single path segment, e.g. './new'
 		len(strings.SplitN(req.Destination.Path, "/", 3)) == 2 {
 
-		// Change the MountPoint of the share
-		srcReceivedShare.MountPoint = &provider.Reference{Path: req.Destination.Path}
+		// Change the MountPoint of the share, it has no relative prefix
+		srcReceivedShare.MountPoint = &provider.Reference{Path: filepath.Base(req.Destination.Path)}
 
 		_, err = s.sharesProviderClient.UpdateReceivedShare(ctx, &collaboration.UpdateReceivedShareRequest{
 			Share:      srcReceivedShare,
