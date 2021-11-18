@@ -22,11 +22,13 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"time"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -55,6 +57,7 @@ type config struct {
 	AppProviderURL string                            `mapstructure:"app_provider_url"`
 	GatewaySvc     string                            `mapstructure:"gatewaysvc"`
 	MimeTypes      []string                          `mapstructure:"mime_types"`
+	Priority       uint64                            `mapstructure:"priority"`
 }
 
 func (c *config) init() {
@@ -122,7 +125,20 @@ func (s *service) registerProvider() {
 		log.Error().Err(err).Msgf("error registering app provider: could not get gateway client")
 		return
 	}
-	res, err := client.AddAppProvider(ctx, &registrypb.AddAppProviderRequest{Provider: pInfo})
+	req := &registrypb.AddAppProviderRequest{Provider: pInfo}
+
+	if s.conf.Priority != 0 {
+		req.Opaque = &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"priority": {
+					Decoder: "plain",
+					Value:   []byte(strconv.FormatUint(s.conf.Priority, 10)),
+				},
+			},
+		}
+	}
+
+	res, err := client.AddAppProvider(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: error calling add app provider")
 		return
