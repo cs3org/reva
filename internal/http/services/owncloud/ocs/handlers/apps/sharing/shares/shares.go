@@ -185,8 +185,9 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// prefix the path with the owners home, because ocs share requests are relative to the home dir
-	fn := path.Join(h.getHomeNamespace(revactx.ContextMustGetUser(ctx)), r.FormValue("path"))
+	currentUser := revactx.ContextMustGetUser(ctx)
+	// prefix the path with the current users home, because ocs share requests are relative to the home dir
+	fn := path.Join(h.getHomeNamespace(currentUser), r.FormValue("path"))
 
 	statReq := provider.StatRequest{
 		Ref: &provider.Reference{Path: fn},
@@ -237,6 +238,9 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 			return
 		}
+
+		// cut off configured home namespace, paths in ocs shares are relative to it
+		statRes.Info.Path = strings.TrimPrefix(statRes.Info.Path, h.getHomeNamespace(currentUser))
 
 		err = h.addFileInfo(ctx, s, statRes.Info)
 		if err != nil {
