@@ -157,15 +157,15 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 
 	}
 
-	total := append(f, files...)
+	f = append(f, files...)
 
 	// check if all the folders are allowed to be archived
-	err := s.allAllowed(total)
+	err := s.allAllowed(f)
 	if err != nil {
 		return nil, err
 	}
 
-	return total, nil
+	return f, nil
 }
 
 // return true if path match with at least with one allowed folder regex
