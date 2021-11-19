@@ -21,7 +21,6 @@ package shares_test
 import (
 	"context"
 	"encoding/xml"
-	"fmt"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -33,6 +32,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/mocks"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/stretchr/testify/mock"
 
@@ -44,6 +44,14 @@ var _ = Describe("The ocs API", func() {
 	var (
 		h      *shares.Handler
 		client *mocks.GatewayClient
+
+		user = &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "admin",
+			},
+		}
+
+		ctx = ctxpkg.ContextSetUser(context.Background(), user)
 	)
 
 	BeforeEach(func() {
@@ -108,12 +116,6 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
-			user := &userpb.User{
-				Id: &userpb.UserId{
-					OpaqueId: "admin",
-				},
-			}
-
 			client.On("GetUserByClaim", mock.Anything, mock.Anything).Return(&userpb.GetUserByClaimResponse{
 				Status: status.NewOK(context.Background()),
 				User:   user,
@@ -160,10 +162,11 @@ var _ = Describe("The ocs API", func() {
 				form.Add("shareWith", "admin")
 				req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req = req.WithContext(ctx)
 
 				w := httptest.NewRecorder()
 				h.CreateShare(w, req)
-				fmt.Println(w.Result())
+				//fmt.Println(w.Result())
 				Expect(w.Result().StatusCode).To(Equal(200))
 				client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 1)
 			})
@@ -211,6 +214,7 @@ var _ = Describe("The ocs API", func() {
 				form.Add("shareWith", "admin")
 				req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req = req.WithContext(ctx)
 
 				w := httptest.NewRecorder()
 				h.CreateShare(w, req)
@@ -253,9 +257,10 @@ var _ = Describe("The ocs API", func() {
 			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 				Status: status.NewOK(context.Background()),
 				Info: &provider.ResourceInfo{
-					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-					Path: "/share1",
-					Id:   resID,
+					Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Path:  "/share1",
+					Id:    resID,
+					Owner: user.Id,
 					PermissionSet: &provider.ResourcePermissions{
 						Stat: true,
 					},
@@ -274,6 +279,11 @@ var _ = Describe("The ocs API", func() {
 					},
 				},
 			}, nil)
+
+			client.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+				Status: status.NewOK(context.Background()),
+				User:   user,
+			}, nil)
 		})
 
 		It("lists accepted shares", func() {
@@ -287,7 +297,7 @@ var _ = Describe("The ocs API", func() {
 				Data data `xml:"data"`
 			}
 
-			req := httptest.NewRequest("GET", "/apps/files_sharing/api/v1/shares?shared_with_me=1", nil)
+			req := httptest.NewRequest("GET", "/apps/files_sharing/api/v1/shares?shared_with_me=1", nil).WithContext(ctx)
 			w := httptest.NewRecorder()
 			h.ListShares(w, req)
 			Expect(w.Result().StatusCode).To(Equal(200))

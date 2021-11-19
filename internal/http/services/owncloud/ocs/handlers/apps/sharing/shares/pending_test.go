@@ -22,11 +22,13 @@ import (
 	"context"
 	"net/http/httptest"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/mocks"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/mock"
@@ -39,6 +41,15 @@ var _ = Describe("The ocs API", func() {
 	var (
 		h      *shares.Handler
 		client *mocks.GatewayClient
+
+		alice = &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "alice",
+			},
+			Username: "alice",
+		}
+
+		ctx = ctxpkg.ContextSetUser(context.Background(), alice)
 	)
 
 	BeforeEach(func() {
@@ -112,9 +123,10 @@ var _ = Describe("The ocs API", func() {
 			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 				Status: status.NewOK(context.Background()),
 				Info: &provider.ResourceInfo{
-					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-					Path: "/share1",
-					Id:   resID,
+					Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Path:  "/share1",
+					Id:    resID,
+					Owner: alice.Id,
 					PermissionSet: &provider.ResourcePermissions{
 						Stat: true,
 					},
@@ -126,12 +138,18 @@ var _ = Describe("The ocs API", func() {
 				Status: status.NewOK(context.Background()),
 				Infos: []*provider.ResourceInfo{
 					{
-						Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-						Path: "/share1",
-						Id:   resID,
-						Size: 1,
+						Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+						Path:  "/share1",
+						Id:    resID,
+						Owner: alice.Id,
+						Size:  1,
 					},
 				},
+			}, nil)
+
+			client.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+				Status: status.NewOK(context.Background()),
+				User:   alice,
 			}, nil)
 		})
 
@@ -164,7 +182,7 @@ var _ = Describe("The ocs API", func() {
 				req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares/pending/1", nil)
 				rctx := chi.NewRouteContext()
 				rctx.URLParams.Add("shareid", "1")
-				req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+				req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
 
 				w := httptest.NewRecorder()
 				h.AcceptReceivedShare(w, req)
@@ -274,7 +292,7 @@ var _ = Describe("The ocs API", func() {
 				req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares/pending/2", nil)
 				rctx := chi.NewRouteContext()
 				rctx.URLParams.Add("shareid", "2")
-				req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+				req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
 
 				w := httptest.NewRecorder()
 				h.AcceptReceivedShare(w, req)
