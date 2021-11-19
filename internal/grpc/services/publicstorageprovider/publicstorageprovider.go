@@ -505,17 +505,9 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Value: attribute.StringValue(req.Ref.String()),
 		})
 
-	var (
-		tkn          string
-		relativePath string
-	)
-
-	if req.Ref.Path != "" {
-		var err error
-		tkn, relativePath, err = s.unwrap(ctx, req.Ref)
-		if err != nil {
-			return nil, err
-		}
+	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
 	}
 
 	share, shareInfo, st, err := s.resolveToken(ctx, tkn)
@@ -673,19 +665,29 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token string, relativePath string, err error) {
-	if !utils.IsRelativeReference(ref) {
-		return "", "", errtypes.BadRequest("need relative path ref: got " + ref.String())
-	}
-	// path has the form "./{token}/relative/path/"
-	parts := strings.SplitN(ref.Path, "/", 3)
-	if len(parts) < 2 {
-		// FIXME ... we should expose every public link as a storage space
-		// but do we need to list them then?
-		return "", "", errtypes.BadRequest("need at least token in ref: got " + ref.String())
-	}
-	token = parts[1]
-	if len(parts) > 2 {
-		relativePath = parts[2]
+	switch {
+	case ref == nil, ref.ResourceId == nil, ref.ResourceId.StorageId == "", ref.ResourceId.OpaqueId == "":
+		return "", "", errtypes.BadRequest("resourceid required, got " + ref.String())
+	case ref.Path == "":
+		// id based stat
+		parts := strings.SplitN(ref.ResourceId.OpaqueId, "/", 2)
+		if len(parts) < 2 {
+			return "", "", errtypes.BadRequest("OpaqueId needs to have form {token}/{shared node id}: got " + ref.String())
+		}
+		token = parts[0]
+		relativePath = ""
+	default:
+		// path has the form "./{token}/relative/path/"
+		parts := strings.SplitN(ref.Path, "/", 3)
+		if len(parts) < 2 {
+			// FIXME ... we should expose every public link as a storage space
+			// but do we need to list them then?
+			return "", "", errtypes.BadRequest("need at least token in ref: got " + ref.String())
+		}
+		token = parts[1]
+		if len(parts) > 2 {
+			relativePath = parts[2]
+		}
 	}
 
 	return
