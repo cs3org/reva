@@ -249,10 +249,20 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*p
 
 // RestoreRecycleItem restores the specified item
 func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
-	if restoreRef == nil {
-		restoreRef = &provider.Reference{}
+	if ref == nil {
+		return errtypes.BadRequest("missing reference, needs a space id")
 	}
-	rn, p, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, relativePath, restoreRef.Path)
+	if restoreRef == nil {
+		// restore to same space
+		restoreRef = &provider.Reference{
+			ResourceId: ref.ResourceId,
+		}
+	}
+	targetNode, err := fs.lu.NodeFromResource(ctx, restoreRef)
+	if err != nil {
+		return err
+	}
+	rn, parent, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, key, relativePath, targetNode)
 	if err != nil {
 		return err
 	}
@@ -268,7 +278,8 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 		return errtypes.PermissionDenied(key)
 	}
 
-	ps, err := fs.p.AssemblePermissions(ctx, p)
+	// check we can write to the parent of the restore reference
+	ps, err := fs.p.AssemblePermissions(ctx, parent)
 	if err != nil {
 		return errtypes.InternalError(err.Error())
 	}
@@ -284,7 +295,10 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 
 // PurgeRecycleItem purges the specified item
 func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
-	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, key, relativePath)
+	if ref == nil {
+		return errtypes.BadRequest("missing reference, needs a space id")
+	}
+	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, key, relativePath)
 	if err != nil {
 		return err
 	}
