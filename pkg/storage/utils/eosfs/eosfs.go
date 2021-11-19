@@ -1283,7 +1283,7 @@ func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
 		return err
 	}
 
-	return fs.c.Remove(ctx, auth, fn)
+	return fs.c.Remove(ctx, auth, fn, false)
 }
 
 func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
@@ -1304,7 +1304,7 @@ func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
 			return err
 		}
 
-		return fs.c.Remove(ctx, auth, fn)
+		return fs.c.Remove(ctx, auth, fn, true)
 	}
 
 	return errors.New("eosfs: shadow delete of share folder that is neither root nor child. path=" + p)

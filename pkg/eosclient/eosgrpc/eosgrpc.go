@@ -981,7 +981,7 @@ func (c *Client) CreateDir(ctx context.Context, auth eosclient.Authorization, pa
 
 }
 
-func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path string) error {
+func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path string, noRecycle bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "rm").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -995,6 +995,7 @@ func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path stri
 
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
+	msg.Norecycle = noRecycle
 
 	rq.Command = &erpc.NSRequest_Unlink{Unlink: msg}
 
@@ -1016,7 +1017,7 @@ func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path stri
 
 }
 
-func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path string) error {
+func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path string, noRecycle bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "rmdir").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -1031,7 +1032,7 @@ func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path s
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 	msg.Recursive = true
-	msg.Norecycle = false
+	msg.Norecycle = noRecycle
 
 	rq.Command = &erpc.NSRequest_Rm{Rm: msg}
 
@@ -1053,7 +1054,7 @@ func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path s
 }
 
 // Remove removes the resource at the given path
-func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path string) error {
+func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path string, noRecycle bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Remove").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -1064,10 +1065,10 @@ func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path 
 	}
 
 	if nfo.IsDir {
-		return c.rmdir(ctx, auth, path)
+		return c.rmdir(ctx, auth, path, noRecycle)
 	}
 
-	return c.rm(ctx, auth, path)
+	return c.rm(ctx, auth, path, noRecycle)
 }
 
 // Rename renames the resource referenced by oldPath to newPath
