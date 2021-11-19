@@ -47,7 +47,6 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/bluele/gcache"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
@@ -203,7 +202,17 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		ocdav.HandleErrorStatus(&sublog, w, statRes.Status)
+		switch statRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			response.WriteOCSError(w, r, http.StatusNotFound, "Not found", nil)
+			w.WriteHeader(http.StatusNotFound)
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Interface("status", statRes.Status).Msg("grpc request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 
