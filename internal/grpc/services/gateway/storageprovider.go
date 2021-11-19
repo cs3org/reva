@@ -1118,6 +1118,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 	res, err := c.PurgeRecycle(ctx, &provider.PurgeRecycleRequest{
 		Opaque: req.GetOpaque(),
 		Ref:    relativeReference,
+		Key:    req.Key,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
