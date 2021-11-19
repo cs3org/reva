@@ -28,18 +28,8 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
-)
-
-const (
-	// ErrMaxFileCount is the error returned when the max files count specified in the config has reached
-	ErrMaxFileCount = errtypes.InternalError("reached max files count")
-	// ErrMaxSize is the error returned when the max total files size specified in the config has reached
-	ErrMaxSize = errtypes.InternalError("reached max total files size")
-	// ErrEmptyList is the error returned when an empty list is passed when an archiver is created
-	ErrEmptyList = errtypes.BadRequest("list of files to archive empty")
 )
 
 // Config is the config for the Archiver
@@ -60,7 +50,7 @@ type Archiver struct {
 // NewArchiver creates a new archiver able to create an archive containing the files in the list
 func NewArchiver(files []string, w walker.Walker, d downloader.Downloader, config Config) (*Archiver, error) {
 	if len(files) == 0 {
-		return nil, ErrEmptyList
+		return nil, ErrEmptyList{}
 	}
 
 	dir := getDeepestCommonDir(files)
@@ -140,7 +130,7 @@ func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 
 			filesCount++
 			if filesCount > a.config.MaxNumFiles {
-				return ErrMaxFileCount
+				return ErrMaxFileCount{}
 			}
 
 			if !isDir {
@@ -149,7 +139,7 @@ func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 				// count the files not only once
 				sizeFiles += int64(info.Size)
 				if sizeFiles > a.config.MaxSize {
-					return ErrMaxSize
+					return ErrMaxSize{}
 				}
 			}
 
@@ -214,7 +204,7 @@ func (a *Archiver) CreateZip(ctx context.Context, dst io.Writer) error {
 
 			filesCount++
 			if filesCount > a.config.MaxNumFiles {
-				return ErrMaxFileCount
+				return ErrMaxFileCount{}
 			}
 
 			if !isDir {
@@ -223,7 +213,7 @@ func (a *Archiver) CreateZip(ctx context.Context, dst io.Writer) error {
 				// count the files not only once
 				sizeFiles += int64(info.Size)
 				if sizeFiles > a.config.MaxSize {
-					return ErrMaxSize
+					return ErrMaxSize{}
 				}
 			}
 
