@@ -520,6 +520,11 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 
 	res, err := c.Delete(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.DeleteResponse{
+				Status: status.NewPermissionDenied(ctx, err, "permission denied"),
+			}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling Delete")
 	}
 
