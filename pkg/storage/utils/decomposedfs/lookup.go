@@ -53,7 +53,7 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 		// is this a relative reference?
 		if ref.Path != "" {
 			p := filepath.Clean(ref.Path)
-			if p != "." {
+			if p != "." && p != "/" {
 				// walk the relative path
 				n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error { return nil })
 				if err != nil {
