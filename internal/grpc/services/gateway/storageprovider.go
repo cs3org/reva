@@ -1071,34 +1071,27 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
-	sourceProviderInfo, err := s.findProviders(ctx, req.Ref)
+	var c provider.ProviderAPIClient
+	var err error
+	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem ref="+req.Ref.String(), err),
 		}, nil
 	}
-	destinationProviderInfo, err := s.findProviders(ctx, req.RestoreRef)
+	_, req.RestoreRef, err = s.findAndUnwrap(ctx, req.RestoreRef)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem ref="+req.Ref.String(), err),
 		}, nil
 	}
-	if sourceProviderInfo[0].ProviderId != destinationProviderInfo[0].ProviderId ||
-		sourceProviderInfo[0].ProviderPath != destinationProviderInfo[0].ProviderPath {
+
+	if req.Ref.ResourceId.StorageId != req.RestoreRef.ResourceId.StorageId {
 		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewPermissionDenied(ctx, err, "gateway: cross-storage restores are forbidden"),
 		}, nil
 	}
 
-	c, p, err := s.find(ctx, req.Ref)
-	if err != nil {
-		return &provider.RestoreRecycleItemResponse{
-			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem ref="+req.Ref.String(), err),
-		}, nil
-	}
-	if req.Ref, err = unwrap(req.Ref, p.ProviderPath); err != nil {
-		return nil, err
-	}
 	res, err := c.RestoreRecycleItem(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RestoreRecycleItem")
