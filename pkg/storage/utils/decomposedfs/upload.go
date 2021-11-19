@@ -197,6 +197,14 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("Decomposedfs: NewUpload")
 
+	// sanity checks
+	if info.MetaData["filename"] == "" {
+		return nil, errors.New("Decomposedfs: missing filename in metadata")
+	}
+	if info.MetaData["dir"] == "" {
+		return nil, errors.New("Decomposedfs: missing dir in metadata")
+	}
+
 	n, err := fs.lu.NodeFromSpaceID(ctx, &provider.ResourceId{
 		StorageId: info.Storage["SpaceRoot"],
 	})
@@ -204,16 +212,7 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		return nil, errors.Wrap(err, "Decomposedfs: error getting space root node")
 	}
 
-	fn := info.MetaData["filename"]
-	if fn == "" {
-		return nil, errors.New("Decomposedfs: missing filename in metadata")
-	}
-	dir := info.MetaData["dir"]
-	if dir == "" {
-		return nil, errors.New("Decomposedfs: missing dir in metadata")
-	}
-
-	n, err = fs.lu.WalkPath(ctx, n, filepath.Join(dir, fn), true, func(ctx context.Context, n *node.Node) error { return nil })
+	n, err = fs.lookupNode(ctx, n, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error walking path")
 	}
@@ -377,7 +376,7 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 
 // lookupNode looks up nodes by path.
 // This method can also handle lookups for paths which contain chunking information.
-func (fs *Decomposedfs) lookupNode(ctx context.Context, path string) (*node.Node, error) {
+func (fs *Decomposedfs) lookupNode(ctx context.Context, spaceRoot *node.Node, path string) (*node.Node, error) {
 	p := path
 	isChunked, err := chunking.IsChunked(path)
 	if err != nil {
@@ -391,9 +390,9 @@ func (fs *Decomposedfs) lookupNode(ctx context.Context, path string) (*node.Node
 		p = chunkInfo.Path
 	}
 
-	n, err := fs.lu.NodeFromPath(ctx, p, false)
+	n, err := fs.lu.WalkPath(ctx, spaceRoot, p, true, func(ctx context.Context, n *node.Node) error { return nil })
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Decomposedfs: error walking path")
 	}
 
 	if isChunked {
@@ -558,7 +557,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
 		versionsPath = upload.fs.lu.InternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
 
-		//FIXME THIS move drops all grants!!!
+		// This move drops all metadata!!! We copy it below with CopyMetadata
+		// FIXME the node must remain the same. otherwise we might restore share metadata
 		if err = os.Rename(targetPath, versionsPath); err != nil {
 			sublog.Err(err).
 				Str("binPath", upload.binPath).
@@ -595,6 +595,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 	if versionsPath != "" {
 		// copy grant and arbitrary metadata
+		// FIXME ... now restoring an older revision might bring back a grant that was removed!
 		xattrs.CopyMetadata(versionsPath, targetPath, func(attributeName string) bool {
 			return true
 			// TODO determine all attributes that must be copied, currently we just copy all and overwrite changed properties
