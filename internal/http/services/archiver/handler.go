@@ -193,6 +193,23 @@ func (s *svc) allAllowed(paths []string) error {
 	return nil
 }
 
+func (s *svc) writeHTTPError(rw http.ResponseWriter, err error) {
+	s.log.Error().Msg(err.Error())
+
+	switch err.(type) {
+	case errtypes.NotFound:
+		rw.WriteHeader(http.StatusNotFound)
+	case manager.ErrMaxSize, manager.ErrMaxFileCount:
+		rw.WriteHeader(http.StatusRequestEntityTooLarge)
+	case errtypes.BadRequest:
+		rw.WriteHeader(http.StatusBadRequest)
+	default:
+		rw.WriteHeader(http.StatusInternalServerError)
+	}
+
+	_, _ = rw.Write([]byte(err.Error()))
+}
+
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		// get the paths and/or the resources id from the query
@@ -210,9 +227,7 @@ func (s *svc) Handler() http.Handler {
 
 		files, err := s.getFiles(ctx, paths, ids)
 		if err != nil {
-			s.log.Error().Msg(err.Error())
-			rw.WriteHeader(http.StatusBadRequest)
-			_, _ = rw.Write([]byte(err.Error()))
+			s.writeHTTPError(rw, err)
 			return
 		}
 
@@ -221,9 +236,7 @@ func (s *svc) Handler() http.Handler {
 			MaxSize:     s.config.MaxSize,
 		})
 		if err != nil {
-			s.log.Error().Msg(err.Error())
-			rw.WriteHeader(http.StatusInternalServerError)
-			_, _ = rw.Write([]byte(err.Error()))
+			s.writeHTTPError(rw, err)
 			return
 		}
 
@@ -248,14 +261,8 @@ func (s *svc) Handler() http.Handler {
 			err = arch.CreateTar(ctx, rw)
 		}
 
-		if err == manager.ErrMaxFileCount || err == manager.ErrMaxSize {
-			s.log.Error().Msg(err.Error())
-			rw.WriteHeader(http.StatusRequestEntityTooLarge)
-			return
-		}
 		if err != nil {
-			s.log.Error().Msg(err.Error())
-			rw.WriteHeader(http.StatusInternalServerError)
+			s.writeHTTPError(rw, err)
 			return
 		}
 
