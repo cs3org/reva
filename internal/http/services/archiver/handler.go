@@ -44,7 +44,6 @@ import (
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
@@ -284,7 +283,7 @@ func (s *svc) Unprotected() []string {
 func decodeResourceID(encodedID string) (string, string, error) {
 	decodedID, err := base64.URLEncoding.DecodeString(encodedID)
 	if err != nil {
-		return "", "", errors.Wrap(err, "resource ID does not follow the required format")
+		return "", "", errtypes.BadRequest("resource ID does not follow the required format")
 	}
 
 	parts := strings.Split(string(decodedID), ":")
