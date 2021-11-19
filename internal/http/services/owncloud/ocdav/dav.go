@@ -185,7 +185,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			var res *gatewayv1beta1.AuthenticateResponse
 			token, _ := router.ShiftPath(r.URL.Path)
-			if _, pass, ok := r.BasicAuth(); ok {
+			var hasValidBasicAuthHeader bool
+			var pass string
+			if _, pass, hasValidBasicAuthHeader = r.BasicAuth(); hasValidBasicAuthHeader {
 				res, err = handleBasicAuth(r.Context(), c, token, pass)
 			} else {
 				q := r.URL.Query()
@@ -207,6 +209,19 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				fallthrough
 			case res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
+				if hasValidBasicAuthHeader {
+					b, err := Marshal(exception{
+						code:    SabredavNotAuthenticated,
+						message: "Username or password was incorrect",
+					})
+					HandleWebdavError(log, w, b, err)
+					return
+				}
+				b, err := Marshal(exception{
+					code:    SabredavNotAuthenticated,
+					message: "No 'Authorization: Basic' header found",
+				})
+				HandleWebdavError(log, w, b, err)
 				return
 			case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
 				w.WriteHeader(http.StatusNotFound)
