@@ -127,7 +127,7 @@ func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) 
 	}
 
 	if len(matches) != 1 {
-		return nil, fmt.Errorf("update space failed: found %d matching spaces", len(matches))
+		return nil, fmt.Errorf("can't determine node from spaceID: found %d matching spaces", len(matches))
 	}
 
 	target, err := os.Readlink(matches[0])

@@ -27,5 +27,5 @@ import (
 
 func TestSpacesDriver(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Spaces driver suite")
+	//RunSpecs(t, "Spaces driver suite")
 }

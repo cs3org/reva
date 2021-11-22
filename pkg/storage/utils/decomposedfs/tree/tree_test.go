@@ -139,7 +139,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("restores the file to its original location if the targetPath is empty", func() {
-					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", "")
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -150,7 +150,10 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("restores files to different locations", func() {
-					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", "dir1/newLocation")
+					dest, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/newLocation", false)
+					Expect(err).ToNot(HaveOccurred())
+
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", dest)
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -165,7 +168,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("removes the file from the trash", func() {
-					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", "")
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
