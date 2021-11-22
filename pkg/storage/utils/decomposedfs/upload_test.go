@@ -129,7 +129,6 @@ var _ = Describe("File uploads", func() {
 		BeforeEach(func() {
 			var err error
 			// recreate the fs with home enabled
-			o.EnableHome = true
 			tree := tree.New(o.Root, true, true, lookup, bs)
 			fs, err = decomposedfs.New(o, lookup, permissions, tree)
 			Expect(err).ToNot(HaveOccurred())

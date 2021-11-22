@@ -29,7 +29,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/pkg/errors"
@@ -142,25 +141,12 @@ func (fs *Decomposedfs) createTrashItem(ctx context.Context, parentNode, interme
 		log.Error().Err(err).Str("link", trashnode).Msg("could not read origin path, skipping")
 		return nil, err
 	}
+
 	// TODO filter results by permission ... on the original parent? or the trashed node?
 	// if it were on the original parent it would be possible to see files that were trashed before the current user got access
 	// so -> check the trash node itself
 	// hmm listing trash currently lists the current users trash or the 'root' trash. from ocs only the home storage is queried for trash items.
 	// for now we can only really check if the current user is the owner
-	if attrBytes, err := xattr.Get(nodePath, xattrs.OwnerIDAttr); err == nil {
-		if fs.o.EnableHome {
-			u := ctxpkg.ContextMustGetUser(ctx)
-			if u.Id.OpaqueId != string(attrBytes) {
-				log.Warn().Str("link", trashnode).Msg("trash item not owned by current user, skipping")
-				// continue
-				return nil, errors.New("trash item not owned by current user")
-			}
-		}
-	} else {
-		log.Error().Err(err).Str("link", trashnode).Msg("could not read owner, skipping")
-		return nil, err
-	}
-
 	return item, nil
 }
 
@@ -229,19 +215,6 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*p
 		// so -> check the trash node itself
 		// hmm listing trash currently lists the current users trash or the 'root' trash. from ocs only the home storage is queried for trash items.
 		// for now we can only really check if the current user is the owner
-		if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDAttr); err == nil {
-			if fs.o.EnableHome {
-				u := ctxpkg.ContextMustGetUser(ctx)
-				if u.Id.OpaqueId != string(attrBytes) {
-					log.Warn().Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", trashnode).Msg("trash item not owned by current user, skipping")
-					continue
-				}
-			}
-		} else {
-			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", trashnode).Msg("could not read owner, skipping")
-			continue
-		}
-
 		items = append(items, item)
 	}
 	return items, nil

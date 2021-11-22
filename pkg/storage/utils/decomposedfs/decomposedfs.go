@@ -106,7 +106,7 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 
 // when enable home is false we want propagation to root if tree size or mtime accounting is enabled
 func enablePropagationForRoot(o *options.Options) bool {
-	return (!o.EnableHome && (o.TreeSizeAccounting || o.TreeTimeAccounting))
+	return (o.TreeSizeAccounting || o.TreeTimeAccounting)
 }
 
 // New returns an implementation of the storage.FS interface that talks to
@@ -197,7 +197,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 
 // CreateHome creates a new home node for the given user
 func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
-	if !fs.o.EnableHome || fs.o.UserLayout == "" {
+	if fs.o.UserLayout == "" {
 		return errtypes.NotSupported("Decomposedfs: CreateHome() home supported disabled")
 	}
 
@@ -258,7 +258,7 @@ func isAlreadyExists(err error) bool {
 // GetHome is called to look up the home path for a user
 // It is NOT supposed to return the internal path but the external path
 func (fs *Decomposedfs) GetHome(ctx context.Context) (string, error) {
-	if !fs.o.EnableHome || fs.o.UserLayout == "" {
+	if fs.o.UserLayout == "" {
 		return "", errtypes.NotSupported("Decomposedfs: GetHome() home supported disabled")
 	}
 	u := ctxpkg.ContextMustGetUser(ctx)

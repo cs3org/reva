@@ -171,10 +171,6 @@ func (lu *Lookup) RootNode(ctx context.Context) (*node.Node, error) {
 
 // HomeNode returns the home node of a user
 func (lu *Lookup) HomeNode(ctx context.Context) (node *node.Node, err error) {
-	if !lu.Options.EnableHome {
-		return nil, errtypes.NotSupported("Decomposedfs: home supported disabled")
-	}
-
 	if node, err = lu.RootNode(ctx); err != nil {
 		return
 	}
@@ -226,9 +222,6 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 // HomeOrRootNode returns the users home node when home support is enabled.
 // it returns the storages root node otherwise
 func (lu *Lookup) HomeOrRootNode(ctx context.Context) (node *node.Node, err error) {
-	if lu.Options.EnableHome {
-		return lu.HomeNode(ctx)
-	}
 	return lu.RootNode(ctx)
 }
 
