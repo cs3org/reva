@@ -1056,7 +1056,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 
 			if err != nil {
 				return &provider.ListRecycleResponse{
-					Status: status.NewStatusFromErrType(ctx, "ListFileVersions ref="+req.Ref.String(), err),
+					Status: status.NewStatusFromErrType(ctx, "ListRecycle ref="+req.Ref.String(), err),
 				}, nil
 			}
 
