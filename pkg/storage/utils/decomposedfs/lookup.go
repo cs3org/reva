@@ -77,7 +77,7 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string, followReferences 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
 
-	root, err := lu.HomeOrRootNode(ctx)
+	root, err := lu.HomeNode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -120,14 +120,14 @@ func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *n
 
 // NodeFromSpaceID converts a resource id without an opaque id into a Node
 func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
-
-	matches, err := filepath.Glob(filepath.Join(lu.Options.Root, "spaces", spaceTypeAny, id.StorageId))
+	d := filepath.Join(lu.Options.Root, "spaces", spaceTypeAny, id.StorageId)
+	matches, err := filepath.Glob(d)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(matches) != 1 {
-		return nil, fmt.Errorf("can't determine node from spaceID: found %d matching spaces", len(matches))
+		return nil, fmt.Errorf("can't determine node from spaceID: found %d matching spaces. Path: %s", len(matches), d)
 	}
 
 	target, err := os.Readlink(matches[0])

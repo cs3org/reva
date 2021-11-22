@@ -76,6 +76,7 @@ var _ = Describe("Lookup", func() {
 			// try to find the same node by id
 			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: &provider.ResourceId{OpaqueId: nRef.ID}})
 			Expect(err).ToNot(HaveOccurred())
+			Expect(n.SpaceRoot).ToNot(BeNil())
 
 			// Check if we got the right node and spaceRoot
 			path, err := env.Lookup.Path(env.Ctx, n)
@@ -95,6 +96,7 @@ var _ = Describe("Lookup", func() {
 			// try to find the child node by parent id and relative path
 			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: &provider.ResourceId{OpaqueId: nRef.ID}, Path: "./file1"})
 			Expect(err).ToNot(HaveOccurred())
+			Expect(n.SpaceRoot).ToNot(BeNil())
 
 			// Check if we got the right node and spaceRoot
 			path, err := env.Lookup.Path(env.Ctx, n)

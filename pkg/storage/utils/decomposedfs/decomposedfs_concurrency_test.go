@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -140,6 +141,7 @@ var _ = Describe("Decomposed", func() {
 					go func() {
 						defer GinkgoRecover()
 						err := fs.CreateDir(ctx, &provider.Reference{Path: "/fightforit"})
+						time.Sleep(time.Second)
 						if err != nil {
 							rinfo, err := fs.GetMD(ctx, &provider.Reference{Path: "/fightforit"}, nil)
 							Expect(err).ToNot(HaveOccurred())
