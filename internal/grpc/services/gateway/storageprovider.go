@@ -1063,8 +1063,9 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 			// get client for storage provider
 			c, err := s.getStorageProviderClient(ctx, providers[i])
 			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not get storage provider client, skipping")
-				continue
+				return &provider.ListRecycleResponse{
+					Status: status.NewInternal(ctx, err, "gateway: could not get storage provider client"),
+				}, nil
 			}
 
 			res, err := c.ListRecycle(ctx, &provider.ListRecycleRequest{
@@ -1075,7 +1076,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 				Key:    req.Key,
 			})
 			if err != nil {
-				return nil, errors.Wrap(err, "gateway: error calling ListRecycleRequest")
+				return nil, errors.Wrap(err, "gateway: error calling ListRecycle")
 			}
 
 			if utils.IsAbsoluteReference(req.Ref) {
@@ -1096,32 +1097,134 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
-	var c provider.ProviderAPIClient
-	var err error
-	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	srcProviders, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
-			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem ref="+req.Ref.String(), err),
+			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem source ref="+req.Ref.String(), err),
 		}, nil
 	}
-	_, req.RestoreRef, err = s.findAndUnwrap(ctx, req.RestoreRef)
-	if err != nil {
+	var srcProvider *registry.ProviderInfo
+	var srcRef *provider.Reference
+	for i := range srcProviders {
+		// there are three valid cases when restoring a trash item
+		switch {
+		// 1. path based references of a space
+		//    -> source must be an exact match for a storage provider path
+		//    -> target path must have the same storage path (longest match)
+		case utils.IsAbsolutePathReference(req.Ref):
+			if req.Ref.Path == srcProviders[i].ProviderPath {
+				srcProvider = srcProviders[i]
+				if srcRef, err = unwrap(req.Ref, srcProvider.ProviderPath); err != nil {
+					return nil, err
+				}
+				srcRef.Path = utils.MakeRelativePath(srcRef.Path)
+				parts := strings.SplitN(srcProvider.ProviderId, "!", 2)
+				if len(parts) != 2 {
+					return nil, errtypes.BadRequest("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + srcProviders[i].ProviderId)
+				}
+				srcRef.ResourceId = &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
+			}
+		// 2. id based references of a space
+		//   source must be an exact id for a space
+		//   target id must match source id
+		case utils.IsAbsoluteReference(req.Ref):
+			parts := strings.SplitN(srcProviders[i].ProviderId, "!", 2)
+			if len(parts) != 2 {
+				return nil, errtypes.BadRequest("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + srcProviders[i].ProviderId)
+			}
+			// always use a relative reference
+			srcId := &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
+			if utils.ResourceIDEqual(req.Ref.ResourceId, srcRef.ResourceId) {
+				srcProvider = srcProviders[i]
+				srcRef = &provider.Reference{ResourceId: srcId, Path: "."}
+			}
+
+		// 3. relative reference -> forward as is
+		case utils.IsRelativeReference(req.Ref):
+			parts := strings.SplitN(srcProviders[i].ProviderId, "!", 2)
+			if len(parts) != 2 {
+				return nil, errtypes.BadRequest("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + srcProviders[i].ProviderId)
+			}
+			// use relative reference
+			srcId := &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
+			if utils.ResourceIDEqual(req.Ref.ResourceId, srcRef.ResourceId) {
+				srcProvider = srcProviders[i]
+				srcRef = &provider.Reference{ResourceId: srcId, Path: req.Ref.Path}
+			}
+		}
+	}
+
+	if srcProvider == nil || srcRef == nil {
 		return &provider.RestoreRecycleItemResponse{
-			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem ref="+req.Ref.String(), err),
+			Status: status.NewNotFound(ctx, "RestoreRecycleItemResponse no matching provider found ref="+req.Ref.String()),
 		}, nil
 	}
 
-	if req.Ref.ResourceId.StorageId != req.RestoreRef.ResourceId.StorageId {
+	// find destination
+	dstProviders, err := s.findProviders(ctx, req.RestoreRef)
+	if err != nil {
+		return &provider.RestoreRecycleItemResponse{
+			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem source ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	var dstProvider *registry.ProviderInfo
+	var dstRef *provider.Reference
+	for i := range dstProviders {
+		if utils.IsAbsolutePathReference(req.RestoreRef) {
+			// find deepest mount
+			// if iteration path is longer than current path && iteration path is shorter or exact dst path
+			if dstProvider == nil || ((len(dstProviders[i].ProviderPath) > len(dstProvider.ProviderPath)) && (len(dstProviders[i].ProviderPath) <= len(req.RestoreRef.Path))) {
+				dstProvider = dstProviders[i]
+				if dstRef, err = unwrap(req.Ref, dstProvider.ProviderPath); err != nil {
+					return nil, err
+				}
+				dstRef.Path = utils.MakeRelativePath(dstRef.Path)
+				parts := strings.SplitN(dstProvider.ProviderId, "!", 2)
+				if len(parts) != 2 {
+					return nil, errtypes.BadRequest("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + dstProviders[i].ProviderId)
+				}
+				dstRef.ResourceId = &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
+			}
+		} else {
+			// TODO implement other cases
+			return &provider.RestoreRecycleItemResponse{
+				Status: &rpc.Status{
+					Code:    rpc.Code_CODE_UNIMPLEMENTED,
+					Message: "RestoreRecycleItem not yet implementad ref=" + req.RestoreRef.String(),
+				},
+			}, nil
+
+		}
+	}
+
+	if dstProvider == nil || dstRef == nil {
+		return &provider.RestoreRecycleItemResponse{
+			Status: status.NewNotFound(ctx, "RestoreRecycleItemResponse no matching destination provider found ref="+req.RestoreRef.String()),
+		}, nil
+	}
+
+	if srcRef.ResourceId.StorageId != dstRef.ResourceId.StorageId {
 		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewPermissionDenied(ctx, err, "gateway: cross-storage restores are forbidden"),
 		}, nil
 	}
 
+	// get client for storage provider
+	c, err := s.getStorageProviderClient(ctx, srcProvider)
+	if err != nil {
+		return &provider.RestoreRecycleItemResponse{
+			Status: status.NewInternal(ctx, err, "gateway: could not get storage provider client"),
+		}, nil
+	}
+
+	req.Ref = srcRef
+	req.RestoreRef = dstRef
+
 	res, err := c.RestoreRecycleItem(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RestoreRecycleItem")
 	}
-
 	return res, nil
 }
 
@@ -1177,6 +1280,8 @@ func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.Provi
 	return client, p[0], err
 }
 
+// FIXME findAndUnwrap currently just returns the first provider ... which may not be what is needed.
+// for the ListRecycle call we need an exact match, for Stat and List we need te query all related providers
 func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *provider.Reference, error) {
 	c, p, err := s.find(ctx, ref)
 	if err != nil {
