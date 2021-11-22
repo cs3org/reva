@@ -1288,11 +1288,11 @@ func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
 
 func getRootAuth() eosclient.Authorization {
 	return eosclient.Authorization{
-			Role: eosclient.Role{
-				UID: "0",
-				GID: "0",
-			},
-		}
+		Role: eosclient.Role{
+			UID: "0",
+			GID: "0",
+		},
+	}
 }
 
 func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
@@ -1302,7 +1302,7 @@ func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
 
 	if fs.isShareFolderChild(ctx, p) {
 		fn := fs.wrapShadow(ctx, p)
-		
+
 		// in order to remove definitely the folder or the file
 		// without moving it to the recycle bin, we should take
 		// the priviledges of the root

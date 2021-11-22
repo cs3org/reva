@@ -637,7 +637,7 @@ func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path 
 	if noRecycle {
 		args = append(args, "--no-recycle-bin") // do not put the file in the recycle bin
 	}
-	args = append(args, path)	
+	args = append(args, path)
 	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
