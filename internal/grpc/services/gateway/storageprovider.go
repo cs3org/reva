@@ -559,11 +559,10 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 			}, nil
 		}
 
-		// if spaces are not the same we do not implement cross storage copy yet.
-		// TODO allow for spaces on the same provider
-		if !utils.ResourceIDEqual(req.Source.ResourceId, req.Destination.ResourceId) {
+		// if the storage id is the same the storage provider decides if the move is allowedy or not
+		if req.Source.ResourceId.StorageId != req.Destination.ResourceId.StorageId {
 			res := &provider.MoveResponse{
-				Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage move not yet implemented"),
+				Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage move not supported, use copy and delete"),
 			}
 			return res, nil
 		}
