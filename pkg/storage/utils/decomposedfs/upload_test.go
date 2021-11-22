@@ -138,7 +138,7 @@ var _ = Describe("File uploads", func() {
 			err = fs.CreateHome(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			// the space name attribute is the stop condition in the lookup
-			h, err := lookup.HomeNode(ctx)
+			h, err := lookup.RootNode(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username"))
 			Expect(err).ToNot(HaveOccurred())
@@ -147,7 +147,7 @@ var _ = Describe("File uploads", func() {
 
 		Describe("InitiateUpload", func() {
 			It("fails", func() {
-				h, err := lookup.HomeNode(ctx)
+				h, err := lookup.RootNode(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				msg := fmt.Sprintf("error: permission denied: %s/foo", h.ID)
 				_, err = fs.InitiateUpload(ctx, ref, 10, map[string]string{})

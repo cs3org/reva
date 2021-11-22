@@ -102,7 +102,7 @@ var _ = Describe("Grants", func() {
 
 		Describe("AddGrant", func() {
 			It("adds grants", func() {
-				n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1", false)
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "/dir1"})
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Fs.AddGrant(env.Ctx, ref, grant)

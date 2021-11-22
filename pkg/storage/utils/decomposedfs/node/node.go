@@ -80,7 +80,6 @@ type Node struct {
 // PathLookup defines the interface for the lookup component
 type PathLookup interface {
 	RootNode(ctx context.Context) (node *Node, err error)
-	HomeOrRootNode(ctx context.Context) (node *Node, err error)
 
 	InternalRoot() string
 	InternalPath(ID string) string
@@ -619,7 +618,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
 		var quotaPath string
 		if n.SpaceRoot == nil {
-			root, err := n.lu.HomeOrRootNode(ctx)
+			root, err := n.lu.RootNode(ctx)
 			if err == nil {
 				quotaPath = root.InternalPath()
 			} else {

@@ -146,7 +146,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 			return 0, 0, err
 		}
 	} else {
-		if n, err = fs.lu.HomeOrRootNode(ctx); err != nil {
+		if n, err = fs.lu.RootNode(ctx); err != nil {
 			return 0, 0, err
 		}
 	}
@@ -352,7 +352,7 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 
 	// create Shares folder if it does not exist
 	var n *node.Node
-	if n, err = fs.lu.NodeFromPath(ctx, fs.o.ShareFolder, false); err != nil {
+	if n, err = fs.lu.NodeFromResource(ctx, &provider.Reference{Path: fs.o.ShareFolder}); err != nil {
 		err := errtypes.InternalError(err.Error())
 		span.SetStatus(codes.Error, err.Error())
 		return err

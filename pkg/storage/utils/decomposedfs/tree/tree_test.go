@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
@@ -61,7 +62,7 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
+			n, err = env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: originalPath})
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -144,13 +145,13 @@ var _ = Describe("Tree", func() {
 
 					Expect(restoreFunc()).To(Succeed())
 
-					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
+					originalNode, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: originalPath})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(originalNode.Exists).To(BeTrue())
 				})
 
 				It("restores files to different locations", func() {
-					dest, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/newLocation", false)
+					dest, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "dir1/newLocation"})
 					Expect(err).ToNot(HaveOccurred())
 
 					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", dest)
@@ -158,11 +159,11 @@ var _ = Describe("Tree", func() {
 
 					Expect(restoreFunc()).To(Succeed())
 
-					newNode, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/newLocation", false)
+					newNode, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "dir1/newLocation"})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(newNode.Exists).To(BeTrue())
 
-					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
+					originalNode, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: originalPath})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(originalNode.Exists).To(BeFalse())
 				})
@@ -187,7 +188,7 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, "emptydir", false)
+			n, err = env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "emptydir"})
 			Expect(err).ToNot(HaveOccurred())
 		})
 

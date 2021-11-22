@@ -64,41 +64,8 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 		return n, nil
 	}
 
-	if ref.Path != "" {
-		return lu.NodeFromPath(ctx, ref.GetPath(), false)
-	}
-
 	// reference is invalid
-	return nil, fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
-}
-
-// NodeFromPath converts a filename into a Node
-func (lu *Lookup) NodeFromPath(ctx context.Context, fn string, followReferences bool) (*node.Node, error) {
-	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
-
-	root, err := lu.HomeNode(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	n := root
-	// TODO collect permissions of the current user on every segment
-	fn = filepath.Clean(fn)
-	if fn != "/" && fn != "." {
-		n, err = lu.WalkPath(ctx, n, fn, followReferences, func(ctx context.Context, n *node.Node) error {
-			log.Debug().Interface("node", n).Msg("NodeFromPath() walk")
-			if n.SpaceRoot != nil && n.SpaceRoot != root {
-				root = n.SpaceRoot
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	n.SpaceRoot = root
-	return n, nil
+	return nil, fmt.Errorf("invalid reference %+v. resource_id must be set", ref)
 }
 
 // NodeFromID returns the internal path for the id
@@ -169,15 +136,6 @@ func (lu *Lookup) RootNode(ctx context.Context) (*node.Node, error) {
 	return n, nil
 }
 
-// HomeNode returns the home node of a user
-func (lu *Lookup) HomeNode(ctx context.Context) (node *node.Node, err error) {
-	if node, err = lu.RootNode(ctx); err != nil {
-		return
-	}
-	node, err = lu.WalkPath(ctx, node, lu.mustGetUserLayout(ctx), false, nil)
-	return
-}
-
 // WalkPath calls n.Child(segment) on every path segment in p starting at the node r.
 // If a function f is given it will be executed for every segment node, but not the root node r.
 // If followReferences is given the current visited reference node is replaced by the referenced node.
@@ -217,12 +175,6 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 		}
 	}
 	return r, nil
-}
-
-// HomeOrRootNode returns the users home node when home support is enabled.
-// it returns the storages root node otherwise
-func (lu *Lookup) HomeOrRootNode(ctx context.Context) (node *node.Node, err error) {
-	return lu.RootNode(ctx)
 }
 
 // InternalRoot returns the internal storage root directory

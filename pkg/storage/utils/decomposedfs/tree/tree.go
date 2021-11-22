@@ -59,10 +59,8 @@ type Blobstore interface {
 // PathLookup defines the interface for the lookup component
 type PathLookup interface {
 	NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error)
-	NodeFromPath(ctx context.Context, fn string, followReferences bool) (*node.Node, error)
 	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error)
 	RootNode(ctx context.Context) (node *node.Node, err error)
-	HomeOrRootNode(ctx context.Context) (node *node.Node, err error)
 
 	InternalRoot() string
 	InternalPath(ID string) string
@@ -579,7 +577,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 
 	var root *node.Node
 	if n.SpaceRoot == nil {
-		if root, err = t.lookup.HomeOrRootNode(ctx); err != nil {
+		if root, err = t.lookup.RootNode(ctx); err != nil {
 			return
 		}
 	} else {

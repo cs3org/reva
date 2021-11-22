@@ -115,7 +115,7 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	// the space name attribute is the stop condition in the lookup
-	h, err := lookup.HomeNode(ctx)
+	h, err := lookup.RootNode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -167,11 +167,12 @@ func (t *TestEnv) Cleanup() {
 
 // CreateTestDir create a directory and returns a corresponding Node
 func (t *TestEnv) CreateTestDir(name string) (*node.Node, error) {
-	err := t.Fs.CreateDir(t.Ctx, &providerv1beta1.Reference{Path: name})
+	ref := &providerv1beta1.Reference{Path: name}
+	err := t.Fs.CreateDir(t.Ctx, ref)
 	if err != nil {
 		return nil, err
 	}
-	n, err := t.Lookup.NodeFromPath(t.Ctx, name, false)
+	n, err := t.Lookup.NodeFromResource(t.Ctx, ref)
 	if err != nil {
 		return nil, err
 	}
