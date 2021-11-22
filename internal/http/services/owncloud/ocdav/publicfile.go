@@ -55,6 +55,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
+			r.URL.Path = path.Base(r.URL.Path)
 			switch r.Method {
 			case MethodPropfind:
 				s.handlePropfindOnToken(w, r, h.namespace, false)
@@ -119,6 +120,9 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 		w.WriteHeader(http.StatusConflict)
 		return false
 	}
+
+	// adjust path in request URL to point at the parent
+	r.URL.Path = path.Dir(r.URL.Path)
 
 	return true
 }
