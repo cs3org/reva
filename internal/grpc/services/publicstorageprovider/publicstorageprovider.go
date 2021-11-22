@@ -154,12 +154,7 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 		return nil, "", nil, st, nil
 	}
 
-	p := shareInfo.Path
-	if shareInfo.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-		p = path.Join("/", shareInfo.Path, relativePath)
-	}
-	cs3Ref := &provider.Reference{Path: p}
-
+	cs3Ref := &provider.Reference{Path: path.Join("/", shareInfo.Path, relativePath)}
 	log.Debug().
 		Interface("sourceRef", ref).
 		Interface("cs3Ref", cs3Ref).
