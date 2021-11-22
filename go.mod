@@ -64,7 +64,7 @@ require (
 	github.com/wk8/go-ordered-map v0.2.0
 	go.mongodb.org/mongo-driver v1.7.2 // indirect
 	go.opencensus.io v0.23.0
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.26.1
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.27.0
 	go.opentelemetry.io/otel v1.2.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.2.0
 	go.opentelemetry.io/otel/sdk v1.2.0
@@ -74,7 +74,7 @@ require (
 	golang.org/x/sys v0.0.0-20210921065528-437939a70204
 	golang.org/x/term v0.0.0-20210916214954-140adaaadfaf
 	google.golang.org/genproto v0.0.0-20200825200019-8632dd797987
-	google.golang.org/grpc v1.41.0
+	google.golang.org/grpc v1.42.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gotest.tools v2.2.0+incompatible
