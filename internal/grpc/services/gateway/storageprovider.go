@@ -1176,7 +1176,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 			// if iteration path is longer than current path && iteration path is shorter or exact dst path
 			if dstProvider == nil || ((len(dstProviders[i].ProviderPath) > len(dstProvider.ProviderPath)) && (len(dstProviders[i].ProviderPath) <= len(req.RestoreRef.Path))) {
 				dstProvider = dstProviders[i]
-				if dstRef, err = unwrap(req.Ref, dstProvider.ProviderPath); err != nil {
+				if dstRef, err = unwrap(req.RestoreRef, dstProvider.ProviderPath); err != nil {
 					return nil, err
 				}
 				dstRef.Path = utils.MakeRelativePath(dstRef.Path)
