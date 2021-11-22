@@ -1186,9 +1186,17 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 		mylst = append(mylst, myitem)
 	}
 
-	for _, info := range mylst {
-		if !info.IsDir && parent != nil {
-			info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+	if parent.SysACL != nil {
+
+		for _, info := range mylst {
+			if !info.IsDir && parent != nil {
+				if info.SysACL == nil {
+					log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
+					info.SysACL.Entries = parent.SysACL.Entries
+				} else {
+					info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+				}
+			}
 		}
 	}
 
