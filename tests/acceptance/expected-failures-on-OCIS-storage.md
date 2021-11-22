@@ -634,7 +634,6 @@ Scenario Outline: Renaming a file to a path with extension .part should not be p
 
 #### [Expiration date for shares is not implemented](https://github.com/owncloud/ocis/issues/1250)
 #### Expiration date of user shares
-
 -   [apiShareCreateSpecialToShares1/createShareExpirationDate.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareExpirationDate.feature#L58)
 -   [apiShareCreateSpecialToShares1/createShareExpirationDate.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareExpirationDate.feature#L59)
 -   [apiShareCreateSpecialToShares1/createShareExpirationDate.feature:86](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareExpirationDate.feature#L86)
@@ -807,7 +806,6 @@ _ocs: api compatibility, return correct status code_
 -   [apiShareUpdateToShares/updateShare.feature:397](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L397)
 -   [apiShareUpdateToShares/updateShare.feature:427](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L427)
 -   [apiShareUpdateToShares/updateShare.feature:428](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L428)
-
 
 #### [Share additional info](https://github.com/owncloud/ocis/issues/1253)
 #### [Share extra attributes](https://github.com/owncloud/ocis/issues/1224)
@@ -1163,6 +1161,13 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 -   [apiWebdavUpload1/uploadFileToBlacklistedName.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L32)
 -   [apiWebdavUpload1/uploadFileToBlacklistedName.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L66)
 -   [apiWebdavUpload1/uploadFileToBlacklistedName.feature:67](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L67)
+
+#### moving a share from the /Shares jail to a user home is no longer supported.
+-   [apiShareManagementToShares/mergeShare.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L89)
+
+
+### To triage
+_The below features have been added after I last categorized them. AFAICT they are bugs. @jfd_
 
 #### [PATCH request for TUS upload with wrong checksum gives incorrect response](https://github.com/owncloud/ocis/issues/1755)
 -   [apiWebdavUploadTUS/checksums.feature:65](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L65)

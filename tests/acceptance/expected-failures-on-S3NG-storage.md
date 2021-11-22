@@ -340,6 +340,7 @@ File and sync features in a shared scenario
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:461](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L461)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:462](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L462)
 
+
 #### [Cannot move a file to a shared folder](https://github.com/owncloud/ocis/issues/2146)
 -   [apiShareManagementBasicToShares/createShareToSharesFolder.feature:509](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L509)
 
@@ -639,7 +640,7 @@ Scenario Outline: Renaming a file to a path with extension .part should not be p
 - [apiVersions/fileVersionsSharingToShares.feature:220](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L220)
 
 #### [Expiration date for shares is not implemented](https://github.com/owncloud/ocis/issues/1250)
-#### Expiration date of user shares-   [apiShareCreateSpecialToShares1/createShareExpirationDate.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareExpirationDate.feature#L29)
+#### Expiration date of user shares
 -   [apiShareCreateSpecialToShares1/createShareExpirationDate.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareExpirationDate.feature#L58)
 -   [apiShareCreateSpecialToShares1/createShareExpirationDate.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareExpirationDate.feature#L59)
 -   [apiShareCreateSpecialToShares1/createShareExpirationDate.feature:86](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareExpirationDate.feature#L86)
@@ -700,7 +701,7 @@ Scenario Outline: Renaming a file to a path with extension .part should not be p
 -   [apiShareReshareToShares3/reShareWithExpiryDate.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareWithExpiryDate.feature#L36)
 -   [apiShareReshareToShares3/reShareWithExpiryDate.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareWithExpiryDate.feature#L37)
 -   [apiShareReshareToShares3/reShareWithExpiryDate.feature:92](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareWithExpiryDate.feature#L92)
--   [apiShareReshareToShares3/reShareWithExpiryDate.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareWithExpiryDate.feature#L93)  
+-   [apiShareReshareToShares3/reShareWithExpiryDate.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareWithExpiryDate.feature#L93)
 -   [apiShareReshareToShares3/reShareWithExpiryDate.feature:124](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareWithExpiryDate.feature#L124)
 -   [apiShareReshareToShares3/reShareWithExpiryDate.feature:125](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareWithExpiryDate.feature#L125)
 -   [apiShareReshareToShares3/reShareWithExpiryDate.feature:153](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareWithExpiryDate.feature#L153)
@@ -1167,6 +1168,13 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 -   [apiWebdavUpload1/uploadFileToBlacklistedName.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L32)
 -   [apiWebdavUpload1/uploadFileToBlacklistedName.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L66)
 -   [apiWebdavUpload1/uploadFileToBlacklistedName.feature:67](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L67)
+
+#### moving a share from the /Shares jail to a user home is no longer supported.
+-   [apiShareManagementToShares/mergeShare.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L89)
+
+
+### To triage
+_The below features have been added after I last categorized them. AFAICT they are bugs. @jfd_
 
 #### [PATCH request for TUS upload with wrong checksum gives incorrect response](https://github.com/owncloud/ocis/issues/1755)
 -   [apiWebdavUploadTUS/checksums.feature:65](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L65)
