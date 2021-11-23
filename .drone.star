@@ -511,10 +511,9 @@ def virtualViews():
         "commands": [
           "cd /drone/src/tests/oc-integration-tests/drone/",
           "/drone/src/cmd/revad/revad -c frontend-global.toml &",
-          "/drone/src/cmd/revad/revad -c gateway.toml &",
-          "/drone/src/cmd/revad/revad -c storage-oc-ocis.toml &",
-          "/drone/src/cmd/revad/revad -c storage-local-1.toml &",
-          "/drone/src/cmd/revad/revad -c storage-local-2.toml &",
+          "/drone/src/cmd/revad/revad -c gateway-virtual.toml &",
+          "/drone/src/cmd/revad/revad -c storage-users-0-9.toml &",
+          "/drone/src/cmd/revad/revad -c storage-users-a-f.toml &",
           "/drone/src/cmd/revad/revad -c users.toml",
         ],
       },

@@ -337,16 +337,48 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 }
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
+	// ask registry for home provider
+	storageRegistryClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
+	}
+	gHRes, err := storageRegistryClient.GetHome(ctx, &registry.GetHomeRequest{})
+	if err != nil {
+		return &provider.GetHomeResponse{
+			Status: status.NewInternal(ctx, err, "error calling GetHome"),
+		}, nil
+	}
+	if gHRes.Status.Code != rpc.Code_CODE_OK {
+		return &provider.GetHomeResponse{
+			Status: gHRes.Status,
+		}, nil
+	}
+	if gHRes.Provider.ProviderId == "" {
+		// look up space id
+		sRes, err := storageRegistryClient.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
+			Ref: &provider.Reference{Path: gHRes.Provider.ProviderPath},
+		})
+		if err != nil {
+			return &provider.GetHomeResponse{
+				Status: status.NewInternal(ctx, err, "error calling GetHome"),
+			}, nil
+		}
+		if sRes.Status.Code != rpc.Code_CODE_OK {
+			return &provider.GetHomeResponse{
+				Status: sRes.Status,
+			}, nil
+		}
+		if len(sRes.Providers) == 0 {
+			return &provider.GetHomeResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND, Message: "no space id for user home found"},
+			}, nil
+		}
+		gHRes.Provider.ProviderId = sRes.Providers[0].ProviderId
+	}
 	return &provider.GetHomeResponse{
-		Path:   s.getHome(ctx),
+		Path:   gHRes.Provider.ProviderPath,
 		Status: status.NewOK(ctx),
 	}, nil
-}
-
-func (s *svc) getHome(ctx context.Context) string {
-	// TODO use user layout
-	u := ctxpkg.ContextMustGetUser(ctx)
-	return filepath.Join("/users", u.Id.OpaqueId)
 }
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {

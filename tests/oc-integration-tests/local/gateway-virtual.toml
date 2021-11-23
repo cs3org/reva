@@ -10,6 +10,10 @@
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
+[log]
+#level = "warn"
+#mode = "json"
+
 [grpc]
 address = "0.0.0.0:19000"
 
@@ -38,7 +42,8 @@ datagateway = "http://localhost:19001/data"
 transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
 transfer_expires = 6 # give it a moment
 #disable_home_creation_on_login = true
-link_grants_file = "/drone/src/tmp/reva/link_grants_file.json"
+link_grants_file = "/var/tmp/reva/link_grants_file.json"
+
 
 [grpc.services.authregistry]
 driver = "static"
@@ -56,24 +61,8 @@ driver = "spaces"
 home_template = "/users/{{.Id.OpaqueId}}"
 
 [grpc.services.storageregistry.drivers.spaces.rules]
-
-## obviously, we do not want to define a rule for every user and space, which is why we can define naming rules:
-"/users" = {"address" = "localhost:11000", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces"}
-
-## users can be spread over multiple providers like this:
-#"/users/[0-9]" = {"address" = "localhost:11000", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces 0-9"}
-#"/users/[a-f]" = {"address" = "localhost:11010", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces a-f"}
-
-## the virtual /Shares folder of every user is routed like this:
-## whenever the path matches the pattern /users/{{.CurrentUser.Id.OpaqueId}}/Shares we forward requests to the sharesstorageprovider
-"/users/{{.CurrentUser.Id.OpaqueId}}/Shares" = {"address" = "localhost:14000", "space_type" = "share", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}", "description" = "shares"}
-
-## An alternative would be used to mount shares outside of the users home:
-#"/shares" = {"address" = "localhost:14000", "space_type" = "share", "path_template" = "/shares/{{.Space.Name}}", "description" = "shares"}
-
-## While public shares are mounted at /public logged in end will should never see that path because it is only created by the spaces registry when
-## a public link is accessed.
-"/public" = {"address" = "localhost:13000",  "space_type" = "public", "path_template" = "/public", "description" = "public links"}
+"/users/[0-9]" = {"address" = "localhost:11000", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces 0-9"}
+"/users/[a-f]" = {"address" = "localhost:11010", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces a-f"}
 
 [http]
 address = "0.0.0.0:19001"

@@ -64,6 +64,7 @@ type config struct {
 	TransferExpires               int64  `mapstructure:"transfer_expires"`
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
+	// FIXME get rid of ShareFolder, there are findByPath calls in the ocmshareporvider.go and usershareprovider.go
 	ShareFolder         string                            `mapstructure:"share_folder"`
 	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
 	HomeMapping         string                            `mapstructure:"home_mapping"`

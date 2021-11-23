@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -41,7 +42,6 @@ import (
 	pkgregistry "github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 )
 
 func init() {
@@ -77,12 +77,13 @@ func (r *rule) ProviderPath(u *userpb.User, s *provider.StorageSpace) (string, e
 
 type config struct {
 	Rules        map[string]*rule `mapstructure:"rules"`
-	HomeProvider string           `mapstructure:"home_provider"`
+	HomeTemplate string           `mapstructure:"home_template"`
 }
 
 func (c *config) init() {
-	if c.HomeProvider == "" {
-		c.HomeProvider = "/"
+
+	if c.HomeTemplate == "" {
+		c.HomeTemplate = "/"
 	}
 
 	if len(c.Rules) == 0 {
@@ -132,12 +133,17 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 		return nil, err
 	}
 	c.init()
-	return &registry{
+	r := &registry{
 		c:         c,
 		resources: make(map[string][]*registrypb.ProviderInfo),
 		//aliases:           make(map[string]map[string]*spaceAndProvider),
 		resourceNameCache: make(map[string]string),
-	}, nil
+	}
+	r.homeTemplate, err = template.New("home_template").Funcs(sprig.TxtFuncMap()).Parse(c.HomeTemplate)
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 type spaceAndProvider struct {
@@ -147,6 +153,8 @@ type spaceAndProvider struct {
 
 type registry struct {
 	c *config
+	// the template to use when determining the home provider
+	homeTemplate *template.Template
 	// a map of resources to providers
 	resources map[string][]*registrypb.ProviderInfo
 	// a map of paths/aliases to spaces and providers
@@ -192,15 +200,31 @@ func (r *registry) ListProviders(ctx context.Context) ([]*registrypb.ProviderInf
 	return providers, nil
 }
 
-// returns the the root path of the first provider in the list.
+// GetHome is called by the gateway to determine the address of the storage provider that should
+// be uset to make a CreateHome call. It does not need to return a path or id. Only the Adress is used.
+// In the spaces registry we will look up a rule matching the configured home template
 func (r *registry) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
-	if rule, ok := r.c.Rules[r.c.HomeProvider]; ok {
-		return &registrypb.ProviderInfo{
-			ProviderPath: r.c.HomeProvider,
-			Address:      rule.Address,
-		}, nil
+	currentUser := ctxpkg.ContextMustGetUser(ctx)
+	b := bytes.Buffer{}
+	// TODO test template on startup
+	if err := r.homeTemplate.Execute(&b, currentUser); err != nil {
+		return nil, err
 	}
-	return nil, errors.New("spaces: home not found")
+	homePath := b.String()
+
+	for pattern, rule := range r.c.Rules {
+		if ok, err := regexp.MatchString(pattern, homePath); ok {
+			return &registrypb.ProviderInfo{
+				Address:      rule.Address,
+				ProviderPath: homePath,
+			}, nil
+		} else if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Interface("rule", rule).Interface("pattern", pattern).Msg("invalid patter, skipping")
+			continue
+		}
+	}
+
+	return nil, errtypes.NotFound("no pattern matching " + homePath)
 }
 
 // FIXME the config takes the mount path of a provider as key,
