@@ -270,7 +270,23 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 	// make child appear in listings
 	err = os.Symlink("../"+n.ID, filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name))
 	if err != nil {
-		return
+		// no better way to check unfortunately
+		if !strings.Contains(err.Error(), "file exists") {
+			return
+		}
+		// try to remove the node
+		e := t.Delete(ctx, n)
+		switch {
+		case e != nil:
+			// failed to move to trash
+		default:
+			_, rm, e := t.PurgeRecycleItemFunc(ctx, n.SpaceRoot.ID, n.ID, "")
+			if e == nil {
+				rm()
+			}
+		}
+
+		return errtypes.AlreadyExists(err.Error())
 	}
 	return t.Propagate(ctx, n)
 }

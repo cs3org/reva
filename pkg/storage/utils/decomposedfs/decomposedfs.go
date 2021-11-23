@@ -280,7 +280,7 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
 	name := path.Base(ref.Path)
 	if name == "" || name == "." || name == "/" {
-		return errtypes.BadRequest("Invalid path")
+		return errtypes.BadRequest("Invalid path: " + ref.Path)
 	}
 
 	ref.Path = path.Dir(ref.Path)
@@ -312,7 +312,6 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.AlreadyExists(ref.Path)
 	}
 
-	n.ID = name
 	if err = fs.tp.CreateDir(ctx, n); err != nil {
 		return
 	}
