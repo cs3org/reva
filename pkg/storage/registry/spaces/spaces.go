@@ -201,7 +201,7 @@ func (r *registry) ListProviders(ctx context.Context) ([]*registrypb.ProviderInf
 }
 
 // GetHome is called by the gateway to determine the address of the storage provider that should
-// be uset to make a CreateHome call. It does not need to return a path or id. Only the Adress is used.
+// be uset to make a CreateHome call. It does not need to return a path or id. Only the address is used.
 // In the spaces registry we will look up a rule matching the configured home template
 func (r *registry) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)

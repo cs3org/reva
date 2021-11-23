@@ -797,13 +797,13 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			if info.Mtime == nil || (currentInfo.Mtime != nil && utils.TSToUnixNano(currentInfo.Mtime) > utils.TSToUnixNano(info.Mtime)) {
 				info.Mtime = currentInfo.Mtime
 				info.Etag = currentInfo.Etag
-				//info.Checksum = resp.Info.Checksum
+				// info.Checksum = resp.Info.Checksum
 			}
 			if info.Etag == "" && info.Etag != currentInfo.Etag {
 				info.Etag = currentInfo.Etag
 			}
-			//info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-			//info.MimeType = "httpd/unix-directory"
+			// info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+			// info.MimeType = "httpd/unix-directory"
 		}
 	}
 

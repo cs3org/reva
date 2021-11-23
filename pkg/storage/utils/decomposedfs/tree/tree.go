@@ -279,13 +279,13 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		e := t.Delete(ctx, n)
 		switch {
 		case e != nil:
-			// failed to move to trash
+			appctx.GetLogger(ctx).Debug().Err(e).Msg("cannot move to trashcan")
 		default:
 			_, rm, e := t.PurgeRecycleItemFunc(ctx, n.SpaceRoot.ID, n.ID, "")
 			if e == nil {
 				e = rm()
 				if e != nil {
-					// failed to purge from trash
+					appctx.GetLogger(ctx).Debug().Err(e).Msg("cannot purge from trashcan")
 				}
 			}
 		}
