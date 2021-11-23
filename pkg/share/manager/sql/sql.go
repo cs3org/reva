@@ -450,7 +450,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaborat
 		query := "update oc_share set "
 		query += strings.Join(fields, ",")
 		query += fmt.Sprintf(" where %s=?", column)
-		params = append(params, rs.Share.Id.OpaqueId)
+		params := append(params, rs.Share.Id.OpaqueId)
 
 		stmt, err := m.db.Prepare(query)
 		if err != nil {
