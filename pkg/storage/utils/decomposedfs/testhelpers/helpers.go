@@ -43,14 +43,15 @@ import (
 
 // TestEnv represents a test environment for unit tests
 type TestEnv struct {
-	Root        string
-	Fs          storage.FS
-	Tree        *tree.Tree
-	Permissions *mocks.PermissionsChecker
-	Blobstore   *treemocks.Blobstore
-	Owner       *userpb.User
-	Lookup      *decomposedfs.Lookup
-	Ctx         context.Context
+	Root         string
+	Fs           storage.FS
+	Tree         *tree.Tree
+	Permissions  *mocks.PermissionsChecker
+	Blobstore    *treemocks.Blobstore
+	Owner        *userpb.User
+	Lookup       *decomposedfs.Lookup
+	Ctx          context.Context
+	SpaceRootRes *providerv1beta1.ResourceId
 }
 
 // NewTestEnv prepares a test environment on disk
@@ -67,7 +68,6 @@ func NewTestEnv() (*TestEnv, error) {
 
 	config := map[string]interface{}{
 		"root":                tmpRoot,
-		"enable_home":         true,
 		"treetime_accounting": true,
 		"treesize_accounting": true,
 		"share_folder":        "/Shares",
@@ -88,7 +88,7 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 	lookup := &decomposedfs.Lookup{Options: o}
 	permissions := &mocks.PermissionsChecker{}
-	permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(3) // Permissions required for setup below
+	permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(4) // Permissions required for setup below
 	bs := &treemocks.Blobstore{}
 	tree := tree.New(o.Root, true, true, lookup, bs)
 	fs, err := decomposedfs.New(o, lookup, permissions, tree)
@@ -96,6 +96,14 @@ func NewTestEnv() (*TestEnv, error) {
 		return nil, err
 	}
 	ctx := ruser.ContextSetUser(context.Background(), owner)
+
+	home, err := fs.CreateStorageSpace(ctx, &providerv1beta1.CreateStorageSpaceRequest{
+		Owner: owner,
+		Type:  "personal",
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	env := &TestEnv{
 		Root:        tmpRoot,
@@ -106,16 +114,17 @@ func NewTestEnv() (*TestEnv, error) {
 		Blobstore:   bs,
 		Owner:       owner,
 		Ctx:         ctx,
+		SpaceRootRes: &providerv1beta1.ResourceId{
+			StorageId: home.StorageSpace.Id.OpaqueId,
+		},
 	}
 
-	// Create home
-	err = fs.CreateHome(ctx)
-	if err != nil {
-		return nil, err
+	spaceRootRef := &providerv1beta1.Reference{
+		ResourceId: env.SpaceRootRes,
 	}
 
 	// the space name attribute is the stop condition in the lookup
-	h, err := lookup.RootNode(ctx)
+	h, err := node.ReadNode(ctx, lookup, home.StorageSpace.Id.OpaqueId)
 	if err != nil {
 		return nil, err
 	}
@@ -123,8 +132,8 @@ func NewTestEnv() (*TestEnv, error) {
 		return nil, err
 	}
 
-	// Create dir1
-	dir1, err := env.CreateTestDir("/dir1")
+	//Create dir1
+	dir1, err := env.CreateTestDir("./dir1", spaceRootRef)
 	if err != nil {
 		return nil, err
 	}
@@ -136,15 +145,17 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	// Create subdir1 in dir1
-	err = fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "/dir1/subdir1"})
+	spaceRootRef.Path = "./dir1/subdir1"
+	err = fs.CreateDir(ctx, spaceRootRef)
 	if err != nil {
 		return nil, err
 	}
 
-	dir2, err := dir1.Child(ctx, "subdir1")
+	dir2, err := dir1.Child(ctx, "subdir1, spaceRootRef")
 	if err != nil {
 		return nil, err
 	}
+
 	// Create file1 in dir1
 	_, err = env.CreateTestFile("file2", "file2-blobid", 12345, dir2.ID)
 	if err != nil {
@@ -152,7 +163,8 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	// Create emptydir
-	err = fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "/emptydir"})
+	spaceRootRef.Path = "/emptydir"
+	err = fs.CreateDir(ctx, spaceRootRef)
 	if err != nil {
 		return nil, err
 	}
@@ -166,12 +178,16 @@ func (t *TestEnv) Cleanup() {
 }
 
 // CreateTestDir create a directory and returns a corresponding Node
-func (t *TestEnv) CreateTestDir(name string) (*node.Node, error) {
-	ref := &providerv1beta1.Reference{Path: name}
+func (t *TestEnv) CreateTestDir(name string, parentRef *providerv1beta1.Reference) (*node.Node, error) {
+	ref := parentRef
+	ref.Path = name
+
 	err := t.Fs.CreateDir(t.Ctx, ref)
 	if err != nil {
 		return nil, err
 	}
+
+	ref.Path = name
 	n, err := t.Lookup.NodeFromResource(t.Ctx, ref)
 	if err != nil {
 		return nil, err

@@ -282,6 +282,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	if name == "" || name == "." || name == "/" {
 		return errtypes.BadRequest("Invalid path")
 	}
+
 	ref.Path = path.Dir(ref.Path)
 
 	// verify parent exists
@@ -293,18 +294,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.NotFound(ref.Path)
 	}
 
-	// verify child does not exist, yet
-	if n, err = n.Child(ctx, name); err != nil {
-		return
-	}
-	if n.Exists {
-		return errtypes.AlreadyExists(ref.Path)
-	}
-	pn, err := n.Parent()
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error getting parent "+n.ParentID)
-	}
-	ok, err := fs.p.HasPermission(ctx, pn, func(rp *provider.ResourcePermissions) bool {
+	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
 		return rp.CreateContainer
 	})
 	switch {
@@ -314,7 +304,18 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
-	err = fs.tp.CreateDir(ctx, n)
+	// verify child does not exist, yet
+	if n, err = n.Child(ctx, name); err != nil {
+		return
+	}
+	if n.Exists {
+		return errtypes.AlreadyExists(ref.Path)
+	}
+
+	n.ID = name
+	if err = fs.tp.CreateDir(ctx, n); err != nil {
+		return
+	}
 
 	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
 		nodePath := n.InternalPath()
