@@ -51,8 +51,6 @@ var _ = Describe("Grants", func() {
 	)
 
 	BeforeEach(func() {
-		ref = &provider.Reference{Path: "/dir1"}
-
 		grant = &provider.Grant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER,
@@ -74,6 +72,12 @@ var _ = Describe("Grants", func() {
 		var err error
 		env, err = helpers.NewTestEnv()
 		Expect(err).ToNot(HaveOccurred())
+
+		ref = &provider.Reference{
+			ResourceId: env.SpaceRootRes,
+			Path:       "/dir1",
+		}
+
 	})
 
 	AfterEach(func() {
@@ -102,7 +106,10 @@ var _ = Describe("Grants", func() {
 
 		Describe("AddGrant", func() {
 			It("adds grants", func() {
-				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "/dir1"})
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1",
+				})
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Fs.AddGrant(env.Ctx, ref, grant)

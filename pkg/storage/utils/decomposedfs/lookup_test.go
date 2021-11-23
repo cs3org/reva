@@ -45,7 +45,10 @@ var _ = Describe("Lookup", func() {
 
 	Describe("Node from path", func() {
 		It("returns the path including a leading slash", func() {
-			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "/dir1/file1"})
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/file1",
+			})
 			Expect(err).ToNot(HaveOccurred())
 
 			path, err := env.Lookup.Path(env.Ctx, n)
@@ -56,7 +59,10 @@ var _ = Describe("Lookup", func() {
 
 	Describe("Node From Resource only by path", func() {
 		It("returns the path including a leading slash and the space root is set", func() {
-			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "/dir1/subdir1/file2"})
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/subdir1/file2",
+			})
 			Expect(err).ToNot(HaveOccurred())
 
 			path, err := env.Lookup.Path(env.Ctx, n)
@@ -70,7 +76,10 @@ var _ = Describe("Lookup", func() {
 	Describe("Node From Resource only by id", func() {
 		It("returns the path including a leading slash and the space root is set", func() {
 			// do a node lookup by path
-			nRef, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "/dir1/file1"})
+			nRef, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/file1",
+			})
 			Expect(err).ToNot(HaveOccurred())
 
 			// try to find the same node by id
@@ -90,7 +99,10 @@ var _ = Describe("Lookup", func() {
 	Describe("Node From Resource by id and relative path", func() {
 		It("returns the path including a leading slash and the space root is set", func() {
 			// do a node lookup by path for the parent
-			nRef, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "/dir1"})
+			nRef, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1",
+			})
 			Expect(err).ToNot(HaveOccurred())
 
 			// try to find the child node by parent id and relative path

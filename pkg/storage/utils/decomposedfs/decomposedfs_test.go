@@ -37,14 +37,15 @@ var _ = Describe("Decomposed", func() {
 		ref *provider.Reference
 	)
 
-	BeforeEach(func() {
-		ref = &provider.Reference{Path: "/dir1"}
-	})
-
 	JustBeforeEach(func() {
 		var err error
 		env, err = helpers.NewTestEnv()
 		Expect(err).ToNot(HaveOccurred())
+
+		ref = &provider.Reference{
+			ResourceId: env.SpaceRootRes,
+			Path:       "/dir1",
+		}
 	})
 
 	AfterEach(func() {

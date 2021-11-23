@@ -63,7 +63,12 @@ var _ = Describe("File uploads", func() {
 	)
 
 	BeforeEach(func() {
-		ref = &provider.Reference{Path: "/foo"}
+		ref = &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: "not needed here",
+			},
+			Path: "/foo",
+		}
 		user = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "idp",
@@ -93,12 +98,18 @@ var _ = Describe("File uploads", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
-		permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
+	BeforeEach(func() {
+		permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Times(1).Return(true, nil)
 		var err error
 		tree := tree.New(o.Root, true, true, lookup, bs)
 		fs, err = decomposedfs.New(o, lookup, permissions, tree)
 		Expect(err).ToNot(HaveOccurred())
+
+		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(resp.Status.Code).To(Equal(v1beta11.Code_CODE_OK))
+		spaceID = resp.StorageSpace.Id.OpaqueId
+		ref.ResourceId = &provider.ResourceId{StorageId: spaceID}
 	})
 
 	Context("quota exceeded", func() {
@@ -116,27 +127,22 @@ var _ = Describe("File uploads", func() {
 	})
 
 	Context("with insufficient permissions", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
 		})
 
 		Describe("InitiateUpload", func() {
 			It("fails", func() {
+				msg := fmt.Sprintf("error: permission denied: userid/foo")
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).ToNot(BeNil())
+				Expect(err).To(MatchError(msg))
 			})
 		})
 	})
 
 	Context("with insufficient permissions, home node", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			var err error
-			// recreate the fs with home enabled
-			tree := tree.New(o.Root, true, true, lookup, bs)
-			fs, err = decomposedfs.New(o, lookup, permissions, tree)
-			Expect(err).ToNot(HaveOccurred())
-			err = fs.CreateHome(ctx)
-			Expect(err).ToNot(HaveOccurred())
 			// the space name attribute is the stop condition in the lookup
 			h, err := lookup.RootNode(ctx)
 			Expect(err).ToNot(HaveOccurred())
@@ -147,10 +153,8 @@ var _ = Describe("File uploads", func() {
 
 		Describe("InitiateUpload", func() {
 			It("fails", func() {
-				h, err := lookup.RootNode(ctx)
-				Expect(err).ToNot(HaveOccurred())
-				msg := fmt.Sprintf("error: permission denied: %s/foo", h.ID)
-				_, err = fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				msg := fmt.Sprintf("error: permission denied: userid/foo")
+				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).To(MatchError(msg))
 			})
 		})
@@ -167,12 +171,6 @@ var _ = Describe("File uploads", func() {
 			tree := tree.New(o.Root, true, true, lookup, bs)
 			fs, err = decomposedfs.New(o, lookup, permissions, tree)
 			Expect(err).ToNot(HaveOccurred())
-
-			resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(resp.Status.Code).To(Equal(v1beta11.Code_CODE_OK))
-			spaceID = resp.StorageSpace.Id.OpaqueId
-			ref.ResourceId = &provider.ResourceId{StorageId: spaceID}
 		})
 
 		Describe("InitiateUpload", func() {
