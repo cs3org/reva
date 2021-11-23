@@ -62,7 +62,10 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: originalPath})
+			n, err = env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       originalPath,
+			})
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -145,13 +148,20 @@ var _ = Describe("Tree", func() {
 
 					Expect(restoreFunc()).To(Succeed())
 
-					originalNode, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: originalPath})
+					originalNode, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       originalPath,
+					})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(originalNode.Exists).To(BeTrue())
 				})
 
 				It("restores files to different locations", func() {
-					dest, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "dir1/newLocation"})
+					ref := &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       "dir1/newLocation",
+					}
+					dest, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 					Expect(err).ToNot(HaveOccurred())
 
 					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", dest)
@@ -159,11 +169,12 @@ var _ = Describe("Tree", func() {
 
 					Expect(restoreFunc()).To(Succeed())
 
-					newNode, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "dir1/newLocation"})
+					newNode, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(newNode.Exists).To(BeTrue())
 
-					originalNode, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: originalPath})
+					ref.Path = originalPath
+					originalNode, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(originalNode.Exists).To(BeFalse())
 				})
@@ -188,7 +199,10 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{Path: "emptydir"})
+			n, err = env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "emptydir",
+			})
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -232,7 +246,7 @@ var _ = Describe("Tree", func() {
 
 			// Create test dir
 			var err error
-			dir, err = env.CreateTestDir("testdir")
+			dir, err = env.CreateTestDir("testdir", &provider.Reference{ResourceId: env.SpaceRootRes})
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -280,7 +294,7 @@ var _ = Describe("Tree", func() {
 			})
 
 			It("adds the size of child directories", func() {
-				subdir, err := env.CreateTestDir("testdir/200bytes")
+				subdir, err := env.CreateTestDir("testdir/200bytes", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
 				err = subdir.SetTreeSize(uint64(200))
 				Expect(err).ToNot(HaveOccurred())
@@ -296,7 +310,7 @@ var _ = Describe("Tree", func() {
 			})
 
 			It("stops at nodes with no propagation flag", func() {
-				subdir, err := env.CreateTestDir("testdir/200bytes")
+				subdir, err := env.CreateTestDir("testdir/200bytes", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
 				err = subdir.SetTreeSize(uint64(200))
 				Expect(err).ToNot(HaveOccurred())
@@ -307,11 +321,11 @@ var _ = Describe("Tree", func() {
 				Expect(size).To(Equal(uint64(200)))
 				Expect(err).ToNot(HaveOccurred())
 
-				stopdir, err := env.CreateTestDir("testdir/stophere")
+				stopdir, err := env.CreateTestDir("testdir/stophere", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
 				err = xattr.Set(stopdir.InternalPath(), xattrs.PropagationAttr, []byte("0"))
 				Expect(err).ToNot(HaveOccurred())
-				otherdir, err := env.CreateTestDir("testdir/stophere/lotsofbytes")
+				otherdir, err := env.CreateTestDir("testdir/stophere/lotsofbytes", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
 				err = otherdir.SetTreeSize(uint64(100000))
 				Expect(err).ToNot(HaveOccurred())
