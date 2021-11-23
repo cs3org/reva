@@ -20,7 +20,6 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 	"path"
 
 	rtrace "github.com/cs3org/reva/pkg/trace"
@@ -379,90 +378,6 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	}
 
 	log.Debug().Str("share_path", sharePath).Msg("share reference successfully removed")
-
-	return status.NewOK(ctx)
-}
-
-func (s *svc) createReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
-	ref := &provider.Reference{
-		ResourceId: resourceID,
-	}
-	log := appctx.GetLogger(ctx)
-
-	// get the metadata about the share
-	c, _, err := s.find(ctx, ref)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
-	}
-
-	statReq := &provider.StatRequest{
-		Ref: ref,
-	}
-
-	statRes, err := c.Stat(ctx, statReq)
-	if err != nil {
-		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		log.Err(err).Msg("gateway: Stat failed on the share resource id: " + resourceID.String())
-		return status.NewInternal(ctx, err, "error updating received share")
-	}
-
-	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		err := errors.Wrap(err, "gateway: error calling GetHome")
-		return status.NewInternal(ctx, err, "error updating received share")
-	}
-
-	// reference path is the home path + some name
-	// CreateReferene(cs3://home/MyShares/x)
-	// that can end up in the storage provider like:
-	// /eos/user/.shadow/g/gonzalhu/MyShares/x
-	// A reference can point to any place, for that reason the namespace starts with cs3://
-	// For example, a reference can point also to a dropbox resource:
-	// CreateReference(dropbox://x/y/z)
-	// It is the responsibility of the gateway to resolve these references and merge the response back
-	// from the main request.
-	// TODO(labkode): the name of the share should be the filename it points to by default.
-	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
-	log.Info().Msg("mount path will be:" + refPath)
-
-	c, p, err := s.findByPath(ctx, refPath)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
-	}
-	pRef, err := unwrap(&provider.Reference{Path: refPath}, p.ProviderPath)
-	if err != nil {
-		log.Err(err).Msg("gateway: error unwrapping reference")
-		return &rpc.Status{
-			Code: rpc.Code_CODE_INTERNAL,
-		}
-	}
-	createRefReq := &provider.CreateReferenceRequest{
-		Ref: pRef,
-		// cs3 is the Scheme and %s/%s is the Opaque parts of a net.URL.
-		TargetUri: fmt.Sprintf("cs3:%s/%s", resourceID.GetStorageId(), resourceID.GetOpaqueId()),
-	}
-	createRefRes, err := c.CreateReference(ctx, createRefReq)
-	if err != nil {
-		log.Err(err).Msg("gateway: error calling GetHome")
-		return &rpc.Status{
-			Code: rpc.Code_CODE_INTERNAL,
-		}
-	}
-
-	if createRefRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(createRefRes.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "error updating received share")
-	}
 
 	return status.NewOK(ctx)
 }

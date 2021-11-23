@@ -977,11 +977,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			if info, ok := infos[statResp.Info.Path]; !ok {
 				// replace with younger info
 				infos[statResp.Info.Path] = statResp.Info
-			} else {
-				if info.Mtime == nil || (statResp.Info.Mtime != nil && utils.TSToUnixNano(statResp.Info.Mtime) > utils.TSToUnixNano(info.Mtime)) {
-					// replace with younger info
-					infos[statResp.Info.Path] = statResp.Info
-				}
+			} else if info.Mtime == nil || (statResp.Info.Mtime != nil && utils.TSToUnixNano(statResp.Info.Mtime) > utils.TSToUnixNano(info.Mtime)) {
+				// replace with younger info
+				infos[statResp.Info.Path] = statResp.Info
 			}
 		default:
 			log := appctx.GetLogger(ctx)
@@ -1165,10 +1163,10 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 				return nil, errtypes.BadRequest("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + srcProviders[i].ProviderId)
 			}
 			// always use a relative reference
-			srcId := &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
+			srcID := &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
 			if utils.ResourceIDEqual(req.Ref.ResourceId, srcRef.ResourceId) {
 				srcProvider = srcProviders[i]
-				srcRef = &provider.Reference{ResourceId: srcId, Path: "."}
+				srcRef = &provider.Reference{ResourceId: srcID, Path: "."}
 			}
 
 		// 3. relative reference -> forward as is
@@ -1178,10 +1176,10 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 				return nil, errtypes.BadRequest("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + srcProviders[i].ProviderId)
 			}
 			// use relative reference
-			srcId := &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
+			srcID := &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
 			if utils.ResourceIDEqual(req.Ref.ResourceId, srcRef.ResourceId) {
 				srcProvider = srcProviders[i]
-				srcRef = &provider.Reference{ResourceId: srcId, Path: req.Ref.Path}
+				srcRef = &provider.Reference{ResourceId: srcID, Path: req.Ref.Path}
 			}
 		}
 	}

@@ -158,7 +158,7 @@ type registry struct {
 	// a map of resources to providers
 	resources map[string][]*registrypb.ProviderInfo
 	// a map of paths/aliases to spaces and providers
-	//aliases           map[string]map[string]*spaceAndProvider
+	// aliases           map[string]map[string]*spaceAndProvider
 	resourceNameCache map[string]string
 }
 

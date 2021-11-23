@@ -274,6 +274,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		if !strings.Contains(err.Error(), "file exists") {
 			return
 		}
+
 		// try to remove the node
 		e := t.Delete(ctx, n)
 		switch {
@@ -282,7 +283,10 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		default:
 			_, rm, e := t.PurgeRecycleItemFunc(ctx, n.SpaceRoot.ID, n.ID, "")
 			if e == nil {
-				rm()
+				e = rm()
+				if e != nil {
+					// failed to purge from trash
+				}
 			}
 		}
 
@@ -876,7 +880,6 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 		log.Error().Err(err).Str("trashItem", trashItem).Str("link", link).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
 	}
 
-	recycleNode.FindStorageSpaceRoot()
-
+	err = recycleNode.FindStorageSpaceRoot()
 	return
 }

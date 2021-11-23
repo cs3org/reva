@@ -103,7 +103,7 @@ func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Refer
 
 // public link access must send a filter with id or type
 func checkPublicListStorageSpacesFilter(filters []*provider.ListStorageSpacesRequest_Filter) bool {
-	return true
+	// return true
 	for _, f := range filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:

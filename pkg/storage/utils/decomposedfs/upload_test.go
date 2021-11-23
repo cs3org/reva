@@ -21,7 +21,6 @@ package decomposedfs_test
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -133,7 +132,7 @@ var _ = Describe("File uploads", func() {
 
 		Describe("InitiateUpload", func() {
 			It("fails", func() {
-				msg := fmt.Sprintf("error: permission denied: userid/foo")
+				msg := "error: permission denied: userid/foo"
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).To(MatchError(msg))
 			})
@@ -153,7 +152,7 @@ var _ = Describe("File uploads", func() {
 
 		Describe("InitiateUpload", func() {
 			It("fails", func() {
-				msg := fmt.Sprintf("error: permission denied: userid/foo")
+				msg := "error: permission denied: userid/foo"
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).To(MatchError(msg))
 			})

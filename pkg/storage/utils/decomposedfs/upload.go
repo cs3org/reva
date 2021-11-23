@@ -596,7 +596,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	if versionsPath != "" {
 		// copy grant and arbitrary metadata
 		// FIXME ... now restoring an older revision might bring back a grant that was removed!
-		xattrs.CopyMetadata(versionsPath, targetPath, func(attributeName string) bool {
+		err = xattrs.CopyMetadata(versionsPath, targetPath, func(attributeName string) bool {
 			return true
 			// TODO determine all attributes that must be copied, currently we just copy all and overwrite changed properties
 			/*
@@ -606,6 +606,9 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 					strings.HasPrefix(attributeName, xattrs.SpaceNameAttr) || // for a shared file
 			*/
 		})
+		if err != nil {
+			sublog.Info().Err(err).Msg("Decomposedfs: failed to copy xattrs")
+		}
 	}
 
 	// now try write all checksums

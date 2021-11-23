@@ -201,17 +201,17 @@ func NewErrtypeFromStatus(status *rpc.Status) error {
 		return NotFound(status.Message)
 	case rpc.Code_CODE_ALREADY_EXISTS:
 		return AlreadyExists(status.Message)
-		//case rpc.Code_CODE_FAILED_PRECONDITION: ?
-		//	return UserRequired(status.Message)
-		//case rpc.Code_CODE_PERMISSION_DENIED: ?
-		//IsInvalidCredentials
+		// case rpc.Code_CODE_FAILED_PRECONDITION: ?
+		// return UserRequired(status.Message)
+		// case rpc.Code_CODE_PERMISSION_DENIED: ?
+		// IsInvalidCredentials
 	case rpc.Code_CODE_UNIMPLEMENTED:
 		return NotSupported(status.Message)
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		return PermissionDenied(status.Message)
-		//case rpc.Code_CODE_DATA_LOSS: ?
+		// case rpc.Code_CODE_DATA_LOSS: ?
 		//	IsPartialContent
-		//case rpc.Code_CODE_FAILED_PRECONDITION: ?
+		// case rpc.Code_CODE_FAILED_PRECONDITION: ?
 		//	IsChecksumMismatch
 	case rpc.Code_CODE_INSUFFICIENT_STORAGE:
 		return InsufficientStorage(status.Message)
