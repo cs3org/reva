@@ -559,7 +559,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
 		Err(err).
-		Msg("sharesstorageprovider: Got Stat request")
+		Msg("sharesstorageprovider: Got ListContainer request")
 	if err != nil {
 		return nil, err
 	}
