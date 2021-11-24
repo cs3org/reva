@@ -805,18 +805,9 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 		return
 	}
 
-	nodeID := filepath.Base(link)
-	if path == "" || path == "/" {
-		parts := strings.SplitN(filepath.Base(link), ".T.", 2)
-		if len(parts) != 2 {
-			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
-			return
-		}
-		nodeID = parts[0]
-	}
-
 	var attrBytes []byte
-	deletedNodePath = t.lookup.InternalPath(filepath.Base(link))
+	trashNodeID := filepath.Base(link)
+	deletedNodePath = t.lookup.InternalPath(trashNodeID)
 
 	owner := &userpb.UserId{}
 	// lookup ownerId in extended attributes
@@ -838,7 +829,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 		return
 	}
 
-	recycleNode = node.New(nodeID, "", "", 0, "", owner, t.lookup)
+	recycleNode = node.New(trashNodeID, "", "", 0, "", owner, t.lookup)
 	// lookup blobID in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.BlobIDAttr); err == nil {
 		recycleNode.BlobID = string(attrBytes)
@@ -852,11 +843,25 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 	} else {
 		return
 	}
+
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.NameAttr); err == nil {
 		recycleNode.Name = string(attrBytes)
 	} else {
 		return
+	}
+
+	// look up space root from the trashed node
+	err = recycleNode.FindStorageSpaceRoot()
+
+	if path == "" || path == "/" {
+		parts := strings.SplitN(filepath.Base(link), ".T.", 2)
+		if len(parts) != 2 {
+			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
+			return
+		}
+		// update the node id, drop the `.T.{timestamp}` suffix
+		recycleNode.ID = parts[0]
 	}
 
 	// get origin node, is relative to space root
@@ -880,6 +885,5 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 		log.Error().Err(err).Str("trashItem", trashItem).Str("link", link).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
 	}
 
-	err = recycleNode.FindStorageSpaceRoot()
 	return
 }
