@@ -64,15 +64,40 @@ var _ = Describe("storage providers", func() {
 			Username: "einstein",
 		}
 
-		homeRef           = &storagep.Reference{Path: "/"}
-		filePath          = "/file"
-		fileRef           = &storagep.Reference{Path: filePath}
+		homeRef = &storagep.Reference{
+			ResourceId: &storagep.ResourceId{
+				StorageId: user.Id.OpaqueId,
+			},
+			Path: "/",
+		}
+		filePath = "/file"
+		fileRef  = &storagep.Reference{
+			ResourceId: &storagep.ResourceId{
+				StorageId: user.Id.OpaqueId,
+			},
+			Path: filePath,
+		}
 		versionedFilePath = "/versionedFile"
-		versionedFileRef  = &storagep.Reference{Path: versionedFilePath}
-		subdirPath        = "/subdir"
-		subdirRef         = &storagep.Reference{Path: subdirPath}
-		sharesPath        = "/Shares"
-		sharesRef         = &storagep.Reference{Path: sharesPath}
+		versionedFileRef  = &storagep.Reference{
+			ResourceId: &storagep.ResourceId{
+				StorageId: user.Id.OpaqueId,
+			},
+			Path: versionedFilePath,
+		}
+		subdirPath = "/subdir"
+		subdirRef  = &storagep.Reference{
+			ResourceId: &storagep.ResourceId{
+				StorageId: user.Id.OpaqueId,
+			},
+			Path: subdirPath,
+		}
+		sharesPath = "/Shares"
+		sharesRef  = &storagep.Reference{
+			ResourceId: &storagep.ResourceId{
+				StorageId: user.Id.OpaqueId,
+			},
+			Path: sharesPath,
+		}
 	)
 
 	JustBeforeEach(func() {
@@ -106,12 +131,17 @@ var _ = Describe("storage providers", func() {
 		It("creates a home directory", func() {
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			//Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
-			res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
+			res, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
+				Owner: user,
+				Type:  "personal",
+				Name:  user.Id.OpaqueId,
+			})
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
 
+			homeRef.ResourceId = res.StorageSpace.Root
 			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -124,11 +154,16 @@ var _ = Describe("storage providers", func() {
 
 	assertCreateContainer := func() {
 		It("creates a new directory", func() {
-			newRef := &storagep.Reference{Path: "/newdir"}
+			newRef := &storagep.Reference{
+				ResourceId: &storagep.ResourceId{
+					StorageId: user.Id.OpaqueId,
+				},
+				Path: "/newdir",
+			}
 
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: newRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			//Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
 			res, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: newRef})
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -145,12 +180,20 @@ var _ = Describe("storage providers", func() {
 			listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			Expect(len(listRes.Infos)).To(Equal(1))
+			Expect(len(listRes.Infos)).To(Equal(2)) // subdir + .space
 
-			info := listRes.Infos[0]
-			Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
-			Expect(info.Path).To(Equal(subdirPath))
-			Expect(info.Owner.OpaqueId).To(Equal("f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"))
+			for _, info := range listRes.Infos {
+				switch info.Path {
+				default:
+					Fail("unknown path: " + info.Path)
+				case "/.space":
+					Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
+				case subdirPath:
+					Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
+					Expect(info.Owner.OpaqueId).To(Equal("f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"))
+
+				}
+			}
 		})
 	}
 
@@ -208,7 +251,7 @@ var _ = Describe("storage providers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-			targetRef := &storagep.Reference{Path: "/new_subdir"}
+			targetRef := &storagep.Reference{ResourceId: subdirRef.ResourceId, Path: "/new_subdir"}
 			res, err := serviceClient.Move(ctx, &storagep.MoveRequest{Source: subdirRef, Destination: targetRef})
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
@@ -227,9 +270,11 @@ var _ = Describe("storage providers", func() {
 		It("gets the path to an ID", func() {
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			res, err := serviceClient.GetPath(ctx, &storagep.GetPathRequest{ResourceId: statRes.Info.Id})
 			Expect(err).ToNot(HaveOccurred())
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(res.Path).To(Equal(subdirPath))
 		})
 	}
@@ -535,7 +580,11 @@ var _ = Describe("storage providers", func() {
 
 		Context("with a home and a subdirectory", func() {
 			JustBeforeEach(func() {
-				res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
+				res, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
+					Owner: user,
+					Type:  "personal",
+					Name:  user.Id.OpaqueId,
+				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
