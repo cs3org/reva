@@ -166,7 +166,6 @@ var _ = Describe("The ocs API", func() {
 
 				w := httptest.NewRecorder()
 				h.CreateShare(w, req)
-				//fmt.Println(w.Result())
 				Expect(w.Result().StatusCode).To(Equal(200))
 				client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 1)
 			})

@@ -241,9 +241,9 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 	}
 
 	// Allow passing in the node id
-	//if n.ID != "" {
+	// if n.ID != "" {
 	// TODO check if already exists
-	//}
+	// }
 
 	// create a directory node
 	if n.ID == "" {

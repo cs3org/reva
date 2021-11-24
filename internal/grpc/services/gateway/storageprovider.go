@@ -1111,7 +1111,6 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 
 			if utils.IsAbsoluteReference(req.Ref) {
 				for j := range res.RecycleItems {
-					//wrap(res.RecycleItems[j].Ref, p) only handles ResourceInfo
 					res.RecycleItems[j].Ref.Path = path.Join(providers[i].ProviderPath, res.RecycleItems[j].Ref.Path)
 				}
 			}
