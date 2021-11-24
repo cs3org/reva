@@ -132,7 +132,7 @@ func NewTestEnv() (*TestEnv, error) {
 		return nil, err
 	}
 
-	//Create dir1
+	// Create dir1
 	dir1, err := env.CreateTestDir("./dir1", spaceRootRef)
 	if err != nil {
 		return nil, err
