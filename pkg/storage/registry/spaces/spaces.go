@@ -134,10 +134,7 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 	}
 	c.init()
 	r := &registry{
-		c:         c,
-		resources: make(map[string][]*registrypb.ProviderInfo),
-		//aliases:           make(map[string]map[string]*spaceAndProvider),
-		resourceNameCache: make(map[string]string),
+		c: c,
 	}
 	r.homeTemplate, err = template.New("home_template").Funcs(sprig.TxtFuncMap()).Parse(c.HomeTemplate)
 	if err != nil {
@@ -155,11 +152,6 @@ type registry struct {
 	c *config
 	// the template to use when determining the home provider
 	homeTemplate *template.Template
-	// a map of resources to providers
-	resources map[string][]*registrypb.ProviderInfo
-	// a map of paths/aliases to spaces and providers
-	// aliases           map[string]map[string]*spaceAndProvider
-	resourceNameCache map[string]string
 }
 
 // ListProviders lists all storage spaces, which is *very* different from the static provider, which lists provider ids
@@ -194,7 +186,6 @@ func (r *registry) ListProviders(ctx context.Context) ([]*registrypb.ProviderInf
 				Address:      rule.Address,
 			}
 			providers = append(providers, pi)
-			r.resources[spaceID(space.Root)] = []*registrypb.ProviderInfo{pi}
 		}
 	}
 	return providers, nil
