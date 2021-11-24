@@ -46,6 +46,29 @@ import (
 	gstatus "google.golang.org/grpc/status"
 )
 
+/*  About caching
+    The gateway is doing a lot of requests to look up the responsible storage providers for a reference.
+    - when the reference uses an id we can use a global id -> provider cache because it is the same for all users
+    - when the reference is an absolute path we
+   	 - 1. look up the corresponding space in the space registry
+     - 2. can reuse the global id -> provider cache to look up the provider
+	 - paths are unique per user: when a rule mounts shares at /shares/{{.Space.Name}}
+	   the path /shares/Documents might show different content for einstein than for marie
+	   -> path -> spaceid lookup needs a per user cache
+	When can we invalidate?
+	- the global cache needs to be invalidated when the provider for a space id changes.
+		- happens when a space is moved from one provider to another. Not yet implemented
+		-> should be good enough to use a TTL. daily should be good enough
+	- the user individual file cache is actually a cache of the mount points
+	    - we could do a registry.ListProviders (for user) on startup to warm up the cache ...
+		- when a share is granted or removed we need to invalidate that path
+		- when a share is renamed we need to invalidate the path
+		- we can use a ttl for all paths?
+		- the findProviders func in the gateway needs to look up in the user cache first
+	We want to cache the root etag of spaces
+	    - can be invalidated on every write or delete with fallback via TTL?
+*/
+
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
 type transferClaims struct {
 	jwt.StandardClaims
@@ -1344,6 +1367,17 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
+	// can we use the provider cache?
+	if ref.ResourceId != nil {
+		// only the StorageId is used to look up the provider. the opaqueid can only be a share and as such part of a storage
+		if value, exists := s.providerCache.Get(ref.ResourceId.StorageId); exists == nil {
+			if providers, ok := value.([]*registry.ProviderInfo); ok {
+				return providers, nil
+			}
+		}
+	}
+
+	// lookup
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
@@ -1360,6 +1394,7 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	if res.Status.Code != rpc.Code_CODE_OK {
 		switch res.Status.Code {
 		case rpc.Code_CODE_NOT_FOUND:
+			// TODO use tombstone cache item?
 			return nil, errtypes.NotFound("gateway: storage provider not found for reference:" + ref.String())
 		case rpc.Code_CODE_PERMISSION_DENIED:
 			return nil, errtypes.PermissionDenied("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
@@ -1374,6 +1409,10 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 
 	if res.Providers == nil {
 		return nil, errtypes.NotFound("gateway: provider is nil")
+	}
+
+	if ref.ResourceId != nil {
+		s.providerCache.Set(ref.ResourceId.StorageId, res.Providers)
 	}
 
 	return res.Providers, nil
