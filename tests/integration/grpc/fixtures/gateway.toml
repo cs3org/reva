@@ -19,7 +19,8 @@ basic = "{{users_address}}"
 driver = "spaces"
 
 [grpc.services.storageregistry.drivers.spaces]
-home_provider = "/users"
+#home_provider = "/users"
+home_template = "/users/{{.Id.OpaqueId}}"
 
 [grpc.services.storageregistry.drivers.spaces.rules]
 "/users" = {"address" = "{{storage_address}}", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}"}
