@@ -397,7 +397,10 @@ var _ = Describe("storage providers", func() {
 		})
 
 		It("restores resources to a different location", func() {
-			restoreRef := &storagep.Reference{Path: "/subdirRestored"}
+			restoreRef := &storagep.Reference{
+				ResourceId: homeRef.ResourceId,
+				Path:       "./subdirRestored",
+			}
 			By("deleting an item")
 			res, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
@@ -419,9 +422,12 @@ var _ = Describe("storage providers", func() {
 
 			restoreRes, err := serviceClient.RestoreRecycleItem(ctx,
 				&storagep.RestoreRecycleItemRequest{
-					Ref:        homeRef,
-					Key:        item.Key,
-					RestoreRef: &storagep.Reference{Path: "/subdirRestored"},
+					Ref: homeRef,
+					Key: item.Key,
+					RestoreRef: &storagep.Reference{
+						ResourceId: homeRef.ResourceId,
+						Path:       "/subdirRestored",
+					},
 				},
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -445,7 +451,9 @@ var _ = Describe("storage providers", func() {
 			Expect(len(listRes.RecycleItems)).To(Equal(1))
 
 			By("purging a recycle item")
-			purgeRes, err := serviceClient.PurgeRecycle(ctx, &storagep.PurgeRecycleRequest{Ref: subdirRef})
+			ref := listRes.RecycleItems[0].Ref
+			ref.ResourceId = homeRef.ResourceId
+			purgeRes, err := serviceClient.PurgeRecycle(ctx, &storagep.PurgeRecycleRequest{Ref: ref})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(purgeRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -464,7 +472,9 @@ var _ = Describe("storage providers", func() {
 			Expect(len(listRes.Infos)).To(Equal(0))
 
 			res, err := serviceClient.CreateReference(ctx, &storagep.CreateReferenceRequest{
-				Ref:       &storagep.Reference{Path: "/Shares/reference"},
+				Ref: &storagep.Reference{
+					Path: "/Shares/reference",
+				},
 				TargetUri: "scheme://target",
 			})
 			Expect(err).ToNot(HaveOccurred())
@@ -603,15 +613,13 @@ var _ = Describe("storage providers", func() {
 			assertUploads()
 			assertDownloads()
 			assertRecycle()
-			assertReferences()
 			assertMetadata()
 		})
 
 		Context("with an existing file /versioned_file", func() {
 			JustBeforeEach(func() {
 				fs, err := ocis.New(map[string]interface{}{
-					"root":        revads["storage"].TmpRoot,
-					"enable_home": true,
+					"root": revads["storage"].TmpRoot,
 				})
 				Expect(err).ToNot(HaveOccurred())
 
@@ -620,7 +628,10 @@ var _ = Describe("storage providers", func() {
 
 				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
-				err = fs.CreateHome(ctx)
+				_, err = fs.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
+					Owner: user,
+					Type:  "personal",
+				})
 				Expect(err).ToNot(HaveOccurred())
 				err = fs.Upload(ctx, versionedFileRef, content1)
 				Expect(err).ToNot(HaveOccurred())
