@@ -269,14 +269,12 @@ var _ = Describe("Static", func() {
 				Expect(addresses).To(ConsistOf("127.0.0.1:13023", "127.0.0.1:13024"))
 			})
 
-			FIt("includes the space for the requested path", func() {
+			It("includes the space for the requested path", func() {
 				filters := map[string]string{
 					"space_path": "/foo/bar/baz",
 				}
 				providers, err := handler.ListProviders(ctxAlice, filters)
 				Expect(err).ToNot(HaveOccurred())
-				s, _ := json.MarshalIndent(providers, "", "	")
-				fmt.Print(string(s))
 				Expect(len(providers)).To(Equal(1))
 				Expect(providers[0].Address).To(Equal("127.0.0.1:13024"))
 
