@@ -30,6 +30,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -225,16 +226,17 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 	if ref == nil {
 		return errtypes.BadRequest("missing reference, needs a space id")
 	}
-	if restoreRef == nil {
-		// restore to same space
-		restoreRef = &provider.Reference{
-			ResourceId: ref.ResourceId,
+
+	var targetNode *node.Node
+	if restoreRef != nil {
+		tn, err := fs.lu.NodeFromResource(ctx, restoreRef)
+		if err != nil {
+			return err
 		}
+
+		targetNode = tn
 	}
-	targetNode, err := fs.lu.NodeFromResource(ctx, restoreRef)
-	if err != nil {
-		return err
-	}
+
 	rn, parent, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, key, relativePath, targetNode)
 	if err != nil {
 		return err

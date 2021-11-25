@@ -67,6 +67,7 @@ var _ = Describe("storage providers", func() {
 		homeRef = &storagep.Reference{
 			ResourceId: &storagep.ResourceId{
 				StorageId: user.Id.OpaqueId,
+				OpaqueId:  user.Id.OpaqueId,
 			},
 			Path: "/",
 		}
@@ -141,7 +142,7 @@ var _ = Describe("storage providers", func() {
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
 
-			homeRef.ResourceId = res.StorageSpace.Root
+			//homeRef.ResourceId = res.StorageSpace.Root
 			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
