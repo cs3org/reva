@@ -1683,7 +1683,13 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		}
 	}
 
+	if eosFileInfo.SysACL == nil {
+		return &provider.ResourcePermissions{
+			// no permissions
+		}
+	}
 	var perm provider.ResourcePermissions
+
 	for _, e := range eosFileInfo.SysACL.Entries {
 		var userInGroup bool
 		if e.Type == acl.TypeGroup {
