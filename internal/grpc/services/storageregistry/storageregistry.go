@@ -20,9 +20,12 @@ package storageregistry
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -101,7 +104,6 @@ func getRegistry(c *config) (storage.Registry, error) {
 }
 
 func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.ListStorageProvidersRequest) (*registrypb.ListStorageProvidersResponse, error) {
-
 	pinfos, err := s.reg.ListProviders(ctx, sdk.DecodeOpaqueMap(req.Opaque))
 	if err != nil {
 		return &registrypb.ListStorageProvidersResponse{
@@ -116,8 +118,15 @@ func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.List
 	return res, nil
 }
 
+// FIXME rename to GetStorageProvider
 func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetStorageProvidersRequest) (*registrypb.GetStorageProvidersResponse, error) {
-	p, err := s.reg.ListSpaces(ctx, req.Ref)
+	space, err := decodeSpace(req.Opaque)
+	if err != nil {
+		return &registrypb.GetStorageProvidersResponse{
+			Status: status.NewInvalidArg(ctx, err.Error()),
+		}, nil
+	}
+	p, err := s.reg.GetProvider(ctx, space)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -133,25 +142,26 @@ func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetSt
 
 	res := &registrypb.GetStorageProvidersResponse{
 		Status:    status.NewOK(ctx),
-		Providers: p,
+		Providers: []*registrypb.ProviderInfo{p},
 	}
 	return res, nil
 }
 
-func (s *service) GetHome(ctx context.Context, req *registrypb.GetHomeRequest) (*registrypb.GetHomeResponse, error) {
-	log := appctx.GetLogger(ctx)
-	p, err := s.reg.GetHome(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("error getting home")
-		res := &registrypb.GetHomeResponse{
-			Status: status.NewInternal(ctx, err, "error getting home"),
+func decodeSpace(o *typespb.Opaque) (*provider.StorageSpace, error) {
+	if entry, ok := o.Map["space"]; ok {
+		space := &provider.StorageSpace{}
+		if err := json.Unmarshal(entry.Value, space); err != nil {
+			return nil, err
 		}
-		return res, nil
+		return space, nil
 	}
+	return nil, fmt.Errorf("missing space in opaque property")
+}
 
+func (s *service) GetHome(ctx context.Context, req *registrypb.GetHomeRequest) (*registrypb.GetHomeResponse, error) {
 	res := &registrypb.GetHomeResponse{
-		Status:   status.NewOK(ctx),
-		Provider: p,
+		Status: status.NewUnimplemented(ctx, nil, "getHome is no longer used. use List"),
 	}
 	return res, nil
+
 }
