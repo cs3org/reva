@@ -126,41 +126,85 @@ var _ = Describe("Static", func() {
 		})
 
 		Describe("ListProviders", func() {
-			BeforeEach(func() {
-				client.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
-					&provider.ListStorageSpacesResponse{
+			Context("path based requests", func() {
+				BeforeEach(func() {
+					client.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
+						&provider.ListStorageSpacesResponse{
+							Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+							StorageSpaces: []*provider.StorageSpace{
+								{
+									Id:   &provider.StorageSpaceId{OpaqueId: "space1!space1"},
+									Root: &provider.ResourceId{StorageId: "space1", OpaqueId: "space1"},
+									Name: "Space 1",
+								},
+								{
+									Id:   &provider.StorageSpaceId{OpaqueId: "space2!space2"},
+									Root: &provider.ResourceId{StorageId: "space2", OpaqueId: "space2"},
+									Name: "Space 2",
+								},
+							},
+						}, nil)
+				})
+
+				It("filters by path with a simple rule", func() {
+					filters := map[string]string{
+						"space_path": "/projects",
+					}
+					providers, err := handler.ListProviders(ctxAlice, filters)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(providers)).To(Equal(1))
+					p := providers[0]
+					Expect(p.Address).To(Equal("127.0.0.1:13022"))
+
+					spacePaths := map[string]string{}
+					err = json.Unmarshal(p.Opaque.Map["space_paths"].Value, &spacePaths)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(spacePaths)).To(Equal(2))
+					Expect(spacePaths["space1!space1"]).To(Equal("/projects/Space 1"))
+					Expect(spacePaths["space2!space2"]).To(Equal("/projects/Space 2"))
+				})
+			})
+
+			Context("with id based requests", func() {
+				BeforeEach(func() {
+					client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *provider.ListStorageSpacesRequest) bool {
+						return len(req.Filters) == 2 && // the 2 filters are the space type defined in the rule and the id from the request
+							req.Filters[1].Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID &&
+							req.Filters[1].GetId().OpaqueId == "space1!space1"
+					})).Return(&provider.ListStorageSpacesResponse{
 						Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
 						StorageSpaces: []*provider.StorageSpace{
 							{
-								Id:   &provider.StorageSpaceId{OpaqueId: "space1"},
+								Id:   &provider.StorageSpaceId{OpaqueId: "space1!space1"},
 								Root: &provider.ResourceId{StorageId: "space1", OpaqueId: "space1"},
 								Name: "Space 1",
 							},
-							{
-								Id:   &provider.StorageSpaceId{OpaqueId: "space2"},
-								Root: &provider.ResourceId{StorageId: "space2", OpaqueId: "space2"},
-								Name: "Space 2",
-							},
 						},
 					}, nil)
-			})
+					client.On("ListStorageSpaces", mock.Anything, mock.Anything).Return( // fallback
+						&provider.ListStorageSpacesResponse{
+							Status:        &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+							StorageSpaces: []*provider.StorageSpace{},
+						}, nil)
+				})
 
-			It("filters by path with a simple rule", func() {
-				filters := map[string]string{
-					"space_path": "/projects",
-				}
-				providers, err := handler.ListProviders(ctxAlice, filters)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(providers)).To(Equal(1))
-				p := providers[0]
-				Expect(p.Address).To(Equal("127.0.0.1:13022"))
+				It("filters by id", func() {
+					filters := map[string]string{
+						"storage_id": "space1",
+						"opaque_id":  "space1",
+					}
+					providers, err := handler.ListProviders(ctxAlice, filters)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(providers)).To(Equal(1))
+					p := providers[0]
+					Expect(p.Address).To(Equal("127.0.0.1:13022"))
 
-				spacePaths := map[string]string{}
-				err = json.Unmarshal(p.Opaque.Map["space_paths"].Value, &spacePaths)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(spacePaths)).To(Equal(2))
-				Expect(spacePaths["space1"]).To(Equal("/projects/Space 1"))
-				Expect(spacePaths["space2"]).To(Equal("/projects/Space 2"))
+					spacePaths := map[string]string{}
+					err = json.Unmarshal(p.Opaque.Map["space_paths"].Value, &spacePaths)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(spacePaths)).To(Equal(1))
+					Expect(spacePaths["space1!space1"]).To(Equal("/projects/Space 1"))
+				})
 			})
 		})
 	})
