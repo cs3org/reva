@@ -66,7 +66,10 @@ type FS interface {
 // Registry is the interface that storage registries implement
 // for discovering storage providers
 type Registry interface {
+	// GetProvider returns the Address of the storage provider that should be used for the given space.
+	// Use it to determine where to create a new storage space.
 	GetProvider(ctx context.Context, space *provider.StorageSpace) (*registry.ProviderInfo, error)
+	// ListProviders returns the storage providers that match the given filter
 	ListProviders(ctx context.Context, filters map[string]string) ([]*registry.ProviderInfo, error)
 }
 
