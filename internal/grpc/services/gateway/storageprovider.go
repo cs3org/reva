@@ -1267,10 +1267,7 @@ func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provi
 	if spacePaths := decodeSpacePaths(p.Opaque); len(spacePaths) > 0 {
 		for spaceId, spacePath := range spacePaths {
 			mountPath = spacePath
-			root = &provider.ResourceId{}
-			if root.StorageId, root.OpaqueId, err = utils.SplitStorageSpaceID(spaceId); err != nil {
-				return nil, nil, err
-			}
+			root = splitStorageSpaceID(spaceId)
 			break // TODO can there be more than one space for a path?
 		}
 	}
