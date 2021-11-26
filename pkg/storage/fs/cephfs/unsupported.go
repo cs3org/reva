@@ -23,7 +23,6 @@ package cephfs
 import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -34,11 +33,5 @@ func init() {
 // New returns an implementation to of the storage.FS interface that talk to
 // a ceph filesystem.
 func New(m map[string]interface{}) (storage.FS, error) {
-	c := &Options{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-
 	return nil, errors.New("cephfs: revad was compiled without CephFS support")
 }
