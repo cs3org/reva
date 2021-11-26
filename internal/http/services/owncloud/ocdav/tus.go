@@ -226,40 +226,36 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 
 		var httpRes *http.Response
 
-		if length != 0 {
-			httpReq, err := rhttp.NewRequest(ctx, http.MethodPatch, ep, r.Body)
-			if err != nil {
-				log.Debug().Err(err).Msg("wrong request")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
+		httpReq, err := rhttp.NewRequest(ctx, http.MethodPatch, ep, r.Body)
+		if err != nil {
+			log.Debug().Err(err).Msg("wrong request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-			httpReq.Header.Set(HeaderContentType, r.Header.Get(HeaderContentType))
-			httpReq.Header.Set(HeaderContentLength, r.Header.Get(HeaderContentLength))
-			if r.Header.Get(HeaderUploadOffset) != "" {
-				httpReq.Header.Set(HeaderUploadOffset, r.Header.Get(HeaderUploadOffset))
-			} else {
-				httpReq.Header.Set(HeaderUploadOffset, "0")
-			}
-			httpReq.Header.Set(HeaderTusResumable, r.Header.Get(HeaderTusResumable))
-
-			httpRes, err = s.client.Do(httpReq)
-			if err != nil {
-				log.Error().Err(err).Msg("error doing GET request to data service")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			defer httpRes.Body.Close()
-
-			w.Header().Set(HeaderUploadOffset, httpRes.Header.Get(HeaderUploadOffset))
-			w.Header().Set(HeaderTusResumable, httpRes.Header.Get(HeaderTusResumable))
-			w.Header().Set(HeaderTusUploadExpires, httpRes.Header.Get(HeaderTusUploadExpires))
-			if httpRes.StatusCode != http.StatusNoContent {
-				w.WriteHeader(httpRes.StatusCode)
-				return
-			}
+		httpReq.Header.Set(HeaderContentType, r.Header.Get(HeaderContentType))
+		httpReq.Header.Set(HeaderContentLength, r.Header.Get(HeaderContentLength))
+		if r.Header.Get(HeaderUploadOffset) != "" {
+			httpReq.Header.Set(HeaderUploadOffset, r.Header.Get(HeaderUploadOffset))
 		} else {
-			log.Debug().Msg("Skipping sending a Patch request as body is empty")
+			httpReq.Header.Set(HeaderUploadOffset, "0")
+		}
+		httpReq.Header.Set(HeaderTusResumable, r.Header.Get(HeaderTusResumable))
+
+		httpRes, err = s.client.Do(httpReq)
+		if err != nil {
+			log.Error().Err(err).Msg("error doing GET request to data service")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer httpRes.Body.Close()
+
+		w.Header().Set(HeaderUploadOffset, httpRes.Header.Get(HeaderUploadOffset))
+		w.Header().Set(HeaderTusResumable, httpRes.Header.Get(HeaderTusResumable))
+		w.Header().Set(HeaderTusUploadExpires, httpRes.Header.Get(HeaderTusUploadExpires))
+		if httpRes.StatusCode != http.StatusNoContent {
+			w.WriteHeader(httpRes.StatusCode)
+			return
 		}
 
 		// check if upload was fully completed

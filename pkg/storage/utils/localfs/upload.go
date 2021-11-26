@@ -43,18 +43,7 @@ var defaultFilePerm = os.FileMode(0664)
 func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		// Upload corresponding to this ID was not found.
-		// Assume that this corresponds to the resource path to which the file has to be uploaded.
-
-		// Set the length to 0 and set SizeIsDeferred to true
-		metadata := map[string]string{"sizedeferred": "true"}
-		uploadIDs, err := fs.InitiateUpload(ctx, ref, 0, metadata)
-		if err != nil {
-			return err
-		}
-		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
-			return errors.Wrap(err, "localfs: error retrieving upload")
-		}
+		return errors.Wrap(err, "localfs: error retrieving upload")
 	}
 
 	uploadInfo := upload.(*fileUpload)
@@ -199,16 +188,6 @@ func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tu
 		infoPath: binPath + ".info",
 		fs:       fs,
 		ctx:      ctx,
-	}
-
-	if !info.SizeIsDeferred && info.Size == 0 {
-		log.Debug().Interface("info", info).Msg("localfs: finishing upload for empty file")
-		// no need to create info file and finish directly
-		err := u.FinishUpload(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return u, nil
 	}
 
 	// writeInfo creates the file by itself if necessary
