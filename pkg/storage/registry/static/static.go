@@ -20,6 +20,9 @@ package static
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"path"
 	"regexp"
 	"strings"
 
@@ -110,6 +113,19 @@ func getProviderAddr(ctx context.Context, r rule) string {
 }
 
 func (b *reg) GetProvider(ctx context.Context, space *provider.StorageSpace) (*registrypb.ProviderInfo, error) {
+	// Assume that HomeProvider is not a regexp
+	if space.SpaceType == "personal" {
+		if r, ok := b.c.Rules[b.c.HomeProvider]; ok {
+			if addr := getProviderAddr(ctx, r); addr != "" {
+				return &registrypb.ProviderInfo{
+					ProviderPath: b.c.HomeProvider,
+					Address:      addr,
+				}, nil
+			}
+		}
+		return nil, errors.New("static: home not found")
+	}
+	return nil, errors.New("static: only personal home is supported")
 	/*provider := []*registrypb.ProviderInfo{}
 	for k, v := range b.c.Rules {
 		if addr := getProviderAddr(ctx, v); addr != "" {
@@ -124,104 +140,83 @@ func (b *reg) GetProvider(ctx context.Context, space *provider.StorageSpace) (*r
 	}
 	return providers, nil
 	*/
-	return nil, errtypes.NotSupported("FIXME")
 }
-
-/*
-// returns the the root path of the first provider in the list.
-func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
-	// Assume that HomeProvider is not a regexp
-	if r, ok := b.c.Rules[b.c.HomeProvider]; ok {
-		if addr := getProviderAddr(ctx, r); addr != "" {
-			return &registrypb.ProviderInfo{
-				ProviderPath: b.c.HomeProvider,
-				Address:      addr,
-			}, nil
-		}
-	}
-	return nil, errors.New("static: home not found")
-}
-*/
 
 func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*registrypb.ProviderInfo, error) {
 
-	return nil, errtypes.NotSupported("FIXME")
-	/*
-		// find longest match
-		var match *registrypb.ProviderInfo
-		var shardedMatches []*registrypb.ProviderInfo
-		// If the reference has a resource id set, use it to route
-		if ref.ResourceId != nil {
-			if ref.ResourceId.StorageId != "" {
-				for prefix, rule := range b.c.Rules {
-					addr := getProviderAddr(ctx, rule)
-					r, err := regexp.Compile("^" + prefix + "$")
-					if err != nil {
-						continue
-					}
-					// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-					if m := r.FindString(ref.ResourceId.StorageId); m != "" {
-						return []*registrypb.ProviderInfo{{
-							ProviderId:   ref.ResourceId.StorageId,
-							Address:      addr,
-							ProviderPath: rule.ProviderPath,
-						}}, nil
-					}
-				}
-				// TODO if the storage id is not set but node id is set we could poll all storage providers to check if the node is known there
-				// for now, say the reference is invalid
-				if ref.ResourceId.OpaqueId != "" {
-					return nil, errtypes.BadRequest("invalid reference " + ref.String())
-				}
+	// find longest match
+	var match *registrypb.ProviderInfo
+	var shardedMatches []*registrypb.ProviderInfo
+	// If the reference has a resource id set, use it to route
+	if filters["storage_id"] != "" {
+		for prefix, rule := range b.c.Rules {
+			addr := getProviderAddr(ctx, rule)
+			r, err := regexp.Compile("^" + prefix + "$")
+			if err != nil {
+				continue
+			}
+			// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
+			if m := r.FindString(filters["storage_id"]); m != "" {
+				return []*registrypb.ProviderInfo{{
+					ProviderId:   filters["storage_id"],
+					Address:      addr,
+					ProviderPath: rule.ProviderPath,
+				}}, nil
 			}
 		}
+		// TODO if the storage id is not set but node id is set we could poll all storage providers to check if the node is known there
+		// for now, say the reference is invalid
+		if filters["opaque_id"] != "" {
+			return nil, errtypes.BadRequest(fmt.Sprintf("invalid filter %+v", filters))
+		}
+	}
 
-		// Try to find by path  as most storage operations will be done using the path.
-		// TODO this needs to be reevaluated once all clients query the storage registry for a list of storage providers
-		fn := path.Clean(ref.GetPath())
-		if fn != "" {
-			for prefix, rule := range b.c.Rules {
+	// Try to find by path  as most storage operations will be done using the path.
+	// TODO this needs to be reevaluated once all clients query the storage registry for a list of storage providers
+	fn := path.Clean(filters["path"])
+	if fn != "" {
+		for prefix, rule := range b.c.Rules {
 
-				addr := getProviderAddr(ctx, rule)
-				r, err := regexp.Compile("^" + prefix)
-				if err != nil {
+			addr := getProviderAddr(ctx, rule)
+			r, err := regexp.Compile("^" + prefix)
+			if err != nil {
+				continue
+			}
+			if m := r.FindString(fn); m != "" {
+				if match != nil && len(match.ProviderPath) > len(m) {
+					// Do not overwrite existing longer match
 					continue
 				}
-				if m := r.FindString(fn); m != "" {
-					if match != nil && len(match.ProviderPath) > len(m) {
-						// Do not overwrite existing longer match
-						continue
-					}
-					match = &registrypb.ProviderInfo{
-						ProviderId:   rule.ProviderID,
-						ProviderPath: m,
-						Address:      addr,
-					}
+				match = &registrypb.ProviderInfo{
+					ProviderId:   rule.ProviderID,
+					ProviderPath: m,
+					Address:      addr,
 				}
-				// Check if the current rule forms a part of a reference spread across storage providers.
-				if strings.HasPrefix(prefix, fn) {
-					combs := generateRegexCombinations(prefix)
-					for _, c := range combs {
-						shardedMatches = append(shardedMatches, &registrypb.ProviderInfo{
-							ProviderId:   rule.ProviderID,
-							ProviderPath: c,
-							Address:      addr,
-						})
-					}
+			}
+			// Check if the current rule forms a part of a reference spread across storage providers.
+			if strings.HasPrefix(prefix, fn) {
+				combs := generateRegexCombinations(prefix)
+				for _, c := range combs {
+					shardedMatches = append(shardedMatches, &registrypb.ProviderInfo{
+						ProviderId:   rule.ProviderID,
+						ProviderPath: c,
+						Address:      addr,
+					})
 				}
 			}
 		}
+	}
 
-		if match != nil && match.ProviderPath != "" {
-			return []*registrypb.ProviderInfo{match}, nil
-		} else if len(shardedMatches) > 0 {
-			// If we don't find a perfect match but at least one provider is encapsulated
-			// by the reference, return all such providers.
-			return shardedMatches, nil
-		}
+	if match != nil && match.ProviderPath != "" {
+		return []*registrypb.ProviderInfo{match}, nil
+	} else if len(shardedMatches) > 0 {
+		// If we don't find a perfect match but at least one provider is encapsulated
+		// by the reference, return all such providers.
+		return shardedMatches, nil
+	}
 
-		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
-	*/
+	return nil, errtypes.NotFound(fmt.Sprintf("storage provider not found for filters %+v", filters))
+
 }
 
 func generateRegexCombinations(rex string) []string {
