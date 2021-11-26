@@ -148,7 +148,7 @@ var _ = Describe("Static", func() {
 
 				It("filters by path with a simple rule", func() {
 					filters := map[string]string{
-						"space_path": "/projects",
+						"path": "/projects",
 					}
 					providers, err := handler.ListProviders(ctxAlice, filters)
 					Expect(err).ToNot(HaveOccurred())
@@ -292,7 +292,7 @@ var _ = Describe("Static", func() {
 		Describe("ListProviders", func() {
 			It("includes all spaces below the requested path", func() {
 				filters := map[string]string{
-					"space_path": "/foo",
+					"path": "/foo",
 				}
 				providers, err := handler.ListProviders(ctxAlice, filters)
 				Expect(err).ToNot(HaveOccurred())
@@ -301,7 +301,7 @@ var _ = Describe("Static", func() {
 
 			It("includes all spaces below the requested path but not the one above", func() {
 				filters := map[string]string{
-					"space_path": "/foo/bar",
+					"path": "/foo/bar",
 				}
 				providers, err := handler.ListProviders(ctxAlice, filters)
 				Expect(err).ToNot(HaveOccurred())
@@ -315,7 +315,7 @@ var _ = Describe("Static", func() {
 
 			It("includes the space for the requested path", func() {
 				filters := map[string]string{
-					"space_path": "/foo/bar/baz",
+					"path": "/foo/bar/baz",
 				}
 				providers, err := handler.ListProviders(ctxAlice, filters)
 				Expect(err).ToNot(HaveOccurred())
@@ -323,7 +323,7 @@ var _ = Describe("Static", func() {
 				Expect(providers[0].Address).To(Equal("127.0.0.1:13024"))
 
 				filters = map[string]string{
-					"space_path": "/foo/bar/baz/qux",
+					"path": "/foo/bar/baz/qux",
 				}
 				providers, err = handler.ListProviders(ctxAlice, filters)
 				Expect(err).ToNot(HaveOccurred())
@@ -333,7 +333,7 @@ var _ = Describe("Static", func() {
 
 			It("includes the space for the requested path", func() {
 				filters := map[string]string{
-					"space_path": "/foo/bar/bif",
+					"path": "/foo/bar/bif",
 				}
 				providers, err := handler.ListProviders(ctxAlice, filters)
 				Expect(err).ToNot(HaveOccurred())

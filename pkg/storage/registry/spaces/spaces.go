@@ -250,8 +250,8 @@ func (r *registry) GetProvider(ctx context.Context, space *provider.StorageSpace
 // matches = /foo/bar       <=> /foo/bar        -> list(spaceid, .)
 // below   = /foo/bar/bif   <=> /foo/bar        -> list(spaceid, ./bif)
 func (r *registry) ListProviders(ctx context.Context, filters map[string]string) ([]*registrypb.ProviderInfo, error) {
-	if filters["space_path"] != "" {
-		return r.findProvidersForAbsolutePathReference(ctx, filters["space_path"]), nil
+	if filters["path"] != "" {
+		return r.findProvidersForAbsolutePathReference(ctx, filters["path"]), nil
 	} else if filters["storage_id"] != "" && filters["opaque_id"] != "" {
 		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"]), nil
 	}
