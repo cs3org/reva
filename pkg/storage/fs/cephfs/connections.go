@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//+build ceph
+// +build ceph
 
 package cephfs
 
@@ -110,8 +110,8 @@ type adminConn struct {
 	indexPoolName string
 	subvolAdmin   *admin.FSAdmin
 	adminMount    Mount
-	radosConn *rados2.Conn
-	radosIO   *rados2.IOContext
+	radosConn     *rados2.Conn
+	radosIO       *rados2.IOContext
 }
 
 func newAdminConn(poolName string) *adminConn {

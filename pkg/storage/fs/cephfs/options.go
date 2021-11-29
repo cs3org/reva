@@ -16,24 +16,25 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//+build ceph
+// +build ceph
 
 package cephfs
 
 import (
-	"github.com/cs3org/reva/pkg/sharedconf"
 	"path/filepath"
+
+	"github.com/cs3org/reva/pkg/sharedconf"
 )
 
 // Options for the cephfs module
 type Options struct {
-	GatewaySvc     string `mapstructure:"gatewaysvc"`
-	IndexPool      string `mapstructure:"index_pool"`
-	Root           string `mapstructure:"root"`
-	ShadowFolder   string `mapstructure:"shadow_folder"`
-	ShareFolder    string `mapstructure:"share_folder"`
-	UploadFolder   string `mapstructure:"uploads"`
-	UserLayout     string `mapstructure:"user_layout"`
+	GatewaySvc   string `mapstructure:"gatewaysvc"`
+	IndexPool    string `mapstructure:"index_pool"`
+	Root         string `mapstructure:"root"`
+	ShadowFolder string `mapstructure:"shadow_folder"`
+	ShareFolder  string `mapstructure:"share_folder"`
+	UploadFolder string `mapstructure:"uploads"`
+	UserLayout   string `mapstructure:"user_layout"`
 
 	DisableHome    bool   `mapstructure:"disable_home"`
 	UserQuotaBytes uint64 `mapstructure:"user_quota_bytes"`

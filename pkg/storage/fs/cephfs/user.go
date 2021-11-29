@@ -16,18 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//+build ceph
+// +build ceph
 
 package cephfs
 
 import (
 	"context"
 	"fmt"
-	"github.com/cs3org/reva/pkg/errtypes"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/cs3org/reva/pkg/errtypes"
 
 	cephfs2 "github.com/ceph/go-ceph/cephfs"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"

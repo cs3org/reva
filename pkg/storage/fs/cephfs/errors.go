@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//+build ceph
+// +build ceph
 
 package cephfs
 
@@ -28,6 +28,7 @@ package cephfs
 import "C"
 import (
 	"fmt"
+
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
