@@ -1462,7 +1462,7 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceId) *provider.Reference {
 	if utils.IsAbsolutePathReference(ref) {
 		relativeRef := &provider.Reference{
-			Path: strings.TrimPrefix(ref.Path, mountPoint),
+			//Path: strings.TrimPrefix(ref.Path, mountPoint), // No need for path when using spaces-registry
 		}
 		// if we have a root use it and make the path relative
 		if root != nil {

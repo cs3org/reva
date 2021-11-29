@@ -83,6 +83,15 @@ var _ = Describe("gateway", func() {
 		}
 	)
 
+	BeforeEach(func() {
+		dependencies = map[string]string{
+			"gateway":  "gateway.toml",
+			"users":    "userprovider-json.toml",
+			"storage":  "storageprovider-ocis.toml",
+			"storage2": "storageprovider-ocis.toml",
+		}
+	})
+
 	JustBeforeEach(func() {
 		var err error
 		ctx = context.Background()
@@ -100,6 +109,7 @@ var _ = Describe("gateway", func() {
 
 		revads, err = startRevads(dependencies, variables)
 		Expect(err).ToNot(HaveOccurred())
+		Expect(revads["gateway"]).ToNot(BeNil())
 		serviceClient, err = pool.GetGatewayServiceClient(revads["gateway"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
 	})
