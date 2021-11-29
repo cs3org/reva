@@ -184,15 +184,17 @@ type registry struct {
 // GetProvider return the storage provider for the given spaces according to the rule configuration
 func (r *registry) GetProvider(ctx context.Context, space *provider.StorageSpace) (*registrypb.ProviderInfo, error) {
 	for pattern, rule := range r.c.Rules {
+		mountPath := ""
+		var err error
 		if space.SpaceType != "" && rule.SpaceType != space.SpaceType {
 			continue
 		}
 		if space.Owner != nil {
-			providerPath, err := rule.ProviderPath(nil, space)
+			mountPath, err = rule.ProviderPath(nil, space)
 			if err != nil {
 				continue
 			}
-			match, err := regexp.MatchString(pattern, providerPath)
+			match, err := regexp.MatchString(pattern, mountPath)
 			if err != nil {
 				continue
 			}
@@ -200,9 +202,14 @@ func (r *registry) GetProvider(ctx context.Context, space *provider.StorageSpace
 				continue
 			}
 		}
-		return &registrypb.ProviderInfo{
-			Address: rule.Address,
-		}, nil
+		pi := &registrypb.ProviderInfo{Address: rule.Address}
+		opaque, err := spacePathsToOpaque(map[string]string{"unused": mountPath})
+		if err != nil {
+			appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
+			continue
+		}
+		pi.Opaque = opaque
+		return pi, nil
 	}
 	return nil, errtypes.NotFound("no provider found for space")
 }
@@ -420,11 +427,11 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 	for addr, spacePaths := range providers {
 		pi := &registrypb.ProviderInfo{Address: addr}
 		opaque, err := spacePathsToOpaque(spacePaths)
-		pi.Opaque = opaque
 		if err != nil {
 			appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
 			continue
 		}
+		pi.Opaque = opaque
 		pis = append(pis, pi)
 	}
 
