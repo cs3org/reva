@@ -153,6 +153,13 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO(lopresti) if target is relative, currently the gateway fails to identify a storage provider (?)
+	// and just returns a CODE_INTERNAL error on InitiateFileUpload.
+	// Therefore for now make sure the target is absolute.
+	if target[0] != '/' {
+		target = "/" + target
+	}
+
 	// Create empty file via storageprovider
 	createReq := &provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{Path: target},

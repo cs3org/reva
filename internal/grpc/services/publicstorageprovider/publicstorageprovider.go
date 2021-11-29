@@ -105,7 +105,16 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
+		return nil, err
+	case st != nil:
+		return &provider.SetArbitraryMetadataResponse{
+			Status: st,
+		}, nil
+	}
+	return s.gateway.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{Opaque: req.Opaque, Ref: ref, ArbitraryMetadata: req.ArbitraryMetadata})
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
