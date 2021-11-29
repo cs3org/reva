@@ -22,8 +22,10 @@ driver = "spaces"
 home_template = "/users/{{.Id.OpaqueId}}"
 
 [grpc.services.storageregistry.drivers.spaces.rules]
-"/users" = {"address" = "{{storage_address}}", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}"}
-"/users/{{.CurrentUser.Id.OpaqueId}}/Projects" = {"address" = "{{storage2_address}}", "space_type" = "project", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}/Projects/{{.Space.Id.OpaqueId}}"}
+"/projects/[a-k]" = {"address" = "{{storage_address}}", "space_type" = "project", "path_template" = "/projects/{{.Space.Name}}"}
+"/projects/[l-z]" = {"address" = "{{storage2_address}}", "space_type" = "project", "path_template" = "/projects/{{.Space.Name}}"}
+
+"/users" = {"address" = "{{homestorage_address}}", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}"}
 
 [http]
 address = "{{grpc_address+1}}"

@@ -20,222 +20,326 @@ package spaces_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/spaces"
+	"github.com/cs3org/reva/pkg/storage/registry/spaces/mocks"
+	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Static", func() {
+	var (
+		handler  storage.Registry
+		ctxAlice context.Context
+		client   *mocks.StorageProviderClient
 
-	totalProviders, rootProviders, eosProviders := 33, 31, 29
+		rules map[string]interface{}
 
-	handler, err := spaces.New(map[string]interface{}{
-		"home_provider": "/personal",
-		"rules": map[string]interface{}{
-			"/home": map[string]interface{}{
-				"mapping": "/home-{{substr 0 1 .Id.OpaqueId}}",
-				"aliases": map[string]string{
-					"/home-[a-fg-o]": "home-00-home",
-					"/home-[pqrstu]": "home-01-home",
-					"/home-[v-z]":    "home-02-home",
+		getClientFunc func(addr string) (spaces.StorageProviderClient, error)
+	)
+
+	BeforeEach(func() {
+		client = &mocks.StorageProviderClient{}
+		ctxAlice = ctxpkg.ContextSetUser(context.Background(), &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "alice",
+			},
+		})
+
+		getClientFunc = func(addr string) (spaces.StorageProviderClient, error) {
+			return client, nil
+		}
+	})
+
+	JustBeforeEach(func() {
+		var err error
+		handler, err = spaces.New(rules, getClientFunc)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	Context("with a simple setup", func() {
+		BeforeEach(func() {
+			rules = map[string]interface{}{
+				"home_provider": "/users/{{.Id.OpaqueId}}",
+				"rules": map[string]interface{}{
+					"/users/[a-k]": map[string]interface{}{
+						"path_template": "/users/{{.Space.Owner.Username}}",
+						"space_type":    "personal",
+						"address":       "127.0.0.1:13020",
+					},
+					"/users/[l-z]": map[string]interface{}{
+						"path_template": "/users/{{.Space.Owner.Username}}",
+						"space_type":    "personal",
+						"address":       "127.0.0.1:13021",
+					},
+					"/projects": map[string]interface{}{
+						"path_template": "/projects/{{.Space.Name}}",
+						"space_type":    "project",
+						"address":       "127.0.0.1:13022",
+					},
 				},
-			},
-			"/MyShares": map[string]interface{}{
-				"mapping": "/MyShares-{{substr 0 1 .Id.OpaqueId}}",
-				"aliases": map[string]string{
-					"/MyShares-[a-fg-o]": "home-00-shares",
-					"/MyShares-[pqrstu]": "home-01-shares",
-					"/MyShares-[v-z]":    "home-02-shares",
+			}
+		})
+
+		Describe("GetProvider", func() {
+			It("filters by space type", func() {
+				space := &provider.StorageSpace{
+					SpaceType: "personal",
+				}
+				p, err := handler.GetProvider(ctxAlice, space)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(p).ToNot(BeNil())
+			})
+
+			It("filters by space type and owner", func() {
+				space := &provider.StorageSpace{
+					Owner: &userpb.User{
+						Username: "alice",
+					},
+					SpaceType: "personal",
+				}
+				p, err := handler.GetProvider(ctxAlice, space)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(p).ToNot(BeNil())
+				Expect(p.Address).To(Equal("127.0.0.1:13020"))
+
+				space = &provider.StorageSpace{
+					Owner: &userpb.User{
+						Username: "zacharias",
+					},
+					SpaceType: "personal",
+				}
+				p, err = handler.GetProvider(ctxAlice, space)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(p).ToNot(BeNil())
+				Expect(p.Address).To(Equal("127.0.0.1:13021"))
+			})
+		})
+
+		Describe("ListProviders", func() {
+			Context("path based requests", func() {
+				BeforeEach(func() {
+					client.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
+						&provider.ListStorageSpacesResponse{
+							Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+							StorageSpaces: []*provider.StorageSpace{
+								{
+									Id:   &provider.StorageSpaceId{OpaqueId: "space1!space1"},
+									Root: &provider.ResourceId{StorageId: "space1", OpaqueId: "space1"},
+									Name: "Space 1",
+								},
+								{
+									Id:   &provider.StorageSpaceId{OpaqueId: "space2!space2"},
+									Root: &provider.ResourceId{StorageId: "space2", OpaqueId: "space2"},
+									Name: "Space 2",
+								},
+							},
+						}, nil)
+				})
+
+				It("filters by path with a simple rule", func() {
+					filters := map[string]string{
+						"path": "/projects",
+					}
+					providers, err := handler.ListProviders(ctxAlice, filters)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(providers)).To(Equal(1))
+					p := providers[0]
+					Expect(p.Address).To(Equal("127.0.0.1:13022"))
+
+					spacePaths := map[string]string{}
+					err = json.Unmarshal(p.Opaque.Map["space_paths"].Value, &spacePaths)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(spacePaths)).To(Equal(2))
+					Expect(spacePaths["space1!space1"]).To(Equal("/projects/Space 1"))
+					Expect(spacePaths["space2!space2"]).To(Equal("/projects/Space 2"))
+				})
+			})
+
+			Context("with id based requests", func() {
+				BeforeEach(func() {
+					client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *provider.ListStorageSpacesRequest) bool {
+						return len(req.Filters) == 2 && // the 2 filters are the space type defined in the rule and the id from the request
+							req.Filters[1].Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID &&
+							req.Filters[1].GetId().OpaqueId == "space1!space1"
+					})).Return(&provider.ListStorageSpacesResponse{
+						Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+						StorageSpaces: []*provider.StorageSpace{
+							{
+								Id:   &provider.StorageSpaceId{OpaqueId: "space1!space1"},
+								Root: &provider.ResourceId{StorageId: "space1", OpaqueId: "space1"},
+								Name: "Space 1",
+							},
+						},
+					}, nil)
+					client.On("ListStorageSpaces", mock.Anything, mock.Anything).Return( // fallback
+						&provider.ListStorageSpacesResponse{
+							Status:        &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+							StorageSpaces: []*provider.StorageSpace{},
+						}, nil)
+				})
+
+				It("filters by id", func() {
+					filters := map[string]string{
+						"storage_id": "space1",
+						"opaque_id":  "space1",
+					}
+					providers, err := handler.ListProviders(ctxAlice, filters)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(providers)).To(Equal(1))
+					p := providers[0]
+					Expect(p.Address).To(Equal("127.0.0.1:13022"))
+
+					spacePaths := map[string]string{}
+					err = json.Unmarshal(p.Opaque.Map["space_paths"].Value, &spacePaths)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(spacePaths)).To(Equal(1))
+					Expect(spacePaths["space1!space1"]).To(Equal("/projects/Space 1"))
+				})
+			})
+		})
+	})
+
+	Context("with a more complex setup", func() {
+		var (
+			fooClient *mocks.StorageProviderClient
+			barClient *mocks.StorageProviderClient
+			bazClient *mocks.StorageProviderClient
+		)
+
+		BeforeEach(func() {
+			getClientFunc = func(addr string) (spaces.StorageProviderClient, error) {
+				switch addr {
+				case "127.0.0.1:13022":
+					return fooClient, nil
+				case "127.0.0.1:13023":
+					return barClient, nil
+				case "127.0.0.1:13024":
+					return bazClient, nil
+				}
+				return nil, fmt.Errorf("Nooooo")
+			}
+
+			rules = map[string]interface{}{
+				"home_provider": "/users/{{.Id.OpaqueId}}",
+				"rules": map[string]interface{}{
+					"/foo": map[string]interface{}{
+						"path_template": "/foo",
+						"space_type":    "project",
+						"address":       "127.0.0.1:13022",
+					},
+					"/foo/bar": map[string]interface{}{
+						"path_template": "/foo/bar",
+						"space_type":    "project",
+						"address":       "127.0.0.1:13023",
+					},
+					"/foo/bar/baz": map[string]interface{}{
+						"path_template": "/foo/bar/baz",
+						"space_type":    "project",
+						"address":       "127.0.0.1:13024",
+					},
 				},
-			},
-			"/eos/user/[a-fg-o]": map[string]interface{}{
-				"address": "home-00-eos",
-			},
-			"/eos/user/[pqrstu]": map[string]interface{}{
-				"address": "home-01-eos",
-			},
-			"/eos/user/[v-z]": map[string]interface{}{
-				"address": "home-02-eos",
-			},
-			"/eos/project": map[string]interface{}{
-				"address": "project-00",
-			},
-			"/eos/media": map[string]interface{}{
-				"address": "media-00",
-			},
-			"123e4567-e89b-12d3-a456-426655440000": map[string]interface{}{
-				"address": "home-00-home",
-			},
-			"123e4567-e89b-12d3-a456-426655440001": map[string]interface{}{
-				"address": "home-01-home",
-			},
-			"/eos/": map[string]interface{}{
-				"address": "unspecific-rule-that-should-never-been-hit",
-			},
-		},
-	})
-	Expect(err).ToNot(HaveOccurred())
+			}
 
-	ctxAlice := ctxpkg.ContextSetUser(context.Background(), &userpb.User{
-		Id: &userpb.UserId{
-			OpaqueId: "alice",
-		},
-	})
-	ctxRobert := ctxpkg.ContextSetUser(context.Background(), &userpb.User{
-		Id: &userpb.UserId{
-			OpaqueId: "robert",
-		},
-	})
+			fooClient = &mocks.StorageProviderClient{}
+			barClient = &mocks.StorageProviderClient{}
+			bazClient = &mocks.StorageProviderClient{}
 
-	Describe("ListProviders", func() {
-		It("lists all providers for user alice", func() {
-			providers, err := handler.ListProviders(ctxAlice)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(providers)).To(Equal(totalProviders))
+			fooClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
+				&provider.ListStorageSpacesResponse{
+					Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+					StorageSpaces: []*provider.StorageSpace{
+						{
+							Id:   &provider.StorageSpaceId{OpaqueId: "foospace"},
+							Root: &provider.ResourceId{StorageId: "foospace", OpaqueId: "foospace"},
+							Name: "Foo space",
+						},
+					},
+				}, nil)
+			barClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
+				&provider.ListStorageSpacesResponse{
+					Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+					StorageSpaces: []*provider.StorageSpace{
+						{
+							Id:   &provider.StorageSpaceId{OpaqueId: "barspace"},
+							Root: &provider.ResourceId{StorageId: "barspace", OpaqueId: "barspace"},
+							Name: "Bar space",
+						},
+					},
+				}, nil)
+			bazClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
+				&provider.ListStorageSpacesResponse{
+					Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+					StorageSpaces: []*provider.StorageSpace{
+						{
+							Id:   &provider.StorageSpaceId{OpaqueId: "bazspace"},
+							Root: &provider.ResourceId{StorageId: "bazspace", OpaqueId: "bazspace"},
+							Name: "Baz space",
+						},
+					},
+				}, nil)
 		})
 
-		It("lists all providers for user robert", func() {
-			providers, err := handler.ListProviders(ctxRobert)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(providers)).To(Equal(totalProviders))
-		})
-	})
+		Describe("ListProviders", func() {
+			It("includes all spaces below the requested path", func() {
+				filters := map[string]string{
+					"path": "/foo",
+				}
+				providers, err := handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(providers)).To(Equal(3))
+			})
 
-	home00 := &registrypb.ProviderInfo{
-		ProviderPath: "/home",
-		Address:      "home-00-home",
-	}
-	home01 := &registrypb.ProviderInfo{
-		ProviderPath: "/home",
-		Address:      "home-01-home",
-	}
+			It("includes all spaces below the requested path but not the one above", func() {
+				filters := map[string]string{
+					"path": "/foo/bar",
+				}
+				providers, err := handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(providers)).To(Equal(2))
+				addresses := []string{}
+				for _, p := range providers {
+					addresses = append(addresses, p.Address)
+				}
+				Expect(addresses).To(ConsistOf("127.0.0.1:13023", "127.0.0.1:13024"))
+			})
 
-	Describe("GetHome", func() {
-		It("get the home provider for user alice", func() {
-			home, err := handler.GetHome(ctxAlice)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(home).To(Equal(home00))
-		})
+			It("includes the space for the requested path", func() {
+				filters := map[string]string{
+					"path": "/foo/bar/baz",
+				}
+				providers, err := handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(providers)).To(Equal(1))
+				Expect(providers[0].Address).To(Equal("127.0.0.1:13024"))
 
-		It("get the home provider for user robert", func() {
-			home, err := handler.GetHome(ctxRobert)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(home).To(Equal(home01))
-		})
-	})
+				filters = map[string]string{
+					"path": "/foo/bar/baz/qux",
+				}
+				providers, err = handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(providers)).To(Equal(1))
+				Expect(providers[0].Address).To(Equal("127.0.0.1:13024"))
+			})
 
-	Describe("FindProviders for home reference", func() {
-		ref := &provider.Reference{Path: "/home/abcd"}
-
-		It("finds all providers for user alice for a home ref", func() {
-			providers, err := handler.FindProviders(ctxAlice, ref)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{home00}))
-		})
-
-		It("finds all providers for user robert for a home ref", func() {
-			providers, err := handler.FindProviders(ctxRobert, ref)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{home01}))
-		})
-	})
-
-	Describe("FindProviders for eos reference", func() {
-		ref := &provider.Reference{Path: "/eos/user/b/bob/xyz"}
-		eosUserB := &registrypb.ProviderInfo{
-			ProviderPath: "/eos/user/b",
-			Address:      "home-00-eos",
-		}
-
-		It("finds all providers for user alice for an eos ref", func() {
-			providers, err := handler.FindProviders(ctxAlice, ref)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{eosUserB}))
-		})
-
-		It("finds all providers for user robert for an eos ref", func() {
-			providers, err := handler.FindProviders(ctxRobert, ref)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{eosUserB}))
-		})
-	})
-
-	Describe("FindProviders for project reference", func() {
-		ref := &provider.Reference{Path: "/eos/project/pqr"}
-		eosProject := &registrypb.ProviderInfo{
-			ProviderPath: "/eos/project",
-			Address:      "project-00",
-		}
-
-		It("finds all providers for user alice for a project ref", func() {
-			providers, err := handler.FindProviders(ctxAlice, ref)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{eosProject}))
-		})
-
-		It("finds all providers for user robert for a project ref", func() {
-			providers, err := handler.FindProviders(ctxRobert, ref)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{eosProject}))
-		})
-	})
-
-	Describe("FindProviders for virtual references", func() {
-		refEos := &provider.Reference{Path: "/eos"}
-		refRoot := &provider.Reference{Path: "/"}
-
-		It("finds all providers for user alice for a virtual eos ref", func() {
-			providers, err := handler.FindProviders(ctxAlice, refEos)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(providers)).To(Equal(eosProviders))
-		})
-
-		It("finds all providers for user robert for a virtual eos ref", func() {
-			providers, err := handler.FindProviders(ctxRobert, refEos)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(providers)).To(Equal(eosProviders))
-		})
-
-		It("finds all providers for user alice for a virtual root ref", func() {
-			providers, err := handler.FindProviders(ctxAlice, refRoot)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(providers)).To(Equal(rootProviders))
-		})
-
-		It("finds all providers for user robert for a virtual root ref", func() {
-			providers, err := handler.FindProviders(ctxRobert, refRoot)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(providers)).To(Equal(rootProviders))
-		})
-	})
-
-	Describe("FindProviders for reference containing ID", func() {
-		ref := &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: "123e4567-e89b-12d3-a456-426655440000",
-			},
-		}
-		home00ID := &registrypb.ProviderInfo{
-			ProviderId: "123e4567-e89b-12d3-a456-426655440000",
-			Address:    "home-00-home",
-		}
-
-		It("finds all providers for user alice for ref containing ID", func() {
-			providers, err := handler.FindProviders(ctxAlice, ref)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{home00ID}))
-		})
-
-		It("finds all providers for user robert for ref containing ID", func() {
-			providers, err := handler.FindProviders(ctxRobert, ref)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(providers).To(Equal([]*registrypb.ProviderInfo{home00ID}))
+			It("includes the space for the requested path", func() {
+				filters := map[string]string{
+					"path": "/foo/bar/bif",
+				}
+				providers, err := handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(providers)).To(Equal(1))
+				Expect(providers[0].Address).To(Equal("127.0.0.1:13023"))
+			})
 		})
 	})
 })

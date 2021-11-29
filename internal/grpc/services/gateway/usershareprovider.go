@@ -346,10 +346,20 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		}
 		return status.NewInternal(ctx, err, "error finding storage provider")
 	}
-	ref, err := unwrap(sharePathRef, providerInfo.ProviderPath)
-	if err != nil {
-		return status.NewInternal(ctx, err, "could not unwrap share path reference")
+
+	spaceId := ""
+	mountPath := providerInfo.ProviderPath
+	var root *provider.ResourceId
+
+	spacePaths := decodeSpacePaths(providerInfo.Opaque)
+	if len(spacePaths) == 0 {
+		spacePaths[""] = mountPath
 	}
+	for spaceId, mountPath = range spacePaths {
+		root = splitStorageSpaceID(spaceId)
+	}
+
+	ref := unwrap(sharePathRef, mountPath, root)
 
 	deleteReq := &provider.DeleteRequest{
 		Opaque: &typesv1beta1.Opaque{

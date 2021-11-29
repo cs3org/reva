@@ -360,13 +360,20 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 		}
 		return status.NewInternal(ctx, err, "error finding storage provider"), nil
 	}
-	pRef, err := unwrap(&provider.Reference{Path: refPath}, p.ProviderPath)
-	if err != nil {
-		log.Err(err).Msg("gateway: error unwrapping")
-		return &rpc.Status{
-			Code: rpc.Code_CODE_INTERNAL,
-		}, nil
+
+	spaceId := ""
+	mountPath := p.ProviderPath
+	var root *provider.ResourceId
+
+	spacePaths := decodeSpacePaths(p.Opaque)
+	if len(spacePaths) == 0 {
+		spacePaths[""] = mountPath
 	}
+	for spaceId, mountPath = range spacePaths {
+		root = splitStorageSpaceID(spaceId)
+	}
+
+	pRef := unwrap(&provider.Reference{Path: refPath}, mountPath, root)
 	createRefReq := &provider.CreateReferenceRequest{
 		Ref:       pRef,
 		TargetUri: targetURI,

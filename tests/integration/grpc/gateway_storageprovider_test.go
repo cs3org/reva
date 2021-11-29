@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"io/ioutil"
+	"os"
 	"path"
 
 	"google.golang.org/grpc/metadata"
@@ -30,6 +31,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -64,16 +66,22 @@ var _ = Describe("gateway", func() {
 			Username: "einstein",
 		}
 		homeRef = &storagep.Reference{Path: "/users/f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"}
-	)
 
-	BeforeEach(func() {
-		dependencies = map[string]string{
-			"gateway":  "gateway.toml",
-			"users":    "userprovider-json.toml",
-			"storage":  "storageprovider-ocis.toml",
-			"storage2": "storageprovider-ocis.toml",
+		infos2Etags = func(infos []*storagep.ResourceInfo) map[string]string {
+			etags := map[string]string{}
+			for _, info := range infos {
+				etags[info.Path] = info.Etag
+			}
+			return etags
 		}
-	})
+		infos2Paths = func(infos []*storagep.ResourceInfo) []string {
+			paths := []string{}
+			for _, info := range infos {
+				paths = append(paths, info.Path)
+			}
+			return paths
+		}
+	)
 
 	JustBeforeEach(func() {
 		var err error
@@ -120,6 +128,187 @@ var _ = Describe("gateway", func() {
 		Expect(ghRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 	})
 
+	Context("with a sharded projects directory", func() {
+		var (
+			shard1Fs    storage.FS
+			shard1Space *storagep.StorageSpace
+			shard2Fs    storage.FS
+			projectsRef = &storagep.Reference{Path: "/projects"}
+
+			getProjectsEtag = func() string {
+				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{Path: "/"}})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(len(listRes.Infos)).To(Equal(1))
+				return listRes.Infos[0].Etag
+			}
+		)
+
+		BeforeEach(func() {
+			dependencies = map[string]string{
+				"gateway":     "gateway-sharded.toml",
+				"users":       "userprovider-json.toml",
+				"homestorage": "storageprovider-ocis.toml",
+				"storage":     "storageprovider-ocis.toml",
+				"storage2":    "storageprovider-ocis.toml",
+			}
+		})
+
+		JustBeforeEach(func() {
+			var err error
+			shard1Fs, err = ocis.New(map[string]interface{}{
+				"root":                revads["storage"].TmpRoot,
+				"userprovidersvc":     revads["users"].GrpcAddress,
+				"enable_home":         true,
+				"treesize_accounting": true,
+				"treetime_accounting": true,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			res, err := shard1Fs.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
+				Type:  "project",
+				Name:  "a - project",
+				Owner: user,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			shard1Space = res.StorageSpace
+
+			err = shard1Fs.Upload(ctx,
+				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/file.txt"},
+				ioutil.NopCloser(bytes.NewReader([]byte("1"))))
+			Expect(err).ToNot(HaveOccurred())
+
+			shard2Fs, err = ocis.New(map[string]interface{}{
+				"root":                revads["storage2"].TmpRoot,
+				"userprovidersvc":     revads["users"].GrpcAddress,
+				"enable_home":         true,
+				"treesize_accounting": true,
+				"treetime_accounting": true,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			res, err = shard2Fs.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
+				Type:  "project",
+				Name:  "z - project",
+				Owner: user,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+		})
+
+		Describe("ListContainer", func() {
+			It("merges the lists of both shards", func() {
+				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				Expect(infos2Paths(listRes.Infos)).To(ConsistOf([]string{"/projects/a - project", "/projects/z - project"}))
+			})
+
+			It("propagates the etags from both shards", func() {
+				rootEtag := getProjectsEtag()
+
+				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				etags := infos2Etags(listRes.Infos)
+				Expect(etags["/projects/a - project"]).ToNot(BeNil())
+				Expect(etags["/projects/z - project"]).ToNot(BeNil())
+
+				By("creating a new file")
+				err = shard1Fs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("1234567890"))))
+				Expect(err).ToNot(HaveOccurred())
+
+				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				etags2 := infos2Etags(listRes.Infos)
+				Expect(etags2["/projects/a - project"]).ToNot(Equal(etags["/projects/a - project"]))
+				Expect(etags2["/projects/z - project"]).To(Equal(etags["/projects/z - project"]))
+
+				rootEtag2 := getProjectsEtag()
+				Expect(rootEtag2).ToNot(Equal(rootEtag))
+
+				By("updating an existing file")
+				err = shard1Fs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("12345678901"))))
+				Expect(err).ToNot(HaveOccurred())
+
+				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				etags3 := infos2Etags(listRes.Infos)
+				Expect(etags3["/projects/a - project"]).ToNot(Equal(etags2["/projects/a - project"]))
+				Expect(etags3["/projects/z - project"]).To(Equal(etags2["/projects/z - project"]))
+
+				rootEtag3 := getProjectsEtag()
+				Expect(rootEtag3).ToNot(Equal(rootEtag2))
+
+				By("creating a directory")
+				err = shard1Fs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/newdirectory"})
+				Expect(err).ToNot(HaveOccurred())
+
+				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				etags4 := infos2Etags(listRes.Infos)
+				Expect(etags4["/projects/a - project"]).ToNot(Equal(etags3["/projects/a - project"]))
+				Expect(etags4["/projects/z - project"]).To(Equal(etags3["/projects/z - project"]))
+
+				rootEtag4 := getProjectsEtag()
+				Expect(rootEtag4).ToNot(Equal(rootEtag3))
+			})
+
+			It("places new spaces in the correct shard", func() {
+				createRes, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
+					Opaque: &typesv1beta1.Opaque{
+						Map: map[string]*typesv1beta1.OpaqueEntry{
+							"path": {
+								Decoder: "plain",
+								Value:   []byte("/projects"),
+							},
+						},
+					},
+					Owner: user,
+					Type:  "project",
+					Name:  "o - project",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				space := createRes.StorageSpace
+
+				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				_, err = os.Stat(path.Join(revads["storage"].TmpRoot, "/spaces/project", space.Id.OpaqueId))
+				Expect(err).To(HaveOccurred())
+				_, err = os.Stat(path.Join(revads["storage2"].TmpRoot, "/spaces/project", space.Id.OpaqueId))
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			PIt("deletes spaces", func() {})
+
+			It("lists individual project spaces", func() {
+				By("trying to list a non-existent space")
+				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{Path: "/projects/does-not-exist"}})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+
+				By("listing an existing space")
+				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{Path: "/projects/a - project"}})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(len(listRes.Infos)).To(Equal(2))
+				paths := []string{}
+				for _, i := range listRes.Infos {
+					paths = append(paths, i.Path)
+				}
+				Expect(paths).To(ConsistOf([]string{"/projects/a - project/file.txt", "/projects/a - project/.space"}))
+			})
+
+		})
+	})
+
 	Context("with a basic user storage", func() {
 		var (
 			fs            storage.FS
@@ -128,6 +317,15 @@ var _ = Describe("gateway", func() {
 			embeddedSpace *storagep.StorageSpace
 			embeddedRef   *storagep.Reference
 		)
+
+		BeforeEach(func() {
+			dependencies = map[string]string{
+				"gateway":  "gateway.toml",
+				"users":    "userprovider-json.toml",
+				"storage":  "storageprovider-ocis.toml",
+				"storage2": "storageprovider-ocis.toml",
+			}
+		})
 
 		JustBeforeEach(func() {
 			var err error
