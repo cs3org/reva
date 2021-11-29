@@ -770,7 +770,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				continue
 			}
 
-			if strings.HasPrefix(mountPath, requestPath) { // requested path is above mount point
+			if requestPath != "" && strings.HasPrefix(mountPath, requestPath) { // when path is used and requested path is above mount point
 				// mountpoint is deeper than the statted path
 				// -> make child a folder
 				statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
