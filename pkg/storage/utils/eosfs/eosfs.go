@@ -1286,15 +1286,6 @@ func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
 	return fs.c.Remove(ctx, auth, fn, false)
 }
 
-func getRootAuth() eosclient.Authorization {
-	return eosclient.Authorization{
-		Role: eosclient.Role{
-			UID: "0",
-			GID: "0",
-		},
-	}
-}
-
 func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
 	if fs.isShareFolderRoot(ctx, p) {
 		return errtypes.PermissionDenied("eosfs: cannot delete the virtual share folder")
@@ -1303,10 +1294,13 @@ func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
 	if fs.isShareFolderChild(ctx, p) {
 		fn := fs.wrapShadow(ctx, p)
 
-		// in order to remove definitely the folder or the file
-		// without moving it to the recycle bin, we should take
-		// the priviledges of the root
-		auth := getRootAuth()
+		// in order to remove the folder or the file without
+		// moving it to the recycle bin, we should take
+		// the privileges of the root
+		auth, err := fs.getRootAuth(ctx)
+		if err != nil {
+			return err
+		}
 
 		return fs.c.Remove(ctx, auth, fn, true)
 	}
