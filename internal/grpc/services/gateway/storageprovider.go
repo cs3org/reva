@@ -757,7 +757,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			// Then it will request path "/projects/projectA" from the provider
 			// But it should only request "/" as the ResourceId already points to the correct resource
 			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if len(strings.Split(req.Ref.Path, "/")) <= 3 { // requesting the root in that case - No Path accepted
+			if strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
 				r.Path = "/"
 			}
 			providerRef := unwrap(r, mountPath, root)
@@ -909,7 +909,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			// Then it will request path "/projects/projectA" from the provider
 			// But it should only request "/" as the ResourceId already points to the correct resource
 			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if len(strings.Split(req.Ref.Path, "/")) <= 3 { // requesting the root in that case - No Path accepted
+			if strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
 				r.Path = "/"
 			}
 			providerRef := unwrap(r, mountPath, root)
