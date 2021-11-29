@@ -158,25 +158,6 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Size: 20,
 						},
 					}
-					//case "./share2-shareddir" || utils.ResourceIDEqual(req.Ref.ResourceId, &sprovider.ResourceId{
-					//StorageId: "share2-storageid",
-					//OpaqueId:  "shareddir",
-					//}) {
-					//return &sprovider.StatResponse{
-					//Status: status.NewOK(context.Background()),
-					//Info: &sprovider.ResourceInfo{
-					//Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
-					//Path: "/share2-shareddir",
-					//Id: &sprovider.ResourceId{
-				//StorageId: "share2-storageid",
-				//OpaqueId:  "shareddir",
-				//},
-				//PermissionSet: &sprovider.ResourcePermissions{
-				//Stat: true,
-				//},
-				//Size: 200,
-				//},
-				//}
 				default:
 					return &sprovider.StatResponse{
 						Status: status.NewOK(context.Background()),
@@ -312,7 +293,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Info).ToNot(BeNil())
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
 				Expect(res.Info.Path).To(Equal("/share1-shareddir"))
-				//Expect(res.Info.Size).To(Equal(uint64(300))) TODO: Why 300?
+				// Expect(res.Info.Size).To(Equal(uint64(300))) TODO: Why 300?
 				Expect(res.Info.Size).To(Equal(uint64(100)))
 			})
 
@@ -375,7 +356,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
 				Expect(res.Info.Path).To(Equal("/share1-shareddir"))
 				Expect(res.Info.PermissionSet.Stat).To(BeTrue())
-				//Expect(res.Info.PermissionSet.ListContainer).To(BeTrue()) //TODO reenable
+				// Expect(res.Info.PermissionSet.ListContainer).To(BeTrue()) // TODO reenable
 			})
 
 			It("stats a subfolder in a share", func() {

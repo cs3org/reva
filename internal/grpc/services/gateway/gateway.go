@@ -72,6 +72,8 @@ type config struct {
 	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
 	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
 	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
+	ProviderCacheTTL    int                               `mapstructure:"provider_cache_ttl"`
+	//MountCacheTTL       int                               `mapstructure:"mount_cache_ttl"`
 }
 
 // sets defaults
@@ -124,6 +126,8 @@ type svc struct {
 	tokenmgr        token.Manager
 	etagCache       *ttlcache.Cache `mapstructure:"etag_cache"`
 	createHomeCache *ttlcache.Cache `mapstructure:"create_home_cache"`
+	providerCache   *ttlcache.Cache `mapstructure:"provider_cache"`
+	//mountCache      *ttlcache.Cache `mapstructure:"mount_cache"`
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -148,6 +152,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	// if the ttl is 0, aka not set, the cache lib will default to an hour
 	etagCache := ttlcache.NewCache()
 	_ = etagCache.SetTTL(time.Duration(c.EtagCacheTTL) * time.Second)
 	etagCache.SkipTTLExtensionOnHit(true)
@@ -156,12 +161,22 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	_ = createHomeCache.SetTTL(time.Duration(c.CreateHomeCacheTTL) * time.Second)
 	createHomeCache.SkipTTLExtensionOnHit(true)
 
+	providerCache := ttlcache.NewCache()
+	_ = providerCache.SetTTL(time.Duration(c.ProviderCacheTTL) * time.Second)
+	providerCache.SkipTTLExtensionOnHit(true)
+
+	//mountCache := ttlcache.NewCache()
+	//_ = mountCache.SetTTL(time.Duration(c.MountCacheTTL) * time.Second)
+	//mountCache.SkipTTLExtensionOnHit(true)
+
 	s := &svc{
 		c:               c,
 		dataGatewayURL:  *u,
 		tokenmgr:        tokenManager,
 		etagCache:       etagCache,
 		createHomeCache: createHomeCache,
+		providerCache:   providerCache,
+		//mountCache:      mountCache,
 	}
 
 	return s, nil

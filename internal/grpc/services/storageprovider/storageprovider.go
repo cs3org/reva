@@ -386,7 +386,6 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 // CreateStorageSpace creates a storage space
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	resp, err := s.storage.CreateStorageSpace(ctx, req)
-
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {

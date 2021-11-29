@@ -235,10 +235,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 			spaceType := filepath.Base(filepath.Dir(matches[i]))
 
-			//if spaceType == "share" {
+			// if spaceType == "share" {
 			// do not list shares at all? the sharesstorageprovider is responsible for it
 			//	continue
-			//}
+			// }
 
 			owner, err := n.Owner()
 			if err != nil {
@@ -430,14 +430,14 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	// filter out spaces user cannot access (currently based on stat permission)
-	//p, err := n.ReadUserPermissions(ctx, user)
-	//if err != nil {
-	//return nil, err
-	//}
+	// p, err := n.ReadUserPermissions(ctx, user)
+	// if err != nil {
+	// return nil, err
+	// }
 
-	//if !(canListAllSpaces || p.Stat) {
-	//return nil,
-	//}
+	// if !(canListAllSpaces || p.Stat) {
+	// return nil,
+	// }
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 	_, canListAllSpaces := permissions["list-all-spaces"]
