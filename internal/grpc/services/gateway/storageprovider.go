@@ -748,7 +748,19 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		for spaceId, mountPath = range spacePaths {
 			root = splitStorageSpaceID(spaceId)
 			// build reference for the provider
-			providerRef := unwrap(req.Ref, mountPath, root)
+			r := &provider.Reference{
+				ResourceId: req.Ref.ResourceId,
+				Path:       req.Ref.Path,
+			}
+			// NOTE: There are problems in the following case:
+			// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
+			// Then it will request path "/projects/projectA" from the provider
+			// But it should only request "/" as the ResourceId already points to the correct resource
+			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
+			if len(strings.Split(req.Ref.Path, "/")) <= 3 { // requesting the root in that case - No Path accepted
+				r.Path = "/"
+			}
+			providerRef := unwrap(r, mountPath, root)
 
 			// there are three cases:
 			// 1. id based references -> send to provider as is. must return the path in the space. space root can be determined by the spaceid
@@ -887,8 +899,20 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 		for spaceId, mountPath = range spacePaths {
 			root = splitStorageSpaceID(spaceId)
-			// build reference for the provider
-			providerRef := unwrap(req.Ref, mountPath, root)
+			// build reference for the provider - copy to avoid side effects
+			r := &provider.Reference{
+				ResourceId: req.Ref.ResourceId,
+				Path:       req.Ref.Path,
+			}
+			// NOTE: There are problems in the following case:
+			// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
+			// Then it will request path "/projects/projectA" from the provider
+			// But it should only request "/" as the ResourceId already points to the correct resource
+			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
+			if len(strings.Split(req.Ref.Path, "/")) <= 3 { // requesting the root in that case - No Path accepted
+				r.Path = "/"
+			}
+			providerRef := unwrap(r, mountPath, root)
 
 			// ref Path: ., Id: a-b-c-d, provider path: /personal/a-b-c-d, provider id: a-b-c-d ->
 			// ref Path: ., Id: a-b-c-d, provider path: /home, provider id: a-b-c-d ->
@@ -1460,10 +1484,10 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 
 // unwrap takes a reference and makes it relative to the given mountPoint, optionally
 func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceId) *provider.Reference {
-	if strings.HasPrefix(mountPoint, ref.Path) {
-		// mountpoint is under the requested Path. Trim path
-		ref.Path = "/"
-	}
+	//if strings.HasPrefix(mountPoint, ref.Path) {
+	//// mountpoint is under the requested Path. Trim path
+	//ref.Path = "/"
+	//}
 	if utils.IsAbsolutePathReference(ref) {
 		relativeRef := &provider.Reference{
 			Path: strings.TrimPrefix(ref.Path, mountPoint),
