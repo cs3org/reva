@@ -389,6 +389,7 @@ func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provide
 	}
 
 	// The registry is responsible for choosing the right provider
+	// TODO fix naming GetStorageProviders calls the GetProvider functon on the registry implementation
 	res, err := srClient.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
 		Opaque: &typesv1beta1.Opaque{
 			Map: map[string]*typesv1beta1.OpaqueEntry{
