@@ -70,6 +70,7 @@ type templateData struct {
 	Space       *provider.StorageSpace
 }
 
+// StorageProviderClient is the interface the spaces registry uses to interact with storage providers
 type StorageProviderClient interface {
 	ListStorageSpaces(ctx context.Context, in *provider.ListStorageSpacesRequest, opts ...grpc.CallOption) (*provider.ListStorageSpacesResponse, error)
 }
@@ -133,8 +134,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New returns an implementation of the storage.Registry interface that
-// redirects requests to corresponding storage drivers.
+// New creates an implementation of the storage.Registry interface that
+// uses the available storage spaces from the configured storage providers
 func New(m map[string]interface{}, getClientFunc GetStorageProviderServiceClientFunc) (storage.Registry, error) {
 	c, err := parseConfig(m)
 	if err != nil {
@@ -155,6 +156,8 @@ func New(m map[string]interface{}, getClientFunc GetStorageProviderServiceClient
 	return r, nil
 }
 
+// NewDefault creates an implementation of the storage.Registry interface that
+// uses the available storage spaces from the configured storage providers
 func NewDefault(m map[string]interface{}) (storage.Registry, error) {
 	getClientFunc := func(addr string) (StorageProviderClient, error) {
 		return pool.GetStorageProviderServiceClient(addr)
@@ -162,11 +165,7 @@ func NewDefault(m map[string]interface{}) (storage.Registry, error) {
 	return New(m, getClientFunc)
 }
 
-type spaceAndProvider struct {
-	*provider.StorageSpace
-	providers []*registrypb.ProviderInfo
-}
-
+// GetStorageProviderServiceClientFunc is a callback used to pass in a StorageProviderClient during testing
 type GetStorageProviderServiceClientFunc func(addr string) (StorageProviderClient, error)
 
 type registry struct {
@@ -433,7 +432,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 }
 
 func spacePathsToOpaque(spacePaths map[string]string) (*typesv1beta1.Opaque, error) {
-	spacePathsJson, err := json.Marshal(spacePaths)
+	spacePathsJSON, err := json.Marshal(spacePaths)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +440,7 @@ func spacePathsToOpaque(spacePaths map[string]string) (*typesv1beta1.Opaque, err
 		Map: map[string]*typesv1beta1.OpaqueEntry{
 			"space_paths": {
 				Decoder: "json",
-				Value:   spacePathsJson,
+				Value:   spacePathsJSON,
 			},
 		},
 	}, nil
