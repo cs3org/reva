@@ -1100,7 +1100,19 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 		for spaceId, mountPath = range spacePaths {
 			root = splitStorageSpaceID(spaceId)
 			// build reference for the provider
-			providerRef := unwrap(req.Ref, mountPath, root)
+			r := &provider.Reference{
+				ResourceId: req.Ref.ResourceId,
+				Path:       req.Ref.Path,
+			}
+			// NOTE: There are problems in the following case:
+			// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
+			// Then it will request path "/projects/projectA" from the provider
+			// But it should only request "/" as the ResourceId already points to the correct resource
+			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
+			if strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
+				r.Path = "/"
+			}
+			providerRef := unwrap(r, mountPath, root)
 
 			// there are three valid cases when listing trash
 			// 1. id based references of a space
@@ -1163,7 +1175,19 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 		for spaceId, mountPath = range spacePaths {
 			root = splitStorageSpaceID(spaceId)
 			// build reference for the provider
-			srcRef = unwrap(req.Ref, mountPath, root)
+			r := &provider.Reference{
+				ResourceId: req.Ref.ResourceId,
+				Path:       req.Ref.Path,
+			}
+			// NOTE: There are problems in the following case:
+			// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
+			// Then it will request path "/projects/projectA" from the provider
+			// But it should only request "/" as the ResourceId already points to the correct resource
+			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
+			if strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
+				r.Path = "/"
+			}
+			srcRef = unwrap(r, mountPath, root)
 			// TODO continue with a matching srcRef?
 		}
 
