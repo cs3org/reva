@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -31,6 +32,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -140,14 +142,58 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 
 func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
-	// TODO: needs to be fixed
-	c, _, err := s.findByPath(ctx, "/users")
+	providerpath := "/users"
+
+	// TODO: filtering storageproviders should probably not happen in Opaque
+	if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["path"] != nil {
+		if req.Opaque.Map["path"].Decoder == "plain" {
+			providerpath = string(req.Opaque.Map["path"].Value)
+		}
+	}
+
+	fullPath := path.Join(providerpath, req.Name)
+	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
+	}
+
+	res, err := c.ListStorageProviders(ctx, &registry.ListStorageProvidersRequest{
+		Opaque: &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"space_path": {
+					Decoder: "plain",
+					Value:   []byte(providerpath),
+				},
+				"space_name": {
+					Decoder: "plain",
+					Value:   []byte(req.Name),
+				},
+				"space_type": {
+					Decoder: "plain",
+					Value:   []byte(req.Type),
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK && res.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
 		return &provider.CreateStorageSpaceResponse{
-			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
+			Status: res.Status,
 		}, nil
 	}
 
+	if len(res.Providers) == 0 {
+		return &provider.CreateStorageSpaceResponse{
+			Status: status.NewNotFound(ctx, fmt.Sprintf("error finding provider for path %s", fullPath)),
+		}, nil
+	}
+
+	c, err := s.getStorageProviderClient(ctx, res.Providers[0])
+	if err != nil {
+		return nil, err
+	}
 	res, err := c.CreateStorageSpace(ctx, req)
 	if err != nil {
 		log.Err(err).Msg("gateway: error creating storage space on storage provider")

@@ -66,9 +66,8 @@ type FS interface {
 // Registry is the interface that storage registries implement
 // for discovering storage providers
 type Registry interface {
-	FindProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error)
-	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
-	GetHome(ctx context.Context) (*registry.ProviderInfo, error)
+	GetProvider(ctx context.Context, space *provider.StorageSpace) (*registry.ProviderInfo, error)
+	ListProviders(ctx context.Context, filters map[string]string) ([]*registry.ProviderInfo, error)
 }
 
 // PathWrapper is the interface to implement for path transformations

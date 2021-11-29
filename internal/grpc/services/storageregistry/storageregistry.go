@@ -26,6 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	sdk "github.com/cs3org/reva/pkg/sdk/common"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/mitchellh/mapstructure"
@@ -100,7 +101,8 @@ func getRegistry(c *config) (storage.Registry, error) {
 }
 
 func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.ListStorageProvidersRequest) (*registrypb.ListStorageProvidersResponse, error) {
-	pinfos, err := s.reg.ListProviders(ctx)
+
+	pinfos, err := s.reg.ListProviders(ctx, sdk.DecodeOpaqueMap(req.Opaque))
 	if err != nil {
 		return &registrypb.ListStorageProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting list of storage providers"),
@@ -115,7 +117,7 @@ func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.List
 }
 
 func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetStorageProvidersRequest) (*registrypb.GetStorageProvidersResponse, error) {
-	p, err := s.reg.FindProviders(ctx, req.Ref)
+	p, err := s.reg.ListSpaces(ctx, req.Ref)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsNotFound:
