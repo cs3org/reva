@@ -19,10 +19,16 @@
 package helpers
 
 import (
+	"bytes"
+	"context"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/storage"
 )
 
 // TempDir creates a temporary directory in tmp/ and returns its path
@@ -43,4 +49,18 @@ func TempDir(name string) (string, error) {
 	}
 
 	return tmpRoot, nil
+}
+
+func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content []byte) error {
+	uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+	if err != nil {
+		return err
+	}
+	uploadID, ok := uploadIds["simple"]
+	if !ok {
+		return errors.New("simple upload method not available")
+	}
+	uploadRef := &provider.Reference{Path: "/" + uploadID}
+	err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(content)))
+	return err
 }

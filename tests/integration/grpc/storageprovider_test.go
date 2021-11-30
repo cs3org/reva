@@ -19,9 +19,7 @@
 package grpc_test
 
 import (
-	"bytes"
 	"context"
-	"io/ioutil"
 	"os"
 
 	"google.golang.org/grpc/metadata"
@@ -32,11 +30,10 @@ import (
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -516,9 +513,9 @@ var _ = Describe("storage providers", func() {
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
-				err = uploadHelper(ctx, fs, versionedFileRef, content1)
+				err = helpers.Upload()(ctx, fs, versionedFileRef, content1)
 				Expect(err).ToNot(HaveOccurred())
-				err = uploadHelper(ctx, fs, versionedFileRef, content2)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content2)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -574,9 +571,9 @@ var _ = Describe("storage providers", func() {
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
-				err = uploadHelper(ctx, fs, versionedFileRef, content1)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content1)
 				Expect(err).ToNot(HaveOccurred())
-				err = uploadHelper(ctx, fs, versionedFileRef, content2)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content2)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -642,9 +639,9 @@ var _ = Describe("storage providers", func() {
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
-				err = uploadHelper(ctx, fs, versionedFileRef, content1)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content1)
 				Expect(err).ToNot(HaveOccurred())
-				err = uploadHelper(ctx, fs, versionedFileRef, content2)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content2)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -652,17 +649,3 @@ var _ = Describe("storage providers", func() {
 		})
 	})
 })
-
-func uploadHelper(ctx context.Context, fs storage.FS, ref *storagep.Reference, content []byte) error {
-	uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
-	if err != nil {
-		return err
-	}
-	uploadID, ok := uploadIds["simple"]
-	if !ok {
-		return errors.New("simple upload method not available")
-	}
-	uploadRef := &storagep.Reference{Path: "/" + uploadID}
-	err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(content)))
-	return err
-}

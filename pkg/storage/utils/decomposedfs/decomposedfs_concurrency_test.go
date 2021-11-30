@@ -19,7 +19,6 @@
 package decomposedfs_test
 
 import (
-	"bytes"
 	"context"
 	"io/ioutil"
 	"os"
@@ -35,7 +34,6 @@ import (
 	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/pkg/errors"
 )
 
 var _ = Describe("Decomposed", func() {
@@ -97,13 +95,13 @@ var _ = Describe("Decomposed", func() {
 
 				// upload file with contents: "test"
 				go func(wg *sync.WaitGroup) {
-					_ = uploadHelper(ctx, fs, &provider.Reference{Path: "uploaded.txt"}, r1)
+					_ = helpers.Upload(ctx, fs, &provider.Reference{Path: "uploaded.txt"}, r1)
 					wg.Done()
 				}(wg)
 
 				// upload file with contents: "another run"
 				go func(wg *sync.WaitGroup) {
-					_ = uploadHelper(ctx, fs, &provider.Reference{Path: "uploaded.txt"}, r2)
+					_ = helpers.Upload(ctx, fs, &provider.Reference{Path: "uploaded.txt"}, r2)
 					wg.Done()
 				}(wg)
 
@@ -140,17 +138,3 @@ var _ = Describe("Decomposed", func() {
 		})
 	})
 })
-
-func uploadHelper(ctx context.Context, fs storage.FS, ref *provider.Reference, content []byte) error {
-	uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
-	if err != nil {
-		return err
-	}
-	uploadID, ok := uploadIds["simple"]
-	if !ok {
-		return errors.New("simple upload method not available")
-	}
-	uploadRef := &provider.Reference{Path: "/" + uploadID}
-	err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(content)))
-	return err
-}
