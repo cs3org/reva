@@ -135,8 +135,16 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
 	}
 
-	if claims["preferred_username"] == nil || claims["name"] == nil {
-		return nil, nil, fmt.Errorf("no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
+	userClaim := "preferred_username"
+	if claims["preferred_username"] == nil {
+		if claims["email"] != nil {
+			userClaim = "email"
+		} else {
+			return nil, nil, fmt.Errorf("no \"preferred_username\" and \"email\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
+		}
+	}
+	if claims["name"] == nil {
+		return nil, nil, fmt.Errorf("no \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
 	}
 
 	var uid, gid float64
@@ -168,7 +176,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	u := &user.User{
 		Id:       userID,
-		Username: claims["preferred_username"].(string),
+		Username: claims[userClaim].(string),
 		// TODO(labkode) if we can get groups from the claim we need to give the possibility
 		// to the admin to choose what claim provides the groups.
 		// TODO(labkode) ... use all claims from oidc?
