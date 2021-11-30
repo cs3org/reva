@@ -51,6 +51,7 @@ func TempDir(name string) (string, error) {
 	return tmpRoot, nil
 }
 
+// Upload can be used to initiate an upload and do the upload to a storage.FS in one step
 func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content []byte) error {
 	uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
 	if err != nil {

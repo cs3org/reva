@@ -513,7 +513,7 @@ var _ = Describe("storage providers", func() {
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
-				err = helpers.Upload()(ctx, fs, versionedFileRef, content1)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content1)
 				Expect(err).ToNot(HaveOccurred())
 				err = helpers.Upload(ctx, fs, versionedFileRef, content2)
 				Expect(err).ToNot(HaveOccurred())

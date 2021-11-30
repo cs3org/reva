@@ -162,7 +162,41 @@ var _ = Describe("File uploads", func() {
 				}, nil)
 		})
 
-		When("the user wants to upload a non zero byte file", func() {
+		When("the user initiates a non zero byte file upload", func() {
+			It("succeeds", func() {
+				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(uploadIds)).To(Equal(2))
+				Expect(uploadIds["simple"]).ToNot(BeEmpty())
+				Expect(uploadIds["tus"]).ToNot(BeEmpty())
+
+				rootRef := &provider.Reference{Path: "/"}
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resources)).To(Equal(0))
+			})
+		})
+
+		When("the user initiates a zero byte file upload", func() {
+			It("succeeds", func() {
+				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(uploadIds)).To(Equal(2))
+				Expect(uploadIds["simple"]).ToNot(BeEmpty())
+				Expect(uploadIds["tus"]).ToNot(BeEmpty())
+
+				rootRef := &provider.Reference{Path: "/"}
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resources)).To(Equal(0))
+			})
+		})
+
+		When("the user uploads a non zero byte file", func() {
 			It("succeeds", func() {
 				var (
 					fileContent = []byte("0123456789")
@@ -201,7 +235,7 @@ var _ = Describe("File uploads", func() {
 			})
 		})
 
-		When("the user wants to upload a zero byte file", func() {
+		When("the user uploads a zero byte file", func() {
 			It("succeeds", func() {
 				var (
 					fileContent = []byte("")
@@ -239,5 +273,25 @@ var _ = Describe("File uploads", func() {
 				Expect(resources[0].Path).To(Equal(ref.Path))
 			})
 		})
+
+		When("the user tries to upload a file without intialising the upload", func() {
+			It("fails", func() {
+				var (
+					fileContent = []byte("0123456789")
+				)
+
+				uploadRef := &provider.Reference{Path: "/some-non-existent-upload-reference"}
+				err := fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)))
+
+				Expect(err).To(HaveOccurred())
+
+				rootRef := &provider.Reference{Path: "/"}
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resources)).To(Equal(0))
+			})
+		})
+
 	})
 })
