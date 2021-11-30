@@ -783,15 +783,19 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			}
 
 			if requestPath != "" && strings.HasPrefix(mountPath, requestPath) { // when path is used and requested path is above mount point
-				// mountpoint is deeper than the statted path
-				// -> make child a folder
-				statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-				statResp.Info.MimeType = "httpd/unix-directory"
-				// -> unset checksums for a folder
-				statResp.Info.Checksum = nil
-				if statResp.Info.Opaque != nil {
-					delete(statResp.Info.Opaque.Map, "md5")
-					delete(statResp.Info.Opaque.Map, "adler32")
+
+				// mount path might be the reuqest path for file based shares
+				if mountPath != requestPath {
+					// mountpoint is deeper than the statted path
+					// -> make child a folder
+					statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+					statResp.Info.MimeType = "httpd/unix-directory"
+					// -> unset checksums for a folder
+					statResp.Info.Checksum = nil
+					if statResp.Info.Opaque != nil {
+						delete(statResp.Info.Opaque.Map, "md5")
+						delete(statResp.Info.Opaque.Map, "adler32")
+					}
 				}
 
 				// -> update metadata for /foo/bar -> set path to './bar'?
