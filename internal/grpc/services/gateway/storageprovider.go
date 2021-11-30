@@ -757,7 +757,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			// Then it will request path "/projects/projectA" from the provider
 			// But it should only request "/" as the ResourceId already points to the correct resource
 			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
+			if strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path needed
 				r.Path = "/"
 			}
 			providerRef := unwrap(r, mountPath, root)
@@ -1512,10 +1512,6 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 
 // unwrap takes a reference and makes it relative to the given mountPoint, optionally
 func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceId) *provider.Reference {
-	//if strings.HasPrefix(mountPoint, ref.Path) {
-	//// mountpoint is under the requested Path. Trim path
-	//ref.Path = "/"
-	//}
 	if utils.IsAbsolutePathReference(ref) {
 		relativeRef := &provider.Reference{
 			Path: strings.TrimPrefix(ref.Path, mountPoint),
