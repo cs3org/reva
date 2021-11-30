@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/registry/spaces"
 	"github.com/cs3org/reva/pkg/storage/registry/spaces/mocks"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -47,6 +48,13 @@ var _ = Describe("Static", func() {
 		rules map[string]interface{}
 
 		getClientFunc func(addr string) (spaces.StorageProviderClient, error)
+
+		alice = &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "alice",
+			},
+			Username: "Alice",
+		}
 	)
 
 	BeforeEach(func() {
@@ -55,42 +63,75 @@ var _ = Describe("Static", func() {
 		bazClient = &mocks.StorageProviderClient{}
 
 		fooClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
-			&provider.ListStorageSpacesResponse{
-				Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
-				StorageSpaces: []*provider.StorageSpace{
+			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
+				spaces := []*provider.StorageSpace{
 					{
-						Id:   &provider.StorageSpaceId{OpaqueId: "foospace"},
-						Root: &provider.ResourceId{StorageId: "foospace", OpaqueId: "foospace"},
-						Name: "Foo space",
+						Id:    &provider.StorageSpaceId{OpaqueId: "foospace"},
+						Root:  &provider.ResourceId{StorageId: "foospace", OpaqueId: "foospace"},
+						Name:  "Foo space",
+						Owner: alice,
 					},
-				},
+				}
+				for _, f := range req.Filters {
+					if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID && f.GetId().OpaqueId != "foospace!foospace" {
+						spaces = []*provider.StorageSpace{}
+					}
+				}
+				return &provider.ListStorageSpacesResponse{
+					Status:        &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+					StorageSpaces: spaces,
+				}
 			}, nil)
 		barClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
-			&provider.ListStorageSpacesResponse{
-				Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
-				StorageSpaces: []*provider.StorageSpace{
+			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
+				spaces := []*provider.StorageSpace{
 					{
-						Id:   &provider.StorageSpaceId{OpaqueId: "barspace"},
-						Root: &provider.ResourceId{StorageId: "barspace", OpaqueId: "barspace"},
-						Name: "Bar space",
+						Id:    &provider.StorageSpaceId{OpaqueId: "barspace"},
+						Root:  &provider.ResourceId{StorageId: "barspace", OpaqueId: "barspace"},
+						Name:  "Bar space",
+						Owner: alice,
 					},
-				},
+				}
+				for _, f := range req.Filters {
+					if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID && f.GetId().OpaqueId != "barspace!barspace" {
+						spaces = []*provider.StorageSpace{}
+					}
+				}
+				return &provider.ListStorageSpacesResponse{
+					Status:        &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+					StorageSpaces: spaces,
+				}
 			}, nil)
 		bazClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
-			&provider.ListStorageSpacesResponse{
-				Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
-				StorageSpaces: []*provider.StorageSpace{
-					{
-						Id:   &provider.StorageSpaceId{OpaqueId: "bazspace1"},
-						Root: &provider.ResourceId{StorageId: "bazspace1", OpaqueId: "bazspace1"},
-						Name: "Baz space 1",
-					},
-					{
-						Id:   &provider.StorageSpaceId{OpaqueId: "bazspace2"},
-						Root: &provider.ResourceId{StorageId: "bazspace2", OpaqueId: "bazspace2"},
-						Name: "Baz space 2",
-					},
-				},
+			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
+				space1 := &provider.StorageSpace{
+					Id:    &provider.StorageSpaceId{OpaqueId: "bazspace1"},
+					Root:  &provider.ResourceId{StorageId: "bazspace1", OpaqueId: "bazspace1"},
+					Name:  "Baz space 1",
+					Owner: alice,
+				}
+				space2 := &provider.StorageSpace{
+					Id:    &provider.StorageSpaceId{OpaqueId: "bazspace2"},
+					Root:  &provider.ResourceId{StorageId: "bazspace2", OpaqueId: "bazspace2"},
+					Name:  "Baz space 2",
+					Owner: alice,
+				}
+				spaces := []*provider.StorageSpace{space1, space2}
+				for _, f := range req.Filters {
+					if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
+						if f.GetId().OpaqueId == "bazspace1!bazspace1" {
+							spaces = []*provider.StorageSpace{space1}
+						} else if f.GetId().OpaqueId == "bazspace2!bazspace2" {
+							spaces = []*provider.StorageSpace{space2}
+						} else {
+							spaces = []*provider.StorageSpace{}
+						}
+					}
+				}
+				return &provider.ListStorageSpacesResponse{
+					Status:        &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+					StorageSpaces: spaces,
+				}
 			}, nil)
 
 		getClientFunc = func(addr string) (spaces.StorageProviderClient, error) {
@@ -105,11 +146,7 @@ var _ = Describe("Static", func() {
 			return nil, fmt.Errorf("Nooooo")
 		}
 
-		ctxAlice = ctxpkg.ContextSetUser(context.Background(), &userpb.User{
-			Id: &userpb.UserId{
-				OpaqueId: "alice",
-			},
-		})
+		ctxAlice = ctxpkg.ContextSetUser(context.Background(), alice)
 	})
 
 	JustBeforeEach(func() {
@@ -224,7 +261,14 @@ var _ = Describe("Static", func() {
 		})
 
 		Describe("ListProviders", func() {
-			It("filters by path with a simple rule", func() {
+			It("returns an empty list when no filters are set", func() {
+				filters := map[string]string{}
+				providers, err := handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(providers)).To(Equal(0))
+			})
+
+			It("filters by path", func() {
 				filters := map[string]string{
 					"path": "/projects",
 				}
@@ -241,10 +285,54 @@ var _ = Describe("Static", func() {
 				Expect(spacePaths["bazspace1"]).To(Equal("/projects/Baz space 1"))
 				Expect(spacePaths["bazspace2"]).To(Equal("/projects/Baz space 2"))
 			})
+
+			It("returns an empty list when a non-existent id is given", func() {
+				filters := map[string]string{
+					"storage_id": "invalid",
+					"opaque_id":  "barspace",
+				}
+				providers, err := handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(providers)).To(Equal(0))
+			})
+
+			It("filters by id", func() {
+				filters := map[string]string{
+					"storage_id": "barspace",
+					"opaque_id":  "barspace",
+				}
+				providers, err := handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(providers)).To(Equal(1))
+				p := providers[0]
+				Expect(p.Address).To(Equal("127.0.0.1:13021"))
+
+				spacePaths := map[string]string{}
+				err = json.Unmarshal(p.Opaque.Map["space_paths"].Value, &spacePaths)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(spacePaths)).To(Equal(1))
+				Expect(spacePaths["barspace"]).To(Equal("/users/Alice"))
+
+				filters = map[string]string{
+					"storage_id": "bazspace2",
+					"opaque_id":  "bazspace2",
+				}
+				providers, err = handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(providers)).To(Equal(1))
+				p = providers[0]
+				Expect(p.Address).To(Equal("127.0.0.1:13022"))
+
+				spacePaths = map[string]string{}
+				err = json.Unmarshal(p.Opaque.Map["space_paths"].Value, &spacePaths)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(spacePaths)).To(Equal(1))
+				Expect(spacePaths["bazspace2"]).To(Equal("/projects/Baz space 2"))
+			})
 		})
 	})
 
-	Context("with a more complex setup", func() {
+	Context("with a nested setup", func() {
 		BeforeEach(func() {
 			rules = map[string]interface{}{
 				"home_provider": "/users/{{.Id.OpaqueId}}",
