@@ -345,7 +345,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			Id: &provider.StorageSpaceId{
 				// Do we need a unique spaceid for every share?
 				// we are going to use the opaque id of the resource as the spaceid
-				OpaqueId: lsRes.Shares[i].Share.ResourceId.OpaqueId,
+				OpaqueId: "a0ca6a90-a365-4782-871e-d44447bbc668!" + lsRes.Shares[i].Share.ResourceId.OpaqueId,
 			},
 			SpaceType: "share",
 			Owner:     &userv1beta1.User{Id: lsRes.Shares[i].Share.Owner},
