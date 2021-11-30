@@ -273,13 +273,6 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 	return []*registrypb.ProviderInfo{}, nil
 }
 
-// spaceID is a workaround te glue together a spaceid that can carry both: the spaceid AND the nodeid
-// the spaceid is needed for routing in the gateway AND for finding the correct storage space in the rpovider
-// the nodeid is needed by the provider to find the shared node
-func spaceID(res *provider.ResourceId) string {
-	return res.StorageId + "!" + res.OpaqueId
-}
-
 // findProvidersForResource looks up storage providers based on a resource id
 // for the root of a space the res.StorageId is the same as the res.OpaqueId
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space

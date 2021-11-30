@@ -130,9 +130,9 @@ var _ = Describe("storage providers", func() {
 
 	assertCreateHome := func() {
 		It("creates a home directory", func() {
-			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
+			_, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
-			//Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			// Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
 			res, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
 				Owner: user,
@@ -142,8 +142,7 @@ var _ = Describe("storage providers", func() {
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
 
-			//homeRef.ResourceId = res.StorageSpace.Root
-			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
+			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -162,15 +161,15 @@ var _ = Describe("storage providers", func() {
 				Path: "/newdir",
 			}
 
-			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: newRef})
+			_, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: newRef})
 			Expect(err).ToNot(HaveOccurred())
-			//Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			// Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
 			res, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: newRef})
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
 
-			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: newRef})
+			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: newRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 		})
