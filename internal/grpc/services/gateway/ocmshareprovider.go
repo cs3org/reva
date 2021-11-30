@@ -361,7 +361,7 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 		return status.NewInternal(ctx, err, "error finding storage provider"), nil
 	}
 
-	spaceId := ""
+	spaceID := ""
 	mountPath := p.ProviderPath
 	var root *provider.ResourceId
 
@@ -369,8 +369,8 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	if len(spacePaths) == 0 {
 		spacePaths[""] = mountPath
 	}
-	for spaceId, mountPath = range spacePaths {
-		root = splitStorageSpaceID(spaceId)
+	for spaceID, mountPath = range spacePaths {
+		root = splitStorageSpaceID(spaceID)
 	}
 
 	pRef := unwrap(&provider.Reference{Path: refPath}, mountPath, root)

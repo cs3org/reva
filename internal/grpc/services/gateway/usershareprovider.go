@@ -347,7 +347,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		return status.NewInternal(ctx, err, "error finding storage provider")
 	}
 
-	spaceId := ""
+	spaceID := ""
 	mountPath := providerInfo.ProviderPath
 	var root *provider.ResourceId
 
@@ -355,8 +355,8 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	if len(spacePaths) == 0 {
 		spacePaths[""] = mountPath
 	}
-	for spaceId, mountPath = range spacePaths {
-		root = splitStorageSpaceID(spaceId)
+	for spaceID, mountPath = range spacePaths {
+		root = splitStorageSpaceID(spaceID)
 	}
 
 	ref := unwrap(sharePathRef, mountPath, root)
