@@ -32,9 +32,11 @@ import (
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/pkg/errors"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -507,16 +509,16 @@ var _ = Describe("storage providers", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
-				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+				content1 := []byte("1")
+				content2 := []byte("22")
 
 				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content1)
+				err = uploadHelper(ctx, fs, versionedFileRef, content1)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content2)
+				err = uploadHelper(ctx, fs, versionedFileRef, content2)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -565,16 +567,16 @@ var _ = Describe("storage providers", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
-				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+				content1 := []byte("1")
+				content2 := []byte("22")
 
 				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content1)
+				err = uploadHelper(ctx, fs, versionedFileRef, content1)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content2)
+				err = uploadHelper(ctx, fs, versionedFileRef, content2)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -633,16 +635,16 @@ var _ = Describe("storage providers", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
-				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+				content1 := []byte("1")
+				content2 := []byte("22")
 
 				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content1)
+				err = uploadHelper(ctx, fs, versionedFileRef, content1)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content2)
+				err = uploadHelper(ctx, fs, versionedFileRef, content2)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -650,3 +652,17 @@ var _ = Describe("storage providers", func() {
 		})
 	})
 })
+
+func uploadHelper(ctx context.Context, fs storage.FS, ref *storagep.Reference, content []byte) error {
+	uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+	if err != nil {
+		return err
+	}
+	uploadID, ok := uploadIds["simple"]
+	if !ok {
+		return errors.New("simple upload method not available")
+	}
+	uploadRef := &storagep.Reference{Path: "/" + uploadID}
+	err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(content)))
+	return err
+}

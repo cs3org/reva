@@ -19,8 +19,8 @@
 package decomposedfs_test
 
 import (
+	"bytes"
 	"context"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/errors"
 )
 
 var _ = Describe("Decomposed", func() {
@@ -85,21 +86,9 @@ var _ = Describe("Decomposed", func() {
 	Describe("concurrent", func() {
 		Describe("Upload", func() {
 			var (
-				f, f1 *os.File
+				r1 = []byte("test")
+				r2 = []byte("another run")
 			)
-
-			BeforeEach(func() {
-				// Prepare two test files for upload
-				err := ioutil.WriteFile(fmt.Sprintf("%s/%s", tmpRoot, "f.lol"), []byte("test"), 0644)
-				Expect(err).ToNot(HaveOccurred())
-				f, err = os.Open(fmt.Sprintf("%s/%s", tmpRoot, "f.lol"))
-				Expect(err).ToNot(HaveOccurred())
-
-				err = ioutil.WriteFile(fmt.Sprintf("%s/%s", tmpRoot, "f1.lol"), []byte("another run"), 0644)
-				Expect(err).ToNot(HaveOccurred())
-				f1, err = os.Open(fmt.Sprintf("%s/%s", tmpRoot, "f1.lol"))
-				Expect(err).ToNot(HaveOccurred())
-			})
 
 			PIt("generates two revisions", func() {
 				// runtime.GOMAXPROCS(1) // uncomment to remove concurrency and see revisions working.
@@ -108,13 +97,13 @@ var _ = Describe("Decomposed", func() {
 
 				// upload file with contents: "test"
 				go func(wg *sync.WaitGroup) {
-					_ = fs.Upload(ctx, &provider.Reference{Path: "uploaded.txt"}, f)
+					_ = uploadHelper(ctx, fs, &provider.Reference{Path: "uploaded.txt"}, r1)
 					wg.Done()
 				}(wg)
 
 				// upload file with contents: "another run"
 				go func(wg *sync.WaitGroup) {
-					_ = fs.Upload(ctx, &provider.Reference{Path: "uploaded.txt"}, f1)
+					_ = uploadHelper(ctx, fs, &provider.Reference{Path: "uploaded.txt"}, r2)
 					wg.Done()
 				}(wg)
 
@@ -151,3 +140,17 @@ var _ = Describe("Decomposed", func() {
 		})
 	})
 })
+
+func uploadHelper(ctx context.Context, fs storage.FS, ref *provider.Reference, content []byte) error {
+	uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+	if err != nil {
+		return err
+	}
+	uploadID, ok := uploadIds["simple"]
+	if !ok {
+		return errors.New("simple upload method not available")
+	}
+	uploadRef := &provider.Reference{Path: "/" + uploadID}
+	err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(content)))
+	return err
+}

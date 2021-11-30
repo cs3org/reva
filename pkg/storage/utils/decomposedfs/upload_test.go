@@ -25,7 +25,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"testing"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -46,11 +45,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
-
-func TestFileUploads(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "File uploads")
-}
 
 var _ = Describe("File uploads", func() {
 	var (
