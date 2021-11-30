@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -115,6 +116,9 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 	}
 
 	for _, u := range oidcUsers {
+		if _, found := am.oidcUsersMapping[u.OIDCGroup]; found {
+			return errors.New("oidcmapping: mapping error, multiple users mapped to a single group")
+		}
 		am.oidcUsersMapping[u.OIDCGroup] = u
 	}
 
@@ -171,23 +175,20 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	// discover the user username
 	var username string
 	mappings := make([]string, 0, len(am.oidcUsersMapping))
-	for _, v := range am.oidcUsersMapping {
-		if v.OIDCIssuer == claims["issuer"] {
-			mappings = append(mappings, v.OIDCGroup)
+	for _, m := range am.oidcUsersMapping {
+		if m.OIDCIssuer == claims["issuer"] {
+			mappings = append(mappings, m.OIDCGroup)
 		}
 	}
 	intersection := intersect.Simple(claims["groups"], mappings)
 	if len(intersection) > 1 {
 		// multiple mappings is not implemented, we don't know which one to choose
-		return nil, nil, errors.New("oidcmapping: mapping failed, more than one mapping found")
+		return nil, nil, errtypes.PermissionDenied("oidcmapping: mapping failed, more than one mapping found")
 	}
 	if len(intersection) == 1 {
 		for _, m := range intersection {
 			username = am.oidcUsersMapping[m.(string)].Username
 		}
-	}
-	if username == "" {
-		return nil, nil, errors.New("oidcmapping: unable to retrieve username from mappings")
 	}
 
 	var uid, gid float64
@@ -198,29 +199,37 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		gid, _ = claims[am.c.GIDClaim].(float64)
 	}
 
-	userID := &user.UserId{
-		OpaqueId: username,
-		Idp:      "",
-		Type:     user.UserType_USER_TYPE_PRIMARY,
-	}
 	gwc, err := pool.GetUserProviderServiceClient(am.c.UserProviderSvc)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "oidcmapping: error getting gateway grpc client")
 	}
 
-	getUserByClaimResp, err := gwc.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
-		Claim: "username",
-		Value: username,
-	})
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "oidcmapping: error getting user by claim username (\"%v\")", username)
-	}
-	if getUserByClaimResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, nil, status.NewErrorFromCode(getUserByClaimResp.Status.Code, "oidcmapping")
+	userID := &user.UserId{
+		OpaqueId: "",
+		Idp:      "",
+		Type:     user.UserType_USER_TYPE_PRIMARY,
 	}
 
-	userID.Idp = getUserByClaimResp.GetUser().GetId().Idp
-	userID.Type = getUserByClaimResp.GetUser().GetId().Type
+	if username != "" {
+		getUserByClaimResp, err := gwc.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
+			Claim: "username",
+			Value: username,
+		})
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "oidcmapping: error getting user by claim username (\"%v\")", username)
+		}
+		if getUserByClaimResp.Status.Code != rpc.Code_CODE_OK {
+			return nil, nil, status.NewErrorFromCode(getUserByClaimResp.Status.Code, "oidcmapping")
+		}
+
+		userID.Idp = getUserByClaimResp.GetUser().GetId().Idp
+		userID.Type = getUserByClaimResp.GetUser().GetId().Type
+		userID.OpaqueId = getUserByClaimResp.GetUser().GetId().OpaqueId
+	} else {
+		username = claims["preferred_username"].(string)
+		userID.OpaqueId = claims[am.c.IDClaim].(string)
+		userID.Idp = claims["issuer"].(string)
+	}
 
 	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
 		UserId: userID,
@@ -234,14 +243,15 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	u := &user.User{
 		Id:           userID,
-		Username:     getUserByClaimResp.GetUser().GetUsername(),
-		Groups:       getUserByClaimResp.GetUser().GetGroups(),
+		Username:     username,
+		Groups:       getGroupsResp.Groups,
 		Mail:         claims["email"].(string),
 		MailVerified: claims["email_verified"].(bool),
 		DisplayName:  claims["name"].(string),
 		UidNumber:    int64(uid),
 		GidNumber:    int64(gid),
 	}
+	log.Debug().Msgf("returning user: %v", u)
 
 	var scopes map[string]*authpb.Scope
 	scopes, err = scope.AddOwnerScope(nil)
