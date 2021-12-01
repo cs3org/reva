@@ -253,20 +253,12 @@ func (r *registry) GetProvider(ctx context.Context, space *provider.StorageSpace
 // matches = /foo/bar       <=> /foo/bar        -> list(spaceid, .)
 // below   = /foo/bar/bif   <=> /foo/bar        -> list(spaceid, ./bif)
 func (r *registry) ListProviders(ctx context.Context, filters map[string]string) ([]*registrypb.ProviderInfo, error) {
-	if filters["path"] != "" {
-		return r.findProvidersForAbsolutePathReference(ctx, filters["path"]), nil
-	} else if filters["storage_id"] != "" && filters["opaque_id"] != "" {
+	switch {
+	case filters["storage_id"] != "" && filters["opaque_id"] != "":
 		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"]), nil
+	case filters["path"] != "":
+		return r.findProvidersForAbsolutePathReference(ctx, filters["path"]), nil
 	}
-
-	// switch {
-	// case ref.ResourceId != nil && ref.ResourceId.StorageId != "":
-	// 	return r.findProvidersForResource(ctx, ref.ResourceId)
-	// case utils.IsAbsolutePathReference(ref):
-	// 	return r.findProvidersForAbsolutePathReference(ctx, ref)
-	// default:
-	// 	return nil, errtypes.NotSupported("unsupported reference type")
-	// }
 	return []*registrypb.ProviderInfo{}, nil
 }
 

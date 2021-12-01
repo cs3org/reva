@@ -216,17 +216,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			parts := strings.SplitN(f.GetId().OpaqueId, "!", 2)
-			switch len(parts) {
-			case 1: // real space root
-				filters["storage_id"] = parts[0]
-				// use storage id as opaqueid
-				// TODO clarify that for the root of a space, the opaqueid can be omitted. Only shares need it to point to the shared resource
-				filters["opaque_id"] = parts[0]
-			case 2: // share space root
-				filters["storage_id"] = parts[0]
-				filters["opaque_id"] = parts[1]
-			}
+			filters["storage_id"], filters["opaque_id"] = utils.SplitStorageSpaceID(f.GetId().OpaqueId)
 		case provider.ListStorageSpacesRequest_Filter_TYPE_OWNER:
 			filters["owner_idp"] = f.GetOwner().Idp
 			filters["owner_id"] = f.GetOwner().OpaqueId
