@@ -104,6 +104,8 @@ check-changelog-drone:
 ci: build-ci test  lint-ci
 
 # to be run in Docker build
+build-revad-eos-docker: off
+	go build -ldflags ${CI_BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 build-revad-docker: off
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 build-revad-cephfs-docker: off

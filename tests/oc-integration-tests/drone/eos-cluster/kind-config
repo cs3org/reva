@@ -1,0 +1,33 @@
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: test
+networking:
+  apiServerAddress: "0.0.0.0"
+
+containerdConfigPatches:
+- |-
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker:5000"]
+    endpoint = ["http://kind-registry:5000"]
+
+nodes:
+# add to the apiServer certSANs the name of the drone service in order to be able to reach the cluster through it
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    apiServer:
+      certSANs:
+      - "docker"
+  #- |
+  #  kind: InitConfiguration
+  #  nodeRegistration:
+  #    kubeletExtraArgs:
+  #      node-labels: "ingress-ready=true"
+  #  extraPortMappings:
+  #  - containerPort: 80
+  #    hostPort: 80
+  #    protocol: TCP
+  #  - containerPort: 443
+  #    hostPort: 443
+  #    protocol: TCP
+- role: worker

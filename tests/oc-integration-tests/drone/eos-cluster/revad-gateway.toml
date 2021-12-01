@@ -1,0 +1,8 @@
+[shared]
+gatewaysvc = "localhost:9142"
+jwt_secret = "POZSOrlP7AgnTxH7MJebWV8ohvsApgbd4u3Joen30c"
+skip_user_groups_in_token = true
+
+[grpc]
+address = "0.0.0.0:18000"
+

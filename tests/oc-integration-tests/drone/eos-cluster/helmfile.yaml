@@ -1,0 +1,62 @@
+repositories:
+  - name: eos
+    url: https://registry.cern.ch/chartrepo/eos
+
+  - name: cs3org
+    url: https://cs3org.github.io/charts/
+
+releases:
+  - name: eos
+    namespace: default
+    chart: eos/server
+
+  - name: revad-gateway
+    namespace: default
+    chart: cs3org/revad
+    values:
+      - image:
+          repository: docker:5000/cs3org/revad
+          tag: latest-eos
+      #- ingress:
+      #    enabled: true
+      #    services:
+      #      http:
+      #        hostname: docker
+      #      grpc:
+      #        hostname: docker
+    set:
+      - name: "configFiles.revad\\.toml"
+        file: ./revad-gateway.toml
+
+  - name: revad-home
+    namespace: default
+    chart: cs3org/revad
+    values:
+      - image:
+          repository: docker:5000/cs3org/revad
+          tag: latest-eos
+    set:
+      - name: "configFiles.revad\\.toml"
+        file: ./revad-home.toml
+
+  - name: revad-shares
+    namespace: default
+    chart: cs3org/revad
+    values:
+      - image:
+          repository: docker:5000/cs3org/revad
+          tag: latest-eos
+    set:
+      - name: "configFiles.revad\\.toml"
+        file: ./revad-shares.toml
+
+  - name: revad-users
+    namespace: default
+    chart: cs3org/revad
+    values:
+      - image:
+          repository: docker:5000/cs3org/revad
+          tag: latest-eos
+    set:
+      - name: "configFiles.revad\\.toml"
+        file: ./revad-users.toml

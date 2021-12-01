@@ -1,0 +1,29 @@
+[shared]
+gatewaysvc = "localhost:9142"
+jwt_secret = "POZSOrlP7AgnTxH7MJebWV8ohvsApgbd4u3Joen30c"
+skip_user_groups_in_token = true
+
+[grpc]
+address = "0.0.0.0:14000"
+
+[grpc.services.storageprovider.drivers.eoshomewrapper]
+namespace = "/eos/user/"
+quota_node = "/eos/user/"
+master_url = "root://eos-mgm.ocis.svc.cluster.local:1094"
+slave_url = "root://eos-mgm.ocis.svc.cluster.local:1094"
+user_layout = "{{substr 0 1 .Username}}/{{.Username}}"
+share_folder = "/Shares"
+xrdcopy_binary = "/opt/eos/xrootd/bin/xrdcopy"
+cache_directory = "/var/tmp/reva"
+
+[http]
+address = "0.0.0.0:13000"
+
+[http.services.dataprovider.drivers.eoshomewrapper]
+namespace = "/eos/user/"
+quota_node = "/eos/user/"
+master_url = "root://eos-mgm.ocis.svc.cluster.local:1094"
+slave_url = "root://eos-mgm.ocis.svc.cluster.local:1094"
+user_layout = "{{substr 0 1 .Username}}/{{.Username}}"
+xrdcopy_binary = "/opt/eos/xrootd/bin/xrdcopy"
+cache_directory = "/var/tmp/reva"

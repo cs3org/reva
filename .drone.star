@@ -98,16 +98,16 @@ def main(ctx):
     return [
         changelog(),
         checkStarlark(),
-        coverage(),
-        buildAndPublishDocker(),
-        buildOnly(),
-        testIntegration(),
-        release(),
-        litmusOcisOldWebdav(),
-        litmusOcisNewWebdav(),
-        litmusOcisSpacesDav(),
-        virtualViews(),
-    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
+        #coverage(),
+        #buildAndPublishDocker(),
+        #buildOnly(),
+        #testIntegration(),
+        #release(),
+        #litmusOcisOldWebdav(),
+        #litmusOcisNewWebdav(),
+        #litmusOcisSpacesDav(),
+        #virtualViews(),
+    ] + eosIntegrationTests(1)  #+ ocisIntegrationTests(6) + s3ngIntegrationTests(12)
 
 def buildAndPublishDocker():
     return {
@@ -933,4 +933,126 @@ def checkStarlark():
                 "refs/pull/**",
             ],
         },
+    }
+
+def eosIntegrationTests(parallelRuns, skipExceptParts = []):
+    pipelines = []
+    debugPartsEnabled = (len(skipExceptParts) != 0)
+    for runPart in range(1, parallelRuns + 1):
+        if debugPartsEnabled and runPart not in skipExceptParts:
+            continue
+
+        pipelines.append(
+            {
+                "kind": "pipeline",
+                "type": "docker",
+                "name": "eos-integration-tests-%s" % runPart,
+                "platform": {
+                    "os": "linux",
+                    "arch": "amd64",
+                },
+                "trigger": {
+                    "event": {
+                        "include": [
+                            "pull_request",
+                            "tag",
+                        ],
+                    },
+                },
+                "steps": [
+                    {
+                        "name": "create-cluster",
+                        "image": "registry.cern.ch/docker.io/library/docker:stable",
+                        "commands": [
+                            "sleep 30",  # wait for the docker daemon to start
+                            "/drone/src/tests/oc-integration-tests/drone/eos-cluster/install-kind.sh",
+                            "/drone/src/tests/oc-integration-tests/drone/eos-cluster/setup.sh",
+                            "kubectl get nodes",
+                        ],
+                        "environment": {
+                            "CLUSTER_HOST": "docker",
+                            "CLUSTER_NAME": "eos-cluster",
+                            "KUBECONFIG": "/mnt/config/admin.conf",
+                            "KIND_CONFIG_FILE": "/drone/src/tests/oc-integration-tests/drone/eos-cluster/kind-config",
+                        },
+                        "volumes": [
+                            {"name": "dockersock", "path": "/var/run"},
+                            {"name": "kubeconfig", "path": "/mnt/config"},
+                        ],
+                    },
+                    {
+                        "name": "build-docker-revad-eos-latest",
+                        "pull": "always",
+                        "image": "plugins/docker",
+                        "settings": {
+                            "insecure": "true",
+                            "registry": "docker:5000",
+                            "repo": "docker:5000/cs3org/revad",
+                            "tags": "latest-eos",
+                            "dockerfile": "Dockerfile.revad-eos",
+                            "custom_dns": [
+                                "128.142.17.5",
+                                "128.142.16.5",
+                            ],
+                        },
+                    },
+                    {
+                        "name": "start-helmfile",
+                        "image": "registry.cern.ch/quay.io/roboll/helmfile:v0.142.0",
+                        "commands": [
+                            "helmfile --file tests/oc-integration-tests/drone/eos-cluster/helmfile.yaml sync",
+                        ],
+                        "environment": {
+                            "KUBECONFIG": "/mnt/config/admin.conf",
+                        },
+                        "volumes": [
+                            {"name": "kubeconfig", "path": "/mnt/config"},
+                        ],
+                    },
+                    cloneOc10TestReposStep(),
+                    {
+                        "name": "oC10APIAcceptanceTestsOcisStorage",
+                        "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
+                        "commands": [
+                            "cd /drone/src/tmp/testrunner",
+                            "make test-acceptance-api",
+                        ],
+                        "environment": {
+                            "TEST_SERVER_URL": "http://revad-services:20080",
+                            "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
+                            "STORAGE_DRIVER": "EOS",
+                            "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
+                            "TEST_WITH_LDAP": "true",
+                            "REVA_LDAP_HOSTNAME": "ldap",
+                            "TEST_REVA": "true",
+                            "SEND_SCENARIO_LINE_REFERENCES": "true",
+                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis",
+                            "DIVIDE_INTO_NUM_PARTS": parallelRuns,
+                            "RUN_PART": runPart,
+                            "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md",
+                        },
+                    },
+                ],
+                "services": [
+                    ldapService(),
+                    dind(),
+                ],
+                "volumes": [
+                    {"name": "dockersock", "temp": {}},
+                    {"name": "kubeconfig", "temp": {}},
+                ],
+                "depends_on": ["changelog"],
+            },
+        )
+
+    return pipelines
+
+def dind():
+    return {
+        "name": "docker",
+        "image": "registry.cern.ch/docker.io/library/docker:dind",
+        "privileged": True,
+        "volumes": [
+            {"name": "dockersock", "path": "/var/run"},
+        ],
     }
