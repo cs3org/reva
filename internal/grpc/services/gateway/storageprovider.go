@@ -1291,7 +1291,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 		}, nil
 	}
 
-	if srcRef.ResourceId.StorageId != dstRef.ResourceId.StorageId {
+	if srcRef.ResourceId.StorageId != dstRef.ResourceId.StorageId || srcProvider.Address != dstProvider.Address {
 		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewPermissionDenied(ctx, err, "gateway: cross-storage restores are forbidden"),
 		}, nil
