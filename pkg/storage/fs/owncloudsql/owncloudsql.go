@@ -491,7 +491,7 @@ func (fs *owncloudsqlfs) getUserStorage(user string) (int, error) {
 
 // CreateStorageSpace creates a storage space
 func (fs *owncloudsqlfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+	return nil, errtypes.NotSupported("unimplemented: CreateStorageSpace")
 }
 
 func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filecache.File, ip string, mdKeys []string) (*provider.ResourceInfo, error) {

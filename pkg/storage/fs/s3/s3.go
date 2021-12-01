@@ -385,7 +385,7 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 
 // CreateStorageSpace creates a storage space
 func (fs *s3FS) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+	return nil, errtypes.NotSupported("unimplemented: CreateStorageSpace")
 }
 
 func (fs *s3FS) moveObject(ctx context.Context, oldKey string, newKey string) error {

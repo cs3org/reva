@@ -65,6 +65,7 @@ var responses = map[string]Response{
 
 	`POST /apps/sciencemesh/~einstein/api/storage/CreateHome `:   {200, ``, serverStateHome},
 	`POST /apps/sciencemesh/~einstein/api/storage/CreateHome {}`: {200, ``, serverStateHome},
+	`POST /apps/sciencemesh/~einstein/api/storage/CreateStorageSpace {"owner":{"id":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"username":"einstein"},"type":"personal","name":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"}`: {200, `{"status":{"code":1}}`, serverStateHome},
 
 	`POST /apps/sciencemesh/~einstein/api/storage/CreateReference {"path":"/Shares/reference","url":"scheme://target"}`: {200, `[]`, serverStateReference},
 

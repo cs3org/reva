@@ -140,30 +140,21 @@ var _ = Describe("storage providers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			// Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
-			switch provider {
-			case "ocis":
-				res, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
-					Owner: user,
-					Type:  "personal",
-					Name:  user.Id.OpaqueId,
-				})
-				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-				Expect(err).ToNot(HaveOccurred())
-			case "owncloud", "nextcloud":
-				res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
-				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-				Expect(err).ToNot(HaveOccurred())
-			default:
-				Fail("unknown storage provider: " + provider)
-			}
+			res, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
+				Owner: user,
+				Type:  "personal",
+				Name:  user.Id.OpaqueId,
+			})
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(err).ToNot(HaveOccurred())
 
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: ref(provider, homePath)})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-			ghRes, err := serviceClient.GetHome(ctx, &storagep.GetHomeRequest{})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(ghRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			//ghRes, err := serviceClient.GetHome(ctx, &storagep.GetHomeRequest{})
+			//Expect(err).ToNot(HaveOccurred())
+			//Expect(ghRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 		})
 	}
 
@@ -223,6 +214,7 @@ var _ = Describe("storage providers", func() {
 			Expect(listRes.Versions[0].Size).To(Equal(uint64(1)))
 		})
 
+		// FIXME flaky test?!?
 		It("restores a file version", func() {
 			vRef := ref(provider, versionedFilePath)
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: vRef})
@@ -574,22 +566,13 @@ var _ = Describe("storage providers", func() {
 
 			Context("with a home and a subdirectory", func() {
 				JustBeforeEach(func() {
-					switch provider {
-					case "ocis":
-						res, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
-							Owner: user,
-							Type:  "personal",
-							Name:  user.Id.OpaqueId,
-						})
-						Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-						Expect(err).ToNot(HaveOccurred())
-					case "owncloud", "nextcloud":
-						res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
-						Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-						Expect(err).ToNot(HaveOccurred())
-					default:
-						Fail("unknown storage provider: " + provider)
-					}
+					res, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
+						Owner: user,
+						Type:  "personal",
+						Name:  user.Id.OpaqueId,
+					})
+					Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+					Expect(err).ToNot(HaveOccurred())
 
 					subdirRes, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: ref(provider, subdirPath)})
 					Expect(err).ToNot(HaveOccurred())
@@ -624,17 +607,10 @@ var _ = Describe("storage providers", func() {
 
 					ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
-					switch provider {
-					case "ocis", "nextcloud":
-						_, err = fs.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
-							Owner: user,
-							Type:  "personal",
-						})
-					case "owncloud":
-						err = fs.CreateHome(ctx)
-					default:
-						Fail("unknown provider:" + provider)
-					}
+					_, err = fs.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
+						Owner: user,
+						Type:  "personal",
+					})
 					Expect(err).ToNot(HaveOccurred())
 					err = fs.Upload(ctx, vRef, content1)
 					Expect(err).ToNot(HaveOccurred())

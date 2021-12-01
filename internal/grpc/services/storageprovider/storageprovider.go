@@ -31,6 +31,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -359,28 +360,11 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 }
 
 func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	res := &provider.GetHomeResponse{
-		Status: status.NewOK(ctx),
-		Path:   "/",
-	}
-
-	return res, nil
+	return nil, errtypes.NotSupported("unused, use the gateway to look up the user home")
 }
 
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
-	log := appctx.GetLogger(ctx)
-	if err := s.storage.CreateHome(ctx); err != nil {
-		st := status.NewInternal(ctx, err, "error creating home")
-		log.Err(err).Msg("storageprovider: error calling CreateHome of storage driver")
-		return &provider.CreateHomeResponse{
-			Status: st,
-		}, nil
-	}
-
-	res := &provider.CreateHomeResponse{
-		Status: status.NewOK(ctx),
-	}
-	return res, nil
+	return nil, errtypes.NotSupported("use CreateStorageSpace with type personal")
 }
 
 // CreateStorageSpace creates a storage space
@@ -394,7 +378,17 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		case errtypes.NotSupported:
-			st = status.NewUnimplemented(ctx, err, "not implemented")
+			// if trying to create a user home fall back to CreateHome
+			if u, ok := ctxpkg.ContextGetUser(ctx); ok && req.Type == "personal" && utils.UserEqual(req.GetOwner().Id, u.Id) {
+				if err := s.storage.CreateHome(ctx); err != nil {
+					st = status.NewInternal(ctx, err, "error creating home")
+				} else {
+					st = status.NewOK(ctx)
+					// TODO we cannot return a space, but the gateway currently does not expect one...
+				}
+			} else {
+				st = status.NewUnimplemented(ctx, err, "not implemented")
+			}
 		case errtypes.AlreadyExists:
 			st = status.NewAlreadyExists(ctx, err, "already exists")
 		default:
