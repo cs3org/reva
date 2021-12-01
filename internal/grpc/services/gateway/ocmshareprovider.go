@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -370,7 +371,11 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 		spacePaths[""] = mountPath
 	}
 	for spaceID, mountPath = range spacePaths {
-		root = splitStorageSpaceID(spaceID)
+		rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+		root = &provider.ResourceId{
+			StorageId: rootSpace,
+			OpaqueId:  rootNode,
+		}
 	}
 
 	pRef := unwrap(&provider.Reference{Path: refPath}, mountPath, root)

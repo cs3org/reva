@@ -23,6 +23,7 @@ import (
 	"path"
 
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -356,7 +357,11 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		spacePaths[""] = mountPath
 	}
 	for spaceID, mountPath = range spacePaths {
-		root = splitStorageSpaceID(spaceID)
+		rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+		root = &provider.ResourceId{
+			StorageId: rootSpace,
+			OpaqueId:  rootNode,
+		}
 	}
 
 	ref := unwrap(sharePathRef, mountPath, root)

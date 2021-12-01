@@ -84,18 +84,13 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 
 			// TODO refactor: pass Reference to Upload & GetOrHeadFile
 			// build a storage space reference
-			storageid, opaqeid, err := utils.SplitStorageSpaceID(spaceID)
-			if err != nil {
-				sublog.Error().Msg("space id must be separated by !")
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
+			storageid, opaqeid := utils.SplitStorageSpaceID(spaceID)
 
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
 				Path:       fn,
 			}
-			err = fs.Upload(ctx, ref, r.Body)
+			err := fs.Upload(ctx, ref, r.Body)
 			switch v := err.(type) {
 			case nil:
 				w.WriteHeader(http.StatusOK)

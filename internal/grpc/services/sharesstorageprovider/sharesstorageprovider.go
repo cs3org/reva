@@ -313,10 +313,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				}, nil
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, _, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
-			if err != nil {
-				return nil, err
-			}
+			spaceid, _ := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
 			if spaceid != "a0ca6a90-a365-4782-871e-d44447bbc668" {
 				return &provider.ListStorageSpacesResponse{
 					// a specific id was requested, return not found instead of empty list

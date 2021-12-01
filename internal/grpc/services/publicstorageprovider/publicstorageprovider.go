@@ -320,10 +320,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				}, nil
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, _, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
-			if err != nil {
-				return nil, err
-			}
+			spaceid, _ := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
 			if spaceid != StorageID {
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},

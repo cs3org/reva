@@ -187,10 +187,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			spaceType = filter[i].GetSpaceType()
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, nodeID, err = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
-			if err != nil {
-				return nil, err
-			}
+			spaceID, nodeID = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
 		}
 	}
 
@@ -291,10 +288,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	space := req.StorageSpace
 
-	_, spaceID, err := utils.SplitStorageSpaceID(space.Id.OpaqueId)
-	if err != nil {
-		return nil, err
-	}
+	_, spaceID := utils.SplitStorageSpaceID(space.Id.OpaqueId)
 
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
 	if err != nil {

@@ -346,12 +346,7 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
-	if err != nil {
-		return &provider.DeleteStorageSpaceResponse{
-			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
-		}, nil
-	}
+	storageid, opaqeid := utils.SplitStorageSpaceID(req.Id.OpaqueId)
 	c, _, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
 		StorageId: storageid,
 		OpaqueId:  opaqeid,
@@ -746,7 +741,11 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			spacePaths[""] = mountPath
 		}
 		for spaceID, mountPath = range spacePaths {
-			root = splitStorageSpaceID(spaceID)
+			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+			root = &provider.ResourceId{
+				StorageId: rootSpace,
+				OpaqueId:  rootNode,
+			}
 			// build reference for the provider
 			r := &provider.Reference{
 				ResourceId: req.Ref.ResourceId,
@@ -902,7 +901,11 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			spacePaths[""] = mountPath
 		}
 		for spaceID, mountPath = range spacePaths {
-			root = splitStorageSpaceID(spaceID)
+			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+			root = &provider.ResourceId{
+				StorageId: rootSpace,
+				OpaqueId:  rootNode,
+			}
 			// build reference for the provider - copy to avoid side effects
 			r := &provider.Reference{
 				ResourceId: req.Ref.ResourceId,
@@ -1102,7 +1105,11 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 			spacePaths[""] = mountPath
 		}
 		for spaceID, mountPath = range spacePaths {
-			root = splitStorageSpaceID(spaceID)
+			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+			root = &provider.ResourceId{
+				StorageId: rootSpace,
+				OpaqueId:  rootNode,
+			}
 			// build reference for the provider
 			r := &provider.Reference{
 				ResourceId: req.Ref.ResourceId,
@@ -1177,7 +1184,11 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 			spacePaths[""] = mountPath
 		}
 		for spaceID, mountPath = range spacePaths {
-			root = splitStorageSpaceID(spaceID)
+			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+			root = &provider.ResourceId{
+				StorageId: rootSpace,
+				OpaqueId:  rootNode,
+			}
 			// build reference for the provider
 			r := &provider.Reference{
 				ResourceId: req.Ref.ResourceId,
@@ -1222,7 +1233,11 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 			spacePaths[""] = mountPath
 		}
 		for spaceID, mountPath = range spacePaths {
-			root = splitStorageSpaceID(spaceID)
+			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+			root = &provider.ResourceId{
+				StorageId: rootSpace,
+				OpaqueId:  rootNode,
+			}
 			// build reference for the provider
 			r := &provider.Reference{
 				ResourceId: req.RestoreRef.ResourceId,
@@ -1370,7 +1385,11 @@ func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provi
 	if spacePaths := decodeSpacePaths(p.Opaque); len(spacePaths) > 0 {
 		for spaceID, spacePath := range spacePaths {
 			mountPath = spacePath
-			root = splitStorageSpaceID(spaceID)
+			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+			root = &provider.ResourceId{
+				StorageId: rootSpace,
+				OpaqueId:  rootNode,
+			}
 			break // TODO can there be more than one space for a path?
 		}
 	}
@@ -1556,20 +1575,4 @@ func decodeSpacePaths(o *typesv1beta1.Opaque) map[string]string {
 		return spacePaths
 	}
 	return nil
-}
-
-// splitStorageSpaceID can be used to split `storagespaceid` into `storageid` and `nodeid`
-// Currently they are built using `<storageid>!<nodeid>` in the decomposedfs, but other drivers might return different ids.
-// any place in the code that relies on this function should instead use the storage registry to look up the responsible storage provider.
-// Note: This would in effect change the storage registry into a storage space registry.
-func splitStorageSpaceID(ssid string) *provider.ResourceId {
-	if ssid == "" {
-		return nil
-	}
-	// query that specific storage provider
-	parts := strings.SplitN(ssid, "!", 2)
-	if len(parts) == 1 {
-		return &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[0]}
-	}
-	return &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
 }
