@@ -165,10 +165,10 @@ var _ = Describe("Static", func() {
 	Describe("New", func() {
 		It("uses the path as the pathtemplate if no template is set (e.g. in cases like the publicstorageprovider which returns a single space)", func() {
 			rules = map[string]interface{}{
-				"rules": map[string]interface{}{
-					"/thepath": map[string]interface{}{
+				"providers": map[string]interface{}{
+					"127.0.0.1:13020": map[string]interface{}{
 						"space_type": "personal",
-						"address":    "127.0.0.1:13020"},
+						"mount_path": "/thepath"},
 				},
 			}
 
@@ -193,21 +193,21 @@ var _ = Describe("Static", func() {
 		BeforeEach(func() {
 			rules = map[string]interface{}{
 				"home_provider": "/users/{{.Id.OpaqueId}}",
-				"rules": map[string]interface{}{
-					"/users/[a-k]": map[string]interface{}{
+				"providers": map[string]interface{}{
+					"127.0.0.1:13020": map[string]interface{}{
+						"mount_path":    "/users/[a-k]",
 						"path_template": "/users/{{.Space.Owner.Username}}",
 						"space_type":    "personal",
-						"address":       "127.0.0.1:13020",
 					},
-					"/users/[l-z]": map[string]interface{}{
+					"127.0.0.1:13021": map[string]interface{}{
+						"mount_path":    "/users/[l-z]",
 						"path_template": "/users/{{.Space.Owner.Username}}",
 						"space_type":    "personal",
-						"address":       "127.0.0.1:13021",
 					},
-					"/projects": map[string]interface{}{
+					"127.0.0.1:13022": map[string]interface{}{
+						"mount_path":    "/projects",
 						"path_template": "/projects/{{.Space.Name}}",
 						"space_type":    "project",
-						"address":       "127.0.0.1:13022",
 					},
 				},
 			}
@@ -336,21 +336,21 @@ var _ = Describe("Static", func() {
 		BeforeEach(func() {
 			rules = map[string]interface{}{
 				"home_provider": "/users/{{.Id.OpaqueId}}",
-				"rules": map[string]interface{}{
-					"/foo": map[string]interface{}{
+				"providers": map[string]interface{}{
+					"127.0.0.1:13020": map[string]interface{}{
+						"mount_path":    "/foo",
 						"path_template": "/foo",
 						"space_type":    "project",
-						"address":       "127.0.0.1:13020",
 					},
-					"/foo/bar": map[string]interface{}{
+					"127.0.0.1:13021": map[string]interface{}{
+						"mount_path":    "/foo/bar",
 						"path_template": "/foo/bar",
 						"space_type":    "project",
-						"address":       "127.0.0.1:13021",
 					},
-					"/foo/bar/baz": map[string]interface{}{
+					"127.0.0.1:13022": map[string]interface{}{
+						"mount_path":    "/foo/bar/baz",
 						"path_template": "/foo/bar/baz",
 						"space_type":    "project",
-						"address":       "127.0.0.1:13022",
 					},
 				},
 			}

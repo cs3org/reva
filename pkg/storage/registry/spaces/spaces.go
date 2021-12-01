@@ -54,7 +54,7 @@ func init() {
 
 type rule struct {
 	Mapping           string            `mapstructure:"mapping"`
-	Address           string            `mapstructure:"address"`
+	MountPath         string            `mapstructure:"mount_path"`
 	Aliases           map[string]string `mapstructure:"aliases"`
 	AllowedUserAgents []string          `mapstructure:"allowed_user_agents"`
 	PathTemplate      string            `mapstructure:"path_template"`
@@ -85,7 +85,7 @@ func (r *rule) ProviderPath(u *userpb.User, s *provider.StorageSpace) (string, e
 }
 
 type config struct {
-	Rules        map[string]*rule `mapstructure:"rules"`
+	Providers    map[string]*rule `mapstructure:"providers"`
 	HomeTemplate string           `mapstructure:"home_template"`
 }
 
@@ -95,23 +95,20 @@ func (c *config) init() {
 		c.HomeTemplate = "/"
 	}
 
-	if len(c.Rules) == 0 {
-		c.Rules = map[string]*rule{
-			"/": {
-				Address: sharedconf.GetGatewaySVC(""),
-			},
-			"00000000-0000-0000-0000-000000000000": {
-				Address: sharedconf.GetGatewaySVC(""),
+	if len(c.Providers) == 0 {
+		c.Providers = map[string]*rule{
+			sharedconf.GetGatewaySVC(""): {
+				MountPath: "/",
 			},
 		}
 	}
 
 	// cleanup rule paths
-	for path, rule := range c.Rules {
-		// if the path template is not explicitly set use the key as path template
-		if rule.PathTemplate == "" && strings.HasPrefix(path, "/") {
+	for _, rule := range c.Providers {
+		// if the path template is not explicitly set use the mountpath as path template
+		if rule.PathTemplate == "" && strings.HasPrefix(rule.MountPath, "/") {
 			// TODO err if the path is a regex
-			rule.PathTemplate = path
+			rule.PathTemplate = rule.MountPath
 		}
 
 		// cleanup path template
@@ -183,7 +180,7 @@ type registry struct {
 
 // GetProvider return the storage provider for the given spaces according to the rule configuration
 func (r *registry) GetProvider(ctx context.Context, space *provider.StorageSpace) (*registrypb.ProviderInfo, error) {
-	for pattern, rule := range r.c.Rules {
+	for address, rule := range r.c.Providers {
 		mountPath := ""
 		var err error
 		if space.SpaceType != "" && rule.SpaceType != space.SpaceType {
@@ -194,7 +191,7 @@ func (r *registry) GetProvider(ctx context.Context, space *provider.StorageSpace
 			if err != nil {
 				continue
 			}
-			match, err := regexp.MatchString(pattern, mountPath)
+			match, err := regexp.MatchString(rule.MountPath, mountPath)
 			if err != nil {
 				continue
 			}
@@ -202,7 +199,7 @@ func (r *registry) GetProvider(ctx context.Context, space *provider.StorageSpace
 				continue
 			}
 		}
-		pi := &registrypb.ProviderInfo{Address: rule.Address}
+		pi := &registrypb.ProviderInfo{Address: address}
 		opaque, err := spacePathsToOpaque(map[string]string{"unused": mountPath})
 		if err != nil {
 			appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
@@ -278,9 +275,9 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
 func (r *registry) findProvidersForResource(ctx context.Context, id string) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
-	for _, rule := range r.c.Rules {
+	for address, rule := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
-			Address:    rule.Address,
+			Address:    address,
 			ProviderId: id,
 		}
 		filters := []*provider.ListStorageSpacesRequest_Filter{}
@@ -301,7 +298,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 				},
 			},
 		})
-		spaces, err := r.findStorageSpaceOnProvider(ctx, rule.Address, filters)
+		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters)
 		if err != nil {
 			appctx.GetLogger(ctx).Debug().Err(err).Interface("rule", rule).Msg("findStorageSpaceOnProvider by id failed, continuing")
 			continue
@@ -338,9 +335,9 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 	var deepestMountSpace *provider.StorageSpace
 	var deepestMountPathProvider *registrypb.ProviderInfo
 	providers := map[string]map[string]string{}
-	for _, rule := range r.c.Rules {
+	for address, rule := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
-			Address: rule.Address,
+			Address: address,
 		}
 		var spaces []*provider.StorageSpace
 		var err error

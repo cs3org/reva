@@ -61,27 +61,24 @@ driver = "spaces"
 [grpc.services.storageregistry.drivers.spaces]
 home_template = "/users/{{.Id.OpaqueId}}"
 
-[grpc.services.storageregistry.drivers.spaces.rules]
-## this is the bare function of the registry: map path to spaceid
-#"/users/einstein" = {"spaceid" = "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"}
-#"/users/marie" = {"spaceid" = "..."}
+[grpc.services.storageregistry.drivers.spaces.providers]
 ## obviously, we do not want to define a rule for every user and space, which is why we can define naming rules:
-"/users" = {"address" = "localhost:11000", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces"}
+"localhost:11000" = {"mount_path" = "/users", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces"}
 
 ## users can be spread over multiple providers like this:
-#"/users/[0-9]" = {"address" = "localhost:11000", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces 0-9"}
-#"/users/[a-f]" = {"address" = "localhost:11010", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces a-f"}
+#"localhost:11000" = {"mount_path" = "/users/[0-9]", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces 0-9"}
+#"localhost:11010" = {"mount_path" = "/users/[a-f]", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces a-f"}
 
 ## the virtual /Shares folder of every user is routed like this:
 ## whenever the path matches the pattern /users/{{.CurrentUser.Id.OpaqueId}}/Shares we forward requests to the sharesstorageprovider
-"/users/{{.CurrentUser.Id.OpaqueId}}/Shares" = {"address" = "localhost:14000", "space_type" = "share", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}", "description" = "shares"}
+"localhost:14000" = {"mount_path" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares", "space_type" = "share", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}", "description" = "shares"}
 
 ## An alternative would be used to mount shares outside of the users home:
-#"/shares" = {"address" = "localhost:14000", "space_type" = "share", "path_template" = "/shares/{{.Space.Name}}", "description" = "shares"}
+#"localhost:14000" = {"mount_path" = "/shares", "space_type" = "share", "path_template" = "/shares/{{.Space.Name}}", "description" = "shares"}
 
 ## While public shares are mounted at /public logged in end will should never see that path because it is only created by the spaces registry when
 ## a public link is accessed.
-"/public" = {"address" = "localhost:13000",  "space_type" = "public", "path_template" = "/public", "description" = "public links"}
+"localhost:13000" = {"mount_path" = "/public",  "space_type" = "public", "path_template" = "/public", "description" = "public links"}
 
 [http]
 address = "0.0.0.0:19001"
