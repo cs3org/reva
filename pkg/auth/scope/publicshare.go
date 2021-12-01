@@ -20,7 +20,6 @@ package scope
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -34,6 +33,8 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
+
+const PublicStorageProviderID = "7993447f-687f-490d-875c-ac95e89a62a4"
 
 func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
 	var share link.PublicShare
@@ -65,6 +66,8 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 			}
 		}
 		return checkStorageRef(ctx, &share, ref), nil
+	case *provider.GetPathRequest:
+		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.GetResourceId()}), nil
 	case *provider.StatRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.ListContainerRequest:
@@ -102,8 +105,8 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		return checkResourcePath(v), nil
 	}
 
-	msg := fmt.Sprintf("resource type assertion failed: %+v", resource)
-	logger.Debug().Str("scope", "publicshareScope").Msg(msg)
+	msg := "resource type assertion failed"
+	logger.Debug().Str("scope", "publicshareScope").Interface("resource", resource).Msg(msg)
 	return false, errtypes.InternalError(msg)
 }
 
@@ -115,6 +118,11 @@ func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Refer
 
 	// r: <path:"/public/$token" >
 	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) || strings.HasPrefix(r.GetPath(), "./"+s.Token) {
+		return true
+	}
+
+	// r: <resource_id:<storage_id: opaque_id:$token/$opaqueID> path:$path>
+	if id := r.GetResourceId(); id.GetStorageId() == PublicStorageProviderID && id.GetOpaqueId() == s.Token+"/"+s.GetResourceId().GetOpaqueId() {
 		return true
 	}
 	return false

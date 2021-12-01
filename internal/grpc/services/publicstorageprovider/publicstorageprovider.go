@@ -48,14 +48,16 @@ func init() {
 	rgrpc.Register("publicstorageprovider", New)
 }
 
+// StorageID is used to identify resources handled by the public storage provider.
+// Used in the publiclink scope
+const StorageID = "7993447f-687f-490d-875c-ac95e89a62a4"
+
 type config struct {
-	MountID     string `mapstructure:"mount_id"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
 type service struct {
 	conf    *config
-	mountID string
 	gateway gateway.GatewayAPIClient
 }
 
@@ -87,9 +89,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	mountID := c.MountID
-	// FIXME roll uuid for provider if not set
-
 	gateway, err := pool.GetGatewayServiceClient(c.GatewayAddr)
 	if err != nil {
 		return nil, err
@@ -97,7 +96,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	service := &service{
 		conf:    c,
-		mountID: mountID,
 		gateway: gateway,
 	}
 
@@ -326,7 +324,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			if err != nil {
 				return nil, err
 			}
-			if spaceid != s.mountID {
+			if spaceid != StorageID {
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 				}, nil
@@ -338,13 +336,13 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 		StorageSpaces: []*provider.StorageSpace{{
 			Id: &provider.StorageSpaceId{
-				OpaqueId: s.mountID,
+				OpaqueId: StorageID,
 			},
 			SpaceType: "public",
 			// return the actual resource id?
 			Root: &provider.ResourceId{
-				StorageId: s.mountID,
-				OpaqueId:  s.mountID,
+				StorageId: StorageID,
+				OpaqueId:  StorageID,
 			},
 			Name:  "Public shares",
 			Mtime: &typesv1beta1.Timestamp{}, // do we need to update it?
@@ -581,7 +579,7 @@ func (s *service) augmentStatResponse(ctx context.Context, res *provider.StatRes
 
 // setPublicStorageID encodes the actual spaceid and nodeid as an opaqueid in the publicstorageprovider space
 func (s *service) setPublicStorageID(info *provider.ResourceInfo, shareToken string) {
-	info.Id.StorageId = s.mountID
+	info.Id.StorageId = StorageID
 	info.Id.OpaqueId = shareToken + "/" + info.Id.OpaqueId
 }
 

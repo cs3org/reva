@@ -757,7 +757,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			// Then it will request path "/projects/projectA" from the provider
 			// But it should only request "/" as the ResourceId already points to the correct resource
 			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path needed
+			if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path needed
 				r.Path = "/"
 			}
 			providerRef := unwrap(r, mountPath, root)
@@ -913,7 +913,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			// Then it will request path "/projects/projectA" from the provider
 			// But it should only request "/" as the ResourceId already points to the correct resource
 			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
+			if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
 				r.Path = "/"
 			}
 			providerRef := unwrap(r, mountPath, root)
@@ -1113,7 +1113,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 			// Then it will request path "/projects/projectA" from the provider
 			// But it should only request "/" as the ResourceId already points to the correct resource
 			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
+			if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
 				r.Path = "/"
 			}
 			providerRef := unwrap(r, mountPath, root)
@@ -1188,7 +1188,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 			// Then it will request path "/projects/projectA" from the provider
 			// But it should only request "/" as the ResourceId already points to the correct resource
 			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
+			if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
 				r.Path = "/"
 			}
 			srcRef = unwrap(r, mountPath, root)
