@@ -49,7 +49,7 @@ import (
 // other dependencies like a userprovider if needed.
 // It also sets up an authenticated context and a service client to the storage
 // provider to be used in the assertion functions.
-var _ = FDescribe("gateway", func() {
+var _ = Describe("gateway", func() {
 	var (
 		dependencies = map[string]string{}
 		variables    = map[string]string{}
