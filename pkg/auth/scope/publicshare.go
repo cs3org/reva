@@ -46,6 +46,25 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 	// Viewer role
 	case *registry.GetStorageProvidersRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *registry.ListStorageProvidersRequest:
+		ref := &provider.Reference{}
+		if v.Opaque != nil && v.Opaque.Map != nil {
+			if e, ok := v.Opaque.Map["storage_id"]; ok {
+				ref.ResourceId = &provider.ResourceId{
+					StorageId: string(e.Value),
+				}
+			}
+			if e, ok := v.Opaque.Map["opaque_id"]; ok {
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
+				}
+				ref.ResourceId.OpaqueId = string(e.Value)
+			}
+			if e, ok := v.Opaque.Map["path"]; ok {
+				ref.Path = string(e.Value)
+			}
+		}
+		return checkStorageRef(ctx, &share, ref), nil
 	case *provider.StatRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.ListContainerRequest:
