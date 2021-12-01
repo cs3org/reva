@@ -1424,7 +1424,7 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	res, err := c.ListStorageProviders(ctx, listReq)
 
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling GetStorageProvider")
+		return nil, errors.Wrap(err, "gateway: error calling ListStorageProviders")
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
