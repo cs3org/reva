@@ -30,7 +30,7 @@ import (
 	"github.com/Masterminds/sprig"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -52,7 +52,7 @@ func init() {
 	pkgregistry.Register("spaces", NewDefault)
 }
 
-type rule struct {
+type provider struct {
 	Mapping           string            `mapstructure:"mapping"`
 	MountPath         string            `mapstructure:"mount_path"`
 	Aliases           map[string]string `mapstructure:"aliases"`
@@ -67,26 +67,26 @@ type rule struct {
 
 type templateData struct {
 	CurrentUser *userpb.User
-	Space       *provider.StorageSpace
+	Space       *providerpb.StorageSpace
 }
 
 // StorageProviderClient is the interface the spaces registry uses to interact with storage providers
 type StorageProviderClient interface {
-	ListStorageSpaces(ctx context.Context, in *provider.ListStorageSpacesRequest, opts ...grpc.CallOption) (*provider.ListStorageSpacesResponse, error)
+	ListStorageSpaces(ctx context.Context, in *providerpb.ListStorageSpacesRequest, opts ...grpc.CallOption) (*providerpb.ListStorageSpacesResponse, error)
 }
 
 // WithSpace generates a layout based on space data.
-func (r *rule) ProviderPath(u *userpb.User, s *provider.StorageSpace) (string, error) {
+func (p *provider) ProviderPath(u *userpb.User, s *providerpb.StorageSpace) (string, error) {
 	b := bytes.Buffer{}
-	if err := r.template.Execute(&b, templateData{CurrentUser: u, Space: s}); err != nil {
+	if err := p.template.Execute(&b, templateData{CurrentUser: u, Space: s}); err != nil {
 		return "", err
 	}
 	return b.String(), nil
 }
 
 type config struct {
-	Providers    map[string]*rule `mapstructure:"providers"`
-	HomeTemplate string           `mapstructure:"home_template"`
+	Providers    map[string]*provider `mapstructure:"providers"`
+	HomeTemplate string               `mapstructure:"home_template"`
 }
 
 func (c *config) init() {
@@ -96,7 +96,7 @@ func (c *config) init() {
 	}
 
 	if len(c.Providers) == 0 {
-		c.Providers = map[string]*rule{
+		c.Providers = map[string]*provider{
 			sharedconf.GetGatewaySVC(""): {
 				MountPath: "/",
 			},
@@ -120,6 +120,8 @@ func (c *config) init() {
 		if err != nil {
 			logger.New().Fatal().Err(err).Interface("rule", rule).Msg("error parsing template")
 		}
+
+		// TODO connect to provider, (List Spaces,) ListContainerStream
 	}
 }
 
@@ -179,7 +181,7 @@ type registry struct {
 }
 
 // GetProvider return the storage provider for the given spaces according to the rule configuration
-func (r *registry) GetProvider(ctx context.Context, space *provider.StorageSpace) (*registrypb.ProviderInfo, error) {
+func (r *registry) GetProvider(ctx context.Context, space *providerpb.StorageSpace) (*registrypb.ProviderInfo, error) {
 	for address, rule := range r.c.Providers {
 		mountPath := ""
 		var err error
@@ -272,20 +274,20 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 			Address:    address,
 			ProviderId: id,
 		}
-		filters := []*provider.ListStorageSpacesRequest_Filter{}
+		filters := []*providerpb.ListStorageSpacesRequest_Filter{}
 		if rule.SpaceType != "" {
 			// add filter to id based request if it is configured
-			filters = append(filters, &provider.ListStorageSpacesRequest_Filter{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-				Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
+			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
 					SpaceType: rule.SpaceType,
 				},
 			})
 		}
-		filters = append(filters, &provider.ListStorageSpacesRequest_Filter{
-			Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
-			Term: &provider.ListStorageSpacesRequest_Filter_Id{
-				Id: &provider.StorageSpaceId{
+		filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_ID,
+			Term: &providerpb.ListStorageSpacesRequest_Filter_Id{
+				Id: &providerpb.StorageSpaceId{
 					OpaqueId: id,
 				},
 			},
@@ -324,37 +326,37 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 
 	deepestMountPath := ""
-	var deepestMountSpace *provider.StorageSpace
+	var deepestMountSpace *providerpb.StorageSpace
 	var deepestMountPathProvider *registrypb.ProviderInfo
 	providers := map[string]map[string]string{}
 	for address, rule := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
 			Address: address,
 		}
-		var spaces []*provider.StorageSpace
+		var spaces []*providerpb.StorageSpace
 		var err error
-		filters := []*provider.ListStorageSpacesRequest_Filter{}
+		filters := []*providerpb.ListStorageSpacesRequest_Filter{}
 		if rule.SpaceOwnerSelf {
-			filters = append(filters, &provider.ListStorageSpacesRequest_Filter{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_OWNER,
-				Term: &provider.ListStorageSpacesRequest_Filter_Owner{
+			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_OWNER,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_Owner{
 					Owner: currentUser.Id,
 				},
 			})
 		}
 		if rule.SpaceType != "" {
-			filters = append(filters, &provider.ListStorageSpacesRequest_Filter{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-				Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
+			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
 					SpaceType: rule.SpaceType,
 				},
 			})
 		}
 		if rule.SpaceID != "" {
-			filters = append(filters, &provider.ListStorageSpacesRequest_Filter{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
-				Term: &provider.ListStorageSpacesRequest_Filter_Id{
-					Id: &provider.StorageSpaceId{OpaqueId: rule.SpaceID},
+			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_ID,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_Id{
+					Id: &providerpb.StorageSpaceId{OpaqueId: rule.SpaceID},
 				},
 			})
 		}
@@ -435,12 +437,12 @@ func spacePathsToOpaque(spacePaths map[string]string) (*typesv1beta1.Opaque, err
 	}, nil
 }
 
-func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, filters []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, filters []*providerpb.ListStorageSpacesRequest_Filter) ([]*providerpb.StorageSpace, error) {
 	c, err := r.getStorageProviderServiceClient(addr)
 	if err != nil {
 		return nil, err
 	}
-	req := &provider.ListStorageSpacesRequest{
+	req := &providerpb.ListStorageSpacesRequest{
 		Filters: filters,
 	}
 
