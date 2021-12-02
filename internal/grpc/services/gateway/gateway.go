@@ -73,6 +73,7 @@ type config struct {
 	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
 	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
 	ProviderCacheTTL    int                               `mapstructure:"provider_cache_ttl"`
+	StatCacheTTL        int                               `mapstructure:"stat_cache_ttl"`
 	// MountCacheTTL       int                               `mapstructure:"mount_cache_ttl"`
 }
 
@@ -127,6 +128,7 @@ type svc struct {
 	etagCache       *ttlcache.Cache `mapstructure:"etag_cache"`
 	createHomeCache *ttlcache.Cache `mapstructure:"create_home_cache"`
 	providerCache   *ttlcache.Cache `mapstructure:"provider_cache"`
+	statCache       *ttlcache.Cache `mapstructure:"stat_cache"`
 	// mountCache      *ttlcache.Cache `mapstructure:"mount_cache"`
 }
 
@@ -165,6 +167,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	_ = providerCache.SetTTL(time.Duration(c.ProviderCacheTTL) * time.Second)
 	providerCache.SkipTTLExtensionOnHit(true)
 
+	statCache := ttlcache.NewCache()
+	_ = statCache.SetTTL(time.Duration(c.StatCacheTTL) * time.Second)
+	statCache.SkipTTLExtensionOnHit(true)
+
 	// mountCache := ttlcache.NewCache()
 	// _ = mountCache.SetTTL(time.Duration(c.MountCacheTTL) * time.Second)
 	// mountCache.SkipTTLExtensionOnHit(true)
@@ -176,6 +182,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		etagCache:       etagCache,
 		createHomeCache: createHomeCache,
 		providerCache:   providerCache,
+		statCache:       statCache,
 		// mountCache:      mountCache,
 	}
 
