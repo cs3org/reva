@@ -1391,6 +1391,22 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 	return c, nil
 }
 
+/*
+func userKey(ctx context.Context) string {
+	u := ctxpkg.ContextMustGetUser(ctx)
+	sb := strings.Builder{}
+	if u.Id != nil {
+		sb.WriteString(u.Id.OpaqueId)
+		sb.WriteString("@")
+		sb.WriteString(u.Id.Idp)
+	} else {
+		// fall back to username
+		sb.WriteString(u.Username)
+	}
+	return sb.String()
+}
+*/
+
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
 	switch {
 	case ref == nil:
@@ -1480,7 +1496,7 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		if err = s.providerCache.Set(ref.ResourceId.StorageId, res.Providers); err != nil {
 			appctx.GetLogger(ctx).Warn().Err(err).Interface("reference", ref).Msg("gateway: could not cache providers")
 		}
-	} /*else {
+	} /* else {
 		// every user has a cache for mount points?
 		// the path map must be cached in the registry, not in the gateway?
 		//   - in the registry we cannot determine if other spaces have been mounted or removed. if a new project space was mounted that happens in the registry
@@ -1493,7 +1509,36 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		// use the root etag of a space to determine if we can read from cache?
 		// (finished) uploads, created dirs, renamed nodes, deleted nodes cause the root etag of a space to change
 		//
-		s.mountCache.Set(userKey(ctx), res.Providers) // FIXME needs a map[string]*registry.ProviderInfo
+		var providersCache *ttlcache.Cache
+		cache, err := s.mountCache.Get(userKey(ctx))
+		if err != nil {
+			providersCache = ttlcache.NewCache()
+			_ = providersCache.SetTTL(time.Duration(s.c.MountCacheTTL) * time.Second)
+			providersCache.SkipTTLExtensionOnHit(true)
+			s.mountCache.Set(userKey(ctx), providersCache)
+		} else {
+			providersCache = cache.(*ttlcache.Cache)
+		}
+
+		for _, providerInfo := range res.Providers {
+
+			mountPath := providerInfo.ProviderPath
+			var root *provider.ResourceId
+
+			if spacePaths := decodeSpacePaths(p.Opaque); len(spacePaths) > 0 {
+				for spaceID, spacePath := range spacePaths {
+					mountPath = spacePath
+					rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+					root = &provider.ResourceId{
+						StorageId: rootSpace,
+						OpaqueId:  rootNode,
+					}
+					break // TODO can there be more than one space for a path?
+				}
+			}
+			providersCache.Set(userKey(ctx), res.Providers) // FIXME needs a map[string]*registry.ProviderInfo
+
+		}
 		// use ListProviders? make it return all providers a user has access to aka all mount points?
 		// cache that list in the gateway.
 		// -> invalidate the cached list of mountpoints when a modification happens
@@ -1520,6 +1565,7 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		//   - a more elegant 'maintenance' would add and remove paths as they occur ... which is what the spaces registry is supposed to do...
 		//     -> don't cache anything in the gateway for path based requests. Instead maintain a cache in the spaces registry.
 		//
+		// Caching needs to take the last modification time into account to discover new mount points -> needs to happen in the registry
 	}*/
 
 	return res.Providers, nil
