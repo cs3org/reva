@@ -25,7 +25,6 @@ import (
 	"strconv"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -206,32 +205,10 @@ func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
 	})
 	if err != nil {
 		logger.Err(err)
-	}
-
-	if psRes.GetShare() != nil {
-		return true
-	}
-
-	// check if we have a user share
-	uRes, err := client.GetShare(r.Context(), &collaboration.GetShareRequest{
-		Ref: &collaboration.ShareReference{
-			Spec: &collaboration.ShareReference_Id{
-				Id: &collaboration.ShareId{
-					OpaqueId: oid,
-				},
-			},
-		},
-	})
-	if err != nil {
-		logger.Err(err)
-	}
-
-	if uRes.GetShare() != nil {
 		return false
 	}
 
-	// TODO token is neither a public or a user share.
-	return false
+	return psRes.GetShare() != nil
 }
 
 func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shareID string) {
