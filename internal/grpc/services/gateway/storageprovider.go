@@ -35,7 +35,10 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/useragent"
+	ua "github.com/mileusna/useragent"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -46,6 +49,9 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+
+	"google.golang.org/grpc/codes"
+	gstatus "google.golang.org/grpc/status"
 )
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -481,6 +487,9 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 	storageRes, err := c.InitiateFileDownload(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &gateway.InitiateFileDownloadResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling InitiateFileDownload")
 	}
 
@@ -679,6 +688,9 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 	storageRes, err := c.InitiateFileUpload(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &gateway.InitiateFileUploadResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling InitiateFileUpload")
 	}
 
@@ -830,6 +842,9 @@ func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainer
 
 	res, err := c.CreateContainer(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.CreateContainerResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
 	}
 
@@ -986,6 +1001,9 @@ func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 
 	res, err := c.Delete(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.DeleteResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling Delete")
 	}
 
@@ -1161,6 +1179,9 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 
 	res, err := c.SetArbitraryMetadata(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.SetArbitraryMetadataResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling Stat")
 	}
 
@@ -1178,6 +1199,9 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 
 	res, err := c.UnsetArbitraryMetadata(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.UnsetArbitraryMetadataResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling Stat")
 	}
 
@@ -1655,6 +1679,30 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 	return lcr, nil
 }
 
+func (s *svc) isPathAllowed(ua *ua.UserAgent, path string) bool {
+	uaLst, ok := s.c.AllowedUserAgents[path]
+	if !ok {
+		// if no user agent is defined for a path, all user agents are allowed
+		return true
+	}
+	return useragent.IsUserAgentAllowed(ua, uaLst)
+}
+
+func (s *svc) filterProvidersByUserAgent(ctx context.Context, providers []*registry.ProviderInfo) []*registry.ProviderInfo {
+	ua, ok := ctxpkg.ContextGetUserAgent(ctx)
+	if !ok {
+		return providers
+	}
+
+	filters := []*registry.ProviderInfo{}
+	for _, p := range providers {
+		if s.isPathAllowed(ua, p.ProviderPath) {
+			filters = append(filters, p)
+		}
+	}
+	return filters
+}
+
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
@@ -1665,6 +1713,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	providers = getUniqueProviders(providers)
 
 	resPath := req.Ref.GetPath()
+
 	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
 		c, err := s.getStorageProviderClient(ctx, providers[0])
 		if err != nil {
@@ -1686,7 +1735,7 @@ func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.Li
 	nestedInfos := make(map[string]*provider.ResourceInfo)
 	log := appctx.GetLogger(ctx)
 
-	for _, p := range providers {
+	for _, p := range s.filterProvidersByUserAgent(ctx, providers) {
 		c, err := s.getStorageProviderClient(ctx, p)
 		if err != nil {
 			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
@@ -2180,15 +2229,15 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 }
 
 func getUniqueProviders(providers []*registry.ProviderInfo) []*registry.ProviderInfo {
-	unique := make(map[string]bool)
+	unique := make(map[string]*registry.ProviderInfo)
 	for _, p := range providers {
-		unique[p.Address] = true
+		unique[p.Address] = p
 	}
-	p := make([]*registry.ProviderInfo, 0, len(unique))
-	for addr := range unique {
-		p = append(p, &registry.ProviderInfo{Address: addr})
+	res := make([]*registry.ProviderInfo, 0, len(unique))
+	for _, provider := range unique {
+		res = append(res, provider)
 	}
-	return p
+	return res
 }
 
 type etagWithTS struct {

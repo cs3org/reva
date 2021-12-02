@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package favorite
+package memory
 
 import (
 	"context"
@@ -65,16 +65,16 @@ func createEnvironment() environment {
 
 func TestListFavorite(t *testing.T) {
 	env := createEnvironment()
-	sut := NewInMemoryManager()
+	sut, _ := New(nil)
 
 	favorites, _ := sut.ListFavorites(env.userOneCtx, env.userOne.Id)
 	if len(favorites) != 0 {
 		t.Error("ListFavorites should not return anything when a user hasn't set a favorite")
 	}
 
-	_ = sut.SetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne.Id)
-	_ = sut.SetFavorite(env.userTwoCtx, env.userTwo.Id, env.resourceInfoOne.Id)
-	_ = sut.SetFavorite(env.userTwoCtx, env.userTwo.Id, env.resourceInfoTwo.Id)
+	_ = sut.SetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne)
+	_ = sut.SetFavorite(env.userTwoCtx, env.userTwo.Id, env.resourceInfoOne)
+	_ = sut.SetFavorite(env.userTwoCtx, env.userTwo.Id, env.resourceInfoTwo)
 
 	favorites, _ = sut.ListFavorites(env.userOneCtx, env.userOne.Id)
 	if len(favorites) != 1 {
@@ -95,12 +95,12 @@ func TestListFavorite(t *testing.T) {
 func TestSetFavorite(t *testing.T) {
 	env := createEnvironment()
 
-	sut := NewInMemoryManager()
+	sut, _ := New(nil)
 
 	favorites, _ := sut.ListFavorites(env.userOneCtx, env.userOne.Id)
 	lenBefore := len(favorites)
 
-	_ = sut.SetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne.Id)
+	_ = sut.SetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne)
 
 	favorites, _ = sut.ListFavorites(env.userOneCtx, env.userOne.Id)
 	lenAfter := len(favorites)
@@ -113,13 +113,13 @@ func TestSetFavorite(t *testing.T) {
 func TestUnsetFavorite(t *testing.T) {
 	env := createEnvironment()
 
-	sut := NewInMemoryManager()
+	sut, _ := New(nil)
 
-	_ = sut.SetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne.Id)
+	_ = sut.SetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne)
 	favorites, _ := sut.ListFavorites(env.userOneCtx, env.userOne.Id)
 	lenBefore := len(favorites)
 
-	_ = sut.UnsetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne.Id)
+	_ = sut.UnsetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne)
 
 	favorites, _ = sut.ListFavorites(env.userOneCtx, env.userOne.Id)
 	lenAfter := len(favorites)

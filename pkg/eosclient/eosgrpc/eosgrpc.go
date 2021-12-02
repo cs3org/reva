@@ -48,6 +48,8 @@ import (
 
 const (
 	versionPrefix = ".sys.v#."
+	// lwShareAttrKey = "reva.lwshare"
+	userACLEvalKey = "eval.useracl"
 )
 
 const (
@@ -485,10 +487,37 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	}
 
 	log.Debug().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Msg("")
-	return c.mergeParentACLsForFiles(ctx, auth, info), nil
+	return c.fixupACLs(ctx, auth, info), nil
 }
 
-func (c *Client) mergeParentACLsForFiles(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
+func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
+
+	// Append the ACLs that are described by the xattr sys.acl entry
+	a, err := acl.Parse(info.Attrs["sys.acl"], acl.ShortTextForm)
+	if err == nil {
+		if info.SysACL != nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, a.Entries...)
+		} else {
+			info.SysACL = a
+		}
+	}
+
+	// Read user ACLs if sys.eval.useracl is set
+	if userACLEval, ok := info.Attrs["sys."+userACLEvalKey]; ok && userACLEval == "1" {
+		if userACL, ok := info.Attrs["user.acl"]; ok {
+			userAcls, err := acl.Parse(userACL, acl.ShortTextForm)
+			if err != nil {
+				return nil
+			}
+			for _, e := range userAcls.Entries {
+				err = info.SysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
+				if err != nil {
+					return nil
+				}
+			}
+		}
+	}
+
 	// We need to inherit the ACLs for the parent directory as these are not available for files
 	if !info.IsDir {
 		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
@@ -640,7 +669,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 		info.Inode = inode
 	}
 
-	return c.mergeParentACLsForFiles(ctx, auth, info), nil
+	return c.fixupACLs(ctx, auth, info), nil
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal
@@ -1157,9 +1186,17 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 		mylst = append(mylst, myitem)
 	}
 
-	for _, info := range mylst {
-		if !info.IsDir && parent != nil {
-			info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+	if parent.SysACL != nil {
+
+		for _, info := range mylst {
+			if !info.IsDir && parent != nil {
+				if info.SysACL == nil {
+					log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
+					info.SysACL.Entries = parent.SysACL.Entries
+				} else {
+					info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+				}
+			}
 		}
 	}
 

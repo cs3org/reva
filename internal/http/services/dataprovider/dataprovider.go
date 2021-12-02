@@ -125,7 +125,9 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{}
+	return []string{
+		"/tus",
+	}
 }
 
 func (s *svc) Prefix() string {

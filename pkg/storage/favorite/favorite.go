@@ -20,7 +20,6 @@ package favorite
 
 import (
 	"context"
-	"sync"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -31,49 +30,7 @@ type Manager interface {
 	// ListFavorites returns all resources that were favorited by a user.
 	ListFavorites(ctx context.Context, userID *user.UserId) ([]*provider.ResourceId, error)
 	// SetFavorite marks a resource as favorited by a user.
-	SetFavorite(ctx context.Context, userID *user.UserId, resourceID *provider.ResourceId) error
+	SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error
 	// UnsetFavorite unmarks a resource as favorited by a user.
-	UnsetFavorite(ctx context.Context, userID *user.UserId, resourceID *provider.ResourceId) error
-}
-
-// NewInMemoryManager returns an instance of the in-memory favorites manager.
-func NewInMemoryManager() *InMemoryManager {
-	return &InMemoryManager{favorites: make(map[string]map[string]*provider.ResourceId)}
-}
-
-// InMemoryManager implements the Manager interface to manage favorites using an in-memory storage.
-// This should not be used in production but can be used for tests.
-type InMemoryManager struct {
-	sync.RWMutex
-	favorites map[string]map[string]*provider.ResourceId
-}
-
-// ListFavorites returns all resources that were favorited by a user.
-func (m *InMemoryManager) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provider.ResourceId, error) {
-	m.RLock()
-	defer m.RUnlock()
-	favorites := make([]*provider.ResourceId, 0, len(m.favorites[userID.OpaqueId]))
-	for _, id := range m.favorites[userID.OpaqueId] {
-		favorites = append(favorites, id)
-	}
-	return favorites, nil
-}
-
-// SetFavorite marks a resource as favorited by a user.
-func (m *InMemoryManager) SetFavorite(_ context.Context, userID *user.UserId, resourceID *provider.ResourceId) error {
-	m.Lock()
-	defer m.Unlock()
-	if m.favorites[userID.OpaqueId] == nil {
-		m.favorites[userID.OpaqueId] = make(map[string]*provider.ResourceId)
-	}
-	m.favorites[userID.OpaqueId][resourceID.OpaqueId] = resourceID
-	return nil
-}
-
-// UnsetFavorite unmarks a resource as favorited by a user.
-func (m *InMemoryManager) UnsetFavorite(_ context.Context, userID *user.UserId, resourceID *provider.ResourceId) error {
-	m.Lock()
-	defer m.Unlock()
-	delete(m.favorites[userID.OpaqueId], resourceID.OpaqueId)
-	return nil
+	UnsetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error
 }

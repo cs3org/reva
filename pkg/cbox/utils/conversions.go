@@ -46,7 +46,6 @@ type DBShare struct {
 	ShareName    string
 	STime        int
 	FileTarget   string
-	RejectedBy   string
 	State        int
 }
 
@@ -83,7 +82,7 @@ func ExtractGrantee(t int, g string) *provider.Grantee {
 	return &grantee
 }
 
-// ResourceTypeToItem maps a resource type to an integer
+// ResourceTypeToItem maps a resource type to a string
 func ResourceTypeToItem(r provider.ResourceType) string {
 	switch r {
 	case provider.ResourceType_RESOURCE_TYPE_FILE:
@@ -96,6 +95,18 @@ func ResourceTypeToItem(r provider.ResourceType) string {
 		return "symlink"
 	default:
 		return ""
+	}
+}
+
+// ResourceTypeToItemInt maps a resource type to an integer
+func ResourceTypeToItemInt(r provider.ResourceType) int {
+	switch r {
+	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		return 0
+	case provider.ResourceType_RESOURCE_TYPE_FILE:
+		return 1
+	default:
+		return -1
 	}
 }
 
@@ -160,6 +171,8 @@ func IntToShareState(g int) collaboration.ShareState {
 		return collaboration.ShareState_SHARE_STATE_PENDING
 	case 1:
 		return collaboration.ShareState_SHARE_STATE_ACCEPTED
+	case -1:
+		return collaboration.ShareState_SHARE_STATE_REJECTED
 	default:
 		return collaboration.ShareState_SHARE_STATE_INVALID
 	}
@@ -214,16 +227,9 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 
 // ConvertToCS3ReceivedShare converts a DBShare to a CS3API collaboration received share
 func ConvertToCS3ReceivedShare(s DBShare) *collaboration.ReceivedShare {
-	share := ConvertToCS3Share(s)
-	var state collaboration.ShareState
-	if s.RejectedBy != "" {
-		state = collaboration.ShareState_SHARE_STATE_REJECTED
-	} else {
-		state = IntToShareState(s.State)
-	}
 	return &collaboration.ReceivedShare{
-		Share: share,
-		State: state,
+		Share: ConvertToCS3Share(s),
+		State: IntToShareState(s.State),
 	}
 }
 

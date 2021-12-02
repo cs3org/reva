@@ -39,7 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -249,8 +249,8 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 
 	cmd.Args = append(cmd.Args, cmdArgs...)
 
-	trace := trace.FromContext(ctx).SpanContext().TraceID.String()
-	cmd.Args = append(cmd.Args, "--comment", trace)
+	span := trace.SpanFromContext(ctx)
+	cmd.Args = append(cmd.Args, "--comment", span.SpanContext().TraceID().String())
 
 	err := cmd.Run()
 
@@ -652,7 +652,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path st
 	if err != nil {
 		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
 	}
-	return c.parseFind(path, stdout)
+	return c.parseFind(ctx, auth, path, stdout)
 }
 
 // Read reads a file from the mgm
@@ -871,8 +871,9 @@ func getMap(partsBySpace []string) map[string]string {
 	return kv
 }
 
-func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
+func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, dirPath, raw string) ([]*eosclient.FileInfo, error) {
 	finfos := []*eosclient.FileInfo{}
+	versionFolders := map[string]*eosclient.FileInfo{}
 	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
 		return c == '\n'
 	})
@@ -894,13 +895,30 @@ func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
 			continue
 		}
 
+		// If it's a version folder, store it in a map, so that for the corresponding file,
+		// we can return its inode instead
+		if isVersionFolder(fi.File) {
+			versionFolders[fi.File] = fi
+		}
+
 		finfos = append(finfos, fi)
 	}
 
 	for _, fi := range finfos {
 		// For files, inherit ACLs from the parent
-		if !fi.IsDir && parent != nil {
-			fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+		// And set the inode to that of their version folder
+		if !fi.IsDir {
+			if parent != nil {
+				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+			}
+			versionFolderPath := getVersionFolder(fi.File)
+			if vf, ok := versionFolders[versionFolderPath]; ok {
+				fi.Inode = vf.Inode
+			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil {
+				if md, err := c.GetFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
+					fi.Inode = md.Inode
+				}
+			}
 		}
 	}
 

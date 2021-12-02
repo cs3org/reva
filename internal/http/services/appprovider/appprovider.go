@@ -153,6 +153,13 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO(lopresti) if target is relative, currently the gateway fails to identify a storage provider (?)
+	// and just returns a CODE_INTERNAL error on InitiateFileUpload.
+	// Therefore for now make sure the target is absolute.
+	if target[0] != '/' {
+		target = "/" + target
+	}
+
 	// Create empty file via storageprovider
 	createReq := &provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{Path: target},
@@ -264,13 +271,13 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 
 	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error getting grpc gateway client", err)
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "Internal error with the gateway, please try again later", err)
 		return
 	}
 
 	info, errCode, err := s.getStatInfo(ctx, r.URL.Query().Get("file_id"), client)
 	if err != nil {
-		ocmd.WriteError(w, r, errCode, "error statting file", err)
+		ocmd.WriteError(w, r, errCode, "Internal error accessing the file, please try again later", err)
 		return
 	}
 
@@ -281,25 +288,27 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error calling OpenInApp")
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, err.Error(), err)
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError,
+			"Error contacting the requested application, please use a different one or try again later", err)
 		return
 	}
 	if openRes.Status.Code != rpc.Code_CODE_OK {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, openRes.Status.Message,
-			status.NewErrorFromCode(openRes.Status.Code, "error calling OpenInApp"))
+			status.NewErrorFromCode(openRes.Status.Code, "Error calling OpenInApp"))
 		return
 	}
 
 	js, err := json.Marshal(openRes.AppUrl)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling JSON response", err)
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "Internal error with JSON payload",
+			errors.Wrap(err, "error marshalling JSON response"))
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error writing JSON response", err)
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "Internal error with JSON payload",
+			errors.Wrap(err, "error writing JSON response"))
 		return
 	}
 }

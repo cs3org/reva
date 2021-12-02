@@ -127,10 +127,12 @@ func (s *service) Register(ss *grpc.Server) {
 func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*userpb.GetUserResponse, error) {
 	user, err := s.usermgr.GetUser(ctx, req.UserId)
 	if err != nil {
-		// TODO(labkode): check for not found.
-		err = errors.Wrap(err, "userprovidersvc: error getting user")
-		res := &userpb.GetUserResponse{
-			Status: status.NewInternal(ctx, err, "error getting user"),
+		res := &userpb.GetUserResponse{}
+		if _, ok := err.(errtypes.NotFound); ok {
+			res.Status = status.NewNotFound(ctx, "user not found")
+		} else {
+			err = errors.Wrap(err, "userprovidersvc: error getting user")
+			res.Status = status.NewInternal(ctx, err, "error getting user")
 		}
 		return res, nil
 	}
@@ -145,10 +147,12 @@ func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*use
 func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaimRequest) (*userpb.GetUserByClaimResponse, error) {
 	user, err := s.usermgr.GetUserByClaim(ctx, req.Claim, req.Value)
 	if err != nil {
-		// TODO(labkode): check for not found.
-		err = errors.Wrap(err, "userprovidersvc: error getting user by claim")
-		res := &userpb.GetUserByClaimResponse{
-			Status: status.NewInternal(ctx, err, "error getting user by claim"),
+		res := &userpb.GetUserByClaimResponse{}
+		if _, ok := err.(errtypes.NotFound); ok {
+			res.Status = status.NewNotFound(ctx, fmt.Sprintf("user not found %s %s", req.Claim, req.Value))
+		} else {
+			err = errors.Wrap(err, "userprovidersvc: error getting user by claim")
+			res.Status = status.NewInternal(ctx, err, "error getting user by claim")
 		}
 		return res, nil
 	}

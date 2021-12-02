@@ -1,170 +1,273 @@
-Changelog for reva 1.15.0 (2021-10-26)
+Changelog for reva 1.16.0 (2021-11-19)
 =======================================
 
-The following sections list the changes in reva 1.15.0 relevant to
+The following sections list the changes in reva 1.16.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Fix #2168: Override provider if was previously registered
- * Fix #2173: Fix archiver max size reached error
- * Fix #2167: Handle nil quota in decomposedfs
- * Fix #2153: Restrict EOS project spaces sharing permissions to admins and writers
- * Fix #2179: Fix the returned permissions for webdav uploads
- * Fix #2177: Retrieve the full path of a share when setting as
- * Chg #2479: Make apps able to work with public shares
- * Enh #2203: Add alerting webhook to SiteAcc service
- * Enh #2190: Update CODEOWNERS
- * Enh #2174: Inherit ACLs for files from parent directories
- * Enh #2152: Add a reference parameter to the getQuota request
- * Enh #2171: Add optional claim parameter to machine auth
- * Enh #2163: Nextcloud-based share manager for pkg/ocm/share
- * Enh #2135: Nextcloud test improvements
- * Enh #2180: Remove OCDAV options namespace parameter
- * Enh #2117: Add ocs cache warmup strategy for first request from the user
- * Enh #2170: Handle propfind requests for existing files
- * Enh #2165: Allow access to recycle bin for arbitrary paths outside homes
- * Enh #2193: Filter root paths according to user agent
- * Enh #2162: Implement the UpdateStorageSpace method
- * Enh #2189: Add user setting capability
+ * Fix #2245: Don't announce search-files capability
+ * Fix #2247: Merge user ACLs from EOS to sys ACLs
+ * Fix #2279: Return the inode of the version folder for files when listing in EOS
+ * Fix #2294: Fix HTTP return code when path is invalid
+ * Fix #2231: Fix share permission on a single file in sql share driver (cbox pkg)
+ * Fix #2230: Fix open by default app and expose default app
+ * Fix #2265: Fix nil pointer exception when resolving members of a group (rest driver)
+ * Fix #1214: Fix restoring versions
+ * Fix #2254: Fix spaces propfind
+ * Fix #2260: Fix unset quota xattr on darwin
+ * Fix #5776: Enforce permissions in public share apps
+ * Fix #2767: Fix status code for WebDAV mkcol requests where an ancestor is missing
+ * Fix #2287: Add public link access via mount-ID:token/relative-path to the scope
+ * Fix #2244: Fix the permissions response for shared files in the cbox sql driver
+ * Enh #2219: Add virtual view tests
+ * Enh #2230: Add priority to app providers
+ * Enh #2258: Improved error messages from the AppProviders
+ * Enh #2119: Add authprovider owncloudsql
+ * Enh #2211: Enhance the cbox share sql driver to store accepted group shares
+ * Enh #2212: Filter root path according to the agent that makes the request
+ * Enh #2237: Skip get user call in eosfs in case previous ones also failed
+ * Enh #2266: Callback for the EOS UID cache to retry fetch for failed keys
+ * Enh #2215: Aggregrate resource info properties for virtual views
+ * Enh #2271: Revamp the favorite manager and add the cbox sql driver
+ * Enh #2248: Cache whether a user home was created or not
+ * Enh #2282: Return a proper NOT_FOUND error when a user or group is not found
+ * Enh #2268: Add the reverseproxy http service
+ * Enh #2207: Enable users to list all spaces
+ * Enh #2286: Add trace ID to middleware loggers
+ * Enh #2251: Mentix service inference
+ * Enh #2218: Allow filtering of mime types supported by app providers
+ * Enh #2213: Add public link share type to propfind response
+ * Enh #2253: Support the file editor role for public links
+ * Enh #2208: Reduce redundant stat calls when statting by resource ID
+ * Enh #2235: Specify a list of allowed folders/files to be archived
+ * Enh #2267: Restrict the paths where share creation is allowed
+ * Enh #2252: Add the xattr sys.acl to SysACL (eosgrpc)
+ * Enh #2239: Update toml configs
 
 Details
 -------
 
- * Bugfix #2168: Override provider if was previously registered
+ * Bugfix #2245: Don't announce search-files capability
 
-   Previously if an AppProvider registered himself two times, for example after a failure, the
-   mime types supported by the provider contained multiple times the same provider. Now this has
-   been fixed, overriding the previous one.
+   The `dav.reports` capability contained a `search-files` report which is currently not
+   implemented. We removed it from the defaults.
 
-   https://github.com/cs3org/reva/pull/2168
+   https://github.com/cs3org/reva/pull/2245
 
- * Bugfix #2173: Fix archiver max size reached error
+ * Bugfix #2247: Merge user ACLs from EOS to sys ACLs
 
-   Previously in the total size count of the files being archived, the folders were taken into
-   account, and this could cause a false max size reached error because the size of a directory is
-   recursive-computed, causing the archive to be truncated. Now in the size count, the
-   directories are skipped.
+   https://github.com/cs3org/reva/pull/2247
 
-   https://github.com/cs3org/reva/pull/2173
+ * Bugfix #2279: Return the inode of the version folder for files when listing in EOS
 
- * Bugfix #2167: Handle nil quota in decomposedfs
+   https://github.com/cs3org/reva/pull/2279
 
-   Do not nil pointer derefenrence when sending nil quota to decomposedfs
+ * Bugfix #2294: Fix HTTP return code when path is invalid
 
-   https://github.com/cs3org/reva/issues/2167
+   Before when a path was invalid, the archiver returned a 500 error code. Now this is fixed and
+   returns a 404 code.
 
- * Bugfix #2153: Restrict EOS project spaces sharing permissions to admins and writers
+   https://github.com/cs3org/reva/pull/2294
 
-   https://github.com/cs3org/reva/pull/2153
+ * Bugfix #2231: Fix share permission on a single file in sql share driver (cbox pkg)
 
- * Bugfix #2179: Fix the returned permissions for webdav uploads
+   https://github.com/cs3org/reva/pull/2231
 
-   We've fixed the returned permissions for webdav uploads. It did not consider shares and public
-   links for the permission calculation, but does so now.
+ * Bugfix #2230: Fix open by default app and expose default app
 
-   https://github.com/cs3org/reva/pull/2179
-   https://github.com/cs3org/reva/pull/2151
+   We've fixed the open by default app name behaviour which previously only worked, if the default
+   app was configured by the provider address. We also now expose the default app on the
+   `/app/list` endpoint to clients.
 
- * Bugfix #2177: Retrieve the full path of a share when setting as
+   https://github.com/cs3org/reva/issues/2230
+   https://github.com/cs3org/cs3apis/pull/157
 
-   Accepted or on shared by me
+ * Bugfix #2265: Fix nil pointer exception when resolving members of a group (rest driver)
 
-   https://github.com/cs3org/reva/pull/2177
+   https://github.com/cs3org/reva/pull/2265
 
- * Change #2479: Make apps able to work with public shares
+ * Bugfix #1214: Fix restoring versions
 
-   Public share receivers were not possible to use apps in public shares because the apps couldn't
-   load the files in the public shares. This has now been made possible by changing the scope checks
-   for public shares.
+   Restoring a version would not remove that version from the version list. Now the behavior is
+   compatible to ownCloud 10.
 
+   https://github.com/owncloud/ocis/issues/1214
+   https://github.com/cs3org/reva/pull/2270
+
+ * Bugfix #2254: Fix spaces propfind
+
+   Fixed the deep listing of spaces.
+
+   https://github.com/cs3org/reva/pull/2254
+
+ * Bugfix #2260: Fix unset quota xattr on darwin
+
+   Unset quota attributes were creating errors in the logfile on darwin.
+
+   https://github.com/cs3org/reva/pull/2260
+
+ * Bugfix #5776: Enforce permissions in public share apps
+
+   A receiver of a read-only public share could still edit files via apps like Collabora. These
+   changes enforce the share permissions in apps used on publicly shared resources.
+
+   https://github.com/owncloud/web/issues/5776
    https://github.com/owncloud/ocis/issues/2479
-   https://github.com/cs3org/reva/pull/2143
+   https://github.com/cs3org/reva/pull/22142214
 
- * Enhancement #2203: Add alerting webhook to SiteAcc service
+ * Bugfix #2767: Fix status code for WebDAV mkcol requests where an ancestor is missing
 
-   To integrate email alerting with the monitoring pipeline, a Prometheus webhook has been added
-   to the SiteAcc service. Furthermore account settings have been extended/modified
-   accordingly.
+   We've fixed the status code to 409 according to the WebDAV standard for MKCOL requests where an
+   ancestor is missing. Previously these requests would fail with an different error code (eg.
+   500) because of storage driver limitations (eg. oCIS FS cannot handle recursive creation of
+   directories).
 
-   https://github.com/cs3org/reva/pull/2203
+   https://github.com/owncloud/ocis/issues/2767
+   https://github.com/cs3org/reva/pull/2293
 
- * Enhancement #2190: Update CODEOWNERS
+ * Bugfix #2287: Add public link access via mount-ID:token/relative-path to the scope
 
-   https://github.com/cs3org/reva/pull/2190
+   https://github.com/cs3org/reva/pull/2287
 
- * Enhancement #2174: Inherit ACLs for files from parent directories
+ * Bugfix #2244: Fix the permissions response for shared files in the cbox sql driver
 
-   https://github.com/cs3org/reva/pull/2174
+   https://github.com/cs3org/reva/pull/2244
 
- * Enhancement #2152: Add a reference parameter to the getQuota request
+ * Enhancement #2219: Add virtual view tests
 
-   Implementation of [cs3org/cs3apis#147](https://github.com/cs3org/cs3apis/pull/147)
+   https://github.com/cs3org/reva/pull/2219
 
-   Make the cs3apis accept a Reference in the getQuota Request to limit the call to a specific
-   storage space.
+ * Enhancement #2230: Add priority to app providers
 
-   https://github.com/cs3org/reva/pull/2152
-   https://github.com/cs3org/reva/pull/2178
-   https://github.com/cs3org/reva/pull/2187
+   Before the order of the list returned by the method FindProviders of app providers depended
+   from the order in which the app provider registered themselves. Now, it is possible to specify a
+   priority for each app provider, and even if an app provider re-register itself (for example
+   after a restart), the order is kept.
 
- * Enhancement #2171: Add optional claim parameter to machine auth
+   https://github.com/cs3org/reva/pull/2230
+   https://github.com/cs3org/cs3apis/pull/157
+   https://github.com/cs3org/reva/pull/2263
 
-   https://github.com/cs3org/reva/issues/2171
-   https://github.com/cs3org/reva/pull/2176
+ * Enhancement #2258: Improved error messages from the AppProviders
 
- * Enhancement #2163: Nextcloud-based share manager for pkg/ocm/share
+   Some rather cryptic messages are now hidden to users, and some others are made more
+   user-friendly. Support for multiple locales is still missing and out of scope for now.
 
-   Note that pkg/ocm/share is very similar to pkg/share, but it deals with cs3/sharing/ocm
-   whereas pkg/share deals with cs3/sharing/collaboration
+   https://github.com/cs3org/reva/pull/2258
 
-   https://github.com/cs3org/reva/pull/2163
+ * Enhancement #2119: Add authprovider owncloudsql
 
- * Enhancement #2135: Nextcloud test improvements
+   We added an authprovider that can be configured to authenticate against an owncloud classic
+   mysql database. It verifies the password from the oc_users table.
 
-   https://github.com/cs3org/reva/pull/2135
+   https://github.com/cs3org/reva/pull/2119
 
- * Enhancement #2180: Remove OCDAV options namespace parameter
+ * Enhancement #2211: Enhance the cbox share sql driver to store accepted group shares
 
-   We dropped the namespace parameter, as it is not used in the options handler.
+   https://github.com/cs3org/reva/pull/2211
 
-   https://github.com/cs3org/reva/pull/2180
+ * Enhancement #2212: Filter root path according to the agent that makes the request
 
- * Enhancement #2117: Add ocs cache warmup strategy for first request from the user
+   https://github.com/cs3org/reva/pull/2212
 
-   https://github.com/cs3org/reva/pull/2117
+ * Enhancement #2237: Skip get user call in eosfs in case previous ones also failed
 
- * Enhancement #2170: Handle propfind requests for existing files
+   https://github.com/cs3org/reva/pull/2237
 
-   https://github.com/cs3org/reva/pull/2170
+ * Enhancement #2266: Callback for the EOS UID cache to retry fetch for failed keys
 
- * Enhancement #2165: Allow access to recycle bin for arbitrary paths outside homes
+   https://github.com/cs3org/reva/pull/2266
 
-   https://github.com/cs3org/reva/pull/2165
-   https://github.com/cs3org/reva/pull/2188
+ * Enhancement #2215: Aggregrate resource info properties for virtual views
 
- * Enhancement #2193: Filter root paths according to user agent
+   https://github.com/cs3org/reva/pull/2215
 
-   Adds a new rule setting in the storage registry ("allowed_user_agents"), that allows a user to
-   specify which storage provider shows according to the user agent that made the request.
+ * Enhancement #2271: Revamp the favorite manager and add the cbox sql driver
 
-   https://github.com/cs3org/reva/pull/2193
+   https://github.com/cs3org/reva/pull/2271
 
- * Enhancement #2162: Implement the UpdateStorageSpace method
+ * Enhancement #2248: Cache whether a user home was created or not
 
-   Added the UpdateStorageSpace method to the decomposedfs.
+   Previously, on every call, we used to stat the user home to make sure that it existed. Now we cache
+   it for a given amount of time so as to avoid repeated calls.
 
-   https://github.com/cs3org/reva/pull/2162
-   https://github.com/cs3org/reva/pull/2195
-   https://github.com/cs3org/reva/pull/2196
+   https://github.com/cs3org/reva/pull/2248
 
- * Enhancement #2189: Add user setting capability
+ * Enhancement #2282: Return a proper NOT_FOUND error when a user or group is not found
 
-   We've added a capability to communicate the existance of a user settings service to clients.
+   https://github.com/cs3org/reva/pull/2282
 
-   https://github.com/owncloud/web/issues/5926
-   https://github.com/cs3org/reva/pull/2189
-   https://github.com/owncloud/ocis/pull/2655
+ * Enhancement #2268: Add the reverseproxy http service
+
+   This PR adds an HTTP service which does the job of authenticating incoming requests via the reva
+   middleware before forwarding them to the respective backends. This is useful for extensions
+   which do not have the auth mechanisms.
+
+   https://github.com/cs3org/reva/pull/2268
+
+ * Enhancement #2207: Enable users to list all spaces
+
+   Added a permission check if the user has the `list-all-spaces` permission. This enables users
+   to list all spaces, even those which they are not members of.
+
+   https://github.com/cs3org/reva/pull/2207
+
+ * Enhancement #2286: Add trace ID to middleware loggers
+
+   https://github.com/cs3org/reva/pull/2286
+
+ * Enhancement #2251: Mentix service inference
+
+   Previously, 4 different services per site had to be created in the GOCDB. This PR removes this
+   redundancy by infering all endpoints from a single service entity, making site
+   administration a lot easier.
+
+   https://github.com/cs3org/reva/pull/2251
+
+ * Enhancement #2218: Allow filtering of mime types supported by app providers
+
+   https://github.com/cs3org/reva/pull/2218
+
+ * Enhancement #2213: Add public link share type to propfind response
+
+   Added share type for public links to propfind responses.
+
+   https://github.com/cs3org/reva/pull/2213
+   https://github.com/cs3org/reva/pull/2257
+
+ * Enhancement #2253: Support the file editor role for public links
+
+   https://github.com/cs3org/reva/pull/2253
+
+ * Enhancement #2208: Reduce redundant stat calls when statting by resource ID
+
+   https://github.com/cs3org/reva/pull/2208
+
+ * Enhancement #2235: Specify a list of allowed folders/files to be archived
+
+   Adds a configuration to the archiver service in order to specify a list of folders (as regex)
+   that can be archived.
+
+   https://github.com/cs3org/reva/pull/2235
+
+ * Enhancement #2267: Restrict the paths where share creation is allowed
+
+   This PR limits share creation to certain specified paths. These can be useful when users have
+   access to global spaces and virtual views but these should not be sharable.
+
+   https://github.com/cs3org/reva/pull/2267
+
+ * Enhancement #2252: Add the xattr sys.acl to SysACL (eosgrpc)
+
+   https://github.com/cs3org/reva/pull/2252
+
+ * Enhancement #2239: Update toml configs
+
+   We updated the local and drone configurations, cleanad up the example configs and removed the
+   reva gen subcommand which was generating outdated config.
+
+   https://github.com/cs3org/reva/pull/2239
 
 

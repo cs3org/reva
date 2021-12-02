@@ -85,6 +85,30 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 	h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
 }
 
+func (h *Handler) isUserShare(r *http.Request, oid string) bool {
+	logger := appctx.GetLogger(r.Context())
+	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		logger.Err(err)
+	}
+
+	getShareRes, err := client.GetShare(r.Context(), &collaboration.GetShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: &collaboration.ShareId{
+					OpaqueId: oid,
+				},
+			},
+		},
+	})
+	if err != nil {
+		logger.Err(err)
+		return false
+	}
+
+	return getShareRes.GetShare() != nil
+}
+
 func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 

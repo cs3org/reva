@@ -93,7 +93,12 @@ func (r *revaDownloader) Download(ctx context.Context, path string, dst io.Write
 	defer httpRes.Body.Close()
 
 	if httpRes.StatusCode != http.StatusOK {
-		return errtypes.InternalError(httpRes.Status)
+		switch httpRes.StatusCode {
+		case http.StatusNotFound:
+			return errtypes.NotFound(path)
+		default:
+			return errtypes.InternalError(httpRes.Status)
+		}
 	}
 
 	_, err = io.Copy(dst, httpRes.Body)

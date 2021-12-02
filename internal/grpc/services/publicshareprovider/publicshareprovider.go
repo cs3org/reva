@@ -20,6 +20,7 @@ package publicshareprovider
 
 import (
 	"context"
+	"regexp"
 
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -40,8 +41,9 @@ func init() {
 }
 
 type config struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+	Driver                string                            `mapstructure:"driver"`
+	Drivers               map[string]map[string]interface{} `mapstructure:"drivers"`
+	AllowedPathsForShares []string                          `mapstructure:"allowed_paths_for_shares"`
 }
 
 func (c *config) init() {
@@ -51,8 +53,9 @@ func (c *config) init() {
 }
 
 type service struct {
-	conf *config
-	sm   publicshare.Manager
+	conf                  *config
+	sm                    publicshare.Manager
+	allowedPathsForShares []*regexp.Regexp
 }
 
 func getShareManager(c *config) (publicshare.Manager, error) {
@@ -98,17 +101,45 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	allowedPathsForShares := make([]*regexp.Regexp, 0, len(c.AllowedPathsForShares))
+	for _, s := range c.AllowedPathsForShares {
+		regex, err := regexp.Compile(s)
+		if err != nil {
+			return nil, err
+		}
+		allowedPathsForShares = append(allowedPathsForShares, regex)
+	}
+
 	service := &service{
-		conf: c,
-		sm:   sm,
+		conf:                  c,
+		sm:                    sm,
+		allowedPathsForShares: allowedPathsForShares,
 	}
 
 	return service, nil
 }
 
+func (s *service) isPathAllowed(path string) bool {
+	if len(s.allowedPathsForShares) == 0 {
+		return true
+	}
+	for _, reg := range s.allowedPathsForShares {
+		if reg.MatchString(path) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "create").Msg("create public share")
+
+	if !s.isPathAllowed(req.ResourceInfo.Path) {
+		return &link.CreatePublicShareResponse{
+			Status: status.NewInvalidArg(ctx, "share creation is not allowed for the specified path"),
+		}, nil
+	}
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
