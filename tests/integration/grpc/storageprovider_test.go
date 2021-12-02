@@ -553,12 +553,14 @@ var _ = Describe("storage providers", func() {
 		Describe(provider, func() {
 			BeforeEach(func() {
 				dependencies = deps
-				redisAddress := os.Getenv("REDIS_ADDRESS")
-				if redisAddress == "" {
-					Fail("REDIS_ADDRESS not set")
-				}
-				variables = map[string]string{
-					"redis_address": redisAddress,
+				if provider == "owncloud" {
+					redisAddress := os.Getenv("REDIS_ADDRESS")
+					if redisAddress == "" {
+						Fail("REDIS_ADDRESS not set")
+					}
+					variables = map[string]string{
+						"redis_address": redisAddress,
+					}
 				}
 			})
 
