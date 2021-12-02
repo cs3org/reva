@@ -400,19 +400,10 @@ func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provide
 		}, nil
 	}
 
-	if res.Providers[0].Opaque == nil || res.Providers[0].Opaque.Map == nil || res.Providers[0].Opaque.Map["space_paths"] == nil {
-		return &provider.GetHomeResponse{
-			Status: status.NewInternal(ctx, fmt.Errorf("missing 'space_paths' key in opaque map"), fmt.Sprintf("invalid provider %+v", res.Providers[0])),
-		}, nil
+	spacePaths := decodeSpacePaths(res.Providers[0].Opaque)
+	if len(spacePaths) == 0 {
+		spacePaths[""] = res.Providers[0].ProviderPath
 	}
-
-	spacePaths := map[string]string{}
-	if err = json.Unmarshal(res.Providers[0].Opaque.Map["space_paths"].Value, &spacePaths); err != nil {
-		return &provider.GetHomeResponse{
-			Status: status.NewInternal(ctx, err, fmt.Sprintf("could not unmarshal space_paths %+v", res.Providers[0].Opaque.Map["space_paths"])),
-		}, nil
-	}
-
 	for _, spacePath := range spacePaths {
 		return &provider.GetHomeResponse{
 			Path:   spacePath,
@@ -724,17 +715,19 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 
 		spaceID := ""
 		mountPath := providerInfos[i].ProviderPath
-		var root *provider.ResourceId
 
 		spacePaths := decodeSpacePaths(providerInfos[i].Opaque)
 		if len(spacePaths) == 0 {
 			spacePaths[""] = mountPath
 		}
 		for spaceID, mountPath = range spacePaths {
+			var root *provider.ResourceId
 			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
-			root = &provider.ResourceId{
-				StorageId: rootSpace,
-				OpaqueId:  rootNode,
+			if rootSpace != "" && rootNode != "" {
+				root = &provider.ResourceId{
+					StorageId: rootSpace,
+					OpaqueId:  rootNode,
+				}
 			}
 			// build reference for the provider
 			r := &provider.Reference{
@@ -1556,13 +1549,13 @@ func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceI
 }
 
 func decodeSpacePaths(o *typesv1beta1.Opaque) map[string]string {
-	if entry, ok := o.Map["space_paths"]; ok {
-		spacePaths := map[string]string{}
-		if err := json.Unmarshal(entry.Value, &spacePaths); err != nil {
-			// TODO log
-			return nil
-		}
+	spacePaths := map[string]string{}
+	if o == nil {
 		return spacePaths
 	}
-	return nil
+	if entry, ok := o.Map["space_paths"]; ok {
+		_ = json.Unmarshal(entry.Value, &spacePaths)
+		// TODO log
+	}
+	return spacePaths
 }
