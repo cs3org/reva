@@ -51,6 +51,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	revactx "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -266,6 +267,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// cut off configured home namespace, paths in ocs shares are relative to it
+		currentUser := ctxpkg.ContextMustGetUser(ctx)
 		statRes.Info.Path = strings.TrimPrefix(statRes.Info.Path, h.getHomeNamespace(currentUser))
 
 		err = h.addFileInfo(ctx, s, statRes.Info)
