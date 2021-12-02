@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 )
@@ -45,6 +46,7 @@ func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 		ID:          u.Username,
 		DisplayName: u.DisplayName,
 		Email:       u.Mail,
+		UserType:    conversions.UserTypeString(u.Id.Type),
 	})
 }
 
@@ -54,4 +56,5 @@ type User struct {
 	ID          string `json:"id" xml:"id"`
 	DisplayName string `json:"display-name" xml:"display-name"`
 	Email       string `json:"email" xml:"email"`
+	UserType    string `json:"user-type" xml:"user-type"`
 }

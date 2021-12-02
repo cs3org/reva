@@ -29,6 +29,7 @@ type Config struct {
 	Config                  data.ConfigData                   `mapstructure:"config"`
 	Capabilities            data.CapabilitiesData             `mapstructure:"capabilities"`
 	GatewaySvc              string                            `mapstructure:"gatewaysvc"`
+	StorageregistrySvc      string                            `mapstructure:"storage_registry_svc"`
 	DefaultUploadProtocol   string                            `mapstructure:"default_upload_protocol"`
 	UserAgentChunkingMap    map[string]string                 `mapstructure:"user_agent_chunking_map"`
 	SharePrefix             string                            `mapstructure:"share_prefix"`

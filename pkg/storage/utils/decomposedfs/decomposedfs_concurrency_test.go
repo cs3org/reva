@@ -19,54 +19,74 @@
 package decomposedfs_test
 
 import (
-	"fmt"
+	"context"
 	"io/ioutil"
 	"os"
 	"path"
 	"sync"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	testhelpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
+	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
+	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/mock"
 )
 
 var _ = Describe("Decomposed", func() {
 	var (
-		env *testhelpers.TestEnv
+		options map[string]interface{}
+		ctx     context.Context
+		tmpRoot string
+		fs      storage.FS
 	)
 
 	BeforeEach(func() {
-		var err error
-		env, err = testhelpers.NewTestEnv()
+		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
+		Expect(err).ToNot(HaveOccurred())
+
+		options = map[string]interface{}{
+			"root":         tmpRoot,
+			"share_folder": "/Shares",
+			"enable_home":  false,
+			"user_layout":  "{{.Id.OpaqueId}}",
+			"owner":        "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+		}
+		u := &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+			},
+			Username:    "test",
+			Mail:        "marie@example.org",
+			DisplayName: "Marie Curie",
+			Groups: []string{
+				"radium-lovers",
+				"polonium-lovers",
+				"physics-lovers",
+			},
+		}
+		ctx = ctxpkg.ContextSetUser(context.Background(), u)
+
+		bs := &treemocks.Blobstore{}
+		fs, err = decomposedfs.NewDefault(options, bs)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		if env != nil {
-			os.RemoveAll(env.Root)
+		if tmpRoot != "" {
+			os.RemoveAll(tmpRoot)
 		}
 	})
 
 	Describe("concurrent", func() {
 		Describe("Upload", func() {
 			var (
-				f, f1 *os.File
+				r1 = []byte("test")
+				r2 = []byte("another run")
 			)
-
-			BeforeEach(func() {
-				// Prepare two test files for upload
-				err := ioutil.WriteFile(fmt.Sprintf("%s/%s", env.Root, "f.lol"), []byte("test"), 0644)
-				Expect(err).ToNot(HaveOccurred())
-				f, err = os.Open(fmt.Sprintf("%s/%s", env.Root, "f.lol"))
-				Expect(err).ToNot(HaveOccurred())
-
-				err = ioutil.WriteFile(fmt.Sprintf("%s/%s", env.Root, "f1.lol"), []byte("another run"), 0644)
-				Expect(err).ToNot(HaveOccurred())
-				f1, err = os.Open(fmt.Sprintf("%s/%s", env.Root, "f1.lol"))
-				Expect(err).ToNot(HaveOccurred())
-			})
 
 			PIt("generates two revisions", func() {
 				// runtime.GOMAXPROCS(1) // uncomment to remove concurrency and see revisions working.
@@ -75,13 +95,13 @@ var _ = Describe("Decomposed", func() {
 
 				// upload file with contents: "test"
 				go func(wg *sync.WaitGroup) {
-					_ = env.Fs.Upload(env.Ctx, &provider.Reference{Path: "uploaded.txt"}, f)
+					_ = helpers.Upload(ctx, fs, &provider.Reference{Path: "uploaded.txt"}, r1)
 					wg.Done()
 				}(wg)
 
 				// upload file with contents: "another run"
 				go func(wg *sync.WaitGroup) {
-					_ = env.Fs.Upload(env.Ctx, &provider.Reference{Path: "uploaded.txt"}, f1)
+					_ = helpers.Upload(ctx, fs, &provider.Reference{Path: "uploaded.txt"}, r2)
 					wg.Done()
 				}(wg)
 
@@ -92,43 +112,28 @@ var _ = Describe("Decomposed", func() {
 				// same for 2 uploads.
 
 				wg.Wait()
-				revisions, err := env.Fs.ListRevisions(env.Ctx, &provider.Reference{Path: "uploaded.txt"})
+				revisions, err := fs.ListRevisions(ctx, &provider.Reference{Path: "uploaded.txt"})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(revisions)).To(Equal(1))
 
-				_, err = ioutil.ReadFile(path.Join(env.Root, "nodes", "root", "uploaded.txt"))
+				_, err = ioutil.ReadFile(path.Join(tmpRoot, "nodes", "root", "uploaded.txt"))
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
 		Describe("CreateDir", func() {
-			JustBeforeEach(func() {
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
-					Stat: true,
-				}, nil)
-			})
 			It("handle already existing directories", func() {
-				var numIterations = 10
-				wg := &sync.WaitGroup{}
-				wg.Add(numIterations)
-				for i := 0; i < numIterations; i++ {
-					go func(wg *sync.WaitGroup) {
+				for i := 0; i < 10; i++ {
+					go func() {
 						defer GinkgoRecover()
-						defer wg.Done()
-						ref := &provider.Reference{
-							ResourceId: env.SpaceRootRes,
-							Path:       "./fightforit",
-						}
-						if err := env.Fs.CreateDir(env.Ctx, ref); err != nil {
-							Expect(err).To(MatchError(ContainSubstring("already exists")))
-							rinfo, err := env.Fs.GetMD(env.Ctx, ref, nil)
+						err := fs.CreateDir(ctx, &provider.Reference{Path: "/fightforit"})
+						if err != nil {
+							rinfo, err := fs.GetMD(ctx, &provider.Reference{Path: "/fightforit"}, nil)
 							Expect(err).ToNot(HaveOccurred())
 							Expect(rinfo).ToNot(BeNil())
 						}
-					}(wg)
+					}()
 				}
-				wg.Wait()
 			})
 		})
 	})

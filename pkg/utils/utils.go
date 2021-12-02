@@ -314,6 +314,27 @@ func SplitStorageSpaceID(ssid string) (storageid, nodeid string) {
 	return parts[0], parts[1]
 }
 
+// ParseStorageSpaceReference parses a string into a spaces reference.
+// The expected format is `<storageid>!<nodeid>/<path>`.
+func ParseStorageSpaceReference(sRef string) (provider.Reference, error) {
+	parts := strings.SplitN(sRef, "/", 2)
+
+	storageid, nodeid := SplitStorageSpaceID(parts[0])
+
+	var relPath string
+	if len(parts) == 2 {
+		relPath = parts[1]
+	}
+
+	return provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: storageid,
+			OpaqueId:  nodeid,
+		},
+		Path: MakeRelativePath(relPath),
+	}, nil
+}
+
 // GetViewMode converts a human-readable string to a view mode for opening a resource in an app.
 func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 	switch viewMode {

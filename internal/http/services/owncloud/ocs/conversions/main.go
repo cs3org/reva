@@ -51,6 +51,9 @@ const (
 
 	// ShareTypeFederatedCloudShare represents a federated share
 	ShareTypeFederatedCloudShare ShareType = 6
+
+	// ShareTypeSpaceMembership represents an action regarding space members
+	ShareTypeSpaceMembership ShareType = 7
 )
 
 // ResourceType indicates the OCS type of the resource
@@ -291,4 +294,25 @@ func ParseTimestamp(timestampString string) (*types.Timestamp, error) {
 		Seconds: uint64(final / 1000000000),
 		Nanos:   uint32(final % 1000000000),
 	}, nil
+}
+
+// UserTypeString returns human readable strings for various user types
+func UserTypeString(userType userpb.UserType) string {
+	switch userType {
+	case userpb.UserType_USER_TYPE_PRIMARY:
+		return "primary"
+	case userpb.UserType_USER_TYPE_SECONDARY:
+		return "secondary"
+	case userpb.UserType_USER_TYPE_SERVICE:
+		return "service"
+	case userpb.UserType_USER_TYPE_APPLICATION:
+		return "application"
+	case userpb.UserType_USER_TYPE_GUEST:
+		return "guest"
+	case userpb.UserType_USER_TYPE_FEDERATED:
+		return "federated"
+	case userpb.UserType_USER_TYPE_LIGHTWEIGHT:
+		return "lightweight"
+	}
+	return "invalid"
 }
