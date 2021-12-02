@@ -124,7 +124,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set(HeaderContentType, info.MimeType)
 	w.Header().Set(HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
-		path.Base(info.Path)+"; filename=\""+path.Base(info.Path)+"\"")
+		path.Base(r.RequestURI)+"; filename=\""+path.Base(r.RequestURI)+"\"")
 	w.Header().Set(HeaderETag, info.Etag)
 	w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
 	w.Header().Set(HeaderOCETag, info.Etag)
