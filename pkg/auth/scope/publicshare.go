@@ -34,6 +34,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// PublicStorageProviderID is the space id used for the public links storage space
 const PublicStorageProviderID = "7993447f-687f-490d-875c-ac95e89a62a4"
 
 func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
