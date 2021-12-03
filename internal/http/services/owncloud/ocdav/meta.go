@@ -19,9 +19,14 @@
 package ocdav
 
 import (
-	"net/http"
-
+	"encoding/xml"
+	"fmt"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"net/http"
 )
 
 // MetaHandler handles meta requests
@@ -53,8 +58,79 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		case "v":
 			h.VersionsHandler.Handler(s, did).ServeHTTP(w, r)
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			h.doGetPath(w, r, s, did)
 		}
-
 	})
+}
+
+func (h *MetaHandler) doGetPath(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "getPath")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Logger()
+
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	pathRes, err := client.GetPath(ctx, &provider.GetPathRequest{ResourceId: rid})
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending GetPath grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	switch pathRes.Status.Code {
+	case rpc.Code_CODE_NOT_FOUND:
+		w.WriteHeader(http.StatusNotFound)
+		b, err := Marshal(exception{
+			code: SabredavNotFound,
+		})
+		HandleWebdavError(&sublog, w, b, err)
+		return
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		w.WriteHeader(http.StatusForbidden)
+		b, err := Marshal(exception{
+			code: SabredavPermissionDenied,
+		})
+		HandleWebdavError(&sublog, w, b, err)
+		return
+	}
+
+	response := responseXML{
+		// static... umgh... is there a method to get the path?
+		Href: fmt.Sprintf("/remote.php/dav/meta/%s/", wrapResourceID(rid)),
+		Propstat: []propstatXML{
+			propstatXML{
+				Status: "HTTP/1.1 200 OK",
+				Prop: []*propertyXML{
+					// pathRes.Path contains /users/..id../.. in response
+					s.newProp("oc:meta-path-for-user", pathRes.Path),
+				},
+			},
+		},
+	}
+
+	responseXML, err := xml.Marshal(&response)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error marshaling GetPath responseXML")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	msg := `<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `
+	msg += `xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`
+	msg += string(responseXML) + `</d:multistatus>`
+
+	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+	w.WriteHeader(http.StatusMultiStatus)
+	_, err = w.Write([]byte(msg))
+	if err != nil {
+		sublog.Error().Err(err).Msg("error writing body")
+		return
+	}
 }
