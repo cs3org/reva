@@ -924,6 +924,19 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 	// TODO rp will be the datadir ... be we don't want to go up that high. The users home is far enough
 	np := ip
 
+	if ip == rp {
+		return &provider.ResourcePermissions{
+			// grant read access to the root
+			GetPath:          true,
+			GetQuota:         true,
+			ListContainer:    true,
+			ListFileVersions: true,
+			ListGrants:       true,
+			ListRecycle:      true,
+			Stat:             true,
+		}, nil
+	}
+
 	// for an efficient group lookup convert the list of groups to a map
 	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
 	groupsMap := make(map[string]bool, len(u.Groups))
