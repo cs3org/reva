@@ -1390,7 +1390,8 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 		return nil, err
 	}
 
-	return Cached(c, s.statCache), nil
+	//return Cached(c, s.statCache), nil
+	return c, nil
 }
 
 /*
