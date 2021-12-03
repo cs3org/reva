@@ -8,6 +8,7 @@ address = "{{grpc_address}}"
 [grpc.services.gateway]
 # registries
 storageregistrysvc = "{{grpc_address}}"
+stat_cache_ttl = 1
 
 [grpc.services.authregistry]
 driver = "static"

@@ -19,11 +19,10 @@
 package grpc_test
 
 import (
-	"bytes"
 	"context"
-	"io/ioutil"
 	"os"
 	"path"
+	"time"
 
 	"google.golang.org/grpc/metadata"
 
@@ -38,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -183,9 +183,11 @@ var _ = Describe("gateway", func() {
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			shard1Space = res.StorageSpace
 
-			err = shard1Fs.Upload(ctx,
+			err = helpers.Upload(ctx,
+				shard1Fs,
 				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/file.txt"},
-				ioutil.NopCloser(bytes.NewReader([]byte("1"))))
+				[]byte("1"),
+			)
 			Expect(err).ToNot(HaveOccurred())
 
 			shard2Fs, err = ocis.New(map[string]interface{}{
@@ -226,9 +228,10 @@ var _ = Describe("gateway", func() {
 				Expect(etags["/projects/z - project"]).ToNot(BeNil())
 
 				By("creating a new file")
-				err = shard1Fs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("1234567890"))))
+				err = helpers.Upload(ctx, shard1Fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("1234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -240,9 +243,10 @@ var _ = Describe("gateway", func() {
 				Expect(rootEtag2).ToNot(Equal(rootEtag))
 
 				By("updating an existing file")
-				err = shard1Fs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("12345678901"))))
+				err = helpers.Upload(ctx, shard1Fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("12345678901"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -257,6 +261,7 @@ var _ = Describe("gateway", func() {
 				err = shard1Fs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/newdirectory"})
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -354,9 +359,11 @@ var _ = Describe("gateway", func() {
 			Expect(err).ToNot(HaveOccurred())
 			homeSpace = spaces[0]
 
-			err = fs.Upload(ctx,
+			err = helpers.Upload(ctx,
+				fs,
 				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/file.txt"},
-				ioutil.NopCloser(bytes.NewReader([]byte("1"))))
+				[]byte("1"),
+			)
 			Expect(err).ToNot(HaveOccurred())
 
 			embeddedFs, err = ocis.New(map[string]interface{}{
@@ -376,9 +383,11 @@ var _ = Describe("gateway", func() {
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			embeddedSpace = res.StorageSpace
 			embeddedRef = &storagep.Reference{Path: path.Join(homeRef.Path, "Projects", embeddedSpace.Id.OpaqueId)}
-			err = embeddedFs.Upload(ctx,
+			err = helpers.Upload(ctx,
+				embeddedFs,
 				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/embedded.txt"},
-				ioutil.NopCloser(bytes.NewReader([]byte("22"))))
+				[]byte("22"),
+			)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -462,9 +471,10 @@ var _ = Describe("gateway", func() {
 				Expect(statRes.Info.Size).To(Equal(uint64(3)))
 
 				By("Uploading a new file")
-				err = fs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("1234567890"))))
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("1234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -473,18 +483,20 @@ var _ = Describe("gateway", func() {
 				By("Uploading a new file into a subdir")
 				err = fs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("1234567890"))))
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, []byte("1234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				Expect(statRes.Info.Size).To(Equal(uint64(23)))
 
 				By("Updating an existing file")
-				err = fs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("12345678901234567890"))))
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, []byte("12345678901234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -498,9 +510,10 @@ var _ = Describe("gateway", func() {
 				Expect(statRes.Info.Size).To(Equal(uint64(3)))
 
 				By("Uploading a new file")
-				err = embeddedFs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("1234567890"))))
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("1234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -509,18 +522,20 @@ var _ = Describe("gateway", func() {
 				By("Uploading a new file into a subdir")
 				err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
-				err = embeddedFs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("1234567890"))))
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, []byte("1234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				Expect(statRes.Info.Size).To(Equal(uint64(23)))
 
 				By("Updating an existing file")
-				err = embeddedFs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("12345678901234567890"))))
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, []byte("12345678901234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -534,9 +549,10 @@ var _ = Describe("gateway", func() {
 				etag := statRes.Info.Etag
 
 				By("Uploading a new file")
-				err = fs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("1"))))
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("1"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -548,6 +564,7 @@ var _ = Describe("gateway", func() {
 				err = fs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -556,9 +573,10 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag2).ToNot(Equal(newEtag))
 
 				By("Updating an existing file")
-				err = fs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/file.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("2"))))
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/file.txt"}, []byte("2"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -574,9 +592,10 @@ var _ = Describe("gateway", func() {
 				etag := statRes.Info.Etag
 
 				By("Uploading a new file")
-				err = embeddedFs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("1"))))
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("1"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -588,6 +607,7 @@ var _ = Describe("gateway", func() {
 				err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -596,9 +616,10 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag2).ToNot(Equal(newEtag))
 
 				By("Updating an existing file")
-				err = embeddedFs.Upload(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newfile.txt"}, ioutil.NopCloser(bytes.NewReader([]byte("1"))))
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("1"))
 				Expect(err).ToNot(HaveOccurred())
 
+				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))

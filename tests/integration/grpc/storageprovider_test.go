@@ -19,9 +19,7 @@
 package grpc_test
 
 import (
-	"bytes"
 	"context"
-	"io/ioutil"
 	"os"
 
 	"google.golang.org/grpc/metadata"
@@ -36,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -599,8 +598,8 @@ var _ = Describe("storage providers", func() {
 					fs, err := createFS(provider, revads)
 					Expect(err).ToNot(HaveOccurred())
 
-					content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
-					content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+					content1 := []byte("1")
+					content2 := []byte("22")
 
 					vRef := ref(provider, versionedFilePath)
 					if provider == "nextcloud" {
@@ -614,9 +613,9 @@ var _ = Describe("storage providers", func() {
 						Type:  "personal",
 					})
 					Expect(err).ToNot(HaveOccurred())
-					err = fs.Upload(ctx, vRef, content1)
+					err = helpers.Upload(ctx, fs, vRef, content1)
 					Expect(err).ToNot(HaveOccurred())
-					err = fs.Upload(ctx, vRef, content2)
+					err = helpers.Upload(ctx, fs, vRef, content2)
 					Expect(err).ToNot(HaveOccurred())
 				})
 
