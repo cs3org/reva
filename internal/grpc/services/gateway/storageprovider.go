@@ -877,17 +877,19 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 
 		spaceID := ""
 		mountPath := providerInfos[i].ProviderPath
-		var root *provider.ResourceId
 
 		spacePaths := decodeSpacePaths(providerInfos[i].Opaque)
 		if len(spacePaths) == 0 {
 			spacePaths[""] = mountPath
 		}
 		for spaceID, mountPath = range spacePaths {
+			var root *provider.ResourceId
 			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
-			root = &provider.ResourceId{
-				StorageId: rootSpace,
-				OpaqueId:  rootNode,
+			if rootSpace != "" && rootNode != "" {
+				root = &provider.ResourceId{
+					StorageId: rootSpace,
+					OpaqueId:  rootNode,
+				}
 			}
 			// build reference for the provider - copy to avoid side effects
 			r := &provider.Reference{

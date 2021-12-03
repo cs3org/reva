@@ -49,16 +49,25 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 		dependencies = map[string]string{}
 		revads       = map[string]*Revad{}
 
-		ctx           context.Context
+		einsteinCtx   context.Context
+		marieCtx      context.Context
 		variables     map[string]string
 		serviceClient gateway.GatewayAPIClient
-		user          = &userpb.User{
+		marie         = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "0.0.0.0:39000",
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username: "marie",
+		}
+		einstein = &userpb.User{
+			Id: &userpb.UserId{
+				Idp:      "0.0.0.0:39000",
+				OpaqueId: "e4fb0282-fabf-4cff-b1ee-90bdc01c4eef",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
+			},
+			Username: "einstein",
 		}
 		homeRef = &storagep.Reference{Path: "/home"}
 	)
@@ -81,18 +90,25 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 
 	JustBeforeEach(func() {
 		var err error
-		ctx = context.Background()
+		einsteinCtx = context.Background()
+		marieCtx = context.Background()
 
 		// Add auth token
 		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
 		scope, err := scope.AddOwnerScope(nil)
 		Expect(err).ToNot(HaveOccurred())
-		t, err := tokenManager.MintToken(ctx, user, scope)
+		t, err := tokenManager.MintToken(marieCtx, marie, scope)
 		Expect(err).ToNot(HaveOccurred())
-		ctx = ctxpkg.ContextSetToken(ctx, t)
-		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, t)
-		ctx = ctxpkg.ContextSetUser(ctx, user)
+		marieCtx = ctxpkg.ContextSetToken(marieCtx, t)
+		marieCtx = metadata.AppendToOutgoingContext(marieCtx, ctxpkg.TokenHeader, t)
+		marieCtx = ctxpkg.ContextSetUser(marieCtx, marie)
+
+		t, err = tokenManager.MintToken(einsteinCtx, einstein, scope)
+		Expect(err).ToNot(HaveOccurred())
+		einsteinCtx = ctxpkg.ContextSetToken(einsteinCtx, t)
+		einsteinCtx = metadata.AppendToOutgoingContext(einsteinCtx, ctxpkg.TokenHeader, t)
+		einsteinCtx = ctxpkg.ContextSetUser(einsteinCtx, einstein)
 
 		revads, err = startRevads(dependencies, variables)
 		Expect(err).ToNot(HaveOccurred())
@@ -107,27 +123,86 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 		}
 	})
 
-	It("creates a home directory on the correct provider", func() {
-		statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+	Context("with a home jail", func() {
+		BeforeEach(func() {
+			variables["enable_home"] = "true"
+		})
+		It("creates a home directory on the correct provider", func() {
+			By("creating marie's home")
+			statRes, err := serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: homeRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
-		res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
-		Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-		Expect(err).ToNot(HaveOccurred())
+			res, err := serviceClient.CreateHome(marieCtx, &storagep.CreateHomeRequest{})
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(err).ToNot(HaveOccurred())
 
-		statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			statRes, err = serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: homeRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-		fi, err := os.Stat(path.Join(revads["storage2"].TmpRoot, user.Id.OpaqueId, "files"))
-		Expect(err).ToNot(HaveOccurred())
-		Expect(fi.IsDir()).To(BeTrue())
-		_, err = os.Stat(path.Join(revads["storage"].TmpRoot, user.Id.OpaqueId, "files"))
-		Expect(err).To(HaveOccurred())
+			// the mapping considers the opaque id: f... -> storage2
+			fi, err := os.Stat(path.Join(revads["storage2"].TmpRoot, "storage", marie.Id.OpaqueId, "files"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fi.IsDir()).To(BeTrue())
+			_, err = os.Stat(path.Join(revads["storage"].TmpRoot, "storage", marie.Id.OpaqueId, "files"))
+			Expect(err).To(HaveOccurred())
 
-		ghRes, err := serviceClient.GetHome(ctx, &storagep.GetHomeRequest{})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(ghRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			ghRes, err := serviceClient.GetHome(marieCtx, &storagep.GetHomeRequest{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ghRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			By("creating einstein's home")
+			statRes, err = serviceClient.Stat(einsteinCtx, &storagep.StatRequest{Ref: homeRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+
+			res, err = serviceClient.CreateHome(einsteinCtx, &storagep.CreateHomeRequest{})
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(err).ToNot(HaveOccurred())
+
+			statRes, err = serviceClient.Stat(einsteinCtx, &storagep.StatRequest{Ref: homeRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			// the mapping considers the opaque id: e... -> storage
+			fi, err = os.Stat(path.Join(revads["storage"].TmpRoot, "storage", einstein.Id.OpaqueId, "files"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fi.IsDir()).To(BeTrue())
+			_, err = os.Stat(path.Join(revads["storage2"].TmpRoot, "storage", einstein.Id.OpaqueId, "files"))
+			Expect(err).To(HaveOccurred())
+
+			ghRes, err = serviceClient.GetHome(einsteinCtx, &storagep.GetHomeRequest{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ghRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+		})
+	})
+
+	Context("without home jail", func() {
+		BeforeEach(func() {
+			variables["enable_home"] = "false"
+		})
+
+		It("merges the results of both /users providers", func() {
+			lRes, err := serviceClient.ListContainer(marieCtx, &storagep.ListContainerRequest{Ref: &storagep.Reference{Path: "/users"}})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(lRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(len(lRes.Infos)).To(Equal(36))
+
+			lRes, err = serviceClient.ListContainer(marieCtx, &storagep.ListContainerRequest{Ref: &storagep.Reference{Path: "/users/f"}})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(lRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(len(lRes.Infos)).To(Equal(0))
+
+			res, err := serviceClient.CreateHome(marieCtx, &storagep.CreateHomeRequest{})
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(err).ToNot(HaveOccurred())
+
+			lRes, err = serviceClient.ListContainer(marieCtx, &storagep.ListContainerRequest{Ref: &storagep.Reference{Path: "/users/f"}})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(lRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(len(lRes.Infos)).To(Equal(1))
+			Expect(lRes.Infos[0].Path).To(Equal("/users/f/f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"))
+		})
 	})
 })

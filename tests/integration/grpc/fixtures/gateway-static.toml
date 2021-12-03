@@ -23,7 +23,9 @@ driver = "static"
 home_provider = "/home"
 
 [grpc.services.storageregistry.drivers.static.rules]
-"/home" = {"mapping" = "/home-{{substr 0 1 .Username}}", "aliases" = {"/home-[a-k]" = "{{storage_address}}", "/home-[l-z]" = "{{storage2_address}}"}}
+"/home" = {"mapping" = "/home-{{substr 0 1 .Id.OpaqueId}}", "aliases" = {"/home-[0-9a-e]" = "{{storage_address}}", "/home-[f-z]" = "{{storage2_address}}"}}
+"/users/[0-9a-e]" = {address = "{{storage_address}}"}
+"/users/[f-z]" = {address = "{{storage2_address}}"}
 
 [http]
 address = "{{grpc_address+1}}"
