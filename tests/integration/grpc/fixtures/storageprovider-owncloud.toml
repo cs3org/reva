@@ -5,7 +5,7 @@ address = "{{grpc_address}}"
 driver = "owncloud"
 
 [grpc.services.storageprovider.drivers.owncloud]
-enable_home = true
-datadirectory = "{{root}}"
+enable_home = {{enable_home}}
+datadirectory = "{{root}}/storage"
 userprovidersvc = "{{users_address}}"
 redis = "{{redis_address}}"

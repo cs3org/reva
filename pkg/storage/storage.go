@@ -42,10 +42,10 @@ type FS interface {
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
 	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
-	ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error)
-	RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error
-	PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error
-	EmptyRecycle(ctx context.Context) error
+	ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error)
+	RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error
+	PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error
+	EmptyRecycle(ctx context.Context, ref *provider.Reference) error
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error
@@ -60,14 +60,17 @@ type FS interface {
 	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, permissions map[string]struct{}) ([]*provider.StorageSpace, error)
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)
+	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error
 }
 
 // Registry is the interface that storage registries implement
 // for discovering storage providers
 type Registry interface {
-	FindProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error)
-	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
-	GetHome(ctx context.Context) (*registry.ProviderInfo, error)
+	// GetProvider returns the Address of the storage provider that should be used for the given space.
+	// Use it to determine where to create a new storage space.
+	GetProvider(ctx context.Context, space *provider.StorageSpace) (*registry.ProviderInfo, error)
+	// ListProviders returns the storage providers that match the given filter
+	ListProviders(ctx context.Context, filters map[string]string) ([]*registry.ProviderInfo, error)
 }
 
 // PathWrapper is the interface to implement for path transformations

@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/xattr"
 )
 
 // Declare a list of xattr keys
@@ -101,4 +102,26 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 			OpaqueId:  strings.Split(parts, "/")[1],
 		},
 	}, nil
+}
+
+// CopyMetadata copies all extended attributes from source to target.
+// The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
+func CopyMetadata(s, t string, filter func(attributeName string) bool) error {
+	var attrs []string
+	var err error
+	if attrs, err = xattr.List(s); err != nil {
+		return err
+	}
+	for i := range attrs {
+		if filter == nil || filter(attrs[i]) {
+			b, err := xattr.Get(s, attrs[i])
+			if err != nil {
+				return err
+			}
+			if err := xattr.Set(t, attrs[i], b); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

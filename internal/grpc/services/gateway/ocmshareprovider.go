@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -352,12 +353,8 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	}
 
 	log.Info().Msg("mount path will be:" + refPath)
-	createRefReq := &provider.CreateReferenceRequest{
-		Ref:       &provider.Reference{Path: refPath},
-		TargetUri: targetURI,
-	}
 
-	c, err := s.findByPath(ctx, refPath)
+	c, p, err := s.findByPath(ctx, refPath)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
@@ -365,6 +362,27 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 		return status.NewInternal(ctx, err, "error finding storage provider"), nil
 	}
 
+	spaceID := ""
+	mountPath := p.ProviderPath
+	var root *provider.ResourceId
+
+	spacePaths := decodeSpacePaths(p.Opaque)
+	if len(spacePaths) == 0 {
+		spacePaths[""] = mountPath
+	}
+	for spaceID, mountPath = range spacePaths {
+		rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+		root = &provider.ResourceId{
+			StorageId: rootSpace,
+			OpaqueId:  rootNode,
+		}
+	}
+
+	pRef := unwrap(&provider.Reference{Path: refPath}, mountPath, root)
+	createRefReq := &provider.CreateReferenceRequest{
+		Ref:       pRef,
+		TargetUri: targetURI,
+	}
 	createRefRes, err := c.CreateReference(ctx, createRefReq)
 	if err != nil {
 		log.Err(err).Msg("gateway: error calling GetHome")

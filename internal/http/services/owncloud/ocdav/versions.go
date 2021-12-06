@@ -107,7 +107,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED || res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,

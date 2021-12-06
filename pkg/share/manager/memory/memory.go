@@ -47,9 +47,11 @@ func init() {
 // New returns a new manager.
 func New(c map[string]interface{}) (share.Manager, error) {
 	state := map[string]map[*collaboration.ShareId]collaboration.ShareState{}
+	mp := map[string]map[*collaboration.ShareId]*provider.Reference{}
 	return &manager{
-		shareState: state,
-		lock:       &sync.Mutex{},
+		shareState:      state,
+		shareMountPoint: mp,
+		lock:            &sync.Mutex{},
 	}, nil
 }
 
@@ -59,6 +61,9 @@ type manager struct {
 	// shareState contains the share state for a user.
 	// map["alice"]["share-id"]state.
 	shareState map[string]map[*collaboration.ShareId]collaboration.ShareState
+	// shareMountPoint contains the mountpoint of a share for a user.
+	// map["alice"]["share-id"]reference.
+	shareMountPoint map[string]map[*collaboration.ShareId]*provider.Reference
 }
 
 func (m *manager) add(ctx context.Context, s *collaboration.Share) {
@@ -151,6 +156,18 @@ func (m *manager) get(ctx context.Context, ref *collaboration.ShareReference) (s
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if share.IsCreatedByUser(s, user) {
 		return s, nil
+	}
+
+	// or the grantee
+	if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
+		return s, nil
+	} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		// check if all user groups match this share; TODO(labkode): filter shares created by us.
+		for _, g := range user.Groups {
+			if g == s.Grantee.GetGroupId().OpaqueId {
+				return s, nil
+			}
+		}
 	}
 
 	// we return not found to not disclose information
@@ -275,6 +292,11 @@ func (m *manager) convert(ctx context.Context, s *collaboration.Share) *collabor
 			rs.State = state
 		}
 	}
+	if v, ok := m.shareMountPoint[user.Id.String()]; ok {
+		if mp, ok := v[s.Id]; ok {
+			rs.MountPoint = mp
+		}
+	}
 	return rs
 }
 
@@ -311,20 +333,32 @@ func (m *manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 		switch fieldMask.Paths[i] {
 		case "state":
 			rs.State = receivedShare.State
-		// TODO case "mount_point":
+		case "mount_point":
+			rs.MountPoint = receivedShare.MountPoint
 		default:
 			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
 		}
 	}
 
+	// Persist state
 	if v, ok := m.shareState[user.Id.String()]; ok {
-		v[rs.Share.Id] = rs.GetState()
+		v[rs.Share.Id] = rs.State
 		m.shareState[user.Id.String()] = v
 	} else {
 		a := map[*collaboration.ShareId]collaboration.ShareState{
-			rs.Share.Id: rs.GetState(),
+			rs.Share.Id: rs.State,
 		}
 		m.shareState[user.Id.String()] = a
+	}
+	// Persist mount point
+	if v, ok := m.shareMountPoint[user.Id.String()]; ok {
+		v[rs.Share.Id] = rs.MountPoint
+		m.shareMountPoint[user.Id.String()] = v
+	} else {
+		a := map[*collaboration.ShareId]*provider.Reference{
+			rs.Share.Id: rs.MountPoint,
+		}
+		m.shareMountPoint[user.Id.String()] = a
 	}
 
 	return rs, nil

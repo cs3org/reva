@@ -40,6 +40,7 @@ type Config struct {
 	ResourceInfoCacheSize   int                               `mapstructure:"resource_info_cache_size"`
 	ResourceInfoCacheTTL    int                               `mapstructure:"resource_info_cache_ttl"`
 	UserIdentifierCacheTTL  int                               `mapstructure:"user_identifier_cache_ttl"`
+	MachineAuthAPIKey       string                            `mapstructure:"machine_auth_apikey"`
 }
 
 // Init sets sane defaults
@@ -57,7 +58,7 @@ func (c *Config) Init() {
 	}
 
 	if c.HomeNamespace == "" {
-		c.HomeNamespace = "/home"
+		c.HomeNamespace = "/users/{{.Id.OpaqueId}}"
 	}
 
 	if c.AdditionalInfoAttribute == "" {

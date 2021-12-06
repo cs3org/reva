@@ -469,6 +469,8 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.Rece
 		switch fieldMask.Paths[i] {
 		case "state":
 			rs.State = share.State
+		case "mount_point":
+			rs.MountPoint = share.MountPoint
 		default:
 			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
 		}

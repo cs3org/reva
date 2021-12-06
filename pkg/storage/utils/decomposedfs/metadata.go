@@ -22,7 +22,9 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"syscall"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -151,28 +153,35 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 	for _, k := range keys {
 		switch k {
 		case node.FavoriteKey:
-			if u, ok := ctxpkg.ContextGetUser(ctx); ok {
-				// the favorite flag is specific to the user, so we need to incorporate the userid
-				if uid := u.GetId(); uid != nil {
-					fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
-					if err := xattr.Remove(nodePath, fa); err != nil {
-						sublog.Error().Err(err).
-							Interface("user", u).
-							Str("key", fa).
-							Msg("could not unset favorite flag")
-						errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
-					}
-				} else {
-					sublog.Error().
-						Interface("user", u).
-						Msg("user has no id")
-					errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
-				}
-			} else {
+			// the favorite flag is specific to the user, so we need to incorporate the userid
+			var u *userpb.User
+			if u, ok = ctxpkg.ContextGetUser(ctx); !ok {
 				sublog.Error().
 					Interface("user", u).
 					Msg("error getting user from ctx")
 				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx"))
+				continue
+			}
+			var uid *userpb.UserId
+			if uid = u.GetId(); uid == nil || uid.OpaqueId == "" {
+				sublog.Error().
+					Interface("user", u).
+					Msg("user has no id")
+				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
+				continue
+			}
+			fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
+			if err := xattr.Remove(nodePath, fa); err != nil {
+				if isNoData(err) {
+					// TODO align with default case: is there a difference between darwin and linux?
+					// refactor this properly into a function in the "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs" package
+					continue // already gone, ignore
+				}
+				sublog.Error().Err(err).
+					Interface("user", u).
+					Str("key", fa).
+					Msg("could not unset favorite flag")
+				errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
 			}
 		default:
 			if err = xattr.Remove(nodePath, xattrs.MetadataPrefix+k); err != nil {
@@ -200,4 +209,15 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 		// TODO how to return multiple errors?
 		return errors.New("multiple errors occurred, see log for details")
 	}
+}
+
+// The os ENODATA error is buried inside the xattr error,
+// so we cannot just use os.IsNotExists().
+func isNoData(err error) bool {
+	if xerr, ok := err.(*xattr.Error); ok {
+		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
+			return serr == syscall.ENODATA
+		}
+	}
+	return false
 }

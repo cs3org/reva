@@ -210,6 +210,26 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 
 	return strings.HasPrefix(childPath, parentPath), nil
 
+	// resourcePath := statResponse.Info.Path
+
+	// if strings.HasPrefix(ref.GetPath(), resourcePath) {
+	// 	// The path corresponds to the resource to which the token has access.
+	// 	// We allow access to it.
+	// 	return true, nil
+	// }
+
+	// // If we arrived here that could mean that ref.GetPath is not prefixed with the storage mount path but resourcePath is
+	// // because it was returned by the gateway which will prefix it. To fix that we remove the mount path from the resourcePath.
+	// // resourcePath = "/users/<name>/some/path"
+	// // After the split we have [" ", "users", "<name>/some/path"].
+	// trimmedPath := "/" + strings.SplitN(resourcePath, "/", 3)[2]
+	// if strings.HasPrefix(ref.GetPath(), trimmedPath) {
+	// 	// The path corresponds to the resource to which the token has access.
+	// 	// We allow access to it.
+	// 	return true, nil
+	// }
+
+	// return false, nil
 }
 
 func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool) {

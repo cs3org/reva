@@ -5,6 +5,10 @@
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
+[log]
+#level = "warn"
+#mode = "json"
+
 [grpc]
 address = "0.0.0.0:18000"
 
@@ -12,7 +16,7 @@ address = "0.0.0.0:18000"
 auth_manager = "ldap"
 
 [grpc.services.authprovider.auth_managers.ldap]
-hostname="localhost"
+hostname="openldap"
 port=636
 insecure=true
 base_dn="dc=owncloud,dc=com"
@@ -21,7 +25,7 @@ bind_username="cn=admin,dc=owncloud,dc=com"
 bind_password="admin"
 idp="http://localhost:20080"
 [grpc.services.authprovider.auth_managers.ldap.schema]
-uid="uid"
+uid="entryuuid"
 displayName="displayName"
 dn="dn"
 cn="cn"
@@ -30,20 +34,20 @@ cn="cn"
 driver = "ldap"
 
 [grpc.services.userprovider.drivers.ldap]
-hostname="localhost"
+hostname="openldap"
 port=636
 insecure=true
 base_dn="dc=owncloud,dc=com"
-userfilter="(&(objectclass=posixAccount)(|(uid={{.OpaqueId}})(cn={{.OpaqueId}})))"
+userfilter="(&(objectclass=posixAccount)(|(entryuuid={{.OpaqueId}})(cn={{.OpaqueId}})))"
 findfilter="(&(objectclass=posixAccount)(|(cn={{query}}*)(displayname={{query}}*)(mail={{query}}*)))"
 attributefilter="(&(objectclass=posixAccount)({{attr}}={{value}}))"
-groupfilter="(&(objectclass=posixGroup)(cn=*)(memberuid={{.OpaqueId}}))"
+groupfilter="(&(objectclass=posixGroup)(cn=*)(memberuid={{.}}))"
 bind_username="cn=admin,dc=owncloud,dc=com"
 bind_password="admin"
 idp="http://localhost:20080"
 
 [grpc.services.userprovider.drivers.ldap.schema]
-uid="uid"
+uid="entryuuid"
 displayName="displayName"
 dn="dn"
 cn="cn"
@@ -52,7 +56,7 @@ cn="cn"
 driver = "ldap"
 
 [grpc.services.groupprovider.drivers.ldap]
-hostname="localhost"
+hostname="openldap"
 port=636
 insecure=true
 base_dn="dc=owncloud,dc=com"

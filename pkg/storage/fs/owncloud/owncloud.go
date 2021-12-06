@@ -77,6 +77,9 @@ const (
 	checksumPrefix    string = ocPrefix + "cs."
 	checksumsKey      string = "http://owncloud.org/ns/checksums"
 	favoriteKey       string = "http://owncloud.org/ns/favorite"
+
+	spaceTypeAny = "*"
+	// spaceIDAny   = "*"
 )
 
 var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
@@ -707,7 +710,29 @@ func getResourceType(isDir bool) provider.ResourceType {
 
 // CreateStorageSpace creates a storage space
 func (fs *ocfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+	if req.Type != "personal" {
+		return nil, errtypes.NotSupported("only personal spaces supported")
+	}
+
+	layout := templates.WithUser(req.Owner, fs.c.UserLayout)
+
+	homePaths := []string{
+		filepath.Join(fs.c.DataDirectory, layout, "files"),
+		filepath.Join(fs.c.DataDirectory, layout, "files_trashbin"),
+		filepath.Join(fs.c.DataDirectory, layout, "files_versions"),
+		filepath.Join(fs.c.DataDirectory, layout, "uploads"),
+		filepath.Join(fs.c.DataDirectory, layout, "shadow_files"),
+	}
+
+	for _, v := range homePaths {
+		if err := os.MkdirAll(v, 0700); err != nil {
+			return nil, errors.Wrap(err, "ocfs: error creating home path: "+v)
+		}
+	}
+
+	return &provider.CreateStorageSpaceResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+	}, nil
 }
 
 func readOrCreateID(ctx context.Context, ip string, conn redis.Conn) string {
@@ -897,6 +922,19 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 	rp := fs.toInternalPath(ctx, "")
 	// TODO rp will be the datadir ... be we don't want to go up that high. The users home is far enough
 	np := ip
+
+	if ip == rp {
+		return &provider.ResourcePermissions{
+			// grant read access to the root
+			GetPath:          true,
+			GetQuota:         true,
+			ListContainer:    true,
+			ListFileVersions: true,
+			ListGrants:       true,
+			ListRecycle:      true,
+			Stat:             true,
+		}, nil
+	}
 
 	// for an efficient group lookup convert the list of groups to a map
 	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
@@ -1125,36 +1163,42 @@ func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pro
 }
 
 func (fs *ocfs) CreateHome(ctx context.Context) error {
-	u, ok := ctxpkg.ContextGetUser(ctx)
-	if !ok {
-		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-		return err
-	}
-	layout := templates.WithUser(u, fs.c.UserLayout)
-
-	homePaths := []string{
-		filepath.Join(fs.c.DataDirectory, layout, "files"),
-		filepath.Join(fs.c.DataDirectory, layout, "files_trashbin"),
-		filepath.Join(fs.c.DataDirectory, layout, "files_versions"),
-		filepath.Join(fs.c.DataDirectory, layout, "uploads"),
-		filepath.Join(fs.c.DataDirectory, layout, "shadow_files"),
-	}
-
-	for _, v := range homePaths {
-		if err := os.MkdirAll(v, 0700); err != nil {
-			return errors.Wrap(err, "ocfs: error creating home path: "+v)
+	return errtypes.NotSupported("use CreateStorageSpace with type personal")
+	/*
+		u, ok := ctxpkg.ContextGetUser(ctx)
+		if !ok {
+			err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+			return err
 		}
-	}
+		layout := templates.WithUser(u, fs.c.UserLayout)
 
-	return nil
+		homePaths := []string{
+			filepath.Join(fs.c.DataDirectory, layout, "files"),
+			filepath.Join(fs.c.DataDirectory, layout, "files_trashbin"),
+			filepath.Join(fs.c.DataDirectory, layout, "files_versions"),
+			filepath.Join(fs.c.DataDirectory, layout, "uploads"),
+			filepath.Join(fs.c.DataDirectory, layout, "shadow_files"),
+		}
+
+		for _, v := range homePaths {
+			if err := os.MkdirAll(v, 0700); err != nil {
+				return errors.Wrap(err, "ocfs: error creating home path: "+v)
+			}
+		}
+
+		return nil
+	*/
 }
 
 // If home is enabled, the relative home is always the empty string
 func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
-	if !fs.c.EnableHome {
-		return "", errtypes.NotSupported("ocfs: get home not supported")
-	}
-	return "", nil
+	return "", errtypes.NotSupported("use CreateStorageSpace with type personal")
+	/*
+		if !fs.c.EnableHome {
+			return "", errtypes.NotSupported("ocfs: get home not supported")
+		}
+		return "", nil
+	*/
 }
 
 func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
@@ -2069,7 +2113,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *ocfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+func (fs *ocfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
@@ -2103,7 +2147,7 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePat
 	return nil
 }
 
-func (fs *ocfs) EmptyRecycle(ctx context.Context) error {
+func (fs *ocfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -2162,7 +2206,7 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 	}
 }
 
-func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *ocfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -2189,7 +2233,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath str
 	return items, nil
 }
 
-func (fs *ocfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *ocfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
@@ -2231,12 +2275,63 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativeP
 }
 
 func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, _ map[string]struct{}) ([]*provider.StorageSpace, error) {
-	return nil, errtypes.NotSupported("list storage spaces")
+
+	var (
+		spaceType = spaceTypeAny
+		// spaceID   = spaceIDAny
+		// nodeID    = spaceIDAny
+		err error
+	)
+
+	for i := range filter {
+		switch filter[i].Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			spaceType = filter[i].GetSpaceType()
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			// spaceID, nodeID = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
+		}
+	}
+
+	spaces := []*provider.StorageSpace{}
+	if spaceType != spaceTypeAny && spaceType != "personal" {
+		// owncloud only has personal spaces
+		// TODO implement external spaces?
+		return spaces, nil
+	}
+
+	// all folders with a files folder could be a personal space
+	matches, err := filepath.Glob(filepath.Join(fs.c.DataDirectory, "*", "files"))
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range matches {
+
+		id := readOrCreateID(context.Background(), matches[i], nil)
+		space := &provider.StorageSpace{
+			Id: &provider.StorageSpaceId{OpaqueId: id},
+			// Owner: , // TODO from path layout?
+			// Root: , //?
+		}
+		spaces = append(spaces, space)
+	}
+
+	// FIXME: The linter doesn't like empty branches
+	// if len(matches) == 0 && nodeID != spaceID {
+	// TODO lookup by id
+	// }
+
+	return spaces, nil
 }
 
 // UpdateStorageSpace updates a storage space
 func (fs *ocfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
+}
+
+// DeleteStorageSpace deletes a storage space
+func (fs *ocfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	return errtypes.NotSupported("delete storage space")
 }
 
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {

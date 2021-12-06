@@ -22,6 +22,10 @@
 // and error is a reserved word :)
 package errtypes
 
+import (
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+)
+
 // NotFound is the error to use when a something is not found.
 type NotFound string
 
@@ -186,4 +190,34 @@ type IsChecksumMismatch interface {
 // to specify that there is insufficient storage.
 type IsInsufficientStorage interface {
 	IsInsufficientStorage()
+}
+
+// NewErrtypeFromStatus maps an rpc status to an errtype
+func NewErrtypeFromStatus(status *rpc.Status) error {
+	switch status.Code {
+	case rpc.Code_CODE_OK:
+		return nil
+	case rpc.Code_CODE_NOT_FOUND:
+		return NotFound(status.Message)
+	case rpc.Code_CODE_ALREADY_EXISTS:
+		return AlreadyExists(status.Message)
+		// case rpc.Code_CODE_FAILED_PRECONDITION: ?
+		// return UserRequired(status.Message)
+		// case rpc.Code_CODE_PERMISSION_DENIED: ?
+		// IsInvalidCredentials
+	case rpc.Code_CODE_UNIMPLEMENTED:
+		return NotSupported(status.Message)
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		return PermissionDenied(status.Message)
+		// case rpc.Code_CODE_DATA_LOSS: ?
+		//	IsPartialContent
+		// case rpc.Code_CODE_FAILED_PRECONDITION: ?
+		//	IsChecksumMismatch
+	case rpc.Code_CODE_INSUFFICIENT_STORAGE:
+		return InsufficientStorage(status.Message)
+	case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_FAILED_PRECONDITION, rpc.Code_CODE_OUT_OF_RANGE:
+		return BadRequest(status.Message)
+	default:
+		return InternalError(status.Message)
+	}
 }

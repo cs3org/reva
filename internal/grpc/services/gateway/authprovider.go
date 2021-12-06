@@ -163,7 +163,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			}, nil
 		}
 
-		if createHomeRes.Status.Code != rpc.Code_CODE_OK {
+		if createHomeRes.Status.Code != rpc.Code_CODE_OK && createHomeRes.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
 			err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
 			log.Err(err).Msg("error calling Createhome")
 			return &gateway.AuthenticateResponse{

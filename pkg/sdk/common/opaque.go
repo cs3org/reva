@@ -41,6 +41,26 @@ func DecodeOpaqueMap(opaque *types.Opaque) map[string]string {
 	return entries
 }
 
+// EncodeOpaqueMap encodes a map of strings into a Reva opaque entry.
+// Only plain encoding is currently supported.
+func EncodeOpaqueMap(opaque *types.Opaque, m map[string]string) {
+	if opaque == nil {
+		return
+	}
+	if opaque.Map == nil {
+		opaque.Map = map[string]*types.OpaqueEntry{}
+	}
+
+	for k, v := range m {
+		// Only plain values are currently supported
+		opaque.Map[k] = &types.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte(v),
+		}
+	}
+
+}
+
 // GetValuesFromOpaque extracts the given keys from the opaque object.
 // If mandatory is set to true, all specified keys must be available in the opaque object.
 func GetValuesFromOpaque(opaque *types.Opaque, keys []string, mandatory bool) (map[string]string, error) {

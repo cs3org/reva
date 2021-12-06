@@ -20,7 +20,6 @@ package scope
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -35,6 +34,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// PublicStorageProviderID is the space id used for the public links storage space
+const PublicStorageProviderID = "7993447f-687f-490d-875c-ac95e89a62a4"
+
 func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
 	var share link.PublicShare
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
@@ -46,6 +48,27 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 	// Viewer role
 	case *registry.GetStorageProvidersRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *registry.ListStorageProvidersRequest:
+		ref := &provider.Reference{}
+		if v.Opaque != nil && v.Opaque.Map != nil {
+			if e, ok := v.Opaque.Map["storage_id"]; ok {
+				ref.ResourceId = &provider.ResourceId{
+					StorageId: string(e.Value),
+				}
+			}
+			if e, ok := v.Opaque.Map["opaque_id"]; ok {
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
+				}
+				ref.ResourceId.OpaqueId = string(e.Value)
+			}
+			if e, ok := v.Opaque.Map["path"]; ok {
+				ref.Path = string(e.Value)
+			}
+		}
+		return checkStorageRef(ctx, &share, ref), nil
+	case *provider.GetPathRequest:
+		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.GetResourceId()}), nil
 	case *provider.StatRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.ListContainerRequest:
@@ -75,28 +98,51 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 	case *userv1beta1.GetUserByClaimRequest:
 		return true, nil
 
+	case *provider.ListStorageSpacesRequest:
+		return checkPublicListStorageSpacesFilter(v.Filters), nil
 	case *link.GetPublicShareRequest:
 		return checkPublicShareRef(&share, v.GetRef()), nil
 	case string:
 		return checkResourcePath(v), nil
 	}
 
-	msg := fmt.Sprintf("resource type assertion failed: %+v", resource)
-	logger.Debug().Str("scope", "publicshareScope").Msg(msg)
+	msg := "resource type assertion failed"
+	logger.Debug().Str("scope", "publicshareScope").Interface("resource", resource).Msg(msg)
 	return false, errtypes.InternalError(msg)
 }
 
 func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Reference) bool {
-	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> >
-	// OR
-	// r: <resource_id:<storage_id:$public-storage-mount-ID opaque_id:$token/$relative-path> >
-	if r.ResourceId != nil && r.Path == "" { // path must be empty
-		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) || strings.HasPrefix(r.ResourceId.OpaqueId, s.Token)
+	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> path:$path > >
+	if utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) {
+		return true
 	}
 
 	// r: <path:"/public/$token" >
-	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) {
+	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) || strings.HasPrefix(r.GetPath(), "./"+s.Token) {
 		return true
+	}
+
+	// r: <resource_id:<storage_id: opaque_id:$token/$opaqueID> path:$path>
+	if id := r.GetResourceId(); id.GetStorageId() == PublicStorageProviderID && id.GetOpaqueId() == s.Token+"/"+s.GetResourceId().GetOpaqueId() {
+		return true
+	}
+	return false
+}
+
+// public link access must send a filter with id or type
+func checkPublicListStorageSpacesFilter(filters []*provider.ListStorageSpacesRequest_Filter) bool {
+	// return true
+	for _, f := range filters {
+		switch f.Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			if f.GetSpaceType() == "public" {
+				return true
+			}
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			if f.GetId().OpaqueId != "" {
+				return true
+			}
+		}
 	}
 	return false
 }

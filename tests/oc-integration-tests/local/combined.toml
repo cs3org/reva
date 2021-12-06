@@ -1,0 +1,189 @@
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+
+[log]
+#level = "warn"
+#mode = "json"
+
+# This frontend-global.toml config file will start a reva service that:
+# - serves as the entrypoint for owncloud APIs but with a globally accessible namespace.
+# - serves http endpoints on port 20180
+#   - / --------------- ocdav
+#   - /ocs ------------ ocs
+#   - /oauth2 --------- oidcprovider
+#   - /.well-known ---- wellknown service to announce openid-configuration
+#   - TODO(diocas): ocm
+# - authenticates requests using oidc bearer auth and basic auth as fallback
+# - serves the grpc services on port 20199
+[grpc]
+[grpc.services.gateway]
+#preferencessvc = "localhost:18000"
+#userprovidersvc = "localhost:18000"
+#groupprovidersvc = "localhost:18000"
+# other
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
+#share_folder = "Shares"
+transfer_expires = 6 # give it a moment
+#disable_home_creation_on_login = true
+
+[grpc.services.authregistry]
+[grpc.services.authregistry.drivers.static.rules]
+#publicshares = "localhost:17000" # started with the shares.toml
+#basic = "localhost:18000" # started with the users.toml
+basic = "localhost:19000" # started with the combined.toml
+#bearer = "localhost:20099" # started with the frontend.toml
+machine = "localhost:21000" # started with the machine-auth.toml
+
+[grpc.services.storageregistry]
+driver = "spaces"
+
+[grpc.services.storageregistry.drivers.spaces]
+home_provider = "/home"
+
+[grpc.services.storageregistry.drivers.spaces.rules]
+"/home" = {"address" = "localhost:11000", "space_type" = "personal", "space_owner_self" = true}
+"/home/Shares" = {"address" = "localhost:19000", "space_type" = "share", "path_template" = "/home/Shares/{{.Space.Name}}", "description" = "shares"}
+"/users" = {"address" = "localhost:11000", "space_type" = "personal", "path_template" = "/users/{{.Owner.Id.OpaqueId}}", "description" = "personal spaces"}
+
+# the /virtual namespace is only accessible via the frontend-global service
+##"/virtual/[a-k]" = {"address" = "localhost:11100", "path_template" = "/virtual/{.Owner.Id.OpaqueId}"}
+##"/virtual/[l-z]" = {"address" = "localhost:11110", "path_template" = "/virtual/{.Owner.Id.OpaqueId}"}
+
+"/public" = {"address" = "localhost:13000",  "space_type" = "public", "path_template" = "/public/{{.Space.Name}}", "description" = "public links"}
+
+[grpc.services.authprovider]
+[grpc.services.authprovider.auth_managers.json]
+users = "users.demo.json"
+
+[grpc.services.userprovider]
+[grpc.services.userprovider.drivers.json]
+users = "users.demo.json"
+
+# This is a storage provider that grants direct access to the wrapped storage
+# we have a locally running dataprovider
+#[grpc.services.storageprovider]
+#driver = "ocis"
+#expose_data_server = true
+
+#[grpc.services.storageprovider.drivers.ocis]
+#root = "/var/tmp/reva/data"
+#enable_home = false
+#treetime_accounting = true
+#treesize_accounting = true
+
+[grpc.services.sharesstorageprovider]
+usershareprovidersvc = "0.0.0.0:19000"
+
+# FIXME start as a separate service ... collides with the storageprovider: 
+# Server.RegisterService found duplicate service registration for "cs3.storage.provider.v1beta1.ProviderAPI"
+#[grpc.services.sharesstorageprovider]
+
+[grpc.services.usershareprovider]
+driver = "memory"
+
+
+[http]
+[http.middlewares.cors]
+allow_credentials = true
+
+[http.services.datagateway]
+
+[http.services.ocdav]
+# serve ocdav on the root path
+prefix = ""
+chunk_folder = "/var/tmp/reva/chunks"
+# for user lookups
+# prefix the path of requests to /dav/files with this namespace
+# While owncloud has only listed usernames at this endpoint CERN has
+# been exposing more than just usernames. For owncloud deployments we
+# can prefix the path to jail the requests to the correct CS3 namespace.
+# In this deployment we mounted the owncloud storage provider at /users. It
+# expects a username as the first path segment.
+# currently, only the desktop client will use this endpoint, but only if
+# the dav.chunking capability is available
+# TODO implement a path wrapper that rewrites `<username>` into the path
+# layout for the users home?
+# no, use GetHome?
+# for eos we need to rewrite the path
+# TODO strip the username from the path so the CS3 namespace can be mounted
+# at the files/<username> endpoint? what about migration? separate reva instance
+files_namespace = "/personal/{{.Id.OpaqueId}}"
+
+# similar to the dav/files endpoint we can configure a prefix for the old webdav endpoint
+# we use the old webdav endpoint to present the cs3 namespace
+# note: this changes the tree that is rendered at remote.php/webdav from the users home to the cs3 namespace
+# use webdav_namespace = "/home" to use the old namespace that only exposes the users files
+# this endpoint should not affect the desktop client sync but will present different folders for the other clients:
+# - the desktop clients use a hardcoded remote.php/dav/files/<username> if the dav.chunkung capability is present
+# - the ios ios uses the core.webdav-root capability which points to remote.php/webdav in oc10
+# - the oc js sdk is hardcoded to the remote.php/webdav so it will see the new tree
+# - TODO android? no sync ... but will see different tree
+webdav_namespace = "/home"
+
+[http.services.ocs]
+machine_auth_apikey = "change-me-please"
+
+[http.services.ocs.capabilities.capabilities.core.status]
+version = "10.0.11.5"
+versionstring = "10.0.11"
+
+[http.services.ocs.capabilities.capabilities.files_sharing]
+api_enabled = true
+resharing = true
+group_sharing = true
+auto_accept_share = true
+share_with_group_members_only = true
+share_with_membership_groups_only = true
+default_permissions = 22
+search_min_length = 3
+
+[http.services.ocs.capabilities.capabilities.files_sharing.public]
+enabled = true
+send_mail = true
+social_share = true
+upload = true
+multiple = true
+supports_upload_only = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.public.password]
+enforced = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.public.password.enforced_for]
+read_only = true
+read_write = true
+upload_only = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.public.expire_date]
+enabled = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.user]
+send_mail = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.user_enumeration]
+enabled = true
+group_members_only = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.federation]
+outgoing = true
+incoming = true
+
+[http.services.ocs.capabilities.capabilities.notifications]
+endpoints = []
+
+[http.services.ocs.capabilities.capabilities.files.tus_support]
+version = "1.0.0"
+resumable = "1.0.0"
+extension = "creation,creation-with-upload"
+http_method_override = ""
+max_chunk_size = 0
+
+[http.services.dataprovider]
+driver = "ocis"
+temp_folder = "/var/tmp/reva/tmp"
+
+[http.services.dataprovider.drivers.ocis]
+root = "/var/tmp/reva/data"
+enable_home = false
+treetime_accounting = true
+treesize_accounting = true

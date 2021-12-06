@@ -48,7 +48,7 @@ func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Str("svc", "ocdav").Str("handler", "get").Logger()
 
 	ref := &provider.Reference{Path: fn}
-	s.handleGet(ctx, w, r, ref, "simple", sublog)
+	s.handleGet(ctx, w, r, ref, "spaces", sublog)
 }
 
 func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, dlProtocol string, log zerolog.Logger) {

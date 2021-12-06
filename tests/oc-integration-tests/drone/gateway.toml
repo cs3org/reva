@@ -46,33 +46,33 @@ driver = "static"
 [grpc.services.authregistry.drivers.static.rules]
 publicshares = "localhost:17000" # started with the shares.toml
 basic = "localhost:18000" # started with the users.toml
+bearer = "localhost:20099" # started with the frontend.toml
+machine = "localhost:21000" # started with the machine-auth.toml
 
 [grpc.services.storageregistry]
-driver = "static"
+driver = "spaces"
 
-[grpc.services.storageregistry.drivers.static]
-home_provider = "/home"
+[grpc.services.storageregistry.drivers.spaces]
+home_template = "/users/{{.Id.OpaqueId}}"
 
-[grpc.services.storageregistry.drivers.static.rules]
+[grpc.services.storageregistry.drivers.spaces.providers]
+## obviously, we do not want to define a rule for every user and space, which is why we can define naming rules:
+"localhost:11000" = {"mount_path" = "/users", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces"}
 
-# mount a home storage provider that uses a context based path wrapper
-# to jail users into their home dir
-"/home" = {"address" = "localhost:12000"}
+## users can be spread over multiple providers like this:
+#"localhost:11000" = {"mount_path" = "/users/[0-9]", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces 0-9"}
+#"localhost:11010" = {"mount_path" = "/users/[a-f]", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces a-f"}
 
-# mount a storage provider without a path wrapper for direct access to users.
-"/users" = {"address" = "localhost:11000"}
-"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:11000"}
+## the virtual /Shares folder of every user is routed like this:
+## whenever the path matches the pattern /users/{{.CurrentUser.Id.OpaqueId}}/Shares we forward requests to the sharesstorageprovider
+"localhost:14000" = {"mount_path" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares", "space_type" = "share", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}", "description" = "shares"}
 
-# the /virtual namespace is only accessible via the frontend-global service
-"/virtual/[a-k]" = {"address" = "localhost:11100"}
-"virtual-a-k" = {"address" = "localhost:11100"}
-"/virtual/[l-z]" = {"address" = "localhost:11110"}
-"virtual-l-z" = {"address" = "localhost:11110"}
+## An alternative would be used to mount shares outside of the users home:
+#"localhost:14000" = {"mount_path" = "/shares", "space_type" = "share", "path_template" = "/shares/{{.Space.Name}}", "description" = "shares"}
 
-# another mount point might be "/projects/"
-
-"/public" = {"address" = "localhost:13000"}
-"e1a73ede-549b-4226-abdf-40e69ca8230d" = {"address" = "localhost:13000"}
+## While public shares are mounted at /public logged in end will should never see that path because it is only created by the spaces registry when
+## a public link is accessed.
+"localhost:13000" = {"mount_path" = "/public",  "space_type" = "public", "path_template" = "/public", "description" = "public links"}
 
 [http]
 address = "0.0.0.0:19001"

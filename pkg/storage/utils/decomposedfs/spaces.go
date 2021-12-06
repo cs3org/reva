@@ -25,7 +25,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -34,11 +33,11 @@ import (
 	ocsconv "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
@@ -57,6 +56,17 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 
 	// "everything is a resource" this is the unique ID for the Space resource.
 	spaceID := uuid.New().String()
+	// allow sending a space id
+	if req.Opaque != nil && req.Opaque.Map != nil {
+		if e, ok := req.Opaque.Map["spaceid"]; ok && e.Decoder == "plain" {
+			spaceID = string(e.Value)
+		}
+	}
+	// TODO enforce a uuid?
+	// TODO clarify if we want to enforce a single personal storage space or if we want to allow sending the spaceid
+	if req.Type == "personal" {
+		spaceID = req.Owner.Id.OpaqueId
+	}
 
 	n, err := r.Child(ctx, spaceID)
 	if err != nil {
@@ -64,8 +74,12 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	}
 
 	if n.Exists {
-		return nil, fmt.Errorf("decomposedfs: spaces: invalid duplicated node with id `%s`", n.ID)
+		return nil, errtypes.AlreadyExists("decomposedfs: spaces: space already exists")
 	}
+
+	// spaceid and nodeid must be the same
+	// TODO enforce a uuid?
+	n.ID = spaceID
 
 	if err := fs.tp.CreateDir(ctx, n); err != nil {
 		return nil, err
@@ -117,26 +131,20 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 			Id: &provider.StorageSpaceId{
 				OpaqueId: spaceID,
 			},
-			// TODO we have to omit Root information because the storage driver does not know its mount point.
-			// Root: &provider.ResourceId{
-			//	StorageId: "",
-			//	OpaqueId:  "",
-			// },
+			Root: &provider.ResourceId{
+				StorageId: spaceID,
+				OpaqueId:  spaceID,
+			},
 			Name:      req.GetName(),
 			Quota:     req.GetQuota(),
 			SpaceType: req.GetType(),
 		},
 	}
 
-	nPath, err := fs.lu.Path(ctx, n)
-	if err != nil {
-		return nil, errors.Wrap(err, "decomposedfs: spaces: could not create space. invalid node path")
-	}
-
 	ctx = context.WithValue(ctx, SpaceGrant, struct{}{})
 
 	if err := fs.AddGrant(ctx, &provider.Reference{
-		Path: nPath,
+		ResourceId: resp.StorageSpace.Root,
 	}, &provider.Grant{
 		Grantee: &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
@@ -170,6 +178,8 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	var (
 		spaceType = spaceTypeAny
 		spaceID   = spaceIDAny
+		nodeID    = spaceIDAny
+		err       error
 	)
 
 	for i := range filter {
@@ -177,28 +187,36 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			spaceType = filter[i].GetSpaceType()
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			parts := strings.SplitN(filter[i].GetId().OpaqueId, "!", 2)
-			if len(parts) == 2 {
-				spaceID = parts[1]
-			}
+			spaceID, nodeID = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
 		}
 	}
 
+	spaces := []*provider.StorageSpace{}
 	// build the glob path, eg.
+	// /path/to/root/spaces/{spaceType}/{spaceId}
 	// /path/to/root/spaces/personal/nodeid
 	// /path/to/root/spaces/shared/nodeid
-	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, spaceID))
+	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
 	if err != nil {
 		return nil, err
 	}
-
-	spaces := make([]*provider.StorageSpace, 0, len(matches))
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Msg("expected user in context")
 		return spaces, nil
 	}
+
+	// FIXME if the space does not exist try a node as the space root.
+
+	// But then the whole /spaces/{spaceType}/{spaceid} becomes obsolete
+	// we can alway just look up by nodeid
+	// -> no. The /spaces folder is used for efficient lookup by type, otherwise we would have
+	//    to iterate over all nodes and read the type from extended attributes
+	// -> but for lookup by id we can use the node directly.
+	// But what about sharding nodes by space?
+	// an efficient lookup would be possible if we received a spaceid&opaqueid in the request
+	// the personal spaces must also use the nodeid and not the name
 
 	for i := range matches {
 		// always read link in case storage space id != node id
@@ -214,6 +232,11 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 			spaceType := filepath.Base(filepath.Dir(matches[i]))
 
+			// if spaceType == "share" {
+			// do not list shares at all? the sharesstorageprovider is responsible for it
+			//	continue
+			// }
+
 			owner, err := n.Owner()
 			if err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not read owner, skipping")
@@ -228,10 +251,32 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			// TODO apply more filters
 			space, err := fs.storageSpaceFromNode(ctx, n, matches[i], spaceType, permissions)
 			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
+				if _, ok := err.(errtypes.IsPermissionDenied); !ok {
+					appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
+				}
 				continue
 			}
 			spaces = append(spaces, space)
+		}
+	}
+	if len(matches) == 0 && nodeID != spaceID {
+		// try node id
+		target := filepath.Join(fs.o.Root, "nodes", nodeID)
+		n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
+		if err != nil {
+			return nil, err
+		}
+		// TODO do we have a better space type than "node" when looking up a space for a node?
+		space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), "node", permissions)
+		if err != nil {
+			return nil, err
+		}
+		if space.Id.OpaqueId == spaceID {
+			spaces = append(spaces, space)
+		} else {
+			appctx.GetLogger(ctx).Debug().Err(err).
+				Str("spaceid", spaceID).Str("nodeid", nodeID).
+				Interface("space", space).Msg("mismatching spaceid, skipping")
 		}
 	}
 
@@ -243,10 +288,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	space := req.StorageSpace
 
-	_, spaceID, err := utils.SplitStorageSpaceID(space.Id.OpaqueId)
-	if err != nil {
-		return nil, err
-	}
+	_, spaceID := utils.SplitStorageSpaceID(space.Id.OpaqueId)
 
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
 	if err != nil {
@@ -285,6 +327,41 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}, nil
 }
 
+// DeleteStorageSpace deletes a storage space
+func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	spaceID := req.Id.OpaqueId
+
+	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
+	if err != nil {
+		return err
+	}
+
+	if len(matches) != 1 {
+		return fmt.Errorf("update space failed: found %d matching spaces", len(matches))
+	}
+
+	target, err := os.Readlink(matches[0])
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[0]).Msg("could not read link, skipping")
+	}
+
+	node, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
+	if err != nil {
+		return err
+	}
+
+	err = fs.tp.Delete(ctx, node)
+	if err != nil {
+		return err
+	}
+
+	err = os.RemoveAll(matches[0])
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // createHiddenSpaceFolder bootstraps a storage space root with a hidden ".space" folder used to store space related
 // metadata such as a description or an image.
 // Internally createHiddenSpaceFolder leverages the use of node.Child() to create a new node under the space root.
@@ -298,61 +375,73 @@ func (fs *Decomposedfs) createHiddenSpaceFolder(ctx context.Context, r *node.Nod
 	return fs.tp.CreateDir(ctx, hiddenSpace)
 }
 
-func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeID string) error {
+func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, spaceID string) error {
 	// create space type dir
 	if err := os.MkdirAll(filepath.Join(fs.o.Root, "spaces", spaceType), 0700); err != nil {
 		return err
 	}
 
 	// we can reuse the node id as the space id
-	err := os.Symlink("../../nodes/"+nodeID, filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
+	err := os.Symlink("../../nodes/"+spaceID, filepath.Join(fs.o.Root, "spaces", spaceType, spaceID))
 	if err != nil {
 		if isAlreadyExists(err) {
-			appctx.GetLogger(ctx).Debug().Err(err).Str("node", nodeID).Str("spacetype", spaceType).Msg("symlink already exists")
+			appctx.GetLogger(ctx).Debug().Err(err).Str("space", spaceID).Str("spacetype", spaceType).Msg("symlink already exists")
 		} else {
 			// TODO how should we handle error cases here?
-			appctx.GetLogger(ctx).Error().Err(err).Str("node", nodeID).Str("spacetype", spaceType).Msg("could not create symlink")
+			appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("spacetype", spaceType).Msg("could not create symlink")
 		}
 	}
 
 	return nil
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Node, nodePath, spaceType string, permissions map[string]struct{}) (*provider.StorageSpace, error) {
-	owner, err := node.Owner()
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, nodePath, spaceType string, permissions map[string]struct{}) (*provider.StorageSpace, error) {
+	owner, err := n.Owner()
 	if err != nil {
 		return nil, err
 	}
 
 	// TODO apply more filters
 
-	sname, err := xattr.Get(node.InternalPath(), xattrs.SpaceNameAttr)
-	if err != nil {
+	sname := ""
+	if bytes, err := xattr.Get(n.InternalPath(), xattrs.SpaceNameAttr); err == nil {
+		sname = string(bytes)
+	}
+
+	if err := n.FindStorageSpaceRoot(); err != nil {
 		return nil, err
 	}
+
 	space := &provider.StorageSpace{
-		// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
-		//Id: &provider.StorageSpaceId{OpaqueId: "1284d238-aa92-42ce-bdc4-0b0000009157!" + n.ID},
+		Id: &provider.StorageSpaceId{OpaqueId: n.SpaceRoot.ID},
 		Root: &provider.ResourceId{
-			// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
-			//StorageId: "1284d238-aa92-42ce-bdc4-0b0000009157",
-			OpaqueId: node.ID,
+			StorageId: n.SpaceRoot.ID,
+			OpaqueId:  n.ID,
 		},
-		Name:      string(sname),
+		Name:      sname,
 		SpaceType: spaceType,
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
 
-	user := ctxpkg.ContextMustGetUser(ctx)
-
 	// filter out spaces user cannot access (currently based on stat permission)
+	// p, err := n.ReadUserPermissions(ctx, user)
+	// if err != nil {
+	// return nil, err
+	// }
+
+	// if !(canListAllSpaces || p.Stat) {
+	// return nil,
+	// }
+
+	user := ctxpkg.ContextMustGetUser(ctx)
 	_, canListAllSpaces := permissions["list-all-spaces"]
-	p, err := node.ReadUserPermissions(ctx, user)
-	if err != nil {
-		return nil, err
-	}
-	if !(canListAllSpaces || p.Stat) {
-		return nil, errors.New("user is not allowed to Stat the space")
+	if !canListAllSpaces {
+		ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
+			return p.Stat
+		})
+		if err != nil || !ok {
+			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
+		}
 	}
 
 	space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
@@ -361,7 +450,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 
 	// we set the space mtime to the root item mtime
 	// override the stat mtime with a tmtime if it is present
-	if tmt, err := node.GetTMTime(); err == nil {
+	if tmt, err := n.GetTMTime(); err == nil {
 		un := tmt.UnixNano()
 		space.Mtime = &types.Timestamp{
 			Seconds: uint64(un / 1000000000),

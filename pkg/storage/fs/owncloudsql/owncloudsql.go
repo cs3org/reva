@@ -491,7 +491,7 @@ func (fs *owncloudsqlfs) getUserStorage(user string) (int, error) {
 
 // CreateStorageSpace creates a storage space
 func (fs *owncloudsqlfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+	return nil, errtypes.NotSupported("unimplemented: CreateStorageSpace")
 }
 
 func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filecache.File, ip string, mdKeys []string) (*provider.ResourceInfo, error) {
@@ -1579,7 +1579,7 @@ func (fs *owncloudsqlfs) RestoreRevision(ctx context.Context, ref *provider.Refe
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
@@ -1639,7 +1639,7 @@ func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, basePath, key, re
 	return nil
 }
 
-func (fs *owncloudsqlfs) EmptyRecycle(ctx context.Context) error {
+func (fs *owncloudsqlfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -1711,7 +1711,7 @@ func (fs *owncloudsqlfs) convertToRecycleItem(ctx context.Context, md os.FileInf
 	}
 }
 
-func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -1738,7 +1738,7 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativ
 	return items, nil
 }
 
-func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 
 	base, ttime, err := splitTrashKey(key)
@@ -1933,6 +1933,11 @@ func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provid
 // UpdateStorageSpace updates a storage space
 func (fs *owncloudsqlfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
+}
+
+// DeleteStorageSpace deletes a storage space
+func (fs *owncloudsqlfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	return errtypes.NotSupported("delete storage space")
 }
 
 func readChecksumIntoResourceChecksum(ctx context.Context, checksums, algo string, ri *provider.ResourceInfo) {

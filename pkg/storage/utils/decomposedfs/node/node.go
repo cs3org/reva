@@ -80,7 +80,6 @@ type Node struct {
 // PathLookup defines the interface for the lookup component
 type PathLookup interface {
 	RootNode(ctx context.Context) (node *Node, err error)
-	HomeOrRootNode(ctx context.Context) (node *Node, err error)
 
 	InternalRoot() string
 	InternalPath(ID string) string
@@ -508,7 +507,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	}
 
-	id := &provider.ResourceId{OpaqueId: n.ID}
+	// TODO ensure we always have a space root
+	id := &provider.ResourceId{StorageId: n.SpaceRoot.Name, OpaqueId: n.ID}
 
 	if returnBasename {
 		fn = n.Name
@@ -618,7 +618,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
 		var quotaPath string
 		if n.SpaceRoot == nil {
-			root, err := n.lu.HomeOrRootNode(ctx)
+			root, err := n.lu.RootNode(ctx)
 			if err == nil {
 				quotaPath = root.InternalPath()
 			} else {
@@ -942,6 +942,9 @@ func parseMTime(v string) (t time.Time, err error) {
 // FindStorageSpaceRoot calls n.Parent() and climbs the tree
 // until it finds the space root node and adds it to the node
 func (n *Node) FindStorageSpaceRoot() error {
+	if n.SpaceRoot != nil {
+		return nil
+	}
 	var err error
 	// remember the node we ask for and use parent to climb the tree
 	parent := n

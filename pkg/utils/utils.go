@@ -19,7 +19,6 @@
 package utils
 
 import (
-	"fmt"
 	"math/rand"
 	"net"
 	"net/http"
@@ -302,17 +301,17 @@ func UserTypeToString(accountType userpb.UserType) string {
 	return t
 }
 
-// SplitStorageSpaceID can be used to split `storagespaceid` into `storageid` and `nodeid`
-// Currently they are built using `<storageid>!<nodeid>` in the decomposedfs, but other drivers might return different ids.
-// any place in the code that relies on this function should instead use the storage registry to look up the responsible storage provider.
-// Note: This would in effect change the storage registry into a storage space registry.
-func SplitStorageSpaceID(ssid string) (storageid, nodeid string, err error) {
-	// query that specific storage provider
-	parts := strings.SplitN(ssid, "!", 2)
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("storage space id must be separated by '!'")
+// SplitStorageSpaceID can be used to split `storagespaceid` into `storageid` and `nodeid`.
+// If no specific node is appended with a `!` separator the spaceid is used as nodeid, identifying the root of the space.
+func SplitStorageSpaceID(ssid string) (storageid, nodeid string) {
+	if ssid == "" {
+		return "", ""
 	}
-	return parts[0], parts[1], nil
+	parts := strings.SplitN(ssid, "!", 2)
+	if len(parts) == 1 {
+		return parts[0], parts[0]
+	}
+	return parts[0], parts[1]
 }
 
 // ParseStorageSpaceReference parses a string into a spaces reference.
@@ -320,10 +319,7 @@ func SplitStorageSpaceID(ssid string) (storageid, nodeid string, err error) {
 func ParseStorageSpaceReference(sRef string) (provider.Reference, error) {
 	parts := strings.SplitN(sRef, "/", 2)
 
-	storageid, nodeid, err := SplitStorageSpaceID(parts[0])
-	if err != nil {
-		return provider.Reference{}, err
-	}
+	storageid, nodeid := SplitStorageSpaceID(parts[0])
 
 	var relPath string
 	if len(parts) == 2 {

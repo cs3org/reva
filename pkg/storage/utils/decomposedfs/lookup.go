@@ -21,6 +21,7 @@ package decomposedfs
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -52,11 +53,9 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 		// is this a relative reference?
 		if ref.Path != "" {
 			p := filepath.Clean(ref.Path)
-			if p != "." {
+			if p != "." && p != "/" {
 				// walk the relative path
-				n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error {
-					return nil
-				})
+				n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error { return nil })
 				if err != nil {
 					return nil, err
 				}
@@ -65,47 +64,18 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 		return n, nil
 	}
 
-	if ref.Path != "" {
-		return lu.NodeFromPath(ctx, ref.GetPath(), false)
-	}
-
 	// reference is invalid
-	return nil, fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
-}
-
-// NodeFromPath converts a filename into a Node
-func (lu *Lookup) NodeFromPath(ctx context.Context, fn string, followReferences bool) (*node.Node, error) {
-	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
-
-	root, err := lu.HomeOrRootNode(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	n := root
-	// TODO collect permissions of the current user on every segment
-	fn = filepath.Clean(fn)
-	if fn != "/" && fn != "." {
-		n, err = lu.WalkPath(ctx, n, fn, followReferences, func(ctx context.Context, n *node.Node) error {
-			log.Debug().Interface("node", n).Msg("NodeFromPath() walk")
-			if n.SpaceRoot != nil && n.SpaceRoot != root {
-				root = n.SpaceRoot
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	n.SpaceRoot = root
-	return n, nil
+	return nil, fmt.Errorf("invalid reference %+v. resource_id must be set", ref)
 }
 
 // NodeFromID returns the internal path for the id
 func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
-	if id == nil || id.OpaqueId == "" {
+	if id == nil {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
+	}
+	if id.OpaqueId == "" {
+		// The Resource references the root of a space
+		return lu.NodeFromSpaceID(ctx, id)
 	}
 	n, err = node.ReadNode(ctx, lu, id.OpaqueId)
 	if err != nil {
@@ -115,12 +85,35 @@ func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *n
 	return n, n.FindStorageSpaceRoot()
 }
 
+// NodeFromSpaceID converts a resource id without an opaque id into a Node
+func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
+	d := filepath.Join(lu.Options.Root, "spaces", spaceTypeAny, id.StorageId)
+	matches, err := filepath.Glob(d)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(matches) != 1 {
+		return nil, fmt.Errorf("can't determine node from spaceID: found %d matching spaces. Path: %s", len(matches), d)
+	}
+
+	target, err := os.Readlink(matches[0])
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[0]).Msg("could not read link, skipping")
+	}
+
+	node, err := node.ReadNode(ctx, lu, filepath.Base(target))
+	if err != nil {
+		return nil, err
+	}
+
+	node.SpaceRoot = node
+	return node, nil
+}
+
 // Path returns the path for node
 func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) {
-	var root *node.Node
-	if root, err = lu.HomeOrRootNode(ctx); err != nil {
-		return
-	}
+	root := n.SpaceRoot
 	for n.ID != root.ID {
 		p = filepath.Join(n.Name, p)
 		if n, err = n.Parent(); err != nil {
@@ -141,19 +134,6 @@ func (lu *Lookup) RootNode(ctx context.Context) (*node.Node, error) {
 	n := node.New("root", "", "", 0, "", nil, lu)
 	n.Exists = true
 	return n, nil
-}
-
-// HomeNode returns the home node of a user
-func (lu *Lookup) HomeNode(ctx context.Context) (node *node.Node, err error) {
-	if !lu.Options.EnableHome {
-		return nil, errtypes.NotSupported("Decomposedfs: home supported disabled")
-	}
-
-	if node, err = lu.RootNode(ctx); err != nil {
-		return
-	}
-	node, err = lu.WalkPath(ctx, node, lu.mustGetUserLayout(ctx), false, nil)
-	return
 }
 
 // WalkPath calls n.Child(segment) on every path segment in p starting at the node r.
@@ -195,15 +175,6 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 		}
 	}
 	return r, nil
-}
-
-// HomeOrRootNode returns the users home node when home support is enabled.
-// it returns the storages root node otherwise
-func (lu *Lookup) HomeOrRootNode(ctx context.Context) (node *node.Node, err error) {
-	if lu.Options.EnableHome {
-		return lu.HomeNode(ctx)
-	}
-	return lu.RootNode(ctx)
 }
 
 // InternalRoot returns the internal storage root directory

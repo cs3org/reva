@@ -121,7 +121,7 @@ func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, r
 	}
 
 	if len(lSSRes.StorageSpaces) != 1 {
-		return nil, nil, fmt.Errorf("unexpected number of spaces")
+		return nil, nil, fmt.Errorf("unexpected number of spaces %d", len(lSSRes.StorageSpaces))
 	}
 	space := lSSRes.StorageSpaces[0]
 

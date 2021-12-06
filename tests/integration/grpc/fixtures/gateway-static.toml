@@ -1,0 +1,34 @@
+[shared]
+jwt_secret = "changemeplease"
+gatewaysvc = "{{grpc_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.gateway]
+# registries
+storageregistrysvc = "{{grpc_address}}"
+stat_cache_ttl = 1
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "{{users_address}}"
+
+[grpc.services.storageregistry]
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = {"mapping" = "/home-{{substr 0 1 .Id.OpaqueId}}", "aliases" = {"/home-[0-9a-e]" = "{{storage_address}}", "/home-[f-z]" = "{{storage2_address}}"}}
+"/users/[0-9a-e]" = {address = "{{storage_address}}"}
+"/users/[f-z]" = {address = "{{storage2_address}}"}
+
+[http]
+address = "{{grpc_address+1}}"
+
+[http.services.datagateway]
+transfer_shared_secret = "replace-me-with-a-transfer-secret"
