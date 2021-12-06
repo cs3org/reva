@@ -244,62 +244,62 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	// ony send actual PUT request if file has bytes. Otherwise the initiate file upload request creates the file
-	if length != 0 {
+	//if length != 0 { // FIXME bring back 0 byte file upload handling, see https://github.com/owncloud/ocis/issues/2609
 
-		var ep, token string
-		for _, p := range uRes.Protocols {
-			if p.Protocol == "simple" {
-				ep, token = p.UploadEndpoint, p.Token
-			}
-		}
-
-		httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, ep, r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
-
-		httpRes, err := s.client.Do(httpReq)
-		if err != nil {
-			log.Error().Err(err).Msg("error doing PUT request to data service")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer httpRes.Body.Close()
-		if httpRes.StatusCode != http.StatusOK {
-			if httpRes.StatusCode == http.StatusPartialContent {
-				w.WriteHeader(http.StatusPartialContent)
-				return
-			}
-			if httpRes.StatusCode == errtypes.StatusChecksumMismatch {
-				w.WriteHeader(http.StatusBadRequest)
-				b, err := Marshal(exception{
-					code:    SabredavBadRequest,
-					message: "The computed checksum does not match the one received from the client.",
-				})
-				HandleWebdavError(&log, w, b, err)
-				return
-			}
-			log.Error().Err(err).Msg("PUT request to data server failed")
-			w.WriteHeader(httpRes.StatusCode)
-			return
-		}
-
-		ok, err := chunking.IsChunked(ref.Path)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		if ok {
-			chunk, err := chunking.GetChunkBLOBInfo(ref.Path)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			sReq = &provider.StatRequest{Ref: &provider.Reference{Path: chunk.Path}}
+	var ep, token string
+	for _, p := range uRes.Protocols {
+		if p.Protocol == "simple" {
+			ep, token = p.UploadEndpoint, p.Token
 		}
 	}
+
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, ep, r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+
+	httpRes, err := s.client.Do(httpReq)
+	if err != nil {
+		log.Error().Err(err).Msg("error doing PUT request to data service")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer httpRes.Body.Close()
+	if httpRes.StatusCode != http.StatusOK {
+		if httpRes.StatusCode == http.StatusPartialContent {
+			w.WriteHeader(http.StatusPartialContent)
+			return
+		}
+		if httpRes.StatusCode == errtypes.StatusChecksumMismatch {
+			w.WriteHeader(http.StatusBadRequest)
+			b, err := Marshal(exception{
+				code:    SabredavBadRequest,
+				message: "The computed checksum does not match the one received from the client.",
+			})
+			HandleWebdavError(&log, w, b, err)
+			return
+		}
+		log.Error().Err(err).Msg("PUT request to data server failed")
+		w.WriteHeader(httpRes.StatusCode)
+		return
+	}
+
+	ok, err := chunking.IsChunked(ref.Path)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if ok {
+		chunk, err := chunking.GetChunkBLOBInfo(ref.Path)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		sReq = &provider.StatRequest{Ref: &provider.Reference{Path: chunk.Path}}
+	}
+	//}
 
 	// stat again to check the new file's metadata
 	sRes, err = client.Stat(ctx, sReq)
