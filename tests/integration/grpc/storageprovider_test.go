@@ -58,14 +58,14 @@ func createFS(provider string, revads map[string]*Revad) (storage.FS, error) {
 	var f func(map[string]interface{}) (storage.FS, error)
 	switch provider {
 	case "ocis":
-		conf["root"] = revads["storage"].TmpRoot
+		conf["root"] = revads["storage"].StorageRoot
 		f = ocis.New
 	case "nextcloud":
-		conf["root"] = revads["storage"].TmpRoot
+		conf["root"] = revads["storage"].StorageRoot
 		conf["enable_home"] = true
 		f = ocis.New
 	case "owncloud":
-		conf["datadirectory"] = revads["storage"].TmpRoot
+		conf["datadirectory"] = revads["storage"].StorageRoot
 		conf["userprovidersvc"] = revads["users"].GrpcAddress
 		conf["enable_home"] = true
 		f = owncloud.New
@@ -552,14 +552,15 @@ var _ = Describe("storage providers", func() {
 		Describe(provider, func() {
 			BeforeEach(func() {
 				dependencies = deps
+				variables = map[string]string{
+					"enable_home": "true",
+				}
 				if provider == "owncloud" {
 					redisAddress := os.Getenv("REDIS_ADDRESS")
 					if redisAddress == "" {
 						Fail("REDIS_ADDRESS not set")
 					}
-					variables = map[string]string{
-						"redis_address": redisAddress,
-					}
+					variables["redis_address"] = redisAddress
 				}
 			})
 
@@ -572,8 +573,8 @@ var _ = Describe("storage providers", func() {
 						Type:  "personal",
 						Name:  user.Id.OpaqueId,
 					})
-					Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 					Expect(err).ToNot(HaveOccurred())
+					Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 					subdirRes, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: ref(provider, subdirPath)})
 					Expect(err).ToNot(HaveOccurred())

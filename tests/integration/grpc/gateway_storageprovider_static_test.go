@@ -142,10 +142,10 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			// the mapping considers the opaque id: f... -> storage2
-			fi, err := os.Stat(path.Join(revads["storage2"].TmpRoot, "storage", marie.Id.OpaqueId, "files"))
+			fi, err := os.Stat(path.Join(revads["storage2"].StorageRoot, marie.Id.OpaqueId, "files"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(fi.IsDir()).To(BeTrue())
-			_, err = os.Stat(path.Join(revads["storage"].TmpRoot, "storage", marie.Id.OpaqueId, "files"))
+			_, err = os.Stat(path.Join(revads["storage"].StorageRoot, marie.Id.OpaqueId, "files"))
 			Expect(err).To(HaveOccurred())
 
 			ghRes, err := serviceClient.GetHome(marieCtx, &storagep.GetHomeRequest{})
@@ -166,10 +166,10 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			// the mapping considers the opaque id: e... -> storage
-			fi, err = os.Stat(path.Join(revads["storage"].TmpRoot, "storage", einstein.Id.OpaqueId, "files"))
+			fi, err = os.Stat(path.Join(revads["storage"].StorageRoot, einstein.Id.OpaqueId, "files"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(fi.IsDir()).To(BeTrue())
-			_, err = os.Stat(path.Join(revads["storage2"].TmpRoot, "storage", einstein.Id.OpaqueId, "files"))
+			_, err = os.Stat(path.Join(revads["storage2"].StorageRoot, einstein.Id.OpaqueId, "files"))
 			Expect(err).To(HaveOccurred())
 
 			ghRes, err = serviceClient.GetHome(einsteinCtx, &storagep.GetHomeRequest{})

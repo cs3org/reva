@@ -5,7 +5,7 @@ address = "{{grpc_address}}"
 driver = "ocis"
 
 [grpc.services.storageprovider.drivers.ocis]
-root = "{{root}}"
+root = "{{root}}/storage"
 treetime_accounting = true
 treesize_accounting = true
 enable_home = true

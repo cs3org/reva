@@ -51,6 +51,7 @@ type cleanupFunc func(bool) error
 // Revad represents a running revad process
 type Revad struct {
 	TmpRoot     string      // Temporary directory on disk. Will be cleaned up by the Cleanup func.
+	StorageRoot string      // Temporary directory used for the revad storage on disk. Will be cleaned up by the Cleanup func.
 	GrpcAddress string      // Address of the grpc service
 	Cleanup     cleanupFunc // Function to kill the process and cleanup the temp. root. If the given parameter is true the files will be kept to make debugging failures easier.
 }
@@ -146,6 +147,7 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 
 		revad := &Revad{
 			TmpRoot:     tmpRoot,
+			StorageRoot: path.Join(tmpRoot, "storage"),
 			GrpcAddress: ownAddress,
 			Cleanup: func(keepLogs bool) error {
 				err := cmd.Process.Signal(os.Kill)

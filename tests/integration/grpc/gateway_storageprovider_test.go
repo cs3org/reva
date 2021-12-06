@@ -167,7 +167,7 @@ var _ = Describe("gateway", func() {
 		JustBeforeEach(func() {
 			var err error
 			shard1Fs, err = ocis.New(map[string]interface{}{
-				"root":                revads["storage"].TmpRoot,
+				"root":                revads["storage"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
 				"enable_home":         true,
 				"treesize_accounting": true,
@@ -191,7 +191,7 @@ var _ = Describe("gateway", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			shard2Fs, err = ocis.New(map[string]interface{}{
-				"root":                revads["storage2"].TmpRoot,
+				"root":                revads["storage"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
 				"enable_home":         true,
 				"treesize_accounting": true,
@@ -295,9 +295,9 @@ var _ = Describe("gateway", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-				_, err = os.Stat(path.Join(revads["storage"].TmpRoot, "/spaces/project", space.Id.OpaqueId))
+				_, err = os.Stat(path.Join(revads["storage"].StorageRoot, "/spaces/project", space.Id.OpaqueId))
 				Expect(err).To(HaveOccurred())
-				_, err = os.Stat(path.Join(revads["storage2"].TmpRoot, "/spaces/project", space.Id.OpaqueId))
+				_, err = os.Stat(path.Join(revads["storage2"].StorageRoot, "/spaces/project", space.Id.OpaqueId))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -345,7 +345,7 @@ var _ = Describe("gateway", func() {
 		JustBeforeEach(func() {
 			var err error
 			fs, err = ocis.New(map[string]interface{}{
-				"root":                revads["storage"].TmpRoot,
+				"root":                revads["storage"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
 				"enable_home":         true,
 				"treesize_accounting": true,
@@ -367,7 +367,7 @@ var _ = Describe("gateway", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			embeddedFs, err = ocis.New(map[string]interface{}{
-				"root":                revads["storage2"].TmpRoot,
+				"root":                revads["storage2"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
 				"enable_home":         true,
 				"treesize_accounting": true,
