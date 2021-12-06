@@ -628,7 +628,7 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}
 
 		// if the storage id is the same the storage provider decides if the move is allowedy or not
-		if req.Source.ResourceId.StorageId != req.Destination.ResourceId.StorageId {
+		if sourceProviderInfo.Address != destinationProviderInfo.Address {
 			res := &provider.MoveResponse{
 				Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage move not supported, use copy and delete"),
 			}
