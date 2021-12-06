@@ -117,7 +117,7 @@ var _ = Describe("File uploads", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(resp.Status.Code).To(Equal(v1beta11.Code_CODE_OK))
 		spaceID = resp.StorageSpace.Id.OpaqueId
-		ref.ResourceId = &provider.ResourceId{StorageId: spaceID}
+		ref.ResourceId = &provider.ResourceId{StorageId: spaceID, OpaqueId: spaceID}
 	})
 
 	Context("the user's quota is exceeded", func() {
@@ -308,5 +308,36 @@ var _ = Describe("File uploads", func() {
 			})
 		})
 
+		When("the user directly uploads a file with a relative reference", func() {
+			It("succeeds", func() {
+				var (
+					fileContent = []byte("0123456789")
+				)
+
+				uploadRef := &provider.Reference{ResourceId: ref.ResourceId, Path: "./newfile.txt"}
+
+				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("*os.File")).
+					Return(nil).
+					Run(func(args mock.Arguments) {
+						reader := args.Get(1).(io.Reader)
+						data, err := ioutil.ReadAll(reader)
+
+						Expect(err).ToNot(HaveOccurred())
+						Expect(data).To(Equal(fileContent))
+					})
+
+				err := fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)))
+
+				Expect(err).ToNot(HaveOccurred())
+				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
+
+				relativeListRef := &provider.Reference{ResourceId: ref.ResourceId, Path: "."}
+				resources, err := fs.ListFolder(ctx, relativeListRef, []string{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resources)).To(Equal(2)) // .space folder + newfile.txt
+				Expect(resources[0].Path).To(Or(Equal("newfile.txt"), Equal(".space")))
+				Expect(resources[1].Path).To(Or(Equal("newfile.txt"), Equal(".space")))
+			})
+		})
 	})
 })
