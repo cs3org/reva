@@ -529,6 +529,7 @@ def virtualViews():
           "PATH_TO_CORE": "/drone/src/tmp/testrunner",
           "TEST_SERVER_URL": "http://revad-services:20180",
           "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
+          "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/spaces/*/*",
           "STORAGE_DRIVER": "OCIS",
           "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
           "TEST_REVA": "true",
@@ -756,6 +757,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
             "environment": {
               "TEST_SERVER_URL": "http://revad-services:20080",
               "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
+              "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/spaces/*/*",
               "STORAGE_DRIVER": "OCIS",
               "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
               "TEST_WITH_LDAP": "true",
@@ -831,6 +833,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
             "environment": {
               "TEST_SERVER_URL": "http://revad-services:20080",
               "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
+              "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/spaces/*/*",
               "STORAGE_DRIVER": "S3NG",
               "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
               "TEST_WITH_LDAP": "true",
