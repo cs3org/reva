@@ -151,9 +151,9 @@ var _ = Describe("storage providers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-			//ghRes, err := serviceClient.GetHome(ctx, &storagep.GetHomeRequest{})
-			//Expect(err).ToNot(HaveOccurred())
-			//Expect(ghRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			// ghRes, err := serviceClient.GetHome(ctx, &storagep.GetHomeRequest{})
+			// Expect(err).ToNot(HaveOccurred())
+			// Expect(ghRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 		})
 	}
 

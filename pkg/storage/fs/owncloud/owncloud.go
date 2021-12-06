@@ -49,7 +49,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/utils"
 	"github.com/gomodule/redigo/redis"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -80,7 +79,7 @@ const (
 	favoriteKey       string = "http://owncloud.org/ns/favorite"
 
 	spaceTypeAny = "*"
-	spaceIDAny   = "*"
+	// spaceIDAny   = "*"
 )
 
 var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
@@ -2279,9 +2278,9 @@ func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListSt
 
 	var (
 		spaceType = spaceTypeAny
-		spaceID   = spaceIDAny
-		nodeID    = spaceIDAny
-		err       error
+		// spaceID   = spaceIDAny
+		// nodeID    = spaceIDAny
+		err error
 	)
 
 	for i := range filter {
@@ -2289,7 +2288,7 @@ func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListSt
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			spaceType = filter[i].GetSpaceType()
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, nodeID = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
+			// spaceID, nodeID = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
 		}
 	}
 
@@ -2316,9 +2315,11 @@ func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListSt
 		}
 		spaces = append(spaces, space)
 	}
-	if len(matches) == 0 && nodeID != spaceID {
-		// TODO lookup by id
-	}
+
+	// FIXME: The linter doesn't like empty branches
+	// if len(matches) == 0 && nodeID != spaceID {
+	// TODO lookup by id
+	// }
 
 	return spaces, nil
 }
