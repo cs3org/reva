@@ -93,10 +93,10 @@ gen-doc:
 
 check-changelog: release-deps
 	`go env GOPATH`/bin/calens > /dev/null
-	go run tools/check-changelog/main.go
+	go run tools/check-changelog/main.go -branch edge
 
 check-changelog-drone:
-	go run tools/check-changelog/main.go -repo origin -pr "$(PR)"
+	go run tools/check-changelog/main.go -repo origin -branch edge -pr "$(PR)"
 
 # to be run in CI platform
 ci: build-ci test  lint-ci

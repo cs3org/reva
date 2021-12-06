@@ -59,6 +59,7 @@ func skipPR(prID int) bool {
 
 func main() {
 	repo := flag.String("repo", "", "the remote repo against which diff-index is to be derived")
+	branch := flag.String("branch", "master", "the branch against which diff-index is to be derived")
 	prID := flag.Int("pr", 0, "the ID of the PR")
 	flag.Parse()
 
@@ -66,12 +67,12 @@ func main() {
 		return
 	}
 
-	branch := "master"
 	if *repo != "" {
-		branch = *repo + "/master"
+		s := *repo + "/" + *branch
+		branch = &s
 	}
 
-	cmd := exec.Command("git", "diff-index", branch, "--", ".")
+	cmd := exec.Command("git", "diff-index", *branch, "--", ".")
 	out, err := cmd.Output()
 	if err != nil {
 		log.Fatal(err)
@@ -81,7 +82,7 @@ func main() {
 		return
 	}
 
-	cmd = exec.Command("git", "diff-index", branch, "--", "changelog/unreleased")
+	cmd = exec.Command("git", "diff-index", *branch, "--", "changelog/unreleased")
 	out, err = cmd.Output()
 	if err != nil {
 		log.Fatal(err)
@@ -96,5 +97,5 @@ func main() {
 		}
 	}
 
-	log.Fatal(errors.New("No changelog added. Please create a changelog item based on your changes"))
+	log.Fatal(errors.New("no changelog added. Please create a changelog item based on your changes"))
 }
