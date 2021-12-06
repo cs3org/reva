@@ -174,7 +174,8 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) {
 	var ref provider.Reference
 	if p := r.FormValue("path"); p != "" {
-		ref = provider.Reference{Path: path.Join(h.homeNamespace, p)}
+		u := ctxpkg.ContextMustGetUser(r.Context())
+		ref = provider.Reference{Path: path.Join(h.getHomeNamespace(u), p)}
 	} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
 		var err error
 		ref, err = utils.ParseStorageSpaceReference(spaceRef)
