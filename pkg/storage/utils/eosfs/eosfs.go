@@ -1283,7 +1283,7 @@ func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
 		return err
 	}
 
-	return fs.c.Remove(ctx, auth, fn)
+	return fs.c.Remove(ctx, auth, fn, false)
 }
 
 func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
@@ -1292,19 +1292,17 @@ func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
 	}
 
 	if fs.isShareFolderChild(ctx, p) {
-		u, err := getUser(ctx)
-		if err != nil {
-			return errors.Wrap(err, "eosfs: no user in ctx")
-		}
-
 		fn := fs.wrapShadow(ctx, p)
 
-		auth, err := fs.getUserAuth(ctx, u, "")
+		// in order to remove the folder or the file without
+		// moving it to the recycle bin, we should take
+		// the privileges of the root
+		auth, err := fs.getRootAuth(ctx)
 		if err != nil {
 			return err
 		}
 
-		return fs.c.Remove(ctx, auth, fn)
+		return fs.c.Remove(ctx, auth, fn, true)
 	}
 
 	return errors.New("eosfs: shadow delete of share folder that is neither root nor child. path=" + p)
