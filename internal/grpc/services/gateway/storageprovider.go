@@ -314,6 +314,8 @@ func (s *svc) listStorageSpacesOnProvider(ctx context.Context, req *provider.Lis
 }
 
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	RemoveFromCache(s.statCache, nil)
+
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
 	c, _, err := s.find(ctx, &provider.Reference{ResourceId: req.StorageSpace.Root})
@@ -334,6 +336,8 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 }
 
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+	RemoveFromCache(s.statCache, nil)
+
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
 	storageid, opaqeid := utils.SplitStorageSpaceID(req.Id.OpaqueId)
@@ -474,6 +478,8 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
+	RemoveFromCache(s.statCache, nil)
+
 	var c provider.ProviderAPIClient
 	var err error
 	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
@@ -557,6 +563,8 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
+	RemoveFromCache(s.statCache, nil)
+
 	var c provider.ProviderAPIClient
 	var err error
 	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
@@ -575,6 +583,8 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 }
 
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
+	RemoveFromCache(s.statCache, nil)
+
 	// TODO(ishank011): enable deleting references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
@@ -599,6 +609,8 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 }
 
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
+	RemoveFromCache(s.statCache, nil)
+
 	var c provider.ProviderAPIClient
 	var err error
 
@@ -639,6 +651,8 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 }
 
 func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
+	RemoveFromCache(s.statCache, nil)
+
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
@@ -661,6 +675,8 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 }
 
 func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
+	RemoveFromCache(s.statCache, nil)
+
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
@@ -1041,6 +1057,8 @@ func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersio
 }
 
 func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
+	RemoveFromCache(s.statCache, nil)
+
 	var c provider.ProviderAPIClient
 	var err error
 	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
@@ -1149,6 +1167,8 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
+	RemoveFromCache(s.statCache, nil)
+
 	// requestPath := req.Ref.Path
 	providerInfos, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
@@ -1301,6 +1321,8 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
+	RemoveFromCache(s.statCache, nil)
+
 	c, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.PurgeRecycleResponse{
@@ -1390,8 +1412,7 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 		return nil, err
 	}
 
-	// return Cached(c, s.statCache), nil
-	return c, nil
+	return Cached(c, s.statCache), nil
 }
 
 /*

@@ -40,6 +40,13 @@ func userKey(ctx context.Context, ref *provider.Reference) string {
 	return u.Id.OpaqueId + "!" + ref.ResourceId.StorageId + "!" + ref.ResourceId.OpaqueId + "!" + ref.Path
 }
 
+// RemoveFromCache removes a reference from the cache
+func RemoveFromCache(cache *ttlcache.Cache, ref *provider.Reference) {
+	// TODO: implement me!
+	cache.Purge()
+	return
+}
+
 // Cached stores responses from the storageprovider inmemory so it doesn't need to do the same request over and over again
 func Cached(c provider.ProviderAPIClient, statCache *ttlcache.Cache) provider.ProviderAPIClient {
 	return &cachedAPIClient{c: c, statCache: statCache}
