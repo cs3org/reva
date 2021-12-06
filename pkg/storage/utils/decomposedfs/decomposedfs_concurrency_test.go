@@ -42,6 +42,7 @@ var _ = Describe("Decomposed", func() {
 		ctx     context.Context
 		tmpRoot string
 		fs      storage.FS
+		user    *userpb.User
 	)
 
 	BeforeEach(func() {
@@ -68,6 +69,8 @@ var _ = Describe("Decomposed", func() {
 				"physics-lovers",
 			},
 		}
+		user = u
+
 		ctx = ctxpkg.ContextSetUser(context.Background(), u)
 
 		bs := &treemocks.Blobstore{}
@@ -123,12 +126,18 @@ var _ = Describe("Decomposed", func() {
 
 		Describe("CreateDir", func() {
 			It("handle already existing directories", func() {
+				ref := &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						StorageId: user.Id.OpaqueId,
+					},
+					Path: "/fightforit",
+				}
 				for i := 0; i < 10; i++ {
 					go func() {
 						defer GinkgoRecover()
-						err := fs.CreateDir(ctx, &provider.Reference{Path: "/fightforit"})
+						err := fs.CreateDir(ctx, ref)
 						if err != nil {
-							rinfo, err := fs.GetMD(ctx, &provider.Reference{Path: "/fightforit"}, nil)
+							rinfo, err := fs.GetMD(ctx, ref, nil)
 							Expect(err).ToNot(HaveOccurred())
 							Expect(rinfo).ToNot(BeNil())
 						}

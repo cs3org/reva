@@ -49,6 +49,7 @@ import (
 var _ = Describe("File uploads", func() {
 	var (
 		ref     *provider.Reference
+		rootRef *provider.Reference
 		fs      storage.FS
 		user    *userpb.User
 		ctx     context.Context
@@ -63,10 +64,11 @@ var _ = Describe("File uploads", func() {
 	BeforeEach(func() {
 		ref = &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: "not needed here",
+				StorageId: "userid",
 			},
 			Path: "/foo",
 		}
+
 		user = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "idp",
@@ -75,6 +77,14 @@ var _ = Describe("File uploads", func() {
 			},
 			Username: "username",
 		}
+
+		rootRef = &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: "userid",
+			},
+			Path: "/",
+		}
+
 		ctx = ruser.ContextSetUser(context.Background(), user)
 
 		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
@@ -176,11 +186,11 @@ var _ = Describe("File uploads", func() {
 				Expect(uploadIds["simple"]).ToNot(BeEmpty())
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 
-				rootRef := &provider.Reference{Path: "/"}
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(0))
+				Expect(len(resources)).To(Equal(1)) // .space folder
+				Expect(resources[0].Path).To(Equal("/.space"))
 			})
 		})
 
@@ -193,11 +203,11 @@ var _ = Describe("File uploads", func() {
 				Expect(uploadIds["simple"]).ToNot(BeEmpty())
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 
-				rootRef := &provider.Reference{Path: "/"}
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(0))
+				Expect(len(resources)).To(Equal(1)) // .space folder
+				Expect(resources[0].Path).To(Equal("/.space"))
 			})
 		})
 
@@ -231,12 +241,12 @@ var _ = Describe("File uploads", func() {
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
 
-				rootRef := &provider.Reference{Path: "/"}
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(1))
-				Expect(resources[0].Path).To(Equal(ref.Path))
+				Expect(len(resources)).To(Equal(2)) // .space folder & uploaded resource
+				Expect(resources[0].Path).To(Or(Equal(ref.Path), Equal("/.space")))
+				Expect(resources[1].Path).To(Or(Equal(ref.Path), Equal("/.space")))
 			})
 		})
 
@@ -270,12 +280,12 @@ var _ = Describe("File uploads", func() {
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
 
-				rootRef := &provider.Reference{Path: "/"}
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(1))
-				Expect(resources[0].Path).To(Equal(ref.Path))
+				Expect(len(resources)).To(Equal(2)) // .space folder & uploaded file
+				Expect(resources[0].Path).To(Or(Equal(ref.Path), Equal("/.space")))
+				Expect(resources[1].Path).To(Or(Equal(ref.Path), Equal("/.space")))
 			})
 		})
 
@@ -290,11 +300,11 @@ var _ = Describe("File uploads", func() {
 
 				Expect(err).To(HaveOccurred())
 
-				rootRef := &provider.Reference{Path: "/"}
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(0))
+				Expect(len(resources)).To(Equal(1)) // .space folder
+				Expect(resources[0].Path).To(Equal("/.space"))
 			})
 		})
 
