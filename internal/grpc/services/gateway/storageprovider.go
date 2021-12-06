@@ -420,7 +420,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 	// TODO(ishank011): enable downloading references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
-	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileDownloadResponse{
 			Status: status.NewStatusFromErrType(ctx, "error initiating download ref="+req.Ref.String(), err),
@@ -476,7 +476,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
-	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileUploadResponse{
 			Status: status.NewStatusFromErrType(ctx, "initiateFileUpload ref="+req.Ref.String(), err),
@@ -559,7 +559,7 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
-	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateContainerResponse{
 			Status: status.NewStatusFromErrType(ctx, "createContainer ref="+req.Ref.String(), err),
@@ -578,7 +578,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 	// TODO(ishank011): enable deleting references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
-	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.DeleteResponse{
 			Status: status.NewStatusFromErrType(ctx, "delete ref="+req.Ref.String(), err),
@@ -600,13 +600,14 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
 	var c provider.ProviderAPIClient
+	var sourceProviderInfo, destinationProviderInfo *registry.ProviderInfo
 	var err error
 
 	rename := utils.IsAbsolutePathReference(req.Source) &&
 		utils.IsAbsolutePathReference(req.Destination) &&
 		filepath.Dir(req.Source.Path) == filepath.Dir(req.Destination.Path)
 
-	c, req.Source, err = s.findAndUnwrap(ctx, req.Source)
+	c, sourceProviderInfo, req.Source, err = s.findAndUnwrap(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, "Move ref="+req.Source.String(), err),
@@ -619,7 +620,7 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		req.Destination.ResourceId = req.Source.ResourceId
 		req.Destination.Path = utils.MakeRelativePath(filepath.Base(req.Destination.Path))
 	} else {
-		_, req.Destination, err = s.findAndUnwrap(ctx, req.Destination)
+		_, destinationProviderInfo, req.Destination, err = s.findAndUnwrap(ctx, req.Destination)
 		if err != nil {
 			return &provider.MoveResponse{
 				Status: status.NewStatusFromErrType(ctx, "Move ref="+req.Destination.String(), err),
@@ -642,7 +643,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
-	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.SetArbitraryMetadataResponse{
 			Status: status.NewStatusFromErrType(ctx, "SetArbitraryMetadata ref="+req.Ref.String(), err),
@@ -664,7 +665,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
-	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.UnsetArbitraryMetadataResponse{
 			Status: status.NewStatusFromErrType(ctx, "UnsetArbitraryMetadata ref="+req.Ref.String(), err),
@@ -1025,7 +1026,7 @@ func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequ
 func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
-	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListFileVersionsResponse{
 			Status: status.NewStatusFromErrType(ctx, "ListFileVersions ref="+req.Ref.String(), err),
@@ -1043,7 +1044,7 @@ func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersio
 func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
-	c, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreFileVersionResponse{
 			Status: status.NewStatusFromErrType(ctx, "RestoreFileVersion ref="+req.Ref.String(), err),
@@ -1301,7 +1302,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
-	c, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
+	c, _, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.PurgeRecycleResponse{
 			Status: status.NewStatusFromErrType(ctx, "PurgeRecycle ref="+req.Ref.String(), err),
@@ -1320,7 +1321,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 }
 
 func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
-	c, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
+	c, _, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.GetQuotaResponse{
 			Status: status.NewStatusFromErrType(ctx, "GetQuota ref="+req.Ref.String(), err),
@@ -1358,10 +1359,10 @@ func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.Provi
 
 // FIXME findAndUnwrap currently just returns the first provider ... which may not be what is needed.
 // for the ListRecycle call we need an exact match, for Stat and List we need to query all related providers
-func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *provider.Reference, error) {
+func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *registry.ProviderInfo, *provider.Reference, error) {
 	c, p, err := s.find(ctx, ref)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	mountPath := p.ProviderPath
@@ -1380,7 +1381,7 @@ func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provi
 	}
 	relativeReference := unwrap(ref, mountPath, root)
 
-	return c, relativeReference, nil
+	return c, p, relativeReference, nil
 }
 
 func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
