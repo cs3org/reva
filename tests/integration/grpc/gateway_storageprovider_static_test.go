@@ -178,31 +178,24 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 			Expect(ghRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 		})
 
-		Context("with a home directory and a subdir", func() {
-			var (
-				subdirRef = &storagep.Reference{Path: "/home/newdir"}
-			)
-
+		Context("with a home directory", func() {
 			JustBeforeEach(func() {
 				res, err := serviceClient.CreateHome(marieCtx, &storagep.CreateHomeRequest{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-
-				createRes, err := serviceClient.CreateContainer(marieCtx, &storagep.CreateContainerRequest{Ref: subdirRef})
-				Expect(createRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("creates and lists a new directory", func() {
-				statRes, err := serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: subdirRef})
+				newRef := &storagep.Reference{Path: "/home/newdir"}
+				statRes, err := serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: newRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
-				res, err := serviceClient.CreateContainer(marieCtx, &storagep.CreateContainerRequest{Ref: subdirRef})
+				res, err := serviceClient.CreateContainer(marieCtx, &storagep.CreateContainerRequest{Ref: newRef})
 				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				Expect(err).ToNot(HaveOccurred())
 
-				statRes, err = serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: subdirRef})
+				statRes, err = serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: newRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -210,31 +203,54 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				Expect(len(listRes.Infos)).To(Equal(1))
-				Expect(listRes.Infos[0].Path).To(Equal(subdirRef.Path))
+				Expect(listRes.Infos[0].Path).To(Equal(newRef.Path))
 
-				listRes, err = serviceClient.ListContainer(marieCtx, &storagep.ListContainerRequest{Ref: homeRef})
+				listRes, err = serviceClient.ListContainer(marieCtx, &storagep.ListContainerRequest{Ref: newRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			})
 
-			It("moves and deletes a directory", func() {
-				newRef2 := &storagep.Reference{Path: "/home/newdir2"}
+			Context("and a subdirectory", func() {
+				var (
+					subdirRef = &storagep.Reference{Path: "/home/subdir"}
+				)
 
-				moveRes, err := serviceClient.Move(marieCtx, &storagep.MoveRequest{Source: subdirRef, Destination: newRef2})
-				Expect(err).ToNot(HaveOccurred())
-				Expect(moveRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				JustBeforeEach(func() {
+					createRes, err := serviceClient.CreateContainer(marieCtx, &storagep.CreateContainerRequest{Ref: subdirRef})
+					Expect(createRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+					Expect(err).ToNot(HaveOccurred())
+				})
 
-				statRes, err := serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: newRef2})
-				Expect(err).ToNot(HaveOccurred())
-				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				It("stats by path and by ID", func() {
+					statRes, err := serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: subdirRef})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-				deleteRes, err := serviceClient.Delete(marieCtx, &storagep.DeleteRequest{Ref: newRef2})
-				Expect(deleteRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-				Expect(err).ToNot(HaveOccurred())
+					idRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: revads["storage2"].ID, OpaqueId: statRes.Info.Id.OpaqueId}}
+					statRes, err = serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: idRef})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				})
 
-				statRes, err = serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: newRef2})
-				Expect(err).ToNot(HaveOccurred())
-				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+				It("moves and deletes a directory", func() {
+					newRef2 := &storagep.Reference{Path: "/home/newdir2"}
+
+					moveRes, err := serviceClient.Move(marieCtx, &storagep.MoveRequest{Source: subdirRef, Destination: newRef2})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(moveRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+					statRes, err := serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: newRef2})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+					deleteRes, err := serviceClient.Delete(marieCtx, &storagep.DeleteRequest{Ref: newRef2})
+					Expect(deleteRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+					Expect(err).ToNot(HaveOccurred())
+
+					statRes, err = serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: newRef2})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+				})
 			})
 		})
 	})

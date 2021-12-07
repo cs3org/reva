@@ -8,4 +8,5 @@ driver = "owncloud"
 enable_home = {{enable_home}}
 datadirectory = "{{root}}/storage"
 userprovidersvc = "{{users_address}}"
+mount_id = "{{id}}"
 redis = "{{redis_address}}"

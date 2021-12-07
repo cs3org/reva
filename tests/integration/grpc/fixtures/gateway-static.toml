@@ -24,6 +24,8 @@ home_provider = "/home"
 
 [grpc.services.storageregistry.drivers.static.rules]
 "/home" = {"mapping" = "/home-{{substr 0 1 .Id.OpaqueId}}", "aliases" = {"/home-[0-9a-e]" = "{{storage_address}}", "/home-[f-z]" = "{{storage2_address}}"}}
+"{{storage_id}}" = {address = "{{storage_address}}"}
+"{{storage2_id}}" = {address = "{{storage2_address}}"}
 "/users/[0-9a-e]" = {address = "{{storage_address}}"}
 "/users/[f-z]" = {address = "{{storage2_address}}"}
 
