@@ -103,7 +103,7 @@ func (s *svc) sign(_ context.Context, target string) (string, error) {
 }
 
 func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, nil, "") // TODO: extract ref
 
 	u := ctxpkg.ContextMustGetUser(ctx)
 	createReq := &provider.CreateStorageSpaceRequest{
@@ -142,8 +142,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 }
 
 func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
-
+	defer RemoveFromCache(ctx, s.statCache, nil, "") // TODO: extract ref
 	log := appctx.GetLogger(ctx)
 
 	// TODO change the CreateStorageSpaceRequest to contain a space instead of sending individual properties
@@ -318,7 +317,7 @@ func (s *svc) listStorageSpacesOnProvider(ctx context.Context, req *provider.Lis
 }
 
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, req.StorageSpace.Root, "")
 
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
@@ -340,7 +339,7 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 }
 
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, &provider.ResourceId{OpaqueId: req.Id.OpaqueId}, "")
 
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
@@ -482,7 +481,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 
 	var c provider.ProviderAPIClient
 	var err error
@@ -567,7 +566,7 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 
 	var c provider.ProviderAPIClient
 	var err error
@@ -587,7 +586,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 }
 
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 
 	// TODO(ishank011): enable deleting references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
@@ -613,7 +612,8 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 }
 
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, req.Source.ResourceId, req.Source.Path)
+	defer RemoveFromCache(ctx, s.statCache, req.Destination.ResourceId, req.Destination.Path)
 
 	var c provider.ProviderAPIClient
 	var err error
@@ -655,7 +655,7 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 }
 
 func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
@@ -679,7 +679,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 }
 
 func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
@@ -1061,7 +1061,7 @@ func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersio
 }
 
 func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 
 	var c provider.ProviderAPIClient
 	var err error
@@ -1171,7 +1171,10 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
+	if req.RestoreRef != nil {
+		defer RemoveFromCache(ctx, s.statCache, req.RestoreRef.ResourceId, req.RestoreRef.Path)
+	}
 
 	// requestPath := req.Ref.Path
 	providerInfos, err := s.findProviders(ctx, req.Ref)
@@ -1325,7 +1328,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 
 	c, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {

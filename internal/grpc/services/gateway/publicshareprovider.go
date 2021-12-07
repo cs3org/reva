@@ -29,7 +29,7 @@ import (
 )
 
 func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, req.ResourceInfo.Id, req.ResourceInfo.Path) // TODO: nil checK?
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
@@ -48,7 +48,7 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 }
 
 func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShareRequest) (*link.RemovePublicShareResponse, error) {
-	RemoveFromCache(s.statCache, nil)
+	RemoveFromCache(ctx, s.statCache, nil, "") // TODO: extract reference
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("remove public share")
@@ -121,7 +121,7 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 }
 
 func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.UpdatePublicShareResponse, error) {
-	defer RemoveFromCache(s.statCache, nil)
+	defer RemoveFromCache(ctx, s.statCache, nil, "") // TODO: extract reference
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("update public share")

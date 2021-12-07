@@ -28,8 +28,6 @@ import (
 )
 
 func (s *svc) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
-	RemoveFromCache(s.statCache, nil)
-
 	c, err := pool.GetOCMCoreClient(s.c.OCMCoreEndpoint)
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
