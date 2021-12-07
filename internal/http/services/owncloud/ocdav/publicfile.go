@@ -181,9 +181,6 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	// adjust path
-	tokenStatInfo.Path = path.Join("/", tokenStatInfo.Path, path.Base(pathRes.Path))
-
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
 
 	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, nil)

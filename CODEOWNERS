@@ -11,5 +11,7 @@ pkg/storage/fs/owncloudsql            @cs3org/owncloud-team
 pkg/storage/fs/owncloud               @cs3org/owncloud-team
 pkg/storage/fs/ocis                   @cs3org/owncloud-team
 pkg/storage/utils/decomposedfs        @cs3org/owncloud-team
+pkg/storage/utils/eosfs               @labkode @ishank011 @glpatcern
 pkg/user/manager/owncloudsql          @cs3org/owncloud-team
+pkg/eosclient                         @labkode @ishank011 @glpatcern
 pkg/app                               @labkode @ishank011 @wkloucek @glpatcern
