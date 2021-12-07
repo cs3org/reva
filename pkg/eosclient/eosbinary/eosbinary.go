@@ -632,8 +632,12 @@ func (c *Client) CreateDir(ctx context.Context, auth eosclient.Authorization, pa
 }
 
 // Remove removes the resource at the given path
-func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path string) error {
-	args := []string{"rm", "-r", path}
+func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path string, noRecycle bool) error {
+	args := []string{"rm", "-r"}
+	if noRecycle {
+		args = append(args, "--no-recycle-bin") // do not put the file in the recycle bin
+	}
+	args = append(args, path)
 	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }

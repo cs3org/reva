@@ -847,6 +847,24 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 					}
+				case "signature-auth":
+					if isPublic {
+						// We only want to add the attribute to the root of the propfind.
+						if strings.HasSuffix(md.Path, ls.Token) && ls.Signature != nil {
+							expiration := time.Unix(int64(ls.Signature.SignatureExpiration.Seconds), int64(ls.Signature.SignatureExpiration.Nanos))
+							var sb strings.Builder
+							sb.WriteString("<oc:signature>")
+							sb.WriteString(ls.Signature.Signature)
+							sb.WriteString("</oc:signature>")
+							sb.WriteString("<oc:expiration>")
+							sb.WriteString(expiration.Format(time.RFC3339))
+							sb.WriteString("</oc:expiration>")
+
+							propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:signature-auth", sb.String()))
+						} else {
+							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:signature-auth", ""))
+						}
+					}
 				case "privatelink": // phoenix only
 					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
 					fallthrough
