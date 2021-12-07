@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/ReneKroon/ttlcache/v2"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -43,8 +44,7 @@ func userKey(ctx context.Context, ref *provider.Reference) string {
 // RemoveFromCache removes a reference from the cache
 func RemoveFromCache(cache *ttlcache.Cache, ref *provider.Reference) {
 	// TODO: implement me!
-	cache.Purge()
-	return
+	_ = cache.Purge()
 }
 
 // Cached stores responses from the storageprovider inmemory so it doesn't need to do the same request over and over again
@@ -63,8 +63,9 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 	if key != "" {
 		r, err := c.statCache.Get(key)
 		if err == nil {
-			s := r.(provider.StatResponse)
-			return &s, nil
+			s := &provider.StatResponse{}
+			err = json.Unmarshal(r.([]byte), s)
+			return s, err
 		}
 	}
 	resp, err := c.c.Stat(ctx, in, opts...)
@@ -76,15 +77,11 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 	case key == "":
 		return resp, nil
 	default:
-		i := provider.ResourceInfo{}
-		if resp.Info != nil {
-			i = *resp.Info
+		b, err := json.Marshal(resp)
+		if err != nil {
+			return resp, nil
 		}
-		s := provider.StatResponse{
-			Status: resp.Status,
-			Info:   &i,
-		}
-		_ = c.statCache.Set(key, s)
+		_ = c.statCache.Set(key, b)
 		return resp, nil
 	}
 }
