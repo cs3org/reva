@@ -28,6 +28,8 @@ import (
 )
 
 func (s *svc) SetKey(ctx context.Context, req *preferences.SetKeyRequest) (*preferences.SetKeyResponse, error) {
+	defer RemoveFromCache(s.statCache, nil)
+
 	c, err := pool.GetPreferencesClient(s.c.PreferencesEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPreferencesClient")

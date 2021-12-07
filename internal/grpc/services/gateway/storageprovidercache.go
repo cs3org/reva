@@ -63,7 +63,8 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 	if key != "" {
 		r, err := c.statCache.Get(key)
 		if err == nil {
-			return r.(*provider.StatResponse), nil
+			s := r.(provider.StatResponse)
+			return &s, nil
 		}
 	}
 	resp, err := c.c.Stat(ctx, in, opts...)
@@ -75,7 +76,15 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 	case key == "":
 		return resp, nil
 	default:
-		_ = c.statCache.Set(key, resp)
+		i := provider.ResourceInfo{}
+		if resp.Info != nil {
+			i = *resp.Info
+		}
+		s := provider.StatResponse{
+			Status: resp.Status,
+			Info:   &i,
+		}
+		_ = c.statCache.Set(key, s)
 		return resp, nil
 	}
 }
