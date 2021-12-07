@@ -276,6 +276,7 @@ def coverage():
     "trigger":{
 	"ref":[
 		"refs/heads/master",
+		"refs/heads/edge",
 		"refs/pull/**",
 	],
     },
