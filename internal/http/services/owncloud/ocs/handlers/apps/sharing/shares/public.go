@@ -423,6 +423,13 @@ func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shar
 }
 
 func ocPublicPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, error) {
+
+	if permKey == 31 {
+		// apiSharePublicLink1/createPublicLinkShare.feature:109
+		// Scenario Outline: Trying to create a new public link share of a file with edit permissions only grants read access using the public WebDAV API
+		permKey = 1
+	}
+
 	// TODO refactor this ocPublicPermToRole[permKey] check into a conversions.NewPublicSharePermissions?
 	// not all permissions are possible for public shares
 	_, ok := ocPublicPermToRole[permKey]
