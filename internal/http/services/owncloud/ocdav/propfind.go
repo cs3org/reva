@@ -159,7 +159,7 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 	var linkshares map[string]struct{}
 	listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
 	if err == nil {
-		linkshares := make(map[string]struct{})
+		linkshares = make(map[string]struct{}, len(listResp.Share))
 		for i := range listResp.Share {
 			linkshares[listResp.Share[i].ResourceId.OpaqueId] = struct{}{}
 		}
