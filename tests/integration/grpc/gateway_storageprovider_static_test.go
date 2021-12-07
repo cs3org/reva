@@ -98,6 +98,7 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 		Expect(err).ToNot(HaveOccurred())
 		scope, err := scope.AddOwnerScope(nil)
 		Expect(err).ToNot(HaveOccurred())
+
 		t, err := tokenManager.MintToken(marieCtx, marie, scope)
 		Expect(err).ToNot(HaveOccurred())
 		marieCtx = ctxpkg.ContextSetToken(marieCtx, t)
@@ -219,6 +220,16 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 					createRes, err := serviceClient.CreateContainer(marieCtx, &storagep.CreateContainerRequest{Ref: subdirRef})
 					Expect(createRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("gets the path to an ID", func() {
+					statRes, err := serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: subdirRef})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+					getPathRes, err := serviceClient.GetPath(marieCtx, &storagep.GetPathRequest{ResourceId: statRes.Info.Id})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(getPathRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				})
 
 				It("stats by path and by ID", func() {

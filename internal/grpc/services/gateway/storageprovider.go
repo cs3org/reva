@@ -790,6 +790,9 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 					statResp.Info.Path = path.Join(requestPath, statResp.Info.Path)
 				}
 			}
+			if statResp.Info.Id.StorageId == "" {
+				statResp.Info.Id.StorageId = providerInfos[i].ProviderId
+			}
 			currentInfo = statResp.Info
 
 			if info == nil {

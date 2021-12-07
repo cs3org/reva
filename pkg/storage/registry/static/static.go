@@ -43,13 +43,17 @@ func init() {
 
 var bracketRegex = regexp.MustCompile(`\[(.*?)\]`)
 
+type alias struct {
+	Address string `mapstructure:"address"`
+	Id      string `mapstructure:"provider_id"`
+}
 type rule struct {
-	Mapping           string            `mapstructure:"mapping"`
-	Address           string            `mapstructure:"address"`
-	ProviderID        string            `mapstructure:"provider_id"`
-	ProviderPath      string            `mapstructure:"provider_path"`
-	Aliases           map[string]string `mapstructure:"aliases"`
-	AllowedUserAgents []string          `mapstructure:"allowed_user_agents"`
+	Mapping           string           `mapstructure:"mapping"`
+	Address           string           `mapstructure:"address"`
+	ProviderID        string           `mapstructure:"provider_id"`
+	ProviderPath      string           `mapstructure:"provider_path"`
+	Aliases           map[string]alias `mapstructure:"aliases"`
+	AllowedUserAgents []string         `mapstructure:"allowed_user_agents"`
 }
 
 type config struct {
@@ -97,28 +101,29 @@ type reg struct {
 	c *config
 }
 
-func getProviderAddr(ctx context.Context, r rule) string {
+func getProviderAddr(ctx context.Context, r rule) (string, string) {
 	addr := r.Address
 	if addr == "" {
 		if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 			layout := templates.WithUser(u, r.Mapping)
 			for k, v := range r.Aliases {
 				if match, _ := regexp.MatchString("^"+k, layout); match {
-					addr = v
+					return v.Address, v.Id
 				}
 			}
 		}
 	}
-	return addr
+	return addr, r.ProviderID
 }
 
 func (b *reg) GetProvider(ctx context.Context, space *provider.StorageSpace) (*registrypb.ProviderInfo, error) {
 	// Assume that HomeProvider is not a regexp
 	if space.SpaceType == "personal" {
 		if r, ok := b.c.Rules[b.c.HomeProvider]; ok {
-			if addr := getProviderAddr(ctx, r); addr != "" {
+			if addr, id := getProviderAddr(ctx, r); addr != "" {
 				return &registrypb.ProviderInfo{
 					ProviderPath: b.c.HomeProvider,
+					ProviderId:   id,
 					Address:      addr,
 				}, nil
 			}
@@ -150,7 +155,7 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 	// If the reference has a resource id set, use it to route
 	if filters["storage_id"] != "" {
 		for prefix, rule := range b.c.Rules {
-			addr := getProviderAddr(ctx, rule)
+			addr, id := getProviderAddr(ctx, rule)
 			r, err := regexp.Compile("^" + prefix + "$")
 			if err != nil {
 				continue
@@ -158,7 +163,7 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 			// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
 			if m := r.FindString(filters["storage_id"]); m != "" {
 				return []*registrypb.ProviderInfo{{
-					ProviderId:   filters["storage_id"],
+					ProviderId:   id,
 					Address:      addr,
 					ProviderPath: rule.ProviderPath,
 				}}, nil
@@ -177,7 +182,7 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 	if fn != "" {
 		for prefix, rule := range b.c.Rules {
 
-			addr := getProviderAddr(ctx, rule)
+			addr, id := getProviderAddr(ctx, rule)
 			r, err := regexp.Compile("^" + prefix)
 			if err != nil {
 				continue
@@ -188,7 +193,7 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 					continue
 				}
 				match = &registrypb.ProviderInfo{
-					ProviderId:   rule.ProviderID,
+					ProviderId:   id,
 					ProviderPath: m,
 					Address:      addr,
 				}
@@ -198,7 +203,7 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 				combs := generateRegexCombinations(prefix)
 				for _, c := range combs {
 					shardedMatches = append(shardedMatches, &registrypb.ProviderInfo{
-						ProviderId:   rule.ProviderID,
+						ProviderId:   id,
 						ProviderPath: c,
 						Address:      addr,
 					})
