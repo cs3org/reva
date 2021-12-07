@@ -20,6 +20,8 @@ package spaces
 
 import (
 	"net/http"
+	"path"
+	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -76,8 +78,10 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		case "GET", "HEAD":
 			download.GetOrHeadFile(w, r, fs, spaceID)
 		case "PUT":
-			fn := utils.MakeRelativePath(r.URL.Path)
+			// make a clean relative path
+			fn := path.Clean(strings.TrimLeft(r.URL.Path, "/"))
 			defer r.Body.Close()
+
 			// TODO refactor: pass Reference to Upload & GetOrHeadFile
 			// build a storage space reference
 			storageid, opaqeid := utils.SplitStorageSpaceID(spaceID)

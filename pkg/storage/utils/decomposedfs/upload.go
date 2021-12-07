@@ -58,19 +58,7 @@ var defaultFilePerm = os.FileMode(0664)
 func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		// Upload corresponding to this ID was not found.
-		// Assume that this corresponds to the resource path to which the file has to be uploaded.
-
-		// Set the length to 0 and set SizeIsDeferred to true
-		metadata := map[string]string{"sizedeferred": "true"}
-		uploadIDs, err := fs.InitiateUpload(ctx, ref, 0, metadata)
-		if err != nil {
-			return err
-		}
-		upload, err = fs.GetUpload(ctx, uploadIDs["simple"])
-		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: error retrieving upload")
-		}
+		return errors.Wrap(err, "Decomposedfs: error retrieving upload")
 	}
 
 	uploadInfo := upload.(*fileUpload)
