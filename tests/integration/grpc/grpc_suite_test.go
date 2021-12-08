@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	. "github.com/onsi/ginkgo"
@@ -53,6 +54,7 @@ type Revad struct {
 	TmpRoot     string      // Temporary directory on disk. Will be cleaned up by the Cleanup func.
 	StorageRoot string      // Temporary directory used for the revad storage on disk. Will be cleaned up by the Cleanup func.
 	GrpcAddress string      // Address of the grpc service
+	ID          string      // ID of the grpc service
 	Cleanup     cleanupFunc // Function to kill the process and cleanup the temp. root. If the given parameter is true the files will be kept to make debugging failures easier.
 }
 
@@ -83,7 +85,9 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 
 	revads := map[string]*Revad{}
 	addresses := map[string]string{}
+	ids := map[string]string{}
 	for name := range configs {
+		ids[name] = uuid.New().String()
 		addresses[name] = fmt.Sprintf("localhost:%d", port)
 		port++
 		addresses[name+"+1"] = fmt.Sprintf("localhost:%d", port)
@@ -94,6 +98,7 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 
 	for name, config := range configs {
 		ownAddress := addresses[name]
+		ownID := ids[name]
 
 		// Create a temporary root for this revad
 		tmpRoot, err := ioutil.TempDir("", "reva-grpc-integration-tests-"+name+"-*-root")
@@ -107,6 +112,7 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		}
 		cfg := string(rawCfg)
 		cfg = strings.ReplaceAll(cfg, "{{root}}", tmpRoot)
+		cfg = strings.ReplaceAll(cfg, "{{id}}", ownID)
 		cfg = strings.ReplaceAll(cfg, "{{grpc_address}}", ownAddress)
 		cfg = strings.ReplaceAll(cfg, "{{grpc_address+1}}", addresses[name+"+1"])
 		cfg = strings.ReplaceAll(cfg, "{{grpc_address+2}}", addresses[name+"+2"])
@@ -115,6 +121,9 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		}
 		for name, address := range addresses {
 			cfg = strings.ReplaceAll(cfg, "{{"+name+"_address}}", address)
+		}
+		for name, id := range ids {
+			cfg = strings.ReplaceAll(cfg, "{{"+name+"_id}}", id)
 		}
 		err = ioutil.WriteFile(newCfgPath, []byte(cfg), 0600)
 		if err != nil {
@@ -149,6 +158,7 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 			TmpRoot:     tmpRoot,
 			StorageRoot: path.Join(tmpRoot, "storage"),
 			GrpcAddress: ownAddress,
+			ID:          ownID,
 			Cleanup: func(keepLogs bool) error {
 				err := cmd.Process.Signal(os.Kill)
 				if err != nil {
