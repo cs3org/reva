@@ -45,7 +45,7 @@ var bracketRegex = regexp.MustCompile(`\[(.*?)\]`)
 
 type alias struct {
 	Address string `mapstructure:"address"`
-	Id      string `mapstructure:"provider_id"`
+	ID      string `mapstructure:"provider_id"`
 }
 type rule struct {
 	Mapping           string           `mapstructure:"mapping"`
@@ -108,7 +108,7 @@ func getProviderAddr(ctx context.Context, r rule) (string, string) {
 			layout := templates.WithUser(u, r.Mapping)
 			for k, v := range r.Aliases {
 				if match, _ := regexp.MatchString("^"+k, layout); match {
-					return v.Address, v.Id
+					return v.Address, v.ID
 				}
 			}
 		}
