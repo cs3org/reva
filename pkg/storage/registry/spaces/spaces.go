@@ -53,11 +53,10 @@ func init() {
 }
 
 type provider struct {
-	Mapping           string            `mapstructure:"mapping"`
-	MountPath         string            `mapstructure:"mount_path"`
-	Aliases           map[string]string `mapstructure:"aliases"`
-	AllowedUserAgents []string          `mapstructure:"allowed_user_agents"`
-	PathTemplate      string            `mapstructure:"path_template"`
+	Mapping           string   `mapstructure:"mapping"`
+	MountPath         string   `mapstructure:"mount_path"`
+	AllowedUserAgents []string `mapstructure:"allowed_user_agents"`
+	PathTemplate      string   `mapstructure:"path_template"`
 	template          *template.Template
 	// filters
 	SpaceType      string `mapstructure:"space_type"`
@@ -142,9 +141,8 @@ func New(m map[string]interface{}, getClientFunc GetStorageProviderServiceClient
 	}
 	c.init()
 	r := &registry{
-		c:         c,
-		resources: make(map[string][]*registrypb.ProviderInfo),
-		//aliases:           make(map[string]map[string]*spaceAndProvider),
+		c:                               c,
+		resources:                       make(map[string][]*registrypb.ProviderInfo),
 		resourceNameCache:               make(map[string]string),
 		getStorageProviderServiceClient: getClientFunc,
 	}
@@ -172,9 +170,7 @@ type registry struct {
 	// the template to use when determining the home provider
 	homeTemplate *template.Template
 	// a map of resources to providers
-	resources map[string][]*registrypb.ProviderInfo
-	// a map of paths/aliases to spaces and providers
-	// aliases           map[string]map[string]*spaceAndProvider
+	resources         map[string][]*registrypb.ProviderInfo
 	resourceNameCache map[string]string
 
 	getStorageProviderServiceClient GetStorageProviderServiceClientFunc
