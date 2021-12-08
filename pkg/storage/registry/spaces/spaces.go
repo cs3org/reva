@@ -103,22 +103,22 @@ func (c *config) init() {
 		}
 	}
 
-	// cleanup rule paths
-	for _, rule := range c.Providers {
+	// cleanup provider paths
+	for _, provider := range c.Providers {
 		// if the path template is not explicitly set use the mountpath as path template
-		if rule.PathTemplate == "" && strings.HasPrefix(rule.MountPath, "/") {
+		if provider.PathTemplate == "" && strings.HasPrefix(provider.MountPath, "/") {
 			// TODO err if the path is a regex
-			rule.PathTemplate = rule.MountPath
+			provider.PathTemplate = provider.MountPath
 		}
 
 		// cleanup path template
-		rule.PathTemplate = filepath.Clean(rule.PathTemplate)
+		provider.PathTemplate = filepath.Clean(provider.PathTemplate)
 
 		// compile given template tpl
 		var err error
-		rule.template, err = template.New("path_template").Funcs(sprig.TxtFuncMap()).Parse(rule.PathTemplate)
+		provider.template, err = template.New("path_template").Funcs(sprig.TxtFuncMap()).Parse(provider.PathTemplate)
 		if err != nil {
-			logger.New().Fatal().Err(err).Interface("rule", rule).Msg("error parsing template")
+			logger.New().Fatal().Err(err).Interface("provider", provider).Msg("error parsing template")
 		}
 
 		// TODO connect to provider, (List Spaces,) ListContainerStream
