@@ -53,12 +53,11 @@ func init() {
 }
 
 type provider struct {
-	Mapping           string            `mapstructure:"mapping"`
-	MountPath         string            `mapstructure:"mount_path"`
-	Aliases           map[string]string `mapstructure:"aliases"`
-	AllowedUserAgents []string          `mapstructure:"allowed_user_agents"`
-	PathTemplate      string            `mapstructure:"path_template"`
-	template          *template.Template
+	Mapping      string            `mapstructure:"mapping"`
+	MountPath    string            `mapstructure:"mount_path"`
+	Aliases      map[string]string `mapstructure:"aliases"`
+	PathTemplate string            `mapstructure:"path_template"`
+	template     *template.Template
 	// filters
 	SpaceType      string `mapstructure:"space_type"`
 	SpaceOwnerSelf bool   `mapstructure:"space_owner_self"`

@@ -24,7 +24,6 @@ A rule has several properties:
 *   `address` The ip address of the CS3 storage provider
 *   `path_template` TODO -> rename to space\_path or space\_mount\_point
 *   `aliases` unused?
-*   `allowed_user_agents` unused? FIXME this seems to be used to route requests based on user agent
 
 It also carries filters that are sent with a ListStorageSpaces call to a storage provider
 

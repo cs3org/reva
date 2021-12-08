@@ -70,7 +70,6 @@ type config struct {
 	HomeMapping         string                            `mapstructure:"home_mapping"`
 	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
 	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
-	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
 	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
 	ProviderCacheTTL    int                               `mapstructure:"provider_cache_ttl"`
 	StatCacheTTL        int                               `mapstructure:"stat_cache_ttl"`

@@ -44,12 +44,11 @@ func init() {
 var bracketRegex = regexp.MustCompile(`\[(.*?)\]`)
 
 type rule struct {
-	Mapping           string            `mapstructure:"mapping"`
-	Address           string            `mapstructure:"address"`
-	ProviderID        string            `mapstructure:"provider_id"`
-	ProviderPath      string            `mapstructure:"provider_path"`
-	Aliases           map[string]string `mapstructure:"aliases"`
-	AllowedUserAgents []string          `mapstructure:"allowed_user_agents"`
+	Mapping      string            `mapstructure:"mapping"`
+	Address      string            `mapstructure:"address"`
+	ProviderID   string            `mapstructure:"provider_id"`
+	ProviderPath string            `mapstructure:"provider_path"`
+	Aliases      map[string]string `mapstructure:"aliases"`
 }
 
 type config struct {
