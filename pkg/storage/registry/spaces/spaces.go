@@ -275,6 +275,7 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"]), nil
 	case filters["path"] != "":
 		return r.findProvidersForAbsolutePathReference(ctx, filters["path"]), nil
+		// TODO add filter for all spaces the user can manage?
 	}
 	return []*registrypb.ProviderInfo{}, nil
 }
@@ -284,6 +285,7 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
 func (r *registry) findProvidersForResource(ctx context.Context, id string) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
+	providerInfos := []*registrypb.ProviderInfo{}
 	for address, provider := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
 			Address:    address,
@@ -312,36 +314,35 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 			continue
 		}
 
-		switch len(spaces) {
-		case 0:
-			// nothing to do, will continue with next provider
-		case 1:
-			space := spaces[0]
-			for spaceType, sc := range provider.Spaces {
-				if spaceType == space.SpaceType {
-					providerPath, err := sc.SpacePath(currentUser, space)
-					if err != nil {
-						appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
-						continue
-					}
-					spacePaths := map[string]string{
-						space.Id.OpaqueId: providerPath,
-					}
-					p.Opaque, err = spacePathsToOpaque(spacePaths)
-					if err != nil {
-						appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
-						continue
-					}
-					return []*registrypb.ProviderInfo{p}
-				}
+		// build the correct path for every space
+		spacePaths := map[string]string{}
+		for _, space := range spaces {
+			var sc *spaceConfig
+			var ok bool
+			if sc, ok = provider.Spaces[space.SpaceType]; !ok {
+				continue
 			}
-		default:
-			// there should not be multiple spaces with the same id per provider
-			appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("spaces", spaces).Msg("multiple spaces returned, ignoring")
+			spacePaths[space.Id.OpaqueId], err = sc.SpacePath(currentUser, space)
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
+				continue
+			}
 		}
 
+		if len(spacePaths) == 0 {
+			// do not add provider to result
+			continue
+		}
+
+		// add spaces to providerinfo
+		p.Opaque, err = spacePathsToOpaque(spacePaths)
+		if err != nil {
+			appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
+			continue
+		}
+		providerInfos = append(providerInfos, p)
 	}
-	return []*registrypb.ProviderInfo{}
+	return providerInfos
 }
 
 // findProvidersForAbsolutePathReference takes a path and ruturns the storage provider with the longest matching path prefix
