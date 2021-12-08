@@ -147,7 +147,8 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 		}
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), nil) // TODO: extract Ref
+	// TODO: How to find the resourceId?
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), nil)
 	return res, nil
 }
 

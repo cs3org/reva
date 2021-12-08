@@ -59,8 +59,8 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShare
 	if err != nil {
 		return nil, err
 	}
-
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), nil) // TODO: extract reference
+	// TODO: How to find out the resourceId?
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), nil)
 	return res, nil
 }
 
