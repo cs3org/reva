@@ -207,7 +207,7 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 		}, nil
 	}
 
-	RemoveFromCache(ctx, s.statCache, createRes.StorageSpace.Root)
+	RemoveFromCache(ctx, s.statCache, createRes.StorageSpace.Root, "")
 	return createRes, nil
 }
 
@@ -334,7 +334,7 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 			Status: status.NewInternal(ctx, err, "error calling UpdateStorageSpace"),
 		}, nil
 	}
-	RemoveFromCache(ctx, s.statCache, res.StorageSpace.Root)
+	RemoveFromCache(ctx, s.statCache, res.StorageSpace.Root, "")
 	return res, nil
 }
 
@@ -360,7 +360,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 		}, nil
 	}
 
-	RemoveFromCache(ctx, s.statCache, &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
+	RemoveFromCache(ctx, s.statCache, &provider.ResourceId{OpaqueId: req.Id.OpaqueId}, "")
 	return res, nil
 }
 
@@ -536,7 +536,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 	}
 
-	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId)
+	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 	return &gateway.InitiateFileUploadResponse{
 		Opaque:    storageRes.Opaque,
 		Status:    storageRes.Status,
@@ -579,7 +579,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
 	}
 
-	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId)
+	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 	return res, nil
 }
 
@@ -604,7 +604,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		return nil, errors.Wrap(err, "gateway: error calling Delete")
 	}
 
-	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId)
+	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 	return res, nil
 }
 
@@ -645,8 +645,8 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}
 	}
 
-	RemoveFromCache(ctx, s.statCache, req.Source.ResourceId)
-	RemoveFromCache(ctx, s.statCache, req.Destination.ResourceId)
+	RemoveFromCache(ctx, s.statCache, req.Source.ResourceId, req.Source.Path)
+	RemoveFromCache(ctx, s.statCache, req.Destination.ResourceId, req.Destination.Path)
 	return c.Move(ctx, req)
 }
 
@@ -669,7 +669,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 		return nil, errors.Wrap(err, "gateway: error calling SetArbitraryMetadata")
 	}
 
-	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId)
+	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 	return res, nil
 }
 
@@ -692,7 +692,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 		return nil, errors.Wrap(err, "gateway: error calling UnsetArbitraryMetadata")
 	}
 
-	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId)
+	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 	return res, nil
 }
 
@@ -1069,7 +1069,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 		return nil, errors.Wrap(err, "gateway: error calling RestoreFileVersion")
 	}
 
-	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId)
+	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 	return res, nil
 }
 
@@ -1313,9 +1313,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 		return nil, errors.Wrap(err, "gateway: error calling RestoreRecycleItem")
 	}
 
-	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId)
+	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 	if req.RestoreRef != nil {
-		RemoveFromCache(ctx, s.statCache, req.RestoreRef.ResourceId)
+		RemoveFromCache(ctx, s.statCache, req.RestoreRef.ResourceId, req.RestoreRef.Path)
 	}
 
 	return res, nil
@@ -1338,7 +1338,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
 	}
 
-	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId)
+	RemoveFromCache(ctx, s.statCache, req.Ref.ResourceId, req.Ref.Path)
 	return res, nil
 }
 
