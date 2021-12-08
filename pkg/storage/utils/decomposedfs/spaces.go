@@ -176,19 +176,22 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// we would not need /nodes/root if access always happened via spaceid+relative path
 
 	var (
-		spaceType = spaceTypeAny
-		spaceID   = spaceIDAny
-		nodeID    = spaceIDAny
-		err       error
+		spaceID = spaceIDAny
+		nodeID  = spaceIDAny
 	)
+
+	spaceTypes := []string{}
 
 	for i := range filter {
 		switch filter[i].Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			spaceType = filter[i].GetSpaceType()
+			spaceTypes = append(spaceTypes, filter[i].GetSpaceType())
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 			spaceID, nodeID = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
 		}
+	}
+	if len(spaceTypes) == 0 {
+		spaceTypes = []string{"*"}
 	}
 
 	spaces := []*provider.StorageSpace{}
@@ -196,9 +199,14 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// /path/to/root/spaces/{spaceType}/{spaceId}
 	// /path/to/root/spaces/personal/nodeid
 	// /path/to/root/spaces/shared/nodeid
-	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
-	if err != nil {
-		return nil, err
+
+	matches := []string{}
+	for _, spaceType := range spaceTypes {
+		m, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
+		if err != nil {
+			return nil, err
+		}
+		matches = append(matches, m...)
 	}
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
@@ -231,11 +239,6 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			}
 
 			spaceType := filepath.Base(filepath.Dir(matches[i]))
-
-			// if spaceType == "share" {
-			// do not list shares at all? the sharesstorageprovider is responsible for it
-			//	continue
-			// }
 
 			owner, err := n.Owner()
 			if err != nil {
