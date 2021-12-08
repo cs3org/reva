@@ -52,16 +52,31 @@ func init() {
 	pkgregistry.Register("spaces", NewDefault)
 }
 
-type provider struct {
-	Mapping           string   `mapstructure:"mapping"`
-	MountPath         string   `mapstructure:"mount_path"`
-	AllowedUserAgents []string `mapstructure:"allowed_user_agents"`
-	PathTemplate      string   `mapstructure:"path_template"`
-	template          *template.Template
+type spaceConfig struct {
+	// MountPoint determines where a space is mounted. Can be a regex
+	// It is used to determine which storage provider is responsible when only a path is given in the request
+	MountPoint string `mapstructure:"mount_point"`
+	// PathTemplate is used to build the path of an individual space. Layouts can access {{.Space...}} and {{.CurrentUser...}}
+	PathTemplate string `mapstructure:"path_template"`
+	template     *template.Template
 	// filters
-	SpaceType      string `mapstructure:"space_type"`
-	SpaceOwnerSelf bool   `mapstructure:"space_owner_self"`
-	SpaceID        string `mapstructure:"space_id"`
+	OwnerIsCurrentUser bool   `mapstructure:"owner_is_current_user"`
+	ID                 string `mapstructure:"id"`
+	// TODO description?
+}
+
+// SpacePath generates a layout based on space data.
+func (sc *spaceConfig) SpacePath(u *userpb.User, space *providerpb.StorageSpace) (string, error) {
+	b := bytes.Buffer{}
+	if err := sc.template.Execute(&b, templateData{CurrentUser: u, Space: space}); err != nil {
+		return "", err
+	}
+	return b.String(), nil
+}
+
+type provider struct {
+	// Spaces is a map from space type to space config
+	Spaces map[string]*spaceConfig `mapstructure:"spaces"`
 }
 
 type templateData struct {
@@ -72,15 +87,6 @@ type templateData struct {
 // StorageProviderClient is the interface the spaces registry uses to interact with storage providers
 type StorageProviderClient interface {
 	ListStorageSpaces(ctx context.Context, in *providerpb.ListStorageSpacesRequest, opts ...grpc.CallOption) (*providerpb.ListStorageSpacesResponse, error)
-}
-
-// WithSpace generates a layout based on space data.
-func (p *provider) ProviderPath(u *userpb.User, s *providerpb.StorageSpace) (string, error) {
-	b := bytes.Buffer{}
-	if err := p.template.Execute(&b, templateData{CurrentUser: u, Space: s}); err != nil {
-		return "", err
-	}
-	return b.String(), nil
 }
 
 type config struct {
@@ -97,27 +103,35 @@ func (c *config) init() {
 	if len(c.Providers) == 0 {
 		c.Providers = map[string]*provider{
 			sharedconf.GetGatewaySVC(""): {
-				MountPath: "/",
+				Spaces: map[string]*spaceConfig{
+					"personal": {MountPoint: "/users", PathTemplate: "/users/{{.Space.Owner.Id.OpaqueId}}"},
+					"project":  {MountPoint: "/projects", PathTemplate: "/projects/{{.Space.Name}}"},
+					"share":    {MountPoint: "/users/{{.CurrentUser.Id.OpaqueId}}/Shares", PathTemplate: "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}"},
+					"public":   {MountPoint: "/public"},
+				},
 			},
 		}
 	}
 
-	// cleanup provider paths
+	// cleanup space paths
 	for _, provider := range c.Providers {
-		// if the path template is not explicitly set use the mountpath as path template
-		if provider.PathTemplate == "" && strings.HasPrefix(provider.MountPath, "/") {
-			// TODO err if the path is a regex
-			provider.PathTemplate = provider.MountPath
-		}
+		for _, space := range provider.Spaces {
 
-		// cleanup path template
-		provider.PathTemplate = filepath.Clean(provider.PathTemplate)
+			// if the path template is not explicitly set use the mountpath as path template
+			if space.PathTemplate == "" && strings.HasPrefix(space.MountPoint, "/") {
+				// TODO err if the path is a regex
+				space.PathTemplate = space.MountPoint
+			}
 
-		// compile given template tpl
-		var err error
-		provider.template, err = template.New("path_template").Funcs(sprig.TxtFuncMap()).Parse(provider.PathTemplate)
-		if err != nil {
-			logger.New().Fatal().Err(err).Interface("provider", provider).Msg("error parsing template")
+			// cleanup path templates
+			space.PathTemplate = filepath.Join("/", space.PathTemplate)
+
+			// compile given template tpl
+			var err error
+			space.template, err = template.New("path_template").Funcs(sprig.TxtFuncMap()).Parse(space.PathTemplate)
+			if err != nil {
+				logger.New().Fatal().Err(err).Interface("space", space).Msg("error parsing template")
+			}
 		}
 
 		// TODO connect to provider, (List Spaces,) ListContainerStream
@@ -178,33 +192,35 @@ type registry struct {
 
 // GetProvider return the storage provider for the given spaces according to the rule configuration
 func (r *registry) GetProvider(ctx context.Context, space *providerpb.StorageSpace) (*registrypb.ProviderInfo, error) {
-	for address, rule := range r.c.Providers {
-		mountPath := ""
-		var err error
-		if space.SpaceType != "" && rule.SpaceType != space.SpaceType {
-			continue
-		}
-		if space.Owner != nil {
-			mountPath, err = rule.ProviderPath(nil, space)
+	for address, provider := range r.c.Providers {
+		for spaceType, sc := range provider.Spaces {
+			spacePath := ""
+			var err error
+			if space.SpaceType != "" && spaceType != space.SpaceType {
+				continue
+			}
+			if space.Owner != nil {
+				spacePath, err = sc.SpacePath(nil, space)
+				if err != nil {
+					continue
+				}
+				match, err := regexp.MatchString(sc.MountPoint, spacePath)
+				if err != nil {
+					continue
+				}
+				if !match {
+					continue
+				}
+			}
+			pi := &registrypb.ProviderInfo{Address: address}
+			opaque, err := spacePathsToOpaque(map[string]string{"unused": spacePath})
 			if err != nil {
+				appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
 				continue
 			}
-			match, err := regexp.MatchString(rule.MountPath, mountPath)
-			if err != nil {
-				continue
-			}
-			if !match {
-				continue
-			}
+			pi.Opaque = opaque
+			return pi, nil // return the first match we find
 		}
-		pi := &registrypb.ProviderInfo{Address: address}
-		opaque, err := spacePathsToOpaque(map[string]string{"unused": mountPath})
-		if err != nil {
-			appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
-			continue
-		}
-		pi.Opaque = opaque
-		return pi, nil
 	}
 	return nil, errtypes.NotFound("no provider found for space")
 }
@@ -265,52 +281,56 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
 func (r *registry) findProvidersForResource(ctx context.Context, id string) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
-	for address, rule := range r.c.Providers {
+	for address, provider := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
 			Address:    address,
 			ProviderId: id,
 		}
-		filters := []*providerpb.ListStorageSpacesRequest_Filter{}
-		if rule.SpaceType != "" {
-			// add filter to id based request if it is configured
-			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
-					SpaceType: rule.SpaceType,
-				},
-			})
-		}
-		filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+		filters := []*providerpb.ListStorageSpacesRequest_Filter{{
 			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_ID,
 			Term: &providerpb.ListStorageSpacesRequest_Filter_Id{
 				Id: &providerpb.StorageSpaceId{
 					OpaqueId: id,
 				},
 			},
-		})
+		}}
+		for spaceType, _ := range provider.Spaces {
+			// add filter to id based request if it is configured
+			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+					SpaceType: spaceType,
+				},
+			})
+		}
 		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters)
 		if err != nil {
-			appctx.GetLogger(ctx).Debug().Err(err).Interface("rule", rule).Msg("findStorageSpaceOnProvider by id failed, continuing")
+			appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Msg("findStorageSpaceOnProvider by id failed, continuing")
 			continue
 		}
 
 		if len(spaces) > 0 {
-			space := spaces[0] // there shouldn't be multiple
-			providerPath, err := rule.ProviderPath(currentUser, space)
-			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Interface("rule", rule).Interface("space", space).Msg("failed to execute template, continuing")
-				continue
+			space := spaces[0] // there should not be multiple per provider
+
+			for spaceType, sc := range provider.Spaces {
+				if spaceType == space.SpaceType {
+					providerPath, err := sc.SpacePath(currentUser, space)
+					if err != nil {
+						appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
+						continue
+					}
+					spacePaths := map[string]string{
+						space.Id.OpaqueId: providerPath,
+					}
+					p.Opaque, err = spacePathsToOpaque(spacePaths)
+					if err != nil {
+						appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
+						continue
+					}
+					return []*registrypb.ProviderInfo{p}
+				}
 			}
 
-			spacePaths := map[string]string{
-				space.Id.OpaqueId: providerPath,
-			}
-			p.Opaque, err = spacePathsToOpaque(spacePaths)
-			if err != nil {
-				appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
-				continue
-			}
-			return []*registrypb.ProviderInfo{p}
 		}
 	}
 	return []*registrypb.ProviderInfo{}
@@ -325,49 +345,55 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 	var deepestMountSpace *providerpb.StorageSpace
 	var deepestMountPathProvider *registrypb.ProviderInfo
 	providers := map[string]map[string]string{}
-	for address, rule := range r.c.Providers {
+	for address, provider := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
 			Address: address,
 		}
 		var spaces []*providerpb.StorageSpace
 		var err error
 		filters := []*providerpb.ListStorageSpacesRequest_Filter{}
-		if rule.SpaceOwnerSelf {
-			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_OWNER,
-				Term: &providerpb.ListStorageSpacesRequest_Filter_Owner{
-					Owner: currentUser.Id,
-				},
-			})
-		}
-		if rule.SpaceType != "" {
+		for spaceType, sc := range provider.Spaces {
+
 			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
 				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
 				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
-					SpaceType: rule.SpaceType,
+					SpaceType: spaceType,
 				},
 			})
-		}
-		if rule.SpaceID != "" {
-			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_ID,
-				Term: &providerpb.ListStorageSpacesRequest_Filter_Id{
-					Id: &providerpb.StorageSpaceId{OpaqueId: rule.SpaceID},
-				},
-			})
+			if sc.OwnerIsCurrentUser {
+				filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+					Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_OWNER,
+					Term: &providerpb.ListStorageSpacesRequest_Filter_Owner{
+						Owner: currentUser.Id,
+					},
+				})
+			}
+			if sc.ID != "" {
+				filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+					Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_ID,
+					Term: &providerpb.ListStorageSpacesRequest_Filter_Id{
+						Id: &providerpb.StorageSpaceId{OpaqueId: sc.ID},
+					},
+				})
+			}
 		}
 
 		spaces, err = r.findStorageSpaceOnProvider(ctx, p.Address, filters)
 		if err != nil {
-			appctx.GetLogger(ctx).Debug().Err(err).Interface("rule", rule).Msg("findStorageSpaceOnProvider failed, continuing")
+			appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Msg("findStorageSpaceOnProvider failed, continuing")
 			continue
 		}
 
 		spacePaths := map[string]string{}
 		for _, space := range spaces {
-			spacePath, err := rule.ProviderPath(currentUser, space)
+			var sc *spaceConfig
+			var ok bool
+			if sc, ok = provider.Spaces[space.SpaceType]; !ok {
+				continue
+			}
+			spacePath, err := sc.SpacePath(currentUser, space)
 			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Interface("rule", rule).Interface("space", space).Msg("failed to execute template, continuing")
+				appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
 				continue
 			}
 

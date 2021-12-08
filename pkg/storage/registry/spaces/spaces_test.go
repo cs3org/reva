@@ -66,10 +66,11 @@ var _ = Describe("Static", func() {
 			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
 				spaces := []*provider.StorageSpace{
 					{
-						Id:    &provider.StorageSpaceId{OpaqueId: "foospace"},
-						Root:  &provider.ResourceId{StorageId: "foospace", OpaqueId: "foospace"},
-						Name:  "Foo space",
-						Owner: alice,
+						Id:        &provider.StorageSpaceId{OpaqueId: "foospace"},
+						Root:      &provider.ResourceId{StorageId: "foospace", OpaqueId: "foospace"},
+						Name:      "Foo space",
+						SpaceType: "personal",
+						Owner:     alice,
 					},
 				}
 				for _, f := range req.Filters {
@@ -86,10 +87,11 @@ var _ = Describe("Static", func() {
 			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
 				spaces := []*provider.StorageSpace{
 					{
-						Id:    &provider.StorageSpaceId{OpaqueId: "barspace"},
-						Root:  &provider.ResourceId{StorageId: "barspace", OpaqueId: "barspace"},
-						Name:  "Bar space",
-						Owner: alice,
+						Id:        &provider.StorageSpaceId{OpaqueId: "barspace"},
+						Root:      &provider.ResourceId{StorageId: "barspace", OpaqueId: "barspace"},
+						Name:      "Bar space",
+						SpaceType: "personal",
+						Owner:     alice,
 					},
 				}
 				for _, f := range req.Filters {
@@ -105,16 +107,18 @@ var _ = Describe("Static", func() {
 		bazClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
 			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
 				space1 := &provider.StorageSpace{
-					Id:    &provider.StorageSpaceId{OpaqueId: "bazspace1"},
-					Root:  &provider.ResourceId{StorageId: "bazspace1", OpaqueId: "bazspace1"},
-					Name:  "Baz space 1",
-					Owner: alice,
+					Id:        &provider.StorageSpaceId{OpaqueId: "bazspace1"},
+					Root:      &provider.ResourceId{StorageId: "bazspace1", OpaqueId: "bazspace1"},
+					Name:      "Baz space 1",
+					SpaceType: "project",
+					Owner:     alice,
 				}
 				space2 := &provider.StorageSpace{
-					Id:    &provider.StorageSpaceId{OpaqueId: "bazspace2"},
-					Root:  &provider.ResourceId{StorageId: "bazspace2", OpaqueId: "bazspace2"},
-					Name:  "Baz space 2",
-					Owner: alice,
+					Id:        &provider.StorageSpaceId{OpaqueId: "bazspace2"},
+					Root:      &provider.ResourceId{StorageId: "bazspace2", OpaqueId: "bazspace2"},
+					Name:      "Baz space 2",
+					SpaceType: "project",
+					Owner:     alice,
 				}
 				spaces := []*provider.StorageSpace{space1, space2}
 				for _, f := range req.Filters {
@@ -167,8 +171,12 @@ var _ = Describe("Static", func() {
 			rules = map[string]interface{}{
 				"providers": map[string]interface{}{
 					"127.0.0.1:13020": map[string]interface{}{
-						"space_type": "personal",
-						"mount_path": "/thepath"},
+						"spaces": map[string]interface{}{
+							"personal": map[string]interface{}{
+								"mount_point": "/thepath",
+							},
+						},
+					},
 				},
 			}
 
@@ -195,19 +203,28 @@ var _ = Describe("Static", func() {
 				"home_provider": "/users/{{.Id.OpaqueId}}",
 				"providers": map[string]interface{}{
 					"127.0.0.1:13020": map[string]interface{}{
-						"mount_path":    "/users/[a-k]",
-						"path_template": "/users/{{.Space.Owner.Username}}",
-						"space_type":    "personal",
+						"spaces": map[string]interface{}{
+							"personal": map[string]interface{}{
+								"mount_point":   "/users/[a-k]",
+								"path_template": "/users/{{.Space.Owner.Username}}",
+							},
+						},
 					},
 					"127.0.0.1:13021": map[string]interface{}{
-						"mount_path":    "/users/[l-z]",
-						"path_template": "/users/{{.Space.Owner.Username}}",
-						"space_type":    "personal",
+						"spaces": map[string]interface{}{
+							"personal": map[string]interface{}{
+								"mount_point":   "/users/[l-z]",
+								"path_template": "/users/{{.Space.Owner.Username}}",
+							},
+						},
 					},
 					"127.0.0.1:13022": map[string]interface{}{
-						"mount_path":    "/projects",
-						"path_template": "/projects/{{.Space.Name}}",
-						"space_type":    "project",
+						"spaces": map[string]interface{}{
+							"project": map[string]interface{}{
+								"mount_point":   "/projects",
+								"path_template": "/projects/{{.Space.Name}}",
+							},
+						},
 					},
 				},
 			}
@@ -338,19 +355,28 @@ var _ = Describe("Static", func() {
 				"home_provider": "/users/{{.Id.OpaqueId}}",
 				"providers": map[string]interface{}{
 					"127.0.0.1:13020": map[string]interface{}{
-						"mount_path":    "/foo",
-						"path_template": "/foo",
-						"space_type":    "project",
+						"spaces": map[string]interface{}{
+							"personal": map[string]interface{}{
+								"mount_point":   "/foo",
+								"path_template": "/foo",
+							},
+						},
 					},
 					"127.0.0.1:13021": map[string]interface{}{
-						"mount_path":    "/foo/bar",
-						"path_template": "/foo/bar",
-						"space_type":    "project",
+						"spaces": map[string]interface{}{
+							"personal": map[string]interface{}{
+								"mount_point":   "/foo/bar",
+								"path_template": "/foo/bar",
+							},
+						},
 					},
 					"127.0.0.1:13022": map[string]interface{}{
-						"mount_path":    "/foo/bar/baz",
-						"path_template": "/foo/bar/baz",
-						"space_type":    "project",
+						"spaces": map[string]interface{}{
+							"project": map[string]interface{}{
+								"mount_point":   "/foo/bar/baz",
+								"path_template": "/foo/bar/baz",
+							},
+						},
 					},
 				},
 			}
