@@ -103,6 +103,8 @@ func (s *svc) sign(_ context.Context, target string) (string, error) {
 }
 
 func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	RemoveFromCache(ctx, s.statCache, nil)
+
 	u := ctxpkg.ContextMustGetUser(ctx)
 	createReq := &provider.CreateStorageSpaceRequest{
 		Type:  "personal",
