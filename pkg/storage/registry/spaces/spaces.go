@@ -66,9 +66,9 @@ type spaceConfig struct {
 }
 
 // SpacePath generates a layout based on space data.
-func (sc *spaceConfig) SpacePath(u *userpb.User, space *providerpb.StorageSpace) (string, error) {
+func (sc *spaceConfig) SpacePath(currentUser *userpb.User, space *providerpb.StorageSpace) (string, error) {
 	b := bytes.Buffer{}
-	if err := sc.template.Execute(&b, templateData{CurrentUser: u, Space: space}); err != nil {
+	if err := sc.template.Execute(&b, templateData{CurrentUser: currentUser, Space: space}); err != nil {
 		return "", err
 	}
 	return b.String(), nil
@@ -117,9 +117,10 @@ func (c *config) init() {
 	for _, provider := range c.Providers {
 		for _, space := range provider.Spaces {
 
-			// if the path template is not explicitly set use the mountpath as path template
+			// if the path template is not explicitly set use the mount point as path template
+			// do not use the mount point if it is a regex (starting with ^ - TODO add test)
 			if space.PathTemplate == "" && strings.HasPrefix(space.MountPoint, "/") {
-				// TODO err if the path is a regex
+				// TODO err if the mount point is a regex
 				space.PathTemplate = space.MountPoint
 			}
 
@@ -294,7 +295,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 				},
 			},
 		}}
-		for spaceType, _ := range provider.Spaces {
+		for spaceType := range provider.Spaces {
 			// add filter to id based request if it is configured
 			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
 				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
@@ -309,9 +310,9 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 			continue
 		}
 
-		if len(spaces) > 0 {
-			space := spaces[0] // there should not be multiple per provider
-
+		switch len(spaces) {
+		case 1:
+			space := spaces[0]
 			for spaceType, sc := range provider.Spaces {
 				if spaceType == space.SpaceType {
 					providerPath, err := sc.SpacePath(currentUser, space)
@@ -330,8 +331,11 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 					return []*registrypb.ProviderInfo{p}
 				}
 			}
-
+		case 2:
+			// there should not be multiple spaces with the same id per provider
+			appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("spaces", spaces).Msg("multiple spaces returned, ignoring")
 		}
+
 	}
 	return []*registrypb.ProviderInfo{}
 }

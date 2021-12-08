@@ -22,11 +22,14 @@ driver = "spaces"
 [grpc.services.storageregistry.drivers.spaces]
 home_template = "/users/{{.Id.OpaqueId}}"
 
-[grpc.services.storageregistry.drivers.spaces.providers]
-"{{storage_address}}" = {"mount_path" = "/projects/[a-k]", "space_type" = "project", "path_template" = "/projects/{{.Space.Name}}"}
-"{{storage2_address}}" = {"mount_path" = "/projects/[l-z]", "space_type" = "project", "path_template" = "/projects/{{.Space.Name}}"}
+# a sharded /projects folder
+[grpc.services.storageregistry.drivers.spaces.providers."{{storage_address}}".spaces]
+"project" = { "mount_point" = "/projects/[a-k]", "path_template" = "/projects/{{.Space.Name}}" }
+[grpc.services.storageregistry.drivers.spaces.providers."{{storage2_address}}".spaces]
+"project" = { "mount_point" = "/projects/[l-z]", "path_template" = "/projects/{{.Space.Name}}" }
 
-"/users" = {"address" = "{{homestorage_address}}", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}"}
+[grpc.services.storageregistry.drivers.spaces.providers."{{homestorage_address}}".spaces]
+"personal" = { "mount_point" = "/users", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}" }
 
 [http]
 address = "{{grpc_address+1}}"
