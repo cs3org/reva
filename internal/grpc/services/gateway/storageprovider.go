@@ -205,7 +205,7 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 		}, nil
 	}
 
-	RemoveFromCache(ctx, s.statCache, createRes.StorageSpace.Root, "")
+	RemoveFromCache(ctx, s.statCache, nil, "") // TODO: find reference
 	return createRes, nil
 }
 
