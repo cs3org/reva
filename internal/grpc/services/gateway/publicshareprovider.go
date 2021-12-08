@@ -29,6 +29,8 @@ import (
 )
 
 func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
+	defer RemoveFromCache(ctx, s.statCache, req.ResourceInfo.Id, req.ResourceInfo.Path) // TODO: nil checK?
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
@@ -42,11 +44,12 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 		return nil, err
 	}
 
-	RemoveFromCache(ctx, s.statCache, res.Share.ResourceId, "")
 	return res, nil
 }
 
 func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShareRequest) (*link.RemovePublicShareResponse, error) {
+	RemoveFromCache(ctx, s.statCache, nil, "") // TODO: extract reference
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("remove public share")
 
@@ -58,8 +61,6 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShare
 	if err != nil {
 		return nil, err
 	}
-
-	RemoveFromCache(ctx, s.statCache, nil, "") // TODO: extract reference
 	return res, nil
 }
 
@@ -120,6 +121,8 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 }
 
 func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.UpdatePublicShareResponse, error) {
+	defer RemoveFromCache(ctx, s.statCache, nil, "") // TODO: extract reference
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("update public share")
 
@@ -137,6 +140,5 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 	if err != nil {
 		return nil, errors.Wrap(err, "error updating share")
 	}
-	RemoveFromCache(ctx, s.statCache, res.Share.ResourceId, "")
 	return res, nil
 }
