@@ -223,16 +223,6 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		ctx:      ctx,
 	}
 
-	if !info.SizeIsDeferred && info.Size == 0 {
-		log.Debug().Interface("info", info).Msg("ocfs: finishing upload for empty file")
-		// no need to create info file and finish directly
-		err := u.FinishUpload(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return u, nil
-	}
-
 	// writeInfo creates the file by itself if necessary
 	err = u.writeInfo()
 	if err != nil {
