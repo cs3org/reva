@@ -22,6 +22,7 @@ import (
 	"context"
 	"path"
 
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 
@@ -88,6 +89,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		}
 	}
 
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.ResourceInfo.Id)
 	return res, nil
 }
 
@@ -145,6 +147,8 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 		}
 	}
 
+	// TODO: How to find the resourceId?
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), nil)
 	return res, nil
 }
 
@@ -228,6 +232,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		}
 	}
 
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), res.Share.ResourceId)
 	return res, nil
 }
 
@@ -304,6 +309,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		}, nil
 	}
 
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Share.Share.ResourceId)
 	return c.UpdateReceivedShare(ctx, req)
 }
 

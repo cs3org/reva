@@ -392,11 +392,6 @@ File and sync features in a shared scenario
 -   [apiSharePublicLink1/changingPublicLinkShare.feature:51](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/changingPublicLinkShare.feature#L51)
 -   [apiSharePublicLink1/changingPublicLinkShare.feature:90](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/changingPublicLinkShare.feature#L90)
 
-#### [Public link enforce permissions](https://github.com/owncloud/ocis/issues/1269)
-
--   [apiSharePublicLink1/createPublicLinkShare.feature:141](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L141)
--   [apiSharePublicLink1/createPublicLinkShare.feature:142](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L142)
-
 #### [various sharing settings cannot be set](https://github.com/owncloud/ocis/issues/1328)
 
 -   [apiSharePublicLink1/createPublicLinkShare.feature:319](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L319)

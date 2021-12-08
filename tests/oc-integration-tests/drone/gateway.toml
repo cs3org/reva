@@ -55,9 +55,9 @@ driver = "spaces"
 [grpc.services.storageregistry.drivers.spaces]
 home_template = "/users/{{.Id.OpaqueId}}"
 
-[grpc.services.storageregistry.drivers.spaces.providers]
 ## obviously, we do not want to define a rule for every user and space, which is why we can define naming rules:
-"localhost:11000" = {"mount_path" = "/users", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces"}
+[grpc.services.storageregistry.drivers.spaces.providers."localhost:11000".spaces]
+"personal" = { "mount_point" = "/users", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}" }
 
 ## users can be spread over multiple providers like this:
 #"localhost:11000" = {"mount_path" = "/users/[0-9]", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces 0-9"}
@@ -65,14 +65,16 @@ home_template = "/users/{{.Id.OpaqueId}}"
 
 ## the virtual /Shares folder of every user is routed like this:
 ## whenever the path matches the pattern /users/{{.CurrentUser.Id.OpaqueId}}/Shares we forward requests to the sharesstorageprovider
-"localhost:14000" = {"mount_path" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares", "space_type" = "share", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}", "description" = "shares"}
+[grpc.services.storageregistry.drivers.spaces.providers."localhost:14000".spaces]
+"share" = { "mount_point" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}" }
 
 ## An alternative would be used to mount shares outside of the users home:
 #"localhost:14000" = {"mount_path" = "/shares", "space_type" = "share", "path_template" = "/shares/{{.Space.Name}}", "description" = "shares"}
 
 ## While public shares are mounted at /public logged in end will should never see that path because it is only created by the spaces registry when
 ## a public link is accessed.
-"localhost:13000" = {"mount_path" = "/public",  "space_type" = "public", "path_template" = "/public", "description" = "public links"}
+[grpc.services.storageregistry.drivers.spaces.providers."localhost:13000".spaces]
+"public" = { "mount_point" = "/public", "path_template" = "/public" }
 
 [http]
 address = "0.0.0.0:19001"

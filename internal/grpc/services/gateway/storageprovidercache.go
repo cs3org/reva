@@ -20,8 +20,11 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -40,6 +43,20 @@ func userKey(ctx context.Context, ref *provider.Reference) string {
 	return u.Id.OpaqueId + "!" + ref.ResourceId.StorageId + "!" + ref.ResourceId.OpaqueId + "!" + ref.Path
 }
 
+// RemoveFromCache removes a reference from the cache
+func RemoveFromCache(cache *ttlcache.Cache, user *userpb.User, res *provider.ResourceId) {
+	remove := user.Id.OpaqueId
+	if res != nil {
+		remove += "!" + res.StorageId + "!" + res.OpaqueId
+	}
+
+	for _, key := range cache.GetKeys() {
+		if strings.HasPrefix(key, remove) {
+			_ = cache.Remove(key)
+		}
+	}
+}
+
 // Cached stores responses from the storageprovider inmemory so it doesn't need to do the same request over and over again
 func Cached(c provider.ProviderAPIClient, statCache *ttlcache.Cache) provider.ProviderAPIClient {
 	return &cachedAPIClient{c: c, statCache: statCache}
@@ -56,7 +73,9 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 	if key != "" {
 		r, err := c.statCache.Get(key)
 		if err == nil {
-			return r.(*provider.StatResponse), nil
+			s := &provider.StatResponse{}
+			err = json.Unmarshal(r.([]byte), s)
+			return s, err
 		}
 	}
 	resp, err := c.c.Stat(ctx, in, opts...)
@@ -68,7 +87,11 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 	case key == "":
 		return resp, nil
 	default:
-		_ = c.statCache.Set(key, resp)
+		b, err := json.Marshal(resp)
+		if err != nil {
+			return resp, nil
+		}
+		_ = c.statCache.Set(key, b)
 		return resp, nil
 	}
 }

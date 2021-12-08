@@ -422,7 +422,18 @@ func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shar
 	response.WriteOCSSuccess(w, r, nil)
 }
 
+// for public links oc10 api decreases all permissions to read: stay compatible!
+func decreasePermissionsIfNecessary(perm int) int {
+	if perm == int(conversions.PermissionAll) {
+		perm = int(conversions.PermissionRead)
+	}
+	return perm
+}
+
 func ocPublicPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, error) {
+
+	permKey = decreasePermissionsIfNecessary(permKey)
+
 	// TODO refactor this ocPublicPermToRole[permKey] check into a conversions.NewPublicSharePermissions?
 	// not all permissions are possible for public shares
 	_, ok := ocPublicPermToRole[permKey]
