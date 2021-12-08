@@ -40,18 +40,30 @@ var _ = Describe("Static", func() {
 		"rules": map[string]interface{}{
 			"/home": map[string]interface{}{
 				"mapping": "/home-{{substr 0 1 .Id.OpaqueId}}",
-				"aliases": map[string]string{
-					"/home-[a-fg-o]": "home-00-home",
-					"/home-[pqrstu]": "home-01-home",
-					"/home-[v-z]":    "home-02-home",
+				"aliases": map[string]interface{}{
+					"/home-[a-fg-o]": map[string]string{
+						"address": "home-00-home",
+					},
+					"/home-[pqrstu]": map[string]string{
+						"address": "home-01-home",
+					},
+					"/home-[v-z]": map[string]string{
+						"address": "home-02-home",
+					},
 				},
 			},
 			"/MyShares": map[string]interface{}{
 				"mapping": "/MyShares-{{substr 0 1 .Id.OpaqueId}}",
-				"aliases": map[string]string{
-					"/MyShares-[a-fg-o]": "home-00-shares",
-					"/MyShares-[pqrstu]": "home-01-shares",
-					"/MyShares-[v-z]":    "home-02-shares",
+				"aliases": map[string]interface{}{
+					"/MyShares-[a-fg-o]": map[string]string{
+						"address": "home-00-shares",
+					},
+					"/MyShares-[pqrstu]": map[string]string{
+						"address": "home-01-shares",
+					},
+					"/MyShares-[v-z]": map[string]string{
+						"address": "home-02-shares",
+					},
 				},
 			},
 			"/eos/user/[a-fg-o]": map[string]interface{}{
