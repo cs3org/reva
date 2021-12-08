@@ -205,14 +205,12 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 		}, nil
 	}
 
-	// assume home if space is nil
-	u := ctxpkg.ContextMustGetUser(ctx)
-	r := &provider.ResourceId{StorageId: u.Id.OpaqueId}
+	var r *provider.ResourceId
 	if createRes.StorageSpace != nil {
 		r = createRes.StorageSpace.Root
 	}
 
-	RemoveFromCache(s.statCache, u, r)
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), r)
 	return createRes, nil
 }
 
