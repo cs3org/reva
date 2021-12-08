@@ -134,8 +134,8 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
 			res, err := serviceClient.CreateHome(marieCtx, &storagep.CreateHomeRequest{})
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			statRes, err = serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())

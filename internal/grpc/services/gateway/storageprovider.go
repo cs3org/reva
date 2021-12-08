@@ -204,6 +204,13 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 			Status: status.NewInternal(ctx, err, "error calling CreateStorageSpace"),
 		}, nil
 	}
+
+	var r *provider.ResourceId
+	if createRes.StorageSpace != nil {
+		r = createRes.StorageSpace.Root
+	}
+
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), r)
 	return createRes, nil
 }
 
@@ -330,6 +337,7 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 			Status: status.NewInternal(ctx, err, "error calling UpdateStorageSpace"),
 		}, nil
 	}
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
 	return res, nil
 }
 
@@ -354,6 +362,8 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 			Status: status.NewInternal(ctx, err, "error calling DeleteStorageSpace"),
 		}, nil
 	}
+
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
 	return res, nil
 }
 
@@ -529,6 +539,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 	}
 
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return &gateway.InitiateFileUploadResponse{
 		Opaque:    storageRes.Opaque,
 		Status:    storageRes.Status,
@@ -571,6 +582,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
 	}
 
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -595,6 +607,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		return nil, errors.Wrap(err, "gateway: error calling Delete")
 	}
 
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -635,6 +648,8 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}
 	}
 
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
 	return c.Move(ctx, req)
 }
 
@@ -657,6 +672,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 		return nil, errors.Wrap(err, "gateway: error calling SetArbitraryMetadata")
 	}
 
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -679,6 +695,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 		return nil, errors.Wrap(err, "gateway: error calling UnsetArbitraryMetadata")
 	}
 
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1055,6 +1072,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 		return nil, errors.Wrap(err, "gateway: error calling RestoreFileVersion")
 	}
 
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1297,6 +1315,12 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RestoreRecycleItem")
 	}
+
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	if req.RestoreRef != nil {
+		RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
+	}
+
 	return res, nil
 }
 
@@ -1316,6 +1340,8 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
 	}
+
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1390,8 +1416,7 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 		return nil, err
 	}
 
-	// return Cached(c, s.statCache), nil
-	return c, nil
+	return Cached(c, s.statCache), nil
 }
 
 /*
