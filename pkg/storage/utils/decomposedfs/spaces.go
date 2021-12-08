@@ -249,7 +249,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			}
 
 			// TODO apply more filters
-			space, err := fs.storageSpaceFromNode(ctx, n, matches[i], spaceType, permissions)
+			space, err := fs.storageSpaceFromNode(ctx, n, matches[i], permissions)
 			if err != nil {
 				if _, ok := err.(errtypes.IsPermissionDenied); !ok {
 					appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
@@ -266,8 +266,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		if err != nil {
 			return nil, err
 		}
-		// TODO do we have a better space type than "node" when looking up a space for a node?
-		space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), "node", permissions)
+		space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), permissions)
 		if err != nil {
 			return nil, err
 		}
@@ -395,7 +394,7 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, space
 	return nil
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, nodePath, spaceType string, permissions map[string]struct{}) (*provider.StorageSpace, error) {
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, nodePath string, permissions map[string]struct{}) (*provider.StorageSpace, error) {
 	owner, err := n.Owner()
 	if err != nil {
 		return nil, err
@@ -411,6 +410,18 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	if err := n.FindStorageSpaceRoot(); err != nil {
 		return nil, err
 	}
+
+	glob := filepath.Join(fs.o.Root, "spaces", "*", n.SpaceRoot.ID)
+	matches, err := filepath.Glob(glob)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(matches) != 1 {
+		return nil, errtypes.InternalError("expected only one match for " + glob)
+	}
+
+	spaceType := filepath.Base(filepath.Dir(matches[0]))
 
 	space := &provider.StorageSpace{
 		Id: &provider.StorageSpaceId{OpaqueId: n.SpaceRoot.ID},
