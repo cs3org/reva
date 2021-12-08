@@ -21,6 +21,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/ReneKroon/ttlcache/v2"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -44,8 +45,17 @@ func userKey(ctx context.Context, ref *provider.Reference) string {
 
 // RemoveFromCache removes a reference from the cache
 func RemoveFromCache(cache *ttlcache.Cache, user *userpb.User, res *provider.ResourceId) {
-	// TODO: implement me!
-	_ = cache.Purge()
+	// TODO: can `user` be nil?
+	remove := user.Id.OpaqueId
+	if res != nil {
+		remove += "!" + res.StorageId
+	}
+
+	for _, key := range cache.GetKeys() {
+		if strings.HasPrefix(key, remove) {
+			_ = cache.Remove(key)
+		}
+	}
 }
 
 // Cached stores responses from the storageprovider inmemory so it doesn't need to do the same request over and over again
