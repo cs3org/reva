@@ -476,7 +476,7 @@ func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, 
 	if err != nil {
 		return nil, err
 	}
-	if res.Status.Code != rpc.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK && res.Status.Code != rpc.Code_CODE_NOT_FOUND {
 		return nil, status.NewErrorFromCode(res.Status.Code, "spaces registry")
 	}
 	return res.StorageSpaces, nil
