@@ -117,10 +117,12 @@ func (c *config) init() {
 	for _, provider := range c.Providers {
 		for _, space := range provider.Spaces {
 
+			if space.MountPoint == "" {
+				space.MountPoint = "/"
+			}
+
 			// if the path template is not explicitly set use the mount point as path template
-			// do not use the mount point if it is a regex (starting with ^ - TODO add test)
-			if space.PathTemplate == "" && strings.HasPrefix(space.MountPoint, "/") {
-				// TODO err if the mount point is a regex
+			if space.PathTemplate == "" {
 				space.PathTemplate = space.MountPoint
 			}
 
@@ -311,6 +313,8 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 		}
 
 		switch len(spaces) {
+		case 0:
+			// nothing to do, will continue with next provider
 		case 1:
 			space := spaces[0]
 			for spaceType, sc := range provider.Spaces {
@@ -331,7 +335,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 					return []*registrypb.ProviderInfo{p}
 				}
 			}
-		case 2:
+		default:
 			// there should not be multiple spaces with the same id per provider
 			appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("spaces", spaces).Msg("multiple spaces returned, ignoring")
 		}
