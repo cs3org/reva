@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -42,7 +43,7 @@ func userKey(ctx context.Context, ref *provider.Reference) string {
 }
 
 // RemoveFromCache removes a reference from the cache
-func RemoveFromCache(ctx context.Context, cache *ttlcache.Cache, res *provider.ResourceId, path string) {
+func RemoveFromCache(cache *ttlcache.Cache, user *userpb.User, res *provider.ResourceId) {
 	// TODO: implement me!
 	_ = cache.Purge()
 }
