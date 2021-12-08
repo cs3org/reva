@@ -38,11 +38,11 @@ func userKey(ctx context.Context, ref *provider.Reference) string {
 	if !ok {
 		return ""
 	}
-	return u.Id.OpaqueId + "!" + ref.ResourceId.StorageId + "!" + ref.ResourceId.OpaqueId + "!" + ref.Path
+	return u.Id.OpaqueId + "!" + ref.ResourceId.StorageId + "!" + ref.ResourceId.OpaqueId
 }
 
 // RemoveFromCache removes a reference from the cache
-func RemoveFromCache(ctx context.Context, cache *ttlcache.Cache, res *provider.ResourceId, path string) {
+func RemoveFromCache(ctx context.Context, cache *ttlcache.Cache, res *provider.ResourceId) {
 	// TODO: implement me!
 	_ = cache.Purge()
 }

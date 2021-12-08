@@ -42,7 +42,7 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 		return nil, err
 	}
 
-	RemoveFromCache(ctx, s.statCache, res.Share.ResourceId, "")
+	RemoveFromCache(ctx, s.statCache, res.Share.ResourceId)
 	return res, nil
 }
 
@@ -59,7 +59,7 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShare
 		return nil, err
 	}
 
-	RemoveFromCache(ctx, s.statCache, nil, "") // TODO: extract reference
+	RemoveFromCache(ctx, s.statCache, nil) // TODO: extract reference
 	return res, nil
 }
 
@@ -137,6 +137,6 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 	if err != nil {
 		return nil, errors.Wrap(err, "error updating share")
 	}
-	RemoveFromCache(ctx, s.statCache, res.Share.ResourceId, "")
+	RemoveFromCache(ctx, s.statCache, res.Share.ResourceId)
 	return res, nil
 }
