@@ -88,7 +88,6 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 	lookup := &decomposedfs.Lookup{Options: o}
 	permissions := &mocks.PermissionsChecker{}
-	permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(4) // Permissions required for setup below
 	bs := &treemocks.Blobstore{}
 	tree := tree.New(o.Root, true, true, lookup, bs)
 	fs, err := decomposedfs.New(o, lookup, permissions, tree)
@@ -96,14 +95,6 @@ func NewTestEnv() (*TestEnv, error) {
 		return nil, err
 	}
 	ctx := ruser.ContextSetUser(context.Background(), owner)
-
-	home, err := fs.CreateStorageSpace(ctx, &providerv1beta1.CreateStorageSpaceRequest{
-		Owner: owner,
-		Type:  "personal",
-	})
-	if err != nil {
-		return nil, err
-	}
 
 	env := &TestEnv{
 		Root:        tmpRoot,
@@ -114,62 +105,10 @@ func NewTestEnv() (*TestEnv, error) {
 		Blobstore:   bs,
 		Owner:       owner,
 		Ctx:         ctx,
-		SpaceRootRes: &providerv1beta1.ResourceId{
-			StorageId: home.StorageSpace.Id.OpaqueId,
-		},
 	}
 
-	spaceRootRef := &providerv1beta1.Reference{
-		ResourceId: env.SpaceRootRes,
-	}
-
-	// the space name attribute is the stop condition in the lookup
-	h, err := node.ReadNode(ctx, lookup, home.StorageSpace.Id.OpaqueId)
-	if err != nil {
-		return nil, err
-	}
-	if err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username")); err != nil {
-		return nil, err
-	}
-
-	// Create dir1
-	dir1, err := env.CreateTestDir("./dir1", spaceRootRef)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create file1 in dir1
-	_, err = env.CreateTestFile("file1", "file1-blobid", 1234, dir1.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create subdir1 in dir1
-	spaceRootRef.Path = "./dir1/subdir1"
-	err = fs.CreateDir(ctx, spaceRootRef)
-	if err != nil {
-		return nil, err
-	}
-
-	dir2, err := dir1.Child(ctx, "subdir1, spaceRootRef")
-	if err != nil {
-		return nil, err
-	}
-
-	// Create file1 in dir1
-	_, err = env.CreateTestFile("file2", "file2-blobid", 12345, dir2.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create emptydir
-	spaceRootRef.Path = "/emptydir"
-	err = fs.CreateDir(ctx, spaceRootRef)
-	if err != nil {
-		return nil, err
-	}
-
-	return env, nil
+	env.SpaceRootRes, err = env.CreateTestStorageSpace("personal")
+	return env, err
 }
 
 // Cleanup removes all files from disk
@@ -224,4 +163,79 @@ func (t *TestEnv) CreateTestFile(name, blobID string, blobSize int64, parentID s
 	}
 
 	return file, err
+}
+
+// CreateTestStorageSpace will create a storage space with some directories and files
+// It returns the ResourceId of the space
+//
+// /dir1/
+// /dir1/file1
+// /dir1/subdir1
+func (t *TestEnv) CreateTestStorageSpace(typ string) (*providerv1beta1.ResourceId, error) {
+	t.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1) // Permissions required for setup below
+	space, err := t.Fs.CreateStorageSpace(t.Ctx, &providerv1beta1.CreateStorageSpaceRequest{
+		Owner: t.Owner,
+		Type:  typ,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ref := buildRef(space.StorageSpace.Id.OpaqueId, "")
+
+	// the space name attribute is the stop condition in the lookup
+	h, err := node.ReadNode(t.Ctx, t.Lookup, space.StorageSpace.Id.OpaqueId)
+	if err != nil {
+		return nil, err
+	}
+	if err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username")); err != nil {
+		return nil, err
+	}
+
+	// Create dir1
+	t.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1) // Permissions required for setup below
+	dir1, err := t.CreateTestDir("./dir1", ref)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create file1 in dir1
+	_, err = t.CreateTestFile("file1", "file1-blobid", 1234, dir1.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create subdir1 in dir1
+	t.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1) // Permissions required for setup below
+	ref.Path = "./dir1/subdir1"
+	err = t.Fs.CreateDir(t.Ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = dir1.Child(t.Ctx, "subdir1, ref")
+	if err != nil {
+		return nil, err
+	}
+
+	// Create emptydir
+	t.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1) // Permissions required for setup below
+	ref.Path = "/emptydir"
+	err = t.Fs.CreateDir(t.Ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	return ref.ResourceId, nil
+}
+
+// shortcut to get a ref
+func buildRef(id, path string) *providerv1beta1.Reference {
+	return &providerv1beta1.Reference{
+		ResourceId: &providerv1beta1.ResourceId{
+			StorageId: id,
+			OpaqueId:  id,
+		},
+		Path: path,
+	}
 }
