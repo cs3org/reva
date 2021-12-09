@@ -311,7 +311,7 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		m.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		m.getMemberFilter(gid),
-		[]string{m.c.Schema.CN}, // TODO use DN to look up user id
+		[]string{m.c.Schema.GID}, // TODO use DN to look up user id
 		nil,
 	)
 

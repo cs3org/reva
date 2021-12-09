@@ -75,6 +75,8 @@ type attributes struct {
 	UIDNumber string `mapstructure:"uidNumber"`
 	// GIDNumber is a numeric id that maps to a filesystem gid, eg. 654321
 	GIDNumber string `mapstructure:"gidNumber"`
+	// GID is an immutable group id
+	GID string `mapstructure:"gid"`
 }
 
 // Default attributes (Active Directory)
@@ -86,6 +88,7 @@ var ldapDefaults = attributes{
 	DisplayName: "displayName",
 	UIDNumber:   "uidNumber",
 	GIDNumber:   "gidNumber",
+	GID:         "cn",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -392,7 +395,7 @@ func (m *manager) getLDAPUserGroups(ctx context.Context, conn *ldap.Conn, userEn
 		m.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		m.getGroupFilter(username),
-		[]string{m.c.Schema.CN}, // TODO use DN to look up group id
+		[]string{m.c.Schema.GID}, // TODO use DN to look up group id
 		nil,
 	)
 
@@ -407,7 +410,7 @@ func (m *manager) getLDAPUserGroups(ctx context.Context, conn *ldap.Conn, userEn
 		// FIXME this makes the users groups use the cn, not an immutable id
 		// FIXME 1. use the memberof or members attribute of a user to get the groups
 		// FIXME 2. ook up the id for each group
-		groups = append(groups, entry.GetEqualFoldAttributeValue(m.c.Schema.CN))
+		groups = append(groups, entry.GetEqualFoldAttributeValue(m.c.Schema.GID))
 	}
 	return groups, nil
 }
