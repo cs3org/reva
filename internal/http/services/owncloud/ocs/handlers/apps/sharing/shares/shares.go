@@ -21,7 +21,6 @@ package shares
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"mime"
@@ -55,6 +54,7 @@ import (
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/registry"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/pkg/errors"
 )
 
@@ -119,7 +119,7 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 		return
 	}
 	for _, r := range infos {
-		key := wrapResourceID(r.Id)
+		key := resourceid.OwnCloudResourceIDWrap(r.Id)
 		_ = h.resourceInfoCache.SetWithExpire(key, r, h.resourceInfoCacheTTL)
 	}
 }
@@ -856,18 +856,6 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 	return collaborationFilters, linkFilters, nil
 }
 
-func wrapResourceID(r *provider.ResourceId) string {
-	return wrap(r.StorageId, r.OpaqueId)
-}
-
-// The fileID must be encoded
-// - XML safe, because it is going to be used in the propfind result
-// - url safe, because the id might be used in a url, eg. the /dav/meta nodes
-// which is why we base64 encode it
-func wrap(sid string, oid string) string {
-	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
-}
-
 func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) error {
 	log := appctx.GetLogger(ctx)
 	if info != nil {
@@ -880,7 +868,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		// TODO Storage: int
-		s.ItemSource = wrapResourceID(info.Id)
+		s.ItemSource = resourceid.OwnCloudResourceIDWrap(info.Id)
 		s.FileSource = s.ItemSource
 		switch {
 		case h.sharePrefix == "/":
@@ -1041,7 +1029,7 @@ func (h *Handler) getResourceInfoByPath(ctx context.Context, client gateway.Gate
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, wrapResourceID(id), &provider.Reference{ResourceId: id})
+	return h.getResourceInfo(ctx, client, resourceid.OwnCloudResourceIDWrap(id), &provider.Reference{ResourceId: id})
 }
 
 // getResourceInfo retrieves the resource info to a target.

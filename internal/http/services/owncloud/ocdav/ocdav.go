@@ -20,7 +20,6 @@ package ocdav
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -28,11 +27,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -53,8 +50,6 @@ type ctxKey int
 
 const (
 	ctxKeyBaseURI ctxKey = iota
-
-	idDelimiter string = ":"
 )
 
 var (
@@ -269,39 +264,6 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 		}
 	}
 	return templates.WithUser(u, ns)
-}
-
-func wrapResourceID(r *provider.ResourceId) string {
-	return wrap(r.StorageId, r.OpaqueId)
-}
-
-// The fileID must be encoded
-// - XML safe, because it is going to be used in the propfind result
-// - url safe, because the id might be used in a url, eg. the /dav/meta nodes
-// which is why we base64 encode it
-func wrap(sid string, oid string) string {
-	return base64.URLEncoding.EncodeToString([]byte(sid + idDelimiter + oid))
-}
-
-func unwrap(rid string) *provider.ResourceId {
-	decodedID, err := base64.URLEncoding.DecodeString(rid)
-	if err != nil {
-		return nil
-	}
-
-	parts := strings.SplitN(string(decodedID), idDelimiter, 2)
-	if len(parts) != 2 {
-		return nil
-	}
-
-	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
-		return nil
-	}
-
-	return &provider.ResourceId{
-		StorageId: parts[0],
-		OpaqueId:  parts[1],
-	}
 }
 
 func addAccessHeaders(w http.ResponseWriter, r *http.Request) {

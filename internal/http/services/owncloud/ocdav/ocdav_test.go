@@ -25,7 +25,7 @@ import (
 	"testing"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
 /*
@@ -41,67 +41,13 @@ func BenchmarkEncodePath(b *testing.B) {
 	}
 }
 
-func BenchmarkWrap(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_ = wrap("storageid", "opaqueid")
-	}
-}
-
-func TestWrap(t *testing.T) {
-	expected := "c3RvcmFnZWlkOm9wYXF1ZWlk"
-	wrapped := wrap("storageid", "opaqueid")
-
-	if wrapped != expected {
-		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
-	}
-}
-
 func TestWrapResourceID(t *testing.T) {
 	expected := "c3RvcmFnZWlkOm9wYXF1ZWlk"
-	wrapped := wrapResourceID(&providerv1beta1.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"})
+	wrapped := resourceid.OwnCloudResourceIDWrap(&providerv1beta1.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"})
 
 	if wrapped != expected {
 		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
 	}
-}
-
-func BenchmarkUnwrap(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_ = unwrap("c3RvcmFnZWlkOm9wYXF1ZWlk")
-	}
-}
-
-func TestUnwrap(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected *providerv1beta1.ResourceId
-	}{
-		{
-			"c3RvcmFnZWlkOm9wYXF1ZWlk",
-			&providerv1beta1.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"},
-		},
-		{
-			"",
-			nil,
-		},
-		{
-			"c",
-			nil,
-		},
-	}
-
-	for _, tt := range tests {
-		rid := unwrap(tt.input)
-
-		if tt.expected == nil {
-			if rid != nil {
-				t.Errorf("Expected unwrap to return nil, got %v", rid)
-			}
-		} else if !utils.ResourceIDEqual(rid, tt.expected) {
-			t.Error("StorageID or OpaqueID doesn't match")
-		}
-	}
-
 }
 
 func TestExtractDestination(t *testing.T) {
