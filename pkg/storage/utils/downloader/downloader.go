@@ -77,7 +77,10 @@ func (r *revaDownloader) Download(ctx context.Context, path string, dst io.Write
 
 	p, err := getDownloadProtocol(downResp.Protocols, "simple")
 	if err != nil {
-		return err
+		p, err = getDownloadProtocol(downResp.Protocols, "spaces")
+		if err != nil {
+			return err
+		}
 	}
 
 	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.DownloadEndpoint, nil)
