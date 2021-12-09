@@ -182,8 +182,10 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fileRef := &provider.Reference{
-		ResourceId: parentContainer.Info.Id,
-		Path:       utils.MakeRelativePath(filename),
+		Path: path.Join(parentContainer.Info.Path, utils.MakeRelativePath(filename)),
+		// TODO: switch to a relative reference as soon as all storage providers support this
+		// ResourceId: parentContainer.Info.Id,
+		// Path:       utils.MakeRelativePath(filename),
 	}
 
 	statFileReq := &provider.StatRequest{
