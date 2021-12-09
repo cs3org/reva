@@ -37,7 +37,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Static", func() {
+var _ = Describe("Spaces", func() {
 	var (
 		handler   storage.Registry
 		ctxAlice  context.Context
@@ -278,11 +278,11 @@ var _ = Describe("Static", func() {
 		})
 
 		Describe("ListProviders", func() {
-			It("returns an empty list when no filters are set", func() {
+			It("returns all providers when no filter is set", func() {
 				filters := map[string]string{}
 				providers, err := handler.ListProviders(ctxAlice, filters)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(providers)).To(Equal(0))
+				Expect(len(providers)).To(Equal(3))
 			})
 
 			It("filters by path", func() {
