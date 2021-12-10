@@ -204,5 +204,9 @@ func NewErrorFromCode(code rpc.Code, pkgname string) error {
 // internal function to attach the trace to a context
 func getTrace(ctx context.Context) string {
 	span := trace.SpanFromContext(ctx)
+	if span.SpanContext().TraceID() == [16]byte{} {
+		return ""
+	}
+
 	return span.SpanContext().TraceID().String()
 }

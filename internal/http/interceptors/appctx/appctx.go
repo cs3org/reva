@@ -49,9 +49,19 @@ func handler(log zerolog.Logger, h http.Handler) http.Handler {
 			ctx, span = rtrace.Provider.Tracer("http").Start(ctx, "http interceptor")
 		}
 
-		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
+		sub := log.With().Str("traceid", getTraceIDFromSpan(span)).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
 		r = r.WithContext(ctx)
 		h.ServeHTTP(w, r)
 	})
+}
+
+func getTraceIDFromSpan(span trace.Span) string {
+	traceID := ""
+	if span.SpanContext().TraceID() == [16]byte{} {
+		traceID = ""
+	} else {
+		traceID = span.SpanContext().TraceID().String()
+	}
+	return traceID
 }

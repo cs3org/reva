@@ -37,7 +37,7 @@ func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 			ctx, span = rtrace.Provider.Tracer("grpc").Start(ctx, "grpc unary")
 		}
 
-		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
+		sub := log.With().Str("traceid", getTraceIDFromSpan(span)).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
 		res, err := handler(ctx, req)
 		return res, err
@@ -57,7 +57,7 @@ func NewStream(log zerolog.Logger) grpc.StreamServerInterceptor {
 			ctx, span = rtrace.Provider.Tracer("grpc").Start(ctx, "grpc stream")
 		}
 
-		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
+		sub := log.With().Str("traceid", getTraceIDFromSpan(span)).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
 
 		wrapped := newWrappedServerStream(ctx, ss)
@@ -78,4 +78,14 @@ type wrappedServerStream struct {
 
 func (ss *wrappedServerStream) Context() context.Context {
 	return ss.newCtx
+}
+
+func getTraceIDFromSpan(span trace.Span) string {
+	traceID := ""
+	if span.SpanContext().TraceID() == [16]byte{} {
+		traceID = ""
+	} else {
+		traceID = span.SpanContext().TraceID().String()
+	}
+	return traceID
 }
