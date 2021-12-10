@@ -1201,7 +1201,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 		if gstatus.Code(err) == codes.PermissionDenied {
 			return &provider.SetArbitraryMetadataResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
 		}
-		return nil, errors.Wrap(err, "gateway: error calling Stat")
+		return nil, errors.Wrap(err, "gateway: error calling SetArbitraryMetadata")
 	}
 
 	return res, nil
@@ -1221,7 +1221,87 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 		if gstatus.Code(err) == codes.PermissionDenied {
 			return &provider.UnsetArbitraryMetadataResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
 		}
-		return nil, errors.Wrap(err, "gateway: error calling Stat")
+		return nil, errors.Wrap(err, "gateway: error calling UnsetArbitraryMetadata")
+	}
+
+	return res, nil
+}
+
+// SetLock puts a lock on the given reference
+func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.SetLockResponse{
+			Status: status.NewStatusFromErrType(ctx, "SetLock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.SetLock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.SetLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling SetLock")
+	}
+
+	return res, nil
+}
+
+// GetLock returns an existing lock on the given reference
+func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.GetLockResponse{
+			Status: status.NewStatusFromErrType(ctx, "GetLock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.GetLock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.GetLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling GetLock")
+	}
+
+	return res, nil
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.RefreshLockResponse{
+			Status: status.NewStatusFromErrType(ctx, "RefreshLock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.RefreshLock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.RefreshLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling RefreshLock")
+	}
+
+	return res, nil
+}
+
+// Unlock removes an existing lock from the given reference
+func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.UnlockResponse{
+			Status: status.NewStatusFromErrType(ctx, "Unlock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.Unlock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.UnlockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling Unlock")
 	}
 
 	return res, nil
