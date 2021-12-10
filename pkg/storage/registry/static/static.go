@@ -192,7 +192,7 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 				}
 				match = &registrypb.ProviderInfo{
 					ProviderId:   id,
-					ProviderPath: m,
+					ProviderPath: rule.ProviderPath,
 					Address:      addr,
 				}
 			}
