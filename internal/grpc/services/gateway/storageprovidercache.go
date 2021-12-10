@@ -40,7 +40,7 @@ func userKey(ctx context.Context, ref *provider.Reference) string {
 	if !ok {
 		return ""
 	}
-	return u.Id.OpaqueId + "!" + ref.ResourceId.StorageId + "!" + ref.ResourceId.OpaqueId + "!" + ref.Path
+	return "uid:" + u.Id.OpaqueId + "!sid:" + ref.ResourceId.StorageId + "!oid:" + ref.ResourceId.OpaqueId + "!path:" + ref.Path
 }
 
 // RemoveFromCache removes a reference from the cache
