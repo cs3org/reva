@@ -57,11 +57,9 @@ func handler(log zerolog.Logger, h http.Handler) http.Handler {
 }
 
 func getTraceIDFromSpan(span trace.Span) string {
-	traceID := ""
-	if span.SpanContext().TraceID() == [16]byte{} {
-		traceID = ""
-	} else {
-		traceID = span.SpanContext().TraceID().String()
+	if span.SpanContext().TraceID() != [16]byte{} {
+		return span.SpanContext().TraceID().String()
 	}
-	return traceID
+
+	return ""
 }
