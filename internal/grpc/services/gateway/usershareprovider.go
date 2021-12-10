@@ -319,6 +319,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	idReference := &provider.Reference{ResourceId: resourceID}
 	storageProvider, _, err := s.find(ctx, idReference)
 	if err != nil {
+		log.Error().Err(err).Interface("reference", idReference).Msg("removeReference: storage provider not found")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
 		}
@@ -327,11 +328,13 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 
 	statRes, err := storageProvider.Stat(ctx, &provider.StatRequest{Ref: idReference})
 	if err != nil {
+		log.Error().Err(err).Interface("reference", idReference).Msg("removeReference: error calling Stat")
 		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
 	}
 
 	// FIXME how can we delete a reference if the original resource was deleted?
 	if statRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Interface("status", statRes.Status).Interface("reference", idReference).Msg("removeReference: error calling Stat")
 		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
 		return status.NewInternal(ctx, err, "could not delete share reference")
 	}

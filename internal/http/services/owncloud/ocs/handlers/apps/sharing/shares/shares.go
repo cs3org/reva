@@ -1010,6 +1010,7 @@ func (h *Handler) logProblems(s *rpc.Status, e error, msg string) {
 	if e != nil {
 		// errors need to be taken care of
 		log.Error().Err(e).Msg(msg)
+		return
 	}
 	if s != nil && s.Code != rpc.Code_CODE_OK {
 		switch s.Code {

@@ -309,18 +309,21 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	var token string
 	tokenOpaque, ok := share.Grantee.Opaque.Map["token"]
 	if !ok {
+		log.Debug().Msg("createOCMReference: token not found in opaque map")
 		return status.NewNotFound(ctx, "token not found"), nil
 	}
 	switch tokenOpaque.Decoder {
 	case "plain":
 		token = string(tokenOpaque.Value)
 	default:
+		log.Error().Str("decoder", tokenOpaque.Decoder).Msg("createOCMReference: opaque entry decoder not recognized")
 		err := errtypes.NotSupported("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
 		return status.NewInternal(ctx, err, "invalid opaque entry decoder"), nil
 	}
 
 	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
+		log.Error().Err(err).Msg("createOCMReference: error calling GetHome")
 		err := errors.Wrap(err, "gateway: error calling GetHome")
 		return status.NewInternal(ctx, err, "error updating received share"), nil
 	}
@@ -333,9 +336,11 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 			},
 		})
 		if err != nil {
+			log.Error().Err(err).Msg("createOCMReference: error creating transfers directory")
 			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
 		}
 		if createTransferDir.Status.Code != rpc.Code_CODE_OK && createTransferDir.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
+			log.Error().Interface("status", createTransferDir.Status).Msg("createOCMReference: error creating transfers directory")
 			err := status.NewErrorFromCode(createTransferDir.Status.GetCode(), "gateway")
 			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
 		}
@@ -356,6 +361,7 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 
 	c, p, err := s.findByPath(ctx, refPath)
 	if err != nil {
+		log.Error().Err(err).Msg("createOCMReference: could not find storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
 		}
@@ -385,13 +391,14 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	}
 	createRefRes, err := c.CreateReference(ctx, createRefReq)
 	if err != nil {
-		log.Err(err).Msg("gateway: error calling GetHome")
+		log.Err(err).Msg("createOCMReference: error calling CreateReference")
 		return &rpc.Status{
 			Code: rpc.Code_CODE_INTERNAL,
 		}, nil
 	}
 
 	if createRefRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Interface("status", createRefRes.Status).Msg("createOCMReference: error calling CreateReference")
 		err := status.NewErrorFromCode(createRefRes.Status.GetCode(), "gateway")
 		return status.NewInternal(ctx, err, "error updating received share"), nil
 	}

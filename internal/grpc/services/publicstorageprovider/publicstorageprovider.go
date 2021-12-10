@@ -124,18 +124,18 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	statRes, err := s.Stat(ctx, statReq)
 	if err != nil {
 		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, err, "InitiateFileDownload: error stating ref:"+req.Ref.String()),
 		}, nil
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			return &provider.InitiateFileDownloadResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found"),
+				Status: status.NewNotFound(ctx, "InitiateFileDownload: file not found"),
 			}, nil
 		}
 		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating ref"),
+			Status: status.NewInternal(ctx, err, "InitiateFileDownload: error stating ref"),
 		}, nil
 	}
 
@@ -201,7 +201,7 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 	dRes, err := s.gateway.InitiateFileDownload(ctx, dReq)
 	if err != nil {
 		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileDownload"),
+			Status: status.NewInternal(ctx, err, "initiateFileDownload: error calling InitiateFileDownload"),
 		}, nil
 	}
 
@@ -254,7 +254,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	uRes, err := s.gateway.InitiateFileUpload(ctx, uReq)
 	if err != nil {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileUpload"),
+			Status: status.NewInternal(ctx, err, "InitiateFileUpload: error calling InitiateFileUpload"),
 		}, nil
 	}
 
@@ -386,7 +386,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	})
 	if err != nil {
 		return &provider.CreateContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling CreateContainer for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, err, "createContainer: error calling CreateContainer for ref:"+req.Ref.String()),
 		}, nil
 	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
@@ -426,7 +426,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	})
 	if err != nil {
 		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Delete for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, err, "Delete: error calling Delete for ref:"+req.Ref.String()),
 		}, nil
 	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
@@ -489,7 +489,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	})
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Move for source ref "+req.Source.String()+" to destination ref "+req.Destination.String()),
+			Status: status.NewInternal(ctx, err, "Move: error calling Move for source ref "+req.Source.String()+" to destination ref "+req.Destination.String()),
 		}, nil
 	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
@@ -545,7 +545,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	statResponse, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: ref})
 	if err != nil {
 		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Stat for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, err, "Stat: error calling Stat for ref:"+req.Ref.String()),
 		}, nil
 	}
 
@@ -632,7 +632,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	)
 	if err != nil {
 		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling ListContainer for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, err, "ListContainer: error calling ListContainer for ref:"+req.Ref.String()),
 		}, nil
 	}
 
