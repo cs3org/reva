@@ -915,7 +915,7 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 	for _, fi := range finfos {
 		// For files, inherit ACLs from the parent
 		// And set the inode to that of their version folder
-		if !fi.IsDir {
+		if !fi.IsDir && !isVersionFolder(dirPath) {
 			if parent != nil {
 				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
 			}
