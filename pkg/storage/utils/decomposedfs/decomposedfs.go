@@ -23,6 +23,7 @@ package decomposedfs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -318,6 +319,10 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		}
 	}
 	return
+}
+
+func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
 }
 
 // CreateReference creates a reference as a node folder with the target stored in extended attributes

@@ -766,6 +766,10 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 	return fs.propagate(ctx, filepath.Dir(ip))
 }
 
+func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
+}
+
 func (fs *owncloudsqlfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
 	return errtypes.NotSupported("owncloudsql: operation not supported")
 }

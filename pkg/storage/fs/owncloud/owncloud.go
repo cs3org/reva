@@ -1186,6 +1186,10 @@ func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference) (err err
 	return fs.propagate(ctx, ip)
 }
 
+func (fs *ocfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
+}
+
 func (fs *ocfs) isShareFolderChild(sp string) bool {
 	return strings.HasPrefix(sp, fs.c.ShareFolder)
 }

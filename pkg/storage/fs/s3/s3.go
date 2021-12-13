@@ -326,6 +326,10 @@ func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	return nil
 }
 
+func (fs *s3FS) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
+}
+
 func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 

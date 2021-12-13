@@ -253,6 +253,11 @@ func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference)
 	return err
 }
 
+// TouchFile as defined in the storage.FS interface
+func (nc *StorageDriver) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
+}
+
 // Delete as defined in the storage.FS interface
 func (nc *StorageDriver) Delete(ctx context.Context, ref *provider.Reference) error {
 	bodyStr, err := json.Marshal(ref)

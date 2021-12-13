@@ -851,6 +851,25 @@ func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainer
 	return res, nil
 }
 
+func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.TouchFileResponse{
+			Status: status.NewStatusFromErrType(ctx, "TouchFile ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.TouchFile(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.TouchFileResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling TouchFile")
+	}
+
+	return res, nil
+}
+
 // check if the path contains the prefix of the shared folder
 func (s *svc) inSharedFolder(ctx context.Context, p string) bool {
 	sharedFolder := s.getSharedFolder(ctx)

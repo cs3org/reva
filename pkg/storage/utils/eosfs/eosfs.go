@@ -1214,6 +1214,28 @@ func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	return fs.c.CreateDir(ctx, auth, fn)
 }
 
+func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	log := appctx.GetLogger(ctx)
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+	p, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil
+	}
+
+	auth, err := fs.getUserAuth(ctx, u, p)
+	if err != nil {
+		return err
+	}
+
+	log.Info().Msgf("eosfs: touch file: path=%s", p)
+
+	fn := fs.wrap(ctx, p)
+	return fs.c.Touch(ctx, auth, fn)
+}
+
 func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
 	// TODO(labkode): for the time being we only allow creating references
 	// in the virtual share folder to not pollute the nominal user tree.

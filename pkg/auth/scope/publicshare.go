@@ -57,6 +57,8 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
 		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.TouchFileRequest:
+		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.DeleteRequest:
 		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.MoveRequest:
