@@ -197,6 +197,11 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 		default:
 			st = status.NewInternal(ctx, err, "error setting arbitrary metadata: "+req.Ref.String())
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Msg("failed to set arbitrary metadata")
 		return &provider.SetArbitraryMetadataResponse{
 			Status: st,
 		}, nil
@@ -219,6 +224,11 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 		default:
 			st = status.NewInternal(ctx, err, "error unsetting arbitrary metadata: "+req.Ref.String())
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Msg("failed to unset arbitrary metadata")
 		return &provider.UnsetArbitraryMetadataResponse{
 			Status: st,
 		}, nil
@@ -276,6 +286,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			var err error
 			uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
 			if err != nil {
+				log.Error().Err(err).Msg("error parsing upload length")
 				return &provider.InitiateFileUploadResponse{
 					Status: status.NewInternal(ctx, err, "error parsing upload length"),
 				}, nil
@@ -314,6 +325,10 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		default:
 			st = status.NewInternal(ctx, err, "error getting upload id: "+req.Ref.String())
 		}
+		log.Error().
+			Err(err).
+			Interface("status", st).
+			Msg("failed to initiate upload")
 		return &provider.InitiateFileUploadResponse{
 			Status: st,
 		}, nil
@@ -348,6 +363,10 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 	// TODO(labkode): check that the storage ID is the same as the storage provider id.
 	fn, err := s.storage.GetPathByID(ctx, req.ResourceId)
 	if err != nil {
+		appctx.GetLogger(ctx).Error().
+			Err(err).
+			Interface("resource_id", req.ResourceId).
+			Msg("error getting path by id")
 		return &provider.GetPathResponse{
 			Status: status.NewInternal(ctx, err, "error getting path by id"),
 		}, nil
@@ -394,6 +413,12 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 		default:
 			st = status.NewInternal(ctx, err, "error listing spaces")
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("request", req).
+			Msg("failed to create storage space")
 		return &provider.CreateStorageSpaceResponse{
 			Status: st,
 		}, nil
@@ -430,6 +455,11 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		default:
 			st = status.NewInternal(ctx, err, "error listing spaces")
 		}
+		log.Error().
+			Err(err).
+			Interface("status", st).
+			Interface("filters", req.Filters).
+			Msg("failed to list storage spaces")
 		return &provider.ListStorageSpacesResponse{
 			Status: st,
 		}, nil
@@ -448,7 +478,16 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	return s.storage.UpdateStorageSpace(ctx, req)
+	res, err := s.storage.UpdateStorageSpace(ctx, req)
+	if err != nil {
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("req", req).
+			Msg("failed to update storage space")
+		return nil, err
+	}
+	return res, nil
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
@@ -462,6 +501,12 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 		default:
 			st = status.NewInternal(ctx, err, "error deleting space: "+req.Id.String())
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("storage_space_id", req.Id).
+			Msg("failed to delete storage space")
 		return &provider.DeleteStorageSpaceResponse{
 			Status: st,
 		}, nil
@@ -486,6 +531,12 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		default:
 			st = status.NewInternal(ctx, err, "error creating container: "+req.Ref.String())
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to create container")
 		return &provider.CreateContainerResponse{
 			Status: st,
 		}, nil
@@ -523,6 +574,12 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		default:
 			st = status.NewInternal(ctx, err, "error deleting file: "+req.Ref.String())
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to delete")
 		return &provider.DeleteResponse{
 			Status: st,
 		}, nil
@@ -545,6 +602,13 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		default:
 			st = status.NewInternal(ctx, err, "error moving: "+req.Source.String())
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("source_reference", req.Source).
+			Interface("target_reference", req.Destination).
+			Msg("failed to move")
 		return &provider.MoveResponse{
 			Status: st,
 		}, nil
@@ -576,6 +640,12 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		default:
 			st = status.NewInternal(ctx, err, "error statting: "+req.Ref.String())
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to stat")
 		return &provider.StatResponse{
 			Status: st,
 		}, nil
@@ -603,6 +673,11 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 		default:
 			st = status.NewInternal(ctx, err, "error listing container: "+req.Ref.String())
 		}
+		log.Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to list folder (stream)")
 		res := &provider.ListContainerStreamResponse{
 			Status: st,
 		}
@@ -639,6 +714,12 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		default:
 			st = status.NewInternal(ctx, err, "error listing container: "+req.Ref.String())
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to list folder")
 		return &provider.ListContainerResponse{
 			Status: st,
 		}, nil
@@ -663,6 +744,12 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 		default:
 			st = status.NewInternal(ctx, err, "error listing file versions: "+req.Ref.String())
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to list file versions")
 		return &provider.ListFileVersionsResponse{
 			Status: st,
 		}, nil
@@ -688,6 +775,13 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 		default:
 			st = status.NewInternal(ctx, err, "error restoring version: "+req.Ref.String())
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Str("key", req.Key).
+			Msg("failed to restore file version")
 		return &provider.RestoreFileVersionResponse{
 			Status: st,
 		}, nil
@@ -715,6 +809,12 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 		default:
 			st = status.NewInternal(ctx, err, "error listing recycle stream")
 		}
+		log.Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Str("key", req.Key).
+			Msg("failed to list recycle (stream)")
 		res := &provider.ListRecycleStreamResponse{
 			Status: st,
 		}
@@ -752,6 +852,13 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 		default:
 			st = status.NewInternal(ctx, err, "error listing recycle")
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Str("key", req.Key).
+			Msg("failed to list recycle")
 		return &provider.ListRecycleResponse{
 			Status: st,
 		}, nil
@@ -777,6 +884,13 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 		default:
 			st = status.NewInternal(ctx, err, "error restoring recycle bin item")
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Str("key", req.Key).
+			Msg("failed to restore recycle item")
 		return &provider.RestoreRecycleItemResponse{
 			Status: st,
 		}, nil
@@ -802,6 +916,13 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 			default:
 				st = status.NewInternal(ctx, err, "error purging recycle item")
 			}
+			appctx.GetLogger(ctx).
+				Error().
+				Err(err).
+				Interface("status", st).
+				Interface("reference", req.Ref).
+				Str("key", req.Key).
+				Msg("failed to purge recycle item")
 			return &provider.PurgeRecycleResponse{
 				Status: st,
 			}, nil
@@ -817,6 +938,13 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 		default:
 			st = status.NewInternal(ctx, err, "error purging recycle bin")
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Str("key", req.Key).
+			Msg("failed to empty recycle")
 		return &provider.PurgeRecycleResponse{
 			Status: st,
 		}, nil
@@ -840,6 +968,12 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 		default:
 			st = status.NewInternal(ctx, err, "error listing grants")
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to list grants")
 		return &provider.ListGrantsResponse{
 			Status: st,
 		}, nil
@@ -871,6 +1005,12 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 		default:
 			st = status.NewInternal(ctx, err, "error setting grants")
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to deny grant")
 		return &provider.DenyGrantResponse{
 			Status: st,
 		}, nil
@@ -901,6 +1041,12 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 		default:
 			st = status.NewInternal(ctx, err, "error setting grants")
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to add grant")
 		return &provider.AddGrantResponse{
 			Status: st,
 		}, nil
@@ -930,6 +1076,12 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 		default:
 			st = status.NewInternal(ctx, err, "error updating grant")
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to update grant")
 		return &provider.UpdateGrantResponse{
 			Status: st,
 		}, nil
@@ -959,6 +1111,12 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 		default:
 			st = status.NewInternal(ctx, err, "error removing grant")
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to remove grant")
 		return &provider.RemoveGrantResponse{
 			Status: st,
 		}, nil
@@ -976,14 +1134,13 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 	// parse uri is valid
 	u, err := url.Parse(req.TargetUri)
 	if err != nil {
-		log.Err(err).Msg("invalid target uri")
+		log.Error().Err(err).Msg("invalid target uri")
 		return &provider.CreateReferenceResponse{
 			Status: status.NewInvalidArg(ctx, "target uri is invalid: "+err.Error()),
 		}, nil
 	}
 
 	if err := s.storage.CreateReference(ctx, req.Ref.GetPath(), u); err != nil {
-		log.Err(err).Msg("error calling CreateReference")
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -993,6 +1150,11 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 		default:
 			st = status.NewInternal(ctx, err, "error creating reference")
 		}
+		log.Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to create reference")
 		return &provider.CreateReferenceResponse{
 			Status: st,
 		}, nil
@@ -1021,6 +1183,12 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 		default:
 			st = status.NewInternal(ctx, err, "error getting quota")
 		}
+		appctx.GetLogger(ctx).
+			Error().
+			Err(err).
+			Interface("status", st).
+			Interface("reference", req.Ref).
+			Msg("failed to get quota")
 		return &provider.GetQuotaResponse{
 			Status: st,
 		}, nil
