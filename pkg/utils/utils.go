@@ -51,6 +51,9 @@ var (
 
 	// ShareStorageProviderID is the id used by the sharestorageprovider
 	ShareStorageProviderID = "a0ca6a90-a365-4782-871e-d44447bbc668"
+
+	// PublicStorageProviderID is the id used by the sharestorageprovider
+	PublicStorageProviderID = "7993447f-687f-490d-875c-ac95e89a62a4"
 )
 
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
