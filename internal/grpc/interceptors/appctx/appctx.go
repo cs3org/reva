@@ -81,8 +81,8 @@ func (ss *wrappedServerStream) Context() context.Context {
 }
 
 func getTraceIDFromSpan(span trace.Span) string {
-	if span.SpanContext().TraceID() != [16]byte{} {
-		return span.SpanContext().TraceID().String()
+	if b := span.SpanContext().TraceID(); b != [16]byte{} {
+		return b.String()
 	}
 	return ""
 }
