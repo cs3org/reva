@@ -465,9 +465,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 
-	dstRef := &provider.Reference{
-		Path: path.Join(basePath, dst),
-	}
+	dstRef := &provider.Reference{Path: dst}
 
 	dstStatReq := &provider.StatRequest{
 		Ref: dstRef,
@@ -544,7 +542,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 			Path: basePath,
 		},
 		Key:        path.Join(key, itemPath),
-		RestoreRef: &provider.Reference{Path: dst},
+		RestoreRef: dstRef,
 	}
 
 	res, err := client.RestoreRecycleItem(ctx, req)
