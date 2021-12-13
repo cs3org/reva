@@ -51,14 +51,14 @@ type PerfResponse struct {
 }
 
 func (p *PerfResponse) getPerfResponseString() string {
-	var response string
-	response += "Perf Marker\n"
-	response += "Timestamp: " + strconv.FormatInt(p.Timestamp.Unix(), 10) + "\n"
-	response += "Stripe Bytes Transferred: " + strconv.FormatUint(p.Bytes, 10) + "\n"
-	response += "Strip Index: " + strconv.Itoa(p.Index) + "\n"
-	response += "Total Stripe Count: " + strconv.Itoa(p.Count) + "\n"
-	response += "End\n"
-	return response
+	var sb strings.Builder
+	sb.WriteString("Perf Marker\n")
+	sb.WriteString("Timestamp: " + strconv.FormatInt(p.Timestamp.Unix(), 10) + "\n")
+	sb.WriteString("Stripe Bytes Transferred: " + strconv.FormatUint(p.Bytes, 10) + "\n")
+	sb.WriteString("Strip Index: " + strconv.Itoa(p.Index) + "\n")
+	sb.WriteString("Total Stripe Count: " + strconv.Itoa(p.Count) + "\n")
+	sb.WriteString("End\n")
+	return sb.String()
 }
 
 // WriteCounter counts the number of bytes transferred and reports
