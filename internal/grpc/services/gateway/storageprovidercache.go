@@ -47,17 +47,25 @@ func userKey(ctx context.Context, ref *provider.Reference) string {
 func RemoveFromCache(cache *ttlcache.Cache, user *userpb.User, res *provider.ResourceId) {
 	uid := "uid:" + user.Id.OpaqueId
 	sid := ""
+	oid := ""
 	if res != nil {
-		sid = "sid:" + res.StorageId + "!oid:" + res.OpaqueId
+		sid = "sid:" + res.StorageId
+		oid = "oid:" + res.OpaqueId
 	}
 
-	for _, key := range cache.GetKeys() {
+	keys := cache.GetKeys()
+	for _, key := range keys {
 		if strings.Contains(key, uid) {
 			_ = cache.Remove(key)
 			continue
 		}
 
 		if sid != "" && strings.Contains(key, sid) {
+			_ = cache.Remove(key)
+			continue
+		}
+
+		if oid != "" && strings.Contains(key, oid) {
 			_ = cache.Remove(key)
 			continue
 		}
