@@ -383,6 +383,7 @@ func (n *Node) InternalPath() string {
 	return n.lu.InternalPath(n.ID)
 }
 
+// InternalSpaceRootPath returns the internal path of the space root
 func (n *Node) InternalSpaceRootPath() string {
 	return n.lu.InternalPath(n.SpaceRoot)
 }
