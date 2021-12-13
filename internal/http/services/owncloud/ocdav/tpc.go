@@ -97,13 +97,6 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-// Uncomment to use for debugging
-// Prints progress after every read from buffer
-//
-// func (wc WriteCounter) PrintProgress() {
-// 	fmt.Printf("\rDownloading... %v complete", wc.Total)
-// }
-
 //
 // An example of an HTTP TPC Pull
 //
@@ -188,7 +181,6 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 }
 
 func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClient, r *http.Request, w http.ResponseWriter, recurse bool, ns string) error {
-
 	src := r.Header.Get("Source")
 	dst := path.Join(ns, r.URL.Path)
 	size := 1024
@@ -247,7 +239,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 		return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
 	}
 
-	// send performance markers periodically ever $PerfMarkerResponseTime
+	// send performance markers periodically every PerfMarkerResponseTime (5 seconds unless configured).
 	// seconds as transfer progreses
 	wc := WriteCounter{0, time.Now(), w}
 	tempReader := io.TeeReader(httpDownloadRes.Body, &wc)
