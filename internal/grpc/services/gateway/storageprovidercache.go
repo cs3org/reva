@@ -28,6 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/utils"
 	"google.golang.org/grpc"
 )
 
@@ -101,7 +102,7 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 		return resp, nil
 	case key == "":
 		return resp, nil
-	case strings.Contains(key, "sid:a0ca6a90-a365-4782-871e-d44447bbc668"):
+	case strings.Contains(key, "sid:"+utils.ShareStorageProviderID):
 		// We cannot cache shares at the moment:
 		// we do not know when to invalidate them
 		// FIXME: find a way to cache/invalidate them too

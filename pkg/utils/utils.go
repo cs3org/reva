@@ -48,6 +48,9 @@ var (
 	// GlobalRegistry configures a service registry globally accessible. It defaults to a memory registry. The usage of
 	// globals is not encouraged, and this is a workaround until the PR is out of a draft state.
 	GlobalRegistry registry.Registry = memory.New(map[string]interface{}{})
+
+	// ShareStorageProviderID is the id used by the sharestorageprovider
+	ShareStorageProviderID = "a0ca6a90-a365-4782-871e-d44447bbc668"
 )
 
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
