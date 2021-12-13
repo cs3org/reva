@@ -31,6 +31,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
@@ -593,7 +594,8 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 
-	n.FindStorageSpaceRoot()
+	currentUser, _ := ctxpkg.ContextGetUser(ctx)
+	n.FindStorageSpaceRoot(currentUser)
 
 	// use a sync time and don't rely on the mtime of the current node, as the stat might not change when a rename happened too quickly
 	sTime := time.Now().UTC()
@@ -843,7 +845,8 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 	}
 
 	// look up space root from the trashed node
-	err = recycleNode.FindStorageSpaceRoot()
+	currentUser, _ := ctxpkg.ContextGetUser(ctx)
+	err = recycleNode.FindStorageSpaceRoot(currentUser)
 
 	if path == "" || path == "/" {
 		parts := strings.SplitN(filepath.Base(link), ".T.", 2)

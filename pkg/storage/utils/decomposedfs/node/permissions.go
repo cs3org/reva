@@ -122,11 +122,6 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
 		return OwnerPermissions(), nil
 	}
-	// determine root
-	var rn *Node
-	if rn, err = p.lu.RootNode(ctx); err != nil {
-		return NoPermissions(), err
-	}
 
 	cn := n
 
@@ -141,9 +136,12 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 
 	// for all segments, starting at the leaf
 	// FIXME remember the highest space root we encounter? always or only for id only based lookups?
-	for cn.ID != rn.ID {
-		if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
+	for cn.ID != cn.SpaceRoot {
+		if np, isShareRoot, err := cn.ReadUserPermissions(ctx, u); err == nil {
 			AddPermissions(&ap, &np)
+			if isShareRoot {
+				n.ShareRoot = cn.ID
+			}
 		} else {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error reading permissions")
 			// continue with next segment
@@ -154,6 +152,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 	}
 
 	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Interface("node", n).Interface("user", u).Msg("returning agregated permissions")
+
 	return ap, nil
 }
 
@@ -190,7 +189,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 	}
 
 	// determine root
-	if err = n.FindStorageSpaceRoot(); err != nil {
+	if err = n.FindStorageSpaceRoot(u); err != nil {
 		return false, err
 	}
 

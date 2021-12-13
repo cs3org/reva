@@ -479,8 +479,13 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	for i := range children {
 		np := rp
 		// add this childs permissions
-		pset := n.PermissionSet(ctx)
+		pset, isShareRoot := n.PermissionSet(ctx)
 		node.AddPermissions(&np, &pset)
+		if n.ShareRoot != "" {
+			children[i].ShareRoot = n.ShareRoot
+		} else if isShareRoot {
+			children[i].ShareRoot = children[i].ID
+		}
 		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, utils.IsRelativeReference(ref)); err == nil {
 			finfos = append(finfos, ri)
 		}

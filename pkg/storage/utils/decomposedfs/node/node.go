@@ -361,21 +361,22 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 }
 
 // PermissionSet returns the permission set for the current user
+// it also returns wether or not the node is a space for the user
 // the parent nodes are not taken into account
-func (n *Node) PermissionSet(ctx context.Context) provider.ResourcePermissions {
+func (n *Node) PermissionSet(ctx context.Context) (provider.ResourcePermissions, bool) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return NoPermissions()
+		return NoPermissions(), false
 	}
 	if o, _ := n.Owner(); utils.UserEqual(u.Id, o) {
-		return OwnerPermissions()
+		return OwnerPermissions(), true
 	}
 	// read the permissions for the current user from the acls of the current node
-	if np, err := n.ReadUserPermissions(ctx, u); err == nil {
-		return np
+	if np, isSpace, err := n.ReadUserPermissions(ctx, u); err == nil {
+		return np, isSpace
 	}
-	return NoPermissions()
+	return NoPermissions(), false
 }
 
 // InternalPath returns the internal path of the Node
@@ -515,7 +516,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 
 	// TODO ensure we always have a space root
-	n.FindStorageSpaceRoot()
+	currentUser, _ := ctxpkg.ContextGetUser(ctx)
+	n.FindStorageSpaceRoot(currentUser)
 
 	ri = &provider.ResourceInfo{
 		Id:            &provider.ResourceId{StorageId: n.SpaceRoot, OpaqueId: n.ID},
@@ -526,18 +528,17 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		PermissionSet: rp,
 	}
 
+	if n.ShareRoot != "" {
+		setPlainOpaque(ri, "root", n.ShareRoot)
+	}
+
 	if returnBasename { // FIXME this is not the basename it is the path relative to the root
 		ri.Path = n.Name
-		// return space root
-		// FIXME not good enough: we need to find the highest space where the current user has access
-		// walk from root? or collect all spaces while walking ... this is done for the permissions check, anyway
-		ri.Opaque = &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"root": {
-					Decoder: "plain",
-					Value:   []byte(n.SpaceRoot),
-				},
-			},
+		// return space root for the user
+		if n.ShareRoot != "" {
+			setPlainOpaque(ri, "root", n.ShareRoot)
+		} else {
+			setPlainOpaque(ri, "root", n.SpaceRoot)
 		}
 
 	} else {
@@ -702,19 +703,25 @@ func readChecksumIntoResourceChecksum(ctx context.Context, nodePath, algo string
 	}
 }
 
+func setPlainOpaque(ri *provider.ResourceInfo, key, value string) {
+	if ri.Opaque == nil {
+		ri.Opaque = &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{},
+		}
+	} else if ri.Opaque.Map == nil {
+		ri.Opaque.Map = map[string]*types.OpaqueEntry{}
+	}
+	ri.Opaque.Map[key] = &types.OpaqueEntry{
+		Decoder: "plain",
+		Value:   []byte(value),
+	}
+}
+
 func readChecksumIntoOpaque(ctx context.Context, nodePath, algo string, ri *provider.ResourceInfo) {
 	v, err := xattr.Get(nodePath, xattrs.ChecksumPrefix+algo)
 	switch {
 	case err == nil:
-		if ri.Opaque == nil {
-			ri.Opaque = &types.Opaque{
-				Map: map[string]*types.OpaqueEntry{},
-			}
-		}
-		ri.Opaque.Map[algo] = &types.OpaqueEntry{
-			Decoder: "plain",
-			Value:   []byte(hex.EncodeToString(v)),
-		}
+		setPlainOpaque(ri, algo, hex.EncodeToString(v))
 	case isAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("checksum not set")
 	case isNotFound(err):
@@ -819,25 +826,27 @@ func (n *Node) UnsetTempEtag() (err error) {
 }
 
 // ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
-func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap provider.ResourcePermissions, err error) {
+// it also returns a flag to indicate if the current node is a share node because it has permissions set for the current user
+func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (provider.ResourcePermissions, bool, error) {
 	// check if the current user is the owner
 	o, err := n.Owner()
 	if err != nil {
 		// TODO check if a parent folder has the owner set?
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
-		return NoPermissions(), err
+		return NoPermissions(), false, err
 	}
 	if o.OpaqueId == "" {
 		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// TODO what if no owner is set but grants are present?
-		return NoOwnerPermissions(), nil
+		return NoOwnerPermissions(), true, nil
 	}
 	if utils.UserEqual(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
-		return OwnerPermissions(), nil
+		return OwnerPermissions(), true, nil
 	}
 
-	ap = provider.ResourcePermissions{}
+	ap := provider.ResourcePermissions{}
+	isShareRoot := false
 
 	// for an efficient group lookup convert the list of groups to a map
 	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
@@ -852,7 +861,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 	var grantees []string
 	if grantees, err = n.ListGrantees(ctx); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("error listing grantees")
-		return NoPermissions(), err
+		return NoPermissions(), false, err
 	}
 
 	// instead of making n getxattr syscalls we are going to list the acls and filter them here
@@ -882,6 +891,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 
 		switch {
 		case err == nil:
+			isShareRoot = true
 			AddPermissions(&ap, g.GetPermissions())
 		case isAttrUnset(err):
 			err = nil
@@ -894,7 +904,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 	}
 
 	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Interface("node", n).Interface("user", u).Msg("returning aggregated permissions")
-	return ap, nil
+	return ap, isShareRoot, nil
 }
 
 // ListGrantees lists the grantees of the current node
@@ -968,7 +978,7 @@ func parseMTime(v string) (t time.Time, err error) {
 
 // FindStorageSpaceRoot calls n.Parent() and climbs the tree
 // until it finds the space root node and adds it to the node
-func (n *Node) FindStorageSpaceRoot() error {
+func (n *Node) FindStorageSpaceRoot(user *userpb.User) error {
 	if n.SpaceRoot != "" {
 		return nil
 	}
@@ -988,8 +998,19 @@ func (n *Node) FindStorageSpaceRoot() error {
 }
 
 // IsSpaceRoot checks if the node is a space root
-func IsSpaceRoot(r *Node) bool {
-	path := r.InternalPath()
+func IsSpaceRoot(n *Node) bool {
+	path := n.InternalPath()
+	if spaceNameBytes, err := xattr.Get(path, xattrs.SpaceNameAttr); err == nil {
+		if string(spaceNameBytes) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// IsSpaceRoot checks if the node is a space root
+func IsShareSpace(n *Node) bool {
+	path := n.InternalPath()
 	if spaceNameBytes, err := xattr.Get(path, xattrs.SpaceNameAttr); err == nil {
 		if string(spaceNameBytes) != "" {
 			return true

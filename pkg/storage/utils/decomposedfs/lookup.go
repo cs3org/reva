@@ -82,7 +82,8 @@ func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *n
 		return nil, err
 	}
 
-	return n, n.FindStorageSpaceRoot()
+	currentUser, _ := ctxpkg.ContextGetUser(ctx)
+	return n, n.FindStorageSpaceRoot(currentUser)
 }
 
 // NodeFromSpaceID converts a resource id without an opaque id into a Node

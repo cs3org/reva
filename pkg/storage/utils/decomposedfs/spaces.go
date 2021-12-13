@@ -410,7 +410,8 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		sname = string(bytes)
 	}
 
-	if err := n.FindStorageSpaceRoot(); err != nil {
+	currentUser, _ := ctxpkg.ContextGetUser(ctx)
+	if err := n.FindStorageSpaceRoot(currentUser); err != nil {
 		return nil, err
 	}
 
