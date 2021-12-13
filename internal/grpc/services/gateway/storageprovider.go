@@ -156,7 +156,7 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 		}
 	}
 
-	srClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	srClient, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -230,7 +230,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		}
 	}
 
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	c, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -331,7 +331,7 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 			Status: status.NewInternal(ctx, err, "error calling UpdateStorageSpace"),
 		}, nil
 	}
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
 	return res, nil
 }
 
@@ -357,14 +357,14 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 		}, nil
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
 	return res, nil
 }
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 
-	srClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	srClient, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -533,7 +533,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return &gateway.InitiateFileUploadResponse{
 		Opaque:    storageRes.Opaque,
 		Status:    storageRes.Status,
@@ -576,7 +576,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -601,7 +601,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		return nil, errors.Wrap(err, "gateway: error calling Delete")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -643,8 +643,8 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
 	return c.Move(ctx, req)
 }
 
@@ -667,7 +667,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 		return nil, errors.Wrap(err, "gateway: error calling SetArbitraryMetadata")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -690,7 +690,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 		return nil, errors.Wrap(err, "gateway: error calling UnsetArbitraryMetadata")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1070,7 +1070,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 		return nil, errors.Wrap(err, "gateway: error calling RestoreFileVersion")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1314,9 +1314,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 		return nil, errors.Wrap(err, "gateway: error calling RestoreRecycleItem")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	if req.RestoreRef != nil {
-		RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
 	}
 
 	return res, nil
@@ -1339,7 +1339,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1414,7 +1414,17 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 		return nil, err
 	}
 
-	return Cached(c, s.statCache), nil
+	return s.cache.StorageProviderClient(c), nil
+}
+
+func (s *svc) getStorageRegistryClient(_ context.Context, address string) (registry.RegistryAPIClient, error) {
+	c, err := pool.GetStorageRegistryClient(address)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting a storage provider client")
+		return nil, err
+	}
+
+	return s.cache.StorageRegistryClient(c), nil
 }
 
 /*
@@ -1475,7 +1485,7 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	}
 
 	// lookup
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	c, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}

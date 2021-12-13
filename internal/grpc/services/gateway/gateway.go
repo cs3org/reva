@@ -122,9 +122,12 @@ func (c *config) init() {
 }
 
 type svc struct {
-	c               *config
-	dataGatewayURL  url.URL
-	tokenmgr        token.Manager
+	c              *config
+	dataGatewayURL url.URL
+	tokenmgr       token.Manager
+	cache          *Caches
+
+	// removes soon
 	etagCache       *ttlcache.Cache `mapstructure:"etag_cache"`
 	createHomeCache *ttlcache.Cache `mapstructure:"create_home_cache"`
 	providerCache   *ttlcache.Cache `mapstructure:"provider_cache"`
@@ -176,14 +179,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	// mountCache.SkipTTLExtensionOnHit(true)
 
 	s := &svc{
-		c:               c,
-		dataGatewayURL:  *u,
-		tokenmgr:        tokenManager,
-		etagCache:       etagCache,
-		createHomeCache: createHomeCache,
-		providerCache:   providerCache,
-		statCache:       statCache,
-		// mountCache:      mountCache,
+		c:              c,
+		dataGatewayURL: *u,
+		tokenmgr:       tokenManager,
+		cache:          NewCaches(c),
+		etagCache:      etagCache,
 	}
 
 	return s, nil

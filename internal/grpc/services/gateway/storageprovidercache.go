@@ -22,29 +22,72 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"google.golang.org/grpc"
 )
 
 // generates a user specific key pointing to ref
-func userKey(ctx context.Context, ref *provider.Reference) string {
+func userKey(user *userpb.User, ref *provider.Reference) string {
+	key := "uid" + user.Id.OpaqueId
 	if ref == nil || ref.ResourceId == nil || ref.ResourceId.StorageId == "" {
-		return ""
+		return key
 	}
-	u, ok := ctxpkg.ContextGetUser(ctx)
-	if !ok {
-		return ""
-	}
-	return "uid:" + u.Id.OpaqueId + "!sid:" + ref.ResourceId.StorageId + "!oid:" + ref.ResourceId.OpaqueId + "!path:" + ref.Path
+	return key + "!sid:" + ref.ResourceId.StorageId + "!oid:" + ref.ResourceId.OpaqueId + "!path:" + ref.Path
 }
 
-// RemoveFromCache removes a reference from the cache
-func RemoveFromCache(cache *ttlcache.Cache, user *userpb.User, res *provider.ResourceId) {
+// Caches holds all caches used by the gateway
+type Caches struct {
+	statCache     *ttlcache.Cache
+	homeCache     *ttlcache.Cache
+	providerCache *ttlcache.Cache
+}
+
+// NewCaches initializes a Caches struct for easy use
+func NewCaches(conf *config) *Caches {
+	homeCache := ttlcache.NewCache()
+	_ = homeCache.SetTTL(time.Duration(conf.CreateHomeCacheTTL) * time.Second)
+	homeCache.SkipTTLExtensionOnHit(true)
+
+	providerCache := ttlcache.NewCache()
+	_ = providerCache.SetTTL(time.Duration(conf.ProviderCacheTTL) * time.Second)
+	providerCache.SkipTTLExtensionOnHit(true)
+
+	statCache := ttlcache.NewCache()
+	_ = statCache.SetTTL(time.Duration(conf.StatCacheTTL) * time.Second)
+	statCache.SkipTTLExtensionOnHit(true)
+
+	return &Caches{
+		homeCache:     homeCache,
+		statCache:     statCache,
+		providerCache: providerCache,
+	}
+}
+
+// StorageProviderClient returns a (cached) client pointing to the storageprovider
+func (c *Caches) StorageProviderClient(p provider.ProviderAPIClient) provider.ProviderAPIClient {
+	return &cachedAPIClient{
+		c:         p,
+		statCache: c.statCache,
+	}
+}
+
+// StorageRegistryClient returns a (cached) client pointing to the storageregistry
+func (c *Caches) StorageRegistryClient(p registry.RegistryAPIClient) registry.RegistryAPIClient {
+	return &cachedRegistryClient{
+		c:             p,
+		providerCache: c.providerCache,
+	}
+}
+
+// RemoveStat removes a reference from the stat cache
+func (c *Caches) RemoveStat(user *userpb.User, res *provider.ResourceId) {
 	uid := "uid:" + user.Id.OpaqueId
 	sid := ""
 	oid := ""
@@ -53,29 +96,46 @@ func RemoveFromCache(cache *ttlcache.Cache, user *userpb.User, res *provider.Res
 		oid = "oid:" + res.OpaqueId
 	}
 
-	keys := cache.GetKeys()
-	for _, key := range keys {
+	for _, key := range c.statCache.GetKeys() {
 		if strings.Contains(key, uid) {
-			_ = cache.Remove(key)
+			_ = c.statCache.Remove(key)
 			continue
 		}
 
 		if sid != "" && strings.Contains(key, sid) {
-			_ = cache.Remove(key)
+			_ = c.statCache.Remove(key)
 			continue
 		}
 
 		if oid != "" && strings.Contains(key, oid) {
-			_ = cache.Remove(key)
+			_ = c.statCache.Remove(key)
 			continue
 		}
 	}
 }
 
-// Cached stores responses from the storageprovider inmemory so it doesn't need to do the same request over and over again
-func Cached(c provider.ProviderAPIClient, statCache *ttlcache.Cache) provider.ProviderAPIClient {
-	return &cachedAPIClient{c: c, statCache: statCache}
+/*
+   Cached Registry
+*/
+
+type cachedRegistryClient struct {
+	c             registry.RegistryAPIClient
+	providerCache *ttlcache.Cache
 }
+
+func (c *cachedRegistryClient) GetStorageProviders(ctx context.Context, in *registry.GetStorageProvidersRequest, opts ...grpc.CallOption) (*registry.GetStorageProvidersResponse, error) {
+	return c.c.GetStorageProviders(ctx, in, opts...)
+}
+func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *registry.ListStorageProvidersRequest, opts ...grpc.CallOption) (*registry.ListStorageProvidersResponse, error) {
+	return c.c.ListStorageProviders(ctx, in, opts...)
+}
+func (c *cachedRegistryClient) GetHome(ctx context.Context, in *registry.GetHomeRequest, opts ...grpc.CallOption) (*registry.GetHomeResponse, error) {
+	return c.c.GetHome(ctx, in, opts...)
+}
+
+/*
+   Cached Storage Provider
+*/
 
 type cachedAPIClient struct {
 	c         provider.ProviderAPIClient
@@ -84,7 +144,7 @@ type cachedAPIClient struct {
 
 // Stat looks in cache first before forwarding to storage provider
 func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error) {
-	key := userKey(ctx, in.Ref)
+	key := userKey(ctxpkg.ContextMustGetUser(ctx), in.Ref)
 	if key != "" {
 		r, err := c.statCache.Get(key)
 		if err == nil {
