@@ -107,7 +107,7 @@ func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.List
 	pinfos, err := s.reg.ListProviders(ctx, sdk.DecodeOpaqueMap(req.Opaque))
 	if err != nil {
 		return &registrypb.ListStorageProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error getting list of storage providers"),
+			Status: status.NewInternal(ctx, "error getting list of storage providers"),
 		}, nil
 	}
 
@@ -135,7 +135,7 @@ func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetSt
 			}, nil
 		default:
 			return &registrypb.GetStorageProvidersResponse{
-				Status: status.NewInternal(ctx, err, "error finding storage provider"),
+				Status: status.NewInternal(ctx, "error finding storage provider"),
 			}, nil
 		}
 	}

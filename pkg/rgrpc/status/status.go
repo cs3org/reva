@@ -40,10 +40,8 @@ func NewOK(ctx context.Context) *rpc.Status {
 	}
 }
 
-// NewNotFound returns a Status with CODE_NOT_FOUND and logs the msg.
+// NewNotFound returns a Status with CODE_NOT_FOUND.
 func NewNotFound(ctx context.Context, msg string) *rpc.Status {
-	// log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	// log.Warn().Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_NOT_FOUND,
 		Message: msg,
@@ -51,10 +49,8 @@ func NewNotFound(ctx context.Context, msg string) *rpc.Status {
 	}
 }
 
-// NewInvalid returns a Status with CODE_INVALID_ARGUMENT and logs the msg.
+// NewInvalid returns a Status with CODE_INVALID_ARGUMENT.
 func NewInvalid(ctx context.Context, msg string) *rpc.Status {
-	// log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	// log.Warn().Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INVALID_ARGUMENT,
 		Message: msg,
@@ -62,16 +58,8 @@ func NewInvalid(ctx context.Context, msg string) *rpc.Status {
 	}
 }
 
-// NewInternal returns a Status with CODE_INTERNAL and logs the msg.
-// In this case, err MUST be filled for tracking purposes.
-func NewInternal(ctx context.Context, err error, msg string) *rpc.Status {
-	if err == nil {
-		panic("Internal error triggered without an error context")
-	}
-
-	// log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	// log.Err(err).Msg(msg)
-
+// NewInternal returns a Status with CODE_INTERNAL.
+func NewInternal(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INTERNAL,
 		Message: msg,
@@ -79,10 +67,8 @@ func NewInternal(ctx context.Context, err error, msg string) *rpc.Status {
 	}
 }
 
-// NewUnauthenticated returns a Status with CODE_UNAUTHENTICATED and logs the msg.
+// NewUnauthenticated returns a Status with CODE_UNAUTHENTICATED.
 func NewUnauthenticated(ctx context.Context, err error, msg string) *rpc.Status {
-	// log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	// log.Warn().Err(err).Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_UNAUTHENTICATED,
 		Message: msg,
@@ -90,11 +76,8 @@ func NewUnauthenticated(ctx context.Context, err error, msg string) *rpc.Status 
 	}
 }
 
-// NewPermissionDenied returns a Status with PERMISSION_DENIED and logs the msg.
+// NewPermissionDenied returns a Status with PERMISSION_DENIED.
 func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status {
-	// log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	// log.Err(err).Msg(msg)
-
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_PERMISSION_DENIED,
 		Message: msg,
@@ -102,11 +85,8 @@ func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status
 	}
 }
 
-// NewInsufficientStorage returns a Status with INSUFFICIENT_STORAGE and logs the msg.
+// NewInsufficientStorage returns a Status with INSUFFICIENT_STORAGE.
 func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Status {
-	// log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	// log.Err(err).Msg(msg)
-
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INSUFFICIENT_STORAGE,
 		Message: msg,
@@ -114,10 +94,8 @@ func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Sta
 	}
 }
 
-// NewUnimplemented returns a Status with CODE_UNIMPLEMENTED and logs the msg.
+// NewUnimplemented returns a Status with CODE_UNIMPLEMENTED.
 func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
-	// log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	// log.Error().Err(err).Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_UNIMPLEMENTED,
 		Message: msg,
@@ -125,10 +103,8 @@ func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 	}
 }
 
-// NewAlreadyExists returns a Status with CODE_ALREADY_EXISTS and logs the msg.
+// NewAlreadyExists returns a Status with CODE_ALREADY_EXISTS.
 func NewAlreadyExists(ctx context.Context, err error, msg string) *rpc.Status {
-	// log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	// log.Error().Err(err).Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ALREADY_EXISTS,
 		Message: msg,
@@ -144,7 +120,7 @@ func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 	}
 }
 
-// NewConflict returns a Status with Code_CODE_ABORTED and logs the msg.
+// NewConflict returns a Status with Code_CODE_ABORTED.
 func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ABORTED,
@@ -192,7 +168,7 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		}
 	}
 
-	return NewInternal(ctx, err, "gateway: "+msg+":"+err.Error())
+	return NewInternal(ctx, "gateway: "+msg+":"+err.Error())
 }
 
 // NewErrorFromCode returns a standardized Error for a given RPC code.

@@ -42,8 +42,11 @@ import (
 func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("CreateShare: failed to get user share provider")
 		return &collaboration.CreateShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -96,8 +99,11 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("RemoveShare: failed to get user share provider")
 		return &collaboration.RemoveShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -114,7 +120,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 
 		if getShareRes.Status.Code != rpc.Code_CODE_OK {
 			res := &collaboration.RemoveShareResponse{
-				Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
+				Status: status.NewInternal(ctx,
 					"error getting share when committing to the storage"),
 			}
 			return res, nil
@@ -162,9 +168,11 @@ func (s *svc) GetShare(ctx context.Context, req *collaboration.GetShareRequest) 
 func (s *svc) getShare(ctx context.Context, req *collaboration.GetShareRequest) (*collaboration.GetShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("getShare: failed to get user share provider")
 		return &collaboration.GetShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -180,9 +188,11 @@ func (s *svc) getShare(ctx context.Context, req *collaboration.GetShareRequest) 
 func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesRequest) (*collaboration.ListSharesResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("ListShares: failed to get user share provider")
 		return &collaboration.ListSharesResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -197,9 +207,11 @@ func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesReque
 func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("UpdateShare: failed to get user share provider")
 		return &collaboration.UpdateShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
 	}
 
@@ -242,9 +254,11 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*collaboration.ListReceivedSharesResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("ListReceivedShares: failed to get user share provider")
 		return &collaboration.ListReceivedSharesResponse{
-			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
 	}
 
@@ -258,9 +272,11 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceivedShareRequest) (*collaboration.GetReceivedShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err := errors.Wrap(err, "gateway: error getting user share provider client")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("GetReceivedShare: failed to get user share provider")
 		return &collaboration.GetReceivedShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting received share"),
+			Status: status.NewInternal(ctx, "error getting received share"),
 		}, nil
 	}
 
@@ -303,9 +319,11 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("UpdateReceivedShare: failed to get user share provider")
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
 	}
 
@@ -319,30 +337,31 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	idReference := &provider.Reference{ResourceId: resourceID}
 	storageProvider, _, err := s.find(ctx, idReference)
 	if err != nil {
-		log.Error().Err(err).Interface("reference", idReference).Msg("removeReference: storage provider not found")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", idReference).
+			Msg("removeReference: failed to get storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewInternal(ctx, "error finding storage provider")
 	}
 
 	statRes, err := storageProvider.Stat(ctx, &provider.StatRequest{Ref: idReference})
 	if err != nil {
 		log.Error().Err(err).Interface("reference", idReference).Msg("removeReference: error calling Stat")
-		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
+		return status.NewInternal(ctx, "gateway: error calling Stat for the share resource id: "+resourceID.String())
 	}
 
 	// FIXME how can we delete a reference if the original resource was deleted?
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		log.Error().Interface("status", statRes.Status).Interface("reference", idReference).Msg("removeReference: error calling Stat")
-		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "could not delete share reference")
+		return status.NewInternal(ctx, "could not delete share reference")
 	}
 
 	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
-		err := errors.Wrap(err, "gateway: error calling GetHome")
-		return status.NewInternal(ctx, err, "could not delete share reference")
+		return status.NewInternal(ctx, "could not delete share reference")
 	}
 
 	sharePath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
@@ -351,10 +370,14 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	sharePathRef := &provider.Reference{Path: sharePath}
 	homeProvider, providerInfo, err := s.find(ctx, sharePathRef)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", sharePathRef).
+			Msg("removeReference: failed to get storage provider for share ref")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewInternal(ctx, "error finding storage provider")
 	}
 
 	spaceID := ""
@@ -387,7 +410,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 
 	deleteResp, err := homeProvider.Delete(ctx, deleteReq)
 	if err != nil {
-		return status.NewInternal(ctx, err, "could not delete share reference")
+		return status.NewInternal(ctx, "could not delete share reference")
 	}
 
 	switch deleteResp.Status.Code {
@@ -397,8 +420,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		// This is fine, we wanted to delete it anyway
 		return status.NewOK(ctx)
 	default:
-		err := status.NewErrorFromCode(deleteResp.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "could not delete share reference")
+		return status.NewInternal(ctx, "could not delete share reference")
 	}
 
 	log.Debug().Str("share_path", sharePath).Msg("share reference successfully removed")
@@ -418,10 +440,14 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 
 	c, _, err := s.find(ctx, ref)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", ref).
+			Msg("denyGrant: failed to get storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewInternal(ctx, "error finding storage provider"), nil
 	}
 
 	grantRes, err := c.DenyGrant(ctx, grantReq)
@@ -429,7 +455,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 		return nil, errors.Wrap(err, "gateway: error calling DenyGrant")
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
+		return status.NewInternal(ctx,
 			"error committing share to storage grant"), nil
 	}
 
@@ -451,10 +477,14 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 
 	c, _, err := s.find(ctx, ref)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", ref).
+			Msg("addGrant: failed to get storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewInternal(ctx, "error finding storage provider"), nil
 	}
 
 	grantRes, err := c.AddGrant(ctx, grantReq)
@@ -462,7 +492,7 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 		return nil, errors.Wrap(err, "gateway: error calling AddGrant")
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
+		return status.NewInternal(ctx,
 			"error committing share to storage grant"), nil
 	}
 
@@ -483,10 +513,14 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 
 	c, _, err := s.find(ctx, ref)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", ref).
+			Msg("updateGrant: failed to get storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewInternal(ctx, "error finding storage provider"), nil
 	}
 
 	grantRes, err := c.UpdateGrant(ctx, grantReq)
@@ -494,7 +528,7 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		return nil, errors.Wrap(err, "gateway: error calling UpdateGrant")
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
+		return status.NewInternal(ctx,
 			"error committing share to storage grant"), nil
 	}
 
@@ -516,10 +550,14 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 
 	c, _, err := s.find(ctx, ref)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", ref).
+			Msg("removeGrant: failed to get storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewInternal(ctx, "error finding storage provider"), nil
 	}
 
 	grantRes, err := c.RemoveGrant(ctx, grantReq)
@@ -527,7 +565,7 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		return nil, errors.Wrap(err, "gateway: error calling RemoveGrant")
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
+		return status.NewInternal(ctx,
 			"error removing storage grant"), nil
 	}
 

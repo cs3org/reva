@@ -166,7 +166,7 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 	err := s.sm.RevokePublicShare(ctx, user, req.Ref)
 	if err != nil {
 		return &link.RemovePublicShareResponse{
-			Status: status.NewInternal(ctx, err, "error deleting public share"),
+			Status: status.NewInternal(ctx, "error deleting public share"),
 		}, err
 	}
 	return &link.RemovePublicShareResponse{
@@ -196,7 +196,7 @@ func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublic
 		}, nil
 	default:
 		return &link.GetPublicShareByTokenResponse{
-			Status: status.NewInternal(ctx, v, "unexpected error"),
+			Status: status.NewInternal(ctx, "unexpected error"),
 		}, nil
 	}
 }
@@ -230,7 +230,7 @@ func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicShar
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &link.ListPublicSharesResponse{
-			Status: status.NewInternal(ctx, err, "error listing public shares"),
+			Status: status.NewInternal(ctx, "error listing public shares"),
 		}, nil
 	}
 

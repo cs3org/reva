@@ -51,7 +51,7 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 	})
 	if err != nil {
 		return &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
+			Status: status.NewInternal(ctx, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
 		}, nil
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
@@ -67,7 +67,7 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		uri, err := url.Parse(fileInfo.Target)
 		if err != nil {
 			return &providerpb.OpenInAppResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error parsing target uri: "+fileInfo.Target),
+				Status: status.NewInternal(ctx, "gateway: error parsing target uri: "+fileInfo.Target),
 			}, nil
 		}
 		if uri.Scheme == "webdav" {
@@ -80,13 +80,12 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		})
 		if err != nil {
 			return &providerpb.OpenInAppResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
+				Status: status.NewInternal(ctx, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
 			}, nil
 		}
 		if res.Status.Code != rpc.Code_CODE_OK {
-			err := status.NewErrorFromCode(res.Status.GetCode(), "gateway")
 			return &providerpb.OpenInAppResponse{
-				Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
+				Status: status.NewInternal(ctx, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
 			}, nil
 		}
 		fileInfo = res.Info

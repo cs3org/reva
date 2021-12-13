@@ -195,7 +195,7 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error setting arbitrary metadata: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error setting arbitrary metadata: "+req.Ref.String())
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -222,7 +222,7 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error unsetting arbitrary metadata: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error unsetting arbitrary metadata: "+req.Ref.String())
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -275,7 +275,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	log := appctx.GetLogger(ctx)
 	if req.Ref.GetPath() == "/" {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, errtypes.BadRequest("can't upload to mount path"), "can't upload to mount path"),
+			Status: status.NewInternal(ctx, "can't upload to mount path"),
 		}, nil
 	}
 
@@ -288,7 +288,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			if err != nil {
 				log.Error().Err(err).Msg("error parsing upload length")
 				return &provider.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "error parsing upload length"),
+					Status: status.NewInternal(ctx, "error parsing upload length"),
 				}, nil
 			}
 		}
@@ -323,7 +323,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		case errtypes.InsufficientStorage:
 			st = status.NewInsufficientStorage(ctx, err, "insufficient storage")
 		default:
-			st = status.NewInternal(ctx, err, "error getting upload id: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error getting upload id: "+req.Ref.String())
 		}
 		log.Error().
 			Err(err).
@@ -368,7 +368,7 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 			Interface("resource_id", req.ResourceId).
 			Msg("error getting path by id")
 		return &provider.GetPathResponse{
-			Status: status.NewInternal(ctx, err, "error getting path by id"),
+			Status: status.NewInternal(ctx, "error getting path by id"),
 		}, nil
 	}
 	res := &provider.GetPathResponse{
@@ -400,7 +400,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 			// if trying to create a user home fall back to CreateHome
 			if u, ok := ctxpkg.ContextGetUser(ctx); ok && req.Type == "personal" && utils.UserEqual(req.GetOwner().Id, u.Id) {
 				if err := s.storage.CreateHome(ctx); err != nil {
-					st = status.NewInternal(ctx, err, "error creating home")
+					st = status.NewInternal(ctx, "error creating home")
 				} else {
 					st = status.NewOK(ctx)
 					// TODO we cannot return a space, but the gateway currently does not expect one...
@@ -411,7 +411,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 		case errtypes.AlreadyExists:
 			st = status.NewAlreadyExists(ctx, err, "already exists")
 		default:
-			st = status.NewInternal(ctx, err, "error listing spaces")
+			st = status.NewInternal(ctx, "error listing spaces")
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -453,7 +453,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		case errtypes.NotSupported:
 			st = status.NewUnimplemented(ctx, err, "not implemented")
 		default:
-			st = status.NewInternal(ctx, err, "error listing spaces")
+			st = status.NewInternal(ctx, "error listing spaces")
 		}
 		log.Error().
 			Err(err).
@@ -499,7 +499,7 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error deleting space: "+req.Id.String())
+			st = status.NewInternal(ctx, "error deleting space: "+req.Id.String())
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -529,7 +529,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error creating container: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error creating container: "+req.Ref.String())
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -551,7 +551,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	if req.Ref.GetPath() == "/" {
 		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, errtypes.BadRequest("can't delete mount path"), "can't delete mount path"),
+			Status: status.NewInternal(ctx, "can't delete mount path"),
 		}, nil
 	}
 
@@ -572,7 +572,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error deleting file: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error deleting file: "+req.Ref.String())
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -600,7 +600,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error moving: "+req.Source.String())
+			st = status.NewInternal(ctx, "error moving: "+req.Source.String())
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -638,7 +638,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error statting: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error statting: "+req.Ref.String())
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -671,7 +671,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error listing container: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error listing container: "+req.Ref.String())
 		}
 		log.Error().
 			Err(err).
@@ -712,7 +712,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error listing container: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error listing container: "+req.Ref.String())
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -742,7 +742,7 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error listing file versions: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error listing file versions: "+req.Ref.String())
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -773,7 +773,7 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error restoring version: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error restoring version: "+req.Ref.String())
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -807,7 +807,7 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error listing recycle stream")
+			st = status.NewInternal(ctx, "error listing recycle stream")
 		}
 		log.Error().
 			Err(err).
@@ -850,7 +850,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error listing recycle")
+			st = status.NewInternal(ctx, "error listing recycle")
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -882,7 +882,7 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error restoring recycle bin item")
+			st = status.NewInternal(ctx, "error restoring recycle bin item")
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -914,7 +914,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 			case errtypes.PermissionDenied:
 				st = status.NewPermissionDenied(ctx, err, "permission denied")
 			default:
-				st = status.NewInternal(ctx, err, "error purging recycle item")
+				st = status.NewInternal(ctx, "error purging recycle item")
 			}
 			appctx.GetLogger(ctx).
 				Error().
@@ -936,7 +936,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error purging recycle bin")
+			st = status.NewInternal(ctx, "error purging recycle bin")
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -966,7 +966,7 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error listing grants")
+			st = status.NewInternal(ctx, "error listing grants")
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -1003,7 +1003,7 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error setting grants")
+			st = status.NewInternal(ctx, "error setting grants")
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -1039,7 +1039,7 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error setting grants")
+			st = status.NewInternal(ctx, "error setting grants")
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -1074,7 +1074,7 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error updating grant")
+			st = status.NewInternal(ctx, "error updating grant")
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -1109,7 +1109,7 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error removing grant")
+			st = status.NewInternal(ctx, "error removing grant")
 		}
 		appctx.GetLogger(ctx).
 			Error().
@@ -1148,7 +1148,7 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error creating reference")
+			st = status.NewInternal(ctx, "error creating reference")
 		}
 		log.Error().
 			Err(err).
@@ -1181,7 +1181,7 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error getting quota")
+			st = status.NewInternal(ctx, "error getting quota")
 		}
 		appctx.GetLogger(ctx).
 			Error().

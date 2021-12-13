@@ -429,7 +429,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		err := s.rejectReceivedShare(ctx, receivedShare)
 		if err != nil {
 			return &provider.DeleteResponse{
-				Status: status.NewInternal(ctx, err, "sharesstorageprovider: error rejecting share"),
+				Status: status.NewInternal(ctx, "sharesstorageprovider: error rejecting share"),
 			}, nil
 		}
 		return &provider.DeleteResponse{
@@ -485,7 +485,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		})
 		if err != nil {
 			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "sharesstorageprovider: can not change mountpoint of share"),
+				Status: status.NewInternal(ctx, "sharesstorageprovider: can not change mountpoint of share"),
 			}, nil
 		}
 		return &provider.MoveResponse{
