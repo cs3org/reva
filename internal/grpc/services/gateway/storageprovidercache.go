@@ -93,6 +93,11 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 		return resp, nil
 	case key == "":
 		return resp, nil
+	case strings.Contains(key, "sid:a0ca6a90-a365-4782-871e-d44447bbc668"):
+		// We cannot cache shares at the moment:
+		// we do not know when to invalidate them
+		// FIXME: find a way to cache/invalidate them too
+		return resp, nil
 	default:
 		b, err := json.Marshal(resp)
 		if err != nil {
