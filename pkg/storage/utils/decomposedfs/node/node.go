@@ -65,14 +65,15 @@ const (
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
 type Node struct {
-	ParentID  string
+	SpaceRoot string
+	ShareRoot string
 	ID        string
+	ParentID  string
 	Name      string
 	Blobsize  int64
 	BlobID    string
 	owner     *userpb.UserId
 	Exists    bool
-	SpaceRoot *Node
 
 	lu PathLookup
 }
@@ -88,18 +89,19 @@ type PathLookup interface {
 }
 
 // New returns a new instance of Node
-func New(id, parentID, name string, blobsize int64, blobID string, owner *userpb.UserId, lu PathLookup) *Node {
+func New(spaceroot, id, parentID, name string, blobsize int64, blobID string, owner *userpb.UserId, lu PathLookup) *Node {
 	if blobID == "" {
 		blobID = uuid.New().String()
 	}
 	return &Node{
-		ID:       id,
-		ParentID: parentID,
-		Name:     name,
-		Blobsize: blobsize,
-		owner:    owner,
-		lu:       lu,
-		BlobID:   blobID,
+		SpaceRoot: spaceroot,
+		ID:        id,
+		ParentID:  parentID,
+		Name:      name,
+		Blobsize:  blobsize,
+		owner:     owner,
+		lu:        lu,
+		BlobID:    blobID,
 	}
 }
 
@@ -194,7 +196,7 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 
 	// check if this is a space root
 	if _, err = xattr.Get(nodePath, xattrs.SpaceNameAttr); err == nil {
-		n.SpaceRoot = n
+		n.SpaceRoot = n.ID // TODO read grants for current user and set share root?
 	}
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, xattrs.NameAttr); err == nil {
@@ -381,6 +383,10 @@ func (n *Node) InternalPath() string {
 	return n.lu.InternalPath(n.ID)
 }
 
+func (n *Node) InternalSpaceRootPath() string {
+	return n.lu.InternalPath(n.SpaceRoot)
+}
+
 // CalculateEtag returns a hash of fileid + tmtime (or mtime)
 func CalculateEtag(nodeID string, tmTime time.Time) (string, error) {
 	return calculateEtag(nodeID, tmTime)
@@ -508,25 +514,36 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 
 	// TODO ensure we always have a space root
-	id := &provider.ResourceId{StorageId: n.SpaceRoot.Name, OpaqueId: n.ID}
-
-	if returnBasename {
-		fn = n.Name
-	} else {
-		fn, err = n.lu.Path(ctx, n)
-		if err != nil {
-			return nil, err
-		}
-	}
+	n.FindStorageSpaceRoot()
 
 	ri = &provider.ResourceInfo{
-		Id:            id,
-		Path:          fn,
+		Id:            &provider.ResourceId{StorageId: n.SpaceRoot, OpaqueId: n.ID},
 		Type:          nodeType,
 		MimeType:      mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, fn),
 		Size:          uint64(n.Blobsize),
 		Target:        string(target),
 		PermissionSet: rp,
+	}
+
+	if returnBasename { // FIXME this is not the basename it is the path relative to the root
+		ri.Path = n.Name
+		// return space root
+		// FIXME not good enough: we need to find the highest space where the current user has access
+		// walk from root? or collect all spaces while walking ... this is done for the permissions check, anyway
+		ri.Opaque = &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"root": {
+					Decoder: "plain",
+					Value:   []byte(n.SpaceRoot),
+				},
+			},
+		}
+
+	} else {
+		ri.Path, err = n.lu.Path(ctx, n)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -617,7 +634,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// quota
 	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
 		var quotaPath string
-		if n.SpaceRoot == nil {
+		if n.SpaceRoot == "" {
 			root, err := n.lu.RootNode(ctx)
 			if err == nil {
 				quotaPath = root.InternalPath()
@@ -625,7 +642,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 				sublog.Debug().Err(err).Msg("error determining the space root node for quota")
 			}
 		} else {
-			quotaPath = n.SpaceRoot.InternalPath()
+			quotaPath = n.InternalSpaceRootPath()
 		}
 		if quotaPath != "" {
 			readQuotaIntoOpaque(ctx, quotaPath, ri)
@@ -764,6 +781,15 @@ func (n *Node) SetTMTime(t time.Time) (err error) {
 func (n *Node) GetTreeSize() (treesize uint64, err error) {
 	var b []byte
 	if b, err = xattr.Get(n.InternalPath(), xattrs.TreesizeAttr); err != nil {
+		return
+	}
+	return strconv.ParseUint(string(b), 10, 64)
+}
+
+// GetSpaceSize reads the space size from the extended attributes
+func (n *Node) GetSpaceSize() (treesize uint64, err error) {
+	var b []byte
+	if b, err = xattr.Get(n.InternalSpaceRootPath(), xattrs.TreesizeAttr); err != nil {
 		return
 	}
 	return strconv.ParseUint(string(b), 10, 64)
@@ -942,7 +968,7 @@ func parseMTime(v string) (t time.Time, err error) {
 // FindStorageSpaceRoot calls n.Parent() and climbs the tree
 // until it finds the space root node and adds it to the node
 func (n *Node) FindStorageSpaceRoot() error {
-	if n.SpaceRoot != nil {
+	if n.SpaceRoot != "" {
 		return nil
 	}
 	var err error
@@ -953,7 +979,7 @@ func (n *Node) FindStorageSpaceRoot() error {
 			return err
 		}
 		if IsSpaceRoot(parent) {
-			n.SpaceRoot = parent
+			n.SpaceRoot = parent.ID
 			break
 		}
 	}
@@ -972,12 +998,12 @@ func IsSpaceRoot(r *Node) bool {
 }
 
 // CheckQuota checks if both disk space and available quota are sufficient
-var CheckQuota = func(spaceRoot *Node, fileSize uint64) (quotaSufficient bool, err error) {
-	used, _ := spaceRoot.GetTreeSize()
-	if !enoughDiskSpace(spaceRoot.InternalPath(), fileSize) {
+var CheckQuota = func(n *Node, fileSize uint64) (quotaSufficient bool, err error) {
+	used, _ := n.GetSpaceSize()
+	if !enoughDiskSpace(n.InternalSpaceRootPath(), fileSize) {
 		return false, errtypes.InsufficientStorage("disk full")
 	}
-	quotaByte, _ := xattr.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
+	quotaByte, _ := xattr.Get(n.InternalSpaceRootPath(), xattrs.QuotaAttr)
 	var total uint64
 	if quotaByte == nil {
 		// if quota is not set, it means unlimited

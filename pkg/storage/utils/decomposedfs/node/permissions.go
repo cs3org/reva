@@ -140,6 +140,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 	}
 
 	// for all segments, starting at the leaf
+	// FIXME remember the highest space root we encounter? always or only for id only based lookups?
 	for cn.ID != rn.ID {
 		if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
 			AddPermissions(&ap, &np)
@@ -203,7 +204,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 	var g *provider.Grant
 	// for all segments, starting at the leaf
 	cn := n
-	for cn.ID != n.SpaceRoot.ID {
+	for cn.ID != n.SpaceRoot {
 
 		var grantees []string
 		if grantees, err = cn.ListGrantees(ctx); err != nil {

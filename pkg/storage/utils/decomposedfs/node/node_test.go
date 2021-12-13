@@ -55,8 +55,8 @@ var _ = Describe("Node", func() {
 
 	Describe("New", func() {
 		It("generates unique blob ids if none are given", func() {
-			n1 := node.New(id, "", name, 10, "", env.Owner.Id, env.Lookup)
-			n2 := node.New(id, "", name, 10, "", env.Owner.Id, env.Lookup)
+			n1 := node.New("", id, "", name, 10, "", env.Owner.Id, env.Lookup)
+			n2 := node.New("", id, "", name, 10, "", env.Owner.Id, env.Lookup)
 
 			Expect(len(n1.BlobID)).To(Equal(36))
 			Expect(n1.BlobID).ToNot(Equal(n2.BlobID))
@@ -81,7 +81,7 @@ var _ = Describe("Node", func() {
 		It("writes all xattrs", func() {
 			ref := &provider.Reference{
 				ResourceId: env.SpaceRootRes,
-				Path:       "/dir1/file1",
+				Path:       "./dir1/file1",
 			}
 			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())

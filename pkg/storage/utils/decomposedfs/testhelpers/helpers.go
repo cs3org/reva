@@ -106,17 +106,15 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	env := &TestEnv{
-		Root:        tmpRoot,
-		Fs:          fs,
-		Tree:        tree,
-		Lookup:      lookup,
-		Permissions: permissions,
-		Blobstore:   bs,
-		Owner:       owner,
-		Ctx:         ctx,
-		SpaceRootRes: &providerv1beta1.ResourceId{
-			StorageId: home.StorageSpace.Id.OpaqueId,
-		},
+		Root:         tmpRoot,
+		Fs:           fs,
+		Tree:         tree,
+		Lookup:       lookup,
+		Permissions:  permissions,
+		Blobstore:    bs,
+		Owner:        owner,
+		Ctx:          ctx,
+		SpaceRootRes: home.StorageSpace.Root,
 	}
 
 	spaceRootRef := &providerv1beta1.Reference{
@@ -139,7 +137,7 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	// Create file1 in dir1
-	_, err = env.CreateTestFile("file1", "file1-blobid", 1234, dir1.ID)
+	_, err = env.CreateTestFile(home.StorageSpace.Root.StorageId, "file1", "file1-blobid", 1234, dir1.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +155,7 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	// Create file1 in dir1
-	_, err = env.CreateTestFile("file2", "file2-blobid", 12345, dir2.ID)
+	_, err = env.CreateTestFile(home.StorageSpace.Root.StorageId, "file2", "file2-blobid", 12345, dir2.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -197,9 +195,10 @@ func (t *TestEnv) CreateTestDir(name string, parentRef *providerv1beta1.Referenc
 }
 
 // CreateTestFile creates a new file and its metadata and returns a corresponding Node
-func (t *TestEnv) CreateTestFile(name, blobID string, blobSize int64, parentID string) (*node.Node, error) {
+func (t *TestEnv) CreateTestFile(spaceRoot, name, blobID string, blobSize int64, parentID string) (*node.Node, error) {
 	// Create file in dir1
 	file := node.New(
+		spaceRoot,
 		uuid.New().String(),
 		parentID,
 		name,

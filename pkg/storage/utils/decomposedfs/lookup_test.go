@@ -50,10 +50,12 @@ var _ = Describe("Lookup", func() {
 				Path:       "/dir1/file1",
 			})
 			Expect(err).ToNot(HaveOccurred())
+			Expect(n.SpaceRoot).To(Equal("userid"))
 
 			path, err := env.Lookup.Path(env.Ctx, n)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/file1"))
+			Expect(n.SpaceRoot).To(Equal("userid"))
 		})
 	})
 
@@ -61,15 +63,15 @@ var _ = Describe("Lookup", func() {
 		It("returns the path including a leading slash and the space root is set", func() {
 			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 				ResourceId: env.SpaceRootRes,
-				Path:       "/dir1/subdir1/file2",
+				Path:       "./dir1/subdir1/file2",
 			})
 			Expect(err).ToNot(HaveOccurred())
+			Expect(n.SpaceRoot).To(Equal("userid"))
 
 			path, err := env.Lookup.Path(env.Ctx, n)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/subdir1/file2"))
-			Expect(n.SpaceRoot.Name).To(Equal("userid"))
-			Expect(n.SpaceRoot.ParentID).To(Equal("root"))
+			Expect(n.SpaceRoot).To(Equal("userid"))
 		})
 	})
 
@@ -78,21 +80,20 @@ var _ = Describe("Lookup", func() {
 			// do a node lookup by path
 			nRef, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 				ResourceId: env.SpaceRootRes,
-				Path:       "/dir1/file1",
+				Path:       "./dir1/file1",
 			})
 			Expect(err).ToNot(HaveOccurred())
 
 			// try to find the same node by id
 			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: &provider.ResourceId{OpaqueId: nRef.ID}})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(n.SpaceRoot).ToNot(BeNil())
+			Expect(n.SpaceRoot).To(Equal("userid"))
 
 			// Check if we got the right node and spaceRoot
 			path, err := env.Lookup.Path(env.Ctx, n)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/file1"))
-			Expect(n.SpaceRoot.Name).To(Equal("userid"))
-			Expect(n.SpaceRoot.ParentID).To(Equal("root"))
+			Expect(n.SpaceRoot).To(Equal("userid"))
 		})
 	})
 
@@ -101,21 +102,20 @@ var _ = Describe("Lookup", func() {
 			// do a node lookup by path for the parent
 			nRef, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 				ResourceId: env.SpaceRootRes,
-				Path:       "/dir1",
+				Path:       "./dir1",
 			})
 			Expect(err).ToNot(HaveOccurred())
 
 			// try to find the child node by parent id and relative path
 			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: &provider.ResourceId{OpaqueId: nRef.ID}, Path: "./file1"})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(n.SpaceRoot).ToNot(BeNil())
+			Expect(n.SpaceRoot).To(Equal("userid"))
 
 			// Check if we got the right node and spaceRoot
 			path, err := env.Lookup.Path(env.Ctx, n)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/file1"))
-			Expect(n.SpaceRoot.Name).To(Equal("userid"))
-			Expect(n.SpaceRoot.ParentID).To(Equal("root"))
+			Expect(n.SpaceRoot).To(Equal("userid"))
 		})
 	})
 

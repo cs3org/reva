@@ -123,7 +123,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		},
 		Size: uploadLength,
 		Storage: map[string]string{
-			"SpaceRoot": n.SpaceRoot.ID,
+			"SpaceRoot": n.SpaceRoot,
 		},
 	}
 
@@ -150,7 +150,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
 
-	_, err = node.CheckQuota(n.SpaceRoot, uint64(info.Size))
+	_, err = node.CheckQuota(n, uint64(info.Size))
 	if err != nil {
 		return nil, err
 	}
@@ -249,10 +249,10 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	var spaceRoot string
 	if info.Storage != nil {
 		if spaceRoot, ok = info.Storage["SpaceRoot"]; !ok {
-			spaceRoot = n.SpaceRoot.ID
+			spaceRoot = n.SpaceRoot
 		}
 	} else {
-		spaceRoot = n.SpaceRoot.ID
+		spaceRoot = n.SpaceRoot
 	}
 
 	info.Storage = map[string]string{
@@ -456,6 +456,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 
 	n := node.New(
+		upload.info.Storage["SpaceRoot"],
 		upload.info.Storage["NodeId"],
 		upload.info.Storage["NodeParentId"],
 		upload.info.Storage["NodeName"],
@@ -464,9 +465,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		nil,
 		upload.fs.lu,
 	)
-	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
 
-	_, err = node.CheckQuota(n.SpaceRoot, uint64(fi.Size()))
+	_, err = node.CheckQuota(n, uint64(fi.Size()))
 	if err != nil {
 		return err
 	}

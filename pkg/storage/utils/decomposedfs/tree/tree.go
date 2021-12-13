@@ -111,7 +111,7 @@ func (t *Tree) Setup(owner *userpb.UserId, propagateToRoot bool) error {
 
 	// the root node has an empty name
 	// the root node has no parent
-	n := node.New("root", "", "", 0, "", nil, t.lookup)
+	n := node.New("root", "root", "", "", 0, "", nil, t.lookup)
 	err := t.createNode(n, owner)
 	if err != nil {
 		return err
@@ -281,7 +281,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		case e != nil:
 			appctx.GetLogger(ctx).Debug().Err(e).Msg("cannot move to trashcan")
 		default:
-			_, rm, e := t.PurgeRecycleItemFunc(ctx, n.SpaceRoot.ID, n.ID, "")
+			_, rm, e := t.PurgeRecycleItemFunc(ctx, n.SpaceRoot, n.ID, "")
 			if e == nil {
 				e = rm()
 				if e != nil {
@@ -396,7 +396,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 			// TODO log
 			continue
 		}
-		if child.SpaceRoot == nil {
+		if child.SpaceRoot == "" {
 			child.SpaceRoot = n.SpaceRoot
 		}
 		nodes = append(nodes, child)
@@ -413,7 +413,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		return os.Remove(src)
 	}
 	// Prepare the trash
-	err = os.MkdirAll(filepath.Join(t.root, "trash", n.SpaceRoot.ID), 0700)
+	err = os.MkdirAll(filepath.Join(t.root, "trash", n.SpaceRoot), 0700)
 	if err != nil {
 		return
 	}
@@ -434,7 +434,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	// first make node appear in the space trash
 	// parent id and name are stored as extended attributes in the node itself
-	trashLink := filepath.Join(t.root, "trash", n.SpaceRoot.ID, n.ID)
+	trashLink := filepath.Join(t.root, "trash", n.SpaceRoot, n.ID)
 	err = os.Symlink("../../nodes/"+n.ID+".T."+deletionTime, trashLink)
 	if err != nil {
 		// To roll back changes
@@ -593,22 +593,13 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 
-	// is propagation enabled for the parent node?
-
-	var root *node.Node
-	if n.SpaceRoot == nil {
-		if root, err = t.lookup.RootNode(ctx); err != nil {
-			return
-		}
-	} else {
-		root = n.SpaceRoot
-	}
+	n.FindStorageSpaceRoot()
 
 	// use a sync time and don't rely on the mtime of the current node, as the stat might not change when a rename happened too quickly
 	sTime := time.Now().UTC()
 
 	// we loop until we reach the root
-	for err == nil && n.ID != root.ID {
+	for err == nil && n.ID != n.SpaceRoot {
 		sublog.Debug().Msg("propagating")
 
 		if n, err = n.Parent(); err != nil {
@@ -829,7 +820,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 		return
 	}
 
-	recycleNode = node.New(trashNodeID, "", "", 0, "", owner, t.lookup)
+	recycleNode = node.New(spaceid, trashNodeID, "", "", 0, "", owner, t.lookup)
 	// lookup blobID in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.BlobIDAttr); err == nil {
 		recycleNode.BlobID = string(attrBytes)

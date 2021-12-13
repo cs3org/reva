@@ -107,14 +107,13 @@ func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) 
 		return nil, err
 	}
 
-	node.SpaceRoot = node
+	node.SpaceRoot = node.ID // FIXME so we can only look up spaces not shares
 	return node, nil
 }
 
 // Path returns the path for node
 func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) {
-	root := n.SpaceRoot
-	for n.ID != root.ID {
+	for n.ID != n.SpaceRoot {
 		p = filepath.Join(n.Name, p)
 		if n, err = n.Parent(); err != nil {
 			appctx.GetLogger(ctx).
@@ -131,7 +130,7 @@ func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) 
 
 // RootNode returns the root node of the storage
 func (lu *Lookup) RootNode(ctx context.Context) (*node.Node, error) {
-	n := node.New("root", "", "", 0, "", nil, lu)
+	n := node.New("root", "root", "", "", 0, "", nil, lu)
 	n.Exists = true
 	return n, nil
 }
@@ -162,7 +161,7 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 			}
 		}
 		if node.IsSpaceRoot(r) {
-			r.SpaceRoot = r
+			r.SpaceRoot = r.ID
 		}
 
 		if !r.Exists && i < len(segments)-1 {

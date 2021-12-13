@@ -414,7 +414,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		return nil, err
 	}
 
-	glob := filepath.Join(fs.o.Root, "spaces", "*", n.SpaceRoot.ID)
+	glob := filepath.Join(fs.o.Root, "spaces", "*", n.SpaceRoot)
 	matches, err := filepath.Glob(glob)
 	if err != nil {
 		return nil, err
@@ -427,9 +427,9 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	spaceType := filepath.Base(filepath.Dir(matches[0]))
 
 	space := &provider.StorageSpace{
-		Id: &provider.StorageSpaceId{OpaqueId: n.SpaceRoot.ID},
+		Id: &provider.StorageSpaceId{OpaqueId: n.SpaceRoot},
 		Root: &provider.ResourceId{
-			StorageId: n.SpaceRoot.ID,
+			StorageId: n.SpaceRoot,
 			OpaqueId:  n.ID,
 		},
 		Name:      sname,

@@ -81,7 +81,7 @@ var _ = Describe("Tree", func() {
 			})
 
 			It("moves the file to the trash", func() {
-				trashPath := path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
+				trashPath := path.Join(env.Root, "trash", n.SpaceRoot, n.ID)
 				_, err := os.Stat(trashPath)
 				Expect(err).ToNot(HaveOccurred())
 			})
@@ -92,7 +92,7 @@ var _ = Describe("Tree", func() {
 			})
 
 			It("sets the trash origin xattr", func() {
-				trashPath := path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
+				trashPath := path.Join(env.Root, "trash", n.SpaceRoot, n.ID)
 				attr, err := xattr.Get(trashPath, xattrs.TrashOriginAttr)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(attr)).To(Equal("/dir1/file1"))
@@ -110,7 +110,7 @@ var _ = Describe("Tree", func() {
 
 			JustBeforeEach(func() {
 				env.Blobstore.On("Delete", n.BlobID).Return(nil)
-				trashPath = path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
+				trashPath = path.Join(env.Root, "trash", n.SpaceRoot, n.ID)
 				Expect(t.Delete(env.Ctx, n)).To(Succeed())
 			})
 
@@ -119,7 +119,7 @@ var _ = Describe("Tree", func() {
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "")
+					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.SpaceRoot, n.ID, "")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(purgeFunc()).To(Succeed())
 				})
@@ -143,7 +143,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("restores the file to its original location if the targetPath is empty", func() {
-					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -164,7 +164,7 @@ var _ = Describe("Tree", func() {
 					dest, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", dest)
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot, n.ID, "", dest)
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -180,7 +180,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("removes the file from the trash", func() {
-					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -212,7 +212,7 @@ var _ = Describe("Tree", func() {
 			)
 
 			JustBeforeEach(func() {
-				trashPath = path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
+				trashPath = path.Join(env.Root, "trash", n.SpaceRoot, n.ID)
 				Expect(t.Delete(env.Ctx, n)).To(Succeed())
 			})
 
@@ -221,7 +221,7 @@ var _ = Describe("Tree", func() {
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "")
+					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.SpaceRoot, n.ID, "")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(purgeFunc()).To(Succeed())
 				})
@@ -252,7 +252,7 @@ var _ = Describe("Tree", func() {
 
 		Describe("with TreeTimeAccounting enabled", func() {
 			It("sets the tmtime of the parent", func() {
-				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				file, err := env.CreateTestFile(env.SpaceRootRes.StorageId, "file1", "", 1, dir.ID)
 				Expect(err).ToNot(HaveOccurred())
 
 				perms := node.OwnerPermissions()
@@ -270,7 +270,7 @@ var _ = Describe("Tree", func() {
 
 		Describe("with TreeSizeAccounting enabled", func() {
 			It("calculates the size", func() {
-				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				file, err := env.CreateTestFile(env.SpaceRootRes.StorageId, "file1", "", 1, dir.ID)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Tree.Propagate(env.Ctx, file)
@@ -281,9 +281,9 @@ var _ = Describe("Tree", func() {
 			})
 
 			It("considers all files", func() {
-				_, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				_, err := env.CreateTestFile(env.SpaceRootRes.StorageId, "file1", "", 1, dir.ID)
 				Expect(err).ToNot(HaveOccurred())
-				file2, err := env.CreateTestFile("file2", "", 100, dir.ID)
+				file2, err := env.CreateTestFile(env.SpaceRootRes.StorageId, "file2", "", 100, dir.ID)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Tree.Propagate(env.Ctx, file2)
@@ -299,7 +299,7 @@ var _ = Describe("Tree", func() {
 				err = subdir.SetTreeSize(uint64(200))
 				Expect(err).ToNot(HaveOccurred())
 
-				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				file, err := env.CreateTestFile(env.SpaceRootRes.StorageId, "file1", "", 1, dir.ID)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Tree.Propagate(env.Ctx, file)
