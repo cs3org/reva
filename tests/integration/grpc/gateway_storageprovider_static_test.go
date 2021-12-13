@@ -358,6 +358,8 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 						Path: path.Join("/users/f"),
 					},
 				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				res, err = serviceClient.CreateContainer(marieCtx, &storagep.CreateContainerRequest{
 					Ref: &storagep.Reference{
 						Path: path.Join("/users/f", marie.Id.OpaqueId),
