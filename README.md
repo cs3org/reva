@@ -146,7 +146,6 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
     cd testrunner
     TEST_SERVER_URL='http://localhost:20080' \
     OCIS_REVA_DATA_ROOT='/var/tmp/reva/' \
-    DELETE_USER_DATA_CMD="rm -rf /var/tmp/reva/data/nodes/root/* /var/tmp/reva/data/nodes/*-*-*-* /var/tmp/reva/data/blobs/*" \
     SKELETON_DIR='./apps/testing/data/apiSkeleton' \
     TEST_WITH_LDAP='true' \
     REVA_LDAP_HOSTNAME='localhost' \
@@ -160,7 +159,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
 
     To run a single test add `BEHAT_FEATURE=<feature file>` and specify the path to the feature file and an optional line number. For example: `BEHAT_FEATURE='tests/acceptance/features/apiWebdavUpload1/uploadFile.feature:12'`
 
-    Make sure to double check the paths if you are changing the `OCIS_REVA_DATA_ROOT`. The `DELETE_USER_DATA_CMD` needs to clean up the correct folders.
+    Make sure to double check the paths if you are changing the `OCIS_REVA_DATA_ROOT`.
 
 ## Daily releases
 On every commit on the master branch (including merged Pull Requests) a new release will be created and 
