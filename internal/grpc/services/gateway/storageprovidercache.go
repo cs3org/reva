@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	sdk "github.com/cs3org/reva/pkg/sdk/common"
 	"google.golang.org/grpc"
 )
 
@@ -127,7 +128,33 @@ func (c *cachedRegistryClient) GetStorageProviders(ctx context.Context, in *regi
 	return c.c.GetStorageProviders(ctx, in, opts...)
 }
 func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *registry.ListStorageProvidersRequest, opts ...grpc.CallOption) (*registry.ListStorageProvidersResponse, error) {
-	return c.c.ListStorageProviders(ctx, in, opts...)
+	key := sdk.DecodeOpaqueMap(in.Opaque)["storage_id"]
+	if key != "" {
+		r, err := c.providerCache.Get(key)
+		if err == nil {
+			s := &registry.ListStorageProvidersResponse{}
+			err = json.Unmarshal(r.([]byte), s)
+			return s, err
+		}
+
+	}
+
+	resp, err := c.c.ListStorageProviders(ctx, in, opts...)
+	switch {
+	case err != nil:
+		return nil, err
+	case resp.Status.Code != rpc.Code_CODE_OK && resp.Status.Code != rpc.Code_CODE_NOT_FOUND:
+		return resp, nil
+	case key == "":
+		return resp, nil
+	default:
+		b, err := json.Marshal(resp)
+		if err != nil {
+			return resp, nil
+		}
+		_ = c.providerCache.Set(key, b)
+		return resp, nil
+	}
 }
 func (c *cachedRegistryClient) GetHome(ctx context.Context, in *registry.GetHomeRequest, opts ...grpc.CallOption) (*registry.GetHomeResponse, error) {
 	return c.c.GetHome(ctx, in, opts...)

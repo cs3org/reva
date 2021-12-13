@@ -1447,13 +1447,7 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	switch {
 	case ref == nil:
 		return nil, errtypes.BadRequest("missing reference")
-	case ref.ResourceId != nil: // can we use the provider cache?
-		// only the StorageId is used to look up the provider. the opaqueid can only be a share and as such part of a storage
-		if value, exists := s.providerCache.Get(ref.ResourceId.StorageId); exists == nil {
-			if providers, ok := value.([]*registry.ProviderInfo); ok {
-				return providers, nil
-			}
-		}
+	case ref.ResourceId != nil:
 	case ref.Path != "": //  TODO implement a mount path cache in the registry?
 	/*
 		// path / mount point lookup from cache
@@ -1503,7 +1497,6 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	}
 	sdk.EncodeOpaqueMap(listReq.Opaque, filters)
 	res, err := c.ListStorageProviders(ctx, listReq)
-
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListStorageProviders")
 	}
@@ -1527,82 +1520,6 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	if res.Providers == nil {
 		return nil, errtypes.NotFound("gateway: provider is nil")
 	}
-
-	if ref.ResourceId != nil {
-		if err = s.providerCache.Set(ref.ResourceId.StorageId, res.Providers); err != nil {
-			appctx.GetLogger(ctx).Warn().Err(err).Interface("reference", ref).Msg("gateway: could not cache providers")
-		}
-	} /* else {
-		// every user has a cache for mount points?
-		// the path map must be cached in the registry, not in the gateway?
-		//   - in the registry we cannot determine if other spaces have been mounted or removed. if a new project space was mounted that happens in the registry
-		//   - but the registry does not know when we rename a space ... or does it?
-		//     - /.../Shares is a collection the gateway builds by aggregating the liststoragespaces response
-		//     - the spaces registry builds a path for every space, treating every share as a distinct space.
-		//       - findProviders() will return a long list of spaces, the Stat / ListContainer calls will stat the root etags of every space and share
-		//       -> FIXME cache the root etag of every space, ttl ... do we need to stat? or can we cach the root etag in the providerinfo?
-		//     - large amounts of shares
-		// use the root etag of a space to determine if we can read from cache?
-		// (finished) uploads, created dirs, renamed nodes, deleted nodes cause the root etag of a space to change
-		//
-		var providersCache *ttlcache.Cache
-		cache, err := s.mountCache.Get(userKey(ctx))
-		if err != nil {
-			providersCache = ttlcache.NewCache()
-			_ = providersCache.SetTTL(time.Duration(s.c.MountCacheTTL) * time.Second)
-			providersCache.SkipTTLExtensionOnHit(true)
-			s.mountCache.Set(userKey(ctx), providersCache)
-		} else {
-			providersCache = cache.(*ttlcache.Cache)
-		}
-
-		for _, providerInfo := range res.Providers {
-
-			mountPath := providerInfo.ProviderPath
-			var root *provider.ResourceId
-
-			if spacePaths := decodeSpacePaths(p.Opaque); len(spacePaths) > 0 {
-				for spaceID, spacePath := range spacePaths {
-					mountPath = spacePath
-					rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
-					root = &provider.ResourceId{
-						StorageId: rootSpace,
-						OpaqueId:  rootNode,
-					}
-					break // TODO can there be more than one space for a path?
-				}
-			}
-			providersCache.Set(userKey(ctx), res.Providers) // FIXME needs a map[string]*registry.ProviderInfo
-
-		}
-		// use ListProviders? make it return all providers a user has access to aka all mount points?
-		// cache that list in the gateway.
-		// -> invalidate the cached list of mountpoints when a modification happens
-		// refres by loading all mountpoints from spaces registry
-		// - in the registry cache listStorageSpaces responses for every provider so we don't have to query every provider?
-		//   - how can we determine which listStorageSpaces response to invalidate?
-		//     - misuse ListContainerStream to get notified of root changes of every space?
-		//     - or send a ListStorageSpaces request to the registry with an invalidate(spaceid) property?
-		//       - This would allow the gateway could tell the registry which space(s) to refresh
-		//         - but the registry might not be using a cache
-		//     - we still don't know when an upload finishes ... so we cannot invalidate the cache for that event
-		//       - especially if there are workflows involved?
-		//       - actually, the initiate upload response should make the provider show the file immediately. it should not be downloadable though
-		//         - with stat we want to see the progress. actually multiple uploads (-> workflows) to the same file might be in progress...
-		// example:
-		//  - user accepts a share in the web ui, then navigates into his /Shares folder
-		//    -> he should see the accepted share, and he should be able to navigate into it
-		// - actually creating a share should already create a space, but it has no name yet
-		// - the problem arises when someone mounts a spaece (can pe a share or a project, does not matter)
-		//    -> when do we update the list of mount points which we cache in the gateway?
-		// - we want to maintain a list of all mount points (and their root etag/mtime) to allow clients to efficiently poll /
-		//   and query the list of all storage spaces the user has access to
-		//   - the simplest 'maintenance' is caching the complete list and invalidating it on changes
-		//   - a more elegant 'maintenance' would add and remove paths as they occur ... which is what the spaces registry is supposed to do...
-		//     -> don't cache anything in the gateway for path based requests. Instead maintain a cache in the spaces registry.
-		//
-		// Caching needs to take the last modification time into account to discover new mount points -> needs to happen in the registry
-	}*/
 
 	return res.Providers, nil
 }
