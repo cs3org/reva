@@ -27,11 +27,8 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -203,59 +200,19 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create empty file via storageprovider
-	createReq := &provider.InitiateFileUploadRequest{
+	// Create the file
+	touchReq := provider.TouchFileRequest{
 		Ref: fileRef,
-		Opaque: &typespb.Opaque{
-			Map: map[string]*typespb.OpaqueEntry{
-				"Upload-Length": {
-					Decoder: "plain",
-					Value:   []byte("0"),
-				},
-			},
-		},
 	}
 
-	// having a client.CreateFile() function would come in handy here...
-
-	createRes, err := client.InitiateFileUpload(ctx, createReq)
-	if err != nil {
-		writeError(w, r, appErrorServerError, "error calling InitiateFileUpload", err)
-		return
-	}
-	if createRes.Status.Code != rpc.Code_CODE_OK {
-		writeError(w, r, appErrorServerError, "error calling InitiateFileUpload", nil)
-		return
-	}
-
-	// Do a HTTP PUT with an empty body
-	var ep, token string
-	for _, p := range createRes.Protocols {
-		if p.Protocol == "simple" {
-			ep, token = p.UploadEndpoint, p.Token
-		}
-	}
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, ep, nil)
+	touchRes, err := client.TouchFile(ctx, &touchReq)
 	if err != nil {
 		writeError(w, r, appErrorServerError, "failed to create the file", err)
 		return
 	}
 
-	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
-	httpRes, err := rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		rhttp.Insecure(s.conf.Insecure),
-	).Do(httpReq)
-	if err != nil {
-		writeError(w, r, appErrorServerError, "failed to create the file", err)
-		return
-	}
-	defer httpRes.Body.Close()
-	if httpRes.StatusCode == http.StatusForbidden {
-		// the file upload was already finished since it is a zero byte file
-		// TODO: why do we get a 401 then!?
-	} else if httpRes.StatusCode != http.StatusOK {
-		writeError(w, r, appErrorServerError, "failed to create the file", nil)
+	if touchRes.Status.Code != rpc.Code_CODE_OK {
+		writeError(w, r, appErrorServerError, "statting the created file failed", nil)
 		return
 	}
 
