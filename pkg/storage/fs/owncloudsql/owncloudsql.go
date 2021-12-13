@@ -766,6 +766,7 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 	return fs.propagate(ctx, filepath.Dir(ip))
 }
 
+// TouchFile as defined in the storage.FS interface
 func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	return fmt.Errorf("unimplemented: TouchFile")
 }

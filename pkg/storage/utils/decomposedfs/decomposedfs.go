@@ -321,6 +321,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	return
 }
 
+// TouchFile as defined in the storage.FS interface
 func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	return fmt.Errorf("unimplemented: TouchFile")
 }

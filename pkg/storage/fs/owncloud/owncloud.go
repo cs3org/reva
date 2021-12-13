@@ -1186,6 +1186,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference) (err err
 	return fs.propagate(ctx, ip)
 }
 
+// TouchFile as defined in the storage.FS interface
 func (fs *ocfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	return fmt.Errorf("unimplemented: TouchFile")
 }

@@ -326,6 +326,7 @@ func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	return nil
 }
 
+// TouchFile as defined in the storage.FS interface
 func (fs *s3FS) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	return fmt.Errorf("unimplemented: TouchFile")
 }
