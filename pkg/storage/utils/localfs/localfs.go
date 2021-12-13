@@ -432,11 +432,11 @@ func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.ResourceId) (s
 			return "", err
 		}
 	}
-	unescapedId, err := url.QueryUnescape(ref.OpaqueId)
+	unescapedID, err := url.QueryUnescape(ref.OpaqueId)
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimPrefix(unescapedId, "fileid-"+layout), nil
+	return strings.TrimPrefix(unescapedID, "fileid-"+layout), nil
 }
 
 func (fs *localfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
