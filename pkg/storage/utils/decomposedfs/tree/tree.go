@@ -595,7 +595,9 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 	}
 
 	currentUser, _ := ctxpkg.ContextGetUser(ctx)
-	n.FindStorageSpaceRoot(currentUser)
+	if err := n.FindStorageSpaceRoot(currentUser); err != nil {
+		return err
+	}
 
 	// use a sync time and don't rely on the mtime of the current node, as the stat might not change when a rename happened too quickly
 	sTime := time.Now().UTC()
@@ -846,7 +848,9 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 
 	// look up space root from the trashed node
 	currentUser, _ := ctxpkg.ContextGetUser(ctx)
-	err = recycleNode.FindStorageSpaceRoot(currentUser)
+	if err = recycleNode.FindStorageSpaceRoot(currentUser); err != nil {
+		return
+	}
 
 	if path == "" || path == "/" {
 		parts := strings.SplitN(filepath.Base(link), ".T.", 2)

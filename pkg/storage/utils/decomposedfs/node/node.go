@@ -516,7 +516,9 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	// TODO ensure we always have a space root
 	currentUser, _ := ctxpkg.ContextGetUser(ctx)
-	n.FindStorageSpaceRoot(currentUser)
+	if err := n.FindStorageSpaceRoot(currentUser); err != nil {
+		return nil, err
+	}
 
 	ri = &provider.ResourceInfo{
 		Id:            &provider.ResourceId{StorageId: n.SpaceRoot, OpaqueId: n.ID},
@@ -871,6 +873,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (provide
 	userace := xattrs.GrantPrefix + xattrs.UserAcePrefix + u.Id.OpaqueId
 	userFound := false
 	for i := range grantees {
+		err = nil
 		switch {
 		// we only need to find the user once
 		case !userFound && grantees[i] == userace:
@@ -893,7 +896,6 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (provide
 			isShareRoot = true
 			AddPermissions(&ap, g.GetPermissions())
 		case isAttrUnset(err):
-			err = nil
 			appctx.GetLogger(ctx).Error().Interface("node", n).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 			// continue with next segment
 		default:
