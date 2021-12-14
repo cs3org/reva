@@ -48,10 +48,6 @@ func init() {
 	rgrpc.Register("publicstorageprovider", New)
 }
 
-// StorageID is used to identify resources handled by the public storage provider.
-// Used in the publiclink scope
-const StorageID = "7993447f-687f-490d-875c-ac95e89a62a4"
-
 type config struct {
 	GatewayAddr string `mapstructure:"gateway_addr"`
 }
@@ -321,7 +317,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 			spaceid, _ := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
-			if spaceid != StorageID {
+			if spaceid != utils.PublicStorageProviderID {
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 				}, nil
@@ -333,13 +329,13 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 		StorageSpaces: []*provider.StorageSpace{{
 			Id: &provider.StorageSpaceId{
-				OpaqueId: StorageID,
+				OpaqueId: utils.PublicStorageProviderID,
 			},
 			SpaceType: "public",
 			// return the actual resource id?
 			Root: &provider.ResourceId{
-				StorageId: StorageID,
-				OpaqueId:  StorageID,
+				StorageId: utils.PublicStorageProviderID,
+				OpaqueId:  utils.PublicStorageProviderID,
 			},
 			Name:  "Public shares",
 			Mtime: &typesv1beta1.Timestamp{}, // do we need to update it?
@@ -576,7 +572,7 @@ func (s *service) augmentStatResponse(ctx context.Context, res *provider.StatRes
 
 // setPublicStorageID encodes the actual spaceid and nodeid as an opaqueid in the publicstorageprovider space
 func (s *service) setPublicStorageID(info *provider.ResourceInfo, shareToken string) {
-	info.Id.StorageId = StorageID
+	info.Id.StorageId = utils.PublicStorageProviderID
 	info.Id.OpaqueId = shareToken + "/" + info.Id.OpaqueId
 }
 
