@@ -83,10 +83,11 @@ func (c *Caches) StorageProviderClient(p provider.ProviderAPIClient) provider.Pr
 
 // StorageRegistryClient returns a (cached) client pointing to the storageregistry
 func (c *Caches) StorageRegistryClient(p registry.RegistryAPIClient) registry.RegistryAPIClient {
-	return &cachedRegistryClient{
-		c:             p,
-		providerCache: c.providerCache,
-	}
+	//return &cachedRegistryClient{
+	//c:             p,
+	//providerCache: c.providerCache,
+	//}
+	return p
 }
 
 // RemoveStat removes a reference from the stat cache
