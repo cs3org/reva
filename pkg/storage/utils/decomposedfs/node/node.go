@@ -489,7 +489,6 @@ func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 
-	var fn string
 	nodePath := n.lu.InternalPath(n.ID)
 
 	var fi os.FileInfo
@@ -522,7 +521,6 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	ri = &provider.ResourceInfo{
 		Id:            &provider.ResourceId{StorageId: n.SpaceRoot, OpaqueId: n.ID},
 		Type:          nodeType,
-		MimeType:      mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, fn),
 		Size:          uint64(n.Blobsize),
 		Target:        string(target),
 		PermissionSet: rp,
@@ -540,13 +538,14 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		} else {
 			setPlainOpaque(ri, "root", n.SpaceRoot)
 		}
-
 	} else {
 		ri.Path, err = n.lu.Path(ctx, n)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	ri.MimeType = mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, ri.Path)
 
 	if nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ts, err := n.GetTreeSize()
