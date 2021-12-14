@@ -22,11 +22,9 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 
-	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -126,13 +124,6 @@ type svc struct {
 	dataGatewayURL url.URL
 	tokenmgr       token.Manager
 	cache          *Caches
-
-	// removes soon
-	etagCache       *ttlcache.Cache `mapstructure:"etag_cache"`
-	createHomeCache *ttlcache.Cache `mapstructure:"create_home_cache"`
-	providerCache   *ttlcache.Cache `mapstructure:"provider_cache"`
-	statCache       *ttlcache.Cache `mapstructure:"stat_cache"`
-	// mountCache      *ttlcache.Cache `mapstructure:"mount_cache"`
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -157,33 +148,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	// if the ttl is 0, aka not set, the cache lib will default to an hour
-	etagCache := ttlcache.NewCache()
-	_ = etagCache.SetTTL(time.Duration(c.EtagCacheTTL) * time.Second)
-	etagCache.SkipTTLExtensionOnHit(true)
-
-	createHomeCache := ttlcache.NewCache()
-	_ = createHomeCache.SetTTL(time.Duration(c.CreateHomeCacheTTL) * time.Second)
-	createHomeCache.SkipTTLExtensionOnHit(true)
-
-	providerCache := ttlcache.NewCache()
-	_ = providerCache.SetTTL(time.Duration(c.ProviderCacheTTL) * time.Second)
-	providerCache.SkipTTLExtensionOnHit(true)
-
-	statCache := ttlcache.NewCache()
-	_ = statCache.SetTTL(time.Duration(c.StatCacheTTL) * time.Second)
-	statCache.SkipTTLExtensionOnHit(true)
-
-	// mountCache := ttlcache.NewCache()
-	// _ = mountCache.SetTTL(time.Duration(c.MountCacheTTL) * time.Second)
-	// mountCache.SkipTTLExtensionOnHit(true)
-
 	s := &svc{
 		c:              c,
 		dataGatewayURL: *u,
 		tokenmgr:       tokenManager,
 		cache:          NewCaches(c),
-		etagCache:      etagCache,
 	}
 
 	return s, nil
@@ -194,7 +163,7 @@ func (s *svc) Register(ss *grpc.Server) {
 }
 
 func (s *svc) Close() error {
-	s.etagCache.Close()
+	s.cache.Close()
 	return nil
 }
 

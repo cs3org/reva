@@ -61,6 +61,13 @@ func NewCaches(conf *config) *Caches {
 	}
 }
 
+// Close closes all caches - best to call it on teardown - ignores errors
+func (c *Caches) Close() {
+	_ = c.homeCache.Close()
+	_ = c.statCache.Close()
+	_ = c.providerCache.Close()
+}
+
 // StorageProviderClient returns a (cached) client pointing to the storageprovider
 func (c *Caches) StorageProviderClient(p provider.ProviderAPIClient) provider.ProviderAPIClient {
 	return &cachedAPIClient{
