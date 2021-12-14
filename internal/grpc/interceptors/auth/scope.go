@@ -63,7 +63,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 		// trying to impersonate the owner, since the share manager doesn't know the
 		// share path.
 		if ref.GetPath() != "" {
-			log.Info().Msgf("resolving path reference to ID to check token scope %+v", ref.GetPath())
+			log.Info().Str("path", ref.GetPath()).Msg("resolving path reference to ID to check token scope")
 			for k := range tokenScope {
 				switch {
 				case strings.HasPrefix(k, "publicshare"):
@@ -138,7 +138,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 		// It's a share ref
 		// The request might be coming from a share created for a lightweight account
 		// after the token was minted.
-		log.Info().Msgf("resolving share reference against received shares to verify token scope %+v", ref)
+		log.Info().Interface("reference", ref).Msg("resolving share reference against received shares to verify token scope")
 		client, err := pool.GetGatewayServiceClient(gatewayAddr)
 		if err != nil {
 			return err

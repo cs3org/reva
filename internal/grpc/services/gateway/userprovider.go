@@ -31,7 +31,7 @@ func (s *svc) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetU
 	c, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
 		return &user.GetUserResponse{
-			Status: status.NewInternal(ctx, err, "error getting auth client"),
+			Status: status.NewInternal(ctx, "error getting auth client"),
 		}, nil
 	}
 
@@ -47,7 +47,7 @@ func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimReques
 	c, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
 		return &user.GetUserByClaimResponse{
-			Status: status.NewInternal(ctx, err, "error getting auth client"),
+			Status: status.NewInternal(ctx, "error getting auth client"),
 		}, nil
 	}
 
@@ -63,7 +63,7 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 	c, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
 		return &user.FindUsersResponse{
-			Status: status.NewInternal(ctx, err, "error getting auth client"),
+			Status: status.NewInternal(ctx, "error getting auth client"),
 		}, nil
 	}
 
@@ -79,7 +79,7 @@ func (s *svc) GetUserGroups(ctx context.Context, req *user.GetUserGroupsRequest)
 	c, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
 		return &user.GetUserGroupsResponse{
-			Status: status.NewInternal(ctx, err, "error getting auth client"),
+			Status: status.NewInternal(ctx, "error getting auth client"),
 		}, nil
 	}
 

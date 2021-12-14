@@ -105,7 +105,7 @@ func (s *service) ListAuthProviders(ctx context.Context, req *registrypb.ListAut
 	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListAuthProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error getting list of auth providers"),
+			Status: status.NewInternal(ctx, "error getting list of auth providers"),
 		}, nil
 	}
 
@@ -120,7 +120,7 @@ func (s *service) GetAuthProvider(ctx context.Context, req *registrypb.GetAuthPr
 	pinfo, err := s.reg.GetProvider(ctx, req.Type)
 	if err != nil {
 		return &registrypb.GetAuthProviderResponse{
-			Status: status.NewInternal(ctx, err, "error getting auth provider for type: "+req.Type),
+			Status: status.NewInternal(ctx, "error getting auth provider for type: "+req.Type),
 		}, nil
 	}
 

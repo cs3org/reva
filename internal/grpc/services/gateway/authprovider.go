@@ -52,7 +52,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	if err != nil {
 		err = errtypes.NotFound("gateway: error finding auth provider for type: " + req.Type)
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error getting auth provider client"),
+			Status: status.NewInternal(ctx, "error getting auth provider client"),
 		}, nil
 	}
 
@@ -64,7 +64,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	switch {
 	case err != nil:
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, fmt.Sprintf("gateway: error calling Authenticate for type: %s", req.Type)),
+			Status: status.NewInternal(ctx, fmt.Sprintf("gateway: error calling Authenticate for type: %s", req.Type)),
 		}, nil
 	case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 		fallthrough
@@ -76,9 +76,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			Status: res.Status,
 		}, nil
 	case res.Status.Code != rpc.Code_CODE_OK:
-		err := status.NewErrorFromCode(res.Status.Code, "gateway")
+		_ = status.NewErrorFromCode(res.Status.Code, "gateway")
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, fmt.Sprintf("error authenticating credentials to auth provider for type: %s", req.Type)),
+			Status: status.NewInternal(ctx, fmt.Sprintf("error authenticating credentials to auth provider for type: %s", req.Type)),
 		}, nil
 	}
 
@@ -87,7 +87,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		err := errtypes.NotFound("gateway: user after Authenticate is nil")
 		log.Err(err).Msg("user is nil")
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "user is nil"),
+			Status: status.NewInternal(ctx, "user is nil"),
 		}, nil
 	}
 
@@ -95,7 +95,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		err := errtypes.NotFound("gateway: uid after Authenticate is nil")
 		log.Err(err).Msg("user id is nil")
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "user id is nil"),
+			Status: status.NewInternal(ctx, "user id is nil"),
 		}, nil
 	}
 
@@ -158,7 +158,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	if err != nil {
 		log.Err(err).Msg("error calling CreateHome")
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error creating user home"),
+			Status: status.NewInternal(ctx, "error creating user home"),
 		}, nil
 	}
 
@@ -166,7 +166,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
 		log.Err(err).Msg("error calling Createhome")
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error creating user home"),
+			Status: status.NewInternal(ctx, "error creating user home"),
 		}, nil
 	}
 

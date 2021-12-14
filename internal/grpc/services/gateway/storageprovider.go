@@ -124,7 +124,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 	res, err := s.CreateStorageSpace(ctx, createReq)
 	if err != nil {
 		return &provider.CreateHomeResponse{
-			Status: status.NewInternal(ctx, err, "error calling CreateHome"),
+			Status: status.NewInternal(ctx, "error calling CreateHome"),
 		}, nil
 	}
 	if res.Status.Code != rpc.Code_CODE_OK && res.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
@@ -201,7 +201,7 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 	if err != nil {
 		log.Err(err).Msg("gateway: error creating storage space on storage provider")
 		return &provider.CreateStorageSpaceResponse{
-			Status: status.NewInternal(ctx, err, "error calling CreateStorageSpace"),
+			Status: status.NewInternal(ctx, "error calling CreateStorageSpace"),
 		}, nil
 	}
 
@@ -328,7 +328,7 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 	if err != nil {
 		log.Err(err).Msg("gateway: error creating update space on storage provider")
 		return &provider.UpdateStorageSpaceResponse{
-			Status: status.NewInternal(ctx, err, "error calling UpdateStorageSpace"),
+			Status: status.NewInternal(ctx, "error calling UpdateStorageSpace"),
 		}, nil
 	}
 	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
@@ -353,7 +353,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 	if err != nil {
 		log.Err(err).Msg("gateway: error deleting storage space on storage provider")
 		return &provider.DeleteStorageSpaceResponse{
-			Status: status.NewInternal(ctx, err, "error calling DeleteStorageSpace"),
+			Status: status.NewInternal(ctx, "error calling DeleteStorageSpace"),
 		}, nil
 	}
 
@@ -452,7 +452,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			u, err := url.Parse(protocols[p].DownloadEndpoint)
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewInternal(ctx, err, "wrong format for download endpoint"),
+					Status: status.NewInternal(ctx, "wrong format for download endpoint"),
 				}, nil
 			}
 
@@ -461,7 +461,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			token, err := s.sign(ctx, target)
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewInternal(ctx, err, "error creating signature for download"),
+					Status: status.NewInternal(ctx, "error creating signature for download"),
 				}, nil
 			}
 
@@ -515,7 +515,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			u, err := url.Parse(protocols[p].UploadEndpoint)
 			if err != nil {
 				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "wrong format for upload endpoint"),
+					Status: status.NewInternal(ctx, "wrong format for upload endpoint"),
 				}, nil
 			}
 
@@ -524,7 +524,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			token, err := s.sign(ctx, target)
 			if err != nil {
 				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "error creating signature for upload"),
+					Status: status.NewInternal(ctx, "error creating signature for upload"),
 				}, nil
 			}
 
@@ -1093,7 +1093,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 		c, err := s.getStorageProviderClient(ctx, providerInfos[i])
 		if err != nil {
 			return &provider.ListRecycleResponse{
-				Status: status.NewInternal(ctx, err, "gateway: could not get storage provider client"),
+				Status: status.NewInternal(ctx, "gateway: could not get storage provider client"),
 			}, nil
 		}
 
@@ -1302,7 +1302,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	c, err := s.getStorageProviderClient(ctx, srcProvider)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
-			Status: status.NewInternal(ctx, err, "gateway: could not get storage provider client"),
+			Status: status.NewInternal(ctx, "gateway: could not get storage provider client"),
 		}, nil
 	}
 
