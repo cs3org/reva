@@ -1007,7 +1007,7 @@ func IsSpaceRoot(n *Node) bool {
 	return false
 }
 
-// IsSpaceRoot checks if the node is a space root
+// IsShareSpace checks if the node is a space root
 func IsShareSpace(n *Node) bool {
 	path := n.InternalPath()
 	if spaceNameBytes, err := xattr.Get(path, xattrs.SpaceNameAttr); err == nil {
