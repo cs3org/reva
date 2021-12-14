@@ -108,7 +108,7 @@ func (s *service) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoB
 	domainInfo, err := s.pa.GetInfoByDomain(ctx, req.Domain)
 	if err != nil {
 		return &ocmprovider.GetInfoByDomainResponse{
-			Status: status.NewInternal(ctx, err, "error getting provider info"),
+			Status: status.NewInternal(ctx, "error getting provider info"),
 		}, nil
 	}
 
@@ -122,7 +122,7 @@ func (s *service) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProv
 	err := s.pa.IsProviderAllowed(ctx, req.Provider)
 	if err != nil {
 		return &ocmprovider.IsProviderAllowedResponse{
-			Status: status.NewInternal(ctx, err, "error verifying mesh provider"),
+			Status: status.NewInternal(ctx, "error verifying mesh provider"),
 		}, nil
 	}
 
@@ -135,7 +135,7 @@ func (s *service) ListAllProviders(ctx context.Context, req *ocmprovider.ListAll
 	providers, err := s.pa.ListAllProviders(ctx)
 	if err != nil {
 		return &ocmprovider.ListAllProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error retrieving mesh providers"),
+			Status: status.NewInternal(ctx, "error retrieving mesh providers"),
 		}, nil
 	}
 

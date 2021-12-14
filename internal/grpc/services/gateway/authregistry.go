@@ -26,30 +26,26 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/pkg/errors"
 )
 
 func (s *svc) ListAuthProviders(ctx context.Context, req *registry.ListAuthProvidersRequest) (*gateway.ListAuthProvidersResponse, error) {
 	c, err := pool.GetAuthRegistryServiceClient(s.c.AuthRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return &gateway.ListAuthProvidersResponse{
-			Status: status.NewInternal(ctx, err, "gateway"),
+			Status: status.NewInternal(ctx, "gateway"),
 		}, nil
 	}
 
 	res, err := c.ListAuthProviders(ctx, req)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling ListAuthProviders")
 		return &gateway.ListAuthProvidersResponse{
-			Status: status.NewInternal(ctx, err, "gateway"),
+			Status: status.NewInternal(ctx, "gateway"),
 		}, nil
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(res.Status.Code, "gateway")
 		return &gateway.ListAuthProvidersResponse{
-			Status: status.NewInternal(ctx, err, "gateway"),
+			Status: status.NewInternal(ctx, "gateway"),
 		}, nil
 	}
 

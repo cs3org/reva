@@ -39,7 +39,7 @@ func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -73,7 +73,7 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
 		return &ocm.RemoveOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -90,7 +90,7 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest
 
 		if getShareRes.Status.Code != rpc.Code_CODE_OK {
 			res := &ocm.RemoveOCMShareResponse{
-				Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
+				Status: status.NewInternal(ctx,
 					"error getting share when committing to the storage"),
 			}
 			return res, nil
@@ -134,9 +134,8 @@ func (s *svc) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*oc
 func (s *svc) getOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*ocm.GetOCMShareResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.GetOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -152,9 +151,8 @@ func (s *svc) getOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*oc
 func (s *svc) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) (*ocm.ListOCMSharesResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.ListOCMSharesResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -169,9 +167,8 @@ func (s *svc) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) 
 func (s *svc) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest) (*ocm.UpdateOCMShareResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.UpdateOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
 	}
 
@@ -186,9 +183,8 @@ func (s *svc) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest
 func (s *svc) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.ListReceivedOCMSharesResponse{
-			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
 	}
 
@@ -204,9 +200,8 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 	log := appctx.GetLogger(ctx)
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.UpdateReceivedOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
 	}
 
@@ -288,9 +283,8 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.GetReceivedOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
 	}
 
@@ -309,20 +303,21 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	var token string
 	tokenOpaque, ok := share.Grantee.Opaque.Map["token"]
 	if !ok {
+		log.Debug().Msg("createOCMReference: token not found in opaque map")
 		return status.NewNotFound(ctx, "token not found"), nil
 	}
 	switch tokenOpaque.Decoder {
 	case "plain":
 		token = string(tokenOpaque.Value)
 	default:
-		err := errtypes.NotSupported("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
-		return status.NewInternal(ctx, err, "invalid opaque entry decoder"), nil
+		log.Error().Str("decoder", tokenOpaque.Decoder).Msg("createOCMReference: opaque entry decoder not recognized")
+		return status.NewInternal(ctx, "invalid opaque entry decoder"), nil
 	}
 
 	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
-		err := errors.Wrap(err, "gateway: error calling GetHome")
-		return status.NewInternal(ctx, err, "error updating received share"), nil
+		log.Error().Err(err).Msg("createOCMReference: error calling GetHome")
+		return status.NewInternal(ctx, "error updating received share"), nil
 	}
 
 	var refPath, targetURI string
@@ -333,11 +328,12 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 			},
 		})
 		if err != nil {
-			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
+			log.Error().Err(err).Msg("createOCMReference: error creating transfers directory")
+			return status.NewInternal(ctx, "error creating transfers directory"), nil
 		}
 		if createTransferDir.Status.Code != rpc.Code_CODE_OK && createTransferDir.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
-			err := status.NewErrorFromCode(createTransferDir.Status.GetCode(), "gateway")
-			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
+			log.Error().Interface("status", createTransferDir.Status).Msg("createOCMReference: error creating transfers directory")
+			return status.NewInternal(ctx, "error creating transfers directory"), nil
 		}
 
 		refPath = path.Join(homeRes.Path, s.c.DataTransfersFolder, path.Base(share.Name))
@@ -356,10 +352,11 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 
 	c, p, err := s.findByPath(ctx, refPath)
 	if err != nil {
+		log.Error().Err(err).Msg("createOCMReference: could not find storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewInternal(ctx, "error finding storage provider"), nil
 	}
 
 	spaceID := ""
@@ -385,15 +382,15 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	}
 	createRefRes, err := c.CreateReference(ctx, createRefReq)
 	if err != nil {
-		log.Err(err).Msg("gateway: error calling GetHome")
+		log.Err(err).Msg("createOCMReference: error calling CreateReference")
 		return &rpc.Status{
 			Code: rpc.Code_CODE_INTERNAL,
 		}, nil
 	}
 
 	if createRefRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(createRefRes.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "error updating received share"), nil
+		log.Error().Interface("status", createRefRes.Status).Msg("createOCMReference: error calling CreateReference")
+		return status.NewInternal(ctx, "error updating received share"), nil
 	}
 
 	return status.NewOK(ctx), nil
