@@ -147,8 +147,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 		}
 	}
 
-	// TODO: How to find the resourceId?
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), nil)
+	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), share.ResourceId)
 	return res, nil
 }
 
