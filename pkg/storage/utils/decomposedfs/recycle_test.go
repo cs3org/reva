@@ -192,39 +192,145 @@ var _ = Describe("Recycle", func() {
 		})
 	})
 	Context("with insufficent permissions", func() {
-		When("a user can only read from a drive", func() {
-			//var ctx context.Context
+		When("a user who can only read from a drive", func() {
+			var ctx context.Context
 			BeforeEach(func() {
-				//ctx = ctxpkg.ContextSetUser(context.Background(), &userpb.User{
-				//Id: &userpb.UserId{
-				//Idp:      "readidp",
-				//OpaqueId: "readuserid",
-				//Type:     userpb.UserType_USER_TYPE_PRIMARY,
-				//},
-				//Username: "readusername",
-				//})
+				ctx = ctxpkg.ContextSetUser(context.Background(), &userpb.User{
+					Id: &userpb.UserId{
+						Idp:      "readidp",
+						OpaqueId: "readuserid",
+						Type:     userpb.UserType_USER_TYPE_PRIMARY,
+					},
+					Username: "readusername",
+				})
 
-				env.Permissions.On("HasPermission", mock.MatchedBy(func(ctx context.Context) bool {
-					return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == "userid"
-				}), mock.Anything, mock.Anything).Return(true, nil)
+				// need user with access ...
+				env.Permissions.On("HasPermission",
+					mock.MatchedBy(func(ctx context.Context) bool {
+						return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == "userid"
+					}),
+					mock.Anything,
+					mock.Anything,
+				).Return(true, nil)
 
-				//c := env.Permissions.On("HasPermission", mock.MatchedBy(func(ctx context.Context) bool {
-				//return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId != "userid"
-				//}), mock.Anything, mock.Anything)
-				//c.Return(c.Arguments.Get(1).(func(*provider.ResourcePermissions) bool)(&provider.ResourcePermissions{}))
+				// and user with read access ...
+				env.Permissions.On("HasPermission",
+					mock.MatchedBy(func(ctx context.Context) bool {
+						return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == "readuserid"
+					}),
+					mock.Anything,
+					mock.MatchedBy(func(f func(*provider.ResourcePermissions) bool) bool {
+						return f(&provider.ResourcePermissions{ListRecycle: true})
+					}),
+				).Return(true, nil)
+				env.Permissions.On("HasPermission",
+					mock.MatchedBy(func(ctx context.Context) bool {
+						return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == "readuserid"
+					}),
+					mock.Anything,
+					mock.MatchedBy(func(f func(*provider.ResourcePermissions) bool) bool {
+						return f(&provider.ResourcePermissions{
+							PurgeRecycle: true,
+							Delete:       true,
+						})
+					}),
+				).Return(false, nil)
 			})
-			It("he can list the trashbin", func() {
+			It("can list the trashbin", func() {
 				err := env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				//items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
-				//Expect(err).ToNot(HaveOccurred())
-				//Expect(len(items)).To(Equal(1))
+				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(items)).To(Equal(1))
+			})
+
+			It("cannot delete files", func() {
+				err := env.Fs.Delete(ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1/file1",
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("permission denied"))
+
+				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(items)).To(Equal(0))
+			})
+
+			It("cannot purge files from trashbin", func() {
+				err := env.Fs.Delete(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1/file1",
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(items)).To(Equal(1))
+
+				err = env.Fs.PurgeRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("permission denied"))
 			})
 		})
 	})
 
+	When("a user who cannot read from a drive", func() {
+		var ctx context.Context
+		BeforeEach(func() {
+			ctx = ctxpkg.ContextSetUser(context.Background(), &userpb.User{
+				Id: &userpb.UserId{
+					Idp:      "maliciousidp",
+					OpaqueId: "hacker",
+					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+				},
+				Username: "mrhacker",
+			})
+			env.Permissions.On("HasPermission",
+				mock.MatchedBy(func(ctx context.Context) bool {
+					return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == "userid"
+				}),
+				mock.Anything,
+				mock.Anything,
+			).Return(true, nil)
+			env.Permissions.On("HasPermission",
+				mock.MatchedBy(func(ctx context.Context) bool {
+					return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == "hacker"
+				}),
+				mock.Anything,
+				mock.Anything,
+			).Return(false, nil)
+		})
+
+		It("cannot delete, list or purge", func() {
+			err := env.Fs.Delete(ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/file1",
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("permission denied"))
+
+			err = env.Fs.Delete(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/file1",
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("permission denied"))
+
+			items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(items)).To(Equal(1))
+
+			err = env.Fs.PurgeRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("permission denied"))
+		})
+	})
 })
