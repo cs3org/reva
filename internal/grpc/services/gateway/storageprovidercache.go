@@ -54,22 +54,10 @@ type Caches struct {
 
 // NewCaches initializes a Caches struct for easy use
 func NewCaches(conf *config) *Caches {
-	homeCache := ttlcache.NewCache()
-	_ = homeCache.SetTTL(time.Duration(conf.CreateHomeCacheTTL) * time.Second)
-	homeCache.SkipTTLExtensionOnHit(true)
-
-	providerCache := ttlcache.NewCache()
-	_ = providerCache.SetTTL(time.Duration(conf.ProviderCacheTTL) * time.Second)
-	providerCache.SkipTTLExtensionOnHit(true)
-
-	statCache := ttlcache.NewCache()
-	_ = statCache.SetTTL(time.Duration(conf.StatCacheTTL) * time.Second)
-	statCache.SkipTTLExtensionOnHit(true)
-
 	return &Caches{
-		homeCache:     homeCache,
-		statCache:     statCache,
-		providerCache: providerCache,
+		homeCache:     initCache(conf.CreateHomeCacheTTL),
+		statCache:     initCache(conf.StatCacheTTL),
+		providerCache: initCache(conf.ProviderCacheTTL),
 	}
 }
 
@@ -78,6 +66,7 @@ func (c *Caches) StorageProviderClient(p provider.ProviderAPIClient) provider.Pr
 	return &cachedAPIClient{
 		c:         p,
 		statCache: c.statCache,
+		homeCache: c.homeCache,
 	}
 }
 
@@ -118,6 +107,30 @@ func (c *Caches) RemoveStat(user *userpb.User, res *provider.ResourceId) {
 	}
 }
 
+func initCache(ttlSeconds int) *ttlcache.Cache {
+	cache := ttlcache.NewCache()
+	_ = cache.SetTTL(time.Duration(ttlSeconds) * time.Second)
+	cache.SkipTTLExtensionOnHit(true)
+	return cache
+}
+
+func pullFromCache(cache *ttlcache.Cache, key string, dest interface{}) error {
+	r, err := cache.Get(key)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(r.([]byte), dest)
+}
+
+func pushToCache(cache *ttlcache.Cache, key string, src interface{}) error {
+	b, err := json.Marshal(src)
+	if err != nil {
+		return err
+	}
+	return cache.Set(key, b)
+}
+
 /*
    Cached Registry
 */
@@ -127,19 +140,13 @@ type cachedRegistryClient struct {
 	providerCache *ttlcache.Cache
 }
 
-func (c *cachedRegistryClient) GetStorageProviders(ctx context.Context, in *registry.GetStorageProvidersRequest, opts ...grpc.CallOption) (*registry.GetStorageProvidersResponse, error) {
-	return c.c.GetStorageProviders(ctx, in, opts...)
-}
 func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *registry.ListStorageProvidersRequest, opts ...grpc.CallOption) (*registry.ListStorageProvidersResponse, error) {
 	key := sdk.DecodeOpaqueMap(in.Opaque)["storage_id"]
 	if key != "" {
-		r, err := c.providerCache.Get(key)
-		if err == nil {
-			s := &registry.ListStorageProvidersResponse{}
-			err = json.Unmarshal(r.([]byte), s)
-			return s, err
+		s := &registry.ListStorageProvidersResponse{}
+		if err := pullFromCache(c.providerCache, key, s); err == nil {
+			return s, nil
 		}
-
 	}
 
 	resp, err := c.c.ListStorageProviders(ctx, in, opts...)
@@ -151,14 +158,16 @@ func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *reg
 	case key == "":
 		return resp, nil
 	default:
-		b, err := json.Marshal(resp)
-		if err != nil {
-			return resp, nil
-		}
-		_ = c.providerCache.Set(key, b)
-		return resp, nil
+		return resp, pushToCache(c.providerCache, key, resp)
 	}
 }
+
+// not cached
+
+func (c *cachedRegistryClient) GetStorageProviders(ctx context.Context, in *registry.GetStorageProvidersRequest, opts ...grpc.CallOption) (*registry.GetStorageProvidersResponse, error) {
+	return c.c.GetStorageProviders(ctx, in, opts...)
+}
+
 func (c *cachedRegistryClient) GetHome(ctx context.Context, in *registry.GetHomeRequest, opts ...grpc.CallOption) (*registry.GetHomeResponse, error) {
 	return c.c.GetHome(ctx, in, opts...)
 }
@@ -170,17 +179,16 @@ func (c *cachedRegistryClient) GetHome(ctx context.Context, in *registry.GetHome
 type cachedAPIClient struct {
 	c         provider.ProviderAPIClient
 	statCache *ttlcache.Cache
+	homeCache *ttlcache.Cache
 }
 
 // Stat looks in cache first before forwarding to storage provider
 func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error) {
 	key := userKey(ctxpkg.ContextMustGetUser(ctx), in.Ref)
 	if key != "" {
-		r, err := c.statCache.Get(key)
-		if err == nil {
-			s := &provider.StatResponse{}
-			err = json.Unmarshal(r.([]byte), s)
-			return s, err
+		s := &provider.StatResponse{}
+		if err := pullFromCache(c.statCache, key, s); err == nil {
+			return s, nil
 		}
 	}
 	resp, err := c.c.Stat(ctx, in, opts...)
@@ -197,12 +205,30 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 		// FIXME: find a way to cache/invalidate them too
 		return resp, nil
 	default:
-		b, err := json.Marshal(resp)
-		if err != nil {
-			return resp, nil
+		return resp, pushToCache(c.statCache, key, resp)
+	}
+}
+
+// CreateHome caches calls to CreateHome locally - anyways they only need to be called once per user
+func (c *cachedAPIClient) CreateHome(ctx context.Context, in *provider.CreateHomeRequest, opts ...grpc.CallOption) (*provider.CreateHomeResponse, error) {
+	key := ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId
+	if key != "" {
+		s := &provider.CreateHomeResponse{}
+		if err := pullFromCache(c.homeCache, key, s); err == nil {
+			return s, nil
 		}
-		_ = c.statCache.Set(key, b)
+
+	}
+	resp, err := c.c.CreateHome(ctx, in, opts...)
+	switch {
+	case err != nil:
+		return nil, err
+	case resp.Status.Code != rpc.Code_CODE_OK && resp.Status.Code != rpc.Code_CODE_ALREADY_EXISTS:
 		return resp, nil
+	case key == "":
+		return resp, nil
+	default:
+		return resp, pushToCache(c.homeCache, key, resp)
 	}
 }
 
@@ -279,9 +305,6 @@ func (c *cachedAPIClient) SetArbitraryMetadata(ctx context.Context, in *provider
 }
 func (c *cachedAPIClient) UnsetArbitraryMetadata(ctx context.Context, in *provider.UnsetArbitraryMetadataRequest, opts ...grpc.CallOption) (*provider.UnsetArbitraryMetadataResponse, error) {
 	return c.c.UnsetArbitraryMetadata(ctx, in, opts...)
-}
-func (c *cachedAPIClient) CreateHome(ctx context.Context, in *provider.CreateHomeRequest, opts ...grpc.CallOption) (*provider.CreateHomeResponse, error) {
-	return c.c.CreateHome(ctx, in, opts...)
 }
 func (c *cachedAPIClient) GetHome(ctx context.Context, in *provider.GetHomeRequest, opts ...grpc.CallOption) (*provider.GetHomeResponse, error) {
 	return c.c.GetHome(ctx, in, opts...)
