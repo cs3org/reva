@@ -237,22 +237,21 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		// 4. do upload
 
-		if cp.sourceInfo.GetSize() > 0 {
-			httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, httpDownloadRes.Body)
-			if err != nil {
-				return err
-			}
-			httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
-
-			httpUploadRes, err := s.client.Do(httpUploadReq)
-			if err != nil {
-				return err
-			}
-			defer httpUploadRes.Body.Close()
-			if httpUploadRes.StatusCode != http.StatusOK {
-				return err
-			}
+		httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, httpDownloadRes.Body)
+		if err != nil {
+			return err
 		}
+		httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
+
+		httpUploadRes, err := s.client.Do(httpUploadReq)
+		if err != nil {
+			return err
+		}
+		defer httpUploadRes.Body.Close()
+		if httpUploadRes.StatusCode != http.StatusOK {
+			return err
+		}
+
 	}
 	return nil
 }
@@ -457,21 +456,19 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 
 		// 4. do upload
 
-		if cp.sourceInfo.GetSize() > 0 {
-			httpUploadReq, err := rhttp.NewRequest(ctx, http.MethodPut, uploadEP, httpDownloadRes.Body)
-			if err != nil {
-				return err
-			}
-			httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
+		httpUploadReq, err := rhttp.NewRequest(ctx, http.MethodPut, uploadEP, httpDownloadRes.Body)
+		if err != nil {
+			return err
+		}
+		httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
 
-			httpUploadRes, err := s.client.Do(httpUploadReq)
-			if err != nil {
-				return err
-			}
-			defer httpUploadRes.Body.Close()
-			if httpUploadRes.StatusCode != http.StatusOK {
-				return err
-			}
+		httpUploadRes, err := s.client.Do(httpUploadReq)
+		if err != nil {
+			return err
+		}
+		defer httpUploadRes.Body.Close()
+		if httpUploadRes.StatusCode != http.StatusOK {
+			return err
 		}
 	}
 	return nil
