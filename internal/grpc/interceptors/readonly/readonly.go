@@ -99,11 +99,11 @@ func NewUnary(map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) 
 			}, nil
 		case *provider.CreateContainerRequest:
 			return &provider.CreateContainerResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to create ressource on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to create resource on read-only storage"),
 			}, nil
 		case *provider.TouchFileRequest:
 			return &provider.TouchFileResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to create ressource on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to create resource on read-only storage"),
 			}, nil
 		case *provider.CreateHomeRequest:
 			return &provider.CreateHomeResponse{
