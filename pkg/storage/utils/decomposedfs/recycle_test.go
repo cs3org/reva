@@ -1,3 +1,21 @@
+// Copyright 2018-2021 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 package decomposedfs_test
 
 import (
@@ -24,7 +42,7 @@ var _ = Describe("Recycle", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	Context("with sufficent permissions", func() {
+	Context("with sufficient permissions", func() {
 		BeforeEach(func() {
 		})
 
@@ -191,7 +209,7 @@ var _ = Describe("Recycle", func() {
 			})
 		})
 	})
-	Context("with insufficent permissions", func() {
+	Context("with insufficient permissions", func() {
 		When("a user who can only read from a drive", func() {
 			var ctx context.Context
 			BeforeEach(func() {
@@ -320,11 +338,11 @@ var _ = Describe("Recycle", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 
-			items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+			_, err = env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("permission denied"))
 
-			items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+			items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(items)).To(Equal(1))
 
