@@ -314,7 +314,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 			spaceid, _ := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
-			if spaceid != "a0ca6a90-a365-4782-871e-d44447bbc668" {
+			if spaceid != utils.ShareStorageProviderID {
 				return &provider.ListStorageSpacesResponse{
 					// a specific id was requested, return not found instead of empty list
 					Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND},
@@ -349,7 +349,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			// return the actual resource id
 			//Root: lsRes.Shares[i].Share.ResourceId,
 			Root: &provider.ResourceId{
-				StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668",
+				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  lsRes.Shares[i].Share.ResourceId.OpaqueId,
 			},
 			// TODO in the future the spaces registry will handle the alias for share spaces.
@@ -425,11 +425,11 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	}
 
 	// the root of a share always has the path "."
-	if req.Ref.ResourceId.StorageId == "a0ca6a90-a365-4782-871e-d44447bbc668" && req.Ref.Path == "." {
+	if req.Ref.ResourceId.StorageId == utils.ShareStorageProviderID && req.Ref.Path == "." {
 		err := s.rejectReceivedShare(ctx, receivedShare)
 		if err != nil {
 			return &provider.DeleteResponse{
-				Status: status.NewInternal(ctx, err, "sharesstorageprovider: error rejecting share"),
+				Status: status.NewInternal(ctx, "sharesstorageprovider: error rejecting share"),
 			}, nil
 		}
 		return &provider.DeleteResponse{
@@ -470,7 +470,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	// can we do a rename
 	if utils.ResourceIDEqual(req.Source.ResourceId, req.Destination.ResourceId) &&
 		// only if we are responsible for the space
-		req.Source.ResourceId.StorageId == "a0ca6a90-a365-4782-871e-d44447bbc668" &&
+		req.Source.ResourceId.StorageId == utils.ShareStorageProviderID &&
 		// only if the source path has no path segment
 		req.Source.Path == "." &&
 		// only if the destination is a dot followed by a single path segment, e.g. './new'
@@ -485,7 +485,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		})
 		if err != nil {
 			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "sharesstorageprovider: can not change mountpoint of share"),
+				Status: status.NewInternal(ctx, "sharesstorageprovider: can not change mountpoint of share"),
 			}, nil
 		}
 		return &provider.MoveResponse{

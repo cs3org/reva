@@ -28,6 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/utils"
 	"google.golang.org/grpc"
 )
 
@@ -40,19 +41,34 @@ func userKey(ctx context.Context, ref *provider.Reference) string {
 	if !ok {
 		return ""
 	}
-	return u.Id.OpaqueId + "!" + ref.ResourceId.StorageId + "!" + ref.ResourceId.OpaqueId + "!" + ref.Path
+	return "uid:" + u.Id.OpaqueId + "!sid:" + ref.ResourceId.StorageId + "!oid:" + ref.ResourceId.OpaqueId + "!path:" + ref.Path
 }
 
 // RemoveFromCache removes a reference from the cache
 func RemoveFromCache(cache *ttlcache.Cache, user *userpb.User, res *provider.ResourceId) {
-	remove := user.Id.OpaqueId
+	uid := "uid:" + user.Id.OpaqueId
+	sid := ""
+	oid := ""
 	if res != nil {
-		remove += "!" + res.StorageId + "!" + res.OpaqueId
+		sid = "sid:" + res.StorageId
+		oid = "oid:" + res.OpaqueId
 	}
 
-	for _, key := range cache.GetKeys() {
-		if strings.HasPrefix(key, remove) {
+	keys := cache.GetKeys()
+	for _, key := range keys {
+		if strings.Contains(key, uid) {
 			_ = cache.Remove(key)
+			continue
+		}
+
+		if sid != "" && strings.Contains(key, sid) {
+			_ = cache.Remove(key)
+			continue
+		}
+
+		if oid != "" && strings.Contains(key, oid) {
+			_ = cache.Remove(key)
+			continue
 		}
 	}
 }
@@ -85,6 +101,11 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 	case resp.Status.Code != rpc.Code_CODE_OK && resp.Status.Code != rpc.Code_CODE_NOT_FOUND:
 		return resp, nil
 	case key == "":
+		return resp, nil
+	case strings.Contains(key, "sid:"+utils.ShareStorageProviderID):
+		// We cannot cache shares at the moment:
+		// we do not know when to invalidate them
+		// FIXME: find a way to cache/invalidate them too
 		return resp, nil
 	default:
 		b, err := json.Marshal(resp)

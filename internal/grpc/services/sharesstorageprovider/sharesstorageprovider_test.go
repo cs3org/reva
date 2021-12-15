@@ -47,7 +47,7 @@ var (
 		State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
 		Share: &collaboration.Share{
 			ResourceId: &sprovider.ResourceId{
-				StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668", // <- sharestorageproviderid
+				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  "shareddir",
 			},
 			Permissions: &collaboration.SharePermissions{
@@ -63,7 +63,7 @@ var (
 		State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
 		Share: &collaboration.Share{
 			ResourceId: &sprovider.ResourceId{
-				StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668",
+				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  "shareddir",
 			},
 			Permissions: &collaboration.SharePermissions{

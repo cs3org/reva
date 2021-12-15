@@ -20,7 +20,6 @@ package appprovider
 
 import (
 	"context"
-	"errors"
 	"os"
 	"strconv"
 	"time"
@@ -106,7 +105,7 @@ func (s *service) registerProvider() {
 	log := logger.New().With().Int("pid", os.Getpid()).Logger()
 	pInfo, err := s.provider.GetAppProviderInfo(ctx)
 	if err != nil {
-		log.Error().Err(err).Msgf("error registering app provider: could not get provider info")
+		log.Error().Err(err).Msg("error registering app provider: could not get provider info")
 		return
 	}
 	pInfo.Address = s.conf.AppProviderURL
@@ -122,7 +121,7 @@ func (s *service) registerProvider() {
 
 	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
 	if err != nil {
-		log.Error().Err(err).Msgf("error registering app provider: could not get gateway client")
+		log.Error().Err(err).Msg("error registering app provider: could not get gateway client")
 		return
 	}
 	req := &registrypb.AddAppProviderRequest{Provider: pInfo}
@@ -140,12 +139,12 @@ func (s *service) registerProvider() {
 
 	res, err := client.AddAppProvider(ctx, req)
 	if err != nil {
-		log.Error().Err(err).Msgf("error registering app provider: error calling add app provider")
+		log.Error().Err(err).Msg("error registering app provider: error calling add app provider")
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
 		err = status.NewErrorFromCode(res.Status.Code, "appprovider")
-		log.Error().Err(err).Msgf("error registering app provider: add app provider returned error")
+		log.Error().Err(err).Msg("error registering app provider: add app provider returned error")
 		return
 	}
 }
@@ -173,7 +172,7 @@ func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppReques
 	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken)
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, errors.New("appprovider: error calling GetAppURL"), err.Error()),
+			Status: status.NewInternal(ctx, err.Error()),
 		}
 		return res, nil
 	}

@@ -48,10 +48,6 @@ func init() {
 	rgrpc.Register("publicstorageprovider", New)
 }
 
-// StorageID is used to identify resources handled by the public storage provider.
-// Used in the publiclink scope
-const StorageID = "7993447f-687f-490d-875c-ac95e89a62a4"
-
 type config struct {
 	GatewayAddr string `mapstructure:"gateway_addr"`
 }
@@ -124,18 +120,17 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	statRes, err := s.Stat(ctx, statReq)
 	if err != nil {
 		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, "InitiateFileDownload: error stating ref:"+req.Ref.String()),
 		}, nil
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			return &provider.InitiateFileDownloadResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found"),
+				Status: status.NewNotFound(ctx, "InitiateFileDownload: file not found"),
 			}, nil
 		}
-		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating ref"),
+			Status: status.NewInternal(ctx, "InitiateFileDownload: error stating ref"),
 		}, nil
 	}
 
@@ -201,7 +196,7 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 	dRes, err := s.gateway.InitiateFileDownload(ctx, dReq)
 	if err != nil {
 		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileDownload"),
+			Status: status.NewInternal(ctx, "initiateFileDownload: error calling InitiateFileDownload"),
 		}, nil
 	}
 
@@ -254,7 +249,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	uRes, err := s.gateway.InitiateFileUpload(ctx, uReq)
 	if err != nil {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileUpload"),
+			Status: status.NewInternal(ctx, "InitiateFileUpload: error calling InitiateFileUpload"),
 		}, nil
 	}
 
@@ -321,7 +316,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 			spaceid, _ := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
-			if spaceid != StorageID {
+			if spaceid != utils.PublicStorageProviderID {
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 				}, nil
@@ -333,13 +328,13 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 		StorageSpaces: []*provider.StorageSpace{{
 			Id: &provider.StorageSpaceId{
-				OpaqueId: StorageID,
+				OpaqueId: utils.PublicStorageProviderID,
 			},
 			SpaceType: "public",
 			// return the actual resource id?
 			Root: &provider.ResourceId{
-				StorageId: StorageID,
-				OpaqueId:  StorageID,
+				StorageId: utils.PublicStorageProviderID,
+				OpaqueId:  utils.PublicStorageProviderID,
 			},
 			Name:  "Public shares",
 			Mtime: &typesv1beta1.Timestamp{}, // do we need to update it?
@@ -386,7 +381,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	})
 	if err != nil {
 		return &provider.CreateContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling CreateContainer for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, "createContainer: error calling CreateContainer for ref:"+req.Ref.String()),
 		}, nil
 	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
@@ -426,7 +421,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	})
 	if err != nil {
 		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Delete for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, "Delete: error calling Delete for ref:"+req.Ref.String()),
 		}, nil
 	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
@@ -489,7 +484,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	})
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Move for source ref "+req.Source.String()+" to destination ref "+req.Destination.String()),
+			Status: status.NewInternal(ctx, "Move: error calling Move for source ref "+req.Source.String()+" to destination ref "+req.Destination.String()),
 		}, nil
 	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
@@ -545,7 +540,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	statResponse, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: ref})
 	if err != nil {
 		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Stat for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, "Stat: error calling Stat for ref:"+req.Ref.String()),
 		}, nil
 	}
 
@@ -576,7 +571,7 @@ func (s *service) augmentStatResponse(ctx context.Context, res *provider.StatRes
 
 // setPublicStorageID encodes the actual spaceid and nodeid as an opaqueid in the publicstorageprovider space
 func (s *service) setPublicStorageID(info *provider.ResourceInfo, shareToken string) {
-	info.Id.StorageId = StorageID
+	info.Id.StorageId = utils.PublicStorageProviderID
 	info.Id.OpaqueId = shareToken + "/" + info.Id.OpaqueId
 }
 
@@ -632,7 +627,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	)
 	if err != nil {
 		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling ListContainer for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, "ListContainer: error calling ListContainer for ref:"+req.Ref.String()),
 		}, nil
 	}
 

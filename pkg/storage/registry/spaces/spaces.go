@@ -275,6 +275,10 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"]), nil
 	case filters["path"] != "":
 		return r.findProvidersForAbsolutePathReference(ctx, filters["path"]), nil
+		// TODO add filter for all spaces the user can manage?
+	case len(filters) == 0:
+		// return all providers
+		return r.findAllProviders(ctx), nil
 	}
 	return []*registrypb.ProviderInfo{}, nil
 }
@@ -332,6 +336,8 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 						appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
 						continue
 					}
+					// we can stop after we found the first space
+					// TODO to improve lookup time the registry could cache which provider last was responsible for a space? could be invalidated by simple ttl? would that work for shares?
 					return []*registrypb.ProviderInfo{p}
 				}
 			}
@@ -339,12 +345,11 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 			// there should not be multiple spaces with the same id per provider
 			appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("spaces", spaces).Msg("multiple spaces returned, ignoring")
 		}
-
 	}
 	return []*registrypb.ProviderInfo{}
 }
 
-// findProvidersForAbsolutePathReference takes a path and ruturns the storage provider with the longest matching path prefix
+// findProvidersForAbsolutePathReference takes a path and returns the storage provider with the longest matching path prefix
 // FIXME use regex to return the correct provider when multiple are configured
 func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, path string) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
@@ -449,6 +454,18 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 		pis = append(pis, pi)
 	}
 
+	return pis
+}
+
+// findAllProviders returns a list of all storage providers
+// This is a dumb call that does not call ListStorageSpaces() on the providers: ListStorageSpaces() in the gateway can cache that better.
+func (r *registry) findAllProviders(ctx context.Context) []*registrypb.ProviderInfo {
+	pis := make([]*registrypb.ProviderInfo, 0, len(r.c.Providers))
+	for address := range r.c.Providers {
+		pis = append(pis, &registrypb.ProviderInfo{
+			Address: address,
+		})
+	}
 	return pis
 }
 
