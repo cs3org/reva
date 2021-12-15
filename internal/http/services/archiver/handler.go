@@ -143,6 +143,8 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 				},
 			},
 		})
+		// FIXME an id based stat on a shared file currently returns the owners path ... not the shared path ... hmm?
+		// has nothing to do with caching
 
 		switch {
 		case err != nil:

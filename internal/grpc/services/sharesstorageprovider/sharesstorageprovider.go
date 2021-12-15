@@ -304,22 +304,18 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 
+	var nodeid string
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			if f.GetSpaceType() != "share" {
+			if f.GetSpaceType() != "reference" {
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 				}, nil
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, _ := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
-			if spaceid != utils.ShareStorageProviderID {
-				return &provider.ListStorageSpacesResponse{
-					// a specific id was requested, return not found instead of empty list
-					Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND},
-				}, nil
-			}
+			//var spaceid string
+			_, nodeid = utils.SplitStorageSpaceID(f.GetId().OpaqueId)
 		}
 	}
 
@@ -334,40 +330,51 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	res := &provider.ListStorageSpacesResponse{}
 	for i := range lsRes.Shares {
 
-		if lsRes.Shares[i].MountPoint == nil {
-			// the gateway needs a name to use as the path segment in the dir listing
+		//if lsRes.Shares[i].MountPoint == nil {
+		// TODO return all as type "share", only mounted ones below also as "reference"?
+		// the gateway needs a name to use as the path segment in the dir listing
+		//	continue
+		//}
+		if nodeid != "" && nodeid != lsRes.Shares[i].Share.ResourceId.OpaqueId {
+			// only a specific share was requested
 			continue
 		}
 		space := &provider.StorageSpace{
 			Id: &provider.StorageSpaceId{
-				// Do we need a unique spaceid for every share?
-				// we are going to use the opaque id of the resource as the spaceid
+				// FIXME The storage space id should always equal the root id,
+				// however, the root is just the mount point. A resource the recipient can rename to his liking.
+				// It should be a reference pointig to the actual resource.
+				// The storagespaceprovider needs to be federated by teaching storage providers to keep track of all mount points
+				// -> maybe as liststoragespaces with space type = 'reference'?
 				OpaqueId: "a0ca6a90-a365-4782-871e-d44447bbc668!" + lsRes.Shares[i].Share.ResourceId.OpaqueId,
 			},
-			SpaceType: "share",
+			SpaceType: "reference", // TODO actually these are references/mount points: the receiving side of an accepted share
 			Owner:     &userv1beta1.User{Id: lsRes.Shares[i].Share.Owner},
-			// return the actual resource id
-			//Root: lsRes.Shares[i].Share.ResourceId,
+			// the sharesstorageprovider keeps track of share references
 			Root: &provider.ResourceId{
 				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  lsRes.Shares[i].Share.ResourceId.OpaqueId,
 			},
-			// TODO in the future the spaces registry will handle the alias for share spaces.
-			// for now use the name
-			Name: lsRes.Shares[i].MountPoint.Path,
 		}
 
-		// TODO the gateway needs to stat if it needs the mtime
-		/*
-			info, st, err := s.statResource(ctx, lsRes.Shares[i].Share.ResourceId, "")
-			if err != nil {
-				return nil, err
-			}
-			if st.Code != rpc.Code_CODE_OK {
-				continue
-			}
-			space.Mtime = info.Mtime
-		*/
+		sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
+			Opaque: req.Opaque,
+			Ref: &provider.Reference{
+				ResourceId: lsRes.Shares[i].Share.ResourceId,
+			},
+		})
+
+		if err == nil && sRes.Status.Code == rpc.Code_CODE_OK {
+			space.Name = filepath.Base(sRes.Info.Path)
+			space.Mtime = sRes.Info.Mtime
+			// TODO more metadata?
+		}
+
+		// TODO in the future the spaces registry will handle the alias for share spaces.
+		// for now use the name from the share to override the name determined by stat
+		if lsRes.Shares[i].MountPoint != nil {
+			space.Name = lsRes.Shares[i].MountPoint.Path
+		}
 
 		// what if we don't have a name?
 		res.StorageSpaces = append(res.StorageSpaces, space)
@@ -477,7 +484,14 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		len(strings.SplitN(req.Destination.Path, "/", 3)) == 2 {
 
 		// Change the MountPoint of the share, it has no relative prefix
-		srcReceivedShare.MountPoint = &provider.Reference{Path: filepath.Base(req.Destination.Path)}
+		srcReceivedShare.MountPoint = &provider.Reference{
+			// FIXME actually it does have a resource id: the one of the sharesstorageprovider
+			//ResourceId: &provider.ResourceId{
+			//	StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668",
+			//	OpaqueId:  "a0ca6a90-a365-4782-871e-d44447bbc668", // FIXME or use the node id of the resource?
+			//},
+			Path: filepath.Base(req.Destination.Path),
+		}
 
 		_, err = s.sharesProviderClient.UpdateReceivedShare(ctx, &collaboration.UpdateReceivedShareRequest{
 			Share:      srcReceivedShare,
@@ -535,8 +549,27 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Status: rpcStatus,
 		}, nil
 	}
+	if receivedShare.State == collaboration.ShareState_SHARE_STATE_PENDING {
+		return &provider.StatResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND},
+			// not mounted yet
+		}, nil
+	}
 
-	return s.gateway.Stat(ctx, &provider.StatRequest{
+	/*
+		return &provider.StatResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+			Info: &provider.ResourceInfo{
+				Type: provider.ResourceType_RESOURCE_TYPE_REFERENCE,
+				Id: &provider.ResourceId{
+					StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668",
+					OpaqueId:  receivedShare.Share.ResourceId.OpaqueId,
+				},
+				Target: utils.ResourceToTarget(receivedShare.Share.ResourceId),
+			},
+		}, nil
+	*/
+	sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
 		Opaque: req.Opaque,
 		Ref: &provider.Reference{
 			ResourceId: receivedShare.Share.ResourceId,
@@ -544,6 +577,13 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		},
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
+
+	if err == nil && sRes.Status.Code == rpc.Code_CODE_OK {
+		sRes.Info.Id.StorageId = "a0ca6a90-a365-4782-871e-d44447bbc668"
+		//sRes.Info.Path = "" // the path of a share is determined by the mount point
+	}
+
+	return sRes, err
 }
 
 func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {

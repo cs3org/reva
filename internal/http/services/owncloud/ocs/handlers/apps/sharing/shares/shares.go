@@ -812,27 +812,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// in a jailed namespace we have to point to the mount point in the users /Shares jail
-	// to do that we have to list the /Shares jail and use those paths instead of stating the shared resources
-	// The stat results would start with a path outside the jail and thus be inaccessible
-
-	var shareJailInfos []*provider.ResourceInfo
-
-	if h.sharePrefix != "/" {
-		// we only need the path from the share jail for accepted shares
-		if stateFilter == collaboration.ShareState_SHARE_STATE_ACCEPTED || stateFilter == ocsStateUnknown {
-			// only log errors. They may happen but we can continue trying to at least list the shares
-			lcRes, err := client.ListContainer(ctx, &provider.ListContainerRequest{
-				Ref: &provider.Reference{Path: path.Join(h.getHomeNamespace(revactx.ContextMustGetUser(ctx)), h.sharePrefix)},
-			})
-			if err != nil || lcRes.Status.Code != rpc.Code_CODE_OK {
-				h.logProblems(lcRes.GetStatus(), err, "could not list container, continuing without share jail path info")
-			} else {
-				shareJailInfos = lcRes.Infos
-			}
-		}
-	}
-
 	shares := make([]*conversions.ShareData, 0, len(lrsRes.GetShares()))
 
 	// TODO(refs) filter out "invalid" shares
@@ -851,10 +830,19 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			info = pinfo
 		} else {
 			var status *rpc.Status
-			info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+			// FIXME the ResourceID is the id of the resource, but we want the id of the mount point so we can fetch that path, well we have the mountpoint path in the receivedshare
+			//info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+
+			info, status, err = h.getResourceInfoByID(ctx, client, &provider.ResourceId{
+				StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668",
+				OpaqueId:  rs.Share.ResourceId.OpaqueId,
+			})
 			if err != nil || status.Code != rpc.Code_CODE_OK {
-				h.logProblems(status, err, "could not stat, skipping")
-				continue
+				info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+				if err != nil || status.Code != rpc.Code_CODE_OK {
+					h.logProblems(status, err, "could not stat, skipping")
+					continue
+				}
 			}
 		}
 
@@ -906,11 +894,11 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// Needed because received shares can be jailed in a folder in the users home
 
 			if h.sharePrefix != "/" {
-				// if we have share jail infos use them to build the path
-				if sji := findMatch(shareJailInfos, rs.Share.ResourceId); sji != nil {
+				// if we have a mount point use it to build the path
+				if rs.MountPoint != nil && rs.MountPoint.Path != "" {
 					// override path with info from share jail
-					data.FileTarget = path.Join(h.sharePrefix, path.Base(sji.Path))
-					data.Path = path.Join(h.sharePrefix, path.Base(sji.Path))
+					data.FileTarget = path.Join(h.sharePrefix, rs.MountPoint.Path)
+					data.Path = path.Join(h.sharePrefix, rs.MountPoint.Path)
 				} else {
 					data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
 					data.Path = path.Join(h.sharePrefix, path.Base(info.Path))

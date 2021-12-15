@@ -104,10 +104,10 @@ func (c *config) init() {
 		c.Providers = map[string]*provider{
 			sharedconf.GetGatewaySVC(""): {
 				Spaces: map[string]*spaceConfig{
-					"personal": {MountPoint: "/users", PathTemplate: "/users/{{.Space.Owner.Id.OpaqueId}}"},
-					"project":  {MountPoint: "/projects", PathTemplate: "/projects/{{.Space.Name}}"},
-					"share":    {MountPoint: "/users/{{.CurrentUser.Id.OpaqueId}}/Shares", PathTemplate: "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}"},
-					"public":   {MountPoint: "/public"},
+					"personal":  {MountPoint: "/users", PathTemplate: "/users/{{.Space.Owner.Id.OpaqueId}}"},
+					"project":   {MountPoint: "/projects", PathTemplate: "/projects/{{.Space.Name}}"},
+					"reference": {MountPoint: "/users/{{.CurrentUser.Id.OpaqueId}}/Shares", PathTemplate: "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}"},
+					"public":    {MountPoint: "/public"},
 				},
 			},
 		}

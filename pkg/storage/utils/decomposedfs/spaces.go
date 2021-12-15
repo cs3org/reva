@@ -273,7 +273,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		if err != nil {
 			return nil, err
 		}
-		if space.Id.OpaqueId == spaceID {
+		if space.Root.StorageId == spaceID && space.Root.OpaqueId == nodeID {
 			spaces = append(spaces, space)
 		} else {
 			appctx.GetLogger(ctx).Debug().Err(err).
@@ -428,7 +428,6 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	spaceType := filepath.Base(filepath.Dir(matches[0]))
 
 	space := &provider.StorageSpace{
-		Id: &provider.StorageSpaceId{OpaqueId: n.SpaceRoot},
 		Root: &provider.ResourceId{
 			StorageId: n.SpaceRoot,
 			OpaqueId:  n.ID,
@@ -436,6 +435,13 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		Name:      sname,
 		SpaceType: spaceType,
 		// Mtime is set either as node.tmtime or as fi.mtime below
+	}
+
+	if n.SpaceRoot != n.ID {
+		space.Id = &provider.StorageSpaceId{OpaqueId: n.SpaceRoot + "!" + n.ID}
+	} else {
+		// omit optional node
+		space.Id = &provider.StorageSpaceId{OpaqueId: n.SpaceRoot}
 	}
 
 	// filter out spaces user cannot access (currently based on stat permission)

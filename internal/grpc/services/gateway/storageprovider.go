@@ -725,14 +725,11 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			continue
 		}
 
-		spaceID := ""
-		mountPath := providerInfos[i].ProviderPath
-
 		spacePaths := decodeSpacePaths(providerInfos[i].Opaque)
 		if len(spacePaths) == 0 {
-			spacePaths[""] = mountPath
+			spacePaths[""] = providerInfos[i].ProviderPath
 		}
-		for spaceID, mountPath = range spacePaths {
+		for spaceID, mountPath := range spacePaths {
 			var root *provider.ResourceId
 			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
 			if rootSpace != "" && rootNode != "" {
@@ -776,29 +773,88 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				continue
 			}
 
-			if requestPath != "" && strings.HasPrefix(mountPath, requestPath) { // when path is used and requested path is above mount point
+			if requestPath != "" {
+				if strings.HasPrefix(mountPath, requestPath) { // when path is used and requested path is above mount point
+					// mount path might be the reuqest path for file based shares
+					if mountPath != requestPath {
+						// mountpoint is deeper than the statted path
+						// -> make child a folder
+						statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+						statResp.Info.MimeType = "httpd/unix-directory"
+						// -> unset checksums for a folder
+						statResp.Info.Checksum = nil
+						if statResp.Info.Opaque != nil {
+							delete(statResp.Info.Opaque.Map, "md5")
+							delete(statResp.Info.Opaque.Map, "adler32")
+						}
+					}
 
-				// mount path might be the reuqest path for file based shares
-				if mountPath != requestPath {
-					// mountpoint is deeper than the statted path
-					// -> make child a folder
-					statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-					statResp.Info.MimeType = "httpd/unix-directory"
-					// -> unset checksums for a folder
-					statResp.Info.Checksum = nil
-					if statResp.Info.Opaque != nil {
-						delete(statResp.Info.Opaque.Map, "md5")
-						delete(statResp.Info.Opaque.Map, "adler32")
+					// -> update metadata for /foo/bar -> set path to './bar'?
+					statResp.Info.Path = strings.TrimPrefix(mountPath, requestPath)
+					statResp.Info.Path, _ = router.ShiftPath(statResp.Info.Path)
+					statResp.Info.Path = utils.MakeRelativePath(statResp.Info.Path)
+					// TODO invent resourceid?
+					if utils.IsAbsoluteReference(req.Ref) {
+						statResp.Info.Path = path.Join(requestPath, statResp.Info.Path)
 					}
 				}
+			} else {
+				// we need to check if the response info carries a root opaque to determine the correct mount point
+				if statResp.Info.Opaque != nil && statResp.Info.Opaque.Map != nil && statResp.Info.Opaque.Map["root"] != nil {
+					// we had an id based stat
+					// the info should carry the same id as the resource id
+					// the path should be relative to a root:
+					// if no "root" is in the opaque the path is relative to the mount point of the storage space?
+					// but that might be the personal space of another user where the current user has no access
+					// so we need to take the "root" in the opaque and find its mount point for the current user
+					spaceRoot := string(statResp.Info.Opaque.Map["root"].Value)
+					// what is the root to which the path of the statResp is relative?
+					/*spaceRootId := &provider.ResourceId{
+						StorageId: statResp.Info.Id.StorageId,
+						OpaqueId:  spaceRoot,
+					}*/
+					// is there a share for the spaceRootId that we can use to build an absolute path
+					//-> try to find a mount point of a space with that id
+					// -> try to find a share for that file?
+					// the spaces registry should know the path or base name for that file
 
-				// -> update metadata for /foo/bar -> set path to './bar'?
-				statResp.Info.Path = strings.TrimPrefix(mountPath, requestPath)
-				statResp.Info.Path, _ = router.ShiftPath(statResp.Info.Path)
-				statResp.Info.Path = utils.MakeRelativePath(statResp.Info.Path)
-				// TODO invent resourceid?
-				if utils.IsAbsoluteReference(req.Ref) {
-					statResp.Info.Path = path.Join(requestPath, statResp.Info.Path)
+					if spaceRoot == statResp.Info.Id.OpaqueId && rootNode == spaceRoot {
+						// all good
+					} else {
+						// we need to look up a space whose root is a cs3 reference to the root of the statResp
+						// now what? we are stating a shared resource from another space
+						// find space root with FindStorageProvider? but now we need a reference
+						shareProviderInfos, err := s.findProviders(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
+							//StorageId: statResp.Info.Id.StorageId,
+							StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668",
+							OpaqueId:  spaceRoot,
+						}})
+						switch {
+						case err != nil:
+							appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: error finding provider for root, skipping")
+							continue
+						case len(shareProviderInfos) < 1:
+							appctx.GetLogger(ctx).Error().Msg("gateway: no provider found for root, skipping")
+							continue
+						case len(shareProviderInfos) > 1:
+							appctx.GetLogger(ctx).Warn().Msg("gateway: more than one provider found for root, picking first")
+							// what if there is more than one provider? pick random one?
+						}
+						spaceID := ""
+						mp := shareProviderInfos[0].ProviderPath
+
+						spacePaths := decodeSpacePaths(shareProviderInfos[0].Opaque)
+						if len(spacePaths) == 0 {
+							spacePaths[""] = mountPath
+						}
+						for spaceID, mp = range spacePaths {
+							shareRootSpace, shareRootNode := utils.SplitStorageSpaceID(spaceID)
+							if shareRootSpace == statResp.Info.Id.StorageId && shareRootNode == spaceRoot {
+								mountPath = mp
+								break // we have a matching space, use the current mount point
+							}
+						}
+					}
 				}
 			}
 			if statResp.Info.Id.StorageId == "" {
@@ -810,9 +866,20 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				switch {
 				case utils.IsAbsolutePathReference(req.Ref):
 					currentInfo.Path = requestPath
-				case utils.IsAbsoluteReference(req.Ref):
+				case utils.IsAbsoluteReference(req.Ref) /*|| req.Ref.Path == "."*/ :
 					// an id based reference needs to adjust the path in the response with the provider path
-					currentInfo.Path = path.Join(mountPath, currentInfo.Path)
+					if strings.HasSuffix(mountPath, currentInfo.Path) {
+						currentInfo.Path = mountPath
+					} else {
+						currentInfo.Path = path.Join(mountPath, currentInfo.Path)
+					}
+					/*
+						if rootNode == currentInfo.Id.OpaqueId {
+								currentInfo.Path = mountPath
+						} else {
+							currentInfo.Path = path.Join(mountPath, currentInfo.Path)
+						}
+					*/
 				}
 				info = currentInfo
 			} else {
@@ -1004,6 +1071,21 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				// TODO invent resourceid? or unset resourceid? derive from path?
 
 				if utils.IsAbsoluteReference(req.Ref) {
+					if statResp.Info.Path == "." {
+						// this feels too hacky:
+						// it triggers for pending share spaces: they should not be listed in the /Shares folder,
+						// pending shares have no mountpoint so the path tamplate which uses
+						// /users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Share.Name}} currently will produce
+						// no child segment.
+						// - We could make the sharesstorageprovider list all references as spaces in its root and
+						// just use /users/{{.CurrentUser.Id.OpaqueId}}/Shares as the path template. A ListContainer
+						// for the root would list only CS3 references for accepted shares and the gateway could resolve them.
+						// -> we would be listing mount points / references as spaces, not shares
+						// But shares can be statted by id as well. Do we really want to return the same path as for the reference?
+						// The share manager keeps track of the shares and the mount points ... hmm
+						appctx.GetLogger(ctx).Debug().Msg("gateway: space path template produced no child segment, skipping")
+						continue
+					}
 					statResp.Info.Path = path.Join(requestPath, statResp.Info.Path)
 				}
 
@@ -1414,7 +1496,8 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 		return nil, err
 	}
 
-	return Cached(c, s.statCache), nil
+	//return Cached(c, s.statCache), nil
+	return c, nil
 }
 
 /*
@@ -1518,11 +1601,11 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		return nil, errtypes.NotFound("gateway: provider is nil")
 	}
 
-	if ref.ResourceId != nil {
+	/*if ref.ResourceId != nil {
 		if err = s.providerCache.Set(ref.ResourceId.StorageId, res.Providers); err != nil {
 			appctx.GetLogger(ctx).Warn().Err(err).Interface("reference", ref).Msg("gateway: could not cache providers")
 		}
-	} /* else {
+	}*/ /* else {
 		// every user has a cache for mount points?
 		// the path map must be cached in the registry, not in the gateway?
 		//   - in the registry we cannot determine if other spaces have been mounted or removed. if a new project space was mounted that happens in the registry
