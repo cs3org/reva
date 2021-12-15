@@ -546,19 +546,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	/*
-		return &provider.StatResponse{
-			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-			Info: &provider.ResourceInfo{
-				Type: provider.ResourceType_RESOURCE_TYPE_REFERENCE,
-				Id: &provider.ResourceId{
-					StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668",
-					OpaqueId:  receivedShare.Share.ResourceId.OpaqueId,
-				},
-				Target: utils.ResourceToTarget(receivedShare.Share.ResourceId),
-			},
-		}, nil
-	*/
 	sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
 		Opaque: req.Opaque,
 		Ref: &provider.Reference{

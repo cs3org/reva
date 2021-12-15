@@ -19,7 +19,6 @@
 package utils
 
 import (
-	"fmt"
 	"math/rand"
 	"net"
 	"net/http"
@@ -39,7 +38,6 @@ import (
 	"github.com/cs3org/reva/pkg/registry"
 	"github.com/cs3org/reva/pkg/registry/memory"
 	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -355,37 +353,4 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 	default:
 		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
-}
-
-func TargetToResource(target string) (*provider.ResourceId, error) {
-	uri, err := url.Parse(target)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error parsing target uri: %s", target)
-	}
-
-	switch uri.Scheme {
-	case "cs3":
-		// a cs3 ref has the following layout: <storage_id>/<opaque_id>
-		parts := strings.SplitN(uri.Opaque, "/", 2)
-		if len(parts) < 2 {
-			err := fmt.Errorf("cs3 ref does not follow the layout storageid/opaqueid:" + uri.Opaque)
-			return nil, err
-		}
-
-		return &provider.ResourceId{
-			StorageId: parts[0],
-			OpaqueId:  parts[1],
-		}, err
-	default:
-		err := fmt.Errorf("no reference handler for scheme: " + uri.Scheme)
-		return nil, err
-	}
-}
-
-func ResourceToTarget(r *provider.ResourceId) string {
-	if r == nil {
-		return ""
-	}
-	// a cs3 ref has the following layout: `cs3://<storage_id>/<opaque_id>``
-	return "cs3:" + r.StorageId + "/" + r.OpaqueId
 }
