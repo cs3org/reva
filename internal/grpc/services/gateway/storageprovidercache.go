@@ -79,11 +79,10 @@ func (c *Caches) StorageProviderClient(p provider.ProviderAPIClient) provider.Pr
 
 // StorageRegistryClient returns a (cached) client pointing to the storageregistry
 func (c *Caches) StorageRegistryClient(p registry.RegistryAPIClient) registry.RegistryAPIClient {
-	//return &cachedRegistryClient{
-	//c:             p,
-	//providerCache: c.providerCache,
-	//}
-	return p
+	return &cachedRegistryClient{
+		c:             p,
+		providerCache: c.providerCache,
+	}
 }
 
 // RemoveStat removes a reference from the stat cache
@@ -148,6 +147,10 @@ type cachedRegistryClient struct {
 }
 
 func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *registry.ListStorageProvidersRequest, opts ...grpc.CallOption) (*registry.ListStorageProvidersResponse, error) {
+	if true {
+		// deactivate cache for now. TODO: reactivate before merge
+		return c.c.ListStorageProviders(ctx, in, opts...)
+	}
 	key := sdk.DecodeOpaqueMap(in.Opaque)["storage_id"]
 	if key != "" {
 		s := &registry.ListStorageProvidersResponse{}
