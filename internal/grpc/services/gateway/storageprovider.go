@@ -840,14 +840,12 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 							appctx.GetLogger(ctx).Warn().Msg("gateway: more than one provider found for root, picking first")
 							// what if there is more than one provider? pick random one?
 						}
-						spaceID := ""
-						mp := shareProviderInfos[0].ProviderPath
 
 						spacePaths := decodeSpacePaths(shareProviderInfos[0].Opaque)
 						if len(spacePaths) == 0 {
 							spacePaths[""] = mountPath
 						}
-						for spaceID, mp = range spacePaths {
+						for spaceID, mp := range spacePaths {
 							shareRootSpace, shareRootNode := utils.SplitStorageSpaceID(spaceID)
 							if shareRootSpace == statResp.Info.Id.StorageId && shareRootNode == spaceRoot {
 								mountPath = mp

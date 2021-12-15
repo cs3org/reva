@@ -314,7 +314,6 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				}, nil
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			//var spaceid string
 			_, nodeid = utils.SplitStorageSpaceID(f.GetId().OpaqueId)
 		}
 	}
@@ -330,11 +329,6 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	res := &provider.ListStorageSpacesResponse{}
 	for i := range lsRes.Shares {
 
-		//if lsRes.Shares[i].MountPoint == nil {
-		// TODO return all as type "share", only mounted ones below also as "reference"?
-		// the gateway needs a name to use as the path segment in the dir listing
-		//	continue
-		//}
 		if nodeid != "" && nodeid != lsRes.Shares[i].Share.ResourceId.OpaqueId {
 			// only a specific share was requested
 			continue
@@ -486,10 +480,6 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		// Change the MountPoint of the share, it has no relative prefix
 		srcReceivedShare.MountPoint = &provider.Reference{
 			// FIXME actually it does have a resource id: the one of the sharesstorageprovider
-			//ResourceId: &provider.ResourceId{
-			//	StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668",
-			//	OpaqueId:  "a0ca6a90-a365-4782-871e-d44447bbc668", // FIXME or use the node id of the resource?
-			//},
 			Path: filepath.Base(req.Destination.Path),
 		}
 
@@ -579,8 +569,10 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	})
 
 	if err == nil && sRes.Status.Code == rpc.Code_CODE_OK {
+		// overwrite id to make subsequent stat calls use the mount point
+		// of the sharesstorageprovider to build absolute paths
+		// TODO use share id as opaque id?
 		sRes.Info.Id.StorageId = "a0ca6a90-a365-4782-871e-d44447bbc668"
-		//sRes.Info.Path = "" // the path of a share is determined by the mount point
 	}
 
 	return sRes, err

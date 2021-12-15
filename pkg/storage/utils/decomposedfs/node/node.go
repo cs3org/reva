@@ -873,7 +873,6 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (provide
 	userace := xattrs.GrantPrefix + xattrs.UserAcePrefix + u.Id.OpaqueId
 	userFound := false
 	for i := range grantees {
-		err = nil
 		switch {
 		// we only need to find the user once
 		case !userFound && grantees[i] == userace:

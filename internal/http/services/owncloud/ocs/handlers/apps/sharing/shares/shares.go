@@ -831,13 +831,13 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		} else {
 			var status *rpc.Status
 			// FIXME the ResourceID is the id of the resource, but we want the id of the mount point so we can fetch that path, well we have the mountpoint path in the receivedshare
-			//info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
-
+			// first stat mount point
 			info, status, err = h.getResourceInfoByID(ctx, client, &provider.ResourceId{
 				StorageId: "a0ca6a90-a365-4782-871e-d44447bbc668",
 				OpaqueId:  rs.Share.ResourceId.OpaqueId,
 			})
 			if err != nil || status.Code != rpc.Code_CODE_OK {
+				// fallback to unmounted resource
 				info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
 				if err != nil || status.Code != rpc.Code_CODE_OK {
 					h.logProblems(status, err, "could not stat, skipping")
@@ -921,15 +921,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
-}
-
-func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId) *provider.ResourceInfo {
-	for i := range shareJailInfos {
-		if shareJailInfos[i].Id != nil && shareJailInfos[i].Id.StorageId == id.StorageId && shareJailInfos[i].Id.OpaqueId == id.OpaqueId {
-			return shareJailInfos[i]
-		}
-	}
-	return nil
 }
 
 func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
