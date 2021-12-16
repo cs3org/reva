@@ -29,6 +29,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"google.golang.org/grpc"
 )
@@ -188,7 +189,7 @@ type cachedAPIClient struct {
 
 // Stat looks in cache first before forwarding to storage provider
 func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error) {
-	key := "" // userKey(ctxpkg.ContextMustGetUser(ctx), in.Ref)
+	key := userKey(ctxpkg.ContextMustGetUser(ctx), in.Ref)
 	if key != "" {
 		s := &provider.StatResponse{}
 		if err := pullFromCache(c.statCache, key, s); err == nil {
