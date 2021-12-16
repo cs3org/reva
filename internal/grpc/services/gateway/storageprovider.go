@@ -949,7 +949,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 
 				if utils.IsAbsoluteReference(req.Ref) {
 					var prefix string
-					if utils.IsAbsolutePathReference(req.Ref) {
+					if utils.IsAbsolutePathReference(providerRef) {
 						prefix = mountPath
 					} else {
 						prefix = path.Join(mountPath, providerRef.Path)
