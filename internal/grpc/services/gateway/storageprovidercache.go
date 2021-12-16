@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	sdk "github.com/cs3org/reva/pkg/sdk/common"
 	"github.com/cs3org/reva/pkg/utils"
 	"google.golang.org/grpc"
 )
@@ -145,7 +146,7 @@ type cachedRegistryClient struct {
 }
 
 func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *registry.ListStorageProvidersRequest, opts ...grpc.CallOption) (*registry.ListStorageProvidersResponse, error) {
-	key := "" // sdk.DecodeOpaqueMap(in.Opaque)["storage_id"]
+	key := sdk.DecodeOpaqueMap(in.Opaque)["storage_id"]
 	if key != "" {
 		s := &registry.ListStorageProvidersResponse{}
 		if err := pullFromCache(c.providerCache, key, s); err == nil {
