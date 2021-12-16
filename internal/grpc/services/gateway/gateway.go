@@ -123,7 +123,7 @@ type svc struct {
 	c              *config
 	dataGatewayURL url.URL
 	tokenmgr       token.Manager
-	cache          *Caches
+	cache          Caches
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -152,7 +152,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		c:              c,
 		dataGatewayURL: *u,
 		tokenmgr:       tokenManager,
-		cache:          NewCaches(c),
+		cache:          NewCaches(c.StatCacheTTL, c.CreateHomeCacheTTL, c.ProviderCacheTTL),
 	}
 
 	return s, nil
