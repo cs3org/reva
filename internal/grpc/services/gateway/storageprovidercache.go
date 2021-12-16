@@ -36,12 +36,11 @@ import (
 
 // generates a user specific key pointing to ref
 func userKey(user *userpb.User, ref *provider.Reference) string {
-	key := "uid" + user.Id.OpaqueId
 	if ref == nil || ref.ResourceId == nil || ref.ResourceId.StorageId == "" {
-		return key
+		return ""
 	}
 
-	return key + "!sid:" + ref.ResourceId.StorageId + "!oid:" + ref.ResourceId.OpaqueId + "!path:" + ref.Path
+	return "uid" + user.Id.OpaqueId + "!sid:" + ref.ResourceId.StorageId + "!oid:" + ref.ResourceId.OpaqueId + "!path:" + ref.Path
 }
 
 // Caches holds all caches used by the gateway
