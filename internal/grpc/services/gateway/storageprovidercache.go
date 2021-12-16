@@ -215,7 +215,7 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 
 // CreateHome caches calls to CreateHome locally - anyways they only need to be called once per user
 func (c *cachedAPIClient) CreateHome(ctx context.Context, in *provider.CreateHomeRequest, opts ...grpc.CallOption) (*provider.CreateHomeResponse, error) {
-	key := "" // ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId
+	key := ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId
 	if key != "" {
 		s := &provider.CreateHomeResponse{}
 		if err := pullFromCache(c.homeCache, key, s); err == nil {
