@@ -343,6 +343,18 @@ func (c *cachedAPIClient) SetArbitraryMetadata(ctx context.Context, in *provider
 func (c *cachedAPIClient) UnsetArbitraryMetadata(ctx context.Context, in *provider.UnsetArbitraryMetadataRequest, opts ...grpc.CallOption) (*provider.UnsetArbitraryMetadataResponse, error) {
 	return c.c.UnsetArbitraryMetadata(ctx, in, opts...)
 }
+func (c *cachedAPIClient) SetLock(ctx context.Context, in *provider.SetLockRequest, opts ...grpc.CallOption) (*provider.SetLockResponse, error) {
+	return c.c.SetLock(ctx, in, opts...)
+}
+func (c *cachedAPIClient) GetLock(ctx context.Context, in *provider.GetLockRequest, opts ...grpc.CallOption) (*provider.GetLockResponse, error) {
+	return c.c.GetLock(ctx, in, opts...)
+}
+func (c *cachedAPIClient) RefreshLock(ctx context.Context, in *provider.RefreshLockRequest, opts ...grpc.CallOption) (*provider.RefreshLockResponse, error) {
+	return c.c.RefreshLock(ctx, in, opts...)
+}
+func (c *cachedAPIClient) Unlock(ctx context.Context, in *provider.UnlockRequest, opts ...grpc.CallOption) (*provider.UnlockResponse, error) {
+	return c.c.Unlock(ctx, in, opts...)
+}
 func (c *cachedAPIClient) GetHome(ctx context.Context, in *provider.GetHomeRequest, opts ...grpc.CallOption) (*provider.GetHomeResponse, error) {
 	return c.c.GetHome(ctx, in, opts...)
 }
