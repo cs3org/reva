@@ -58,7 +58,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		ref = &provider.Reference{
 			ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
 			// ensure the relative path starts with '.'
-			Path: utils.MakeRelativePath(fn),
+			// Path: utils.MakeRelativePath(fn),
 		}
 	}
 	// TODO check preconditions like If-Range, If-Match ...
