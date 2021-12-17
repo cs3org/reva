@@ -43,7 +43,7 @@ import (
 func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	log := appctx.GetLogger(ctx)
 	h := md5.New()
-	err := binary.Write(h, binary.BigEndian, fi.ModTime().Unix())
+	err := binary.Write(h, binary.BigEndian, fi.ModTime().UnixNano())
 	if err != nil {
 		log.Error().Err(err).Msg("error writing mtime")
 	}

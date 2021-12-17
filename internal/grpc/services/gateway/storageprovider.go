@@ -1027,8 +1027,15 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				*/
 
 				if utils.IsAbsoluteReference(req.Ref) {
+					var prefix string
+					if utils.IsAbsolutePathReference(providerRef) {
+						prefix = mountPath
+					} else {
+						prefix = path.Join(mountPath, providerRef.Path)
+					}
 					for j := range rsp.Infos {
-						rsp.Infos[j].Path = path.Join(mountPath, providerRef.Path, rsp.Infos[j].Path)
+
+						rsp.Infos[j].Path = path.Join(prefix, rsp.Infos[j].Path)
 					}
 				}
 				for i := range rsp.Infos {
@@ -1617,18 +1624,18 @@ func (s *svc) findProvider(ctx context.Context, listReq *registry.ListStoragePro
 	return res.Providers, nil
 }
 
-// unwrap takes a reference and makes it relative to the given mountPoint, optionally
+// unwrap takes a reference and builds a reference for the provider. can be absolute or relative to a root node
 func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceId) *provider.Reference {
 	if utils.IsAbsolutePathReference(ref) {
-		relativeRef := &provider.Reference{
+		providerRef := &provider.Reference{
 			Path: strings.TrimPrefix(ref.Path, mountPoint),
 		}
 		// if we have a root use it and make the path relative
 		if root != nil {
-			relativeRef.ResourceId = root
-			relativeRef.Path = utils.MakeRelativePath(relativeRef.Path)
+			providerRef.ResourceId = root
+			providerRef.Path = utils.MakeRelativePath(providerRef.Path)
 		}
-		return relativeRef
+		return providerRef
 	}
 	// build a copy to avoid side effects
 	return &provider.Reference{
