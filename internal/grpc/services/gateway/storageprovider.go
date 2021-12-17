@@ -599,12 +599,6 @@ func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*p
 	return res, nil
 }
 
-// check if the path contains the prefix of the shared folder
-//func (s *svc) inSharedFolder(ctx context.Context, p string) bool {
-//sharedFolder := s.getSharedFolder(ctx)
-//return strings.HasPrefix(p, sharedFolder)
-//}
-
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	// TODO(ishank011): enable deleting references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
