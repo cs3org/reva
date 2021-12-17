@@ -30,6 +30,7 @@ import (
 	"time"
 
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -585,7 +586,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	info := dstStatRes.Info
 	w.Header().Set(HeaderContentType, info.MimeType)
 	w.Header().Set(HeaderETag, info.Etag)
-	w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
+	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
 	w.Header().Set(HeaderOCETag, info.Etag)
 
 	w.WriteHeader(successCode)

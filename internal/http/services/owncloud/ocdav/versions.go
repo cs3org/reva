@@ -24,6 +24,7 @@ import (
 	"path"
 
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -53,7 +54,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 		}
 
 		// baseURI is encoded as part of the response payload in href field
-		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), wrapResourceID(rid))
+		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), resourceid.OwnCloudResourceIDWrap(rid))
 		ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 		r = r.WithContext(ctx)
 
