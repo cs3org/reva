@@ -185,7 +185,14 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	for i := range filter {
 		switch filter[i].Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			spaceTypes = append(spaceTypes, filter[i].GetSpaceType())
+			switch filter[i].GetSpaceType() {
+			case "+mountpoint":
+				// TODO include mount poits
+			case "+grant":
+				// TODO include grants
+			default:
+				spaceTypes = append(spaceTypes, filter[i].GetSpaceType())
+			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 			spaceID, nodeID = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
 		}

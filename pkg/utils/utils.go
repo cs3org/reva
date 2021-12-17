@@ -320,6 +320,18 @@ func SplitStorageSpaceID(ssid string) (storageid, nodeid string) {
 	return parts[0], parts[1]
 }
 
+func TargetAsResourceID(t string) *provider.ResourceId {
+	parts := strings.SplitN(strings.TrimPrefix(t, "cs3"), "/", 2)
+	switch len(parts) {
+	case 1:
+		return &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[0]}
+	case 2:
+		return &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
+	default:
+		return nil
+	}
+}
+
 // ParseStorageSpaceReference parses a string into a spaces reference.
 // The expected format is `<storageid>!<nodeid>/<path>`.
 func ParseStorageSpaceReference(sRef string) (provider.Reference, error) {

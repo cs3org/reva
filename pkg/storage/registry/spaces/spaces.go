@@ -302,15 +302,33 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 				},
 			},
 		}}
-
+		if findMoundpoint {
+			// when listing by id return also grants and mountpoints
+			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+					SpaceType: "+mountpoint",
+				},
+			})
+		} else {
+			// when listing by id return also grants and mountpoints
+			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+					SpaceType: "+grant",
+				},
+			})
+		}
 		//if findMoundpoint {
 		// FIXME when do we allow
-		filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-			Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
-				SpaceType: "mountpoint",
-			},
-		})
+		/*
+			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+					SpaceType: "mountpoint",
+				},
+			})
+		*/
 		//}
 		/* else {
 			for spaceType := range provider.Spaces {
@@ -337,19 +355,24 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 			space := spaces[0]
 			var sc *spaceConfig
 			var ok bool
+			var spacePath string
 
-			if findMoundpoint && space.SpaceType != "mountpoint" {
-				continue
-			}
-			// filter unwanted space types. type mountpoint is not explicitly configured but requested by the gateway
-			if sc, ok = provider.Spaces[space.SpaceType]; !ok && space.SpaceType != "mountpoint" {
-				continue
-			}
+			if space.SpaceType == "grant" {
+				spacePath = "." // a . indicates a grant, the gateway will do a findMountpoint for it
+			} else {
+				if findMoundpoint && space.SpaceType != "mountpoint" {
+					continue
+				}
+				// filter unwanted space types. type mountpoint is not explicitly configured but requested by the gateway
+				if sc, ok = provider.Spaces[space.SpaceType]; !ok && space.SpaceType != "mountpoint" {
+					continue
+				}
 
-			spacePath, err := sc.SpacePath(currentUser, space)
-			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
-				continue
+				spacePath, err = sc.SpacePath(currentUser, space)
+				if err != nil {
+					appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
+					continue
+				}
 			}
 
 			spacePaths := map[string]string{
@@ -388,32 +411,14 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 		var spaces []*providerpb.StorageSpace
 		var err error
 		filters := []*providerpb.ListStorageSpacesRequest_Filter{}
-		for _, sc := range provider.Spaces {
-			/*
-				filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-					Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-					Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
-						SpaceType: spaceType,
-					},
-				})
-			*/
-			if sc.OwnerIsCurrentUser {
-				filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-					Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_OWNER,
-					Term: &providerpb.ListStorageSpacesRequest_Filter_Owner{
-						Owner: currentUser.Id,
-					},
-				})
-			}
-			if sc.ID != "" {
-				filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-					Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_ID,
-					Term: &providerpb.ListStorageSpacesRequest_Filter_Id{
-						Id: &providerpb.StorageSpaceId{OpaqueId: sc.ID},
-					},
-				})
-			}
-		}
+
+		// when listing paths also return mountpoints
+		filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+			Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+				SpaceType: "+mountpoint",
+			},
+		})
 
 		spaces, err = r.findStorageSpaceOnProvider(ctx, p.Address, filters)
 		if err != nil {

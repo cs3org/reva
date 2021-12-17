@@ -310,14 +310,19 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		Status: status.NewOK(ctx),
 	}
 	var fetchShares bool
+	appendTypes := []string{}
 	var spaceID *provider.ResourceId
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			spaceType := f.GetSpaceType()
-			spaceTypes = append(spaceTypes, spaceType)
 			// do we need to fetch the shares?
 			if spaceType == "mountpoint" || spaceType == "grant" {
+				spaceTypes = append(spaceTypes, spaceType)
+				fetchShares = true
+			}
+			if spaceType == "+mountpoint" || spaceType == "+grant" {
+				appendTypes = append(appendTypes, strings.TrimPrefix(spaceType, "+"))
 				fetchShares = true
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
@@ -331,9 +336,11 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	}
 
 	if len(spaceTypes) == 0 {
-		spaceTypes = []string{"virtual", "grant"}
+		spaceTypes = []string{"virtual"}
 		fetchShares = true
 	}
+
+	spaceTypes = append(spaceTypes, appendTypes...)
 
 	var receivedShares []*collaboration.ReceivedShare
 	if fetchShares {
@@ -408,7 +415,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 						// we have a virtual node
 					case utils.ResourceIDEqual(spaceID, receivedShare.Share.ResourceId):
 						// we have a mount point
-						//root = receivedShare.Share.ResourceId
+						root = receivedShare.Share.ResourceId
 					default:
 						// none of our business
 						continue
@@ -634,37 +641,51 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
-		Opaque: req.Opaque,
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path, // TODO can path ever be something else than ""?
+	return &provider.StatResponse{
+		Status: status.NewOK(ctx),
+		Info: &provider.ResourceInfo{
+			Type: provider.ResourceType_RESOURCE_TYPE_REFERENCE,
+			Id: &provider.ResourceId{
+				StorageId: utils.ShareStorageProviderID,
+				OpaqueId:  receivedShare.Share.Id.OpaqueId,
+			},
+			Path:   receivedShare.MountPoint.Path,
+			Target: "cs3:" + receivedShare.Share.ResourceId.StorageId + "/" + receivedShare.Share.ResourceId.OpaqueId,
 		},
-		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-	})
+	}, nil
+	/*
+		sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
+			Opaque: req.Opaque,
+			Ref: &provider.Reference{
+				ResourceId: receivedShare.Share.ResourceId,
+				Path:       req.Ref.Path, // TODO can path ever be something else than ""?
+			},
+			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+		})
 
-	if err == nil && sRes.Status.Code == rpc.Code_CODE_OK {
-		if sRes.Info.Opaque == nil {
-			sRes.Info.Opaque = &typesv1beta1.Opaque{
-				Map: map[string]*typesv1beta1.OpaqueEntry{},
+		if err == nil && sRes.Status.Code == rpc.Code_CODE_OK {
+			if sRes.Info.Opaque == nil {
+				sRes.Info.Opaque = &typesv1beta1.Opaque{
+					Map: map[string]*typesv1beta1.OpaqueEntry{},
+				}
+			} else if sRes.Info.Opaque.Map == nil {
+				sRes.Info.Opaque.Map = map[string]*typesv1beta1.OpaqueEntry{}
 			}
-		} else if sRes.Info.Opaque.Map == nil {
-			sRes.Info.Opaque.Map = map[string]*typesv1beta1.OpaqueEntry{}
+			// set root to the sharesstorageprovider
+			sRes.Info.Opaque.Map["root"] = &typesv1beta1.OpaqueEntry{
+				Decoder: "plain",
+				Value:   []byte(utils.ShareStorageProviderID),
+			}
+			// overwrite id to make subsequent stat calls use the mount point
+			// of the sharesstorageprovider to build absolute paths
+			sRes.Info.Id = &provider.ResourceId{
+				StorageId: utils.ShareStorageProviderID,
+				OpaqueId:  receivedShare.Share.Id.OpaqueId,
+			}
 		}
-		// set root to the sharesstorageprovider
-		sRes.Info.Opaque.Map["root"] = &typesv1beta1.OpaqueEntry{
-			Decoder: "plain",
-			Value:   []byte(utils.ShareStorageProviderID),
-		}
-		// overwrite id to make subsequent stat calls use the mount point
-		// of the sharesstorageprovider to build absolute paths
-		sRes.Info.Id = &provider.ResourceId{
-			StorageId: utils.ShareStorageProviderID,
-			OpaqueId:  receivedShare.Share.Id.OpaqueId,
-		}
-	}
 
-	return sRes, err
+		return sRes, err
+	*/
 }
 
 func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {

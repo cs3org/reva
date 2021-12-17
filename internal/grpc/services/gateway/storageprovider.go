@@ -804,6 +804,35 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				continue
 			}
 
+			// follow reference
+			if statResp.Info.Type == provider.ResourceType_RESOURCE_TYPE_REFERENCE && strings.HasPrefix(statResp.Info.Target, "cs3:") {
+				refStatRes, err := s.Stat(ctx, &provider.StatRequest{
+					Opaque: req.Opaque,
+					Ref: &provider.Reference{
+						ResourceId: utils.TargetAsResourceID(statResp.Info.Target),
+					},
+					ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+				})
+				if err != nil {
+					appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not stat reference, skipping")
+					continue
+				}
+				if refStatRes.Status.Code != rpc.Code_CODE_OK {
+					appctx.GetLogger(ctx).Debug().Interface("status", refStatRes.Status).Msg("gateway: stating reference was not ok, skipping")
+					continue
+				}
+				if refStatRes.Info == nil {
+					appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response for reference carried no info, skipping")
+					continue
+				}
+
+				// replace path with reference
+				refStatRes.Info.Path = statResp.Info.Path
+				// TODO for now we hide the resource id of the reference, but in the future clients should be able to explicitly request if they want to dereference or not
+				// replace reference with real info
+				statResp = refStatRes
+			}
+
 			if requestPath != "" {
 				if strings.HasPrefix(spacePath, requestPath) { // when path is used and requested path is above mount point
 					// mount path might be the reuqest path for file based shares
@@ -859,30 +888,35 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 							if len(spacePaths) == 0 {
 								spacePaths[""] = spacePath
 							}
-							for mid, mp := range spacePaths {
-								sid, nid := utils.SplitStorageSpaceID(mid)
-								mountId := &provider.ResourceId{
-									StorageId: sid,
-									OpaqueId:  nid,
-								}
-								// TODO the mountid might not be a root, it can be mounted anywhere
+							for /*mid*/ _, mp := range spacePaths {
+								/*
+									sid, nid := utils.SplitStorageSpaceID(mid)
+									mountId := &provider.ResourceId{
+										StorageId: sid,
+										OpaqueId:  nid,
+									}
+									// TODO the mountid might not be a root, it can be mounted anywhere
 
-								// if the rootId is the same as the resourceId we statted a shared node
-								// we can use the mount point and omit the path in the stat response, because it is determined
-								// by the mount point
-								if utils.ResourceIDEqual(statResp.Info.Id, mountId) {
-								}
-								if utils.ResourceIDEqual(statResp.Info.Id, rootId) {
-									//mountPath = path.Join(mp, statResp.Info.Path)
-									// when listing shared with me the stated path is /DriveSort.ini
-									// but the mp already is /users/shareeid/Shares/DriveSort.ini
-									// The request ref is "ddc2004c-0977-11eb-9d3f-a793888cd0f8" ! "e39007a4-8a4c-4c4a-9c32-249e7ead2373" Path = ""
-									spacePath = mp
-								} else {
-									// drop head of stat result
-									_, statResp.Info.Path = router.ShiftPath(strings.TrimLeft(statResp.Info.Path, "."))
-									spacePath = mp
-								}
+									// if the rootId is the same as the resourceId we statted a shared node
+									// we can use the mount point and omit the path in the stat response, because it is determined
+									// by the mount point
+										if utils.ResourceIDEqual(statResp.Info.Id, mountId) {
+										}
+										if utils.ResourceIDEqual(statResp.Info.Id, rootId) {
+											//mountPath = path.Join(mp, statResp.Info.Path)
+											// when listing shared with me the stated path is /DriveSort.ini
+											// but the mp already is /users/shareeid/Shares/DriveSort.ini
+											// The request ref is "ddc2004c-0977-11eb-9d3f-a793888cd0f8" ! "e39007a4-8a4c-4c4a-9c32-249e7ead2373" Path = ""
+											spacePath = mp
+										} else {
+											// drop head of stat result
+											_, statResp.Info.Path = router.ShiftPath(strings.TrimLeft(statResp.Info.Path, "."))
+											spacePath = mp
+										}
+								*/
+								// drop head of stat result
+								_, statResp.Info.Path = router.ShiftPath(strings.TrimLeft(statResp.Info.Path, "."))
+								spacePath = mp
 								break // we have a share space, use the current mount point
 							}
 						}
@@ -1072,37 +1106,28 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 					appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not list provider, skipping")
 					continue
 				}
-				// TODO resolve references
+				//  resolve references
 
-				/*
-					for i, info := range rsp.Infos {
-						if info.Type == provider.ResourceType_RESOURCE_TYPE_REFERENCE && strings.HasPrefix(info.Target, "cs3:") {
-							parts := strings.SplitN(strings.TrimPrefix(info.Target, "cs3:"), "/", 2)
-							if len(parts) != 2 {
-								appctx.GetLogger(ctx).Error().Err(err).Interface("info", info).Msg("gateway: invalid target reference, skipping")
-								continue
-							}
-							statResp, err := s.Stat(ctx, &provider.StatRequest{
-								Opaque: req.Opaque,
-								Ref: &provider.Reference{
-									ResourceId: &provider.ResourceId{
-										StorageId: parts[0],
-										OpaqueId:  parts[1],
-									},
-								},
-							})
-							if err != nil || statResp.Status.Code != rpc.Code_CODE_OK {
-								appctx.GetLogger(ctx).Error().Err(err).Interface("response", statResp).Interface("info", info).Msg("gateway: could not resolve reference, skipping")
-								continue
-							}
-							// replace path with reference
-							statResp.Info.Path = info.Path
-							// TODO for now we hide the resource id of the reference, but in the future clients should be able to explicitly request if they want to dereference or not
-							// replace reference with real info
-							rsp.Infos[i] = statResp.Info
+				for i, info := range rsp.Infos {
+					if info.Type == provider.ResourceType_RESOURCE_TYPE_REFERENCE && strings.HasPrefix(info.Target, "cs3:") {
+						refStatRes, err := s.Stat(ctx, &provider.StatRequest{
+							Opaque: req.Opaque,
+							Ref: &provider.Reference{
+								ResourceId: utils.TargetAsResourceID(info.Target),
+							},
+							ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+						})
+						if err != nil || refStatRes.Status.Code != rpc.Code_CODE_OK {
+							appctx.GetLogger(ctx).Error().Err(err).Interface("response", refStatRes).Interface("info", info).Msg("gateway: could not resolve reference, skipping")
+							continue
 						}
+						// replace path with reference
+						refStatRes.Info.Path = info.Path
+						// TODO for now we hide the resource id of the reference, but in the future clients should be able to explicitly request if they want to dereference or not
+						// replace reference with real info
+						rsp.Infos[i] = refStatRes.Info
 					}
-				*/
+				}
 
 				if utils.IsAbsoluteReference(req.Ref) {
 					var prefix string
@@ -1145,6 +1170,35 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				if statResp.Info == nil {
 					appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response for list carried no info, skipping")
 					continue
+				}
+
+				// follow reference
+				if statResp.Info.Type == provider.ResourceType_RESOURCE_TYPE_REFERENCE && strings.HasPrefix(statResp.Info.Target, "cs3:") {
+					refStatRes, err := s.Stat(ctx, &provider.StatRequest{
+						Opaque: req.Opaque,
+						Ref: &provider.Reference{
+							ResourceId: utils.TargetAsResourceID(statResp.Info.Target),
+						},
+						ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+					})
+					if err != nil {
+						appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not stat reference, skipping")
+						continue
+					}
+					if refStatRes.Status.Code != rpc.Code_CODE_OK {
+						appctx.GetLogger(ctx).Debug().Interface("status", refStatRes.Status).Msg("gateway: stating reference was not ok, skipping")
+						continue
+					}
+					if refStatRes.Info == nil {
+						appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: stat response for reference carried no info, skipping")
+						continue
+					}
+
+					// replace path with reference
+					refStatRes.Info.Path = statResp.Info.Path
+					// TODO for now we hide the resource id of the reference, but in the future clients should be able to explicitly request if they want to dereference or not
+					// replace reference with real info
+					statResp = refStatRes
 				}
 
 				// is the mount point a direct child of the requested resurce? only works for absolute paths ... hmmm
