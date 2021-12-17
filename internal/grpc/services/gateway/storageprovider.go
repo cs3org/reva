@@ -763,8 +763,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 							appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not get storage provider client, skipping")
 							continue
 						}
-						// overwrite id and path
-						spaceID = mountID
+						// overwrite path
 						spacePath = mountPath
 					}
 				}
@@ -872,11 +871,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 						StorageId: statResp.Info.Id.StorageId,
 						OpaqueId:  string(statResp.Info.Opaque.Map["root"].Value),
 					}
-					if isSpaceRoot(rootId) {
-						// the path is relative to the root, but the mount point already includes the relative path
-						// -> don't add the path twice
-						statResp.Info.Path = ""
-					} else {
+					if !isSpaceRoot(rootId) {
 						// find mount point of share
 						shareProviderInfos, err := s.findMountPoint(ctx, rootId)
 						if err != nil {
@@ -888,32 +883,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 							if len(spacePaths) == 0 {
 								spacePaths[""] = spacePath
 							}
-							for /*mid*/ _, mp := range spacePaths {
-								/*
-									sid, nid := utils.SplitStorageSpaceID(mid)
-									mountId := &provider.ResourceId{
-										StorageId: sid,
-										OpaqueId:  nid,
-									}
-									// TODO the mountid might not be a root, it can be mounted anywhere
-
-									// if the rootId is the same as the resourceId we statted a shared node
-									// we can use the mount point and omit the path in the stat response, because it is determined
-									// by the mount point
-										if utils.ResourceIDEqual(statResp.Info.Id, mountId) {
-										}
-										if utils.ResourceIDEqual(statResp.Info.Id, rootId) {
-											//mountPath = path.Join(mp, statResp.Info.Path)
-											// when listing shared with me the stated path is /DriveSort.ini
-											// but the mp already is /users/shareeid/Shares/DriveSort.ini
-											// The request ref is "ddc2004c-0977-11eb-9d3f-a793888cd0f8" ! "e39007a4-8a4c-4c4a-9c32-249e7ead2373" Path = ""
-											spacePath = mp
-										} else {
-											// drop head of stat result
-											_, statResp.Info.Path = router.ShiftPath(strings.TrimLeft(statResp.Info.Path, "."))
-											spacePath = mp
-										}
-								*/
+							for _, mp := range spacePaths {
 								// drop head of stat result
 								_, statResp.Info.Path = router.ShiftPath(strings.TrimLeft(statResp.Info.Path, "."))
 								spacePath = mp
@@ -1222,23 +1192,6 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				// TODO invent resourceid? or unset resourceid? derive from path?
 
 				if utils.IsAbsoluteReference(req.Ref) {
-					/*
-						if statResp.Info.Path == "." {
-							// this feels too hacky:
-							// it triggers for pending share spaces: they should not be listed in the /Shares folder,
-							// pending shares have no mountpoint so the path tamplate which uses
-							// /users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Share.Name}} currently will produce
-							// no child segment.
-							// - We could make the sharesstorageprovider list all references as spaces in its root and
-							// just use /users/{{.CurrentUser.Id.OpaqueId}}/Shares as the path template. A ListContainer
-							// for the root would list only CS3 references for accepted shares and the gateway could resolve them.
-							// -> we would be listing mount points / references as spaces, not shares
-							// But shares can be statted by id as well. Do we really want to return the same path as for the reference?
-							// The share manager keeps track of the shares and the mount points ... hmm
-							appctx.GetLogger(ctx).Debug().Msg("gateway: space path template produced no child segment, skipping")
-							continue
-						}
-					*/
 					statResp.Info.Path = path.Join(requestPath, statResp.Info.Path)
 				}
 
@@ -1491,34 +1444,6 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 			dstProvider = providerInfos[i]
 			break
 		}
-		/*
-			if utils.IsAbsolutePathReference(req.RestoreRef) {
-				// find deepest mount
-				// if iteration path is longer than current path && iteration path is shorter or exact dst path
-				if dstProvider == nil || ((len(dstProviderInfos[i].ProviderPath) > len(dstProvider.ProviderPath)) && (len(dstProviderInfos[i].ProviderPath) <= len(req.RestoreRef.Path))) {
-					dstProvider = dstProviderInfos[i]
-					r, mountPath, root
-					if dstRef, err = unwrap(req.RestoreRef, dstProvider.ProviderPath); err != nil {
-						return nil, err
-					}
-					dstRef.Path = utils.MakeRelativePath(dstRef.Path)
-					parts := strings.SplitN(dstProvider.ProviderId, "!", 2)
-					if len(parts) != 2 {
-						return nil, errtypes.BadRequest("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + dstProviderInfos[i].ProviderId)
-					}
-					dstRef.ResourceId = &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
-				}
-			} else {
-				// TODO implement other cases
-				return &provider.RestoreRecycleItemResponse{
-					Status: &rpc.Status{
-						Code:    rpc.Code_CODE_UNIMPLEMENTED,
-						Message: "RestoreRecycleItem not yet implementad ref=" + req.RestoreRef.String(),
-					},
-				}, nil
-
-			}
-		*/
 	}
 
 	if dstProvider == nil || dstRef == nil {
@@ -1652,22 +1577,6 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 	//return Cached(c, s.statCache), nil
 	return c, nil
 }
-
-/*
-func userKey(ctx context.Context) string {
-	u := ctxpkg.ContextMustGetUser(ctx)
-	sb := strings.Builder{}
-	if u.Id != nil {
-		sb.WriteString(u.Id.OpaqueId)
-		sb.WriteString("@")
-		sb.WriteString(u.Id.Idp)
-	} else {
-		// fall back to username
-		sb.WriteString(u.Username)
-	}
-	return sb.String()
-}
-*/
 
 func (s *svc) findMountPoint(ctx context.Context, id *provider.ResourceId) ([]*registry.ProviderInfo, error) {
 	//TODO can we use a provider cache for mount points?
