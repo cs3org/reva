@@ -233,6 +233,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// an efficient lookup would be possible if we received a spaceid&opaqueid in the request
 	// the personal spaces must also use the nodeid and not the name
 
+	numShares := 0
 	for i := range matches {
 		// always read link in case storage space id != node id
 		if target, err := os.Readlink(matches[i]); err != nil {
@@ -254,6 +255,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			}
 
 			if spaceType == "share" && utils.UserEqual(u.Id, owner) {
+				numShares++
 				// do not list shares as spaces for the owner
 				continue
 			}
@@ -269,7 +271,8 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			spaces = append(spaces, space)
 		}
 	}
-	if len(matches) == 0 && nodeID != spaceID {
+	// if there are no matches (or they happened to be spaces for the owner) and the node is a child return a space
+	if len(matches) <= numShares && nodeID != spaceID {
 		// try node id
 		target := filepath.Join(fs.o.Root, "nodes", nodeID)
 		n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
