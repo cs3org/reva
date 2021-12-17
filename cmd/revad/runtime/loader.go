@@ -38,6 +38,7 @@ import (
 	_ "github.com/cs3org/reva/pkg/ocm/invite/manager/loader"
 	_ "github.com/cs3org/reva/pkg/ocm/provider/authorizer/loader"
 	_ "github.com/cs3org/reva/pkg/ocm/share/manager/loader"
+	_ "github.com/cs3org/reva/pkg/permission/manager/loader"
 	_ "github.com/cs3org/reva/pkg/publicshare/manager/loader"
 	_ "github.com/cs3org/reva/pkg/rhttp/datatx/manager/loader"
 	_ "github.com/cs3org/reva/pkg/share/cache/loader"

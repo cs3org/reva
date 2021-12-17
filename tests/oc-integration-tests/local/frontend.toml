@@ -50,7 +50,6 @@ webdav_namespace = "/home"
 
 # serve /ocs which contains the sharing and user provisioning api of owncloud classic
 [http.services.ocs]
-storage_registry_svc = "localhost:19000"
 
 [http.services.ocs.capabilities.capabilities.core.status]
 version = "10.0.11.5"

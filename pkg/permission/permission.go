@@ -16,24 +16,13 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gateway
+package permission
 
 import (
-	"context"
-
-	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/pkg/errors"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-func (s *svc) CheckPermission(ctx context.Context, req *permissions.CheckPermissionRequest) (*permissions.CheckPermissionResponse, error) {
-	c, err := pool.GetPermissionsClient(s.c.PermissionsEndpoint)
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetPermissionssClient")
-		return &permissions.CheckPermissionResponse{
-			Status: status.NewInternal(ctx, err, "error getting permissions client"),
-		}, nil
-	}
-	return c.CheckPermission(ctx, req)
+// Manager defines the interface for the permission service driver
+type Manager interface {
+	CheckPermission(permission string, subject string, ref *provider.Reference) bool
 }

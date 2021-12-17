@@ -16,24 +16,28 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gateway
+package ocisci
 
 import (
-	"context"
-
-	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/pkg/errors"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/permission"
+	"github.com/cs3org/reva/pkg/permission/manager/registry"
 )
 
-func (s *svc) CheckPermission(ctx context.Context, req *permissions.CheckPermissionRequest) (*permissions.CheckPermissionResponse, error) {
-	c, err := pool.GetPermissionsClient(s.c.PermissionsEndpoint)
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetPermissionssClient")
-		return &permissions.CheckPermissionResponse{
-			Status: status.NewInternal(ctx, err, "error getting permissions client"),
-		}, nil
-	}
-	return c.CheckPermission(ctx, req)
+func init() {
+	registry.Register("ocisci", New)
+}
+
+// New returns a new permission manager specific for the CI
+func New(c map[string]interface{}) (permission.Manager, error) {
+	return manager{}, nil
+}
+
+type manager struct {
+}
+
+func (m manager) CheckPermission(permission string, subject string, ref *provider.Reference) bool {
+	// We can currently return false all the time.
+	// Once we beginn testing roles we need to somehow check the roles of the users here
+	return false
 }

@@ -719,6 +719,7 @@ def litmusOcisSpacesDav():
                     "/drone/src/cmd/revad/revad -c gateway.toml &",
                     "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
                     "/drone/src/cmd/revad/revad -c storage-users-ocis.toml &",
+                    "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
                     "/drone/src/cmd/revad/revad -c users.toml",
                 ],
             },

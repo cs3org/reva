@@ -38,3 +38,4 @@ root = "/var/tmp/reva/data"
 enable_home = false
 treetime_accounting = true
 treesize_accounting = true
+gateway_addr = "0.0.0.0:19000"

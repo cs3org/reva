@@ -16,24 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gateway
+package registry
 
-import (
-	"context"
+import "github.com/cs3org/reva/pkg/permission"
 
-	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/pkg/errors"
-)
+// NewFunc is the function that permission managers
+// should register at init time.
+type NewFunc func(map[string]interface{}) (permission.Manager, error)
 
-func (s *svc) CheckPermission(ctx context.Context, req *permissions.CheckPermissionRequest) (*permissions.CheckPermissionResponse, error) {
-	c, err := pool.GetPermissionsClient(s.c.PermissionsEndpoint)
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetPermissionssClient")
-		return &permissions.CheckPermissionResponse{
-			Status: status.NewInternal(ctx, err, "error getting permissions client"),
-		}, nil
-	}
-	return c.CheckPermission(ctx, req)
+// NewFuncs is a map containing all the registered share managers.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new permission manager new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
 }
