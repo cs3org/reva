@@ -75,7 +75,6 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			Status: res.Status,
 		}, nil
 	case res.Status.Code != rpc.Code_CODE_OK:
-		_ = status.NewErrorFromCode(res.Status.Code, "gateway")
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, fmt.Sprintf("error authenticating credentials to auth provider for type: %s", req.Type)),
 		}, nil

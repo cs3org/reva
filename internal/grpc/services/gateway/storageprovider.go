@@ -1448,6 +1448,7 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	case ref == nil:
 		return nil, errtypes.BadRequest("missing reference")
 	case ref.ResourceId != nil:
+		// no action needed in that case
 	case ref.Path != "": //  TODO implement a mount path cache in the registry?
 	/*
 		// path / mount point lookup from cache
