@@ -280,6 +280,26 @@ func (fs *s3FS) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
+// GetLock returns an existing lock on the given reference
+func (fs *s3FS) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+// SetLock puts a lock on the given reference
+func (fs *s3FS) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (fs *s3FS) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// Unlock removes an existing lock from the given reference
+func (fs *s3FS) Unlock(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
 func (fs *s3FS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	// TODO(jfd):implement
 	return errtypes.NotSupported("s3: operation not supported")
