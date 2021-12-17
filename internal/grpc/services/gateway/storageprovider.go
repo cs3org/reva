@@ -729,13 +729,44 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		if len(spacePaths) == 0 {
 			spacePaths[""] = providerInfos[i].ProviderPath
 		}
-		for spaceID, mountPath := range spacePaths {
-			var root *provider.ResourceId
-			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
-			if rootSpace != "" && rootNode != "" {
-				root = &provider.ResourceId{
-					StorageId: rootSpace,
-					OpaqueId:  rootNode,
+		for spaceID, spacePath := range spacePaths {
+			root := &provider.ResourceId{}
+			root.StorageId, root.OpaqueId = utils.SplitStorageSpaceID(spaceID)
+			if root.StorageId == "" || root.OpaqueId == "" {
+				// invalid id, skip
+				appctx.GetLogger(ctx).Error().Str("spaceid", spaceID).Msg("gateway: invalid space id, skipping")
+				continue
+			}
+			if spacePath == "." { // a . indicates a grant
+				mountProviderInfos, err := s.findMountPoint(ctx, root)
+				if err != nil {
+					appctx.GetLogger(ctx).Debug().Err(err).Interface("root", root).Msg("gateway: no mount point for grant, skipping")
+					// no mount point for the grant, skip it
+					continue
+				}
+				for i := range mountProviderInfos {
+					mountPaths := decodeSpacePaths(mountProviderInfos[i].Opaque)
+					if len(mountPaths) == 0 {
+						mountPaths[""] = mountProviderInfos[i].ProviderPath
+					}
+					for mountID, mountPath := range mountPaths {
+						root = &provider.ResourceId{}
+						root.StorageId, root.OpaqueId = utils.SplitStorageSpaceID(mountID)
+						if root.StorageId == "" || root.OpaqueId == "" {
+							// invalid id, skip
+							appctx.GetLogger(ctx).Error().Str("spaceid", mountID).Msg("gateway: invalid space id, skipping")
+							continue
+						}
+						// switch to new client
+						c, err = s.getStorageProviderClient(ctx, mountProviderInfos[i])
+						if err != nil {
+							appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not get storage provider client, skipping")
+							continue
+						}
+						// overwrite id and path
+						spaceID = mountID
+						spacePath = mountPath
+					}
 				}
 			}
 			// build reference for the provider
@@ -748,10 +779,10 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			// Then it will request path "/projects/projectA" from the provider
 			// But it should only request "/" as the ResourceId already points to the correct resource
 			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path needed
+			if r.Path != "" && strings.HasPrefix(spacePath, r.Path) { // requesting the root in that case - No Path needed
 				r.Path = "/"
 			}
-			providerRef := unwrap(r, mountPath, root)
+			providerRef := unwrap(r, spacePath, root)
 
 			// there are three cases:
 			// 1. id based references -> send to provider as is. must return the path in the space. space root can be determined by the spaceid
@@ -774,9 +805,9 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			}
 
 			if requestPath != "" {
-				if strings.HasPrefix(mountPath, requestPath) { // when path is used and requested path is above mount point
+				if strings.HasPrefix(spacePath, requestPath) { // when path is used and requested path is above mount point
 					// mount path might be the reuqest path for file based shares
-					if mountPath != requestPath {
+					if spacePath != requestPath {
 						// mountpoint is deeper than the statted path
 						// -> make child a folder
 						statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
@@ -790,7 +821,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 					}
 
 					// -> update metadata for /foo/bar -> set path to './bar'?
-					statResp.Info.Path = strings.TrimPrefix(mountPath, requestPath)
+					statResp.Info.Path = strings.TrimPrefix(spacePath, requestPath)
 					statResp.Info.Path, _ = router.ShiftPath(statResp.Info.Path)
 					statResp.Info.Path = utils.MakeRelativePath(statResp.Info.Path)
 					// TODO invent resourceid?
@@ -817,20 +848,41 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 						// -> don't add the path twice
 						statResp.Info.Path = ""
 					} else {
-						// TODO find mount point of share
+						// find mount point of share
 						shareProviderInfos, err := s.findMountPoint(ctx, rootId)
 						if err != nil {
 							// unset mount point of provider and return relative path in resource info
-							mountPath = ""
+							spacePath = ""
 						} else {
+							// there is a mount point for the rootId
 							spacePaths := decodeSpacePaths(shareProviderInfos[0].Opaque)
 							if len(spacePaths) == 0 {
-								spacePaths[""] = mountPath
+								spacePaths[""] = spacePath
 							}
-							for _, mp := range spacePaths {
-								// drop head of stat result
-								_, statResp.Info.Path = router.ShiftPath(strings.TrimLeft(statResp.Info.Path, "."))
-								mountPath = mp
+							for mid, mp := range spacePaths {
+								sid, nid := utils.SplitStorageSpaceID(mid)
+								mountId := &provider.ResourceId{
+									StorageId: sid,
+									OpaqueId:  nid,
+								}
+								// TODO the mountid might not be a root, it can be mounted anywhere
+
+								// if the rootId is the same as the resourceId we statted a shared node
+								// we can use the mount point and omit the path in the stat response, because it is determined
+								// by the mount point
+								if utils.ResourceIDEqual(statResp.Info.Id, mountId) {
+								}
+								if utils.ResourceIDEqual(statResp.Info.Id, rootId) {
+									//mountPath = path.Join(mp, statResp.Info.Path)
+									// when listing shared with me the stated path is /DriveSort.ini
+									// but the mp already is /users/shareeid/Shares/DriveSort.ini
+									// The request ref is "ddc2004c-0977-11eb-9d3f-a793888cd0f8" ! "e39007a4-8a4c-4c4a-9c32-249e7ead2373" Path = ""
+									spacePath = mp
+								} else {
+									// drop head of stat result
+									_, statResp.Info.Path = router.ShiftPath(strings.TrimLeft(statResp.Info.Path, "."))
+									spacePath = mp
+								}
 								break // we have a share space, use the current mount point
 							}
 						}
@@ -851,11 +903,11 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 					currentInfo.Path = requestPath
 				case utils.IsAbsoluteReference(req.Ref):
 					// an id based reference needs to adjust the path in the response with the provider path
-					if mountPath == "" {
+					if spacePath == "" {
 						// we have no mount point, make path relative
 						currentInfo.Path = utils.MakeRelativePath(currentInfo.Path)
 					} else {
-						currentInfo.Path = path.Join(mountPath, currentInfo.Path)
+						currentInfo.Path = path.Join(spacePath, currentInfo.Path)
 					}
 				}
 				info = currentInfo
@@ -938,20 +990,46 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			continue
 		}
 
-		spaceID := ""
-		mountPath := providerInfos[i].ProviderPath
-
 		spacePaths := decodeSpacePaths(providerInfos[i].Opaque)
 		if len(spacePaths) == 0 {
-			spacePaths[""] = mountPath
+			spacePaths[""] = providerInfos[i].ProviderPath
 		}
-		for spaceID, mountPath = range spacePaths {
-			var root *provider.ResourceId
-			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
-			if rootSpace != "" && rootNode != "" {
-				root = &provider.ResourceId{
-					StorageId: rootSpace,
-					OpaqueId:  rootNode,
+		for spaceID, spacePath := range spacePaths {
+			root := &provider.ResourceId{}
+			root.StorageId, root.OpaqueId = utils.SplitStorageSpaceID(spaceID)
+			if root.StorageId == "" || root.OpaqueId == "" {
+				// invalid id, skip
+				appctx.GetLogger(ctx).Error().Str("spaceid", spaceID).Msg("gateway: invalid space id, skipping")
+				continue
+			}
+			if spacePath == "." { // a . indicates a grant
+				mountProviderInfos, err := s.findMountPoint(ctx, root)
+				if err != nil {
+					appctx.GetLogger(ctx).Debug().Err(err).Interface("root", root).Msg("gateway: no mount point for grant, skipping")
+					// no mount point for the grant, skip it
+					continue
+				}
+				for i := range mountProviderInfos {
+					// switch to new client
+					c, err = s.getStorageProviderClient(ctx, mountProviderInfos[i])
+					if err != nil {
+						appctx.GetLogger(ctx).Error().Err(err).Msg("gateway: could not get storage provider client, skipping")
+						continue
+					}
+					mountPaths := decodeSpacePaths(mountProviderInfos[i].Opaque)
+					if len(mountPaths) == 0 {
+						mountPaths[""] = mountProviderInfos[i].ProviderPath
+					}
+					for mountID, mountPath := range mountPaths {
+						root = &provider.ResourceId{}
+						root.StorageId, root.OpaqueId = utils.SplitStorageSpaceID(mountID)
+						if root.StorageId == "" || root.OpaqueId == "" {
+							appctx.GetLogger(ctx).Error().Str("spaceid", mountID).Msg("gateway: invalid space id, skipping")
+							// invalid id, skip
+							continue
+						}
+						spacePath = mountPath
+					}
 				}
 			}
 			// build reference for the provider - copy to avoid side effects
@@ -964,10 +1042,10 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			// Then it will request path "/projects/projectA" from the provider
 			// But it should only request "/" as the ResourceId already points to the correct resource
 			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
+			if r.Path != "" && strings.HasPrefix(spacePath, r.Path) { // requesting the root in that case - No Path accepted
 				r.Path = "/"
 			}
-			providerRef := unwrap(r, mountPath, root)
+			providerRef := unwrap(r, spacePath, root)
 
 			// ref Path: ., Id: a-b-c-d, provider path: /personal/a-b-c-d, provider id: a-b-c-d ->
 			// ref Path: ., Id: a-b-c-d, provider path: /home, provider id: a-b-c-d ->
@@ -984,7 +1062,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				fallthrough
 			case strings.HasPrefix(requestPath, "."): // space request
 				fallthrough
-			case strings.HasPrefix(requestPath, mountPath): //  requested path is below mount point
+			case strings.HasPrefix(requestPath, spacePath): //  requested path is below mount point
 				rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
 					Opaque:                req.Opaque,
 					Ref:                   providerRef,
@@ -1029,9 +1107,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				if utils.IsAbsoluteReference(req.Ref) {
 					var prefix string
 					if utils.IsAbsolutePathReference(providerRef) {
-						prefix = mountPath
+						prefix = spacePath
 					} else {
-						prefix = path.Join(mountPath, providerRef.Path)
+						prefix = path.Join(spacePath, providerRef.Path)
 					}
 					for j := range rsp.Infos {
 
@@ -1047,7 +1125,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 					// replace with younger info
 					infos[rsp.Infos[i].Path] = rsp.Infos[i]
 				}
-			case strings.HasPrefix(mountPath, requestPath): // requested path is above mount point
+			case strings.HasPrefix(spacePath, requestPath): // requested path is above mount point
 				//  requested path     provider path
 				//  /foo           <=> /foo/bar          -> stat(spaceid, .)    -> add metadata for /foo/bar
 				//  /foo           <=> /foo/bar/bif      -> stat(spaceid, .)    -> add metadata for /foo/bar, overwrite type with dir
@@ -1070,7 +1148,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				}
 
 				// is the mount point a direct child of the requested resurce? only works for absolute paths ... hmmm
-				if filepath.Dir(mountPath) != requestPath {
+				if filepath.Dir(spacePath) != requestPath {
 					// mountpoint is deeper than one level
 					// -> make child a folder
 					statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
@@ -1084,7 +1162,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 				}
 
 				// -> update metadata for /foo/bar -> set path to './bar'?
-				statResp.Info.Path = strings.TrimPrefix(mountPath, requestPath)
+				statResp.Info.Path = strings.TrimPrefix(spacePath, requestPath)
 				statResp.Info.Path, _ = router.ShiftPath(statResp.Info.Path)
 				statResp.Info.Path = utils.MakeRelativePath(statResp.Info.Path)
 				// TODO invent resourceid? or unset resourceid? derive from path?

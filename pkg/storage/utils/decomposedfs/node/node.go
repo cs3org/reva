@@ -528,18 +528,15 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		PermissionSet: rp,
 	}
 
+	// return space root for the user
 	if n.ShareRoot != "" {
 		setPlainOpaque(ri, "root", n.ShareRoot)
+	} else {
+		setPlainOpaque(ri, "root", n.SpaceRoot)
 	}
 
 	if returnBasename { // FIXME this is not the basename it is the path relative to the root
 		ri.Path = n.Name
-		// return space root for the user
-		if n.ShareRoot != "" {
-			setPlainOpaque(ri, "root", n.ShareRoot)
-		} else {
-			setPlainOpaque(ri, "root", n.SpaceRoot)
-		}
 	} else {
 		ri.Path, err = n.lu.Path(ctx, n)
 		if err != nil {

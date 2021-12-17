@@ -201,7 +201,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string) (*providerv1beta1.ResourceI
 	}
 
 	// Create file1 in dir1
-	_, err = t.CreateTestFile(t.SpaceRootRes.StorageId, "file1", "file1-blobid", 1234, dir1.ID)
+	_, err = t.CreateTestFile(space.StorageSpace.Id.OpaqueId, "file1", "file1-blobid", 1234, dir1.ID)
 	if err != nil {
 		return nil, err
 	}

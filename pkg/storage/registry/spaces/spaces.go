@@ -302,14 +302,17 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 				},
 			},
 		}}
-		if findMoundpoint {
-			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
-					SpaceType: "mountpoint",
-				},
-			})
-		} else {
+
+		//if findMoundpoint {
+		// FIXME when do we allow
+		filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+			Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+				SpaceType: "mountpoint",
+			},
+		})
+		//}
+		/* else {
 			for spaceType := range provider.Spaces {
 				// add filter to id based request if it is configured
 				filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
@@ -320,6 +323,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 				})
 			}
 		}
+		*/
 		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters)
 		if err != nil {
 			appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Msg("findStorageSpaceOnProvider by id failed, continuing")
@@ -384,13 +388,15 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 		var spaces []*providerpb.StorageSpace
 		var err error
 		filters := []*providerpb.ListStorageSpacesRequest_Filter{}
-		for spaceType, sc := range provider.Spaces {
-			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
-					SpaceType: spaceType,
-				},
-			})
+		for _, sc := range provider.Spaces {
+			/*
+				filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+					Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+					Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+						SpaceType: spaceType,
+					},
+				})
+			*/
 			if sc.OwnerIsCurrentUser {
 				filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
 					Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_OWNER,
@@ -419,6 +425,12 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 		for _, space := range spaces {
 			var sc *spaceConfig
 			var ok bool
+
+			if space.SpaceType == "grant" {
+				spacePaths[space.Id.OpaqueId] = "." // a . indicates a grant, the gateway will do a findMountpoint for it
+				continue
+			}
+
 			// filter unwanted space types. type mountpoint is not explicitly configured but requested by the gateway
 			if sc, ok = provider.Spaces[space.SpaceType]; !ok {
 				continue
