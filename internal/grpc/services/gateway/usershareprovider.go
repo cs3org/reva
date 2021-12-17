@@ -379,16 +379,16 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		return status.NewInternal(ctx, "error finding storage provider")
 	}
 
-	spaceID := ""
-	mountPath := providerInfo.ProviderPath
-	var root *provider.ResourceId
-
-	spacePaths := decodeSpacePaths(providerInfo.Opaque)
-	if len(spacePaths) == 0 {
-		spacePaths[""] = mountPath
-	}
-	for spaceID, mountPath = range spacePaths {
-		rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+	var (
+		root      *provider.ResourceId
+		mountPath string
+	)
+	for spaceID, mp := range decodeSpacePaths(providerInfo) {
+		mountPath = mp
+		rootSpace, rootNode, err := utils.SplitStorageSpaceID(spaceID)
+		if err != nil {
+			continue
+		}
 		root = &provider.ResourceId{
 			StorageId: rootSpace,
 			OpaqueId:  rootNode,

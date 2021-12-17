@@ -19,21 +19,35 @@
 package common
 
 import (
+	"encoding/json"
+	"encoding/xml"
 	"fmt"
 
+	"github.com/BurntSushi/toml"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 // DecodeOpaqueMap decodes a Reva opaque object into a map of strings.
-// Only plain decoders are currently supported.
 func DecodeOpaqueMap(opaque *types.Opaque) map[string]string {
 	entries := make(map[string]string)
 
 	if opaque != nil {
 		for k, v := range opaque.GetMap() {
-			// Only plain values are currently supported
-			if v.Decoder == "plain" {
+			switch v.Decoder {
+			case "plain":
 				entries[k] = string(v.Value)
+			case "json":
+				var s string
+				_ = json.Unmarshal(v.Value, &s)
+				entries[k] = s
+			case "toml":
+				var s string
+				_ = toml.Unmarshal(v.Value, &s)
+				entries[k] = s
+			case "xml":
+				var s string
+				_ = xml.Unmarshal(v.Value, &s)
+				entries[k] = s
 			}
 		}
 	}

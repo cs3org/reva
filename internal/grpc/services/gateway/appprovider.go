@@ -44,8 +44,6 @@ import (
 )
 
 func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-
-	resChild := ""
 	statRes, err := s.Stat(ctx, &storageprovider.StatRequest{
 		Ref: req.Ref,
 	})
@@ -72,7 +70,7 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		}
 		if uri.Scheme == "webdav" {
 			insecure, skipVerify := getGRPCConfig(req.Opaque)
-			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, req.App, insecure, skipVerify, resChild)
+			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, req.App, insecure, skipVerify, "")
 		}
 
 		res, err := s.Stat(ctx, &storageprovider.StatRequest{

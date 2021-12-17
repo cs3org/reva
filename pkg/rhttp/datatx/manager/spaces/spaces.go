@@ -82,10 +82,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			fn := path.Clean(strings.TrimLeft(r.URL.Path, "/"))
 			defer r.Body.Close()
 
-			// TODO refactor: pass Reference to Upload & GetOrHeadFile
-			// build a storage space reference
-			storageid, opaqeid := utils.SplitStorageSpaceID(spaceID)
-
+			storageid, opaqeid, _ := utils.SplitStorageSpaceID(spaceID)
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
 				Path:       fn,

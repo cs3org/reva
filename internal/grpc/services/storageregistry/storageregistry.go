@@ -21,8 +21,10 @@ package storageregistry
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 
+	"github.com/BurntSushi/toml"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -118,7 +120,6 @@ func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.List
 	return res, nil
 }
 
-// FIXME rename to GetStorageProvider
 func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetStorageProvidersRequest) (*registrypb.GetStorageProvidersResponse, error) {
 	space, err := decodeSpace(req.Opaque)
 	if err != nil {
@@ -149,12 +150,20 @@ func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetSt
 
 func decodeSpace(o *typespb.Opaque) (*provider.StorageSpace, error) {
 	if entry, ok := o.Map["space"]; ok {
-		space := &provider.StorageSpace{}
-		if err := json.Unmarshal(entry.Value, space); err != nil {
-			return nil, err
+		var unmarshal func([]byte, interface{}) error
+		switch entry.Decoder {
+		case "json":
+			unmarshal = json.Unmarshal
+		case "toml":
+			unmarshal = toml.Unmarshal
+		case "xml":
+			unmarshal = xml.Unmarshal
 		}
-		return space, nil
+
+		space := &provider.StorageSpace{}
+		return space, unmarshal(entry.Value, space)
 	}
+
 	return nil, fmt.Errorf("missing space in opaque property")
 }
 

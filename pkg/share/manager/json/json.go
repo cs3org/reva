@@ -400,7 +400,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 	}
 
 	// if there is a mix-up of shares of type group and shares of type user we need to deduplicate them, since it points
-	// to the same resource. Leave the more explicit and hide the more explicit. In this case we hide the group shares
+	// to the same resource. Leave the more explicit and hide the less explicit. In this case we hide the group shares
 	// and return the user share to the user.
 	filtered := make([]*collaboration.ReceivedShare, 0)
 	filtered = append(filtered, rss...)
