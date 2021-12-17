@@ -363,6 +363,19 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	return res, nil
 }
 
+func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
+	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
+		return nil, err
+	case st != nil:
+		return &provider.TouchFileResponse{
+			Status: st,
+		}, nil
+	}
+	return s.gateway.TouchFile(ctx, &provider.TouchFileRequest{Opaque: req.Opaque, Ref: ref})
+}
+
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Delete")
 	defer span.End()

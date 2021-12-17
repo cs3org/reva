@@ -782,6 +782,11 @@ func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 	return fs.propagate(ctx, path.Dir(fn))
 }
 
+// TouchFile as defined in the storage.FS interface
+func (fs *localfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
+}
+
 func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
