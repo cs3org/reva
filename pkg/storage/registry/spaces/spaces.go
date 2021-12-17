@@ -272,7 +272,7 @@ func (r *registry) GetProvider(ctx context.Context, space *providerpb.StorageSpa
 func (r *registry) ListProviders(ctx context.Context, filters map[string]string) ([]*registrypb.ProviderInfo, error) {
 	switch {
 	case filters["storage_id"] != "" && filters["opaque_id"] != "":
-		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"]), nil
+		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"], filters["type"] == "mountpoint"), nil
 	case filters["path"] != "":
 		return r.findProvidersForAbsolutePathReference(ctx, filters["path"]), nil
 		// TODO add filter for all spaces the user can manage?
@@ -286,8 +286,9 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 // findProvidersForResource looks up storage providers based on a resource id
 // for the root of a space the res.StorageId is the same as the res.OpaqueId
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
-func (r *registry) findProvidersForResource(ctx context.Context, id string) []*registrypb.ProviderInfo {
+func (r *registry) findProvidersForResource(ctx context.Context, id string, findMoundpoint bool) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
+	providerInfos := []*registrypb.ProviderInfo{}
 	for address, provider := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
 			Address:    address,
@@ -301,14 +302,23 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 				},
 			},
 		}}
-		for spaceType := range provider.Spaces {
-			// add filter to id based request if it is configured
+		if findMoundpoint {
 			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
 				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
 				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
-					SpaceType: spaceType,
+					SpaceType: "mountpoint",
 				},
 			})
+		} else {
+			for spaceType := range provider.Spaces {
+				// add filter to id based request if it is configured
+				filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+					Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+					Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+						SpaceType: spaceType,
+					},
+				})
+			}
 		}
 		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters)
 		if err != nil {
@@ -321,32 +331,41 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 			// nothing to do, will continue with next provider
 		case 1:
 			space := spaces[0]
-			for spaceType, sc := range provider.Spaces {
-				if spaceType == space.SpaceType {
-					providerPath, err := sc.SpacePath(currentUser, space)
-					if err != nil {
-						appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
-						continue
-					}
-					spacePaths := map[string]string{
-						space.Id.OpaqueId: providerPath,
-					}
-					p.Opaque, err = spacePathsToOpaque(spacePaths)
-					if err != nil {
-						appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
-						continue
-					}
-					// we can stop after we found the first space
-					// TODO to improve lookup time the registry could cache which provider last was responsible for a space? could be invalidated by simple ttl? would that work for shares?
-					return []*registrypb.ProviderInfo{p}
-				}
+			var sc *spaceConfig
+			var ok bool
+
+			if findMoundpoint && space.SpaceType != "mountpoint" {
+				continue
 			}
+			// filter unwanted space types. type mountpoint is not explicitly configured but requested by the gateway
+			if sc, ok = provider.Spaces[space.SpaceType]; !ok && space.SpaceType != "mountpoint" {
+				continue
+			}
+
+			spacePath, err := sc.SpacePath(currentUser, space)
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
+				continue
+			}
+
+			spacePaths := map[string]string{
+				space.Id.OpaqueId: spacePath,
+			}
+			p.Opaque, err = spacePathsToOpaque(spacePaths)
+			if err != nil {
+				appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
+				continue
+			}
+			// we can stop after we found the first space
+			// TODO to improve lookup time the registry could cache which provider last was responsible for a space? could be invalidated by simple ttl? would that work for shares?
+			//return []*registrypb.ProviderInfo{p}
+			providerInfos = append(providerInfos, p) // hm we need to query all providers ... or the id based lookup might only see the spaces storage provider
 		default:
 			// there should not be multiple spaces with the same id per provider
 			appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("spaces", spaces).Msg("multiple spaces returned, ignoring")
 		}
 	}
-	return []*registrypb.ProviderInfo{}
+	return providerInfos
 }
 
 // findProvidersForAbsolutePathReference takes a path and returns the storage provider with the longest matching path prefix
@@ -366,7 +385,6 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 		var err error
 		filters := []*providerpb.ListStorageSpacesRequest_Filter{}
 		for spaceType, sc := range provider.Spaces {
-
 			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
 				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
 				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
@@ -401,6 +419,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 		for _, space := range spaces {
 			var sc *spaceConfig
 			var ok bool
+			// filter unwanted space types. type mountpoint is not explicitly configured but requested by the gateway
 			if sc, ok = provider.Spaces[space.SpaceType]; !ok {
 				continue
 			}

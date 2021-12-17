@@ -34,6 +34,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -304,77 +305,80 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 
-	var nodeid string
+	spaceTypes := []string{}
+	res := &provider.ListStorageSpacesResponse{
+		Status: status.NewOK(ctx),
+	}
+	spaceID := &provider.ResourceId{}
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			if f.GetSpaceType() != "reference" {
-				return &provider.ListStorageSpacesResponse{
-					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-				}, nil
-			}
+			spaceTypes = append(spaceTypes, f.GetSpaceType())
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			_, nodeid = utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			spaceID.StorageId, spaceID.OpaqueId = utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			if spaceID.StorageId == "" || spaceID.OpaqueId == "" {
+				res.Status = status.NewInvalid(ctx, "invalid space id")
+				return res, nil
+			}
 		}
 	}
 
-	lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-	if err != nil {
-		return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
-	}
-	if lsRes.Status.Code != rpc.Code_CODE_OK {
-		return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
+	if len(spaceTypes) == 0 {
+		spaceTypes = []string{"mountpoint"}
 	}
 
-	res := &provider.ListStorageSpacesResponse{}
-	for i := range lsRes.Shares {
+	for i := range spaceTypes {
+		switch spaceTypes[i] {
+		case "mountpoint":
+			lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
+				// FIXME filter by received shares for resource id - listing all shares is tooo expensive!
+			})
+			if err != nil {
+				return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
+			}
+			if lsRes.Status.Code != rpc.Code_CODE_OK {
+				return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
+			}
 
-		if nodeid != "" && nodeid != lsRes.Shares[i].Share.ResourceId.OpaqueId {
-			// only a specific share was requested
-			continue
+			for i := range lsRes.Shares {
+				root := &provider.ResourceId{
+					StorageId: utils.ShareStorageProviderID,
+					OpaqueId:  lsRes.Shares[i].Share.Id.OpaqueId,
+				}
+				// do we filter by id
+				if spaceID.StorageId != "" {
+					switch {
+					case utils.ResourceIDEqual(spaceID, root):
+						// we have a virtual node
+					case utils.ResourceIDEqual(spaceID, lsRes.Shares[i].Share.ResourceId):
+						// we have a mount point
+						//root = lsRes.Shares[i].Share.ResourceId
+					default:
+						// none of our business
+						continue
+					}
+				}
+				space := &provider.StorageSpace{
+					Id: &provider.StorageSpaceId{
+						OpaqueId: root.StorageId + "!" + root.OpaqueId,
+					},
+					SpaceType: "mountpoint",
+					Owner:     &userv1beta1.User{Id: lsRes.Shares[i].Share.Owner}, // FIXME actually, the mount point belongs to the recipient
+					// the sharesstorageprovider keeps track of mount points
+					Root: root,
+				}
+
+				// TODO in the future the spaces registry will handle the alias for share spaces.
+				// for now use the name from the share to override the name determined by stat
+				if lsRes.Shares[i].MountPoint != nil {
+					space.Name = lsRes.Shares[i].MountPoint.Path
+				}
+
+				// what if we don't have a name?
+				res.StorageSpaces = append(res.StorageSpaces, space)
+			}
 		}
-		space := &provider.StorageSpace{
-			Id: &provider.StorageSpaceId{
-				// FIXME The storage space id should always equal the root id,
-				// however, the root is just the mount point. A resource the recipient can rename to his liking.
-				// It should be a reference pointig to the actual resource.
-				// The storagespaceprovider needs to be federated by teaching storage providers to keep track of all mount points
-				// -> maybe as liststoragespaces with space type = 'reference'?
-				OpaqueId: "a0ca6a90-a365-4782-871e-d44447bbc668!" + lsRes.Shares[i].Share.ResourceId.OpaqueId,
-			},
-			SpaceType: "reference", // TODO actually these are references/mount points: the receiving side of an accepted share
-			Owner:     &userv1beta1.User{Id: lsRes.Shares[i].Share.Owner},
-			// the sharesstorageprovider keeps track of share references
-			Root: &provider.ResourceId{
-				StorageId: utils.ShareStorageProviderID,
-				OpaqueId:  lsRes.Shares[i].Share.ResourceId.OpaqueId,
-			},
-		}
-
-		sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
-			Opaque: req.Opaque,
-			Ref: &provider.Reference{
-				ResourceId: lsRes.Shares[i].Share.ResourceId,
-			},
-		})
-
-		if err == nil && sRes.Status.Code == rpc.Code_CODE_OK {
-			space.Name = filepath.Base(sRes.Info.Path)
-			space.Mtime = sRes.Info.Mtime
-			// TODO more metadata?
-		}
-
-		// TODO in the future the spaces registry will handle the alias for share spaces.
-		// for now use the name from the share to override the name determined by stat
-		if lsRes.Shares[i].MountPoint != nil {
-			space.Name = lsRes.Shares[i].MountPoint.Path
-		}
-
-		// what if we don't have a name?
-		res.StorageSpaces = append(res.StorageSpaces, space)
 	}
-	res.Status = status.NewOK(ctx)
-
 	return res, nil
 }
 
@@ -550,16 +554,30 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		Opaque: req.Opaque,
 		Ref: &provider.Reference{
 			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path,
+			Path:       req.Ref.Path, // TODO can path ever best else than ""?
 		},
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
 
 	if err == nil && sRes.Status.Code == rpc.Code_CODE_OK {
+		if sRes.Info.Opaque == nil {
+			sRes.Info.Opaque = &typesv1beta1.Opaque{
+				Map: map[string]*typesv1beta1.OpaqueEntry{},
+			}
+		} else if sRes.Info.Opaque.Map == nil {
+			sRes.Info.Opaque.Map = map[string]*typesv1beta1.OpaqueEntry{}
+		}
+		// set root to the sharesstorageprovider
+		sRes.Info.Opaque.Map["root"] = &typesv1beta1.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte(utils.ShareStorageProviderID),
+		}
 		// overwrite id to make subsequent stat calls use the mount point
 		// of the sharesstorageprovider to build absolute paths
-		// TODO use share id as opaque id?
-		sRes.Info.Id.StorageId = "a0ca6a90-a365-4782-871e-d44447bbc668"
+		sRes.Info.Id = &provider.ResourceId{
+			StorageId: utils.ShareStorageProviderID,
+			OpaqueId:  receivedShare.Share.Id.OpaqueId,
+		}
 	}
 
 	return sRes, err
@@ -701,7 +719,9 @@ func (s *service) resolveReference(ctx context.Context, ref *provider.Reference)
 	}
 	if utils.IsRelativeReference(ref) {
 		// look up share for this resourceid
-		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
+			// FIXME filter by received shares for resource id - listing all shares is tooo expensive!
+		})
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
 		}
@@ -710,7 +730,7 @@ func (s *service) resolveReference(ctx context.Context, ref *provider.Reference)
 		}
 		for _, rs := range lsRes.Shares {
 			// match the opaque id
-			if rs.Share.ResourceId.OpaqueId == ref.ResourceId.OpaqueId {
+			if rs.Share.Id.OpaqueId == ref.ResourceId.OpaqueId {
 				return rs, nil, nil
 			}
 		}
