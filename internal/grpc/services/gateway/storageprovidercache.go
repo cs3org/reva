@@ -205,6 +205,8 @@ type cachedAPIClient struct {
 }
 
 // generates a user specific key pointing to ref - used for statcache
+// a key looks like: uid:1234-1233!sid:5678-5677!oid:9923-9934!path:/path/to/source
+// as you see it adds "uid:"/"sid:"/"oid:" prefixes to the uuids so they can be differentiated
 func statKey(user *userpb.User, ref *provider.Reference) string {
 	if ref == nil || ref.ResourceId == nil || ref.ResourceId.StorageId == "" {
 		return ""
