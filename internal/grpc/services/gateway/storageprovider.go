@@ -1100,11 +1100,8 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 			}, nil
 		}
 
-		spaceID := ""
-		mountPath := providerInfos[i].ProviderPath
 		var root *provider.ResourceId
-
-		for spaceID, mountPath = range decodeSpacePaths(providerInfos[i]) {
+		for spaceID, mountPath := range decodeSpacePaths(providerInfos[i]) {
 			rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
 			root = &provider.ResourceId{
 				StorageId: rootSpace,
