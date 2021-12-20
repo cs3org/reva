@@ -24,10 +24,12 @@ import (
 	"path"
 
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -279,7 +281,7 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 
 	Context("with a sharded /users mount", func() {
 		var (
-			homePath  = "/users/f/f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"
+			homePath  = path.Join("/users/f/", marie.Id.OpaqueId)
 			rootRef   = &storagep.Reference{Path: path.Join("/users")}
 			baseRef   = &storagep.Reference{Path: path.Join("/users/f")}
 			homeRef   = &storagep.Reference{Path: homePath}
@@ -419,6 +421,137 @@ var _ = Describe("gateway using a static registry and a shard setup", func() {
 				Expect(getEtag(homeRef)).ToNot(Equal(userEtag))
 				Expect(getEtag(baseRef)).ToNot(Equal(baseEtag))
 				Expect(getEtag(rootRef)).ToNot(Equal(rootEtag))
+			})
+
+			Context("and a shared directory", func() {
+				var (
+					sharedRef = &storagep.Reference{Path: path.Join(homePath, "shared")}
+				)
+
+				BeforeEach(func() {
+					dependencies["storage_shares"] = "storageprovider-shares.toml"
+				})
+
+				JustBeforeEach(func() {
+					createRes, err := serviceClient.CreateContainer(marieCtx, &storagep.CreateContainerRequest{Ref: sharedRef})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(createRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+					statRes, err := serviceClient.Stat(marieCtx, &storagep.StatRequest{Ref: sharedRef})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+					grant := &collaboration.ShareGrant{
+						Permissions: &collaboration.SharePermissions{
+							Permissions: &storagep.ResourcePermissions{
+								GetPath:              true,
+								InitiateFileDownload: true,
+								ListFileVersions:     true,
+								ListContainer:        true,
+								Stat:                 true,
+								CreateContainer:      true,
+								Delete:               true,
+								InitiateFileUpload:   true,
+								RestoreFileVersion:   true,
+								Move:                 true,
+							},
+						},
+						Grantee: &storagep.Grantee{
+							Type: storagep.GranteeType_GRANTEE_TYPE_USER,
+							Id:   &storagep.Grantee_UserId{UserId: einstein.Id},
+						},
+					}
+					shareRes, err := serviceClient.CreateShare(marieCtx, &collaboration.CreateShareRequest{
+						ResourceInfo: statRes.Info,
+						Grant:        grant,
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(shareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+					getRSRes, err := serviceClient.GetReceivedShare(einsteinCtx, &collaboration.GetReceivedShareRequest{
+						Ref: &collaboration.ShareReference{
+							Spec: &collaboration.ShareReference_Id{
+								Id: &collaboration.ShareId{
+									OpaqueId: shareRes.Share.Id.OpaqueId,
+								},
+							},
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					getRSRes.Share.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+					getRSRes.Share.MountPoint = &storagep.Reference{Path: "shared"}
+					updateRes, err := serviceClient.UpdateReceivedShare(einsteinCtx, &collaboration.UpdateReceivedShareRequest{
+						Share:      getRSRes.Share,
+						UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(updateRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				})
+
+				It("lets the grantee access the share", func() {
+					statRes, err := serviceClient.Stat(einsteinCtx, &storagep.StatRequest{Ref: &storagep.Reference{Path: path.Join("/home/Shares/shared")}})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+					lRes, err := serviceClient.ListContainer(einsteinCtx, &storagep.ListContainerRequest{Ref: &storagep.Reference{Path: path.Join("/home/Shares/shared")}})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(lRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				})
+
+				It("declines the share when deleting the share root", func() {
+					delRes, err := serviceClient.Delete(einsteinCtx, &storagep.DeleteRequest{
+						Ref: &storagep.Reference{Path: path.Join("/home/Shares/shared")},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+					statRes, err := serviceClient.Stat(einsteinCtx, &storagep.StatRequest{Ref: &storagep.Reference{Path: path.Join("/home/Shares/shared")}})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+				})
+
+				Context("and a directory inside the share", func() {
+					JustBeforeEach(func() {
+						createRes, err := serviceClient.CreateContainer(einsteinCtx, &storagep.CreateContainerRequest{
+							Ref: &storagep.Reference{Path: path.Join("/home/Shares/shared/subdir")},
+						})
+						Expect(err).ToNot(HaveOccurred())
+						Expect(createRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+					})
+
+					It("lets the grantee delete the directory", func() {
+						delRes, err := serviceClient.Delete(einsteinCtx, &storagep.DeleteRequest{
+							Ref: &storagep.Reference{Path: path.Join("/home/Shares/shared/subdir")},
+						})
+						Expect(err).ToNot(HaveOccurred())
+						Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+					})
+
+					It("lets the grantee rename the directory", func() {
+						moveRes, err := serviceClient.Move(einsteinCtx, &storagep.MoveRequest{
+							Source:      &storagep.Reference{Path: path.Join("/home/Shares/shared/subdir")},
+							Destination: &storagep.Reference{Path: path.Join("/home/Shares/shared/new")},
+						})
+						Expect(err).ToNot(HaveOccurred())
+						Expect(moveRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+					})
+
+					It("lets the grantee move the directory", func() {
+						createRes, err := serviceClient.CreateContainer(einsteinCtx, &storagep.CreateContainerRequest{
+							Ref: &storagep.Reference{Path: path.Join("/home/Shares/shared/anothersub")},
+						})
+						Expect(err).ToNot(HaveOccurred())
+						Expect(createRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+						moveRes, err := serviceClient.Move(einsteinCtx, &storagep.MoveRequest{
+							Source:      &storagep.Reference{Path: path.Join("/home/Shares/shared/subdir")},
+							Destination: &storagep.Reference{Path: path.Join("/home/Shares/shared/anothersub/subdir")},
+						})
+						Expect(err).ToNot(HaveOccurred())
+						Expect(moveRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+					})
+				})
+
 			})
 		})
 	})

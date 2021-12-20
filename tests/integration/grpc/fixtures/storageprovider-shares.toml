@@ -1,0 +1,11 @@
+[shared]
+jwt_secret = "changemeplease"
+gatewaysvc = "{{gateway_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+# This is a storage provider that grants direct access to the wrapped storage
+# we have a locally running dataprovider
+[grpc.services.sharesstorageprovider]
+usershareprovidersvc = "{{gateway_address}}"
