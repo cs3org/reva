@@ -501,6 +501,8 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
 	ref := &provider.Reference{
 		ResourceId: id,
+		// TODO make a dedicated findSpace without the grant type?
+		Path: ".", // no need to make the registry look up grants as the reference is always in a storage spaces, not in the sharesstorage provider
 	}
 	grantReq := &provider.UpdateGrantRequest{
 		Ref: ref,
