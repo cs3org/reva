@@ -153,9 +153,22 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 		return nil, "", nil, st, nil
 	}
 
+	var path string
+	switch shareInfo.Type {
+	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		// folders point to the folder -> path needs to be added
+		path = utils.MakeRelativePath(relativePath)
+	case provider.ResourceType_RESOURCE_TYPE_FILE:
+		// files already point to the correct id
+		path = "."
+	default:
+		// TODO: can this happen?
+		// path = utils.MakeRelativePath(relativePath)
+	}
+
 	cs3Ref := &provider.Reference{
 		ResourceId: shareInfo.Id,
-		Path:       utils.MakeRelativePath(relativePath),
+		Path:       path,
 	}
 
 	log.Debug().
