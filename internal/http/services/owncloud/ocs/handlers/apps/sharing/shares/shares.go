@@ -51,7 +51,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	revactx "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share"
@@ -299,7 +298,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Get auth
-			granteeCtx := revactx.ContextSetUser(context.Background(), res.User)
+			granteeCtx := ctxpkg.ContextSetUser(context.Background(), res.User)
 
 			authRes, err := client.Authenticate(granteeCtx, &gateway.AuthenticateRequest{
 				Type:         "machine",
@@ -314,7 +313,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "machine authentication failed", nil)
 				return
 			}
-			granteeCtx = metadata.AppendToOutgoingContext(granteeCtx, revactx.TokenHeader, authRes.Token)
+			granteeCtx = metadata.AppendToOutgoingContext(granteeCtx, ctxpkg.TokenHeader, authRes.Token)
 
 			lrs, ocsResponse := getSharesList(granteeCtx, client)
 			if ocsResponse != nil {
@@ -570,7 +569,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// cut off configured home namespace, paths in ocs shares are relative to it
-	info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(revactx.ContextMustGetUser(ctx)))
+	info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(ctxpkg.ContextMustGetUser(ctx)))
 
 	err = h.addFileInfo(ctx, share, info)
 	if err != nil {
@@ -680,7 +679,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	}
 
 	// cut off configured home namespace, paths in ocs shares are relative to it
-	statRes.Info.Path = strings.TrimPrefix(statRes.Info.Path, h.getHomeNamespace(revactx.ContextMustGetUser(ctx)))
+	statRes.Info.Path = strings.TrimPrefix(statRes.Info.Path, h.getHomeNamespace(ctxpkg.ContextMustGetUser(ctx)))
 
 	err = h.addFileInfo(r.Context(), share, statRes.Info)
 	if err != nil {
@@ -747,7 +746,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// we need to lookup the resource id so we can filter the list of shares later
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		target := path.Join(h.getHomeNamespace(revactx.ContextMustGetUser(ctx)), r.FormValue("path"))
+		target := path.Join(h.getHomeNamespace(ctxpkg.ContextMustGetUser(ctx)), r.FormValue("path"))
 
 		var status *rpc.Status
 		pinfo, status, err = h.getResourceInfoByPath(ctx, client, target)
@@ -935,7 +934,7 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		filters, linkFilters, e = h.addFilters(w, r, h.getHomeNamespace(revactx.ContextMustGetUser(r.Context())))
+		filters, linkFilters, e = h.addFilters(w, r, h.getHomeNamespace(ctxpkg.ContextMustGetUser(r.Context())))
 		if e != nil {
 			// result has been written as part of addFilters
 			return
