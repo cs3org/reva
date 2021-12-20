@@ -24,6 +24,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -43,12 +44,21 @@ var _ = Describe("Recycle", func() {
 	})
 
 	Context("with sufficient permissions", func() {
-		BeforeEach(func() {
-		})
-
 		When("a user deletes files from the same space", func() {
+
+			BeforeEach(func() {
+				// in this scenario user "userid" has this permissions:
+				registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+					InitiateFileUpload: true,
+					Delete:             true,
+					ListRecycle:        true,
+					PurgeRecycle:       true,
+					RestoreRecycleItem: true,
+					GetQuota:           true,
+				})
+			})
+
 			JustBeforeEach(func() {
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(2)
 				err := env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
@@ -63,7 +73,6 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they are stored in the same trashbin", func() {
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1)
 				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(2))
@@ -77,8 +86,8 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they can be permanently deleted by this user", func() {
+				// mock call to blobstore
 				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(4)
 
 				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 				Expect(err).ToNot(HaveOccurred())
@@ -94,6 +103,17 @@ var _ = Describe("Recycle", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(0))
 			})
+
+			It("they can be restored", func() {
+				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
+
+				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(items)).To(Equal(2))
+
+				err = env.Fs.RestoreRecycleItem(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/", nil)
+				Expect(err).ToNot(HaveOccurred())
+			})
 		})
 
 		When("two users delete files from the same space", func() {
@@ -108,10 +128,25 @@ var _ = Describe("Recycle", func() {
 					},
 					Username: "anotherusername",
 				})
+
+				// in this scenario user "userid" has this permissions:
+				registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+					Delete:             true,
+					ListRecycle:        true,
+					PurgeRecycle:       true,
+					RestoreRecycleItem: true,
+				})
+
+				// and user "anotheruserid" has the same permissions:
+				registerPermissions(env.Permissions, "anotheruserid", &provider.ResourcePermissions{
+					Delete:             true,
+					ListRecycle:        true,
+					PurgeRecycle:       true,
+					RestoreRecycleItem: true,
+				})
 			})
 
 			JustBeforeEach(func() {
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(2)
 				err := env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
@@ -127,7 +162,6 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they are stored in the same trashbin (for both users)", func() {
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(2)
 				itemsA, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(itemsA)).To(Equal(2))
@@ -141,7 +175,6 @@ var _ = Describe("Recycle", func() {
 
 			It("they can be permanently deleted by the other user", func() {
 				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(4)
 
 				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 				Expect(err).ToNot(HaveOccurred())
@@ -176,10 +209,17 @@ var _ = Describe("Recycle", func() {
 				projectID, err = env.CreateTestStorageSpace("project")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(projectID).ToNot(BeNil())
+
+				// in this scenario user "userid" has this permissions:
+				registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+					Delete:             true,
+					ListRecycle:        true,
+					PurgeRecycle:       true,
+					RestoreRecycleItem: true,
+				})
 			})
 
 			JustBeforeEach(func() {
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(2)
 				err := env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
@@ -194,7 +234,6 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they are stored in different trashbins", func() {
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(2)
 				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(1))
@@ -222,38 +261,20 @@ var _ = Describe("Recycle", func() {
 					Username: "readusername",
 				})
 
-				// need user with access ...
-				env.Permissions.On("HasPermission",
-					mock.MatchedBy(func(ctx context.Context) bool {
-						return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == "userid"
-					}),
-					mock.Anything,
-					mock.Anything,
-				).Return(true, nil)
+				// in this scenario user "userid" has this permissions:
+				registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+					Delete:             true,
+					ListRecycle:        true,
+					PurgeRecycle:       true,
+					RestoreRecycleItem: true,
+				})
 
-				// and user with read access ...
-				env.Permissions.On("HasPermission",
-					mock.MatchedBy(func(ctx context.Context) bool {
-						return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == "readuserid"
-					}),
-					mock.Anything,
-					mock.MatchedBy(func(f func(*provider.ResourcePermissions) bool) bool {
-						return f(&provider.ResourcePermissions{ListRecycle: true})
-					}),
-				).Return(true, nil)
-				env.Permissions.On("HasPermission",
-					mock.MatchedBy(func(ctx context.Context) bool {
-						return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == "readuserid"
-					}),
-					mock.Anything,
-					mock.MatchedBy(func(f func(*provider.ResourcePermissions) bool) bool {
-						return f(&provider.ResourcePermissions{
-							PurgeRecycle: true,
-							Delete:       true,
-						})
-					}),
-				).Return(false, nil)
+				// and user "readuserid" has this permissions:
+				registerPermissions(env.Permissions, "readuserid", &provider.ResourcePermissions{
+					ListRecycle: true,
+				})
 			})
+
 			It("can list the trashbin", func() {
 				err := env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
@@ -308,20 +329,17 @@ var _ = Describe("Recycle", func() {
 				},
 				Username: "mrhacker",
 			})
-			env.Permissions.On("HasPermission",
-				mock.MatchedBy(func(ctx context.Context) bool {
-					return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == "userid"
-				}),
-				mock.Anything,
-				mock.Anything,
-			).Return(true, nil)
-			env.Permissions.On("HasPermission",
-				mock.MatchedBy(func(ctx context.Context) bool {
-					return ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == "hacker"
-				}),
-				mock.Anything,
-				mock.Anything,
-			).Return(false, nil)
+
+			// in this scenario user "userid" has this permissions:
+			registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+				Delete:             true,
+				ListRecycle:        true,
+				PurgeRecycle:       true,
+				RestoreRecycleItem: true,
+			})
+
+			// and user "hacker" has no permissions:
+			registerPermissions(env.Permissions, "hacker", &provider.ResourcePermissions{})
 		})
 
 		It("cannot delete, list or purge", func() {
@@ -352,3 +370,38 @@ var _ = Describe("Recycle", func() {
 		})
 	})
 })
+
+func registerPermissions(m *mocks.PermissionsChecker, uid string, exp *provider.ResourcePermissions) {
+	// add positives
+	m.On("HasPermission",
+		mock.MatchedBy(func(ctx context.Context) bool {
+			return uid == "" || ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == uid
+		}),
+		mock.Anything,
+		mock.MatchedBy(func(r func(*provider.ResourcePermissions) bool) bool {
+			return exp == nil || r(exp)
+		}),
+	).Return(true, nil)
+
+	// add negatives
+	if exp != nil {
+		m.On("HasPermission",
+			mock.MatchedBy(func(ctx context.Context) bool {
+				return uid == "" || ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == uid
+			}),
+			mock.Anything,
+			mock.Anything,
+		).Return(false, nil)
+	}
+
+	p := provider.ResourcePermissions{}
+	if exp != nil {
+		p = *exp
+	}
+	m.On("AssemblePermissions",
+		mock.MatchedBy(func(ctx context.Context) bool {
+			return uid == "" || ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == uid
+		}),
+		mock.Anything,
+	).Return(p, nil)
+}
