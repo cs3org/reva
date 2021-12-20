@@ -272,7 +272,9 @@ func (r *registry) GetProvider(ctx context.Context, space *providerpb.StorageSpa
 func (r *registry) ListProviders(ctx context.Context, filters map[string]string) ([]*registrypb.ProviderInfo, error) {
 	switch {
 	case filters["storage_id"] != "" && filters["opaque_id"] != "":
-		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"], filters["type"] == "mountpoint"), nil
+		findMountpoint := filters["type"] == "mountpoint"
+		findGrant := !findMountpoint && filters["path"] == "" // relvative references, by definition, occur in the correct storage, so do not look for grants
+		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"], findMountpoint, findGrant), nil
 	case filters["path"] != "":
 		return r.findProvidersForAbsolutePathReference(ctx, filters["path"]), nil
 		// TODO add filter for all spaces the user can manage?
@@ -286,7 +288,7 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 // findProvidersForResource looks up storage providers based on a resource id
 // for the root of a space the res.StorageId is the same as the res.OpaqueId
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
-func (r *registry) findProvidersForResource(ctx context.Context, id string, findMoundpoint bool) []*registrypb.ProviderInfo {
+func (r *registry) findProvidersForResource(ctx context.Context, id string, findMoundpoint, findGrant bool) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 	providerInfos := []*registrypb.ProviderInfo{}
 	for address, provider := range r.c.Providers {
@@ -310,7 +312,8 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 					SpaceType: "+mountpoint",
 				},
 			})
-		} else {
+		}
+		if findGrant {
 			// when listing by id return also grants and mountpoints
 			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
 				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
