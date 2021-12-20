@@ -20,6 +20,7 @@ package shares
 
 import (
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -223,7 +224,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 			}
 
 			// cut off configured home namespace, paths in ocs shares are relative to it
-			info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(u))
+			info.Path = filepath.Join("/", strings.TrimPrefix(info.Path, h.getHomeNamespace(u)))
 
 			if err := h.addFileInfo(ctx, data, info); err != nil {
 				log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
