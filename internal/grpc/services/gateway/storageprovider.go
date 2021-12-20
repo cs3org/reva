@@ -809,6 +809,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 					Opaque: req.Opaque,
 					Ref: &provider.Reference{
 						ResourceId: utils.TargetAsResourceID(statResp.Info.Target),
+						Path:       statResp.Info.Path,
 					},
 					ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 				})

@@ -649,7 +649,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  receivedShare.Share.Id.OpaqueId,
 			},
-			Path:   receivedShare.MountPoint.Path,
+			Path:   req.Ref.Path,
 			Target: "cs3:" + receivedShare.Share.ResourceId.StorageId + "/" + receivedShare.Share.ResourceId.OpaqueId,
 		},
 	}, nil
