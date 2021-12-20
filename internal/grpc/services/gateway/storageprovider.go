@@ -1118,20 +1118,27 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 						rsp.Infos[i] = refStatRes.Info
 					}
 				}
+				/*
+					if utils.IsAbsoluteReference(req.Ref) {
+						var prefix string
+						if utils.IsAbsolutePathReference(providerRef) {
+							prefix = spacePath
+						} else {
+							prefix = path.Join(spacePath, providerRef.Path)
+						}
+						for j := range rsp.Infos {
 
-				if utils.IsAbsoluteReference(req.Ref) {
-					var prefix string
-					if utils.IsAbsolutePathReference(providerRef) {
-						prefix = spacePath
-					} else {
-						prefix = path.Join(spacePath, providerRef.Path)
+							rsp.Infos[j].Path = path.Join(prefix, rsp.Infos[j].Path)
+						}
 					}
-					for j := range rsp.Infos {
-
-						rsp.Infos[j].Path = path.Join(prefix, rsp.Infos[j].Path)
-					}
-				}
+				*/
 				for i := range rsp.Infos {
+					if spacePath == "" {
+						// we have no mount point, make path relative
+						rsp.Infos[i].Path = utils.MakeRelativePath(rsp.Infos[i].Path)
+					} else {
+						rsp.Infos[i].Path = path.Join(spacePath, rsp.Infos[i].Path)
+					}
 					if info, ok := infos[rsp.Infos[i].Path]; ok {
 						if info.Mtime != nil && rsp.Infos[i].Mtime != nil && utils.TSToUnixNano(rsp.Infos[i].Mtime) > utils.TSToUnixNano(info.Mtime) {
 							continue
