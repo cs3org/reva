@@ -321,7 +321,7 @@ func SplitStorageSpaceID(ssid string) (storageid, nodeid string) {
 }
 
 func TargetAsResourceID(t string) *provider.ResourceId {
-	parts := strings.SplitN(strings.TrimPrefix(t, "cs3"), "/", 2)
+	parts := strings.SplitN(strings.TrimPrefix(t, "cs3:"), "/", 2)
 	switch len(parts) {
 	case 1:
 		return &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[0]}
