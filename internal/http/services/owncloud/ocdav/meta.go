@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
 // MetaHandler handles meta requests
@@ -45,7 +46,7 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		did := unwrap(id)
+		did := resourceid.OwnCloudResourceIDUnwrap(id)
 
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)

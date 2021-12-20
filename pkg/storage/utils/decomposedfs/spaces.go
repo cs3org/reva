@@ -304,7 +304,12 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	if len(matches) != 1 {
-		return nil, fmt.Errorf("update space failed: found %d matching spaces", len(matches))
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{
+				Code:    v1beta11.Code_CODE_NOT_FOUND,
+				Message: fmt.Sprintf("update space failed: found %d matching spaces", len(matches)),
+			},
+		}, nil
 	}
 
 	target, err := os.Readlink(matches[0])
@@ -316,6 +321,12 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	if err != nil {
 		return nil, err
 	}
+
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
+	}
+	space.Owner = u
 
 	if space.Name != "" {
 		if err := node.SetMetadata(xattrs.SpaceNameAttr, space.Name); err != nil {

@@ -548,6 +548,30 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	return res, nil
 }
 
+func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
+	if err := s.storage.TouchFile(ctx, req.Ref); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when touching the file")
+		case errtypes.AlreadyExists:
+			st = status.NewAlreadyExists(ctx, err, "file already exists")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, "error touching file: "+req.Ref.String())
+		}
+		return &provider.TouchFileResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.TouchFileResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+}
+
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	if req.Ref.GetPath() == "/" {
 		return &provider.DeleteResponse{
