@@ -832,7 +832,11 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			var status *rpc.Status
 			// FIXME the ResourceID is the id of the resource, but we want the id of the mount point so we can fetch that path, well we have the mountpoint path in the receivedshare
 			// first stat mount point
-			info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+			mountID := &provider.ResourceId{
+				StorageId: utils.ShareStorageProviderID,
+				OpaqueId:  rs.Share.Id.OpaqueId,
+			}
+			info, status, err = h.getResourceInfoByID(ctx, client, mountID)
 			if err != nil || status.Code != rpc.Code_CODE_OK {
 				// fallback to unmounted resource
 				info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
@@ -1223,7 +1227,7 @@ func (h *Handler) getResourceInfoByPath(ctx context.Context, client GatewayClien
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client GatewayClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, wrapResourceID(id), &provider.Reference{ResourceId: id})
+	return h.getResourceInfo(ctx, client, wrapResourceID(id), &provider.Reference{ResourceId: id, Path: "."})
 }
 
 // getResourceInfo retrieves the resource info to a target.
