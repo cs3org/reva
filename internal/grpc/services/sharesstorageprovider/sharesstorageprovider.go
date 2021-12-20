@@ -592,36 +592,33 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	if isVirtualRoot(req.Ref.ResourceId) {
-		if req.Ref.Path == "" || req.Ref.Path == "." {
-			// The root is empty, it is filled by mountpoints
-			return &provider.StatResponse{
-				Status: status.NewOK(ctx),
-				Info: &provider.ResourceInfo{
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"root": {
-								Decoder: "plain",
-								Value:   []byte(utils.ShareStorageProviderID),
-							},
+	if isVirtualRoot(req.Ref.ResourceId) && (req.Ref.Path == "" || req.Ref.Path == ".") {
+		// The root is empty, it is filled by mountpoints
+		return &provider.StatResponse{
+			Status: status.NewOK(ctx),
+			Info: &provider.ResourceInfo{
+				Opaque: &typesv1beta1.Opaque{
+					Map: map[string]*typesv1beta1.OpaqueEntry{
+						"root": {
+							Decoder: "plain",
+							Value:   []byte(utils.ShareStorageProviderID),
 						},
 					},
-					Id: &provider.ResourceId{
-						StorageId: utils.ShareStorageProviderID,
-						OpaqueId:  utils.ShareStorageProviderID,
-					},
-					Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-					Mtime:         &typesv1beta1.Timestamp{},
-					Path:          "/",
-					MimeType:      "httpd/unix-directory",
-					Size:          0,
-					PermissionSet: &provider.ResourcePermissions{
-						// TODO
-					},
 				},
-			}, nil
-		}
-		// we need to check if a child with that name exists
+				Id: &provider.ResourceId{
+					StorageId: utils.ShareStorageProviderID,
+					OpaqueId:  utils.ShareStorageProviderID,
+				},
+				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				Mtime:         &typesv1beta1.Timestamp{},
+				Path:          "/",
+				MimeType:      "httpd/unix-directory",
+				Size:          0,
+				PermissionSet: &provider.ResourcePermissions{
+					// TODO
+				},
+			},
+		}, nil
 	}
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
@@ -656,39 +653,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Target: "cs3:" + receivedShare.Share.ResourceId.StorageId + "/" + receivedShare.Share.ResourceId.OpaqueId,
 		},
 	}, nil
-	/*
-		sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
-			Opaque: req.Opaque,
-			Ref: &provider.Reference{
-				ResourceId: receivedShare.Share.ResourceId,
-				Path:       req.Ref.Path, // TODO can path ever be something else than ""?
-			},
-			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-		})
-
-		if err == nil && sRes.Status.Code == rpc.Code_CODE_OK {
-			if sRes.Info.Opaque == nil {
-				sRes.Info.Opaque = &typesv1beta1.Opaque{
-					Map: map[string]*typesv1beta1.OpaqueEntry{},
-				}
-			} else if sRes.Info.Opaque.Map == nil {
-				sRes.Info.Opaque.Map = map[string]*typesv1beta1.OpaqueEntry{}
-			}
-			// set root to the sharesstorageprovider
-			sRes.Info.Opaque.Map["root"] = &typesv1beta1.OpaqueEntry{
-				Decoder: "plain",
-				Value:   []byte(utils.ShareStorageProviderID),
-			}
-			// overwrite id to make subsequent stat calls use the mount point
-			// of the sharesstorageprovider to build absolute paths
-			sRes.Info.Id = &provider.ResourceId{
-				StorageId: utils.ShareStorageProviderID,
-				OpaqueId:  receivedShare.Share.Id.OpaqueId,
-			}
-		}
-
-		return sRes, err
-	*/
 }
 
 func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {
