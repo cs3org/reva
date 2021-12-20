@@ -261,6 +261,8 @@ func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool)
 	// Write Requests
 	case *provider.CreateContainerRequest:
 		return v.GetRef(), true
+	case *provider.TouchFileRequest:
+		return v.GetRef(), true
 	case *provider.DeleteRequest:
 		return v.GetRef(), true
 	case *provider.MoveRequest:
