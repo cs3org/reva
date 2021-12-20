@@ -79,7 +79,6 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they do not count towards the quota anymore", func() {
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(provider.ResourcePermissions{GetQuota: true}, nil).Times(1)
 				_, used, err := env.Fs.GetQuota(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(used).To(Equal(uint64(0)))
@@ -113,6 +112,10 @@ var _ = Describe("Recycle", func() {
 
 				err = env.Fs.RestoreRecycleItem(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/", nil)
 				Expect(err).ToNot(HaveOccurred())
+
+				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(items)).To(Equal(1))
 			})
 		})
 
@@ -131,6 +134,7 @@ var _ = Describe("Recycle", func() {
 
 				// in this scenario user "userid" has this permissions:
 				registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+					InitiateFileUpload: true,
 					Delete:             true,
 					ListRecycle:        true,
 					PurgeRecycle:       true,
@@ -139,6 +143,7 @@ var _ = Describe("Recycle", func() {
 
 				// and user "anotheruserid" has the same permissions:
 				registerPermissions(env.Permissions, "anotheruserid", &provider.ResourcePermissions{
+					InitiateFileUpload: true,
 					Delete:             true,
 					ListRecycle:        true,
 					PurgeRecycle:       true,
@@ -201,21 +206,52 @@ var _ = Describe("Recycle", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(0))
 			})
+
+			It("they can be restored by the other user", func() {
+				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
+
+				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(items)).To(Equal(2))
+
+				// pick correct ctx
+				var ctx1, ctx2 context.Context
+				switch items[0].Type {
+				case provider.ResourceType_RESOURCE_TYPE_FILE:
+					ctx1 = env.Ctx
+					ctx2 = ctx
+				case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+					ctx1 = ctx
+					ctx2 = env.Ctx
+				}
+
+				err = env.Fs.RestoreRecycleItem(ctx1, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/", nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = env.Fs.RestoreRecycleItem(ctx2, &provider.Reference{ResourceId: env.SpaceRootRes}, items[1].Key, "/", nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(items)).To(Equal(0))
+			})
 		})
 
 		When("a user deletes files from different spaces", func() {
 			BeforeEach(func() {
 				var err error
-				projectID, err = env.CreateTestStorageSpace("project")
+				projectID, err = env.CreateTestStorageSpace("project", &provider.Quota{QuotaMaxBytes: 2000})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(projectID).ToNot(BeNil())
 
 				// in this scenario user "userid" has this permissions:
 				registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+					InitiateFileUpload: true,
 					Delete:             true,
 					ListRecycle:        true,
 					PurgeRecycle:       true,
 					RestoreRecycleItem: true,
+					GetQuota:           true,
 				})
 			})
 
@@ -246,6 +282,25 @@ var _ = Describe("Recycle", func() {
 
 				Expect(recycled1).ToNot(Equal(recycled2))
 			})
+
+			It("they can excess the spaces quota if restored", func() {
+				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: projectID}, "", "/")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(items)).To(Equal(1))
+
+				// use up 2000 byte quota
+				_, err = env.CreateTestFile("largefile", "largefile-blobid", 2000, projectID.OpaqueId)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = env.Fs.RestoreRecycleItem(env.Ctx, &provider.Reference{ResourceId: projectID}, items[0].Key, "/", nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				max, used, err := env.Fs.GetQuota(env.Ctx, &provider.Reference{ResourceId: projectID})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(max).To(Equal(uint64(2000)))
+				Expect(used).To(Equal(uint64(3234)))
+			})
+
 		})
 	})
 	Context("with insufficient permissions", func() {
@@ -315,6 +370,22 @@ var _ = Describe("Recycle", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("permission denied"))
 			})
+
+			It("cannot restore files from trashbin", func() {
+				err := env.Fs.Delete(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1/file1",
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(items)).To(Equal(1))
+
+				err = env.Fs.RestoreRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/", nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("permission denied"))
+			})
 		})
 	})
 
@@ -342,7 +413,7 @@ var _ = Describe("Recycle", func() {
 			registerPermissions(env.Permissions, "hacker", &provider.ResourcePermissions{})
 		})
 
-		It("cannot delete, list or purge", func() {
+		It("cannot delete, list, purge or restore", func() {
 			err := env.Fs.Delete(ctx, &provider.Reference{
 				ResourceId: env.SpaceRootRes,
 				Path:       "/dir1/file1",
@@ -365,6 +436,10 @@ var _ = Describe("Recycle", func() {
 			Expect(len(items)).To(Equal(1))
 
 			err = env.Fs.PurgeRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("permission denied"))
+
+			err = env.Fs.RestoreRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/", nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("permission denied"))
 		})
