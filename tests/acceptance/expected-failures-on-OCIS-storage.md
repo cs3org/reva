@@ -1153,8 +1153,9 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 -   [apiWebdavUpload1/uploadFileToBlacklistedName.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L66)
 -   [apiWebdavUpload1/uploadFileToBlacklistedName.feature:67](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L67)
 
-#### moving a share from the /Shares jail to a user home is no longer supported.
+#### Cross storage move is not supported
 -   [apiShareManagementToShares/mergeShare.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L89)
+-   [apiShareUpdateToShares/updateShare.feature:195](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L195)
 
 
 ### To triage
