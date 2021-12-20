@@ -535,13 +535,9 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		setPlainOpaque(ri, "root", n.SpaceRoot)
 	}
 
-	if returnBasename { // FIXME this is not the basename it is the path relative to the root
-		ri.Path = n.Name
-	} else {
-		ri.Path, err = n.lu.Path(ctx, n)
-		if err != nil {
-			return nil, err
-		}
+	ri.Path, err = n.lu.Path(ctx, n)
+	if err != nil {
+		return nil, err
 	}
 
 	ri.MimeType = mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, ri.Path)

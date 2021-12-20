@@ -114,7 +114,7 @@ func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) 
 
 // Path returns the path for node
 func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) {
-	for n.ID != n.SpaceRoot {
+	for n.ID != n.SpaceRoot && !(n.ShareRoot != "" && n.ID != n.ShareRoot) {
 		p = filepath.Join(n.Name, p)
 		if n, err = n.Parent(); err != nil {
 			appctx.GetLogger(ctx).
