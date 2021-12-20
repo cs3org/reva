@@ -320,6 +320,7 @@ func SplitStorageSpaceID(ssid string) (storageid, nodeid string) {
 	return parts[0], parts[1]
 }
 
+// TargetAsResourceID converts a valid CS3 URL into a resource or returns nil
 func TargetAsResourceID(t string) *provider.ResourceId {
 	parts := strings.SplitN(strings.TrimPrefix(t, "cs3:"), "/", 2)
 	switch len(parts) {
