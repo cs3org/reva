@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -350,7 +351,8 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 
 	log.Info().Msg("mount path will be:" + refPath)
 
-	c, p, err := s.findByPath(ctx, refPath)
+	// FIXME: Do I need to use absolute paths?
+	c, p, err := s.find(ctx, &provider.Reference{Path: refPath})
 	if err != nil {
 		log.Error().Err(err).Msg("createOCMReference: could not find storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -361,21 +363,25 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 
 	spaceID := ""
 	mountPath := p.ProviderPath
-	var root *provider.ResourceId
 
 	spacePaths := decodeSpacePaths(p.Opaque)
 	if len(spacePaths) == 0 {
 		spacePaths[""] = mountPath
 	}
+
+	var pRef *provider.Reference
 	for spaceID, mountPath = range spacePaths {
 		rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
-		root = &provider.ResourceId{
-			StorageId: rootSpace,
-			OpaqueId:  rootNode,
+		pRef = &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: rootSpace,
+				OpaqueId:  rootNode,
+			},
+			Path: utils.MakeRelativePath(strings.TrimPrefix(refPath, mountPath)),
 		}
+		break
 	}
 
-	pRef := unwrap(&provider.Reference{Path: refPath}, mountPath, root)
 	createRefReq := &provider.CreateReferenceRequest{
 		Ref:       pRef,
 		TargetUri: targetURI,

@@ -58,6 +58,14 @@ func NewInvalid(ctx context.Context, msg string) *rpc.Status {
 	}
 }
 
+// NewInvalidArg returns a Status with CODE_INVALID_ARGUMENT. TODO: Deduplicate me! <- Keep me
+func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
+	return &rpc.Status{Code: rpc.Code_CODE_INVALID_ARGUMENT,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 // NewInternal returns a Status with CODE_INTERNAL.
 func NewInternal(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
@@ -107,14 +115,6 @@ func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 func NewAlreadyExists(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ALREADY_EXISTS,
-		Message: msg,
-		Trace:   getTrace(ctx),
-	}
-}
-
-// NewInvalidArg returns a Status with CODE_INVALID_ARGUMENT.
-func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
-	return &rpc.Status{Code: rpc.Code_CODE_INVALID_ARGUMENT,
 		Message: msg,
 		Trace:   getTrace(ctx),
 	}

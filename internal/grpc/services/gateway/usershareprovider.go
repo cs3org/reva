@@ -20,11 +20,9 @@ package gateway
 
 import (
 	"context"
-	"path"
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/utils"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -333,12 +331,12 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 func (s *svc) removeReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
 	log := appctx.GetLogger(ctx)
 
-	idReference := &provider.Reference{ResourceId: resourceID}
-	storageProvider, _, err := s.find(ctx, idReference)
+	ref := &provider.Reference{ResourceId: resourceID}
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).
-			Interface("reference", idReference).
+			Interface("resourceID", resourceID).
 			Msg("removeReference: failed to get storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
@@ -346,58 +344,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		return status.NewInternal(ctx, "error finding storage provider")
 	}
 
-	statRes, err := storageProvider.Stat(ctx, &provider.StatRequest{Ref: idReference})
-	if err != nil {
-		log.Error().Err(err).Interface("reference", idReference).Msg("removeReference: error calling Stat")
-		return status.NewInternal(ctx, "gateway: error calling Stat for the share resource id: "+resourceID.String())
-	}
-
-	// FIXME how can we delete a reference if the original resource was deleted?
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Interface("status", statRes.Status).Interface("reference", idReference).Msg("removeReference: error calling Stat")
-		return status.NewInternal(ctx, "could not delete share reference")
-	}
-
-	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		return status.NewInternal(ctx, "could not delete share reference")
-	}
-
-	sharePath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
-	log.Debug().Str("share_path", sharePath).Msg("remove reference of share")
-
-	sharePathRef := &provider.Reference{Path: sharePath}
-	homeProvider, providerInfo, err := s.find(ctx, sharePathRef)
-	if err != nil {
-		appctx.GetLogger(ctx).
-			Err(err).
-			Interface("reference", sharePathRef).
-			Msg("removeReference: failed to get storage provider for share ref")
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, "error finding storage provider")
-	}
-
-	spaceID := ""
-	mountPath := providerInfo.ProviderPath
-	var root *provider.ResourceId
-
-	spacePaths := decodeSpacePaths(providerInfo.Opaque)
-	if len(spacePaths) == 0 {
-		spacePaths[""] = mountPath
-	}
-	for spaceID, mountPath = range spacePaths {
-		rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
-		root = &provider.ResourceId{
-			StorageId: rootSpace,
-			OpaqueId:  rootNode,
-		}
-	}
-
-	ref := unwrap(sharePathRef, mountPath, root)
-
-	deleteReq := &provider.DeleteRequest{
+	deleteResp, err := c.Delete(ctx, &provider.DeleteRequest{
 		Opaque: &typesv1beta1.Opaque{
 			Map: map[string]*typesv1beta1.OpaqueEntry{
 				// This signals the storageprovider that we want to delete the share reference and not the underlying file.
@@ -405,9 +352,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 			},
 		},
 		Ref: ref,
-	}
-
-	deleteResp, err := homeProvider.Delete(ctx, deleteReq)
+	})
 	if err != nil {
 		return status.NewInternal(ctx, "could not delete share reference")
 	}
@@ -422,8 +367,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		return status.NewInternal(ctx, "could not delete share reference")
 	}
 
-	log.Debug().Str("share_path", sharePath).Msg("share reference successfully removed")
-
+	log.Debug().Interface("resourceID", resourceID).Msg("share reference successfully removed")
 	return status.NewOK(ctx)
 }
 
