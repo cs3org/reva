@@ -304,6 +304,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 
+	var spaceid, nodeid string
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
@@ -313,7 +314,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				}, nil
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, _ := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			spaceid, nodeid = utils.SplitStorageSpaceID(f.GetId().OpaqueId)
 			if spaceid != utils.ShareStorageProviderID {
 				return &provider.ListStorageSpacesResponse{
 					// a specific id was requested, return not found instead of empty list
@@ -333,7 +334,9 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 
 	res := &provider.ListStorageSpacesResponse{}
 	for i := range lsRes.Shares {
-
+		if nodeid != "" && nodeid != lsRes.Shares[i].Share.ResourceId.OpaqueId {
+			continue
+		}
 		if lsRes.Shares[i].MountPoint == nil {
 			// the gateway needs a name to use as the path segment in the dir listing
 			continue
