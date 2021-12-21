@@ -26,7 +26,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -209,7 +208,6 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 }
 
 func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	log := appctx.GetLogger(ctx)
 
 	// TODO update CS3 api to forward the filters to the registry so it can filter the number of providers the gateway needs to query
 	filters := map[string]string{}
@@ -227,6 +225,13 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 			return &provider.ListStorageSpacesResponse{
 				Status: status.NewInvalidArg(ctx, fmt.Sprintf("unknown filter %v", f.Type)),
 			}, nil
+		}
+	}
+
+	// FIXME allow filter by path in CS3 api
+	if req.Opaque != nil && req.Opaque.Map != nil {
+		if entry, ok := req.Opaque.Map["path"]; ok && entry.Decoder == "plain" {
+			filters["path"] = string(req.Opaque.Map["path"].Value)
 		}
 	}
 
@@ -252,66 +257,33 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		}, nil
 	}
 
-	// TODO the providers now have an opaque "spaces_paths" property
-	providerInfos := res.Providers
-
-	spacesFromProviders := make([][]*provider.StorageSpace, len(providerInfos))
-	errors := make([]error, len(providerInfos))
-
-	var wg sync.WaitGroup
-	for i, p := range providerInfos {
-		// we need to ask the provider for the space details
-		wg.Add(1)
-		go s.listStorageSpacesOnProvider(ctx, req, &spacesFromProviders[i], p, &errors[i], &wg)
-	}
-	wg.Wait()
-
-	uniqueSpaces := map[string]*provider.StorageSpace{}
-	for i := range providerInfos {
-		if errors[i] != nil {
-			if len(providerInfos) > 1 {
-				log.Debug().Err(errors[i]).Msg("skipping provider")
-				continue
-			}
-			return &provider.ListStorageSpacesResponse{
-				Status: status.NewStatusFromErrType(ctx, "error listing space", errors[i]),
-			}, nil
+	spaces := []*provider.StorageSpace{}
+	for _, providerInfo := range res.Providers {
+		spacePaths := decodeSpacePaths(providerInfo.Opaque)
+		for spaceID, spacePath := range spacePaths {
+			storageid, opaqueid := utils.SplitStorageSpaceID(spaceID)
+			spaces = append(spaces, &provider.StorageSpace{
+				Id: &provider.StorageSpaceId{OpaqueId: spaceID},
+				Opaque: &typesv1beta1.Opaque{
+					Map: map[string]*typesv1beta1.OpaqueEntry{
+						"path": {
+							Decoder: "plain",
+							Value:   []byte(spacePath),
+						},
+					},
+				},
+				Root: &provider.ResourceId{
+					StorageId: storageid,
+					OpaqueId:  opaqueid,
+				},
+			})
 		}
-		for j := range spacesFromProviders[i] {
-			uniqueSpaces[spacesFromProviders[i][j].Id.OpaqueId] = spacesFromProviders[i][j]
-		}
-	}
-	spaces := make([]*provider.StorageSpace, 0, len(uniqueSpaces))
-	for spaceID := range uniqueSpaces {
-		spaces = append(spaces, uniqueSpaces[spaceID])
-	}
-	if len(spaces) == 0 {
-		return &provider.ListStorageSpacesResponse{
-			Status: status.NewNotFound(ctx, "space not found"),
-		}, nil
 	}
 
 	return &provider.ListStorageSpacesResponse{
 		Status:        status.NewOK(ctx),
 		StorageSpaces: spaces,
 	}, nil
-}
-
-func (s *svc) listStorageSpacesOnProvider(ctx context.Context, req *provider.ListStorageSpacesRequest, res *[]*provider.StorageSpace, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
-	defer wg.Done()
-	c, err := s.getStorageProviderClient(ctx, p)
-	if err != nil {
-		*e = errors.Wrap(err, "error connecting to storage provider="+p.Address)
-		return
-	}
-
-	r, err := c.ListStorageSpaces(ctx, req)
-	if err != nil {
-		*e = errors.Wrap(err, "gateway: error calling ListStorageSpaces")
-		return
-	}
-
-	*res = r.StorageSpaces
 }
 
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
