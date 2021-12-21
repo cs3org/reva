@@ -107,7 +107,7 @@ func NewTestEnv() (*TestEnv, error) {
 		Ctx:         ctx,
 	}
 
-	env.SpaceRootRes, err = env.CreateTestStorageSpace("personal")
+	env.SpaceRootRes, err = env.CreateTestStorageSpace("personal", nil)
 	return env, err
 }
 
@@ -171,11 +171,12 @@ func (t *TestEnv) CreateTestFile(name, blobID string, blobSize int64, parentID s
 // /dir1/
 // /dir1/file1
 // /dir1/subdir1
-func (t *TestEnv) CreateTestStorageSpace(typ string) (*providerv1beta1.ResourceId, error) {
+func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quota) (*providerv1beta1.ResourceId, error) {
 	t.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1) // Permissions required for setup below
 	space, err := t.Fs.CreateStorageSpace(t.Ctx, &providerv1beta1.CreateStorageSpaceRequest{
 		Owner: t.Owner,
 		Type:  typ,
+		Quota: quota,
 	})
 	if err != nil {
 		return nil, err
