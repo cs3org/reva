@@ -233,6 +233,9 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		if entry, ok := req.Opaque.Map["path"]; ok && entry.Decoder == "plain" {
 			filters["path"] = string(req.Opaque.Map["path"].Value)
 		}
+		if entry, ok := req.Opaque.Map["withChildMounts"]; ok && entry.Decoder == "plain" && string(req.Opaque.Map["withChildMounts"].Value) == "true" {
+			filters["space_type"] = "+mountpoint"
+		}
 	}
 
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
@@ -699,7 +702,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 
 	requestPath := req.Ref.Path
 	// find the providers
-	providerInfos, err := s.findProviders(ctx, req.Ref)
+	providerInfos, err := s.findSpaces(ctx, req.Ref)
 	if err != nil {
 		// we have no provider -> not found
 		return &provider.StatResponse{
@@ -848,7 +851,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 
 	requestPath := req.Ref.Path
 	// find the providers
-	providerInfos, err := s.findProviders(ctx, req.Ref)
+	providerInfos, err := s.findSpaces(ctx, req.Ref)
 	if err != nil {
 		// we have no provider -> not found
 		return &provider.ListContainerResponse{
@@ -1079,7 +1082,7 @@ func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.
 // TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
 func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
 	requestPath := req.Ref.Path
-	providerInfos, err := s.findProviders(ctx, req.Ref)
+	providerInfos, err := s.findSpaces(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListRecycleResponse{
 			Status: status.NewStatusFromErrType(ctx, "ListRecycle ref="+req.Ref.String(), err),
@@ -1164,7 +1167,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
 	// requestPath := req.Ref.Path
-	providerInfos, err := s.findProviders(ctx, req.Ref)
+	providerInfos, err := s.findSpaces(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem source ref="+req.Ref.String(), err),
@@ -1214,7 +1217,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	}
 
 	// find destination
-	dstProviderInfos, err := s.findProviders(ctx, req.RestoreRef)
+	dstProviderInfos, err := s.findSpaces(ctx, req.RestoreRef)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem source ref="+req.Ref.String(), err),
@@ -1254,34 +1257,6 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 			dstProvider = providerInfos[i]
 			break
 		}
-		/*
-			if utils.IsAbsolutePathReference(req.RestoreRef) {
-				// find deepest mount
-				// if iteration path is longer than current path && iteration path is shorter or exact dst path
-				if dstProvider == nil || ((len(dstProviderInfos[i].ProviderPath) > len(dstProvider.ProviderPath)) && (len(dstProviderInfos[i].ProviderPath) <= len(req.RestoreRef.Path))) {
-					dstProvider = dstProviderInfos[i]
-					r, mountPath, root
-					if dstRef, err = unwrap(req.RestoreRef, dstProvider.ProviderPath); err != nil {
-						return nil, err
-					}
-					dstRef.Path = utils.MakeRelativePath(dstRef.Path)
-					parts := strings.SplitN(dstProvider.ProviderId, "!", 2)
-					if len(parts) != 2 {
-						return nil, errtypes.BadRequest("gateway: invalid provider id, expected <storageid>!<opaqueid> format, got " + dstProviderInfos[i].ProviderId)
-					}
-					dstRef.ResourceId = &provider.ResourceId{StorageId: parts[0], OpaqueId: parts[1]}
-				}
-			} else {
-				// TODO implement other cases
-				return &provider.RestoreRecycleItemResponse{
-					Status: &rpc.Status{
-						Code:    rpc.Code_CODE_UNIMPLEMENTED,
-						Message: "RestoreRecycleItem not yet implementad ref=" + req.RestoreRef.String(),
-					},
-				}, nil
-
-			}
-		*/
 	}
 
 	if dstProvider == nil || dstRef == nil {
@@ -1369,7 +1344,7 @@ func (s *svc) findByPath(ctx context.Context, path string) (provider.ProviderAPI
 // - contains the provider path, which is the mount point of the provider
 // - may contain a list of storage spaces with their id and space path
 func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *registry.ProviderInfo, error) {
-	p, err := s.findProviders(ctx, ref)
+	p, err := s.findSpaces(ctx, ref)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1414,24 +1389,26 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 
 	return Cached(c, s.statCache), nil
 }
-
-/*
-func userKey(ctx context.Context) string {
-	u := ctxpkg.ContextMustGetUser(ctx)
-	sb := strings.Builder{}
-	if u.Id != nil {
-		sb.WriteString(u.Id.OpaqueId)
-		sb.WriteString("@")
-		sb.WriteString(u.Id.Idp)
-	} else {
-		// fall back to username
-		sb.WriteString(u.Username)
+func (s *svc) findMountPoint(ctx context.Context, id *provider.ResourceId) ([]*registry.ProviderInfo, error) {
+	//TODO can we use a provider cache for mount points?
+	if id == nil {
+		return nil, errtypes.BadRequest("invalid reference, at least path or id must be set")
 	}
-	return sb.String()
-}
-*/
 
-func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
+	filters := map[string]string{
+		"type":       "mountpoint",
+		"storage_id": id.StorageId,
+		"opaque_id":  id.OpaqueId,
+	}
+
+	listReq := &registry.ListStorageProvidersRequest{
+		Opaque: &typesv1beta1.Opaque{},
+	}
+	sdk.EncodeOpaqueMap(listReq.Opaque, filters)
+
+	return s.findProvider(ctx, listReq)
+}
+func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
 	switch {
 	case ref == nil:
 		return nil, errtypes.BadRequest("missing reference")
@@ -1443,39 +1420,8 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 			}
 		}
 	case ref.Path != "": //  TODO implement a mount path cache in the registry?
-	/*
-		// path / mount point lookup from cache
-		if value, exists := s.mountCache.Get(userKey(ctx)); exists == nil {
-			if m, ok := value.(map[string][]*registry.ProviderInfo); ok {
-				providers := make([]*registry.ProviderInfo, 0, len(m))
-				deepestMountPath := ""
-				for mountPath, providerInfos := range m {
-					switch {
-					case strings.HasPrefix(mountPath, ref.Path):
-						// and add all providers below and exactly matching the path
-						// requested /foo, mountPath /foo/sub
-						providers = append(providers, providerInfos...)
-					case strings.HasPrefix(ref.Path, mountPath) && len(mountPath) > len(deepestMountPath):
-						// eg. three providers: /foo, /foo/sub, /foo/sub/bar
-						// requested /foo/sub/mob
-						deepestMountPath = mountPath
-					}
-				}
-				if deepestMountPath != "" {
-					providers = append(providers, m[deepestMountPath]...)
-				}
-				return providers, nil
-			}
-		}
-	*/
 	default:
 		return nil, errtypes.BadRequest("invalid reference, at least path or id must be set")
-	}
-
-	// lookup
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
 
 	filters := map[string]string{
@@ -1490,6 +1436,16 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		Opaque: &typesv1beta1.Opaque{},
 	}
 	sdk.EncodeOpaqueMap(listReq.Opaque, filters)
+
+	return s.findProvider(ctx, listReq)
+}
+
+func (s *svc) findProvider(ctx context.Context, listReq *registry.ListStorageProvidersRequest) ([]*registry.ProviderInfo, error) {
+	// lookup
+	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
+	}
 	res, err := c.ListStorageProviders(ctx, listReq)
 
 	if err != nil {
@@ -1500,13 +1456,13 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		switch res.Status.Code {
 		case rpc.Code_CODE_NOT_FOUND:
 			// TODO use tombstone cache item?
-			return nil, errtypes.NotFound("gateway: storage provider not found for reference:" + ref.String())
+			return nil, errtypes.NotFound("gateway: storage provider not found for reference:" + listReq.String())
 		case rpc.Code_CODE_PERMISSION_DENIED:
-			return nil, errtypes.PermissionDenied("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.PermissionDenied("gateway: " + res.Status.Message + " for " + listReq.String() + " with code " + res.Status.Code.String())
 		case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_FAILED_PRECONDITION, rpc.Code_CODE_OUT_OF_RANGE:
-			return nil, errtypes.BadRequest("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.BadRequest("gateway: " + res.Status.Message + " for " + listReq.String() + " with code " + res.Status.Code.String())
 		case rpc.Code_CODE_UNIMPLEMENTED:
-			return nil, errtypes.NotSupported("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.NotSupported("gateway: " + res.Status.Message + " for " + listReq.String() + " with code " + res.Status.Code.String())
 		default:
 			return nil, status.NewErrorFromCode(res.Status.Code, "gateway")
 		}
@@ -1515,82 +1471,6 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	if res.Providers == nil {
 		return nil, errtypes.NotFound("gateway: provider is nil")
 	}
-
-	if ref.ResourceId != nil {
-		if err = s.providerCache.Set(ref.ResourceId.StorageId, res.Providers); err != nil {
-			appctx.GetLogger(ctx).Warn().Err(err).Interface("reference", ref).Msg("gateway: could not cache providers")
-		}
-	} /* else {
-		// every user has a cache for mount points?
-		// the path map must be cached in the registry, not in the gateway?
-		//   - in the registry we cannot determine if other spaces have been mounted or removed. if a new project space was mounted that happens in the registry
-		//   - but the registry does not know when we rename a space ... or does it?
-		//     - /.../Shares is a collection the gateway builds by aggregating the liststoragespaces response
-		//     - the spaces registry builds a path for every space, treating every share as a distinct space.
-		//       - findProviders() will return a long list of spaces, the Stat / ListContainer calls will stat the root etags of every space and share
-		//       -> FIXME cache the root etag of every space, ttl ... do we need to stat? or can we cach the root etag in the providerinfo?
-		//     - large amounts of shares
-		// use the root etag of a space to determine if we can read from cache?
-		// (finished) uploads, created dirs, renamed nodes, deleted nodes cause the root etag of a space to change
-		//
-		var providersCache *ttlcache.Cache
-		cache, err := s.mountCache.Get(userKey(ctx))
-		if err != nil {
-			providersCache = ttlcache.NewCache()
-			_ = providersCache.SetTTL(time.Duration(s.c.MountCacheTTL) * time.Second)
-			providersCache.SkipTTLExtensionOnHit(true)
-			s.mountCache.Set(userKey(ctx), providersCache)
-		} else {
-			providersCache = cache.(*ttlcache.Cache)
-		}
-
-		for _, providerInfo := range res.Providers {
-
-			mountPath := providerInfo.ProviderPath
-			var root *provider.ResourceId
-
-			if spacePaths := decodeSpacePaths(p.Opaque); len(spacePaths) > 0 {
-				for spaceID, spacePath := range spacePaths {
-					mountPath = spacePath
-					rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
-					root = &provider.ResourceId{
-						StorageId: rootSpace,
-						OpaqueId:  rootNode,
-					}
-					break // TODO can there be more than one space for a path?
-				}
-			}
-			providersCache.Set(userKey(ctx), res.Providers) // FIXME needs a map[string]*registry.ProviderInfo
-
-		}
-		// use ListProviders? make it return all providers a user has access to aka all mount points?
-		// cache that list in the gateway.
-		// -> invalidate the cached list of mountpoints when a modification happens
-		// refres by loading all mountpoints from spaces registry
-		// - in the registry cache listStorageSpaces responses for every provider so we don't have to query every provider?
-		//   - how can we determine which listStorageSpaces response to invalidate?
-		//     - misuse ListContainerStream to get notified of root changes of every space?
-		//     - or send a ListStorageSpaces request to the registry with an invalidate(spaceid) property?
-		//       - This would allow the gateway could tell the registry which space(s) to refresh
-		//         - but the registry might not be using a cache
-		//     - we still don't know when an upload finishes ... so we cannot invalidate the cache for that event
-		//       - especially if there are workflows involved?
-		//       - actually, the initiate upload response should make the provider show the file immediately. it should not be downloadable though
-		//         - with stat we want to see the progress. actually multiple uploads (-> workflows) to the same file might be in progress...
-		// example:
-		//  - user accepts a share in the web ui, then navigates into his /Shares folder
-		//    -> he should see the accepted share, and he should be able to navigate into it
-		// - actually creating a share should already create a space, but it has no name yet
-		// - the problem arises when someone mounts a spaece (can pe a share or a project, does not matter)
-		//    -> when do we update the list of mount points which we cache in the gateway?
-		// - we want to maintain a list of all mount points (and their root etag/mtime) to allow clients to efficiently poll /
-		//   and query the list of all storage spaces the user has access to
-		//   - the simplest 'maintenance' is caching the complete list and invalidating it on changes
-		//   - a more elegant 'maintenance' would add and remove paths as they occur ... which is what the spaces registry is supposed to do...
-		//     -> don't cache anything in the gateway for path based requests. Instead maintain a cache in the spaces registry.
-		//
-		// Caching needs to take the last modification time into account to discover new mount points -> needs to happen in the registry
-	}*/
 
 	return res.Providers, nil
 }

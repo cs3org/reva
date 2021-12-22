@@ -34,6 +34,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -303,80 +304,142 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 // should be found.
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-
-	var spaceid, nodeid string
+	spaceTypes := []string{}
+	res := &provider.ListStorageSpacesResponse{
+		Status: status.NewOK(ctx),
+	}
+	var fetchShares bool
+	appendTypes := []string{}
+	var spaceID *provider.ResourceId
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			if f.GetSpaceType() != "share" {
-				return &provider.ListStorageSpacesResponse{
-					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-				}, nil
+			spaceType := f.GetSpaceType()
+			// do we need to fetch the shares?
+			if spaceType == "mountpoint" || spaceType == "grant" {
+				spaceTypes = append(spaceTypes, spaceType)
+				fetchShares = true
+			}
+			if spaceType == "+mountpoint" || spaceType == "+grant" {
+				appendTypes = append(appendTypes, strings.TrimPrefix(spaceType, "+"))
+				fetchShares = true
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, nodeid = utils.SplitStorageSpaceID(f.GetId().OpaqueId)
-			if spaceid != utils.ShareStorageProviderID {
-				return &provider.ListStorageSpacesResponse{
-					// a specific id was requested, return not found instead of empty list
-					Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND},
-				}, nil
+			spaceID = &provider.ResourceId{}
+			spaceID.StorageId, spaceID.OpaqueId = utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			if spaceID.StorageId == "" || spaceID.OpaqueId == "" {
+				res.Status = status.NewInvalid(ctx, "invalid space id")
+				return res, nil
 			}
 		}
 	}
 
-	lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-	if err != nil {
-		return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
-	}
-	if lsRes.Status.Code != rpc.Code_CODE_OK {
-		return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
+	if len(spaceTypes) == 0 {
+		spaceTypes = []string{"virtual", "mountpoint"}
+		fetchShares = true
 	}
 
-	res := &provider.ListStorageSpacesResponse{}
-	for i := range lsRes.Shares {
-		if nodeid != "" && nodeid != lsRes.Shares[i].Share.ResourceId.OpaqueId {
-			continue
+	spaceTypes = append(spaceTypes, appendTypes...)
+
+	var receivedShares []*collaboration.ReceivedShare
+	if fetchShares {
+		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
+			// FIXME filter by received shares for resource id - listing all shares is tooo expensive!
+		})
+		if err != nil {
+			return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
 		}
-		if lsRes.Shares[i].MountPoint == nil {
-			// the gateway needs a name to use as the path segment in the dir listing
-			continue
+		if lsRes.Status.Code != rpc.Code_CODE_OK {
+			return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
 		}
-		space := &provider.StorageSpace{
-			Id: &provider.StorageSpaceId{
-				// Do we need a unique spaceid for every share?
-				// we are going to use the opaque id of the resource as the spaceid
-				OpaqueId: "a0ca6a90-a365-4782-871e-d44447bbc668!" + lsRes.Shares[i].Share.ResourceId.OpaqueId,
-			},
-			SpaceType: "share",
-			Owner:     &userv1beta1.User{Id: lsRes.Shares[i].Share.Owner},
-			// return the actual resource id
-			//Root: lsRes.Shares[i].Share.ResourceId,
-			Root: &provider.ResourceId{
+		receivedShares = lsRes.Shares
+	}
+	for i := range spaceTypes {
+		switch spaceTypes[i] {
+		case "virtual":
+			virtualRootID := &provider.ResourceId{
 				StorageId: utils.ShareStorageProviderID,
-				OpaqueId:  lsRes.Shares[i].Share.ResourceId.OpaqueId,
-			},
-			// TODO in the future the spaces registry will handle the alias for share spaces.
-			// for now use the name
-			Name: lsRes.Shares[i].MountPoint.Path,
+				OpaqueId:  utils.ShareStorageProviderID,
+			}
+			if spaceID == nil || utils.ResourceIDEqual(virtualRootID, spaceID) {
+
+				space := &provider.StorageSpace{
+					Id: &provider.StorageSpaceId{
+						OpaqueId: virtualRootID.StorageId + "!" + virtualRootID.OpaqueId,
+					},
+					SpaceType: "virtual",
+					//Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
+					// the sharesstorageprovider keeps track of mount points
+					Root: virtualRootID,
+					Name: "Shares Jail",
+				}
+				res.StorageSpaces = append(res.StorageSpaces, space)
+			}
+		case "grant":
+			for _, receivedShare := range receivedShares {
+				root := receivedShare.Share.ResourceId
+				// do we filter by id?
+				if spaceID != nil && !utils.ResourceIDEqual(spaceID, root) {
+					// none of our business
+					continue
+				}
+				// we know a grant for this resource
+				space := &provider.StorageSpace{
+					Id: &provider.StorageSpaceId{
+						OpaqueId: root.StorageId + "!" + root.OpaqueId,
+					},
+					SpaceType: "grant",
+					Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner},
+					// the sharesstorageprovider keeps track of mount points
+					Root: root,
+				}
+
+				res.StorageSpaces = append(res.StorageSpaces, space)
+			}
+		case "mountpoint":
+			for _, receivedShare := range receivedShares {
+				if receivedShare.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
+					continue
+				}
+				root := &provider.ResourceId{
+					StorageId: utils.ShareStorageProviderID,
+					OpaqueId:  receivedShare.Share.Id.OpaqueId,
+					//OpaqueId: utils.ShareStorageProviderID,
+				}
+				// do we filter by id
+				if spaceID != nil {
+					switch {
+					case utils.ResourceIDEqual(spaceID, root):
+						// we have a virtual node
+					case utils.ResourceIDEqual(spaceID, receivedShare.Share.ResourceId):
+						// we have a mount point
+						root = receivedShare.Share.ResourceId
+					default:
+						// none of our business
+						continue
+					}
+				}
+				space := &provider.StorageSpace{
+					Id: &provider.StorageSpaceId{
+						OpaqueId: root.StorageId + "!" + root.OpaqueId,
+					},
+					SpaceType: "mountpoint",
+					Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
+					// the sharesstorageprovider keeps track of mount points
+					Root: root,
+				}
+
+				// TODO in the future the spaces registry will handle the alias for share spaces.
+				// for now use the name from the share to override the name determined by stat
+				if receivedShare.MountPoint != nil {
+					space.Name = receivedShare.MountPoint.Path
+				}
+
+				// what if we don't have a name?
+				res.StorageSpaces = append(res.StorageSpaces, space)
+			}
 		}
-
-		// TODO the gateway needs to stat if it needs the mtime
-		/*
-			info, st, err := s.statResource(ctx, lsRes.Shares[i].Share.ResourceId, "")
-			if err != nil {
-				return nil, err
-			}
-			if st.Code != rpc.Code_CODE_OK {
-				continue
-			}
-			space.Mtime = info.Mtime
-		*/
-
-		// what if we don't have a name?
-		res.StorageSpaces = append(res.StorageSpaces, space)
 	}
-	res.Status = status.NewOK(ctx)
-
 	return res, nil
 }
 
@@ -480,7 +543,10 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		len(strings.SplitN(req.Destination.Path, "/", 3)) == 2 {
 
 		// Change the MountPoint of the share, it has no relative prefix
-		srcReceivedShare.MountPoint = &provider.Reference{Path: filepath.Base(req.Destination.Path)}
+		srcReceivedShare.MountPoint = &provider.Reference{
+			// FIXME actually it does have a resource id: the one of the sharesstorageprovider
+			Path: filepath.Base(req.Destination.Path),
+		}
 
 		_, err = s.sharesProviderClient.UpdateReceivedShare(ctx, &collaboration.UpdateReceivedShareRequest{
 			Share:      srcReceivedShare,
@@ -524,6 +590,34 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	if isVirtualRoot(req.Ref.ResourceId) && (req.Ref.Path == "" || req.Ref.Path == ".") {
+		// The root is empty, it is filled by mountpoints
+		return &provider.StatResponse{
+			Status: status.NewOK(ctx),
+			Info: &provider.ResourceInfo{
+				Opaque: &typesv1beta1.Opaque{
+					Map: map[string]*typesv1beta1.OpaqueEntry{
+						"root": {
+							Decoder: "plain",
+							Value:   []byte(utils.ShareStorageProviderID),
+						},
+					},
+				},
+				Id: &provider.ResourceId{
+					StorageId: utils.ShareStorageProviderID,
+					OpaqueId:  utils.ShareStorageProviderID,
+				},
+				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				Mtime:         &typesv1beta1.Timestamp{},
+				Path:          "/",
+				MimeType:      "httpd/unix-directory",
+				Size:          0,
+				PermissionSet: &provider.ResourcePermissions{
+					// TODO
+				},
+			},
+		}, nil
+	}
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
@@ -538,7 +632,14 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Status: rpcStatus,
 		}, nil
 	}
+	if receivedShare.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
+		return &provider.StatResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND},
+			// not mounted yet
+		}, nil
+	}
 
+	// TODO return reference?
 	return s.gateway.Stat(ctx, &provider.StatRequest{
 		Opaque: req.Opaque,
 		Ref: &provider.Reference{
@@ -553,7 +654,20 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 	return gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
+func isVirtualRoot(id *provider.ResourceId) bool {
+	return utils.ResourceIDEqual(id, &provider.ResourceId{
+		StorageId: utils.ShareStorageProviderID,
+		OpaqueId:  utils.ShareStorageProviderID,
+	})
+}
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	if isVirtualRoot(req.Ref.ResourceId) {
+		// The root is empty, it is filled by mountpoints
+		return &provider.ListContainerResponse{
+			Status: status.NewOK(ctx),
+			Infos:  []*provider.ResourceInfo{},
+		}, nil
+	}
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
@@ -688,18 +802,36 @@ func (s *service) resolveReference(ctx context.Context, ref *provider.Reference)
 		ref.Path = "."
 	}
 	if utils.IsRelativeReference(ref) {
+		if ref.ResourceId.StorageId != utils.ShareStorageProviderID {
+			return nil, status.NewNotFound(ctx, "sharesstorageprovider: not found "+ref.String()), nil
+		}
 		// look up share for this resourceid
-		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
+			// FIXME filter by received shares for resource id - listing all shares is tooo expensive!
+		})
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
 		}
 		if lsRes.Status.Code != rpc.Code_CODE_OK {
 			return nil, nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
 		}
-		for _, rs := range lsRes.Shares {
-			// match the opaque id
-			if rs.Share.ResourceId.OpaqueId == ref.ResourceId.OpaqueId {
-				return rs, nil, nil
+		for _, receivedShare := range lsRes.Shares {
+			if receivedShare.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
+				continue
+			}
+			root := &provider.ResourceId{
+				StorageId: utils.ShareStorageProviderID,
+				OpaqueId:  receivedShare.Share.Id.OpaqueId,
+			}
+			switch {
+			case utils.ResourceIDEqual(ref.ResourceId, root):
+				// we have a virtual node
+				return receivedShare, nil, nil
+			case utils.ResourceIDEqual(ref.ResourceId, receivedShare.Share.ResourceId):
+				// we have a mount point
+				return receivedShare, nil, nil
+			default:
+				continue
 			}
 		}
 		return nil, status.NewNotFound(ctx, "sharesstorageprovider: not found "+ref.String()), nil
