@@ -281,7 +281,10 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
-	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: path.Join("/public", token)}})
+	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+		// FIXME ResourceId?
+		Path: path.Join("/public", token),
+	}})
 }
 
 func handleBasicAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token, pw string) (*gatewayv1beta1.AuthenticateResponse, error) {

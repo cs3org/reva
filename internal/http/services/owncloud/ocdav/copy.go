@@ -140,7 +140,10 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		// descend for children
 		listReq := &provider.ListContainerRequest{
-			Ref: &provider.Reference{Path: cp.sourceInfo.Path},
+			Ref: &provider.Reference{
+				// FIXME ResourceId: cp.sourceInfo.Id,?
+				Path: cp.sourceInfo.Path,
+			},
 		}
 		res, err := client.ListContainer(ctx, listReq)
 		if err != nil {
@@ -152,7 +155,10 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		}
 
 		for i := range res.Infos {
-			childDst := &provider.Reference{Path: path.Join(cp.destination.Path, path.Base(res.Infos[i].Path))}
+			childDst := &provider.Reference{
+				// FIXME ResourceId: cp.sourceInfo.Id,?
+				Path: path.Join(cp.destination.Path, path.Base(res.Infos[i].Path)),
+			}
 			err := s.executePathCopy(ctx, client, w, r, &copy{sourceInfo: res.Infos[i], destination: childDst, depth: cp.depth, successCode: cp.successCode})
 			if err != nil {
 				return err

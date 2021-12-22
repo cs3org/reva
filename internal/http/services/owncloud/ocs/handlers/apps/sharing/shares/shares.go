@@ -174,7 +174,10 @@ func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) 
 	var ref provider.Reference
 	if p := r.FormValue("path"); p != "" {
 		u := ctxpkg.ContextMustGetUser(r.Context())
-		ref = provider.Reference{Path: path.Join(h.getHomeNamespace(u), p)}
+		ref = provider.Reference{
+			// FIXME ResourceId?
+			Path: path.Join(h.getHomeNamespace(u), p),
+		}
 	} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
 		var err error
 		ref, err = utils.ParseStorageSpaceReference(spaceRef)
@@ -1209,6 +1212,7 @@ func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentif
 
 func (h *Handler) getResourceInfoByPath(ctx context.Context, client GatewayClient, path string) (*provider.ResourceInfo, *rpc.Status, error) {
 	return h.getResourceInfo(ctx, client, path, &provider.Reference{
+		// FIXME ResourceId?
 		Path: path,
 	})
 }

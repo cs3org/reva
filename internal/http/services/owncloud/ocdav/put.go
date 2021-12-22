@@ -306,9 +306,11 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		sReq = &provider.StatRequest{Ref: &provider.Reference{Path: chunk.Path}}
+		sReq = &provider.StatRequest{Ref: &provider.Reference{
+			// FIXME ResourceId?
+			Path: chunk.Path,
+		}}
 	}
-	// }
 
 	// stat again to check the new file's metadata
 	sRes, err = client.Stat(ctx, sReq)
