@@ -35,8 +35,18 @@ func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(r.Context()).With().Str("path", fn).Logger()
-	ref := &provider.Reference{Path: fn}
-	s.handleDelete(r.Context(), w, r, ref, sublog)
+	space, status, err := s.lookUpStorageSpaceForPath(r.Context(), fn)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handleDelete(r.Context(), w, r, makeRelativeReference(space, fn), sublog)
 }
 
 func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
