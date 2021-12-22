@@ -72,7 +72,9 @@ home_template = "/users/{{.Id.OpaqueId}}"
 ## the virtual /Shares folder of every user is routed like this:
 ## whenever the path matches the pattern /users/{{.CurrentUser.Id.OpaqueId}}/Shares we forward requests to the sharesstorageprovider
 [grpc.services.storageregistry.drivers.spaces.providers."localhost:14000".spaces]
-"share" = { "mount_point" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}" }
+"virtual" = { "mount_point" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares" }
+"grant" = { "mount_point" = "." }
+"mountpoint" = { "mount_point" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}" }
 
 ## An alternative would be used to mount shares outside of the users home:
 #"localhost:14000" = {"mount_path" = "/shares", "space_type" = "share", "path_template" = "/shares/{{.Space.Name}}", "description" = "shares"}
