@@ -393,6 +393,9 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					HandleErrorStatus(&log, w, res.Status)
 					return nil, nil, false
 				}
+				for _, info := range res.Infos {
+					info.Path = path.Join(requestPath, info.Path)
+				}
 				resourceInfos = append(resourceInfos, res.Infos...)
 			case strings.HasPrefix(spacePath, requestPath): // space is a child of the requested path
 				// stat root and add as child
