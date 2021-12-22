@@ -85,7 +85,7 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 	}
 
 	// retrieve a specific storage space
-	spaces, rpcStatus, err := s.lookUpStorageSpacesForPath(ctx, fn)
+	spaces, rpcStatus, err := s.lookUpStorageSpacesForPathWithChildren(ctx, fn)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -119,7 +119,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 	}
 
 	// retrieve a specific storage space
-	space, rpcStatus, err := s.lookUpStorageSpace(ctx, spaceID)
+	space, rpcStatus, err := s.lookUpStorageSpaceById(ctx, spaceID)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)

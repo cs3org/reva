@@ -288,6 +288,7 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
 func (r *registry) findProvidersForResource(ctx context.Context, id string) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
+	providerInfos := []*registrypb.ProviderInfo{}
 	for address, provider := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
 			Address:    address,
@@ -338,7 +339,8 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 					}
 					// we can stop after we found the first space
 					// TODO to improve lookup time the registry could cache which provider last was responsible for a space? could be invalidated by simple ttl? would that work for shares?
-					return []*registrypb.ProviderInfo{p}
+					//return []*registrypb.ProviderInfo{p}
+					providerInfos = append(providerInfos, p)
 				}
 			}
 		default:
@@ -346,7 +348,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 			appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("spaces", spaces).Msg("multiple spaces returned, ignoring")
 		}
 	}
-	return []*registrypb.ProviderInfo{}
+	return providerInfos
 }
 
 // findProvidersForAbsolutePathReference takes a path and returns the storage provider with the longest matching path prefix
