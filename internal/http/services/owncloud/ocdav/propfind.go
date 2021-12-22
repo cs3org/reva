@@ -374,7 +374,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			spacePath := string(space.Opaque.Map["path"].Value)
 
 			switch {
-			case requestPath == spacePath:
+			case strings.HasPrefix(requestPath, spacePath):
 				req := &provider.ListContainerRequest{
 					Ref:                   makeRelativeReference(space, requestPath),
 					ArbitraryMetadataKeys: metadataKeys,
@@ -418,7 +418,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					res.Info.Checksum = nil
 					//TODO unset opaque checksum
 				}
-				res.Info.Path = childName
+				res.Info.Path = path.Join(requestPath, childName)
 				if existingChild, ok := childInfos[childName]; ok {
 					// use most recent child
 					if existingChild.Mtime == nil || (res.Info.Mtime != nil && utils.TSToUnixNano(res.Info.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
