@@ -44,10 +44,20 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 	}
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
-	parentRef := &provider.Reference{Path: path.Dir(fn)}
-	childRef := &provider.Reference{Path: fn}
+	parentPath := path.Dir(fn)
 
-	s.handleMkcol(ctx, w, r, parentRef, childRef, sublog)
+	space, status, err := s.lookUpStorageSpaceForPath(ctx, parentPath)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", parentPath).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handleMkcol(ctx, w, r, makeRelativeReference(space, parentPath), makeRelativeReference(space, fn), sublog)
 }
 
 func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) {
