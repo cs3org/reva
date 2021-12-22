@@ -112,10 +112,18 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	space, status, err := s.lookUpStorageSpaceForPath(ctx, fn)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
 
-	ref := &provider.Reference{Path: fn}
-
-	s.handlePut(ctx, w, r, ref, sublog)
+	s.handlePut(ctx, w, r, makeRelativeReference(space, fn), sublog)
 }
 
 func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
