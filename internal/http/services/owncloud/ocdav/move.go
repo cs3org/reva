@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
@@ -203,8 +204,10 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		}
 	} else {
 		// check if an intermediate path / the parent exists
-		dst.Path = path.Dir(dst.Path)
-		intStatReq := &provider.StatRequest{Ref: dst}
+		intStatReq := &provider.StatRequest{Ref: &provider.Reference{
+			ResourceId: dst.ResourceId,
+			Path:       utils.MakeRelativePath(path.Dir(dst.Path)),
+		}}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
