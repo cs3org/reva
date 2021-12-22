@@ -44,7 +44,7 @@ import (
 // other dependencies like a userprovider if needed.
 // It also sets up an authenticated context and a service client to the storage
 // provider to be used in the assertion functions.
-var _ = Describe("gateway using a static registry and a shard setup", func() {
+var _ = PDescribe("gateway using a static registry and a shard setup", func() {
 	var (
 		dependencies = map[string]string{}
 		revads       = map[string]*Revad{}
