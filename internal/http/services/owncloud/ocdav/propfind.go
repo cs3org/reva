@@ -221,7 +221,7 @@ func (s *svc) statSpace(ctx context.Context, client gateway.GatewayAPIClient, sp
 	return res.Info, res.Status, nil
 }
 
-func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, spaces []*provider.StorageSpace, relativePath string, spacesPropfind bool, log zerolog.Logger) (*provider.ResourceInfo, []*provider.ResourceInfo, bool) {
+func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, spaces []*provider.StorageSpace, requestPath string, spacesPropfind bool, log zerolog.Logger) (*provider.ResourceInfo, []*provider.ResourceInfo, bool) {
 	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
 		depth = "1"
@@ -275,12 +275,13 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		spacePath := string(space.Opaque.Map["path"].Value)
 		// TODO separate stats to the path or to the children, after statting all children update the mtime/etag
 		// TODO get mtime, and size from space as well, so we no longer have to stat here?
-		spaceRef := makeRelativeReference(space, relativePath)
+		spaceRef := makeRelativeReference(space, requestPath)
 		info, status, err := s.statSpace(ctx, client, space, spaceRef, metadataKeys)
 		if err != nil || status.Code != rpc.Code_CODE_OK {
 			continue
 		}
-		if relativePath != spacePath && strings.HasPrefix(relativePath, spacePath) {
+		// Check if the space is a child of the requested path
+		if requestPath != spacePath && strings.HasPrefix(spacePath, requestPath) {
 			// aggregate child metadata
 			aggregatedChildSize += info.Size
 			if mostRecentChildInfo == nil {
@@ -373,9 +374,9 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			spacePath := string(space.Opaque.Map["path"].Value)
 
 			switch {
-			case relativePath == spacePath:
+			case requestPath == spacePath:
 				req := &provider.ListContainerRequest{
-					Ref:                   makeRelativeReference(space, relativePath),
+					Ref:                   makeRelativeReference(space, requestPath),
 					ArbitraryMetadataKeys: metadataKeys,
 				}
 				res, err := client.ListContainer(ctx, req)
@@ -390,7 +391,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					return nil, nil, false
 				}
 				resourceInfos = append(resourceInfos, res.Infos...)
-			case strings.HasPrefix(spacePath, relativePath): // space is a child of the requested path
+			case strings.HasPrefix(spacePath, requestPath): // space is a child of the requested path
 				// stat root and add as child
 				req := &provider.StatRequest{
 					Ref: &provider.Reference{
@@ -410,7 +411,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
 					continue
 				}
-				childPath := strings.TrimPrefix(spacePath, relativePath)
+				childPath := strings.TrimPrefix(spacePath, requestPath)
 				childName, tail := router.ShiftPath(childPath)
 				if tail != "/" {
 					res.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
