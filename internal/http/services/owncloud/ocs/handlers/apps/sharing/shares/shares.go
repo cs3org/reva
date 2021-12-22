@@ -51,7 +51,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	revactx "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share"
@@ -299,7 +298,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Get auth
-			granteeCtx := revactx.ContextSetUser(context.Background(), res.User)
+			granteeCtx := ctxpkg.ContextSetUser(context.Background(), res.User)
 
 			authRes, err := client.Authenticate(granteeCtx, &gateway.AuthenticateRequest{
 				Type:         "machine",
@@ -314,7 +313,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "machine authentication failed", nil)
 				return
 			}
-			granteeCtx = metadata.AppendToOutgoingContext(granteeCtx, revactx.TokenHeader, authRes.Token)
+			granteeCtx = metadata.AppendToOutgoingContext(granteeCtx, ctxpkg.TokenHeader, authRes.Token)
 
 			lrs, ocsResponse := getSharesList(granteeCtx, client)
 			if ocsResponse != nil {
@@ -570,7 +569,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// cut off configured home namespace, paths in ocs shares are relative to it
-	info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(revactx.ContextMustGetUser(ctx)))
+	info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(ctxpkg.ContextMustGetUser(ctx)))
 
 	err = h.addFileInfo(ctx, share, info)
 	if err != nil {
@@ -680,7 +679,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	}
 
 	// cut off configured home namespace, paths in ocs shares are relative to it
-	statRes.Info.Path = strings.TrimPrefix(statRes.Info.Path, h.getHomeNamespace(revactx.ContextMustGetUser(ctx)))
+	statRes.Info.Path = strings.TrimPrefix(statRes.Info.Path, h.getHomeNamespace(ctxpkg.ContextMustGetUser(ctx)))
 
 	err = h.addFileInfo(r.Context(), share, statRes.Info)
 	if err != nil {
@@ -747,7 +746,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// we need to lookup the resource id so we can filter the list of shares later
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		target := path.Join(h.getHomeNamespace(revactx.ContextMustGetUser(ctx)), r.FormValue("path"))
+		target := path.Join(h.getHomeNamespace(ctxpkg.ContextMustGetUser(ctx)), r.FormValue("path"))
 
 		var status *rpc.Status
 		pinfo, status, err = h.getResourceInfoByPath(ctx, client, target)
@@ -812,27 +811,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// in a jailed namespace we have to point to the mount point in the users /Shares jail
-	// to do that we have to list the /Shares jail and use those paths instead of stating the shared resources
-	// The stat results would start with a path outside the jail and thus be inaccessible
-
-	var shareJailInfos []*provider.ResourceInfo
-
-	if h.sharePrefix != "/" {
-		// we only need the path from the share jail for accepted shares
-		if stateFilter == collaboration.ShareState_SHARE_STATE_ACCEPTED || stateFilter == ocsStateUnknown {
-			// only log errors. They may happen but we can continue trying to at least list the shares
-			lcRes, err := client.ListContainer(ctx, &provider.ListContainerRequest{
-				Ref: &provider.Reference{Path: path.Join(h.getHomeNamespace(revactx.ContextMustGetUser(ctx)), h.sharePrefix)},
-			})
-			if err != nil || lcRes.Status.Code != rpc.Code_CODE_OK {
-				h.logProblems(lcRes.GetStatus(), err, "could not list container, continuing without share jail path info")
-			} else {
-				shareJailInfos = lcRes.Infos
-			}
-		}
-	}
-
 	shares := make([]*conversions.ShareData, 0, len(lrsRes.GetShares()))
 
 	// TODO(refs) filter out "invalid" shares
@@ -851,10 +829,20 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			info = pinfo
 		} else {
 			var status *rpc.Status
-			info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+			// FIXME the ResourceID is the id of the resource, but we want the id of the mount point so we can fetch that path, well we have the mountpoint path in the receivedshare
+			// first stat mount point
+			mountID := &provider.ResourceId{
+				StorageId: utils.ShareStorageProviderID,
+				OpaqueId:  rs.Share.Id.OpaqueId,
+			}
+			info, status, err = h.getResourceInfoByID(ctx, client, mountID)
 			if err != nil || status.Code != rpc.Code_CODE_OK {
-				h.logProblems(status, err, "could not stat, skipping")
-				continue
+				// fallback to unmounted resource
+				info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+				if err != nil || status.Code != rpc.Code_CODE_OK {
+					h.logProblems(status, err, "could not stat, skipping")
+					continue
+				}
 			}
 		}
 
@@ -906,11 +894,11 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// Needed because received shares can be jailed in a folder in the users home
 
 			if h.sharePrefix != "/" {
-				// if we have share jail infos use them to build the path
-				if sji := findMatch(shareJailInfos, rs.Share.ResourceId); sji != nil {
+				// if we have a mount point use it to build the path
+				if rs.MountPoint != nil && rs.MountPoint.Path != "" {
 					// override path with info from share jail
-					data.FileTarget = path.Join(h.sharePrefix, path.Base(sji.Path))
-					data.Path = path.Join(h.sharePrefix, path.Base(sji.Path))
+					data.FileTarget = path.Join(h.sharePrefix, rs.MountPoint.Path)
+					data.Path = path.Join(h.sharePrefix, rs.MountPoint.Path)
 				} else {
 					data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
 					data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
@@ -935,15 +923,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSSuccess(w, r, shares)
 }
 
-func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId) *provider.ResourceInfo {
-	for i := range shareJailInfos {
-		if shareJailInfos[i].Id != nil && shareJailInfos[i].Id.StorageId == id.StorageId && shareJailInfos[i].Id.OpaqueId == id.OpaqueId {
-			return shareJailInfos[i]
-		}
-	}
-	return nil
-}
-
 func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 
@@ -955,7 +934,7 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		filters, linkFilters, e = h.addFilters(w, r, h.getHomeNamespace(revactx.ContextMustGetUser(r.Context())))
+		filters, linkFilters, e = h.addFilters(w, r, h.getHomeNamespace(ctxpkg.ContextMustGetUser(r.Context())))
 		if e != nil {
 			// result has been written as part of addFilters
 			return
@@ -1235,7 +1214,7 @@ func (h *Handler) getResourceInfoByPath(ctx context.Context, client GatewayClien
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client GatewayClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, resourceid.OwnCloudResourceIDWrap(id), &provider.Reference{ResourceId: id})
+	return h.getResourceInfo(ctx, client, resourceid.OwnCloudResourceIDWrap(id), &provider.Reference{ResourceId: id, Path: "."})
 }
 
 // getResourceInfo retrieves the resource info to a target.
