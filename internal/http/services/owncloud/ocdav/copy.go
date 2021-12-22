@@ -46,8 +46,6 @@ type copy struct {
 	successCode int
 }
 
-type intermediateDirRefFunc func() (*provider.Reference, *rpc.Status, error)
-
 func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "copy")
 	defer span.End()
@@ -68,18 +66,28 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
 
-	srcRef := &provider.Reference{Path: src}
-
-	// check dst exists
-	dstRef := &provider.Reference{Path: dst}
-
-	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
-		intermediateDir := path.Dir(dst)
-		ref := &provider.Reference{Path: intermediateDir}
-		return ref, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
+	srcSpace, status, err := s.lookUpStorageSpaceForPath(ctx, src)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", src).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+	dstSpace, status, err := s.lookUpStorageSpaceForPath(ctx, dst)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", dst).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
 	}
 
-	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
+	cp := s.prepareCopy(ctx, w, r, makeRelativeReference(srcSpace, src), makeRelativeReference(dstSpace, dst), &sublog)
 	if cp == nil {
 		return
 	}
@@ -296,12 +304,7 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 		return
 	}
 
-	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
-		intermediateDir := path.Dir(dstRelPath)
-		return s.lookUpStorageSpaceReference(ctx, dstSpaceID, intermediateDir)
-	}
-
-	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
+	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, &sublog)
 	if cp == nil {
 		return
 	}
@@ -474,7 +477,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 	return nil
 }
 
-func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, intermediateDirRef intermediateDirRefFunc, log *zerolog.Logger) *copy {
+func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, log *zerolog.Logger) *copy {
 	overwrite, err := extractOverwrite(w, r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -572,18 +575,8 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 	} else {
 		// check if an intermediate path / the parent exists
-		intermediateRef, status, err := intermediateDirRef()
-		if err != nil {
-			log.Error().Err(err).Msg("error sending a grpc request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return nil
-		}
-
-		if status.Code != rpc.Code_CODE_OK {
-			HandleErrorStatus(log, w, status)
-			return nil
-		}
-		intStatReq := &provider.StatRequest{Ref: intermediateRef}
+		dstRef.Path = path.Dir(dstRef.Path)
+		intStatReq := &provider.StatRequest{Ref: dstRef}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
@@ -593,7 +586,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		if intStatRes.Status.Code != rpc.Code_CODE_OK {
 			if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
-				log.Debug().Interface("parent", intermediateRef).Interface("status", intStatRes.Status).Msg("conflict")
+				log.Debug().Interface("parent", dstRef).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
 			} else {
 				HandleErrorStatus(log, w, srcStatRes.Status)
