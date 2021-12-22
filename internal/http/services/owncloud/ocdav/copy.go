@@ -171,7 +171,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		// 1. get download url
 
 		dReq := &provider.InitiateFileDownloadRequest{
-			Ref: &provider.Reference{Path: cp.sourceInfo.Path},
+			Ref: &provider.Reference{ResourceId: cp.sourceInfo.Id, Path: "."},
 		}
 
 		dRes, err := client.InitiateFileDownload(ctx, dReq)
