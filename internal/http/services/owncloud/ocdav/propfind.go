@@ -280,7 +280,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		if err != nil || status.Code != rpc.Code_CODE_OK {
 			continue
 		}
-		if strings.HasPrefix(relativePath, spacePath) {
+		if relativePath != spacePath && strings.HasPrefix(relativePath, spacePath) {
 			// aggregate child metadata
 			aggregatedChildSize += info.Size
 			if mostRecentChildInfo == nil {
