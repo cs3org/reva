@@ -192,8 +192,11 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 				}
 				match = &registrypb.ProviderInfo{
 					ProviderId:   id,
-					ProviderPath: m,
+					ProviderPath: rule.ProviderPath,
 					Address:      addr,
+				}
+				if match.ProviderPath == "" {
+					match.ProviderPath = m
 				}
 			}
 			// Check if the current rule forms a part of a reference spread across storage providers.

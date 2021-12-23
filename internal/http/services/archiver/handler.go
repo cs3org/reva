@@ -20,12 +20,10 @@ package archiver
 
 import (
 	"context"
-	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -41,6 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
@@ -130,17 +129,14 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 	for _, id := range ids {
 		// id is base64 encoded and after decoding has the form <storage_id>:<resource_id>
 
-		storageID, opaqueID, err := decodeResourceID(id)
-		if err != nil {
-			return nil, err
+		ref := resourceid.OwnCloudResourceIDUnwrap(id)
+		if ref == nil {
+			return nil, errors.New("could not unwrap given file id")
 		}
 
 		resp, err := s.gtwClient.Stat(ctx, &provider.StatRequest{
 			Ref: &provider.Reference{
-				ResourceId: &provider.ResourceId{
-					StorageId: storageID,
-					OpaqueId:  opaqueID,
-				},
+				ResourceId: ref,
 			},
 		})
 
@@ -278,20 +274,4 @@ func (s *svc) Close() error {
 
 func (s *svc) Unprotected() []string {
 	return nil
-}
-
-func decodeResourceID(encodedID string) (string, string, error) {
-	decodedID, err := base64.URLEncoding.DecodeString(encodedID)
-	if err != nil {
-		return "", "", errtypes.BadRequest("resource ID does not follow the required format")
-	}
-
-	parts := strings.Split(string(decodedID), ":")
-	if len(parts) != 2 {
-		return "", "", errtypes.BadRequest("resource ID does not follow the required format")
-	}
-	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
-		return "", "", errtypes.BadRequest("resourceID contains illegal characters")
-	}
-	return parts[0], parts[1], nil
 }

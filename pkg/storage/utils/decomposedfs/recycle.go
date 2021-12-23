@@ -54,8 +54,23 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	if ref == nil || ref.ResourceId == nil || ref.ResourceId.OpaqueId == "" {
 		return items, errtypes.BadRequest("spaceid required")
 	}
-	spaceID := ref.ResourceId.OpaqueId
 
+	// check permissions
+	trashnode, err := fs.lu.NodeFromSpaceID(ctx, ref.ResourceId)
+	if err != nil {
+		return nil, err
+	}
+	ok, err := fs.p.HasPermission(ctx, trashnode, func(rp *provider.ResourcePermissions) bool {
+		return rp.ListRecycle
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(key)
+	}
+
+	spaceID := ref.ResourceId.OpaqueId
 	if key == "" && relativePath == "/" {
 		return fs.listTrashRoot(ctx, spaceID)
 	}

@@ -1,0 +1,10 @@
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.storageprovider]
+driver = "local"
+
+[grpc.services.storageprovider.drivers.local]
+disable_home = {{disable_home}}
+root = "{{root}}/storage"
+user_layout = "{{substr 0 1 .Id.OpaqueId}}/{{.Id.OpaqueId}}"

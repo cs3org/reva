@@ -358,3 +358,7 @@ func (c *cachedAPIClient) UpdateStorageSpace(ctx context.Context, in *provider.U
 func (c *cachedAPIClient) DeleteStorageSpace(ctx context.Context, in *provider.DeleteStorageSpaceRequest, opts ...grpc.CallOption) (*provider.DeleteStorageSpaceResponse, error) {
 	return c.c.DeleteStorageSpace(ctx, in, opts...)
 }
+
+func (c *cachedAPIClient) TouchFile(ctx context.Context, in *provider.TouchFileRequest, opts ...grpc.CallOption) (*provider.TouchFileResponse, error) {
+	return c.c.TouchFile(ctx, in, opts...)
+}

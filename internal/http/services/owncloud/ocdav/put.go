@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
@@ -318,7 +319,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	w.Header().Add(HeaderContentType, newInfo.MimeType)
 	w.Header().Set(HeaderETag, newInfo.Etag)
-	w.Header().Set(HeaderOCFileID, wrapResourceID(newInfo.Id))
+	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(newInfo.Id))
 	w.Header().Set(HeaderOCETag, newInfo.Etag)
 	t := utils.TSToTime(newInfo.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)

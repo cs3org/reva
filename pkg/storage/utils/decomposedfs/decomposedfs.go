@@ -23,6 +23,7 @@ package decomposedfs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -283,15 +284,18 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.BadRequest("Invalid path: " + ref.Path)
 	}
 
-	ref.Path = path.Dir(ref.Path)
+	parentRef := &provider.Reference{
+		ResourceId: ref.ResourceId,
+		Path:       path.Dir(ref.Path),
+	}
 
 	// verify parent exists
 	var n *node.Node
-	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+	if n, err = fs.lu.NodeFromResource(ctx, parentRef); err != nil {
 		return
 	}
 	if !n.Exists {
-		return errtypes.NotFound(ref.Path)
+		return errtypes.NotFound(parentRef.Path)
 	}
 
 	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
@@ -309,7 +313,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return
 	}
 	if n.Exists {
-		return errtypes.AlreadyExists(ref.Path)
+		return errtypes.AlreadyExists(parentRef.Path)
 	}
 
 	if err = fs.tp.CreateDir(ctx, n); err != nil {
@@ -325,6 +329,11 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		}
 	}
 	return
+}
+
+// TouchFile as defined in the storage.FS interface
+func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
 }
 
 // CreateReference creates a reference as a node folder with the target stored in extended attributes

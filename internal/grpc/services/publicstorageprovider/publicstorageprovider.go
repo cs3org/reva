@@ -44,6 +44,9 @@ import (
 	gstatus "google.golang.org/grpc/status"
 )
 
+// SpaceTypePublic is the public space type
+var SpaceTypePublic = "public"
+
 func init() {
 	rgrpc.Register("publicstorageprovider", New)
 }
@@ -153,10 +156,24 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 		return nil, "", nil, st, nil
 	}
 
+	var path string
+	switch shareInfo.Type {
+	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		// folders point to the folder -> path needs to be added
+		path = utils.MakeRelativePath(relativePath)
+	case provider.ResourceType_RESOURCE_TYPE_FILE:
+		// files already point to the correct id
+		path = "."
+	default:
+		// TODO: can this happen?
+		// path = utils.MakeRelativePath(relativePath)
+	}
+
 	cs3Ref := &provider.Reference{
 		ResourceId: shareInfo.Id,
-		Path:       utils.MakeRelativePath(relativePath),
+		Path:       path,
 	}
+
 	log.Debug().
 		Interface("sourceRef", ref).
 		Interface("cs3Ref", cs3Ref).
@@ -309,13 +326,16 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			if f.GetSpaceType() != "public" {
+			if f.GetSpaceType() != SpaceTypePublic {
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 				}, nil
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, _ := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			spaceid, _, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			if err != nil {
+				continue
+			}
 			if spaceid != utils.PublicStorageProviderID {
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
@@ -330,7 +350,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			Id: &provider.StorageSpaceId{
 				OpaqueId: utils.PublicStorageProviderID,
 			},
-			SpaceType: "public",
+			SpaceType: SpaceTypePublic,
 			// return the actual resource id?
 			Root: &provider.ResourceId{
 				StorageId: utils.PublicStorageProviderID,
@@ -389,6 +409,19 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	}
 
 	return res, nil
+}
+
+func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
+	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
+		return nil, err
+	case st != nil:
+		return &provider.TouchFileResponse{
+			Status: st,
+		}, nil
+	}
+	return s.gateway.TouchFile(ctx, &provider.TouchFileRequest{Opaque: req.Opaque, Ref: ref})
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
@@ -664,8 +697,12 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token string, relativePath string, err error) {
+	isValidReference := func(r *provider.Reference) bool {
+		return r != nil && r.ResourceId != nil && r.ResourceId.StorageId != "" && r.ResourceId.OpaqueId != ""
+	}
+
 	switch {
-	case ref == nil, ref.ResourceId == nil, ref.ResourceId.StorageId == "", ref.ResourceId.OpaqueId == "":
+	case !isValidReference(ref):
 		return "", "", errtypes.BadRequest("resourceid required, got " + ref.String())
 	case ref.Path == "":
 		// id based stat

@@ -187,7 +187,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			spaceTypes = append(spaceTypes, filter[i].GetSpaceType())
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, nodeID = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
+			spaceID, nodeID, _ = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
 		}
 	}
 	if len(spaceTypes) == 0 {
@@ -290,7 +290,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	space := req.StorageSpace
 
-	_, spaceID := utils.SplitStorageSpaceID(space.Id.OpaqueId)
+	_, spaceID, _ := utils.SplitStorageSpaceID(space.Id.OpaqueId)
 
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
 	if err != nil {
@@ -298,7 +298,12 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	if len(matches) != 1 {
-		return nil, fmt.Errorf("update space failed: found %d matching spaces", len(matches))
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{
+				Code:    v1beta11.Code_CODE_NOT_FOUND,
+				Message: fmt.Sprintf("update space failed: found %d matching spaces", len(matches)),
+			},
+		}, nil
 	}
 
 	target, err := os.Readlink(matches[0])
@@ -310,6 +315,12 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	if err != nil {
 		return nil, err
 	}
+
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
+	}
+	space.Owner = u
 
 	if space.Name != "" {
 		if err := node.SetMetadata(xattrs.SpaceNameAttr, space.Name); err != nil {
@@ -436,16 +447,6 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		SpaceType: spaceType,
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
-
-	// filter out spaces user cannot access (currently based on stat permission)
-	// p, err := n.ReadUserPermissions(ctx, user)
-	// if err != nil {
-	// return nil, err
-	// }
-
-	// if !(canListAllSpaces || p.Stat) {
-	// return nil,
-	// }
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 	_, canListAllSpaces := permissions["list-all-spaces"]

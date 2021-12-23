@@ -562,10 +562,6 @@ Scenario Outline: Retrieving folder quota when quota is set and a file was recei
 -   [apiWebdavProperties1/getQuota.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L27)
 -   [apiWebdavProperties1/getQuota.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L28)
 
-#### [cannot get share-types webdav property](https://github.com/owncloud/ocis/issues/567)
--   [apiWebdavProperties2/getFileProperties.feature:174](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L174)
--   [apiWebdavProperties2/getFileProperties.feature:175](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L175)
-
 #### [Private link support](https://github.com/owncloud/product/issues/201)
 #### [oc:privatelink property not returned in webdav responses](https://github.com/owncloud/product/issues/262)
 -   [apiWebdavProperties2/getFileProperties.feature:232](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L232)
@@ -1107,8 +1103,8 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 -   [apiWebdavProperties1/copyFile.feature:108](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L108)
 -   [apiWebdavProperties1/createFolder.feature:71](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L71)
 -   [apiWebdavProperties1/createFolder.feature:72](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L72)
--   [apiWebdavUpload1/uploadFile.feature:127](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L127)
--   [apiWebdavUpload1/uploadFile.feature:128](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L128)
+-   [apiWebdavUpload1/uploadFile.feature:132](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L132)
+-   [apiWebdavUpload1/uploadFile.feature:133](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L133)
 -   [apiWebdavUpload2/uploadFileToBlacklistedNameUsingOldChunking.feature:19](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileToBlacklistedNameUsingOldChunking.feature#L19)
 -   [apiWebdavUpload2/uploadFileToBlacklistedNameUsingOldChunking.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileToBlacklistedNameUsingOldChunking.feature#L35)
 -   [apiWebdavUpload2/uploadFileToBlacklistedNameUsingOldChunking.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileToBlacklistedNameUsingOldChunking.feature#L36)
@@ -1260,6 +1256,9 @@ _ocs: api compatibility, return correct status code_
 -    [apiVersions/fileVersions.feature:455](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L455)
 -    [apiVersions/fileVersionsSharingToShares.feature:305](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L305)
 
+#### [file versions do not report the version author](https://github.com/owncloud/ocis/issues/2914)
+-    [apiVersions/fileVersions.feature:474](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L474)
+
 ### [Allow public link sharing only for certain groups feature not implemented]
 - [apiSharePublicLink2/allowGroupToCreatePublicLinks.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/allowGroupToCreatePublicLinks.feature#L35)
 - [apiSharePublicLink2/allowGroupToCreatePublicLinks.feature:91](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/allowGroupToCreatePublicLinks.feature#L91)
@@ -1284,5 +1283,8 @@ _ocs: api compatibility, return correct status code_
 -   [apiWebdavOperations/downloadFile.feature:169](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L169)
 -   [apiWebdavOperations/downloadFile.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L170)
 
-### [send PUT requests to another user's webDav endpoints as normal user](https://github.com/owncloud/ocis/issues/2759)
+### [send PUT requests to another user's webDav endpoints as normal user](https://github.com/owncloud/ocis/issues/2893)
 -   [apiAuthWebDav/webDavPUTAuth.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPUTAuth.feature#L40)
+
+### [Calculate personal space id in tests when running on reva](https://github.com/owncloud/core/issues/39617)
+-   [apiWebdavUpload1/uploadFile.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L32)

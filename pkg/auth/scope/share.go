@@ -56,6 +56,8 @@ func shareScope(_ context.Context, scope *authpb.Scope, resource interface{}, lo
 		// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
 		return checkShareStorageRef(&share, v.GetRef()), nil
+	case *provider.TouchFileRequest:
+		return checkShareStorageRef(&share, v.GetRef()), nil
 	case *provider.DeleteRequest:
 		return checkShareStorageRef(&share, v.GetRef()), nil
 	case *provider.MoveRequest:

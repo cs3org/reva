@@ -432,7 +432,11 @@ func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.ResourceId) (s
 			return "", err
 		}
 	}
-	return url.QueryUnescape(strings.TrimPrefix(ref.OpaqueId, "fileid-"+layout))
+	unescapedID, err := url.QueryUnescape(ref.OpaqueId)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimPrefix(unescapedID, "fileid-"+layout), nil
 }
 
 func (fs *localfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
@@ -780,6 +784,11 @@ func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 	}
 
 	return fs.propagate(ctx, path.Dir(fn))
+}
+
+// TouchFile as defined in the storage.FS interface
+func (fs *localfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
 }
 
 func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {

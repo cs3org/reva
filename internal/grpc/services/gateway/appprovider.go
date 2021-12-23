@@ -44,8 +44,6 @@ import (
 )
 
 func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-
-	resChild := ""
 	statRes, err := s.Stat(ctx, &storageprovider.StatRequest{
 		Ref: req.Ref,
 	})
@@ -72,7 +70,7 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		}
 		if uri.Scheme == "webdav" {
 			insecure, skipVerify := getGRPCConfig(req.Opaque)
-			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, req.App, insecure, skipVerify, resChild)
+			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, req.App, insecure, skipVerify, "")
 		}
 
 		res, err := s.Stat(ctx, &storageprovider.StatRequest{
@@ -219,7 +217,7 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 
 		// we did not find a default provider
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			err := errtypes.NotFound(fmt.Sprintf("gateway: default app rovider for mime type:%s not found", ri.MimeType))
+			err := errtypes.NotFound(fmt.Sprintf("gateway: default app provider for mime type:%s not found", ri.MimeType))
 			return nil, err
 		}
 
@@ -262,7 +260,10 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 	}
 	res.Providers = filteredProviders
 
-	// if we only have one app provider we verify that it matches the requested app name
+	if len(res.Providers) == 0 {
+		return nil, errtypes.NotFound(fmt.Sprintf("app '%s' not found", app))
+	}
+
 	if len(res.Providers) == 1 {
 		return res.Providers[0], nil
 	}

@@ -628,5 +628,29 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag3).ToNot(Equal(newEtag2))
 			})
 		})
+
+		Describe("Move", func() {
+			It("moves a directory", func() {
+				sourceRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId, OpaqueId: homeSpace.Id.OpaqueId}, Path: "/source"}
+				targetRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId, OpaqueId: homeSpace.Id.OpaqueId}, Path: "/destination"}
+				dstRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/destination/source"}
+
+				err := fs.CreateDir(ctx, sourceRef)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.CreateDir(ctx, targetRef)
+				Expect(err).ToNot(HaveOccurred())
+
+				mvRes, err := serviceClient.Move(ctx, &storagep.MoveRequest{Source: sourceRef, Destination: dstRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mvRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: sourceRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: dstRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			})
+		})
 	})
 })
