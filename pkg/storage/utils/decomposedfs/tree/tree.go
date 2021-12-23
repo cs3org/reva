@@ -240,11 +240,6 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		return errtypes.AlreadyExists(n.ID) // path?
 	}
 
-	// Allow passing in the node id
-	// if n.ID != "" {
-	// TODO check if already exists
-	// }
-
 	// create a directory node
 	if n.ID == "" {
 		n.ID = uuid.New().String()
@@ -275,7 +270,6 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 			return
 		}
 
-		// try to remove the node
 		e := t.Delete(ctx, n)
 		switch {
 		case e != nil:
@@ -285,7 +279,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 			if e == nil {
 				e = rm()
 				if e != nil {
-					appctx.GetLogger(ctx).Debug().Err(e).Msg("cannot purge from trashcan")
+					appctx.GetLogger(ctx).Debug().Err(e).Msg("cannot purge from trashbin")
 				}
 			}
 		}

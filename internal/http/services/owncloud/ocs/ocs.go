@@ -48,6 +48,7 @@ type svc struct {
 	warmupCacheTracker *ttlcache.Cache
 }
 
+// New initializes the service
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config.Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
@@ -96,7 +97,7 @@ func (s *svc) routerInit() error {
 	capabilitiesHandler.Init(s.c)
 	usersHandler.Init(s.c)
 	configHandler.Init(s.c)
-	sharesHandler.InitDefault(s.c)
+	sharesHandler.Init(s.c)
 	shareesHandler.Init(s.c)
 
 	s.router.Route("/v{version:(1|2)}.php", func(r chi.Router) {

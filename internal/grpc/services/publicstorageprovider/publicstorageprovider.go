@@ -44,6 +44,9 @@ import (
 	gstatus "google.golang.org/grpc/status"
 )
 
+// SpaceTypePublic is the public space type
+var SpaceTypePublic = "public"
+
 func init() {
 	rgrpc.Register("publicstorageprovider", New)
 }
@@ -323,13 +326,16 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			if f.GetSpaceType() != "public" {
+			if f.GetSpaceType() != SpaceTypePublic {
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 				}, nil
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, _ := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			spaceid, _, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			if err != nil {
+				continue
+			}
 			if spaceid != utils.PublicStorageProviderID {
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
@@ -344,7 +350,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			Id: &provider.StorageSpaceId{
 				OpaqueId: utils.PublicStorageProviderID,
 			},
-			SpaceType: "public",
+			SpaceType: SpaceTypePublic,
 			// return the actual resource id?
 			Root: &provider.ResourceId{
 				StorageId: utils.PublicStorageProviderID,
@@ -691,8 +697,12 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token string, relativePath string, err error) {
+	isValidReference := func(r *provider.Reference) bool {
+		return r != nil && r.ResourceId != nil && r.ResourceId.StorageId != "" && r.ResourceId.OpaqueId != ""
+	}
+
 	switch {
-	case ref == nil, ref.ResourceId == nil, ref.ResourceId.StorageId == "", ref.ResourceId.OpaqueId == "":
+	case !isValidReference(ref):
 		return "", "", errtypes.BadRequest("resourceid required, got " + ref.String())
 	case ref.Path == "":
 		// id based stat

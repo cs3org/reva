@@ -79,7 +79,6 @@ const (
 	favoriteKey       string = "http://owncloud.org/ns/favorite"
 
 	spaceTypeAny = "*"
-	// spaceIDAny   = "*"
 )
 
 var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{

@@ -41,14 +41,14 @@ import (
 )
 
 const (
-	// shareID is the id of the share to update. It is present in the request URL.
-	shareID string = "shareid"
+	// shareidkey is the key user to obtain the id of the share to update. It is present in the request URL.
+	shareidkey string = "shareid"
 )
 
 // AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}
 func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	shareID := chi.URLParam(r, shareID)
+	shareID := chi.URLParam(r, shareidkey)
 	client, err := h.getClient()
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
@@ -267,7 +267,14 @@ func getSharesList(ctx context.Context, client GatewayClient) (*collaboration.Li
 
 // arbitraryOcsResponse abstracts the boilerplate that is creating a response.Response struct.
 func arbitraryOcsResponse(statusCode int, message string) *response.Response {
-	r := response.NewResponse()
+	r := response.Response{
+		OCS: &response.Payload{
+			XMLName: struct{}{},
+			Meta:    response.Meta{},
+			Data:    nil,
+		},
+	}
+
 	r.OCS.Meta.StatusCode = statusCode
 	r.OCS.Meta.Message = message
 	return &r

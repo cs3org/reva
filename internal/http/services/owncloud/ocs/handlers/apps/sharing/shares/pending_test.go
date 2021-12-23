@@ -58,7 +58,7 @@ var _ = Describe("The ocs API", func() {
 
 		c := &config.Config{}
 		c.Init()
-		h.Init(c, func() (shares.GatewayClient, error) {
+		h.InitWithGetter(c, func() (shares.GatewayClient, error) {
 			return client, nil
 		})
 	})

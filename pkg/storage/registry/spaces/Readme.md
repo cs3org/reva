@@ -2,13 +2,13 @@
 
 The spaces registry recognizes individual spaces instead of storage providers.
 While it is configured with a list of storage providers, it will query them for all storage spaces and use the space ids to resolve id based lookups.
-Furthermore, path based lookups will take into account a path templvate to present a human readable file tree.
+Furthermore, path based lookups will take into account a path template to present a human readable file tree.
 
 ## Configuration
 
 The spaces registry takes two configuration options:
 
-1.  `home_template` is used to buld a path for the users home. It uses a template that can access the current user in the context, e.g. `/users/{{.Id.OpaqueId}}`
+1.  `home_template` is used to build a path for the users home. It uses a template that can access the current user in the context, e.g. `/users/{{.Id.OpaqueId}}`
 2.  `rules` is a map of path patterns to config rules
 
 ### Patterns
@@ -20,11 +20,9 @@ The pattern is used when matching the path for path based requests.
 
 A rule has several properties:
 
-*   `mapping` unused?
 *   `address` The ip address of the CS3 storage provider
-*   `path_template` TODO -> rename to space\_path or space\_mount\_point
-*   `aliases` unused?
-*   `allowed_user_agents` unused? FIXME this seems to be used to route requests based on user agent
+*   `path_template` Will be renamed to space\_path or space\_mount\_point. If set this must be a valid go template.
+*   `allowed_user_agents` FIXME this seems to be used to route requests based on user agent
 
 It also carries filters that are sent with a ListStorageSpaces call to a storage provider
 
