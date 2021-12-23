@@ -92,7 +92,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		}
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.ResourceInfo.Id)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.ResourceInfo.Id)
 	return res, nil
 }
 
@@ -153,7 +153,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 		}
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), share.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), share.ResourceId)
 	return res, nil
 }
 
@@ -243,7 +243,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		}
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), res.Share.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.Share.ResourceId)
 	return res, nil
 }
 
@@ -326,7 +326,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		}, nil
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Share.Share.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Share.Share.ResourceId)
 	return c.UpdateReceivedShare(ctx, req)
 }
 

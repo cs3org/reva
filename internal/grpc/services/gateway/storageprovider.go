@@ -158,7 +158,7 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 		}
 	}
 
-	srClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	srClient, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -236,7 +236,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		}
 	}
 
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	c, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -337,7 +337,7 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 			Status: status.NewInternal(ctx, "error calling UpdateStorageSpace"),
 		}, nil
 	}
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
 	return res, nil
 }
 
@@ -369,14 +369,14 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 		}, nil
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
 	return res, nil
 }
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 
-	srClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	srClient, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -543,7 +543,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return &gateway.InitiateFileUploadResponse{
 		Opaque:    storageRes.Opaque,
 		Status:    storageRes.Status,
@@ -586,7 +586,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -630,7 +630,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		return nil, errors.Wrap(err, "gateway: error calling Delete")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -672,8 +672,8 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
 	return c.Move(ctx, req)
 }
 
@@ -696,7 +696,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 		return nil, errors.Wrap(err, "gateway: error calling SetArbitraryMetadata")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -719,7 +719,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 		return nil, errors.Wrap(err, "gateway: error calling UnsetArbitraryMetadata")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1092,7 +1092,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 		return nil, errors.Wrap(err, "gateway: error calling RestoreFileVersion")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1315,9 +1315,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 		return nil, errors.Wrap(err, "gateway: error calling RestoreRecycleItem")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	if req.RestoreRef != nil {
-		RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
 	}
 
 	return res, nil
@@ -1340,7 +1340,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1418,7 +1418,17 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 		return nil, err
 	}
 
-	return Cached(c, s.statCache), nil
+	return s.cache.StorageProviderClient(c), nil
+}
+
+func (s *svc) getStorageRegistryClient(_ context.Context, address string) (registry.RegistryAPIClient, error) {
+	c, err := pool.GetStorageRegistryClient(address)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting a storage provider client")
+		return nil, err
+	}
+
+	return s.cache.StorageRegistryClient(c), nil
 }
 
 /*
@@ -1441,45 +1451,16 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	switch {
 	case ref == nil:
 		return nil, errtypes.BadRequest("missing reference")
-	case ref.ResourceId != nil: // can we use the provider cache?
-		// only the StorageId is used to look up the provider. the opaqueid can only be a share and as such part of a storage
-		if value, exists := s.providerCache.Get(ref.ResourceId.StorageId); exists == nil {
-			if providers, ok := value.([]*registry.ProviderInfo); ok {
-				return providers, nil
-			}
-		}
+	case ref.ResourceId != nil:
+		// no action needed in that case
 	case ref.Path != "": //  TODO implement a mount path cache in the registry?
-	/*
-		// path / mount point lookup from cache
-		if value, exists := s.mountCache.Get(userKey(ctx)); exists == nil {
-			if m, ok := value.(map[string][]*registry.ProviderInfo); ok {
-				providers := make([]*registry.ProviderInfo, 0, len(m))
-				deepestMountPath := ""
-				for mountPath, providerInfos := range m {
-					switch {
-					case strings.HasPrefix(mountPath, ref.Path):
-						// and add all providers below and exactly matching the path
-						// requested /foo, mountPath /foo/sub
-						providers = append(providers, providerInfos...)
-					case strings.HasPrefix(ref.Path, mountPath) && len(mountPath) > len(deepestMountPath):
-						// eg. three providers: /foo, /foo/sub, /foo/sub/bar
-						// requested /foo/sub/mob
-						deepestMountPath = mountPath
-					}
-				}
-				if deepestMountPath != "" {
-					providers = append(providers, m[deepestMountPath]...)
-				}
-				return providers, nil
-			}
-		}
-	*/
+		// nothing to do here either
 	default:
 		return nil, errtypes.BadRequest("invalid reference, at least path or id must be set")
 	}
 
 	// lookup
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	c, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -1497,7 +1478,6 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	}
 	sdk.EncodeOpaqueMap(listReq.Opaque, filters)
 	res, err := c.ListStorageProviders(ctx, listReq)
-
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListStorageProviders")
 	}
@@ -1520,12 +1500,6 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 
 	if res.Providers == nil {
 		return nil, errtypes.NotFound("gateway: provider is nil")
-	}
-
-	if ref.ResourceId != nil {
-		if err = s.providerCache.Set(ref.ResourceId.StorageId, res.Providers); err != nil {
-			appctx.GetLogger(ctx).Warn().Err(err).Interface("reference", ref).Msg("gateway: could not cache providers")
-		}
 	}
 
 	return res.Providers, nil
