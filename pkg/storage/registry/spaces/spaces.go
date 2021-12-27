@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -284,8 +285,9 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 	case len(filters) == 0:
 		// return all providers
 		return r.findAllProviders(ctx), nil
+	default:
+		return nil, errors.New("filters misconfigured")
 	}
-	return []*registrypb.ProviderInfo{}, nil
 }
 
 // findProvidersForResource looks up storage providers based on a resource id
