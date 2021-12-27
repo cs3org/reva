@@ -239,9 +239,8 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
 
-	listReq := &registry.ListStorageProvidersRequest{}
+	listReq := &registry.ListStorageProvidersRequest{Opaque: req.Opaque}
 	if len(filters) > 0 {
-		listReq.Opaque = &typesv1beta1.Opaque{}
 		sdk.EncodeOpaqueMap(listReq.Opaque, filters)
 	}
 	res, err := c.ListStorageProviders(ctx, listReq)
