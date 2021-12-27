@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -118,6 +119,10 @@ func (s *svc) lookUpStorageSpaceForPath(ctx context.Context, path string) (*stor
 				"path": {
 					Decoder: "plain",
 					Value:   []byte(path),
+				},
+				"unique": {
+					Decoder: "plain",
+					Value:   []byte(strconv.FormatBool(true)),
 				},
 			},
 		},

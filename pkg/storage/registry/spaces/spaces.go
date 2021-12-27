@@ -25,6 +25,7 @@ import (
 	"errors"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -274,13 +275,14 @@ func (r *registry) GetProvider(ctx context.Context, space *providerpb.StorageSpa
 // matches = /foo/bar       <=> /foo/bar        -> list(spaceid, .)
 // below   = /foo/bar/bif   <=> /foo/bar        -> list(spaceid, ./bif)
 func (r *registry) ListProviders(ctx context.Context, filters map[string]string) ([]*registrypb.ProviderInfo, error) {
+	b, _ := strconv.ParseBool(filters["unique"])
 	switch {
 	case filters["storage_id"] != "" && filters["opaque_id"] != "":
 		findMountpoint := filters["type"] == "mountpoint"
 		findGrant := !findMountpoint && filters["path"] == "" // relvative references, by definition, occur in the correct storage, so do not look for grants
 		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"], findMountpoint, findGrant), nil
 	case filters["path"] != "":
-		return r.findProvidersForAbsolutePathReference(ctx, filters["path"]), nil
+		return r.findProvidersForAbsolutePathReference(ctx, filters["path"], b), nil
 		// TODO add filter for all spaces the user can manage?
 	case len(filters) == 0:
 		// return all providers
@@ -383,7 +385,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 
 // findProvidersForAbsolutePathReference takes a path and returns the storage provider with the longest matching path prefix
 // FIXME use regex to return the correct provider when multiple are configured
-func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, path string) []*registrypb.ProviderInfo {
+func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, path string, unique bool) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 
 	deepestMountPath := ""
@@ -432,7 +434,10 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 			}
 
 			switch {
-			case strings.HasPrefix(spacePath, path):
+			case spacePath == path:
+				spacePaths[space.Id.OpaqueId] = spacePath
+
+			case strings.HasPrefix(spacePath, path) && !unique:
 				// and add all providers below and exactly matching the path
 				// requested /foo, mountPath /foo/sub
 				spacePaths[space.Id.OpaqueId] = spacePath
@@ -441,6 +446,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 					deepestMountSpace = space
 					deepestMountPathProvider = p
 				}
+
 			case strings.HasPrefix(path, spacePath) && len(spacePath) > len(deepestMountPath):
 				// eg. three providers: /foo, /foo/sub, /foo/sub/bar
 				// requested /foo/sub/mob
