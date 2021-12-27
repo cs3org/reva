@@ -119,7 +119,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 	}
 
 	// retrieve a specific storage space
-	space, rpcStatus, err := s.lookUpStorageSpaceById(ctx, spaceID)
+	space, rpcStatus, err := s.lookUpStorageSpaceByID(ctx, spaceID)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -422,7 +422,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				if tail != "/" {
 					res.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 					res.Info.Checksum = nil
-					//TODO unset opaque checksum
+					// TODO unset opaque checksum
 				}
 				res.Info.Path = path.Join(requestPath, childName)
 				if existingChild, ok := childInfos[childName]; ok {

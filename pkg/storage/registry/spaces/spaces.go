@@ -369,7 +369,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 			}
 			// we can stop after we found the first space
 			// TODO to improve lookup time the registry could cache which provider last was responsible for a space? could be invalidated by simple ttl? would that work for shares?
-			//return []*registrypb.ProviderInfo{p}
+			// return []*registrypb.ProviderInfo{p}
 			providerInfos = append(providerInfos, p) // hm we need to query all providers ... or the id based lookup might only see the spaces storage provider
 		default:
 			// there should not be multiple spaces with the same id per provider

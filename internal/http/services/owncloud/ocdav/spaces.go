@@ -166,7 +166,7 @@ func (s *svc) lookUpStorageSpacesForPathWithChildren(ctx context.Context, path s
 
 	return lSSRes.StorageSpaces, lSSRes.Status, nil
 }
-func (s *svc) lookUpStorageSpaceById(ctx context.Context, spaceID string) (*storageProvider.StorageSpace, *rpc.Status, error) {
+func (s *svc) lookUpStorageSpaceByID(ctx context.Context, spaceID string) (*storageProvider.StorageSpace, *rpc.Status, error) {
 	// Get the getway client
 	gatewayClient, err := s.getClient()
 	if err != nil {
@@ -199,7 +199,7 @@ func (s *svc) lookUpStorageSpaceById(ctx context.Context, spaceID string) (*stor
 
 }
 func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string) (*storageProvider.Reference, *rpc.Status, error) {
-	space, status, err := s.lookUpStorageSpaceById(ctx, spaceID)
+	space, status, err := s.lookUpStorageSpaceByID(ctx, spaceID)
 	return makeRelativeReference(space, relativePath), status, err
 }
 

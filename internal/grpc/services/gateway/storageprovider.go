@@ -1371,25 +1371,27 @@ func (s *svc) getStorageRegistryClient(_ context.Context, address string) (regis
 
 	return s.cache.StorageRegistryClient(c), nil
 }
-func (s *svc) findMountPoint(ctx context.Context, id *provider.ResourceId) ([]*registry.ProviderInfo, error) {
-	//TODO can we use a provider cache for mount points?
-	if id == nil {
-		return nil, errtypes.BadRequest("invalid reference, at least path or id must be set")
-	}
 
-	filters := map[string]string{
-		"type":       "mountpoint",
-		"storage_id": id.StorageId,
-		"opaque_id":  id.OpaqueId,
-	}
+// func (s *svc) findMountPoint(ctx context.Context, id *provider.ResourceId) ([]*registry.ProviderInfo, error) {
+// // TODO can we use a provider cache for mount points?
+// if id == nil {
+// return nil, errtypes.BadRequest("invalid reference, at least path or id must be set")
+// }
 
-	listReq := &registry.ListStorageProvidersRequest{
-		Opaque: &typesv1beta1.Opaque{},
-	}
-	sdk.EncodeOpaqueMap(listReq.Opaque, filters)
+// filters := map[string]string{
+// "type":       "mountpoint",
+// "storage_id": id.StorageId,
+// "opaque_id":  id.OpaqueId,
+// }
 
-	return s.findProvider(ctx, listReq)
-}
+// listReq := &registry.ListStorageProvidersRequest{
+// Opaque: &typesv1beta1.Opaque{},
+// }
+// sdk.EncodeOpaqueMap(listReq.Opaque, filters)
+
+// return s.findProvider(ctx, listReq)
+// }
+
 func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
 	switch {
 	case ref == nil:
