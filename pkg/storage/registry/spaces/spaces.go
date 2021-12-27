@@ -74,7 +74,8 @@ func (sc *spaceConfig) SpacePath(currentUser *userpb.User, space *providerpb.Sto
 	return b.String(), nil
 }
 
-type provider struct {
+// Provider holds information on Spaces
+type Provider struct {
 	// Spaces is a map from space type to space config
 	Spaces map[string]*spaceConfig `mapstructure:"spaces"`
 }
@@ -90,7 +91,7 @@ type StorageProviderClient interface {
 }
 
 type config struct {
-	Providers    map[string]*provider `mapstructure:"providers"`
+	Providers    map[string]*Provider `mapstructure:"providers"`
 	HomeTemplate string               `mapstructure:"home_template"`
 }
 
@@ -101,7 +102,7 @@ func (c *config) init() {
 	}
 
 	if len(c.Providers) == 0 {
-		c.Providers = map[string]*provider{
+		c.Providers = map[string]*Provider{
 			sharedconf.GetGatewaySVC(""): {
 				Spaces: map[string]*spaceConfig{
 					"personal":   {MountPoint: "/users", PathTemplate: "/users/{{.Space.Owner.Id.OpaqueId}}"},
@@ -335,6 +336,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 			// nothing to do, will continue with next provider
 		case 1:
 			space := spaces[0]
+
 			var sc *spaceConfig
 			var ok bool
 			var spacePath string

@@ -325,11 +325,15 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				fetchShares = true
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID = &provider.ResourceId{}
-			spaceID.StorageId, spaceID.OpaqueId = utils.SplitStorageSpaceID(f.GetId().OpaqueId)
-			if spaceID.StorageId == "" || spaceID.OpaqueId == "" {
-				res.Status = status.NewInvalid(ctx, "invalid space id")
-				return res, nil
+			spaceid, _, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			if err != nil {
+				continue
+			}
+			if spaceid != utils.ShareStorageProviderID {
+				return &provider.ListStorageSpacesResponse{
+					// a specific id was requested, return not found instead of empty list
+					Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND},
+				}, nil
 			}
 		}
 	}

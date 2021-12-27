@@ -240,11 +240,6 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		return errtypes.AlreadyExists(n.ID) // path?
 	}
 
-	// Allow passing in the node id
-	// if n.ID != "" {
-	// TODO check if already exists
-	// }
-
 	// create a directory node
 	if n.ID == "" {
 		n.ID = uuid.New().String()

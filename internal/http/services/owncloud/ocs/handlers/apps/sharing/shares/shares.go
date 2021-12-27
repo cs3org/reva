@@ -127,8 +127,8 @@ type GatewayClient interface {
 	GetUserByClaim(ctx context.Context, in *userpb.GetUserByClaimRequest, opts ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error)
 }
 
-// InitDefault initializes the handler using default values
-func (h *Handler) InitDefault(c *config.Config) {
+// Init initializes the handler using default values
+func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.machineAuthAPIKey = c.MachineAuthAPIKey
 	h.storageRegistryAddr = c.StorageregistrySvc
@@ -152,9 +152,9 @@ func (h *Handler) InitDefault(c *config.Config) {
 	h.getClient = h.getPoolClient
 }
 
-// Init initializes the handler
-func (h *Handler) Init(c *config.Config, clientGetter GatewayClientGetter) {
-	h.InitDefault(c)
+// InitWithGetter initializes the handler and adds the clientGetter
+func (h *Handler) InitWithGetter(c *config.Config, clientGetter GatewayClientGetter) {
+	h.Init(c)
 	h.getClient = clientGetter
 }
 

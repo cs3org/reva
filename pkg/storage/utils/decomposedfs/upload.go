@@ -186,7 +186,6 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("Decomposedfs: NewUpload")
 
-	// sanity checks
 	if info.MetaData["filename"] == "" {
 		return nil, errors.New("Decomposedfs: missing filename in metadata")
 	}

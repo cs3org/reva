@@ -19,6 +19,7 @@
 package utils
 
 import (
+	"errors"
 	"math/rand"
 	"net"
 	"net/http"
@@ -309,15 +310,15 @@ func UserTypeToString(accountType userpb.UserType) string {
 
 // SplitStorageSpaceID can be used to split `storagespaceid` into `storageid` and `nodeid`.
 // If no specific node is appended with a `!` separator the spaceid is used as nodeid, identifying the root of the space.
-func SplitStorageSpaceID(ssid string) (storageid, nodeid string) {
+func SplitStorageSpaceID(ssid string) (storageid, nodeid string, err error) {
 	if ssid == "" {
-		return "", ""
+		return "", "", errors.New("can't split empty StorageSpaceID")
 	}
 	parts := strings.SplitN(ssid, "!", 2)
 	if len(parts) == 1 {
-		return parts[0], parts[0]
+		return parts[0], parts[0], nil
 	}
-	return parts[0], parts[1]
+	return parts[0], parts[1], nil
 }
 
 // ParseStorageSpaceReference parses a string into a spaces reference.
@@ -325,7 +326,10 @@ func SplitStorageSpaceID(ssid string) (storageid, nodeid string) {
 func ParseStorageSpaceReference(sRef string) (provider.Reference, error) {
 	parts := strings.SplitN(sRef, "/", 2)
 
-	storageid, nodeid := SplitStorageSpaceID(parts[0])
+	storageid, nodeid, err := SplitStorageSpaceID(parts[0])
+	if err != nil {
+		return provider.Reference{}, err
+	}
 
 	var relPath string
 	if len(parts) == 2 {

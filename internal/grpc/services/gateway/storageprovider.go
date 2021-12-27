@@ -21,6 +21,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"net/url"
 	"path"
@@ -28,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -155,7 +157,7 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 		}
 	}
 
-	srClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	srClient, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -215,7 +217,11 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			filters["storage_id"], filters["opaque_id"] = utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			sid, oid, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			if err != nil {
+				continue
+			}
+			filters["storage_id"], filters["opaque_id"] = sid, oid
 		case provider.ListStorageSpacesRequest_Filter_TYPE_OWNER:
 			filters["owner_idp"] = f.GetOwner().Idp
 			filters["owner_id"] = f.GetOwner().OpaqueId
@@ -228,17 +234,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		}
 	}
 
-	// FIXME allow filter by path in CS3 api
-	if req.Opaque != nil && req.Opaque.Map != nil {
-		if entry, ok := req.Opaque.Map["path"]; ok && entry.Decoder == "plain" {
-			filters["path"] = string(req.Opaque.Map["path"].Value)
-		}
-		if entry, ok := req.Opaque.Map["withChildMounts"]; ok && entry.Decoder == "plain" && string(req.Opaque.Map["withChildMounts"].Value) == "true" {
-			filters["space_type"] = "+mountpoint"
-		}
-	}
-
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	c, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -262,9 +258,13 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 	spaces := []*provider.StorageSpace{}
 	for _, providerInfo := range res.Providers {
-		spacePaths := decodeSpacePaths(providerInfo.Opaque)
+		spacePaths := decodeSpacePaths(providerInfo)
 		for spaceID, spacePath := range spacePaths {
-			storageid, opaqueid := utils.SplitStorageSpaceID(spaceID)
+			storageid, opaqueid, err := utils.SplitStorageSpaceID(spaceID)
+			if err != nil {
+				// TODO: log? error?
+				continue
+			}
 			spaces = append(spaces, &provider.StorageSpace{
 				Id: &provider.StorageSpaceId{OpaqueId: spaceID},
 				Opaque: &typesv1beta1.Opaque{
@@ -306,14 +306,20 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 			Status: status.NewInternal(ctx, "error calling UpdateStorageSpace"),
 		}, nil
 	}
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
 	return res, nil
 }
 
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	storageid, opaqeid := utils.SplitStorageSpaceID(req.Id.OpaqueId)
+	storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
+	if err != nil {
+		return &provider.DeleteStorageSpaceResponse{
+			Status: status.NewInvalidArg(ctx, "OpaqueID was empty"),
+		}, nil
+	}
+
 	c, _, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
 		StorageId: storageid,
 		OpaqueId:  opaqeid,
@@ -332,14 +338,14 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 		}, nil
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
 	return res, nil
 }
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 
-	srClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	srClient, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -379,10 +385,8 @@ func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provide
 		}, nil
 	}
 
-	spacePaths := decodeSpacePaths(res.Providers[0].Opaque)
-	if len(spacePaths) == 0 {
-		spacePaths[""] = res.Providers[0].ProviderPath
-	}
+	// NOTE: this will cause confusion if len(spacePath) > 1
+	spacePaths := decodeSpacePaths(res.Providers[0])
 	for _, spacePath := range spacePaths {
 		return &provider.GetHomeResponse{
 			Path:   spacePath,
@@ -508,7 +512,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return &gateway.InitiateFileUploadResponse{
 		Opaque:    storageRes.Opaque,
 		Status:    storageRes.Status,
@@ -551,7 +555,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -595,7 +599,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		return nil, errors.Wrap(err, "gateway: error calling Delete")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -637,8 +641,8 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
 	return c.Move(ctx, req)
 }
 
@@ -661,7 +665,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 		return nil, errors.Wrap(err, "gateway: error calling SetArbitraryMetadata")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -684,7 +688,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 		return nil, errors.Wrap(err, "gateway: error calling UnsetArbitraryMetadata")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -719,16 +723,9 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			continue
 		}
 
-		spaceID := ""
-		mountPath := providerInfos[i].ProviderPath
-
-		spacePaths := decodeSpacePaths(providerInfos[i].Opaque)
-		if len(spacePaths) == 0 {
-			spacePaths[""] = mountPath
-		}
-		for spaceID, mountPath = range spacePaths {
+		for spaceID, mountPath := range decodeSpacePaths(providerInfos[i]) {
 			var root *provider.ResourceId
-			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+			rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
 			if rootSpace != "" && rootNode != "" {
 				root = &provider.ResourceId{
 					StorageId: rootSpace,
@@ -884,16 +881,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			continue
 		}
 
-		spaceID := ""
-		mountPath := providerInfos[i].ProviderPath
-
-		spacePaths := decodeSpacePaths(providerInfos[i].Opaque)
-		if len(spacePaths) == 0 {
-			spacePaths[""] = mountPath
-		}
-		for spaceID, mountPath = range spacePaths {
+		for spaceID, mountPath := range decodeSpacePaths(providerInfos[i]) {
 			var root *provider.ResourceId
-			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+			rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
 			if rootSpace != "" && rootNode != "" {
 				root = &provider.ResourceId{
 					StorageId: rootSpace,
@@ -1071,7 +1061,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 		return nil, errors.Wrap(err, "gateway: error calling RestoreFileVersion")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1098,16 +1088,9 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 			}, nil
 		}
 
-		spaceID := ""
-		mountPath := providerInfos[i].ProviderPath
 		var root *provider.ResourceId
-
-		spacePaths := decodeSpacePaths(providerInfos[i].Opaque)
-		if len(spacePaths) == 0 {
-			spacePaths[""] = mountPath
-		}
-		for spaceID, mountPath = range spacePaths {
-			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+		for spaceID, mountPath := range decodeSpacePaths(providerInfos[i]) {
+			rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
 			root = &provider.ResourceId{
 				StorageId: rootSpace,
 				OpaqueId:  rootNode,
@@ -1177,16 +1160,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	var srcRef *provider.Reference
 	for i := range providerInfos {
 
-		spaceID := ""
-		mountPath := providerInfos[i].ProviderPath
 		var root *provider.ResourceId
-
-		spacePaths := decodeSpacePaths(providerInfos[i].Opaque)
-		if len(spacePaths) == 0 {
-			spacePaths[""] = mountPath
-		}
-		for spaceID, mountPath = range spacePaths {
-			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+		for spaceID, mountPath := range decodeSpacePaths(providerInfos[i]) {
+			rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
 			root = &provider.ResourceId{
 				StorageId: rootSpace,
 				OpaqueId:  rootNode,
@@ -1226,16 +1202,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	var dstProvider *registry.ProviderInfo
 	var dstRef *provider.Reference
 	for i := range dstProviderInfos {
-		spaceID := ""
-		mountPath := dstProviderInfos[i].ProviderPath
 		var root *provider.ResourceId
-
-		spacePaths := decodeSpacePaths(dstProviderInfos[i].Opaque)
-		if len(spacePaths) == 0 {
-			spacePaths[""] = mountPath
-		}
-		for spaceID, mountPath = range spacePaths {
-			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+		for spaceID, mountPath := range decodeSpacePaths(dstProviderInfos[i]) {
+			rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
 			root = &provider.ResourceId{
 				StorageId: rootSpace,
 				OpaqueId:  rootNode,
@@ -1287,9 +1256,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 		return nil, errors.Wrap(err, "gateway: error calling RestoreRecycleItem")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	if req.RestoreRef != nil {
-		RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
 	}
 
 	return res, nil
@@ -1312,7 +1281,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1361,20 +1330,23 @@ func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provi
 		return nil, nil, nil, err
 	}
 
-	mountPath := p.ProviderPath
-	var root *provider.ResourceId
-
-	if spacePaths := decodeSpacePaths(p.Opaque); len(spacePaths) > 0 {
-		for spaceID, spacePath := range spacePaths {
-			mountPath = spacePath
-			rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
-			root = &provider.ResourceId{
-				StorageId: rootSpace,
-				OpaqueId:  rootNode,
-			}
-			break // TODO can there be more than one space for a path?
+	var (
+		root      *provider.ResourceId
+		mountPath string
+	)
+	for spaceID, spacePath := range decodeSpacePaths(p) {
+		mountPath = spacePath
+		rootSpace, rootNode, err := utils.SplitStorageSpaceID(spaceID)
+		if err != nil {
+			continue
 		}
+		root = &provider.ResourceId{
+			StorageId: rootSpace,
+			OpaqueId:  rootNode,
+		}
+		break // TODO can there be more than one space for a path?
 	}
+
 	relativeReference := unwrap(ref, mountPath, root)
 
 	return c, p, relativeReference, nil
@@ -1387,7 +1359,17 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 		return nil, err
 	}
 
-	return Cached(c, s.statCache), nil
+	return s.cache.StorageProviderClient(c), nil
+}
+
+func (s *svc) getStorageRegistryClient(_ context.Context, address string) (registry.RegistryAPIClient, error) {
+	c, err := pool.GetStorageRegistryClient(address)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting a storage provider client")
+		return nil, err
+	}
+
+	return s.cache.StorageRegistryClient(c), nil
 }
 func (s *svc) findMountPoint(ctx context.Context, id *provider.ResourceId) ([]*registry.ProviderInfo, error) {
 	//TODO can we use a provider cache for mount points?
@@ -1412,14 +1394,10 @@ func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*regis
 	switch {
 	case ref == nil:
 		return nil, errtypes.BadRequest("missing reference")
-	case ref.ResourceId != nil: // can we use the provider cache?
-		// only the StorageId is used to look up the provider. the opaqueid can only be a share and as such part of a storage
-		if value, exists := s.providerCache.Get(ref.ResourceId.StorageId); exists == nil {
-			if providers, ok := value.([]*registry.ProviderInfo); ok {
-				return providers, nil
-			}
-		}
+	case ref.ResourceId != nil:
+		// no action needed in that case
 	case ref.Path != "": //  TODO implement a mount path cache in the registry?
+		// nothing to do here either
 	default:
 		return nil, errtypes.BadRequest("invalid reference, at least path or id must be set")
 	}
@@ -1447,7 +1425,6 @@ func (s *svc) findProvider(ctx context.Context, listReq *registry.ListStoragePro
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
 	res, err := c.ListStorageProviders(ctx, listReq)
-
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListStorageProviders")
 	}
@@ -1488,7 +1465,7 @@ func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceI
 		}
 		return providerRef
 	}
-	// build a copy to avoid side effects
+
 	return &provider.Reference{
 		ResourceId: &provider.ResourceId{
 			StorageId: ref.ResourceId.StorageId,
@@ -1498,14 +1475,23 @@ func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceI
 	}
 }
 
-func decodeSpacePaths(o *typesv1beta1.Opaque) map[string]string {
+func decodeSpacePaths(r *registry.ProviderInfo) map[string]string {
 	spacePaths := map[string]string{}
-	if o == nil {
-		return spacePaths
+	if r.Opaque != nil {
+		if entry, ok := r.Opaque.Map["space_paths"]; ok {
+			switch entry.Decoder {
+			case "json":
+				_ = json.Unmarshal(entry.Value, &spacePaths)
+			case "toml":
+				_ = toml.Unmarshal(entry.Value, &spacePaths)
+			case "xml":
+				_ = xml.Unmarshal(entry.Value, &spacePaths)
+			}
+		}
 	}
-	if entry, ok := o.Map["space_paths"]; ok {
-		_ = json.Unmarshal(entry.Value, &spacePaths)
-		// TODO log
+
+	if len(spacePaths) == 0 {
+		spacePaths[""] = r.ProviderPath
 	}
 	return spacePaths
 }

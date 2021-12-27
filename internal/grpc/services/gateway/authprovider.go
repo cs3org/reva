@@ -109,6 +109,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	// token obtained from the updated scope in the context.
 	token, err := s.tokenmgr.MintToken(ctx, &u, res.TokenScope)
 	if err != nil {
+		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error creating access token"),
 		}
@@ -151,25 +152,20 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
-	if _, err = s.createHomeCache.Get(res.User.Id.OpaqueId); err != nil {
-		createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
-		if err != nil {
-			log.Err(err).Msg("error calling CreateHome")
-			return &gateway.AuthenticateResponse{
-				Status: status.NewInternal(ctx, "error creating user home"),
-			}, nil
-		}
+	createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
+	if err != nil {
+		log.Err(err).Msg("error calling CreateHome")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewInternal(ctx, "error creating user home"),
+		}, nil
+	}
 
-		if createHomeRes.Status.Code != rpc.Code_CODE_OK && createHomeRes.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
-			err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
-			log.Err(err).Msg("error calling Createhome")
-			return &gateway.AuthenticateResponse{
-				Status: status.NewInternal(ctx, "error creating user home"),
-			}, nil
-		}
-		if s.c.CreateHomeCacheTTL > 0 {
-			_ = s.createHomeCache.Set(res.User.Id.OpaqueId, true)
-		}
+	if createHomeRes.Status.Code != rpc.Code_CODE_OK && createHomeRes.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
+		err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
+		log.Err(err).Msg("error calling Createhome")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewInternal(ctx, "error creating user home"),
+		}, nil
 	}
 
 	gwRes := &gateway.AuthenticateResponse{
