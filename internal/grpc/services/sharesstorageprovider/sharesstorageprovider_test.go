@@ -46,6 +46,9 @@ var (
 	BaseShare = &collaboration.ReceivedShare{
 		State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
 		Share: &collaboration.Share{
+			Id: &collaboration.ShareId{
+				OpaqueId: "shareid",
+			},
 			ResourceId: &sprovider.ResourceId{
 				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  "shareddir",
@@ -62,6 +65,9 @@ var (
 	BaseShareTwo = &collaboration.ReceivedShare{
 		State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
 		Share: &collaboration.Share{
+			Id: &collaboration.ShareId{
+				OpaqueId: "shareidtwo",
+			},
 			ResourceId: &sprovider.ResourceId{
 				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  "shareddir",
@@ -78,7 +84,7 @@ var (
 	BaseStatRequest = &sprovider.StatRequest{
 		Ref: &sprovider.Reference{
 			ResourceId: &sprovider.ResourceId{
-				StorageId: "share1-storageid",
+				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  "shareddir",
 			},
 			Path: ".",
@@ -88,7 +94,7 @@ var (
 	BaseListContainerRequest = &sprovider.ListContainerRequest{
 		Ref: &sprovider.Reference{
 			ResourceId: &sprovider.ResourceId{
-				StorageId: "share1-storageid",
+				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  "shareddir",
 			},
 			Path: ".",
@@ -126,12 +132,12 @@ var _ = Describe("Sharesstorageprovider", func() {
 		gw.On("Stat", mock.Anything, mock.AnythingOfType("*providerv1beta1.StatRequest")).Return(
 			func(_ context.Context, req *sprovider.StatRequest, _ ...grpc.CallOption) *sprovider.StatResponse {
 				switch req.Ref.GetPath() {
-				case "./share1-shareddir/share1-subdir":
+				case "./share1-subdir":
 					return &sprovider.StatResponse{
 						Status: status.NewOK(context.Background()),
 						Info: &sprovider.ResourceInfo{
 							Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
-							Path: "/share1-shareddir/share1-subdir",
+							Path: "share1-subdir",
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
 								OpaqueId:  "subdir",
@@ -142,12 +148,12 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Size: 10,
 						},
 					}
-				case "./share1-shareddir/share1-subdir/share1-subdir-file":
+				case "./share1-subdir/share1-subdir-file":
 					return &sprovider.StatResponse{
 						Status: status.NewOK(context.Background()),
 						Info: &sprovider.ResourceInfo{
 							Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-							Path: "/share1-shareddir/share1-subdir/share1-subdir-file",
+							Path: "share1-subdir-file",
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
 								OpaqueId:  "file",
@@ -158,12 +164,12 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Size: 20,
 						},
 					}
-				default:
+				case ".":
 					return &sprovider.StatResponse{
 						Status: status.NewOK(context.Background()),
 						Info: &sprovider.ResourceInfo{
 							Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
-							Path: "/share1-shareddir",
+							Path: "share1-shareddir",
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
 								OpaqueId:  "shareddir",
@@ -174,6 +180,8 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Size: 100,
 						},
 					}
+				default:
+					return nil
 				}
 			},
 			nil)
@@ -191,7 +199,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					case ".":
 						resp.Infos = append(resp.Infos, &sprovider.ResourceInfo{
 							Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
-							Path: "/share1-shareddir/share1-subdir",
+							Path: "share1-shareddir/share1-subdir",
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
 								OpaqueId:  "subdir",
@@ -201,7 +209,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					case "./share1-subdir":
 						resp.Infos = append(resp.Infos, &sprovider.ResourceInfo{
 							Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
-							Path: "/share1-shareddir/share1-subdir/share1-subdir-file",
+							Path: "share1-shareddir/share1-subdir/share1-subdir-file",
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
 								OpaqueId:  "file",
@@ -292,7 +300,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 				Expect(res.Info).ToNot(BeNil())
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(res.Info.Path).To(Equal("/share1-shareddir"))
+				Expect(res.Info.Path).To(Equal("share1-shareddir"))
 				// Expect(res.Info.Size).To(Equal(uint64(300))) TODO: Why 300?
 				Expect(res.Info.Size).To(Equal(uint64(100)))
 			})
@@ -306,7 +314,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 				Expect(res.Info).ToNot(BeNil())
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(res.Info.Path).To(Equal("/share1-shareddir"))
+				Expect(res.Info.Path).To(Equal("share1-shareddir"))
 				Expect(res.Info.Size).To(Equal(uint64(100)))
 			})
 
@@ -354,34 +362,34 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Info).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(res.Info.Path).To(Equal("/share1-shareddir"))
+				Expect(res.Info.Path).To(Equal("share1-shareddir"))
 				Expect(res.Info.PermissionSet.Stat).To(BeTrue())
 				// Expect(res.Info.PermissionSet.ListContainer).To(BeTrue()) // TODO reenable
 			})
 
 			It("stats a subfolder in a share", func() {
 				statReq := BaseStatRequest
-				statReq.Ref.Path = "./share1-shareddir/share1-subdir"
+				statReq.Ref.Path = "./share1-subdir"
 				res, err := s.Stat(ctx, statReq)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 				Expect(res.Info).ToNot(BeNil())
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(res.Info.Path).To(Equal("/share1-shareddir/share1-subdir"))
+				Expect(res.Info.Path).To(Equal("share1-subdir"))
 				Expect(res.Info.Size).To(Equal(uint64(10)))
 			})
 
 			It("stats a shared file", func() {
 				statReq := BaseStatRequest
-				statReq.Ref.Path = "./share1-shareddir/share1-subdir/share1-subdir-file"
+				statReq.Ref.Path = "./share1-subdir/share1-subdir-file"
 				res, err := s.Stat(ctx, statReq)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 				Expect(res.Info).ToNot(BeNil())
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_FILE))
-				Expect(res.Info.Path).To(Equal("/share1-shareddir/share1-subdir/share1-subdir-file"))
+				Expect(res.Info.Path).To(Equal("share1-subdir-file"))
 				Expect(res.Info.Size).To(Equal(uint64(20)))
 			})
 		})
@@ -396,7 +404,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(len(res.Infos)).To(Equal(1))
 
 				entry := res.Infos[0]
-				Expect(entry.Path).To(Equal("/share1-shareddir/share1-subdir"))
+				Expect(entry.Path).To(Equal("share1-shareddir/share1-subdir"))
 			})
 
 			It("traverses into subfolders of specific shares", func() {
@@ -409,7 +417,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(len(res.Infos)).To(Equal(1))
 
 				entry := res.Infos[0]
-				Expect(entry.Path).To(Equal("/share1-shareddir/share1-subdir/share1-subdir-file"))
+				Expect(entry.Path).To(Equal("share1-shareddir/share1-subdir/share1-subdir-file"))
 			})
 		})
 
