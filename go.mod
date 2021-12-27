@@ -51,7 +51,7 @@ require (
 	github.com/pkg/xattr v0.4.4
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus/alertmanager v0.23.0
-	github.com/rs/cors v1.8.0
+	github.com/rs/cors v1.8.2
 	github.com/rs/zerolog v1.26.0
 	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
