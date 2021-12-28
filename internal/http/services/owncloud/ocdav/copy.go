@@ -141,8 +141,8 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		// descend for children
 		listReq := &provider.ListContainerRequest{
 			Ref: &provider.Reference{
-				// FIXME ResourceId: cp.sourceInfo.Id,?
-				Path: cp.sourceInfo.Path,
+				ResourceId: cp.sourceInfo.Id,
+				Path:       cp.sourceInfo.Path,
 			},
 		}
 		res, err := client.ListContainer(ctx, listReq)
@@ -156,8 +156,8 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		for i := range res.Infos {
 			childDst := &provider.Reference{
-				// FIXME ResourceId: cp.sourceInfo.Id,?
-				Path: path.Join(cp.destination.Path, path.Base(res.Infos[i].Path)),
+				ResourceId: cp.sourceInfo.Id,
+				Path:       path.Join(cp.destination.Path, path.Base(res.Infos[i].Path)),
 			}
 			err := s.executePathCopy(ctx, client, w, r, &copy{sourceInfo: res.Infos[i], destination: childDst, depth: cp.depth, successCode: cp.successCode})
 			if err != nil {
@@ -579,10 +579,13 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 			HandleErrorStatus(log, w, delRes.Status)
 			return nil
 		}
-	} else {
+	} else if p := path.Dir(dstRef.Path); p != "" {
 		// check if an intermediate path / the parent exists
-		dstRef.Path = path.Dir(dstRef.Path)
-		intStatReq := &provider.StatRequest{Ref: dstRef}
+		pRef := &provider.Reference{
+			ResourceId: dstRef.ResourceId,
+			Path:       p,
+		}
+		intStatReq := &provider.StatRequest{Ref: pRef}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
@@ -592,7 +595,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		if intStatRes.Status.Code != rpc.Code_CODE_OK {
 			if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
-				log.Debug().Interface("parent", dstRef).Interface("status", intStatRes.Status).Msg("conflict")
+				log.Debug().Interface("parent", pRef).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
 			} else {
 				HandleErrorStatus(log, w, srcStatRes.Status)
