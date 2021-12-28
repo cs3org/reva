@@ -307,8 +307,8 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			return
 		}
 		sReq = &provider.StatRequest{Ref: &provider.Reference{
-			// FIXME ResourceId?
-			Path: chunk.Path,
+			ResourceId: ref.ResourceId,
+			Path:       chunk.Path,
 		}}
 	}
 
