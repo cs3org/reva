@@ -55,22 +55,13 @@ func GetNextcloudServerMock(called *[]string) http.Handler {
 			panic("Error reading response into buffer")
 		}
 		var key = fmt.Sprintf("%s %s %s", r.Method, r.URL, buf.String())
-		fmt.Printf("Nextcloud Server Mock key components %s %d %s %d %s %d\n", r.Method, len(r.Method), r.URL.String(), len(r.URL.String()), buf.String(), len(buf.String()))
-		fmt.Printf("Nextcloud Server Mock key %s\n", key)
 		*called = append(*called, key)
 		response := responses[key]
 		if (response == Response{}) {
 			key = fmt.Sprintf("%s %s %s %s", r.Method, r.URL, buf.String(), serverState)
-			fmt.Printf("Nextcloud Server Mock key with State %s\n", key)
-			// *called = append(*called, key)
 			response = responses[key]
 		}
 		if (response == Response{}) {
-			fmt.Println("ERROR!!")
-			fmt.Println("ERROR!!")
-			fmt.Printf("Nextcloud Server Mock key not found! %s\n", key)
-			fmt.Println("ERROR!!")
-			fmt.Println("ERROR!!")
 			response = Response{200, fmt.Sprintf("response not defined! %s", key), serverStateEmpty}
 		}
 		serverState = responses[key].newServerState

@@ -42,14 +42,16 @@ func init() {
 // Manager is the Nextcloud-based implementation of the auth.Manager interface
 // see https://github.com/cs3org/reva/blob/v1.13.0/pkg/auth/auth.go#L32-L35
 type Manager struct {
-	client   *http.Client
-	endPoint string
+	client       *http.Client
+	sharedSecret string
+	endPoint     string
 }
 
 // AuthManagerConfig contains config for a Nextcloud-based AuthManager
 type AuthManagerConfig struct {
-	EndPoint string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
-	MockHTTP bool   `mapstructure:"mock_http"`
+	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
+	SharedSecret string `mapstructure:"shared_secret"`
+	MockHTTP     bool   `mapstructure:"mock_http"`
 }
 
 // Action describes a REST request to forward to the Nextcloud backend
@@ -93,12 +95,16 @@ func NewAuthManager(c *AuthManagerConfig) (*Manager, error) {
 		// Wait for SetHTTPClient to be called later
 		client = nil
 	} else {
+		if len(c.EndPoint) == 0 {
+			return nil, errors.New("Please specify 'endpoint' in '[grpc.services.authprovider.auth_managers.nextcloud]'")
+		}
 		client = &http.Client{}
 	}
 
 	return &Manager{
-		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
-		client:   client,
+		endPoint:     c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
+		sharedSecret: c.SharedSecret,
+		client:       client,
 	}, nil
 }
 
@@ -115,8 +121,9 @@ func (am *Manager) SetHTTPClient(c *http.Client) {
 func (am *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	log := appctx.GetLogger(ctx)
 	url := am.endPoint + "~" + a.username + "/api/auth/" + a.verb
-	log.Info().Msgf("am.do %s %s", url, a.argS)
+	log.Info().Msgf("am.do %s %s %s", url, a.argS, am.sharedSecret)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
+	req.Header.Set("X-Reva-Secret", am.sharedSecret)
 	if err != nil {
 		return 0, nil, err
 	}

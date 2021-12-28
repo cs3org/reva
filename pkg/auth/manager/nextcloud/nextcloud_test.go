@@ -20,7 +20,6 @@ package nextcloud_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"google.golang.org/grpc/metadata"
@@ -43,7 +42,6 @@ func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
 	var conf *nextcloud.AuthManagerConfig
 
 	ncHost := os.Getenv("NEXTCLOUD")
-	fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
 	if len(ncHost) == 0 {
 		conf = &nextcloud.AuthManagerConfig{
 			EndPoint: "http://mock.com/apps/sciencemesh/",

@@ -44,14 +44,16 @@ func init() {
 // Manager is the Nextcloud-based implementation of the share.Manager interface
 // see https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 type Manager struct {
-	client   *http.Client
-	endPoint string
+	client       *http.Client
+	sharedSecret string
+	endPoint     string
 }
 
 // UserManagerConfig contains config for a Nextcloud-based UserManager
 type UserManagerConfig struct {
-	EndPoint string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user management"`
-	MockHTTP bool   `mapstructure:"mock_http"`
+	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user management"`
+	SharedSecret string `mapstructure:"shared_secret"`
+	MockHTTP     bool   `mapstructure:"mock_http"`
 }
 
 func (c *UserManagerConfig) init() {
@@ -94,12 +96,16 @@ func NewUserManager(c *UserManagerConfig) (*Manager, error) {
 		// Wait for SetHTTPClient to be called later
 		client = nil
 	} else {
+		if len(c.EndPoint) == 0 {
+			return nil, errors.New("Please specify 'endpoint' in '[grpc.services.userprovider.drivers.nextcloud]'")
+		}
 		client = &http.Client{}
 	}
 
 	return &Manager{
-		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
-		client:   client,
+		endPoint:     c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
+		sharedSecret: c.SharedSecret,
+		client:       client,
 	}, nil
 }
 
@@ -117,16 +123,13 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
-func (um *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
-	user, err := getUser(ctx)
-	if err != nil {
-		return 0, nil, err
-	}
-	url := um.endPoint + "~" + user.Username + "/api/user/" + a.verb
+func (um *Manager) do(ctx context.Context, a Action, username string) (int, []byte, error) {
+	url := um.endPoint + "~" + username + "/api/user/" + a.verb
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
 		panic(err)
 	}
+	req.Header.Set("X-Reva-Secret", um.sharedSecret)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := um.client.Do(req)
@@ -146,21 +149,13 @@ func (um *Manager) Configure(ml map[string]interface{}) error {
 
 // GetUser method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
-	bodyStr, err := json.Marshal(uid)
-	if err != nil {
-		return nil, err
-	}
-	_, respBody, err := um.do(ctx, Action{"GetUser", string(bodyStr)})
-	if err != nil {
-		return nil, err
-	}
-
-	result := &userpb.User{}
-	err = json.Unmarshal(respBody, &result)
-	if err != nil {
-		return nil, err
-	}
-	return result, err
+	// FIXME: work around https://github.com/pondersource/nc-sciencemesh/issues/148
+	return &userpb.User{
+		Id: &userpb.UserId{
+			OpaqueId: uid.OpaqueId,
+			Idp:      "local",
+		},
+	}, nil
 }
 
 // GetUserByClaim method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
@@ -173,8 +168,13 @@ func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string) (*us
 		Claim: claim,
 		Value: value,
 	}
+	user, err := getUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	bodyStr, _ := json.Marshal(bodyObj)
-	_, respBody, err := um.do(ctx, Action{"GetUserByClaim", string(bodyStr)})
+	_, respBody, err := um.do(ctx, Action{"GetUserByClaim", string(bodyStr)}, user.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,12 @@ func (um *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]str
 	if err != nil {
 		return nil, err
 	}
-	_, respBody, err := um.do(ctx, Action{"GetUserGroups", string(bodyStr)})
+	user, err := getUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	_, respBody, err := um.do(ctx, Action{"GetUserGroups", string(bodyStr)}, user.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +211,12 @@ func (um *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]str
 
 // FindUsers method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 func (um *Manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
-	_, respBody, err := um.do(ctx, Action{"FindUsers", query})
+	user, err := getUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	_, respBody, err := um.do(ctx, Action{"FindUsers", query}, user.Username)
 	if err != nil {
 		return nil, err
 	}

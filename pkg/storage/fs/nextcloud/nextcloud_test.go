@@ -20,7 +20,6 @@ package nextcloud_test
 
 import (
 	"context"
-	"fmt"
 
 	// "fmt"
 	"io"
@@ -47,7 +46,6 @@ func setUpNextcloudServer() (*nextcloud.StorageDriver, *[]string, func()) {
 	var conf *nextcloud.StorageDriverConfig
 
 	ncHost := os.Getenv("NEXTCLOUD")
-	fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
 	if len(ncHost) == 0 {
 		conf = &nextcloud.StorageDriverConfig{
 			EndPoint: "http://mock.com/apps/sciencemesh/",

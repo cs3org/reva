@@ -20,7 +20,6 @@ package nextcloud_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"google.golang.org/genproto/protobuf/field_mask"
@@ -47,7 +46,6 @@ func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
 	var conf *nextcloud.ShareManagerConfig
 
 	ncHost := os.Getenv("NEXTCLOUD")
-	fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
 	if len(ncHost) == 0 {
 		conf = &nextcloud.ShareManagerConfig{
 			EndPoint: "http://mock.com/apps/sciencemesh/",
@@ -132,7 +130,6 @@ var _ = Describe("Nextcloud", func() {
 	// Share(ctx context.Context, md *provider.ResourceInfo, g *ocm.ShareGrant) (*ocm.Share, error)
 	Describe("Share", func() {
 		It("calls the Share endpoint", func() {
-			fmt.Println("Calling setUpNextCloudServer!")
 			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
 			var md = &provider.ResourceId{
@@ -246,7 +243,7 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/Share {"md":{"opaque_id":"fileid-/some/path"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"permissions":{"get_path":true}}}}`)
+			checkCalled(called, `POST /index.php/apps/sciencemesh/~marie/api/ocm/addReceivedShare {"md":{"opaque_id":"fileid-/some/path"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"permissions":{"get_path":true}}},"provider_domain":"cern.ch","resource_type":"file","provider_id":2,"owner_opaque_id":"einstein","owner_display_name":"Albert Einstein","protocol":{"name":"webdav","options":{"sharedSecret":"secret","permissions":"webdav-property"}}}`)
 		})
 	})
 
@@ -324,7 +321,7 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/GetShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
+			checkCalled(called, `POST /index.php/apps/sciencemesh/~marie/api/ocm/GetShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
 	})
 
@@ -342,7 +339,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 			})
 			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/Unshare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
+			checkCalled(called, `POST /index.php/apps/sciencemesh/~marie/api/ocm/Unshare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
 	})
 
@@ -443,7 +440,7 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateShare {"ref":{"Spec":{"Id":{"opaque_id":"some-share-id"}}},"p":{"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`)
+			checkCalled(called, `POST /index.php/apps/sciencemesh/~marie/api/ocm/UpdateShare {"ref":{"Spec":{"Id":{"opaque_id":"some-share-id"}}},"p":{"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`)
 		})
 	})
 
@@ -527,7 +524,7 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/ListShares [{"type":4,"Term":{"Creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}]`)
+			checkCalled(called, `POST /index.php/apps/sciencemesh/~marie/api/ocm/ListShares [{"type":4,"Term":{"Creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}]`)
 		})
 	})
 
@@ -603,7 +600,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/ListReceivedShares `)
+			checkCalled(called, `POST /index.php/apps/sciencemesh/~marie/api/ocm/ListReceivedShares `)
 		})
 	})
 
@@ -684,7 +681,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/GetReceivedShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
+			checkCalled(called, `POST /index.php/apps/sciencemesh/~marie/api/ocm/GetReceivedShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
 	})
 
@@ -825,7 +822,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateReceivedShare {"received_share":{"share":{"id":{},"resource_id":{},"permissions":{"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}},"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890}},"state":2},"field_mask":{"paths":["state"]}}`)
+			checkCalled(called, `POST /index.php/apps/sciencemesh/~marie/api/ocm/UpdateReceivedShare {"received_share":{"share":{"id":{},"resource_id":{},"permissions":{"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}},"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890}},"state":2},"field_mask":{"paths":["state"]}}`)
 		})
 	})
 

@@ -44,15 +44,17 @@ func init() {
 
 // StorageDriverConfig is the configuration struct for a NextcloudStorageDriver
 type StorageDriverConfig struct {
-	EndPoint string `mapstructure:"end_point"` // e.g. "http://nc/apps/sciencemesh/~alice/"
-	MockHTTP bool   `mapstructure:"mock_http"`
+	EndPoint     string `mapstructure:"endpoint"` // e.g. "http://nc/apps/sciencemesh/~alice/"
+	SharedSecret string `mapstructure:"shared_secret"`
+	MockHTTP     bool   `mapstructure:"mock_http"`
 }
 
 // StorageDriver implements the storage.FS interface
 // and connects with a StorageDriver server as its backend
 type StorageDriver struct {
-	endPoint string
-	client   *http.Client
+	endPoint     string
+	sharedSecret string
+	client       *http.Client
 }
 
 func parseConfig(m map[string]interface{}) (*StorageDriverConfig, error) {
@@ -90,11 +92,15 @@ func NewStorageDriver(c *StorageDriverConfig) (*StorageDriver, error) {
 		client, _ = TestingHTTPClient(h)
 		// FIXME: defer teardown()
 	} else {
+		if len(c.EndPoint) == 0 {
+			return nil, errors.New("Please specify 'endpoint' in '[grpc.services.storageprovider.drivers.nextcloud]'")
+		}
 		client = &http.Client{}
 	}
 	return &StorageDriver{
-		endPoint: c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
-		client:   client,
+		endPoint:     c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
+		sharedSecret: c.SharedSecret,
+		client:       client,
 	}, nil
 }
 
@@ -132,6 +138,7 @@ func (nc *StorageDriver) doUpload(ctx context.Context, filePath string, r io.Rea
 		panic(err)
 	}
 
+	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
 	// set the request header Content-Type for the upload
 	// FIXME: get the actual content type from somewhere
 	req.Header.Set("Content-Type", "text/plain")
@@ -177,6 +184,7 @@ func (nc *StorageDriver) doDownloadRevision(ctx context.Context, filePath string
 	// See https://github.com/pondersource/nc-sciencemesh/issues/5
 	url := nc.endPoint + "~" + user.Username + "/api/storage/DownloadRevision/" + url.QueryEscape(key) + "/" + filePath
 	req, err := http.NewRequest(http.MethodGet, url, strings.NewReader(""))
+	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
 	if err != nil {
 		panic(err)
 	}
@@ -198,12 +206,15 @@ func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) 
 	if err != nil {
 		return 0, nil, err
 	}
-	url := nc.endPoint + "~" + user.Username + "/api/storage/" + a.verb
+	// See https://github.com/cs3org/reva/issues/2377
+	// for discussion of user.Username vs user.Id.OpaqueId
+	url := nc.endPoint + "~" + user.Id.OpaqueId + "/api/storage/" + a.verb
 	log.Info().Msgf("nc.do req %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
 		return 0, nil, err
 	}
+	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := nc.client.Do(req)
@@ -335,10 +346,7 @@ func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("calling!")
-	fmt.Println(string(bodyStr))
 	status, body, err := nc.do(ctx, Action{"ListFolder", string(bodyStr)})
-	fmt.Println(string(body))
 	if err != nil {
 		return nil, err
 	}
@@ -806,7 +814,6 @@ func (nc *StorageDriver) UpdateStorageSpace(ctx context.Context, req *provider.U
 		return nil, err
 	}
 	var respObj provider.UpdateStorageSpaceResponse
-	fmt.Println(string(respBody))
 	err = json.Unmarshal(respBody, &respObj)
 	if err != nil {
 		return nil, err
