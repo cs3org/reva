@@ -343,8 +343,8 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		resourceInfos = append(resourceInfos, parentInfo)
 		parentRes, err := client.Stat(ctx, &provider.StatRequest{
 			Ref: &provider.Reference{
-				// FIXME ResourceId?
-				Path: parentPath,
+				ResourceId: parentInfo.Id,
+				Path:       parentPath,
 			},
 			ArbitraryMetadataKeys: metadataKeys,
 		})

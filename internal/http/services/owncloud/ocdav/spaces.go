@@ -143,7 +143,7 @@ func (s *svc) lookUpStorageSpaceForPath(ctx context.Context, path string) (*stor
 }
 
 // lookUpStorageSpacesForPathWithChildren returns:
-// tha list of storage spaces responsible for a path
+// the list of storage spaces responsible for a path
 // the status and error for the lookup
 func (s *svc) lookUpStorageSpacesForPathWithChildren(ctx context.Context, path string) ([]*storageProvider.StorageSpace, *rpc.Status, error) {
 	// Get the getway client
