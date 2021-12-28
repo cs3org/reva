@@ -434,7 +434,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 			}
 
 			switch {
-			case spacePath == path:
+			case spacePath == path && unique:
 				spacePaths[space.Id.OpaqueId] = spacePath
 
 			case strings.HasPrefix(spacePath, path) && !unique:
