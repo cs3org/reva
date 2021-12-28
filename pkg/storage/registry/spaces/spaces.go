@@ -437,6 +437,10 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 			case spacePath == path && unique:
 				spacePaths[space.Id.OpaqueId] = spacePath
 
+				deepestMountPath = spacePath
+				deepestMountSpace = space
+				deepestMountPathProvider = p
+
 			case strings.HasPrefix(spacePath, path) && !unique:
 				// and add all providers below and exactly matching the path
 				// requested /foo, mountPath /foo/sub
