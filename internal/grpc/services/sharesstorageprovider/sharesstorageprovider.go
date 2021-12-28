@@ -325,7 +325,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				fetchShares = true
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, _, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			spaceid, shareid, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
 			if err != nil {
 				continue
 			}
@@ -335,6 +335,8 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 					Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND},
 				}, nil
 			}
+
+			spaceID = &provider.ResourceId{StorageId: spaceid, OpaqueId: shareid}
 		}
 	}
 
