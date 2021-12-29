@@ -607,10 +607,6 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 	var sourceProviderInfo, destinationProviderInfo *registry.ProviderInfo
 	var err error
 
-	rename := utils.IsAbsolutePathReference(req.Source) &&
-		utils.IsAbsolutePathReference(req.Destination) &&
-		filepath.Dir(req.Source.Path) == filepath.Dir(req.Destination.Path)
-
 	c, sourceProviderInfo, req.Source, err = s.findAndUnwrap(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
@@ -620,7 +616,7 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 
 	// do we try to rename the root of a mountpoint?
 	// TODO how do we determine if the destination resides on the same storage space?
-	if rename && req.Source.Path == "." {
+	if req.Source.Path == "." {
 		req.Destination.ResourceId = req.Source.ResourceId
 		req.Destination.Path = utils.MakeRelativePath(filepath.Base(req.Destination.Path))
 	} else {
