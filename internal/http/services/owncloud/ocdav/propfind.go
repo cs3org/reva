@@ -344,12 +344,11 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		case !spacesPropfind && parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
 			// The propfind is requested for a file that exists
 			// In this case, we can stat the parent directory and return both
-			parentPath := path.Dir(parentInfo.Path)
 			resourceInfos = append(resourceInfos, parentInfo)
 			parentRes, err := client.Stat(ctx, &provider.StatRequest{
 				Ref: &provider.Reference{
 					ResourceId: parentInfo.Id,
-					Path:       parentPath,
+					Path:       ".",
 				},
 				ArbitraryMetadataKeys: metadataKeys,
 			})
@@ -360,7 +359,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			} else if parentRes.Status.Code != rpc.Code_CODE_OK {
 				if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 					w.WriteHeader(http.StatusNotFound)
-					m := fmt.Sprintf("Resource %v not found", parentPath)
+					m := fmt.Sprintf("Resource %v not found", parentInfo.Id)
 					b, err := Marshal(exception{
 						code:    SabredavNotFound,
 						message: m,
