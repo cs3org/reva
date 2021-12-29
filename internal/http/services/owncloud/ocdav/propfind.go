@@ -269,7 +269,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	var mostRecentChildInfo *provider.ResourceInfo
 	var aggregatedChildSize uint64
 	parentInfos := make([]*provider.ResourceInfo, 0, len(spaces))
-	for _, space := range spaces {
+	for i, space := range spaces {
 		if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
 			continue // not mounted
 		}
@@ -285,7 +285,9 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		// adjust path
 		info.Path = spacePath
 
-		parentInfos = append(parentInfos, info)
+		if i == 0 || depth != "0" {
+			parentInfos = append(parentInfos, info)
+		}
 
 		// Check if the space is a child of the requested path
 		if requestPath != spacePath && strings.HasPrefix(spacePath, requestPath) {
