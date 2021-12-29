@@ -267,8 +267,8 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	// we need to stat all spaces to aggregate the root etag, mtime and size
 	// TODO cache per space (hah, no longer per user + per space!)
 	var mostRecentChildInfo *provider.ResourceInfo
-	var parentInfos []*provider.ResourceInfo
 	var aggregatedChildSize uint64
+	parentInfos := make([]*provider.ResourceInfo, 0, len(spaces))
 	for _, space := range spaces {
 		if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
 			continue // not mounted
@@ -317,18 +317,18 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		HandleWebdavError(&log, w, b, err)
 		return nil, nil, false
 	}
-	if mostRecentChildInfo != nil {
-		// FIXME: update parent infos
-		//if parentInfo.Mtime == nil || (parentInfo.Mtime != nil && utils.TSToUnixNano(parentInfo.Mtime) > utils.TSToUnixNano(mostRecentChildInfo.Mtime)) {
-		//parentInfo.Mtime = mostRecentChildInfo.Mtime
-		//parentInfo.Etag = mostRecentChildInfo.Etag
-		//}
-		//if parentInfo.Etag == "" && mostRecentChildInfo.Etag != parentInfo.Etag {
-		//parentInfo.Etag = mostRecentChildInfo.Etag
-		//}
-	}
+	// if mostRecentChildInfo != nil {
+	// FIXME: update parent infos
+	// if parentInfo.Mtime == nil || (parentInfo.Mtime != nil && utils.TSToUnixNano(parentInfo.Mtime) > utils.TSToUnixNano(mostRecentChildInfo.Mtime)) {
+	// parentInfo.Mtime = mostRecentChildInfo.Mtime
+	// parentInfo.Etag = mostRecentChildInfo.Etag
+	// }
+	// if parentInfo.Etag == "" && mostRecentChildInfo.Etag != parentInfo.Etag {
+	// parentInfo.Etag = mostRecentChildInfo.Etag
+	// }
+	// }
 	// add size of children
-	//parentInfo.Size += aggregatedChildSize
+	// parentInfo.Size += aggregatedChildSize
 	/*
 		if spacesPropfind {
 			res.Info.Path = ref.Path
@@ -370,7 +370,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				HandleErrorStatus(&log, w, parentRes.Status)
 				return nil, nil, false
 			}
-			parentInfo = parentRes.Info
+			// parentInfo = parentRes.Info
 
 		case parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
 			// TODO for all spaces list or stat
@@ -448,11 +448,6 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			}
 
 		case depth == "infinity":
-			//log.Error().Err(err).Msg("FIXME not supported")
-			//w.WriteHeader(http.StatusInternalServerError)
-			//return nil, nil, false
-
-			// FIXME: doesn't work cross-storage as the results will have the wrong paths!
 			// use a stack to explore sub-containers breadth-first
 			stack := []*provider.ResourceInfo{parentInfo}
 			for len(stack) != 0 {
