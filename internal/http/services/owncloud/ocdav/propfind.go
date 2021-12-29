@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -266,7 +267,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	// we need to stat all spaces to aggregate the root etag, mtime and size
 	// TODO cache per space (hah, no longer per user + per space!)
 	var mostRecentChildInfo *provider.ResourceInfo
-	var parentInfo *provider.ResourceInfo
+	var parentInfos []*provider.ResourceInfo
 	var aggregatedChildSize uint64
 	for _, space := range spaces {
 		if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
@@ -280,6 +281,12 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		if err != nil || status.Code != rpc.Code_CODE_OK {
 			continue
 		}
+
+		// adjust path
+		info.Path = spacePath
+
+		parentInfos = append(parentInfos, info)
+
 		// Check if the space is a child of the requested path
 		if requestPath != spacePath && strings.HasPrefix(spacePath, requestPath) {
 			// aggregate child metadata
@@ -297,13 +304,9 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			}
 			continue
 		}
-		if parentInfo == nil {
-			parentInfo = info
-			continue
-		}
 	}
 
-	if parentInfo == nil {
+	if len(parentInfos) == 0 {
 		// TODO if we have children invent node on the fly
 		w.WriteHeader(http.StatusNotFound)
 		m := fmt.Sprintf("Resource %v not found", r.URL.Path)
@@ -315,16 +318,17 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		return nil, nil, false
 	}
 	if mostRecentChildInfo != nil {
-		if parentInfo.Mtime == nil || (parentInfo.Mtime != nil && utils.TSToUnixNano(parentInfo.Mtime) > utils.TSToUnixNano(mostRecentChildInfo.Mtime)) {
-			parentInfo.Mtime = mostRecentChildInfo.Mtime
-			parentInfo.Etag = mostRecentChildInfo.Etag
-		}
-		if parentInfo.Etag == "" && mostRecentChildInfo.Etag != parentInfo.Etag {
-			parentInfo.Etag = mostRecentChildInfo.Etag
-		}
+		// FIXME: update parent infos
+		//if parentInfo.Mtime == nil || (parentInfo.Mtime != nil && utils.TSToUnixNano(parentInfo.Mtime) > utils.TSToUnixNano(mostRecentChildInfo.Mtime)) {
+		//parentInfo.Mtime = mostRecentChildInfo.Mtime
+		//parentInfo.Etag = mostRecentChildInfo.Etag
+		//}
+		//if parentInfo.Etag == "" && mostRecentChildInfo.Etag != parentInfo.Etag {
+		//parentInfo.Etag = mostRecentChildInfo.Etag
+		//}
 	}
 	// add size of children
-	parentInfo.Size += aggregatedChildSize
+	//parentInfo.Size += aggregatedChildSize
 	/*
 		if spacesPropfind {
 			res.Info.Path = ref.Path
@@ -332,145 +336,140 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 
 		parentInfo := res.Info
 	*/
-	resourceInfos := []*provider.ResourceInfo{parentInfo}
+	resourceInfos := parentInfos
 	childInfos := map[string]*provider.ResourceInfo{}
 
-	switch {
-	case !spacesPropfind && parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
-		// The propfind is requested for a file that exists
-		// In this case, we can stat the parent directory and return both
-		parentPath := path.Dir(parentInfo.Path)
-		resourceInfos = append(resourceInfos, parentInfo)
-		parentRes, err := client.Stat(ctx, &provider.StatRequest{
-			Ref: &provider.Reference{
-				ResourceId: parentInfo.Id,
-				Path:       parentPath,
-			},
-			ArbitraryMetadataKeys: metadataKeys,
-		})
-		if err != nil {
-			log.Error().Err(err).Msg("error sending a grpc stat request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return nil, nil, false
-		} else if parentRes.Status.Code != rpc.Code_CODE_OK {
-			if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-				w.WriteHeader(http.StatusNotFound)
-				m := fmt.Sprintf("Resource %v not found", parentPath)
-				b, err := Marshal(exception{
-					code:    SabredavNotFound,
-					message: m,
-				})
-				HandleWebdavError(&log, w, b, err)
+	for _, parentInfo := range parentInfos {
+		switch {
+		case !spacesPropfind && parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+			// The propfind is requested for a file that exists
+			// In this case, we can stat the parent directory and return both
+			parentPath := path.Dir(parentInfo.Path)
+			resourceInfos = append(resourceInfos, parentInfo)
+			parentRes, err := client.Stat(ctx, &provider.StatRequest{
+				Ref: &provider.Reference{
+					ResourceId: parentInfo.Id,
+					Path:       parentPath,
+				},
+				ArbitraryMetadataKeys: metadataKeys,
+			})
+			if err != nil {
+				log.Error().Err(err).Msg("error sending a grpc stat request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return nil, nil, false
+			} else if parentRes.Status.Code != rpc.Code_CODE_OK {
+				if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+					w.WriteHeader(http.StatusNotFound)
+					m := fmt.Sprintf("Resource %v not found", parentPath)
+					b, err := Marshal(exception{
+						code:    SabredavNotFound,
+						message: m,
+					})
+					HandleWebdavError(&log, w, b, err)
+					return nil, nil, false
+				}
+				HandleErrorStatus(&log, w, parentRes.Status)
 				return nil, nil, false
 			}
-			HandleErrorStatus(&log, w, parentRes.Status)
-			return nil, nil, false
-		}
-		parentInfo = parentRes.Info
+			parentInfo = parentRes.Info
 
-	case parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
-		// TODO for all spaces list or stat
-		for _, space := range spaces {
-			if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
-				continue // not mounted
-			}
-			spacePath := string(space.Opaque.Map["path"].Value)
+		case parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
+			// TODO for all spaces list or stat
+			for _, space := range spaces {
+				if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
+					continue // not mounted
+				}
+				spacePath := string(space.Opaque.Map["path"].Value)
 
-			switch {
-			case strings.HasPrefix(requestPath, spacePath):
-				req := &provider.ListContainerRequest{
-					Ref:                   makeRelativeReference(space, requestPath),
-					ArbitraryMetadataKeys: metadataKeys,
-				}
-				res, err := client.ListContainer(ctx, req)
-				if err != nil {
-					log.Error().Err(err).Msg("error sending list container grpc request")
-					w.WriteHeader(http.StatusInternalServerError)
-					return nil, nil, false
-				}
+				switch {
+				case strings.HasPrefix(requestPath, spacePath):
+					req := &provider.ListContainerRequest{
+						Ref:                   makeRelativeReference(space, requestPath),
+						ArbitraryMetadataKeys: metadataKeys,
+					}
+					res, err := client.ListContainer(ctx, req)
+					if err != nil {
+						log.Error().Err(err).Msg("error sending list container grpc request")
+						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
 
-				if res.Status.Code != rpc.Code_CODE_OK {
-					HandleErrorStatus(&log, w, res.Status)
-					return nil, nil, false
-				}
-				for _, info := range res.Infos {
-					info.Path = path.Join(requestPath, info.Path)
-				}
-				resourceInfos = append(resourceInfos, res.Infos...)
-			case strings.HasPrefix(spacePath, requestPath): // space is a child of the requested path
-				// stat root and add as child
-				req := &provider.StatRequest{
-					Ref: &provider.Reference{
-						ResourceId: space.Root,
-						Path:       "."},
-					// FIXME for shares the root currently is a resource in the sharesstorageprovider
-					// but the gateway/spaces registry does not find it
-					ArbitraryMetadataKeys: metadataKeys,
-				}
+					if res.Status.Code != rpc.Code_CODE_OK {
+						HandleErrorStatus(&log, w, res.Status)
+						return nil, nil, false
+					}
+					for _, info := range res.Infos {
+						info.Path = path.Join(requestPath, info.Path)
+					}
+					resourceInfos = append(resourceInfos, res.Infos...)
+				case strings.HasPrefix(spacePath, requestPath): // space is a child of the requested path
+					// stat root and add as child
+					req := &provider.StatRequest{
+						Ref: &provider.Reference{
+							ResourceId: space.Root,
+							Path:       "."},
+						// FIXME for shares the root currently is a resource in the sharesstorageprovider
+						// but the gateway/spaces registry does not find it
+						ArbitraryMetadataKeys: metadataKeys,
+					}
 
-				res, err := client.Stat(ctx, req)
-				if err != nil {
-					log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
-					continue
-				}
-				if res.Status.Code != rpc.Code_CODE_OK {
-					log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
-					continue
-				}
-				childPath := strings.TrimPrefix(spacePath, requestPath)
-				childName, tail := router.ShiftPath(childPath)
-				if tail != "/" {
-					res.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-					res.Info.Checksum = nil
-					// TODO unset opaque checksum
-				}
-				res.Info.Path = path.Join(requestPath, childName)
-				if existingChild, ok := childInfos[childName]; ok {
-					// use most recent child
-					if existingChild.Mtime == nil || (res.Info.Mtime != nil && utils.TSToUnixNano(res.Info.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
+					res, err := client.Stat(ctx, req)
+					if err != nil {
+						log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
+						continue
+					}
+					if res.Status.Code != rpc.Code_CODE_OK {
+						log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
+						continue
+					}
+					childPath := strings.TrimPrefix(spacePath, requestPath)
+					childName, tail := router.ShiftPath(childPath)
+					if tail != "/" {
+						res.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+						res.Info.Checksum = nil
+						// TODO unset opaque checksum
+					}
+					res.Info.Path = path.Join(requestPath, childName)
+					if existingChild, ok := childInfos[childName]; ok {
+						// use most recent child
+						if existingChild.Mtime == nil || (res.Info.Mtime != nil && utils.TSToUnixNano(res.Info.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
+							childInfos[childName] = res.Info
+						}
+					} else {
 						childInfos[childName] = res.Info
 					}
-				} else {
-					childInfos[childName] = res.Info
+					// TODO update parent size, mtime & etag info with child spaces
+					// TODO reuse storage space mtime? instead of stating?
+				default:
+					log.Debug().Msg("unhandled")
 				}
-				// TODO update parent size, mtime & etag info with child spaces
-				// TODO reuse storage space mtime? instead of stating?
-			default:
-				log.Debug().Msg("unhandled")
 			}
-		}
-		for _, childInfo := range childInfos {
-			resourceInfos = append(resourceInfos, childInfo)
-		}
+			for _, childInfo := range childInfos {
+				resourceInfos = append(resourceInfos, childInfo)
+			}
 
-	case depth == "infinity":
-		log.Error().Err(err).Msg("FIXME not supported")
-		w.WriteHeader(http.StatusInternalServerError)
+		case depth == "infinity":
+			//log.Error().Err(err).Msg("FIXME not supported")
+			//w.WriteHeader(http.StatusInternalServerError)
+			//return nil, nil, false
 
-		// FIXME: doesn't work cross-storage as the results will have the wrong paths!
-		// use a stack to explore sub-containers breadth-first
-		/*
-			stack := []string{parentInfo.Path}
-			for len(stack) > 0 {
-				// retrieve path on top of stack
-				path := stack[len(stack)-1]
+			// FIXME: doesn't work cross-storage as the results will have the wrong paths!
+			// use a stack to explore sub-containers breadth-first
+			stack := []*provider.ResourceInfo{parentInfo}
+			for len(stack) != 0 {
+				info := stack[0]
+				stack = stack[1:]
 
-				var nRef *provider.Reference
-				if spacesPropfind {
-					nRef = &provider.Reference{
-						ResourceId: ref.ResourceId,
-						Path:       path,
-					}
-				} else {
-					nRef = &provider.Reference{Path: path}
-				}
 				req := &provider.ListContainerRequest{
-					Ref:                   nRef,
+					Ref: &provider.Reference{
+						ResourceId: info.Id,
+						Path:       ".",
+					},
 					ArbitraryMetadataKeys: metadataKeys,
 				}
 				res, err := client.ListContainer(ctx, req)
 				if err != nil {
-					log.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
+					log.Error().Err(err).Interface("info", info).Msg("error sending list container grpc request")
 					w.WriteHeader(http.StatusInternalServerError)
 					return nil, nil, false
 				}
@@ -478,32 +477,28 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					HandleErrorStatus(&log, w, res.Status)
 					return nil, nil, false
 				}
-
-				stack = stack[:len(stack)-1]
 
 				// check sub-containers in reverse order and add them to the stack
 				// the reversed order here will produce a more logical sorting of results
 				for i := len(res.Infos) - 1; i >= 0; i-- {
+					// add path to resource
+					res.Infos[i].Path = filepath.Join(info.Path, res.Infos[i].Path)
 					if spacesPropfind {
-						res.Infos[i].Path = utils.MakeRelativePath(filepath.Join(nRef.Path, res.Infos[i].Path))
+						res.Infos[i].Path = utils.MakeRelativePath(filepath.Join(info.Path, res.Infos[i].Path))
 					}
 					if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						stack = append(stack, res.Infos[i].Path)
+						stack = append(stack, res.Infos[i])
 					}
 				}
 
 				resourceInfos = append(resourceInfos, res.Infos...)
-
-				if depth != "infinity" {
-					break
-				}
 				// TODO: stream response to avoid storing too many results in memory
 				// we can do that after having stated the root.
 			}
-		*/
+		}
 	}
 
-	return parentInfo, resourceInfos, true
+	return parentInfos[0], resourceInfos, true
 }
 
 func requiresExplicitFetching(n *xml.Name) bool {
