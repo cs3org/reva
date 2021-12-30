@@ -60,6 +60,9 @@ var (
 				},
 			},
 		},
+		MountPoint: &sprovider.Reference{
+			Path: "",
+		},
 	}
 
 	BaseShareTwo = &collaboration.ReceivedShare{
@@ -78,6 +81,9 @@ var (
 					ListContainer: true,
 				},
 			},
+		},
+		MountPoint: &sprovider.Reference{
+			Path: "",
 		},
 	}
 
