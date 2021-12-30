@@ -777,21 +777,17 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 
 // resolveToken returns the path and share for the publicly shared resource.
 func (s *service) resolveToken(ctx context.Context, token string) (*link.PublicShare, *provider.ResourceInfo, *rpc.Status, error) {
-	driver, err := pool.GetGatewayServiceClient(s.conf.GatewayAddr)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	publicShareResponse, err := driver.GetPublicShare(
-		ctx,
-		&link.GetPublicShareRequest{
-			Ref: &link.PublicShareReference{
-				Spec: &link.PublicShareReference_Token{
-					Token: token,
-				},
+	publicShareReq := &link.GetPublicShareRequest{
+		Ref: &link.PublicShareReference{
+			Spec: &link.PublicShareReference_Token{
+				Token: token,
 			},
-			Sign: true,
 		},
+		Sign: true,
+	}
+	publicShareResponse, err := s.gateway.GetPublicShare(
+		ctx,
+		publicShareReq,
 	)
 	switch {
 	case err != nil:
@@ -800,11 +796,12 @@ func (s *service) resolveToken(ctx context.Context, token string) (*link.PublicS
 		return nil, nil, publicShareResponse.Status, nil
 	}
 
-	sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
+	statReq := &provider.StatRequest{
 		Ref: &provider.Reference{
 			ResourceId: publicShareResponse.GetShare().GetResourceId(),
 		},
-	})
+	}
+	sRes, err := s.gateway.Stat(ctx, statReq)
 	switch {
 	case err != nil:
 		return nil, nil, nil, err
