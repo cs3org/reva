@@ -78,6 +78,11 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
+	// FIXME I suck
+	if dstSpace.Root.OpaqueId == utils.ShareStorageProviderID {
+		dstSpace.Root = srcSpace.Root
+	}
+
 	s.handleMove(ctx, w, r, makeRelativeReference(srcSpace, srcPath), makeRelativeReference(dstSpace, dstPath), sublog)
 }
 

@@ -650,7 +650,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		Opaque: req.Opaque,
 		Ref: &provider.Reference{
 			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path,
+			Path:       ".",
 		},
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
@@ -828,6 +828,10 @@ func (s *service) resolveReference(ctx context.Context, ref *provider.Reference)
 			root := &provider.ResourceId{
 				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  receivedShare.Share.Id.OpaqueId,
+			}
+			if ref.Path != "." && receivedShare.MountPoint.Path != strings.TrimPrefix(ref.Path, "./") {
+				// we are looking for a different path
+				continue
 			}
 			switch {
 			case utils.ResourceIDEqual(ref.ResourceId, root):
