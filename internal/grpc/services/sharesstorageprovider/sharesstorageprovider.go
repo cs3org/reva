@@ -645,12 +645,17 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
+	path := req.Ref.Path
+	if receivedShare.MountPoint.Path == strings.TrimPrefix(req.Ref.Path, "./") {
+		path = "."
+	}
+
 	// TODO return reference?
 	return s.gateway.Stat(ctx, &provider.StatRequest{
 		Opaque: req.Opaque,
 		Ref: &provider.Reference{
 			ResourceId: receivedShare.Share.ResourceId,
-			Path:       ".",
+			Path:       path,
 		},
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
@@ -829,10 +834,7 @@ func (s *service) resolveReference(ctx context.Context, ref *provider.Reference)
 				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  receivedShare.Share.Id.OpaqueId,
 			}
-			if ref.Path != "." && receivedShare.MountPoint.Path != strings.TrimPrefix(ref.Path, "./") {
-				// we are looking for a different path
-				continue
-			}
+
 			switch {
 			case utils.ResourceIDEqual(ref.ResourceId, root):
 				// we have a virtual node
