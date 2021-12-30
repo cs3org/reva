@@ -216,11 +216,20 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
+	space, rpcstatus, err := s.lookUpStorageSpaceForPath(ctx, basePath)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if rpcstatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcstatus)
+		return
+	}
+	ref := makeRelativeReference(space, basePath)
+
 	// ask gateway for recycle items
-	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{
-		// FIXME ResourceId?
-		Path: basePath,
-	}, Key: path.Join(key, itemPath)})
+	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: path.Join(key, itemPath)})
 
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
@@ -248,10 +257,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 		for len(stack) > 0 {
 			key := stack[len(stack)-1]
-			getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{
-				// FIXME ResourceId?
-				Path: basePath,
-			}, Key: key})
+			getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: key})
 			if err != nil {
 				sublog.Error().Err(err).Msg("error calling ListRecycle")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -475,11 +481,17 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	dstRef := &provider.Reference{
-		// FIXME ResourceId?
-		Path: dst,
+	space, rpcstatus, err := s.lookUpStorageSpaceForPath(ctx, dst)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+	if rpcstatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcstatus)
+		return
+	}
+	dstRef := makeRelativeReference(space, dst)
 
 	dstStatReq := &provider.StatRequest{
 		Ref: dstRef,
@@ -501,10 +513,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	// restore location exists, and if it doesn't returns a conflict error code.
 	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst) {
 		parentStatReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				// FIXME ResourceId?
-				Path: filepath.Dir(dst),
-			},
+			Ref: makeRelativeReference(space, filepath.Dir(dst)),
 		}
 
 		parentStatResponse, err := client.Stat(ctx, parentStatReq)
@@ -550,20 +559,24 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		}
 	}
 
+	sourceSpace, rpcstatus, err := s.lookUpStorageSpaceForPath(ctx, basePath)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if rpcstatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcstatus)
+		return
+	}
 	req := &provider.RestoreRecycleItemRequest{
 		// use the target path to find the storage provider
 		// this means we can only undelete on the same storage, not to a different folder
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
 		// TODO currently limited to the home storage
-		Ref: &provider.Reference{
-			// FIXME ResourceId?
-			Path: basePath,
-		},
-		Key: path.Join(key, itemPath),
-		RestoreRef: &provider.Reference{
-			// FIXME ResourceId?
-			Path: dst,
-		},
+		Ref:        makeRelativeReference(sourceSpace, basePath),
+		Key:        path.Join(key, itemPath),
+		RestoreRef: dstRef,
 	}
 
 	res, err := client.RestoreRecycleItem(ctx, req)
