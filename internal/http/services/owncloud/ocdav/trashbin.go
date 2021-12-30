@@ -622,12 +622,19 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 
 	// set key as opaque id, the storageprovider will use it as the key for the
 	// storage drives  PurgeRecycleItem key call
+	space, status, err := s.lookUpStorageSpaceForPath(ctx, basePath)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
 
 	req := &provider.PurgeRecycleRequest{
-		Ref: &provider.Reference{
-			// FIXME ResourceId?
-			Path: basePath,
-		},
+		Ref: makeRelativeReference(space, basePath),
 		Key: path.Join(key, itemPath),
 	}
 
