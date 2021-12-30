@@ -1066,7 +1066,6 @@ func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.
 
 // TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
 func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	requestPath := req.Ref.Path
 	providerInfos, err := s.findSpaces(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListRecycleResponse{
@@ -1112,28 +1111,26 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 
 			// we can ignore spaces below the mount point
 			// -> only match exact references
-			if requestPath == mountPath {
 
-				res, err := c.ListRecycle(ctx, &provider.ListRecycleRequest{
-					Opaque: req.Opaque,
-					FromTs: req.FromTs,
-					ToTs:   req.ToTs,
-					Ref:    providerRef,
-					Key:    req.Key,
-				})
-				if err != nil {
-					return nil, errors.Wrap(err, "gateway: error calling ListRecycle")
-				}
-
-				if utils.IsAbsoluteReference(req.Ref) {
-					for j := range res.RecycleItems {
-						// wrap(res.RecycleItems[j].Ref, p) only handles ResourceInfo
-						res.RecycleItems[j].Ref.Path = path.Join(mountPath, res.RecycleItems[j].Ref.Path)
-					}
-				}
-
-				return res, nil
+			res, err := c.ListRecycle(ctx, &provider.ListRecycleRequest{
+				Opaque: req.Opaque,
+				FromTs: req.FromTs,
+				ToTs:   req.ToTs,
+				Ref:    providerRef,
+				Key:    req.Key,
+			})
+			if err != nil {
+				return nil, errors.Wrap(err, "gateway: error calling ListRecycle")
 			}
+
+			if utils.IsAbsoluteReference(req.Ref) {
+				for j := range res.RecycleItems {
+					// wrap(res.RecycleItems[j].Ref, p) only handles ResourceInfo
+					res.RecycleItems[j].Ref.Path = path.Join(mountPath, res.RecycleItems[j].Ref.Path)
+				}
+			}
+
+			return res, nil
 		}
 
 	}
