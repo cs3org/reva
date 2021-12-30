@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -95,11 +94,14 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(mountPoints)
 
 	// now we have a list of shares, we want to iterate over all of them and check for name collisions
-	for i, mp := range mountPoints {
-		if mp == mount {
-			mount = fmt.Sprintf("%s (%s)", base, strconv.Itoa(i+1))
+	// FIXME: adjust logic
+	/*
+		for i, mp := range mountPoints {
+			if mp == mount {
+				mount = fmt.Sprintf("%s (%s)", base, strconv.Itoa(i+1))
+			}
 		}
-	}
+	*/
 
 	for id := range sharesToAccept {
 		h.updateReceivedShare(w, r, id, false, mount)
