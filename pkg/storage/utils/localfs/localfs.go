@@ -82,9 +82,11 @@ func (c *Config) init() {
 	// ensure share folder always starts with slash
 	c.ShareFolder = path.Join("/", c.ShareFolder)
 
-	c.DataDirectory = path.Join(c.Root, "data")
+	//c.DataDirectory = path.Join(c.Root, "data")
+	c.DataDirectory = path.Join(c.Root, "dCache", "data")
 	c.Uploads = path.Join(c.Root, ".uploads")
-	c.Shadow = path.Join(c.Root, ".shadow")
+	//c.Shadow = path.Join(c.Root, ".shadow")
+	c.Shadow = path.Join(c.Root, "dCache", ".shadow")
 
 	c.References = path.Join(c.Shadow, "references")
 	c.RecycleBin = path.Join(c.Shadow, "recycle_bin")
