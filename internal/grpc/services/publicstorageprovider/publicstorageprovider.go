@@ -326,7 +326,12 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			if f.GetSpaceType() != SpaceTypePublic {
+			switch f.GetSpaceType() {
+			case SpaceTypePublic:
+				continue
+			case "mountpoint", "+mountpoint":
+				continue
+			default:
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 				}, nil

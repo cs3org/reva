@@ -285,7 +285,7 @@ func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClien
 			StorageId: utils.PublicStorageProviderID,
 			OpaqueId:  utils.PublicStorageProviderID,
 		},
-		Path: token,
+		Path: utils.MakeRelativePath(token),
 	}})
 }
 
