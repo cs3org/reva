@@ -1053,7 +1053,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 					s.Path = gpRes.Path
 
 					// cut off configured home namespace, paths in ocs shares are relative to it
-					identifier := h.mustGetIdentifiers(ctx, client, info.Owner.OpaqueId, false)
+					identifier := h.mustGetIdentifiers(ctx, client, info.GetOwner().GetOpaqueId(), false)
 					u := &userpb.User{
 						Id:          info.Owner,
 						Username:    identifier.Username,
@@ -1081,7 +1081,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 				}
 
 				// cut off configured home namespace, paths in ocs shares are relative to it
-				identifier := h.mustGetIdentifiers(ctx, client, info.Owner.OpaqueId, false)
+				identifier := h.mustGetIdentifiers(ctx, client, info.GetOwner().GetOpaqueId(), false)
 				u := &userpb.User{
 					Id:          info.Owner,
 					Username:    identifier.Username,
