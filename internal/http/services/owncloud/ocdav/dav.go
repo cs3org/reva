@@ -33,6 +33,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/utils"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -280,8 +281,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
 	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
-		// FIXME ResourceId?
-		Path: path.Join("/public", token),
+		ResourceId: &provider.ResourceId{
+			StorageId: utils.PublicStorageProviderID,
+			OpaqueId:  utils.PublicStorageProviderID,
+		},
+		Path: token,
 	}})
 }
 

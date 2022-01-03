@@ -31,7 +31,6 @@ import (
 
 	"github.com/Masterminds/sprig"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -39,7 +38,6 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
@@ -526,10 +524,8 @@ func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, 
 
 	res, err := c.ListStorageSpaces(ctx, req)
 	if err != nil {
-		return nil, err
-	}
-	if res.Status.Code != rpc.Code_CODE_OK && res.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		return nil, status.NewErrorFromCode(res.Status.Code, "spaces registry")
+		// ignore errors
+		return nil, nil
 	}
 	return res.StorageSpaces, nil
 }

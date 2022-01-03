@@ -44,6 +44,12 @@ func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interfac
 	// Viewer role
 	case *registry.GetStorageProvidersRequest:
 		return checkResourceInfo(&r, v.GetRef()), nil
+	case *registry.ListStorageProvidersRequest:
+		// the call will only return spaces the current user has access to
+		return true, nil
+	case *provider.ListStorageSpacesRequest:
+		// the call will only return spaces the current user has access to
+		return true, nil
 	case *provider.StatRequest:
 		return checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.ListContainerRequest:
