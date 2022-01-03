@@ -98,12 +98,12 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 		return
 	}
 
-	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, spaces, fn, false, sublog)
+	resourceInfos, sendTusHeaders, ok := s.getResourceInfos(ctx, w, r, pf, spaces, fn, false, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
 	}
-	s.propfindResponse(ctx, w, r, ns, pf, parentInfo, resourceInfos, sublog)
+	s.propfindResponse(ctx, w, r, ns, pf, sendTusHeaders, resourceInfos, sublog)
 }
 
 func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
@@ -132,17 +132,10 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		return
 	}
 
-	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, []*provider.StorageSpace{space}, r.URL.Path, true, sublog)
+	resourceInfos, sendTusHeaders, ok := s.getResourceInfos(ctx, w, r, pf, []*provider.StorageSpace{space}, r.URL.Path, true, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
-	}
-
-	// parentInfo Path is the name but we need /
-	if r.URL.Path != "" {
-		parentInfo.Path = r.URL.Path
-	} else {
-		parentInfo.Path = "/"
 	}
 
 	// prefix space id to paths
@@ -150,11 +143,11 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		resourceInfos[i].Path = path.Join("/", spaceID, resourceInfos[i].Path)
 	}
 
-	s.propfindResponse(ctx, w, r, "", pf, parentInfo, resourceInfos, sublog)
+	s.propfindResponse(ctx, w, r, "", pf, sendTusHeaders, resourceInfos, sublog)
 
 }
 
-func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(ctx, "propfind_response")
 	defer span.End()
 
@@ -191,25 +184,20 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
 	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
 
-	var disableTus bool
-	// let clients know this collection supports tus.io POST requests to start uploads
-	if parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		if parentInfo.Opaque != nil {
-			_, disableTus = parentInfo.Opaque.Map["disable_tus"]
-		}
-		if !disableTus {
-			w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderTusVersion, HeaderTusExtension}, ", "))
-			w.Header().Set(HeaderTusResumable, "1.0.0")
-			w.Header().Set(HeaderTusVersion, "1.0.0")
-			w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
-		}
+	if sendTusHeaders {
+		w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderTusVersion, HeaderTusExtension}, ", "))
+		w.Header().Set(HeaderTusResumable, "1.0.0")
+		w.Header().Set(HeaderTusVersion, "1.0.0")
+		w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
 	}
+
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
 		log.Err(err).Msg("error writing response")
 	}
 }
 
+// TODO this is just a stat -> rename
 func (s *svc) statSpace(ctx context.Context, client gateway.GatewayAPIClient, space *provider.StorageSpace, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
 	req := &provider.StatRequest{
 		Ref:                   ref,
@@ -222,14 +210,14 @@ func (s *svc) statSpace(ctx context.Context, client gateway.GatewayAPIClient, sp
 	return res.Info, res.Status, nil
 }
 
-func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, spaces []*provider.StorageSpace, requestPath string, spacesPropfind bool, log zerolog.Logger) (*provider.ResourceInfo, []*provider.ResourceInfo, bool) {
+func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, spaces []*provider.StorageSpace, requestPath string, spacesPropfind bool, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
 	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
 		depth = "1"
 	}
 	// see https://tools.ietf.org/html/rfc4918#section-9.1
 	if depth != "0" && depth != "1" && depth != "infinity" {
-		log.Debug().Str("depth", depth).Msgf("invalid Depth header value")
+		log.Debug().Str("depth", depth).Msg("invalid Depth header value")
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Invalid Depth header value: %v", depth)
 		b, err := Marshal(exception{
@@ -237,14 +225,14 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			message: m,
 		})
 		HandleWebdavError(&log, w, b, err)
-		return nil, nil, false
+		return nil, false, false
 	}
 
 	client, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
-		return nil, nil, false
+		return nil, false, false
 	}
 
 	var metadataKeys []string
@@ -266,6 +254,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 
 	// we need to stat all spaces to aggregate the root etag, mtime and size
 	// TODO cache per space (hah, no longer per user + per space!)
+	var rootInfo *provider.ResourceInfo
 	var mostRecentChildInfo *provider.ResourceInfo
 	var aggregatedChildSize uint64
 	parentInfos := make([]*provider.ResourceInfo, 0, len(spaces))
@@ -285,8 +274,12 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		// adjust path
 		info.Path = spacePath
 
-		if depth != "0" || len(parentInfos) == 0 {
-			parentInfos = append(parentInfos, info)
+		//if depth != "0" || len(parentInfos) == 0 {
+		parentInfos = append(parentInfos, info)
+		//}
+
+		if rootInfo == nil && requestPath == info.Path {
+			rootInfo = info
 		}
 
 		// Check if the space is a child of the requested path
@@ -317,20 +310,20 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			message: m,
 		})
 		HandleWebdavError(&log, w, b, err)
-		return nil, nil, false
+		return nil, false, false
 	}
-	// if mostRecentChildInfo != nil {
-	// FIXME: update parent infos
-	// if parentInfo.Mtime == nil || (parentInfo.Mtime != nil && utils.TSToUnixNano(parentInfo.Mtime) > utils.TSToUnixNano(mostRecentChildInfo.Mtime)) {
-	// parentInfo.Mtime = mostRecentChildInfo.Mtime
-	// parentInfo.Etag = mostRecentChildInfo.Etag
-	// }
-	// if parentInfo.Etag == "" && mostRecentChildInfo.Etag != parentInfo.Etag {
-	// parentInfo.Etag = mostRecentChildInfo.Etag
-	// }
-	// }
-	// add size of children
-	// parentInfo.Size += aggregatedChildSize
+	if mostRecentChildInfo != nil {
+		// FIXME: update parent infos
+		if rootInfo.Mtime == nil || (rootInfo.Mtime != nil && utils.TSToUnixNano(rootInfo.Mtime) > utils.TSToUnixNano(mostRecentChildInfo.Mtime)) {
+			rootInfo.Mtime = mostRecentChildInfo.Mtime
+			rootInfo.Etag = mostRecentChildInfo.Etag
+		}
+		if rootInfo.Etag == "" && mostRecentChildInfo.Etag != rootInfo.Etag {
+			rootInfo.Etag = mostRecentChildInfo.Etag
+		}
+	}
+	//add size of children
+	rootInfo.Size += aggregatedChildSize
 	/*
 		if spacesPropfind {
 			res.Info.Path = ref.Path
@@ -338,9 +331,13 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 
 		parentInfo := res.Info
 	*/
-	resourceInfos := parentInfos
+	//resourceInfos := parentInfos
+	resourceInfos := []*provider.ResourceInfo{
+		rootInfo, // PROPFIND always includes the root resource
+	}
 	childInfos := map[string]*provider.ResourceInfo{}
 
+	// then add children
 	for _, parentInfo := range parentInfos {
 		switch {
 		case !spacesPropfind && parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
@@ -357,7 +354,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			if err != nil {
 				log.Error().Err(err).Msg("error sending a grpc stat request")
 				w.WriteHeader(http.StatusInternalServerError)
-				return nil, nil, false
+				return nil, false, false
 			} else if parentRes.Status.Code != rpc.Code_CODE_OK {
 				if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 					w.WriteHeader(http.StatusNotFound)
@@ -367,44 +364,49 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 						message: m,
 					})
 					HandleWebdavError(&log, w, b, err)
-					return nil, nil, false
+					return nil, false, false
 				}
 				HandleErrorStatus(&log, w, parentRes.Status)
-				return nil, nil, false
+				return nil, false, false
 			}
+			resourceInfos = append(resourceInfos, parentRes.Info)
 			// parentInfo = parentRes.Info
 
 		case parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
 			// TODO for all spaces list or stat
-			for _, space := range spaces {
-				if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
-					continue // not mounted
+			//for _, space := range spaces {
+			//	if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
+			//		continue // not mounted
+			//	}
+			spacePath := parentInfo.Path
+
+			switch {
+			case strings.HasPrefix(requestPath, spacePath):
+				req := &provider.ListContainerRequest{
+					Ref: &provider.Reference{
+						ResourceId: parentInfo.Id,
+						Path:       ".",
+					},
+					ArbitraryMetadataKeys: metadataKeys,
 				}
-				spacePath := string(space.Opaque.Map["path"].Value)
+				res, err := client.ListContainer(ctx, req)
+				if err != nil {
+					log.Error().Err(err).Msg("error sending list container grpc request")
+					w.WriteHeader(http.StatusInternalServerError)
+					return nil, false, false
+				}
 
-				switch {
-				case strings.HasPrefix(requestPath, spacePath):
-					req := &provider.ListContainerRequest{
-						Ref:                   makeRelativeReference(space, requestPath),
-						ArbitraryMetadataKeys: metadataKeys,
-					}
-					res, err := client.ListContainer(ctx, req)
-					if err != nil {
-						log.Error().Err(err).Msg("error sending list container grpc request")
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-
-					if res.Status.Code != rpc.Code_CODE_OK {
-						HandleErrorStatus(&log, w, res.Status)
-						return nil, nil, false
-					}
-					for _, info := range res.Infos {
-						info.Path = path.Join(requestPath, info.Path)
-					}
-					resourceInfos = append(resourceInfos, res.Infos...)
-				case strings.HasPrefix(spacePath, requestPath): // space is a child of the requested path
-					// stat root and add as child
+				if res.Status.Code != rpc.Code_CODE_OK {
+					HandleErrorStatus(&log, w, res.Status)
+					return nil, false, false
+				}
+				for _, info := range res.Infos {
+					info.Path = path.Join(requestPath, info.Path)
+				}
+				resourceInfos = append(resourceInfos, res.Infos...)
+			case strings.HasPrefix(spacePath, requestPath): // space is a child of the requested path
+				// stat root and add as child
+				/*
 					req := &provider.StatRequest{
 						Ref: &provider.Reference{
 							ResourceId: space.Root,
@@ -438,16 +440,29 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 						}
 					} else {
 						childInfos[childName] = res.Info
-					}
-					// TODO update parent size, mtime & etag info with child spaces
-					// TODO reuse storage space mtime? instead of stating?
-				default:
-					log.Debug().Msg("unhandled")
+					}*/
+				childPath := strings.TrimPrefix(spacePath, requestPath)
+				childName, tail := router.ShiftPath(childPath)
+				if tail != "/" {
+					parentInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+					parentInfo.Checksum = nil
+					// TODO unset opaque checksum
 				}
+				parentInfo.Path = path.Join(requestPath, childName)
+				if existingChild, ok := childInfos[childName]; ok {
+					// use most recent child
+					if existingChild.Mtime == nil || (parentInfo.Mtime != nil && utils.TSToUnixNano(parentInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
+						childInfos[childName] = parentInfo
+					}
+				} else {
+					childInfos[childName] = parentInfo
+				}
+				// TODO update parent size, mtime & etag info with child spaces
+				// TODO reuse storage space mtime? instead of stating?
+			default:
+				log.Debug().Msg("unhandled")
 			}
-			for _, childInfo := range childInfos {
-				resourceInfos = append(resourceInfos, childInfo)
-			}
+			//}
 
 		case depth == "infinity":
 			// use a stack to explore sub-containers breadth-first
@@ -467,11 +482,11 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				if err != nil {
 					log.Error().Err(err).Interface("info", info).Msg("error sending list container grpc request")
 					w.WriteHeader(http.StatusInternalServerError)
-					return nil, nil, false
+					return nil, false, false
 				}
 				if res.Status.Code != rpc.Code_CODE_OK {
 					HandleErrorStatus(&log, w, res.Status)
-					return nil, nil, false
+					return nil, false, false
 				}
 
 				// check sub-containers in reverse order and add them to the stack
@@ -494,7 +509,21 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 	}
 
-	return parentInfos[0], resourceInfos, true
+	// now add all aggregated child infos
+	for _, childInfo := range childInfos {
+		resourceInfos = append(resourceInfos, childInfo)
+	}
+
+	sendTusHeaders := true
+	// let clients know this collection supports tus.io POST requests to start uploads
+	if rootInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		if rootInfo.Opaque != nil {
+			_, ok := rootInfo.Opaque.Map["disable_tus"]
+			sendTusHeaders = !ok
+		}
+	}
+
+	return resourceInfos, sendTusHeaders, true
 }
 
 func requiresExplicitFetching(n *xml.Name) bool {
