@@ -274,9 +274,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		// adjust path
 		info.Path = filepath.Join(spacePath, spaceRef.Path)
 
-		//if depth != "0" || len(parentInfos) == 0 {
 		spaceInfos = append(spaceInfos, info)
-		//}
 
 		if rootInfo == nil && requestPath == info.Path {
 			rootInfo = info
@@ -313,7 +311,6 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		return nil, false, false
 	}
 	if mostRecentChildInfo != nil {
-		// FIXME: update parent infos
 		if rootInfo.Mtime == nil || (rootInfo.Mtime != nil && utils.TSToUnixNano(rootInfo.Mtime) > utils.TSToUnixNano(mostRecentChildInfo.Mtime)) {
 			rootInfo.Mtime = mostRecentChildInfo.Mtime
 			rootInfo.Etag = mostRecentChildInfo.Etag
@@ -322,16 +319,10 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			rootInfo.Etag = mostRecentChildInfo.Etag
 		}
 	}
-	//add size of children
-	rootInfo.Size += aggregatedChildSize
-	/*
-		if spacesPropfind {
-			res.Info.Path = ref.Path
-		}
 
-		parentInfo := res.Info
-	*/
-	//resourceInfos := parentInfos
+	// add size of children
+	rootInfo.Size += aggregatedChildSize
+
 	resourceInfos := []*provider.ResourceInfo{
 		rootInfo, // PROPFIND always includes the root resource
 	}
@@ -361,11 +352,6 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			}
 
 		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
-			// TODO for all spaces list or stat
-			//for _, space := range spaces {
-			//	if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
-			//		continue // not mounted
-			//	}
 			spacePath := spaceInfo.Path
 
 			switch {
@@ -393,42 +379,6 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				}
 				resourceInfos = append(resourceInfos, res.Infos...)
 			case strings.HasPrefix(spacePath, requestPath): // space is a child of the requested path
-				// stat root and add as child
-				/*
-					req := &provider.StatRequest{
-						Ref: &provider.Reference{
-							ResourceId: space.Root,
-							Path:       "."},
-						// FIXME for shares the root currently is a resource in the sharesstorageprovider
-						// but the gateway/spaces registry does not find it
-						ArbitraryMetadataKeys: metadataKeys,
-					}
-
-					res, err := client.Stat(ctx, req)
-					if err != nil {
-						log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
-						continue
-					}
-					if res.Status.Code != rpc.Code_CODE_OK {
-						log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
-						continue
-					}
-					childPath := strings.TrimPrefix(spacePath, requestPath)
-					childName, tail := router.ShiftPath(childPath)
-					if tail != "/" {
-						res.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-						res.Info.Checksum = nil
-						// TODO unset opaque checksum
-					}
-					res.Info.Path = path.Join(requestPath, childName)
-					if existingChild, ok := childInfos[childName]; ok {
-						// use most recent child
-						if existingChild.Mtime == nil || (res.Info.Mtime != nil && utils.TSToUnixNano(res.Info.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
-							childInfos[childName] = res.Info
-						}
-					} else {
-						childInfos[childName] = res.Info
-					}*/
 				childPath := strings.TrimPrefix(spacePath, requestPath)
 				childName, tail := router.ShiftPath(childPath)
 				if tail != "/" {
@@ -445,12 +395,9 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				} else {
 					childInfos[childName] = spaceInfo
 				}
-				// TODO update parent size, mtime & etag info with child spaces
-				// TODO reuse storage space mtime? instead of stating?
 			default:
 				log.Debug().Msg("unhandled")
 			}
-			//}
 
 		case depth == "infinity":
 			// use a stack to explore sub-containers breadth-first
