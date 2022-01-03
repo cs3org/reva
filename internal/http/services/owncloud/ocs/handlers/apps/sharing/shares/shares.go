@@ -113,6 +113,7 @@ type GatewayClient interface {
 
 	Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error)
 	ListContainer(ctx context.Context, in *provider.ListContainerRequest, opts ...grpc.CallOption) (*provider.ListContainerResponse, error)
+	GetPath(ctx context.Context, in *provider.GetPathRequest, opts ...grpc.CallOption) (*provider.GetPathResponse, error)
 
 	ListShares(ctx context.Context, in *collaboration.ListSharesRequest, opts ...grpc.CallOption) (*collaboration.ListSharesResponse, error)
 	GetShare(ctx context.Context, in *collaboration.GetShareRequest, opts ...grpc.CallOption) (*collaboration.GetShareResponse, error)
@@ -268,10 +269,6 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 			return
 		}
-
-		// cut off configured home namespace, paths in ocs shares are relative to it
-		currentUser := ctxpkg.ContextMustGetUser(ctx)
-		statRes.Info.Path = strings.TrimPrefix(statRes.Info.Path, h.getHomeNamespace(currentUser))
 
 		err = h.addFileInfo(ctx, s, statRes.Info)
 		if err != nil {
@@ -571,9 +568,6 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// cut off configured home namespace, paths in ocs shares are relative to it
-	info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(ctxpkg.ContextMustGetUser(ctx)))
-
 	err = h.addFileInfo(ctx, share, info)
 	if err != nil {
 		log.Error().Err(err).Msg("error mapping share data")
@@ -680,9 +674,6 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed for stat after updating user share", err)
 		return
 	}
-
-	// cut off configured home namespace, paths in ocs shares are relative to it
-	statRes.Info.Path = strings.TrimPrefix(statRes.Info.Path, h.getHomeNamespace(ctxpkg.ContextMustGetUser(ctx)))
 
 	err = h.addFileInfo(r.Context(), share, statRes.Info)
 	if err != nil {
@@ -854,16 +845,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			log.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
 			continue
 		}
-
-		// cut off configured home namespace, paths in ocs shares are relative to it
-		identifier := h.mustGetIdentifiers(ctx, client, info.Owner.OpaqueId, false)
-		u := &userpb.User{
-			Id:          info.Owner,
-			Username:    identifier.Username,
-			DisplayName: identifier.DisplayName,
-			Mail:        identifier.Mail,
-		}
-		info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(u))
 
 		data.State = mapState(rs.GetState())
 
@@ -1062,12 +1043,53 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		case h.sharePrefix == "/":
 			s.FileTarget = info.Path
 			s.Path = info.Path
+			client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+			if err == nil {
+				gpRes, err := client.GetPath(ctx, &provider.GetPathRequest{
+					ResourceId: info.Id,
+				})
+				if err == nil && gpRes.Status.Code == rpc.Code_CODE_OK {
+					// TODO log error?
+					s.Path = gpRes.Path
+
+					// cut off configured home namespace, paths in ocs shares are relative to it
+					identifier := h.mustGetIdentifiers(ctx, client, info.Owner.OpaqueId, false)
+					u := &userpb.User{
+						Id:          info.Owner,
+						Username:    identifier.Username,
+						DisplayName: identifier.DisplayName,
+						Mail:        identifier.Mail,
+					}
+					s.Path = strings.TrimPrefix(s.Path, h.getHomeNamespace(u))
+				}
+			}
+
 		case s.ShareType == conversions.ShareTypePublicLink:
 			s.FileTarget = path.Join("/", path.Base(info.Path))
 			s.Path = path.Join("/", path.Base(info.Path))
 		default:
 			s.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
 			s.Path = info.Path
+			client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+			if err == nil {
+				gpRes, err := client.GetPath(ctx, &provider.GetPathRequest{
+					ResourceId: info.Id,
+				})
+				if err == nil && gpRes.Status.Code == rpc.Code_CODE_OK {
+					// TODO log error?
+					s.Path = gpRes.Path
+				}
+
+				// cut off configured home namespace, paths in ocs shares are relative to it
+				identifier := h.mustGetIdentifiers(ctx, client, info.Owner.OpaqueId, false)
+				u := &userpb.User{
+					Id:          info.Owner,
+					Username:    identifier.Username,
+					DisplayName: identifier.DisplayName,
+					Mail:        identifier.Mail,
+				}
+				s.Path = strings.TrimPrefix(s.Path, h.getHomeNamespace(u))
+			}
 		}
 		s.StorageID = storageIDPrefix + s.FileTarget
 		// TODO FileParent:

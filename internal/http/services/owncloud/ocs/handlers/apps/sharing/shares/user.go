@@ -20,7 +20,6 @@ package shares
 
 import (
 	"net/http"
-	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -30,7 +29,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
@@ -185,7 +183,6 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareI
 func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filter) ([]*conversions.ShareData, *rpc.Status, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	u := ctxpkg.ContextMustGetUser(ctx)
 
 	lsUserSharesRequest := collaboration.ListSharesRequest{
 		Filters: filters,
@@ -221,9 +218,6 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 				log.Debug().Interface("share", s).Interface("status", status).Interface("shareData", data).Err(err).Msg("could not stat share, skipping")
 				continue
 			}
-
-			// cut off configured home namespace, paths in ocs shares are relative to it
-			info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(u))
 
 			if err := h.addFileInfo(ctx, data, info); err != nil {
 				log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")

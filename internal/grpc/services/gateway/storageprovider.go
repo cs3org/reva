@@ -520,22 +520,34 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
-	statReq := &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.ResourceId}}
-	statRes, err := s.Stat(ctx, statReq)
+	c, p, err := s.find(ctx, &provider.Reference{ResourceId: req.ResourceId})
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error stating ref:"+statReq.Ref.String())
+		return &provider.GetPathResponse{
+			Status: status.NewStatusFromErrType(ctx, "getpath ref="+req.String(), err),
+		}, nil
+	}
+
+	mountPath := ""
+	for _, spacePath := range decodeSpacePaths(p) {
+		mountPath = spacePath
+		break // TODO can there be more than one space for a path?
+	}
+
+	res, err := c.GetPath(ctx, req)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting path:"+req.String())
 		return nil, err
 	}
 
-	if statRes.Status.Code != rpc.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK {
 		return &provider.GetPathResponse{
-			Status: statRes.Status,
+			Status: res.Status,
 		}, nil
 	}
 
 	return &provider.GetPathResponse{
-		Status: statRes.Status,
-		Path:   statRes.GetInfo().GetPath(),
+		Status: res.Status,
+		Path:   filepath.Join(mountPath, res.GetPath()),
 	}, nil
 }
 
