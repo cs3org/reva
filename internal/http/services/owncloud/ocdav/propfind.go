@@ -331,7 +331,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	// then add children
 	for _, spaceInfo := range spaceInfos {
 		switch {
-		case !spacesPropfind && spaceInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		case !spacesPropfind && spaceInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != "infinity":
 			// The propfind is requested for a file that exists
 
 			childPath := strings.TrimPrefix(spaceInfo.Path, requestPath)
@@ -401,6 +401,9 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 
 		case depth == "infinity":
 			// use a stack to explore sub-containers breadth-first
+			if spaceInfo != rootInfo {
+				resourceInfos = append(resourceInfos, spaceInfo)
+			}
 			stack := []*provider.ResourceInfo{spaceInfo}
 			for len(stack) != 0 {
 				info := stack[0]
