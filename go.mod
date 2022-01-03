@@ -39,7 +39,7 @@ require (
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/juliangruber/go-intersect v1.1.0
-	github.com/mattn/go-sqlite3 v1.14.9
+	github.com/mattn/go-sqlite3 v1.14.10
 	github.com/mileusna/useragent v1.0.2
 	github.com/minio/minio-go/v7 v7.0.18
 	github.com/mitchellh/copystructure v1.2.0 // indirect
