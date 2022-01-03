@@ -385,8 +385,8 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				}
 
 				if res.Status.Code != rpc.Code_CODE_OK {
-					HandleErrorStatus(&log, w, res.Status)
-					return nil, false, false
+					log.Debug().Interface("status", res.Status).Msg("List Container not ok, skipping")
+					continue
 				}
 				for _, info := range res.Infos {
 					info.Path = path.Join(requestPath, info.Path)
@@ -473,8 +473,8 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					return nil, false, false
 				}
 				if res.Status.Code != rpc.Code_CODE_OK {
-					HandleErrorStatus(&log, w, res.Status)
-					return nil, false, false
+					log.Debug().Interface("status", res.Status).Msg("List Container not ok, skipping")
+					continue
 				}
 
 				// check sub-containers in reverse order and add them to the stack
