@@ -257,7 +257,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	var rootInfo *provider.ResourceInfo
 	var mostRecentChildInfo *provider.ResourceInfo
 	var aggregatedChildSize uint64
-	parentInfos := make([]*provider.ResourceInfo, 0, len(spaces))
+	spaceInfos := make([]*provider.ResourceInfo, 0, len(spaces))
 	for _, space := range spaces {
 		if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
 			continue // not mounted
@@ -272,10 +272,10 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 
 		// adjust path
-		info.Path = spacePath
+		info.Path = filepath.Join(spacePath, spaceRef.Path)
 
 		//if depth != "0" || len(parentInfos) == 0 {
-		parentInfos = append(parentInfos, info)
+		spaceInfos = append(spaceInfos, info)
 		//}
 
 		if rootInfo == nil && requestPath == info.Path {
@@ -301,7 +301,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 	}
 
-	if len(parentInfos) == 0 {
+	if len(spaceInfos) == 0 {
 		// TODO if we have children invent node on the fly
 		w.WriteHeader(http.StatusNotFound)
 		m := fmt.Sprintf("Resource %v not found", r.URL.Path)
@@ -338,7 +338,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	childInfos := map[string]*provider.ResourceInfo{}
 
 	// then add children
-	for _, parentInfo := range parentInfos {
+	for _, parentInfo := range spaceInfos {
 		switch {
 		case !spacesPropfind && parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
 			// The propfind is requested for a file that exists
