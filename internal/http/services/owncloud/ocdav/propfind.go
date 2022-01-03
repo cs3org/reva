@@ -813,7 +813,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					// TODO what is the difference to d:quota-used-bytes (which only exists for collections)?
 					// oc:size is available on files and folders and behaves like d:getcontentlength or d:quota-used-bytes respectively
-					if ls == nil {
+					// The hasPrefix is a workaround to make children of the link root show a size if they have 0 bytes
+					if ls == nil || strings.HasPrefix(md.Path, "/"+ls.Token+"/") {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
 					} else {
 						// link share root collection has no size
