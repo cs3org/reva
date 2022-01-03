@@ -709,7 +709,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token st
 	switch {
 	case !isValidReference(ref):
 		return "", "", errtypes.BadRequest("resourceid required, got " + ref.String())
-	case ref.Path == "":
+	case ref.Path == "" || ref.Path == ".":
 		// id based stat
 		parts := strings.SplitN(ref.ResourceId.OpaqueId, "/", 2)
 		if len(parts) < 2 {
