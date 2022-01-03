@@ -338,53 +338,41 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	childInfos := map[string]*provider.ResourceInfo{}
 
 	// then add children
-	for _, parentInfo := range spaceInfos {
+	for _, spaceInfo := range spaceInfos {
 		switch {
-		case !spacesPropfind && parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		case !spacesPropfind && spaceInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
 			// The propfind is requested for a file that exists
-			// In this case, we can stat the parent directory and return both
-			resourceInfos = append(resourceInfos, parentInfo)
-			parentRes, err := client.Stat(ctx, &provider.StatRequest{
-				Ref: &provider.Reference{
-					ResourceId: parentInfo.Id,
-					Path:       ".",
-				},
-				ArbitraryMetadataKeys: metadataKeys,
-			})
-			if err != nil {
-				log.Error().Err(err).Msg("error sending a grpc stat request")
-				w.WriteHeader(http.StatusInternalServerError)
-				return nil, false, false
-			} else if parentRes.Status.Code != rpc.Code_CODE_OK {
-				if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-					w.WriteHeader(http.StatusNotFound)
-					m := fmt.Sprintf("Resource %v not found", parentInfo.Id)
-					b, err := Marshal(exception{
-						code:    SabredavNotFound,
-						message: m,
-					})
-					HandleWebdavError(&log, w, b, err)
-					return nil, false, false
-				}
-				HandleErrorStatus(&log, w, parentRes.Status)
-				return nil, false, false
-			}
-			resourceInfos = append(resourceInfos, parentRes.Info)
-			// parentInfo = parentRes.Info
 
-		case parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
+			childPath := strings.TrimPrefix(spaceInfo.Path, requestPath)
+			childName, tail := router.ShiftPath(childPath)
+			if tail != "/" {
+				spaceInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+				spaceInfo.Checksum = nil
+				// TODO unset opaque checksum
+			}
+			spaceInfo.Path = path.Join(requestPath, childName)
+			if existingChild, ok := childInfos[childName]; ok {
+				// use most recent child
+				if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
+					childInfos[childName] = spaceInfo
+				}
+			} else {
+				childInfos[childName] = spaceInfo
+			}
+
+		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
 			// TODO for all spaces list or stat
 			//for _, space := range spaces {
 			//	if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
 			//		continue // not mounted
 			//	}
-			spacePath := parentInfo.Path
+			spacePath := spaceInfo.Path
 
 			switch {
 			case strings.HasPrefix(requestPath, spacePath):
 				req := &provider.ListContainerRequest{
 					Ref: &provider.Reference{
-						ResourceId: parentInfo.Id,
+						ResourceId: spaceInfo.Id,
 						Path:       ".",
 					},
 					ArbitraryMetadataKeys: metadataKeys,
@@ -444,18 +432,18 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				childPath := strings.TrimPrefix(spacePath, requestPath)
 				childName, tail := router.ShiftPath(childPath)
 				if tail != "/" {
-					parentInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-					parentInfo.Checksum = nil
+					spaceInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+					spaceInfo.Checksum = nil
 					// TODO unset opaque checksum
 				}
-				parentInfo.Path = path.Join(requestPath, childName)
+				spaceInfo.Path = path.Join(requestPath, childName)
 				if existingChild, ok := childInfos[childName]; ok {
 					// use most recent child
-					if existingChild.Mtime == nil || (parentInfo.Mtime != nil && utils.TSToUnixNano(parentInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
-						childInfos[childName] = parentInfo
+					if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
+						childInfos[childName] = spaceInfo
 					}
 				} else {
-					childInfos[childName] = parentInfo
+					childInfos[childName] = spaceInfo
 				}
 				// TODO update parent size, mtime & etag info with child spaces
 				// TODO reuse storage space mtime? instead of stating?
@@ -466,7 +454,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 
 		case depth == "infinity":
 			// use a stack to explore sub-containers breadth-first
-			stack := []*provider.ResourceInfo{parentInfo}
+			stack := []*provider.ResourceInfo{spaceInfo}
 			for len(stack) != 0 {
 				info := stack[0]
 				stack = stack[1:]
