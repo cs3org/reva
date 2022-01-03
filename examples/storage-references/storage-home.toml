@@ -7,8 +7,16 @@ mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 data_server_url = "http://localhost:17001/data"
 
+[grpc.services.storageprovider.drivers.localhome]
+data_directory = "/data"
+shadow = "/.shadow"
+
 [http]
 address = "0.0.0.0:17001"
 
 [http.services.dataprovider]
 driver = "localhome"
+
+[http.services.dataprovider.drivers.localhome]
+data_directory = "/data"
+shadow = "/.shadow"
