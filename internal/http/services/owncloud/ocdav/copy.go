@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -40,6 +41,7 @@ import (
 )
 
 type copy struct {
+	source      *provider.Reference
 	sourceInfo  *provider.ResourceInfo
 	destination *provider.Reference
 	depth       string
@@ -154,11 +156,16 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		}
 
 		for i := range res.Infos {
+			child := filepath.Base(res.Infos[i].Path)
+			src := &provider.Reference{
+				ResourceId: cp.source.ResourceId,
+				Path:       utils.MakeRelativePath(filepath.Join(cp.source.Path, child)),
+			}
 			childDst := &provider.Reference{
 				ResourceId: cp.destination.ResourceId,
-				Path:       utils.MakeRelativePath(path.Join(cp.destination.Path, path.Base(res.Infos[i].Path))),
+				Path:       utils.MakeRelativePath(filepath.Join(cp.destination.Path, child)),
 			}
-			err := s.executePathCopy(ctx, client, w, r, &copy{sourceInfo: res.Infos[i], destination: childDst, depth: cp.depth, successCode: cp.successCode})
+			err := s.executePathCopy(ctx, client, w, r, &copy{source: src, sourceInfo: res.Infos[i], destination: childDst, depth: cp.depth, successCode: cp.successCode})
 			if err != nil {
 				return err
 			}
@@ -170,7 +177,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		// 1. get download url
 
 		dReq := &provider.InitiateFileDownloadRequest{
-			Ref: &provider.Reference{ResourceId: cp.sourceInfo.Id, Path: "."},
+			Ref: cp.source,
 		}
 
 		dRes, err := client.InitiateFileDownload(ctx, dReq)
@@ -582,7 +589,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		// check if an intermediate path / the parent exists
 		pRef := &provider.Reference{
 			ResourceId: dstRef.ResourceId,
-			Path:       p,
+			Path:       utils.MakeRelativePath(p),
 		}
 		intStatReq := &provider.StatRequest{Ref: pRef}
 		intStatRes, err := client.Stat(ctx, intStatReq)
@@ -597,14 +604,14 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 				log.Debug().Interface("parent", pRef).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
 			} else {
-				HandleErrorStatus(log, w, srcStatRes.Status)
+				HandleErrorStatus(log, w, intStatRes.Status)
 			}
 			return nil
 		}
 		// TODO what if intermediate is a file?
 	}
 
-	return &copy{sourceInfo: srcStatRes.Info, depth: depth, successCode: successCode, destination: dstRef}
+	return &copy{source: srcRef, sourceInfo: srcStatRes.Info, depth: depth, successCode: successCode, destination: dstRef}
 }
 
 func extractOverwrite(w http.ResponseWriter, r *http.Request) (string, error) {
