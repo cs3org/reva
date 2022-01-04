@@ -169,15 +169,14 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	// TODO we need to send the If-Match etag in the GET to the datagateway to prevent race conditions between stating and reading the file
 }
 
-func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID, ns string) {
+func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_get")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "get").Logger()
 
-	fn := path.Join(ns, r.URL.Path)
 	// retrieve a specific storage space
-	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, fn)
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)

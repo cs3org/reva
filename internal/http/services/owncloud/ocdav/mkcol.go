@@ -60,14 +60,13 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 	s.handleMkcol(ctx, w, r, makeRelativeReference(space, parentPath), makeRelativeReference(space, fn), sublog)
 }
 
-func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID, ns string) {
+func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_mkcol")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()
 
-	fn := path.Join(ns, r.URL.Path)
-	parentRef, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, path.Dir(fn))
+	parentRef, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, path.Dir(r.URL.Path))
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -79,7 +78,7 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID,
 		return
 	}
 
-	childRef, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, fn)
+	childRef, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)

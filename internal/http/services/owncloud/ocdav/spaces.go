@@ -30,7 +30,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/utils"
@@ -55,16 +54,6 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ctx := r.Context()
 		// log := appctx.GetLogger(ctx)
-		ns, newPath, err := s.ApplyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
-		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			b, err := Marshal(exception{
-				code:    SabredavNotFound,
-				message: fmt.Sprintf("could not get storage for %s", r.URL.Path),
-			})
-			HandleWebdavError(appctx.GetLogger(r.Context()), w, b, err)
-		}
-		r.URL.Path = newPath
 
 		if r.Method == http.MethodOptions {
 			s.handleOptions(w, r)
@@ -90,7 +79,7 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		case MethodUnlock:
 			s.handleUnlock(w, r, spaceID)
 		case MethodMkcol:
-			s.handleSpacesMkCol(w, r, spaceID, ns)
+			s.handleSpacesMkCol(w, r, spaceID)
 		case MethodMove:
 			s.handleSpacesMove(w, r, spaceID)
 		case MethodCopy:
@@ -98,9 +87,9 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		case MethodReport:
 			s.handleReport(w, r, spaceID)
 		case http.MethodGet:
-			s.handleSpacesGet(w, r, spaceID, ns)
+			s.handleSpacesGet(w, r, spaceID)
 		case http.MethodPut:
-			s.handleSpacesPut(w, r, spaceID, ns)
+			s.handleSpacesPut(w, r, spaceID)
 		case http.MethodPost:
 			s.handleSpacesTusPost(w, r, spaceID)
 		case http.MethodOptions:
@@ -108,7 +97,7 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		case http.MethodHead:
 			s.handleSpacesHead(w, r, spaceID)
 		case http.MethodDelete:
-			s.handleSpacesDelete(w, r, spaceID, ns)
+			s.handleSpacesDelete(w, r, spaceID)
 		default:
 			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		}
@@ -233,10 +222,7 @@ func makeRelativeReference(space *provider.StorageSpace, relativePath string) *s
 		return nil // not mounted
 	}
 	spacePath := string(space.Opaque.Map["path"].Value)
-	relativeSpacePath := "."
-	if strings.HasPrefix(relativePath, spacePath) {
-		relativeSpacePath = utils.MakeRelativePath(strings.TrimPrefix(relativePath, spacePath))
-	}
+	relativeSpacePath := utils.MakeRelativePath(strings.TrimPrefix(relativePath, spacePath))
 	return &storageProvider.Reference{
 		ResourceId: space.Root,
 		Path:       relativeSpacePath,

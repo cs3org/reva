@@ -276,7 +276,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 
 		spaceInfos = append(spaceInfos, info)
 
-		if rootInfo == nil && requestPath == info.Path {
+		if rootInfo == nil && requestPath == info.Path || requestPath == path.Join("/", strings.TrimPrefix(info.Path, spacePath)) {
 			rootInfo = info
 		}
 
