@@ -272,11 +272,15 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 
 		// adjust path
-		info.Path = filepath.Join(spacePath, spaceRef.Path)
+		if !spacesPropfind {
+			info.Path = filepath.Join(spacePath, spaceRef.Path)
+		} else {
+			info.Path = spaceRef.Path
+		}
 
 		spaceInfos = append(spaceInfos, info)
 
-		if rootInfo == nil && requestPath == info.Path || requestPath == path.Join("/", strings.TrimPrefix(info.Path, spacePath)) {
+		if rootInfo == nil && requestPath == info.Path || spacesPropfind && requestPath == path.Join("/", info.Path) {
 			rootInfo = info
 		}
 
@@ -371,8 +375,10 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					log.Debug().Interface("status", res.Status).Msg("List Container not ok, skipping")
 					continue
 				}
-				for _, info := range res.Infos {
-					info.Path = path.Join(requestPath, info.Path)
+				if !spacesPropfind {
+					for _, info := range res.Infos {
+						info.Path = path.Join(requestPath, info.Path)
+					}
 				}
 				resourceInfos = append(resourceInfos, res.Infos...)
 			case strings.HasPrefix(spacePath, requestPath): // space is a child of the requested path
