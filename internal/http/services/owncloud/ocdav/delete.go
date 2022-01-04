@@ -104,14 +104,15 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID string) {
+func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID, ns string) {
 	ctx := r.Context()
 	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "spaces_delete")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
+	fn := path.Join(ns, r.URL.Path)
 	// retrieve a specific storage space
-	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, fn)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
