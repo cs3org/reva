@@ -130,7 +130,7 @@ func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Refer
 			return true
 		}
 		// r: <resource_id:<storage_id: opaque_id:$token/$opaqueID> path:$path>
-		if id.GetOpaqueId() == s.Token+"/"+s.GetResourceId().GetOpaqueId() {
+		if strings.HasPrefix(id.GetOpaqueId(), s.Token+"/") {
 			return true
 		}
 	}

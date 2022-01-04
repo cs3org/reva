@@ -411,12 +411,12 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 
 				req := &provider.ListContainerRequest{
 					Ref: &provider.Reference{
-						ResourceId: info.Id,
-						Path:       ".",
+						ResourceId: spaceInfo.Id,
+						Path:       utils.MakeRelativePath(strings.TrimPrefix(info.Path, spaceInfo.Path)),
 					},
 					ArbitraryMetadataKeys: metadataKeys,
 				}
-				res, err := client.ListContainer(ctx, req)
+				res, err := client.ListContainer(ctx, req) // FIXME public link depth infinity -> "gateway: could not find provider: gateway: error calling ListStorageProviders: rpc error: code = PermissionDenied desc = auth: core access token is invalid"
 				if err != nil {
 					log.Error().Err(err).Interface("info", info).Msg("error sending list container grpc request")
 					w.WriteHeader(http.StatusInternalServerError)
