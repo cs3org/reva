@@ -98,6 +98,7 @@ def main(ctx):
     return [
         changelog(),
         checkStarlark(),
+        checkGoGenerate(),
         coverage(),
         buildAndPublishDocker(),
         buildOnly(),
@@ -925,6 +926,29 @@ def checkStarlark():
                         "failure",
                     ],
                 },
+            },
+        ],
+        "depends_on": [],
+        "trigger": {
+            "ref": [
+                "refs/pull/**",
+            ],
+        },
+    }
+
+def checkGoGenerate():
+    return {
+        "kind": "pipeline",
+        "type": "docker",
+        "name": "check-go-generate",
+        "steps": [
+            {
+                "name": "check-go-generate",
+                "image": "registry.cern.ch/docker.io/library/golang:1.17",
+                "commands": [
+                    "make go-generate",
+                    "git diff --exit-code",
+                ],
             },
         ],
         "depends_on": [],
