@@ -298,10 +298,10 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 	}
 
-	if len(spaceInfos) == 0 {
+	if len(spaceInfos) == 0 || rootInfo == nil {
 		// TODO if we have children invent node on the fly
 		w.WriteHeader(http.StatusNotFound)
-		m := fmt.Sprintf("Resource %v not found", r.URL.Path)
+		m := fmt.Sprintf("Resource %v not found", requestPath)
 		b, err := Marshal(exception{
 			code:    SabredavNotFound,
 			message: m,
