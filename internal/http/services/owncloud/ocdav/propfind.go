@@ -308,9 +308,11 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	if mostRecentChildInfo != nil {
 		if rootInfo.Mtime == nil || (mostRecentChildInfo.Mtime != nil && utils.TSToUnixNano(mostRecentChildInfo.Mtime) > utils.TSToUnixNano(rootInfo.Mtime)) {
 			rootInfo.Mtime = mostRecentChildInfo.Mtime
-			rootInfo.Etag = mostRecentChildInfo.Etag
+			if mostRecentChildInfo.Etag != "" {
+				rootInfo.Etag = mostRecentChildInfo.Etag
+			}
 		}
-		if rootInfo.Etag == "" || mostRecentChildInfo.Etag != rootInfo.Etag {
+		if rootInfo.Etag == "" {
 			rootInfo.Etag = mostRecentChildInfo.Etag
 		}
 	}
