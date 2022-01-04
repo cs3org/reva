@@ -39,7 +39,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-//go:generate make -C ../../../.. mockery NAME=GatewayClient
+//go:generate make --no-print-directory -C ../../../.. mockery NAME=GatewayClient
 
 // GatewayClient describe the interface of a gateway client
 type GatewayClient interface {

@@ -44,7 +44,7 @@ import (
 	gstatus "google.golang.org/grpc/status"
 )
 
-//go:generate make -C ../../../.. mockery NAME=GatewayClient
+//go:generate make --no-print-directory -C ../../../.. mockery NAME=GatewayClient
 
 // GatewayClient describe the interface of a gateway client
 type GatewayClient interface {

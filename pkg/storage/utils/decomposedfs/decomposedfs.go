@@ -50,8 +50,8 @@ import (
 	"github.com/pkg/xattr"
 )
 
-//go:generate make -C ../../../.. mockery NAME=PermissionsChecker
-//go:generate make -C ../../../.. mockery NAME=Tree
+//go:generate make --no-print-directory -C ../../../.. mockery NAME=PermissionsChecker
+//go:generate make --no-print-directory -C ../../../.. mockery NAME=Tree
 
 // PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
