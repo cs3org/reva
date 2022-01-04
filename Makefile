@@ -148,7 +148,7 @@ composer.lock: composer.json
 
 .PHONY: mockery
 mockery: $(MOCKERY)
-	$(MOCKERY) --dir $(PWD) --output $(PWD)/mocks --boilerplate-file ./.templates/mockery.go --name $(NAME)
+	$(MOCKERY) --dir $(PWD) --output $(PWD)/mocks --boilerplate-file ./.templates/mockery.go.tmpl --name $(NAME)
 	@echo ""
 
 .PHONY: go-generate
