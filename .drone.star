@@ -97,6 +97,7 @@ def main(ctx):
   # implemented for: ocisIntegrationTests and s3ngIntegrationTests
   return [
     changelog(),
+    checkStarlark(),
     coverage(),
     buildAndPublishDocker(),
     buildOnly(),
@@ -859,3 +860,38 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
     )
 
   return pipelines
+
+def checkStarlark():
+    return [{
+        "kind": "pipeline",
+        "type": "docker",
+        "name": "check-starlark",
+        "steps": [
+            {
+                "name": "format-check-starlark",
+                "image": "owncloudci/bazel-buildifier:latest",
+                "commands": [
+                    "buildifier --mode=check .drone.star",
+                ],
+            },
+            {
+                "name": "show-diff",
+                "image": "owncloudci/bazel-buildifier:latest",
+                "commands": [
+                    "buildifier --mode=fix .drone.star",
+                    "git diff",
+                ],
+                "when": {
+                    "status": [
+                        "failure",
+                    ],
+                },
+            },
+        ],
+        "depends_on": [],
+        "trigger": {
+            "ref": [
+                "refs/pull/**",
+            ],
+        },
+    }]
