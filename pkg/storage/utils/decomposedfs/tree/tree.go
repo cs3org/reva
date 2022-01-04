@@ -43,7 +43,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// go:generate mockery -name Blobstore
+//go:generate make -C ../../../../.. mockery NAME=Blobstore
 
 const (
 	spaceTypePersonal = "personal"

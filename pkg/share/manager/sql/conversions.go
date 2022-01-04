@@ -33,7 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-//go:generate mockery -name UserConverter
+//go:generate make -C ../../../.. mockery NAME=UserConverter
 
 // DBShare stores information about user and public shares.
 type DBShare struct {

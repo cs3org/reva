@@ -36,14 +36,24 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 )
+
+//go:generate make -C ../../../.. mockery NAME=GatewayClient
+
+// GatewayClient describe the interface of a gateway client
+type GatewayClient interface {
+	GetPublicShareByToken(ctx context.Context, req *link.GetPublicShareByTokenRequest, opts ...grpc.CallOption) (*link.GetPublicShareByTokenResponse, error)
+	GetUser(ctx context.Context, in *userprovider.GetUserRequest, opts ...grpc.CallOption) (*userprovider.GetUserResponse, error)
+}
 
 func init() {
 	registry.Register("publicshares", New)
 }
 
 type manager struct {
-	c *config
+	c   *config
+	gwc GatewayClient
 }
 
 type config struct {
@@ -66,6 +76,13 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	gwc, err := pool.GetGatewayServiceClient(mgr.c.GatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+	mgr.gwc = gwc
+
 	return mgr, nil
 }
 
@@ -79,11 +96,6 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 }
 
 func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user.User, map[string]*authpb.Scope, error) {
-	gwConn, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	var auth *link.PublicShareAuthentication
 	if strings.HasPrefix(secret, "password|") {
 		secret = strings.TrimPrefix(secret, "password|")
@@ -111,7 +123,7 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		}
 	}
 
-	publicShareResponse, err := gwConn.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{
+	publicShareResponse, err := m.gwc.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{
 		Token:          token,
 		Authentication: auth,
 		Sign:           true,
@@ -127,7 +139,7 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		return nil, nil, errtypes.InternalError(publicShareResponse.Status.Message)
 	}
 
-	getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{
+	getUserResponse, err := m.gwc.GetUser(ctx, &userprovider.GetUserRequest{
 		UserId: publicShareResponse.GetShare().GetCreator(),
 	})
 	if err != nil {

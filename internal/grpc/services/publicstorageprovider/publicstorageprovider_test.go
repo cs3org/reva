@@ -29,7 +29,6 @@ import (
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	gatewayMock "github.com/cs3org/go-cs3apis/mocks/cs3/gateway/v1beta1"
 )
 
 var (
@@ -39,13 +38,13 @@ var (
 var _ = Describe("Public Storage Provider", func() {
 	var (
 		ctx context.Context
-		gwc *gatewayMock.GatewayAPIClient
+		gwc *MockGatewayClient
 		psp *service
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		gwc = &gatewayMock.GatewayAPIClient{}
+		gwc = &MockGatewayClient{}
 		psp = &service{
 			conf:      &config{},
 			mountPath: "/public/",

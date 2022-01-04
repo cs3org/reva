@@ -44,6 +44,22 @@ import (
 	gstatus "google.golang.org/grpc/status"
 )
 
+//go:generate make -C ../../../.. mockery NAME=GatewayClient
+
+// GatewayClient describe the interface of a gateway client
+type GatewayClient interface {
+	Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error)
+	Move(ctx context.Context, in *provider.MoveRequest, opts ...grpc.CallOption) (*provider.MoveResponse, error)
+	Delete(ctx context.Context, in *provider.DeleteRequest, opts ...grpc.CallOption) (*provider.DeleteResponse, error)
+	CreateContainer(ctx context.Context, in *provider.CreateContainerRequest, opts ...grpc.CallOption) (*provider.CreateContainerResponse, error)
+	TouchFile(ctx context.Context, in *provider.TouchFileRequest, opts ...grpc.CallOption) (*provider.TouchFileResponse, error)
+	ListContainer(ctx context.Context, in *provider.ListContainerRequest, opts ...grpc.CallOption) (*provider.ListContainerResponse, error)
+	InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileDownloadResponse, error)
+	InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileUploadResponse, error)
+	SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest, opts ...grpc.CallOption) (*provider.SetArbitraryMetadataResponse, error)
+	GetPublicShare(ctx context.Context, req *link.GetPublicShareRequest, opts ...grpc.CallOption) (*link.GetPublicShareResponse, error)
+}
+
 func init() {
 	rgrpc.Register("publicstorageprovider", New)
 }
@@ -58,7 +74,7 @@ type service struct {
 	conf      *config
 	mountPath string
 	mountID   string
-	gateway   gateway.GatewayAPIClient
+	gateway   GatewayClient
 }
 
 func (s *service) Close() error {

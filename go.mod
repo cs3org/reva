@@ -91,5 +91,3 @@ replace (
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 	google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
 )
-
-replace github.com/cs3org/go-cs3apis => /home/kloucek/Projects/github.com/cs3org/cs3apis/build/go-cs3apis

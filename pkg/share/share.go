@@ -29,7 +29,7 @@ import (
 	"google.golang.org/genproto/protobuf/field_mask"
 )
 
-//go:generate mockery -name Manager
+//go:generate make -C ../.. mockery NAME=Manager
 
 // Manager is the interface that manipulates shares.
 type Manager interface {

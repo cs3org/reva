@@ -18,9 +18,6 @@
 
 package decomposedfs
 
-// go:generate mockery -name PermissionsChecker
-// go:generate mockery -name Tree
-
 import (
 	"context"
 	"fmt"
@@ -52,6 +49,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
+
+//go:generate make -C ../../../.. mockery NAME=PermissionsChecker
+//go:generate make -C ../../../.. mockery NAME=Tree
 
 // PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
