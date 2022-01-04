@@ -103,9 +103,10 @@ var _ = Describe("The ocs API", func() {
 			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 				Status: status.NewOK(context.Background()),
 				Info: &provider.ResourceInfo{
-					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-					Path: "/newshare",
-					Id:   resID,
+					Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Path:  "/newshare",
+					Id:    resID,
+					Owner: user.Id,
 					PermissionSet: &provider.ResourcePermissions{
 						Stat:        true,
 						AddGrant:    true,
