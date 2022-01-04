@@ -226,7 +226,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		HandleErrorStatus(&sublog, w, rpcstatus)
 		return
 	}
-	ref := makeRelativeReference(space, basePath)
+	ref := makeRelativeReference(space, basePath, false)
 
 	// ask gateway for recycle items
 	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: path.Join(key, itemPath)})
@@ -491,7 +491,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		HandleErrorStatus(&sublog, w, rpcstatus)
 		return
 	}
-	dstRef := makeRelativeReference(space, dst)
+	dstRef := makeRelativeReference(space, dst, false)
 
 	dstStatReq := &provider.StatRequest{
 		Ref: dstRef,
@@ -513,7 +513,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	// restore location exists, and if it doesn't returns a conflict error code.
 	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst) {
 		parentStatReq := &provider.StatRequest{
-			Ref: makeRelativeReference(space, filepath.Dir(dst)),
+			Ref: makeRelativeReference(space, filepath.Dir(dst), false),
 		}
 
 		parentStatResponse, err := client.Stat(ctx, parentStatReq)
@@ -574,7 +574,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		// this means we can only undelete on the same storage, not to a different folder
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
 		// TODO currently limited to the home storage
-		Ref:        makeRelativeReference(sourceSpace, basePath),
+		Ref:        makeRelativeReference(sourceSpace, basePath, false),
 		Key:        path.Join(key, itemPath),
 		RestoreRef: dstRef,
 	}
@@ -647,7 +647,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	}
 
 	req := &provider.PurgeRecycleRequest{
-		Ref: makeRelativeReference(space, basePath),
+		Ref: makeRelativeReference(space, basePath, false),
 		Key: path.Join(key, itemPath),
 	}
 

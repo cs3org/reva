@@ -265,7 +265,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		spacePath := string(space.Opaque.Map["path"].Value)
 		// TODO separate stats to the path or to the children, after statting all children update the mtime/etag
 		// TODO get mtime, and size from space as well, so we no longer have to stat here?
-		spaceRef := makeRelativeReference(space, requestPath)
+		spaceRef := makeRelativeReference(space, requestPath, spacesPropfind)
 		info, status, err := s.statSpace(ctx, client, space, spaceRef, metadataKeys)
 		if err != nil || status.Code != rpc.Code_CODE_OK {
 			continue

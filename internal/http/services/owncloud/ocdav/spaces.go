@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -209,15 +208,15 @@ func (s *svc) lookUpStorageSpaceByID(ctx context.Context, spaceID string) (*stor
 	return lSSRes.StorageSpaces[0], lSSRes.Status, nil
 
 }
-func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string) (*storageProvider.Reference, *rpc.Status, error) {
+func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string, spacesDavRequest bool) (*storageProvider.Reference, *rpc.Status, error) {
 	space, status, err := s.lookUpStorageSpaceByID(ctx, spaceID)
 	if err != nil {
 		return nil, status, err
 	}
-	return makeRelativeReference(space, relativePath), status, err
+	return makeRelativeReference(space, relativePath, spacesDavRequest), status, err
 }
 
-func makeRelativeReference(space *provider.StorageSpace, relativePath string) *storageProvider.Reference {
+func makeRelativeReference(space *storageProvider.StorageSpace, relativePath string, spacesDavRequest bool) *storageProvider.Reference {
 	if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
 		return nil // not mounted
 	}
@@ -225,6 +224,8 @@ func makeRelativeReference(space *provider.StorageSpace, relativePath string) *s
 	relativeSpacePath := "."
 	if strings.HasPrefix(relativePath, spacePath) {
 		relativeSpacePath = utils.MakeRelativePath(strings.TrimPrefix(relativePath, spacePath))
+	} else if spacesDavRequest {
+		relativeSpacePath = utils.MakeRelativePath(relativePath)
 	}
 	return &storageProvider.Reference{
 		ResourceId: space.Root,

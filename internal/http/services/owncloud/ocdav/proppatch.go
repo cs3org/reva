@@ -75,7 +75,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		return
 	}
 	// check if resource exists
-	statReq := &provider.StatRequest{Ref: makeRelativeReference(space, fn)}
+	statReq := &provider.StatRequest{Ref: makeRelativeReference(space, fn, false)}
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc stat request")
@@ -97,7 +97,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		return
 	}
 
-	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, makeRelativeReference(space, fn), pp, sublog)
+	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, makeRelativeReference(space, fn, false), pp, sublog)
 	if !ok {
 		// handleProppatch handles responses in error cases so we can just return
 		return
@@ -126,7 +126,7 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	}
 
 	// retrieve a specific storage space
-	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)

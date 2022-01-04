@@ -80,7 +80,7 @@ func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceI
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
 
-	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, path.Join(r.URL.Path, meta["filename"]))
+	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, path.Join(r.URL.Path, meta["filename"]), true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)

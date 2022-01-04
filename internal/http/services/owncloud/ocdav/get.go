@@ -59,7 +59,7 @@ func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	s.handleGet(ctx, w, r, makeRelativeReference(space, fn), "spaces", sublog)
+	s.handleGet(ctx, w, r, makeRelativeReference(space, fn, false), "spaces", sublog)
 }
 
 func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, dlProtocol string, log zerolog.Logger) {
@@ -176,7 +176,7 @@ func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID st
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "get").Logger()
 
 	// retrieve a specific storage space
-	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
