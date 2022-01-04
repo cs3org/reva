@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 
@@ -29,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/utils"
@@ -36,11 +38,15 @@ import (
 
 // SpacesHandler handles trashbin requests
 type SpacesHandler struct {
-	gatewaySvc string
+	gatewaySvc        string
+	namespace         string
+	useLoggedInUserNS bool
 }
 
 func (h *SpacesHandler) init(c *Config) error {
 	h.gatewaySvc = c.GatewaySvc
+	h.namespace = path.Join("/", c.WebdavNamespace)
+	h.useLoggedInUserNS = true
 	return nil
 }
 
@@ -49,6 +55,16 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ctx := r.Context()
 		// log := appctx.GetLogger(ctx)
+		ns, newPath, err := s.ApplyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: fmt.Sprintf("could not get storage for %s", r.URL.Path),
+			})
+			HandleWebdavError(appctx.GetLogger(r.Context()), w, b, err)
+		}
+		r.URL.Path = newPath
 
 		if r.Method == http.MethodOptions {
 			s.handleOptions(w, r)
@@ -74,7 +90,7 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		case MethodUnlock:
 			s.handleUnlock(w, r, spaceID)
 		case MethodMkcol:
-			s.handleSpacesMkCol(w, r, spaceID)
+			s.handleSpacesMkCol(w, r, spaceID, ns)
 		case MethodMove:
 			s.handleSpacesMove(w, r, spaceID)
 		case MethodCopy:
@@ -180,6 +196,7 @@ func (s *svc) lookUpStorageSpaceByID(ctx context.Context, spaceID string) (*stor
 
 	// retrieve a specific storage space
 	lSSReq := &storageProvider.ListStorageSpacesRequest{
+		Opaque: &typesv1beta1.Opaque{},
 		Filters: []*storageProvider.ListStorageSpacesRequest_Filter{
 			{
 				Type: storageProvider.ListStorageSpacesRequest_Filter_TYPE_ID,
@@ -205,6 +222,9 @@ func (s *svc) lookUpStorageSpaceByID(ctx context.Context, spaceID string) (*stor
 }
 func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string) (*storageProvider.Reference, *rpc.Status, error) {
 	space, status, err := s.lookUpStorageSpaceByID(ctx, spaceID)
+	if err != nil {
+		return nil, status, err
+	}
 	return makeRelativeReference(space, relativePath), status, err
 }
 
