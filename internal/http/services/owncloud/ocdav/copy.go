@@ -142,9 +142,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		// descend for children
 		listReq := &provider.ListContainerRequest{
-			Ref: &provider.Reference{
-				ResourceId: cp.sourceInfo.Id,
-			},
+			Ref: cp.source,
 		}
 		res, err := client.ListContainer(ctx, listReq)
 		if err != nil {
