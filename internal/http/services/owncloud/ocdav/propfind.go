@@ -289,13 +289,8 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				continue
 			}
 			if mostRecentChildInfo.Mtime == nil || (info.Mtime != nil && utils.TSToUnixNano(info.Mtime) > utils.TSToUnixNano(mostRecentChildInfo.Mtime)) {
-				mostRecentChildInfo.Mtime = info.Mtime
-				mostRecentChildInfo.Etag = info.Etag
+				mostRecentChildInfo = info
 			}
-			if mostRecentChildInfo.Etag == "" && mostRecentChildInfo.Etag != info.Etag {
-				mostRecentChildInfo.Etag = info.Etag
-			}
-			continue
 		}
 	}
 
@@ -311,11 +306,11 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		return nil, false, false
 	}
 	if mostRecentChildInfo != nil {
-		if rootInfo.Mtime == nil || (rootInfo.Mtime != nil && utils.TSToUnixNano(rootInfo.Mtime) > utils.TSToUnixNano(mostRecentChildInfo.Mtime)) {
+		if rootInfo.Mtime == nil || (mostRecentChildInfo.Mtime != nil && utils.TSToUnixNano(mostRecentChildInfo.Mtime) > utils.TSToUnixNano(rootInfo.Mtime)) {
 			rootInfo.Mtime = mostRecentChildInfo.Mtime
 			rootInfo.Etag = mostRecentChildInfo.Etag
 		}
-		if rootInfo.Etag == "" && mostRecentChildInfo.Etag != rootInfo.Etag {
+		if rootInfo.Etag == "" || mostRecentChildInfo.Etag != rootInfo.Etag {
 			rootInfo.Etag = mostRecentChildInfo.Etag
 		}
 	}
