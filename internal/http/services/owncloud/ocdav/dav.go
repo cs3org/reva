@@ -33,6 +33,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/utils"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -279,7 +280,13 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
-	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: path.Join("/public", token)}})
+	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: utils.PublicStorageProviderID,
+			OpaqueId:  utils.PublicStorageProviderID,
+		},
+		Path: utils.MakeRelativePath(token),
+	}})
 }
 
 func handleBasicAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token, pw string) (*gatewayv1beta1.AuthenticateResponse, error) {

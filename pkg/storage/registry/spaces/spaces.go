@@ -22,14 +22,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -37,7 +38,6 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
@@ -105,10 +105,12 @@ func (c *config) init() {
 		c.Providers = map[string]*Provider{
 			sharedconf.GetGatewaySVC(""): {
 				Spaces: map[string]*spaceConfig{
-					"personal": {MountPoint: "/users", PathTemplate: "/users/{{.Space.Owner.Id.OpaqueId}}"},
-					"project":  {MountPoint: "/projects", PathTemplate: "/projects/{{.Space.Name}}"},
-					"share":    {MountPoint: "/users/{{.CurrentUser.Id.OpaqueId}}/Shares", PathTemplate: "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}"},
-					"public":   {MountPoint: "/public"},
+					"personal":   {MountPoint: "/users", PathTemplate: "/users/{{.Space.Owner.Id.OpaqueId}}"},
+					"project":    {MountPoint: "/projects", PathTemplate: "/projects/{{.Space.Name}}"},
+					"virtual":    {MountPoint: "/users/{{.CurrentUser.Id.OpaqueId}}/Shares"},
+					"grant":      {MountPoint: "."},
+					"mountpoint": {MountPoint: "/users/{{.CurrentUser.Id.OpaqueId}}/Shares", PathTemplate: "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}"},
+					"public":     {MountPoint: "/public"},
 				},
 			},
 		}
@@ -271,24 +273,29 @@ func (r *registry) GetProvider(ctx context.Context, space *providerpb.StorageSpa
 // matches = /foo/bar       <=> /foo/bar        -> list(spaceid, .)
 // below   = /foo/bar/bif   <=> /foo/bar        -> list(spaceid, ./bif)
 func (r *registry) ListProviders(ctx context.Context, filters map[string]string) ([]*registrypb.ProviderInfo, error) {
+	b, _ := strconv.ParseBool(filters["unique"])
 	switch {
 	case filters["storage_id"] != "" && filters["opaque_id"] != "":
-		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"]), nil
+		findMountpoint := filters["type"] == "mountpoint"
+		findGrant := !findMountpoint && filters["path"] == "" // relvative references, by definition, occur in the correct storage, so do not look for grants
+		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"], findMountpoint, findGrant), nil
 	case filters["path"] != "":
-		return r.findProvidersForAbsolutePathReference(ctx, filters["path"]), nil
+		return r.findProvidersForAbsolutePathReference(ctx, filters["path"], b), nil
 		// TODO add filter for all spaces the user can manage?
 	case len(filters) == 0:
 		// return all providers
 		return r.findAllProviders(ctx), nil
+	default:
+		return nil, errors.New("filters misconfigured")
 	}
-	return []*registrypb.ProviderInfo{}, nil
 }
 
 // findProvidersForResource looks up storage providers based on a resource id
 // for the root of a space the res.StorageId is the same as the res.OpaqueId
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
-func (r *registry) findProvidersForResource(ctx context.Context, id string) []*registrypb.ProviderInfo {
+func (r *registry) findProvidersForResource(ctx context.Context, id string, findMoundpoint, findGrant bool) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
+	providerInfos := []*registrypb.ProviderInfo{}
 	for address, provider := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
 			Address:    address,
@@ -302,12 +309,21 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 				},
 			},
 		}}
-		for spaceType := range provider.Spaces {
-			// add filter to id based request if it is configured
+		if findMoundpoint {
+			// when listing by id return also grants and mountpoints
 			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
 				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
 				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
-					SpaceType: spaceType,
+					SpaceType: "+mountpoint",
+				},
+			})
+		}
+		if findGrant {
+			// when listing by id return also grants and mountpoints
+			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+					SpaceType: "+grant",
 				},
 			})
 		}
@@ -322,37 +338,52 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string) []*r
 			// nothing to do, will continue with next provider
 		case 1:
 			space := spaces[0]
-			for spaceType, sc := range provider.Spaces {
-				if spaceType == space.SpaceType {
-					providerPath, err := sc.SpacePath(currentUser, space)
-					if err != nil {
-						appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
-						continue
-					}
-					spacePaths := map[string]string{
-						space.Id.OpaqueId: providerPath,
-					}
-					p.Opaque, err = spacePathsToOpaque(spacePaths)
-					if err != nil {
-						appctx.GetLogger(ctx).Error().Err(err).Msg("marshaling space paths map failed, continuing")
-						continue
-					}
-					// we can stop after we found the first space
-					// TODO to improve lookup time the registry could cache which provider last was responsible for a space? could be invalidated by simple ttl? would that work for shares?
-					return []*registrypb.ProviderInfo{p}
+
+			var sc *spaceConfig
+			var ok bool
+			var spacePath string
+
+			if space.SpaceType == "grant" {
+				spacePath = "." // a . indicates a grant, the gateway will do a findMountpoint for it
+			} else {
+				if findMoundpoint && space.SpaceType != "mountpoint" {
+					continue
+				}
+				// filter unwanted space types. type mountpoint is not explicitly configured but requested by the gateway
+				if sc, ok = provider.Spaces[space.SpaceType]; !ok && space.SpaceType != "mountpoint" {
+					continue
+				}
+
+				spacePath, err = sc.SpacePath(currentUser, space)
+				if err != nil {
+					appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
+					continue
 				}
 			}
+
+			spacePaths := map[string]string{
+				space.Id.OpaqueId: spacePath,
+			}
+			p.Opaque, err = spacePathsToOpaque(spacePaths)
+			if err != nil {
+				appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
+				continue
+			}
+			// we can stop after we found the first space
+			// TODO to improve lookup time the registry could cache which provider last was responsible for a space? could be invalidated by simple ttl? would that work for shares?
+			// return []*registrypb.ProviderInfo{p}
+			providerInfos = append(providerInfos, p) // hm we need to query all providers ... or the id based lookup might only see the spaces storage provider
 		default:
 			// there should not be multiple spaces with the same id per provider
 			appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("spaces", spaces).Msg("multiple spaces returned, ignoring")
 		}
 	}
-	return []*registrypb.ProviderInfo{}
+	return providerInfos
 }
 
 // findProvidersForAbsolutePathReference takes a path and returns the storage provider with the longest matching path prefix
 // FIXME use regex to return the correct provider when multiple are configured
-func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, path string) []*registrypb.ProviderInfo {
+func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, path string, unique bool) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 
 	deepestMountPath := ""
@@ -366,31 +397,13 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 		var spaces []*providerpb.StorageSpace
 		var err error
 		filters := []*providerpb.ListStorageSpacesRequest_Filter{}
-		for spaceType, sc := range provider.Spaces {
-
-			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
-					SpaceType: spaceType,
-				},
-			})
-			if sc.OwnerIsCurrentUser {
-				filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-					Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_OWNER,
-					Term: &providerpb.ListStorageSpacesRequest_Filter_Owner{
-						Owner: currentUser.Id,
-					},
-				})
-			}
-			if sc.ID != "" {
-				filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-					Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_ID,
-					Term: &providerpb.ListStorageSpacesRequest_Filter_Id{
-						Id: &providerpb.StorageSpaceId{OpaqueId: sc.ID},
-					},
-				})
-			}
-		}
+		// when listing paths also return mountpoints
+		filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+			Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+				SpaceType: "+mountpoint",
+			},
+		})
 
 		spaces, err = r.findStorageSpaceOnProvider(ctx, p.Address, filters)
 		if err != nil {
@@ -402,6 +415,13 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 		for _, space := range spaces {
 			var sc *spaceConfig
 			var ok bool
+
+			if space.SpaceType == "grant" {
+				spacePaths[space.Id.OpaqueId] = "." // a . indicates a grant, the gateway will do a findMountpoint for it
+				continue
+			}
+
+			// filter unwanted space types. type mountpoint is not explicitly configured but requested by the gateway
 			if sc, ok = provider.Spaces[space.SpaceType]; !ok {
 				continue
 			}
@@ -412,7 +432,14 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 			}
 
 			switch {
-			case strings.HasPrefix(spacePath, path):
+			case spacePath == path && unique:
+				spacePaths[space.Id.OpaqueId] = spacePath
+
+				deepestMountPath = spacePath
+				deepestMountSpace = space
+				deepestMountPathProvider = p
+
+			case strings.HasPrefix(spacePath, path) && !unique:
 				// and add all providers below and exactly matching the path
 				// requested /foo, mountPath /foo/sub
 				spacePaths[space.Id.OpaqueId] = spacePath
@@ -421,6 +448,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 					deepestMountSpace = space
 					deepestMountPathProvider = p
 				}
+
 			case strings.HasPrefix(path, spacePath) && len(spacePath) > len(deepestMountPath):
 				// eg. three providers: /foo, /foo/sub, /foo/sub/bar
 				// requested /foo/sub/mob
@@ -496,10 +524,8 @@ func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, 
 
 	res, err := c.ListStorageSpaces(ctx, req)
 	if err != nil {
-		return nil, err
-	}
-	if res.Status.Code != rpc.Code_CODE_OK && res.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		return nil, status.NewErrorFromCode(res.Status.Code, "spaces registry")
+		// ignore errors
+		return nil, nil
 	}
 	return res.StorageSpaces, nil
 }

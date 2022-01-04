@@ -251,7 +251,8 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		}
 	}
 
-	appctx.GetLogger(ctx).Debug().Interface("permissions", NoPermissions()).Interface("node", n).Interface("user", u).Msg("no grant found, returning default permissions")
+	// NOTE: this log is being printed 1 million times on a simple test. TODO: Check if this is expected
+	// appctx.GetLogger(ctx).Debug().Interface("permissions", NoPermissions()).Interface("node", n).Interface("user", u).Msg("no grant found, returning default permissions")
 	return false, nil
 }
 

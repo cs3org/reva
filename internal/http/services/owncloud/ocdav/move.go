@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
@@ -55,15 +56,34 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	dstPath = path.Join(ns, dstPath)
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", srcPath).Str("dst", dstPath).Logger()
-	src := &provider.Reference{Path: srcPath}
-	dst := &provider.Reference{Path: dstPath}
 
-	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
-		intermediateDir := path.Dir(dstPath)
-		ref := &provider.Reference{Path: intermediateDir}
-		return ref, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
+	srcSpace, status, err := s.lookUpStorageSpaceForPath(ctx, srcPath)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", srcPath).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
-	s.handleMove(ctx, w, r, src, dst, intermediateDirRefFunc, sublog)
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+	dstSpace, status, err := s.lookUpStorageSpaceForPath(ctx, dstPath)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", srcPath).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	// FIXME I suck
+	if dstSpace.Root.OpaqueId == utils.ShareStorageProviderID {
+		dstSpace.Root = srcSpace.Root
+	}
+
+	s.handleMove(ctx, w, r, makeRelativeReference(srcSpace, srcPath, false), makeRelativeReference(dstSpace, dstPath, false), sublog)
 }
 
 func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
@@ -78,7 +98,7 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", srcSpaceID).Str("path", r.URL.Path).Logger()
 	// retrieve a specific storage space
-	srcRef, status, err := s.lookUpStorageSpaceReference(ctx, srcSpaceID, r.URL.Path)
+	srcRef, status, err := s.lookUpStorageSpaceReference(ctx, srcSpaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -93,7 +113,7 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 	dstSpaceID, dstRelPath := router.ShiftPath(dst)
 
 	// retrieve a specific storage space
-	dstRef, status, err := s.lookUpStorageSpaceReference(ctx, dstSpaceID, dstRelPath)
+	dstRef, status, err := s.lookUpStorageSpaceReference(ctx, dstSpaceID, dstRelPath, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -105,14 +125,10 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 		return
 	}
 
-	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
-		intermediateDir := path.Dir(dstRelPath)
-		return s.lookUpStorageSpaceReference(ctx, dstSpaceID, intermediateDir)
-	}
-	s.handleMove(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, sublog)
+	s.handleMove(ctx, w, r, srcRef, dstRef, sublog)
 }
 
-func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, intermediateDirRef intermediateDirRefFunc, log zerolog.Logger) {
+func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, log zerolog.Logger) {
 	overwrite := r.Header.Get(HeaderOverwrite)
 	log.Debug().Str("overwrite", overwrite).Msg("move")
 
@@ -193,17 +209,10 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		}
 	} else {
 		// check if an intermediate path / the parent exists
-		dst, status, err := intermediateDirRef()
-		if err != nil {
-			log.Error().Err(err).Msg("error sending a grpc request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		} else if status.Code != rpc.Code_CODE_OK {
-			HandleErrorStatus(&log, w, status)
-			return
-		}
-
-		intStatReq := &provider.StatRequest{Ref: dst}
+		intStatReq := &provider.StatRequest{Ref: &provider.Reference{
+			ResourceId: dst.ResourceId,
+			Path:       utils.MakeRelativePath(path.Dir(dst.Path)),
+		}}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")

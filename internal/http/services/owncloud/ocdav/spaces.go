@@ -22,20 +22,29 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"path"
+	"strconv"
+	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
 // SpacesHandler handles trashbin requests
 type SpacesHandler struct {
-	gatewaySvc string
+	gatewaySvc        string
+	namespace         string
+	useLoggedInUserNS bool
 }
 
 func (h *SpacesHandler) init(c *Config) error {
 	h.gatewaySvc = c.GatewaySvc
+	h.namespace = path.Join("/", c.WebdavNamespace)
+	h.useLoggedInUserNS = true
 	return nil
 }
 
@@ -94,7 +103,79 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string) (*storageProvider.Reference, *rpc.Status, error) {
+// lookUpStorageSpacesForPath returns:
+// th storage spaces responsible for a path
+// the status and error for the lookup
+func (s *svc) lookUpStorageSpaceForPath(ctx context.Context, path string) (*storageProvider.StorageSpace, *rpc.Status, error) {
+	// Get the getway client
+	gatewayClient, err := s.getClient()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// TODO add filter to only fetch spaces changed in the last 30 sec?
+	// TODO cache space information, invalidate after ... 5min? so we do not need to fetch all spaces?
+	// TODO use ListContainerStream to listen for changes
+	// retrieve a specific storage space
+	lSSReq := &storageProvider.ListStorageSpacesRequest{
+		Opaque: &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"path": {
+					Decoder: "plain",
+					Value:   []byte(path),
+				},
+				"unique": {
+					Decoder: "plain",
+					Value:   []byte(strconv.FormatBool(true)),
+				},
+			},
+		},
+	}
+
+	lSSRes, err := gatewayClient.ListStorageSpaces(ctx, lSSReq)
+	if err != nil || lSSRes.Status.Code != rpc.Code_CODE_OK {
+		return nil, lSSRes.Status, err
+	}
+	switch len(lSSRes.StorageSpaces) {
+	case 0:
+		return nil, status.NewNotFound(ctx, "no space found"), nil
+	case 1:
+		return lSSRes.StorageSpaces[0], lSSRes.Status, nil
+	}
+
+	return nil, status.NewInternal(ctx, "too many spaces returned"), nil
+}
+
+// lookUpStorageSpacesForPathWithChildren returns:
+// the list of storage spaces responsible for a path
+// the status and error for the lookup
+func (s *svc) lookUpStorageSpacesForPathWithChildren(ctx context.Context, path string) ([]*storageProvider.StorageSpace, *rpc.Status, error) {
+	// Get the getway client
+	gatewayClient, err := s.getClient()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// TODO add filter to only fetch spaces changed in the last 30 sec?
+	// TODO cache space information, invalidate after ... 5min? so we do not need to fetch all spaces?
+	// TODO use ListContainerStream to listen for changes
+	// retrieve a specific storage space
+	lSSReq := &storageProvider.ListStorageSpacesRequest{
+		Opaque: &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"path":            {Decoder: "plain", Value: []byte(path)},
+				"withChildMounts": {Decoder: "plain", Value: []byte("true")},
+			}},
+	}
+
+	lSSRes, err := gatewayClient.ListStorageSpaces(ctx, lSSReq)
+	if err != nil || lSSRes.Status.Code != rpc.Code_CODE_OK {
+		return nil, lSSRes.Status, err
+	}
+
+	return lSSRes.StorageSpaces, lSSRes.Status, nil
+}
+func (s *svc) lookUpStorageSpaceByID(ctx context.Context, spaceID string) (*storageProvider.StorageSpace, *rpc.Status, error) {
 	// Get the getway client
 	gatewayClient, err := s.getClient()
 	if err != nil {
@@ -103,6 +184,7 @@ func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, r
 
 	// retrieve a specific storage space
 	lSSReq := &storageProvider.ListStorageSpacesRequest{
+		Opaque: &typesv1beta1.Opaque{},
 		Filters: []*storageProvider.ListStorageSpacesRequest_Filter{
 			{
 				Type: storageProvider.ListStorageSpacesRequest_Filter_TYPE_ID,
@@ -123,10 +205,30 @@ func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, r
 	if len(lSSRes.StorageSpaces) != 1 {
 		return nil, nil, fmt.Errorf("unexpected number of spaces %d", len(lSSRes.StorageSpaces))
 	}
-	space := lSSRes.StorageSpaces[0]
+	return lSSRes.StorageSpaces[0], lSSRes.Status, nil
 
+}
+func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string, spacesDavRequest bool) (*storageProvider.Reference, *rpc.Status, error) {
+	space, status, err := s.lookUpStorageSpaceByID(ctx, spaceID)
+	if err != nil {
+		return nil, status, err
+	}
+	return makeRelativeReference(space, relativePath, spacesDavRequest), status, err
+}
+
+func makeRelativeReference(space *storageProvider.StorageSpace, relativePath string, spacesDavRequest bool) *storageProvider.Reference {
+	if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
+		return nil // not mounted
+	}
+	spacePath := string(space.Opaque.Map["path"].Value)
+	relativeSpacePath := "."
+	if strings.HasPrefix(relativePath, spacePath) {
+		relativeSpacePath = utils.MakeRelativePath(strings.TrimPrefix(relativePath, spacePath))
+	} else if spacesDavRequest {
+		relativeSpacePath = utils.MakeRelativePath(relativePath)
+	}
 	return &storageProvider.Reference{
 		ResourceId: space.Root,
-		Path:       utils.MakeRelativePath(relativePath),
-	}, lSSRes.Status, nil
+		Path:       relativeSpacePath,
+	}
 }

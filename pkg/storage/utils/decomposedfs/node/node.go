@@ -948,13 +948,13 @@ func (n *Node) FindStorageSpaceRoot() error {
 	var err error
 	// remember the node we ask for and use parent to climb the tree
 	parent := n
-	for parent.ParentID != "" {
-		if parent, err = parent.Parent(); err != nil {
-			return err
-		}
+	for {
 		if IsSpaceRoot(parent) {
 			n.SpaceRoot = parent
 			break
+		}
+		if parent, err = parent.Parent(); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -963,10 +963,8 @@ func (n *Node) FindStorageSpaceRoot() error {
 // IsSpaceRoot checks if the node is a space root
 func IsSpaceRoot(r *Node) bool {
 	path := r.InternalPath()
-	if spaceNameBytes, err := xattr.Get(path, xattrs.SpaceNameAttr); err == nil {
-		if string(spaceNameBytes) != "" {
-			return true
-		}
+	if _, err := xattr.Get(path, xattrs.SpaceNameAttr); err == nil {
+		return true
 	}
 	return false
 }

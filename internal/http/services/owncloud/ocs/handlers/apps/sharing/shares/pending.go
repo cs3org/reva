@@ -24,10 +24,7 @@ import (
 	"net/http"
 	"path"
 	"sort"
-	"strconv"
-	"strings"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -95,11 +92,14 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(mountPoints)
 
 	// now we have a list of shares, we want to iterate over all of them and check for name collisions
-	for i, mp := range mountPoints {
-		if mp == mount {
-			mount = fmt.Sprintf("%s (%s)", base, strconv.Itoa(i+1))
+	// FIXME: adjust logic
+	/*
+		for i, mp := range mountPoints {
+			if mp == mount {
+				mount = fmt.Sprintf("%s (%s)", base, strconv.Itoa(i+1))
+			}
 		}
-	}
+	*/
 
 	for id := range sharesToAccept {
 		h.updateReceivedShare(w, r, id, false, mount)
@@ -162,16 +162,6 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc get resource info failed", errors.Errorf("code: %d, message: %s", status.Code, status.Message))
 		return
 	}
-
-	// cut off configured home namespace, paths in ocs shares are relative to it
-	identifier := h.mustGetIdentifiers(ctx, client, info.Owner.OpaqueId, false)
-	u := &userpb.User{
-		Id:          info.Owner,
-		Username:    identifier.Username,
-		DisplayName: identifier.DisplayName,
-		Mail:        identifier.Mail,
-	}
-	info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(u))
 
 	data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
 	if err != nil {

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -40,13 +41,12 @@ import (
 )
 
 type copy struct {
+	source      *provider.Reference
 	sourceInfo  *provider.ResourceInfo
 	destination *provider.Reference
 	depth       string
 	successCode int
 }
-
-type intermediateDirRefFunc func() (*provider.Reference, *rpc.Status, error)
 
 func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "copy")
@@ -68,18 +68,28 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
 
-	srcRef := &provider.Reference{Path: src}
-
-	// check dst exists
-	dstRef := &provider.Reference{Path: dst}
-
-	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
-		intermediateDir := path.Dir(dst)
-		ref := &provider.Reference{Path: intermediateDir}
-		return ref, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
+	srcSpace, status, err := s.lookUpStorageSpaceForPath(ctx, src)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", src).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+	dstSpace, status, err := s.lookUpStorageSpaceForPath(ctx, dst)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", dst).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
 	}
 
-	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
+	cp := s.prepareCopy(ctx, w, r, makeRelativeReference(srcSpace, src, false), makeRelativeReference(dstSpace, dst, false), &sublog)
 	if cp == nil {
 		return
 	}
@@ -132,7 +142,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		// descend for children
 		listReq := &provider.ListContainerRequest{
-			Ref: &provider.Reference{Path: cp.sourceInfo.Path},
+			Ref: cp.source,
 		}
 		res, err := client.ListContainer(ctx, listReq)
 		if err != nil {
@@ -144,8 +154,16 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		}
 
 		for i := range res.Infos {
-			childDst := &provider.Reference{Path: path.Join(cp.destination.Path, path.Base(res.Infos[i].Path))}
-			err := s.executePathCopy(ctx, client, w, r, &copy{sourceInfo: res.Infos[i], destination: childDst, depth: cp.depth, successCode: cp.successCode})
+			child := filepath.Base(res.Infos[i].Path)
+			src := &provider.Reference{
+				ResourceId: cp.source.ResourceId,
+				Path:       utils.MakeRelativePath(filepath.Join(cp.source.Path, child)),
+			}
+			childDst := &provider.Reference{
+				ResourceId: cp.destination.ResourceId,
+				Path:       utils.MakeRelativePath(filepath.Join(cp.destination.Path, child)),
+			}
+			err := s.executePathCopy(ctx, client, w, r, &copy{source: src, sourceInfo: res.Infos[i], destination: childDst, depth: cp.depth, successCode: cp.successCode})
 			if err != nil {
 				return err
 			}
@@ -157,7 +175,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		// 1. get download url
 
 		dReq := &provider.InitiateFileDownloadRequest{
-			Ref: &provider.Reference{Path: cp.sourceInfo.Path},
+			Ref: cp.source,
 		}
 
 		dRes, err := client.InitiateFileDownload(ctx, dReq)
@@ -269,7 +287,7 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Str("destination", dst).Logger()
 
 	// retrieve a specific storage space
-	srcRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	srcRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -284,7 +302,7 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 	dstSpaceID, dstRelPath := router.ShiftPath(dst)
 
 	// retrieve a specific storage space
-	dstRef, status, err := s.lookUpStorageSpaceReference(ctx, dstSpaceID, dstRelPath)
+	dstRef, status, err := s.lookUpStorageSpaceReference(ctx, dstSpaceID, dstRelPath, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -296,12 +314,7 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 		return
 	}
 
-	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
-		intermediateDir := path.Dir(dstRelPath)
-		return s.lookUpStorageSpaceReference(ctx, dstSpaceID, intermediateDir)
-	}
-
-	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
+	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, &sublog)
 	if cp == nil {
 		return
 	}
@@ -474,7 +487,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 	return nil
 }
 
-func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, intermediateDirRef intermediateDirRefFunc, log *zerolog.Logger) *copy {
+func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, log *zerolog.Logger) *copy {
 	overwrite, err := extractOverwrite(w, r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -570,20 +583,13 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 			HandleErrorStatus(log, w, delRes.Status)
 			return nil
 		}
-	} else {
+	} else if p := path.Dir(dstRef.Path); p != "" {
 		// check if an intermediate path / the parent exists
-		intermediateRef, status, err := intermediateDirRef()
-		if err != nil {
-			log.Error().Err(err).Msg("error sending a grpc request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return nil
+		pRef := &provider.Reference{
+			ResourceId: dstRef.ResourceId,
+			Path:       utils.MakeRelativePath(p),
 		}
-
-		if status.Code != rpc.Code_CODE_OK {
-			HandleErrorStatus(log, w, status)
-			return nil
-		}
-		intStatReq := &provider.StatRequest{Ref: intermediateRef}
+		intStatReq := &provider.StatRequest{Ref: pRef}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
@@ -593,17 +599,17 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		if intStatRes.Status.Code != rpc.Code_CODE_OK {
 			if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
-				log.Debug().Interface("parent", intermediateRef).Interface("status", intStatRes.Status).Msg("conflict")
+				log.Debug().Interface("parent", pRef).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
 			} else {
-				HandleErrorStatus(log, w, srcStatRes.Status)
+				HandleErrorStatus(log, w, intStatRes.Status)
 			}
 			return nil
 		}
 		// TODO what if intermediate is a file?
 	}
 
-	return &copy{sourceInfo: srcStatRes.Info, depth: depth, successCode: successCode, destination: dstRef}
+	return &copy{source: srcRef, sourceInfo: srcStatRes.Info, depth: depth, successCode: successCode, destination: dstRef}
 }
 
 func extractOverwrite(w http.ResponseWriter, r *http.Request) (string, error) {
