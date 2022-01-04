@@ -222,7 +222,10 @@ func makeRelativeReference(space *provider.StorageSpace, relativePath string) *s
 		return nil // not mounted
 	}
 	spacePath := string(space.Opaque.Map["path"].Value)
-	relativeSpacePath := utils.MakeRelativePath(strings.TrimPrefix(relativePath, spacePath))
+	relativeSpacePath := "."
+	if strings.HasPrefix(relativePath, spacePath) {
+		relativeSpacePath = utils.MakeRelativePath(strings.TrimPrefix(relativePath, spacePath))
+	}
 	return &storageProvider.Reference{
 		ResourceId: space.Root,
 		Path:       relativeSpacePath,
