@@ -345,13 +345,14 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {
+func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID, ns string) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_put")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
 
-	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	fn := path.Join(ns, r.URL.Path)
+	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, fn)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)

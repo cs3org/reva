@@ -98,9 +98,9 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		case MethodReport:
 			s.handleReport(w, r, spaceID)
 		case http.MethodGet:
-			s.handleSpacesGet(w, r, spaceID)
+			s.handleSpacesGet(w, r, spaceID, ns)
 		case http.MethodPut:
-			s.handleSpacesPut(w, r, spaceID)
+			s.handleSpacesPut(w, r, spaceID, ns)
 		case http.MethodPost:
 			s.handleSpacesTusPost(w, r, spaceID)
 		case http.MethodOptions:
