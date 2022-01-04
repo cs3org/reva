@@ -21,8 +21,8 @@ package ocdav
 import (
 	"net/http"
 	"path"
+	"path/filepath"
 
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -50,10 +50,6 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 
 		if relativePath != "" && relativePath != "/" {
 			// accessing the file
-			// PROPFIND has an implicit call
-			if r.Method != MethodPropfind && !s.adjustResourcePathInURL(w, r) {
-				return
-			}
 
 			switch r.Method {
 			case MethodPropfind:
@@ -85,44 +81,6 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bool {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "adjustResourcePathInURL")
-	defer span.End()
-
-	// find actual file name
-	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
-	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
-
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return false
-	}
-	pathRes, err := client.GetPath(ctx, &provider.GetPathRequest{
-		ResourceId: tokenStatInfo.GetId(),
-	})
-	if err != nil {
-		sublog.Error().Msg("Could not get path of resource")
-		w.WriteHeader(http.StatusInternalServerError)
-		return false
-	}
-	if pathRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, pathRes.Status)
-		return false
-	}
-	if path.Base(r.URL.Path) != path.Base(pathRes.Path) {
-		sublog.Debug().
-			Str("requestbase", path.Base(r.URL.Path)).
-			Str("pathbase", path.Base(pathRes.Path)).
-			Msg("base paths don't match")
-		w.WriteHeader(http.StatusConflict)
-		return false
-	}
-
-	return true
-}
-
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns string, onContainer bool) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "token_propfind")
@@ -150,6 +108,9 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		w.WriteHeader(status)
 		return
 	}
+
+	// prefix tokenStatInfo.Path with token
+	tokenStatInfo.Path = filepath.Join(r.URL.Path, tokenStatInfo.Path)
 
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
 
