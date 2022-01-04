@@ -151,32 +151,6 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		return
 	}
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	// find actual file name
-	pathRes, err := client.GetPath(ctx, &provider.GetPathRequest{
-		ResourceId: tokenStatInfo.GetId(),
-	})
-	if err != nil {
-		sublog.Warn().Msg("Could not get path of resource")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if pathRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, pathRes.Status)
-		return
-	}
-
-	if !onContainer && path.Base(r.URL.Path) != path.Base(pathRes.Path) {
-		// if queried on the wrong path, return not found
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
 
 	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, nil)
