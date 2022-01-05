@@ -202,7 +202,7 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 	if err != nil {
 		log.Err(err).Msg("gateway: error creating storage space on storage provider")
 		return &provider.CreateStorageSpaceResponse{
-			Status: status.NewInternal(ctx, "error calling CreateStorageSpace"),
+			Status: status.NewStatusFromErrType(ctx, "gateway could not call CreateStorageSpace", err),
 		}, nil
 	}
 
@@ -257,29 +257,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 	spaces := []*provider.StorageSpace{}
 	for _, providerInfo := range res.Providers {
-		spacePaths := decodeSpacePaths(providerInfo)
-		for spaceID, spacePath := range spacePaths {
-			storageid, opaqueid, err := utils.SplitStorageSpaceID(spaceID)
-			if err != nil {
-				// TODO: log? error?
-				continue
-			}
-			spaces = append(spaces, &provider.StorageSpace{
-				Id: &provider.StorageSpaceId{OpaqueId: spaceID},
-				Opaque: &typesv1beta1.Opaque{
-					Map: map[string]*typesv1beta1.OpaqueEntry{
-						"path": {
-							Decoder: "plain",
-							Value:   []byte(spacePath),
-						},
-					},
-				},
-				Root: &provider.ResourceId{
-					StorageId: storageid,
-					OpaqueId:  opaqueid,
-				},
-			})
-		}
+		spaces = append(spaces, decodeSpaces(providerInfo)...)
 	}
 
 	return &provider.ListStorageSpacesResponse{
@@ -384,17 +362,17 @@ func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provide
 		}, nil
 	}
 
-	// NOTE: this will cause confusion if len(spacePath) > 1
-	spacePaths := decodeSpacePaths(res.Providers[0])
-	for _, spacePath := range spacePaths {
+	// NOTE: this will cause confusion if len(spaces) > 1
+	spaces := decodeSpaces(res.Providers[0])
+	for _, space := range spaces {
 		return &provider.GetHomeResponse{
-			Path:   spacePath,
+			Path:   decodePath(space),
 			Status: status.NewOK(ctx),
 		}, nil
 	}
 
 	return &provider.GetHomeResponse{
-		Status: status.NewNotFound(ctx, fmt.Sprintf("error finding home path for provider %+v with spacePaths  %+v ", res.Providers[0], spacePaths)),
+		Status: status.NewNotFound(ctx, fmt.Sprintf("error finding home path for provider %+v with spaces %+v ", res.Providers[0], spaces)),
 	}, nil
 }
 
@@ -528,8 +506,8 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 	}
 
 	mountPath := ""
-	for _, spacePath := range decodeSpacePaths(p) {
-		mountPath = spacePath
+	for _, space := range decodeSpaces(p) {
+		mountPath = decodePath(space)
 		break // TODO can there be more than one space for a path?
 	}
 
@@ -818,15 +796,9 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			continue
 		}
 
-		for spaceID, mountPath := range decodeSpacePaths(providerInfos[i]) {
-			var root *provider.ResourceId
-			rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
-			if rootSpace != "" && rootNode != "" {
-				root = &provider.ResourceId{
-					StorageId: rootSpace,
-					OpaqueId:  rootNode,
-				}
-			}
+		for _, space := range decodeSpaces(providerInfos[i]) {
+			mountPath := decodePath(space)
+			root := space.Root
 			// build reference for the provider
 			r := &provider.Reference{
 				ResourceId: req.Ref.ResourceId,
@@ -976,15 +948,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			continue
 		}
 
-		for spaceID, mountPath := range decodeSpacePaths(providerInfos[i]) {
-			var root *provider.ResourceId
-			rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
-			if rootSpace != "" && rootNode != "" {
-				root = &provider.ResourceId{
-					StorageId: rootSpace,
-					OpaqueId:  rootNode,
-				}
-			}
+		for _, space := range decodeSpaces(providerInfos[i]) {
+			mountPath := decodePath(space)
+			root := space.Root
 			// build reference for the provider - copy to avoid side effects
 			r := &provider.Reference{
 				ResourceId: req.Ref.ResourceId,
@@ -1182,13 +1148,9 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 			}, nil
 		}
 
-		var root *provider.ResourceId
-		for spaceID, mountPath := range decodeSpacePaths(providerInfos[i]) {
-			rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
-			root = &provider.ResourceId{
-				StorageId: rootSpace,
-				OpaqueId:  rootNode,
-			}
+		for _, space := range decodeSpaces(providerInfos[i]) {
+			mountPath := decodePath(space)
+			root := space.Root
 			// build reference for the provider
 			r := &provider.Reference{
 				ResourceId: req.Ref.ResourceId,
@@ -1252,13 +1214,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	var srcRef *provider.Reference
 	for i := range providerInfos {
 
-		var root *provider.ResourceId
-		for spaceID, mountPath := range decodeSpacePaths(providerInfos[i]) {
-			rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
-			root = &provider.ResourceId{
-				StorageId: rootSpace,
-				OpaqueId:  rootNode,
-			}
+		for _, space := range decodeSpaces(providerInfos[i]) {
+			mountPath := decodePath(space)
+			root := space.Root
 			// build reference for the provider
 			r := &provider.Reference{
 				ResourceId: req.Ref.ResourceId,
@@ -1294,13 +1252,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	var dstProvider *registry.ProviderInfo
 	var dstRef *provider.Reference
 	for i := range dstProviderInfos {
-		var root *provider.ResourceId
-		for spaceID, mountPath := range decodeSpacePaths(dstProviderInfos[i]) {
-			rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
-			root = &provider.ResourceId{
-				StorageId: rootSpace,
-				OpaqueId:  rootNode,
-			}
+		for _, space := range decodeSpaces(dstProviderInfos[i]) {
+			mountPath := decodePath(space)
+			root := space.Root
 			// build reference for the provider
 			r := &provider.Reference{
 				ResourceId: req.RestoreRef.ResourceId,
@@ -1426,16 +1380,9 @@ func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provi
 		root      *provider.ResourceId
 		mountPath string
 	)
-	for spaceID, spacePath := range decodeSpacePaths(p) {
-		mountPath = spacePath
-		rootSpace, rootNode, err := utils.SplitStorageSpaceID(spaceID)
-		if err != nil {
-			continue
-		}
-		root = &provider.ResourceId{
-			StorageId: rootSpace,
-			OpaqueId:  rootNode,
-		}
+	for _, space := range decodeSpaces(p) {
+		mountPath = decodePath(space)
+		root = space.Root
 		break // TODO can there be more than one space for a path?
 	}
 
@@ -1569,23 +1516,36 @@ func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceI
 	}
 }
 
-func decodeSpacePaths(r *registry.ProviderInfo) map[string]string {
-	spacePaths := map[string]string{}
+func decodeSpaces(r *registry.ProviderInfo) []*provider.StorageSpace {
+	spaces := []*provider.StorageSpace{}
 	if r.Opaque != nil {
-		if entry, ok := r.Opaque.Map["space_paths"]; ok {
+		if entry, ok := r.Opaque.Map["spaces"]; ok {
 			switch entry.Decoder {
 			case "json":
-				_ = json.Unmarshal(entry.Value, &spacePaths)
+				_ = json.Unmarshal(entry.Value, &spaces)
 			case "toml":
-				_ = toml.Unmarshal(entry.Value, &spacePaths)
+				_ = toml.Unmarshal(entry.Value, &spaces)
 			case "xml":
-				_ = xml.Unmarshal(entry.Value, &spacePaths)
+				_ = xml.Unmarshal(entry.Value, &spaces)
 			}
 		}
 	}
 
-	if len(spacePaths) == 0 {
-		spacePaths[""] = r.ProviderPath
+	return spaces
+}
+
+func decodePath(s *provider.StorageSpace) (path string) {
+	if s.Opaque != nil {
+		if entry, ok := s.Opaque.Map["path"]; ok {
+			switch entry.Decoder {
+			case "json":
+				_ = json.Unmarshal(entry.Value, &path)
+			case "toml":
+				_ = toml.Unmarshal(entry.Value, &path)
+			case "xml":
+				_ = xml.Unmarshal(entry.Value, &path)
+			}
+		}
 	}
-	return spacePaths
+	return
 }
