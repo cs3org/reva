@@ -97,7 +97,7 @@ func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo
 	// The primary key is just the ID in the table, it should ideally be (uid, fileid_prefix, fileid, tag_key)
 	// For the time being, just check if the favorite already exists. If it does, return early
 	var id int
-	query := `"SELECT id FROM cbox_metadata WHERE uid=? AND fileid_prefix=? AND fileid=? AND tag_key="fav"`
+	query := `SELECT id FROM cbox_metadata WHERE uid=? AND fileid_prefix=? AND fileid=? AND tag_key="fav"`
 	if err := m.db.QueryRow(query, user.Id.OpaqueId, resourceInfo.Id.StorageId, resourceInfo.Id.OpaqueId).Scan(&id); err == nil {
 		// Favorite is already set, return
 		return nil

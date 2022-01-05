@@ -497,7 +497,7 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 		} else if grantSplit[0] == acl.TypeGroup {
 			grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: parts[0], Idp: parts[1]}}
 		}
-		permissions := grants.GetGrantPermissionSet(role, true)
+		permissions := grants.GetGrantPermissionSet(role)
 
 		grantList = append(grantList, &provider.Grant{
 			Grantee:     grantee,

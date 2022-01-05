@@ -596,8 +596,10 @@ func (s *service) augmentStatResponse(ctx context.Context, res *provider.StatRes
 }
 
 func (s *service) setPublicStorageID(info *provider.ResourceInfo, shareToken string) {
-	info.Id.StorageId = s.mountID
-	info.Id.OpaqueId = shareToken + "/" + info.Id.OpaqueId
+	if s.mountID != "" {
+		info.Id.StorageId = s.mountID
+		info.Id.OpaqueId = shareToken + "/" + info.Id.OpaqueId
+	}
 }
 
 func addShare(i *provider.ResourceInfo, ls *link.PublicShare) error {
