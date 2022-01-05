@@ -20,7 +20,6 @@ package ocdav
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"path"
 	"strings"
@@ -34,6 +33,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/utils"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -98,7 +98,6 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
-		log.Info().Str("request", fmt.Sprintf("%#v", r)).Msg("Got webdav request")
 
 		// if there is no file in the request url we assume the request url is: "/remote.php/dav/files"
 		// https://github.com/owncloud/core/blob/18475dac812064b21dabcc50f25ef3ffe55691a5/tests/acceptance/features/apiWebdavOperations/propfind.feature
@@ -281,7 +280,13 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
-	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: path.Join("/public", token)}})
+	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: utils.PublicStorageProviderID,
+			OpaqueId:  utils.PublicStorageProviderID,
+		},
+		Path: utils.MakeRelativePath(token),
+	}})
 }
 
 func handleBasicAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token, pw string) (*gatewayv1beta1.AuthenticateResponse, error) {

@@ -654,9 +654,9 @@ var _ = Describe("gateway", func() {
 
 		Describe("Move", func() {
 			It("moves a directory", func() {
-				sourceRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId, OpaqueId: homeSpace.Id.OpaqueId}, Path: "/source"}
-				targetRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId, OpaqueId: homeSpace.Id.OpaqueId}, Path: "/destination"}
-				dstRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/destination/source"}
+				sourceRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId, OpaqueId: homeSpace.Id.OpaqueId}, Path: "./source"}
+				targetRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId, OpaqueId: homeSpace.Id.OpaqueId}, Path: "./destination"}
+				dstRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId, OpaqueId: homeSpace.Id.OpaqueId}, Path: "./destination/source"}
 
 				err := fs.CreateDir(ctx, sourceRef)
 				Expect(err).ToNot(HaveOccurred())

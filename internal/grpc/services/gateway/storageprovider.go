@@ -21,11 +21,13 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"net/url"
-	"sync"
+	"path/filepath"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -152,7 +154,7 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 		}
 	}
 
-	srClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	srClient, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -205,7 +207,6 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 }
 
 func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	log := appctx.GetLogger(ctx)
 
 	// TODO update CS3 api to forward the filters to the registry so it can filter the number of providers the gateway needs to query
 	filters := map[string]string{}
@@ -213,7 +214,11 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			filters["storage_id"], filters["opaque_id"] = utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			sid, oid, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			if err != nil {
+				continue
+			}
+			filters["storage_id"], filters["opaque_id"] = sid, oid
 		case provider.ListStorageSpacesRequest_Filter_TYPE_OWNER:
 			filters["owner_idp"] = f.GetOwner().Idp
 			filters["owner_id"] = f.GetOwner().OpaqueId
@@ -226,14 +231,13 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		}
 	}
 
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	c, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
 
-	listReq := &registry.ListStorageProvidersRequest{}
+	listReq := &registry.ListStorageProvidersRequest{Opaque: req.Opaque}
 	if len(filters) > 0 {
-		listReq.Opaque = &typesv1beta1.Opaque{}
 		sdk.EncodeOpaqueMap(listReq.Opaque, filters)
 	}
 	res, err := c.ListStorageProviders(ctx, listReq)
@@ -248,66 +252,37 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		}, nil
 	}
 
-	// TODO the providers now have an opaque "spaces_paths" property
-	providerInfos := res.Providers
-
-	spacesFromProviders := make([][]*provider.StorageSpace, len(providerInfos))
-	errors := make([]error, len(providerInfos))
-
-	var wg sync.WaitGroup
-	for i, p := range providerInfos {
-		// we need to ask the provider for the space details
-		wg.Add(1)
-		go s.listStorageSpacesOnProvider(ctx, req, &spacesFromProviders[i], p, &errors[i], &wg)
-	}
-	wg.Wait()
-
-	uniqueSpaces := map[string]*provider.StorageSpace{}
-	for i := range providerInfos {
-		if errors[i] != nil {
-			if len(providerInfos) > 1 {
-				log.Debug().Err(errors[i]).Msg("skipping provider")
+	spaces := []*provider.StorageSpace{}
+	for _, providerInfo := range res.Providers {
+		spacePaths := decodeSpacePaths(providerInfo)
+		for spaceID, spacePath := range spacePaths {
+			storageid, opaqueid, err := utils.SplitStorageSpaceID(spaceID)
+			if err != nil {
+				// TODO: log? error?
 				continue
 			}
-			return &provider.ListStorageSpacesResponse{
-				Status: status.NewStatusFromErrType(ctx, "error listing space", errors[i]),
-			}, nil
+			spaces = append(spaces, &provider.StorageSpace{
+				Id: &provider.StorageSpaceId{OpaqueId: spaceID},
+				Opaque: &typesv1beta1.Opaque{
+					Map: map[string]*typesv1beta1.OpaqueEntry{
+						"path": {
+							Decoder: "plain",
+							Value:   []byte(spacePath),
+						},
+					},
+				},
+				Root: &provider.ResourceId{
+					StorageId: storageid,
+					OpaqueId:  opaqueid,
+				},
+			})
 		}
-		for j := range spacesFromProviders[i] {
-			uniqueSpaces[spacesFromProviders[i][j].Id.OpaqueId] = spacesFromProviders[i][j]
-		}
-	}
-	spaces := make([]*provider.StorageSpace, 0, len(uniqueSpaces))
-	for spaceID := range uniqueSpaces {
-		spaces = append(spaces, uniqueSpaces[spaceID])
-	}
-	if len(spaces) == 0 {
-		return &provider.ListStorageSpacesResponse{
-			Status: status.NewNotFound(ctx, "space not found"),
-		}, nil
 	}
 
 	return &provider.ListStorageSpacesResponse{
 		Status:        status.NewOK(ctx),
 		StorageSpaces: spaces,
 	}, nil
-}
-
-func (s *svc) listStorageSpacesOnProvider(ctx context.Context, req *provider.ListStorageSpacesRequest, res *[]*provider.StorageSpace, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
-	defer wg.Done()
-	c, err := s.getStorageProviderClient(ctx, p)
-	if err != nil {
-		*e = errors.Wrap(err, "error connecting to storage provider="+p.Address)
-		return
-	}
-
-	r, err := c.ListStorageSpaces(ctx, req)
-	if err != nil {
-		*e = errors.Wrap(err, "gateway: error calling ListStorageSpaces")
-		return
-	}
-
-	*res = r.StorageSpaces
 }
 
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
@@ -327,14 +302,20 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 			Status: status.NewInternal(ctx, "error calling UpdateStorageSpace"),
 		}, nil
 	}
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
 	return res, nil
 }
 
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	storageid, opaqeid := utils.SplitStorageSpaceID(req.Id.OpaqueId)
+	storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
+	if err != nil {
+		return &provider.DeleteStorageSpaceResponse{
+			Status: status.NewInvalidArg(ctx, "OpaqueID was empty"),
+		}, nil
+	}
+
 	c, _, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
 		StorageId: storageid,
 		OpaqueId:  opaqeid,
@@ -353,14 +334,14 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 		}, nil
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
 	return res, nil
 }
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 
-	srClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	srClient, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -400,10 +381,8 @@ func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provide
 		}, nil
 	}
 
-	spacePaths := decodeSpacePaths(res.Providers[0].Opaque)
-	if len(spacePaths) == 0 {
-		spacePaths[""] = res.Providers[0].ProviderPath
-	}
+	// NOTE: this will cause confusion if len(spacePath) > 1
+	spacePaths := decodeSpacePaths(res.Providers[0])
 	for _, spacePath := range spacePaths {
 		return &provider.GetHomeResponse{
 			Path:   spacePath,
@@ -529,7 +508,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return &gateway.InitiateFileUploadResponse{
 		Opaque:    storageRes.Opaque,
 		Status:    storageRes.Status,
@@ -538,22 +517,34 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
-	statReq := &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.ResourceId}}
-	statRes, err := s.Stat(ctx, statReq)
+	c, p, err := s.find(ctx, &provider.Reference{ResourceId: req.ResourceId})
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error stating ref:"+statReq.Ref.String())
+		return &provider.GetPathResponse{
+			Status: status.NewStatusFromErrType(ctx, "getpath ref="+req.String(), err),
+		}, nil
+	}
+
+	mountPath := ""
+	for _, spacePath := range decodeSpacePaths(p) {
+		mountPath = spacePath
+		break // TODO can there be more than one space for a path?
+	}
+
+	res, err := c.GetPath(ctx, req)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting path:"+req.String())
 		return nil, err
 	}
 
-	if statRes.Status.Code != rpc.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK {
 		return &provider.GetPathResponse{
-			Status: statRes.Status,
+			Status: res.Status,
 		}, nil
 	}
 
 	return &provider.GetPathResponse{
-		Status: statRes.Status,
-		Path:   statRes.GetInfo().GetPath(),
+		Status: res.Status,
+		Path:   filepath.Join(mountPath, res.GetPath()),
 	}, nil
 }
 
@@ -572,7 +563,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -614,7 +605,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		return nil, errors.Wrap(err, "gateway: error calling Delete")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -638,8 +629,8 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}, nil
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
 	return c.Move(ctx, req)
 }
 
@@ -660,7 +651,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 		return nil, errors.Wrap(err, "gateway: error calling SetArbitraryMetadata")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -681,7 +672,95 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 		return nil, errors.Wrap(err, "gateway: error calling UnsetArbitraryMetadata")
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	return res, nil
+}
+
+// SetLock puts a lock on the given reference
+func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
+	var c provider.ProviderAPIClient
+	var err error
+	c, _, err = s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.SetLockResponse{
+			Status: status.NewStatusFromErrType(ctx, "SetLock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.SetLock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.SetLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling SetLock")
+	}
+
+	return res, nil
+}
+
+// GetLock returns an existing lock on the given reference
+func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
+	var c provider.ProviderAPIClient
+	var err error
+	c, _, err = s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.GetLockResponse{
+			Status: status.NewStatusFromErrType(ctx, "GetLock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.GetLock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.GetLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling GetLock")
+	}
+
+	return res, nil
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+	var c provider.ProviderAPIClient
+	var err error
+	c, _, err = s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.RefreshLockResponse{
+			Status: status.NewStatusFromErrType(ctx, "RefreshLock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.RefreshLock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.RefreshLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling RefreshLock")
+	}
+
+	return res, nil
+}
+
+// Unlock removes an existing lock from the given reference
+func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
+	var c provider.ProviderAPIClient
+	var err error
+	c, _, err = s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.UnlockResponse{
+			Status: status.NewStatusFromErrType(ctx, "Unlock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.Unlock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.UnlockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling Unlock")
+	}
+
 	return res, nil
 }
 
@@ -753,7 +832,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 		}, nil
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return c.RestoreFileVersion(ctx, req)
 }
 
@@ -805,9 +884,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 		}, nil
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	if req.RestoreRef != nil {
-		RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
 	}
 	return c.RestoreRecycleItem(ctx, req)
 }
@@ -821,7 +900,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 		}, nil
 	}
 
-	RemoveFromCache(s.statCache, ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return c.PurgeRecycle(ctx, &provider.PurgeRecycleRequest{
 		Opaque: req.GetOpaque(),
 		Ref:    req.Ref,
@@ -849,7 +928,7 @@ func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*prov
 // - contains the provider path, which is the mount point of the provider
 // - may contain a list of storage spaces with their id and space path
 func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *registry.ProviderInfo, error) {
-	p, err := s.findProviders(ctx, ref)
+	p, err := s.findSpaces(ctx, ref)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -865,70 +944,49 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 		return nil, err
 	}
 
-	return Cached(c, s.statCache), nil
+	return s.cache.StorageProviderClient(c), nil
 }
 
-/*
-func userKey(ctx context.Context) string {
-	u := ctxpkg.ContextMustGetUser(ctx)
-	sb := strings.Builder{}
-	if u.Id != nil {
-		sb.WriteString(u.Id.OpaqueId)
-		sb.WriteString("@")
-		sb.WriteString(u.Id.Idp)
-	} else {
-		// fall back to username
-		sb.WriteString(u.Username)
+func (s *svc) getStorageRegistryClient(_ context.Context, address string) (registry.RegistryAPIClient, error) {
+	c, err := pool.GetStorageRegistryClient(address)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting a storage provider client")
+		return nil, err
 	}
-	return sb.String()
-}
-*/
 
-func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
+	return s.cache.StorageRegistryClient(c), nil
+}
+
+// func (s *svc) findMountPoint(ctx context.Context, id *provider.ResourceId) ([]*registry.ProviderInfo, error) {
+// // TODO can we use a provider cache for mount points?
+// if id == nil {
+// return nil, errtypes.BadRequest("invalid reference, at least path or id must be set")
+// }
+
+// filters := map[string]string{
+// "type":       "mountpoint",
+// "storage_id": id.StorageId,
+// "opaque_id":  id.OpaqueId,
+// }
+
+// listReq := &registry.ListStorageProvidersRequest{
+// Opaque: &typesv1beta1.Opaque{},
+// }
+// sdk.EncodeOpaqueMap(listReq.Opaque, filters)
+
+// return s.findProvider(ctx, listReq)
+// }
+
+func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
 	switch {
 	case ref == nil:
 		return nil, errtypes.BadRequest("missing reference")
-	case ref.ResourceId != nil: // can we use the provider cache?
-		// only the StorageId is used to look up the provider. the opaqueid can only be a share and as such part of a storage
-		if value, exists := s.providerCache.Get(ref.ResourceId.StorageId); exists == nil {
-			if providers, ok := value.([]*registry.ProviderInfo); ok {
-				return providers, nil
-			}
-		}
+	case ref.ResourceId != nil:
+		// no action needed in that case
 	case ref.Path != "": //  TODO implement a mount path cache in the registry?
-	/*
-		// path / mount point lookup from cache
-		if value, exists := s.mountCache.Get(userKey(ctx)); exists == nil {
-			if m, ok := value.(map[string][]*registry.ProviderInfo); ok {
-				providers := make([]*registry.ProviderInfo, 0, len(m))
-				deepestMountPath := ""
-				for mountPath, providerInfos := range m {
-					switch {
-					case strings.HasPrefix(mountPath, ref.Path):
-						// and add all providers below and exactly matching the path
-						// requested /foo, mountPath /foo/sub
-						providers = append(providers, providerInfos...)
-					case strings.HasPrefix(ref.Path, mountPath) && len(mountPath) > len(deepestMountPath):
-						// eg. three providers: /foo, /foo/sub, /foo/sub/bar
-						// requested /foo/sub/mob
-						deepestMountPath = mountPath
-					}
-				}
-				if deepestMountPath != "" {
-					providers = append(providers, m[deepestMountPath]...)
-				}
-				return providers, nil
-			}
-		}
-	*/
+		// nothing to do here either
 	default:
 		return nil, errtypes.BadRequest("invalid reference, at least path or id must be set")
-	}
-
-	// lookup
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
 
 	filters := map[string]string{
@@ -943,8 +1001,17 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		Opaque: &typesv1beta1.Opaque{},
 	}
 	sdk.EncodeOpaqueMap(listReq.Opaque, filters)
-	res, err := c.ListStorageProviders(ctx, listReq)
 
+	return s.findProvider(ctx, listReq)
+}
+
+func (s *svc) findProvider(ctx context.Context, listReq *registry.ListStorageProvidersRequest) ([]*registry.ProviderInfo, error) {
+	// lookup
+	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
+	}
+	res, err := c.ListStorageProviders(ctx, listReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListStorageProviders")
 	}
@@ -953,13 +1020,13 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		switch res.Status.Code {
 		case rpc.Code_CODE_NOT_FOUND:
 			// TODO use tombstone cache item?
-			return nil, errtypes.NotFound("gateway: storage provider not found for reference:" + ref.String())
+			return nil, errtypes.NotFound("gateway: storage provider not found for reference:" + listReq.String())
 		case rpc.Code_CODE_PERMISSION_DENIED:
-			return nil, errtypes.PermissionDenied("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.PermissionDenied("gateway: " + res.Status.Message + " for " + listReq.String() + " with code " + res.Status.Code.String())
 		case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_FAILED_PRECONDITION, rpc.Code_CODE_OUT_OF_RANGE:
-			return nil, errtypes.BadRequest("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.BadRequest("gateway: " + res.Status.Message + " for " + listReq.String() + " with code " + res.Status.Code.String())
 		case rpc.Code_CODE_UNIMPLEMENTED:
-			return nil, errtypes.NotSupported("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.NotSupported("gateway: " + res.Status.Message + " for " + listReq.String() + " with code " + res.Status.Code.String())
 		default:
 			return nil, status.NewErrorFromCode(res.Status.Code, "gateway")
 		}
@@ -969,93 +1036,26 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		return nil, errtypes.NotFound("gateway: provider is nil")
 	}
 
-	if ref.ResourceId != nil {
-		if err = s.providerCache.Set(ref.ResourceId.StorageId, res.Providers); err != nil {
-			appctx.GetLogger(ctx).Warn().Err(err).Interface("reference", ref).Msg("gateway: could not cache providers")
-		}
-	} /* else {
-		// every user has a cache for mount points?
-		// the path map must be cached in the registry, not in the gateway?
-		//   - in the registry we cannot determine if other spaces have been mounted or removed. if a new project space was mounted that happens in the registry
-		//   - but the registry does not know when we rename a space ... or does it?
-		//     - /.../Shares is a collection the gateway builds by aggregating the liststoragespaces response
-		//     - the spaces registry builds a path for every space, treating every share as a distinct space.
-		//       - findProviders() will return a long list of spaces, the Stat / ListContainer calls will stat the root etags of every space and share
-		//       -> FIXME cache the root etag of every space, ttl ... do we need to stat? or can we cach the root etag in the providerinfo?
-		//     - large amounts of shares
-		// use the root etag of a space to determine if we can read from cache?
-		// (finished) uploads, created dirs, renamed nodes, deleted nodes cause the root etag of a space to change
-		//
-		var providersCache *ttlcache.Cache
-		cache, err := s.mountCache.Get(userKey(ctx))
-		if err != nil {
-			providersCache = ttlcache.NewCache()
-			_ = providersCache.SetTTL(time.Duration(s.c.MountCacheTTL) * time.Second)
-			providersCache.SkipTTLExtensionOnHit(true)
-			s.mountCache.Set(userKey(ctx), providersCache)
-		} else {
-			providersCache = cache.(*ttlcache.Cache)
-		}
-
-		for _, providerInfo := range res.Providers {
-
-			mountPath := providerInfo.ProviderPath
-			var root *provider.ResourceId
-
-			if spacePaths := decodeSpacePaths(p.Opaque); len(spacePaths) > 0 {
-				for spaceID, spacePath := range spacePaths {
-					mountPath = spacePath
-					rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
-					root = &provider.ResourceId{
-						StorageId: rootSpace,
-						OpaqueId:  rootNode,
-					}
-					break // TODO can there be more than one space for a path?
-				}
-			}
-			providersCache.Set(userKey(ctx), res.Providers) // FIXME needs a map[string]*registry.ProviderInfo
-
-		}
-		// use ListProviders? make it return all providers a user has access to aka all mount points?
-		// cache that list in the gateway.
-		// -> invalidate the cached list of mountpoints when a modification happens
-		// refres by loading all mountpoints from spaces registry
-		// - in the registry cache listStorageSpaces responses for every provider so we don't have to query every provider?
-		//   - how can we determine which listStorageSpaces response to invalidate?
-		//     - misuse ListContainerStream to get notified of root changes of every space?
-		//     - or send a ListStorageSpaces request to the registry with an invalidate(spaceid) property?
-		//       - This would allow the gateway could tell the registry which space(s) to refresh
-		//         - but the registry might not be using a cache
-		//     - we still don't know when an upload finishes ... so we cannot invalidate the cache for that event
-		//       - especially if there are workflows involved?
-		//       - actually, the initiate upload response should make the provider show the file immediately. it should not be downloadable though
-		//         - with stat we want to see the progress. actually multiple uploads (-> workflows) to the same file might be in progress...
-		// example:
-		//  - user accepts a share in the web ui, then navigates into his /Shares folder
-		//    -> he should see the accepted share, and he should be able to navigate into it
-		// - actually creating a share should already create a space, but it has no name yet
-		// - the problem arises when someone mounts a spaece (can pe a share or a project, does not matter)
-		//    -> when do we update the list of mount points which we cache in the gateway?
-		// - we want to maintain a list of all mount points (and their root etag/mtime) to allow clients to efficiently poll /
-		//   and query the list of all storage spaces the user has access to
-		//   - the simplest 'maintenance' is caching the complete list and invalidating it on changes
-		//   - a more elegant 'maintenance' would add and remove paths as they occur ... which is what the spaces registry is supposed to do...
-		//     -> don't cache anything in the gateway for path based requests. Instead maintain a cache in the spaces registry.
-		//
-		// Caching needs to take the last modification time into account to discover new mount points -> needs to happen in the registry
-	}*/
-
 	return res.Providers, nil
 }
 
-func decodeSpacePaths(o *typesv1beta1.Opaque) map[string]string {
+func decodeSpacePaths(r *registry.ProviderInfo) map[string]string {
 	spacePaths := map[string]string{}
-	if o == nil {
-		return spacePaths
+	if r.Opaque != nil {
+		if entry, ok := r.Opaque.Map["space_paths"]; ok {
+			switch entry.Decoder {
+			case "json":
+				_ = json.Unmarshal(entry.Value, &spacePaths)
+			case "toml":
+				_ = toml.Unmarshal(entry.Value, &spacePaths)
+			case "xml":
+				_ = xml.Unmarshal(entry.Value, &spacePaths)
+			}
+		}
 	}
-	if entry, ok := o.Map["space_paths"]; ok {
-		_ = json.Unmarshal(entry.Value, &spacePaths)
-		// TODO log
+
+	if len(spacePaths) == 0 {
+		spacePaths[""] = r.ProviderPath
 	}
 	return spacePaths
 }

@@ -79,7 +79,6 @@ const (
 	favoriteKey       string = "http://owncloud.org/ns/favorite"
 
 	spaceTypeAny = "*"
-	// spaceIDAny   = "*"
 )
 
 var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
@@ -1515,6 +1514,26 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 		// TODO how to return multiple errors?
 		return errors.New("multiple errors occurred, see log for details")
 	}
+}
+
+// GetLock returns an existing lock on the given reference
+func (fs *ocfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+// SetLock puts a lock on the given reference
+func (fs *ocfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (fs *ocfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// Unlock removes an existing lock from the given reference
+func (fs *ocfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
 }
 
 // Delete is actually only a move to trash

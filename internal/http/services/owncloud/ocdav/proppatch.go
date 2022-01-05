@@ -64,9 +64,18 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		return
 	}
 
-	ref := &provider.Reference{Path: fn}
+	space, rpcStatus, err := s.lookUpStorageSpaceForPath(ctx, fn)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
 	// check if resource exists
-	statReq := &provider.StatRequest{Ref: ref}
+	statReq := &provider.StatRequest{Ref: makeRelativeReference(space, fn, false)}
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc stat request")
@@ -88,7 +97,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		return
 	}
 
-	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, ref, pp, sublog)
+	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, makeRelativeReference(space, fn, false), pp, sublog)
 	if !ok {
 		// handleProppatch handles responses in error cases so we can just return
 		return
@@ -117,7 +126,7 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	}
 
 	// retrieve a specific storage space
-	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)

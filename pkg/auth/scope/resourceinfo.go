@@ -44,6 +44,29 @@ func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interfac
 	// Viewer role
 	case *registry.GetStorageProvidersRequest:
 		return checkResourceInfo(&r, v.GetRef()), nil
+	case *registry.ListStorageProvidersRequest:
+		// the call will only return spaces the current user has access to
+		ref := &provider.Reference{}
+		if v.Opaque != nil && v.Opaque.Map != nil {
+			if e, ok := v.Opaque.Map["storage_id"]; ok {
+				ref.ResourceId = &provider.ResourceId{
+					StorageId: string(e.Value),
+				}
+			}
+			if e, ok := v.Opaque.Map["opaque_id"]; ok {
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
+				}
+				ref.ResourceId.OpaqueId = string(e.Value)
+			}
+			if e, ok := v.Opaque.Map["path"]; ok {
+				ref.Path = string(e.Value)
+			}
+		}
+		return checkResourceInfo(&r, ref), nil
+	case *provider.ListStorageSpacesRequest:
+		// the call will only return spaces the current user has access to
+		return true, nil
 	case *provider.StatRequest:
 		return checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.ListContainerRequest:
@@ -102,6 +125,7 @@ func checkResourcePath(path string) bool {
 		"/dataprovider",
 		"/data",
 		"/app/open",
+		"/app/new",
 		"/archiver",
 		"/ocs/v2.php/cloud/capabilities",
 		"/ocs/v1.php/cloud/capabilities",

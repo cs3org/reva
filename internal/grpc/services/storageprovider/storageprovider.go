@@ -240,6 +240,101 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 	return res, nil
 }
 
+// SetLock puts a lock on the given reference
+func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
+	if err := s.storage.SetLock(ctx, req.Ref, req.Lock); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when setting lock")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, fmt.Sprintf("error setting lock %s: %s", req.Ref.String(), err))
+		}
+		return &provider.SetLockResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.SetLockResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+}
+
+// GetLock returns an existing lock on the given reference
+func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
+	var lock *provider.Lock
+	var err error
+	if lock, err = s.storage.GetLock(ctx, req.Ref); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when getting lock")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, fmt.Sprintf("error getting lock %s: %s", req.Ref.String(), err))
+		}
+		return &provider.GetLockResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.GetLockResponse{
+		Status: status.NewOK(ctx),
+		Lock:   lock,
+	}
+	return res, nil
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+	if err := s.storage.RefreshLock(ctx, req.Ref, req.Lock); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when refreshing lock")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, fmt.Sprintf("error refreshing lock %s: %s", req.Ref.String(), err))
+		}
+		return &provider.RefreshLockResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.RefreshLockResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+}
+
+// Unlock removes an existing lock from the given reference
+func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
+	if err := s.storage.Unlock(ctx, req.Ref); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when unlocking")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, fmt.Sprintf("error unlocking %s: %s", req.Ref.String(), err))
+		}
+		return &provider.UnlockResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.UnlockResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+}
+
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
 	// TODO(labkode): maybe add some checks before download starts? eg. check permissions?
 	// TODO(labkode): maybe add short-lived token?

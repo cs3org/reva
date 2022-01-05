@@ -54,7 +54,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		ref = &provider.Reference{Path: path.Join("/", fn)}
 	} else {
 		// build a storage space reference
-		storageid, opaqeid := utils.SplitStorageSpaceID(spaceID)
+		storageid, opaqeid, _ := utils.SplitStorageSpaceID(spaceID)
 		ref = &provider.Reference{
 			ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
 			// ensure the relative path starts with '.'

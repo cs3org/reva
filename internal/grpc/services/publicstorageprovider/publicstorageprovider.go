@@ -44,6 +44,9 @@ import (
 	gstatus "google.golang.org/grpc/status"
 )
 
+// SpaceTypePublic is the public space type
+var SpaceTypePublic = "public"
+
 func init() {
 	rgrpc.Register("publicstorageprovider", New)
 }
@@ -115,6 +118,26 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
+// SetLock puts a lock on the given reference
+func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
+// GetLock returns an existing lock on the given reference
+func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
+// Unlock removes an existing lock from the given reference
+func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
 	statReq := &provider.StatRequest{Ref: req.Ref}
 	statRes, err := s.Stat(ctx, statReq)
@@ -140,7 +163,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 
 func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.Reference) (*provider.Reference, string, *link.PublicShare, *rpc.Status, error) {
 	log := appctx.GetLogger(ctx)
-	tkn, relativePath, err := s.unwrap(ctx, ref)
+	tkn, opaqueid, relativePath, err := s.unwrap(ctx, ref)
 	if err != nil {
 		return nil, "", nil, nil, err
 	}
@@ -166,9 +189,16 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 		// path = utils.MakeRelativePath(relativePath)
 	}
 
+	if opaqueid == "" {
+		opaqueid = shareInfo.Id.OpaqueId
+	}
+
 	cs3Ref := &provider.Reference{
-		ResourceId: shareInfo.Id,
-		Path:       path,
+		ResourceId: &provider.ResourceId{
+			StorageId: shareInfo.Id.StorageId,
+			OpaqueId:  opaqueid,
+		},
+		Path: path,
 	}
 
 	log.Debug().
@@ -323,13 +353,21 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			if f.GetSpaceType() != "public" {
+			switch f.GetSpaceType() {
+			case SpaceTypePublic:
+				continue
+			case "mountpoint", "+mountpoint":
+				continue
+			default:
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 				}, nil
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, _ := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			spaceid, _, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			if err != nil {
+				continue
+			}
 			if spaceid != utils.PublicStorageProviderID {
 				return &provider.ListStorageSpacesResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
@@ -344,7 +382,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			Id: &provider.StorageSpaceId{
 				OpaqueId: utils.PublicStorageProviderID,
 			},
-			SpaceType: "public",
+			SpaceType: SpaceTypePublic,
 			// return the actual resource id?
 			Root: &provider.ResourceId{
 				StorageId: utils.PublicStorageProviderID,
@@ -531,7 +569,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Value: attribute.StringValue(req.Ref.String()),
 		})
 
-	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
+	tkn, opaqueid, relativePath, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return nil, err
 	}
@@ -559,9 +597,16 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		return res, nil
 	}
 
+	if opaqueid == "" {
+		opaqueid = share.ResourceId.OpaqueId
+	}
+
 	ref := &provider.Reference{
-		ResourceId: share.ResourceId,
-		Path:       utils.MakeRelativePath(relativePath),
+		ResourceId: &provider.ResourceId{
+			StorageId: share.ResourceId.StorageId,
+			OpaqueId:  opaqueid,
+		},
+		Path: utils.MakeRelativePath(relativePath),
 	}
 
 	statResponse, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: ref})
@@ -622,7 +667,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
+	tkn, opaqueid, relativePath, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return nil, err
 	}
@@ -642,11 +687,18 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}, nil
 	}
 
+	if opaqueid == "" {
+		opaqueid = shareInfo.Id.OpaqueId
+	}
+
 	listContainerR, err := s.gateway.ListContainer(
 		ctx,
 		&provider.ListContainerRequest{
 			Ref: &provider.Reference{
-				ResourceId: shareInfo.Id,
+				ResourceId: &provider.ResourceId{
+					StorageId: shareInfo.Id.StorageId,
+					OpaqueId:  opaqueid,
+				},
 				// prefix relative path with './' to make it a CS3 relative path
 				Path: utils.MakeRelativePath(relativePath),
 			},
@@ -690,30 +742,38 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 	l.UpdateGrant = l.UpdateGrant && r.UpdateGrant
 }
 
-func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token string, relativePath string, err error) {
+func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token, opaqueid, relativePath string, err error) {
+	isValidReference := func(r *provider.Reference) bool {
+		return r != nil && r.ResourceId != nil && r.ResourceId.StorageId != "" && r.ResourceId.OpaqueId != ""
+	}
+
 	switch {
-	case ref == nil, ref.ResourceId == nil, ref.ResourceId.StorageId == "", ref.ResourceId.OpaqueId == "":
-		return "", "", errtypes.BadRequest("resourceid required, got " + ref.String())
-	case ref.Path == "":
-		// id based stat
-		parts := strings.SplitN(ref.ResourceId.OpaqueId, "/", 2)
-		if len(parts) < 2 {
-			return "", "", errtypes.BadRequest("OpaqueId needs to have form {token}/{shared node id}: got " + ref.String())
-		}
-		token = parts[0]
-		relativePath = ""
-	default:
+	case !isValidReference(ref):
+		return "", "", "", errtypes.BadRequest("resourceid required, got " + ref.String())
+	case utils.ResourceIDEqual(ref.ResourceId, &provider.ResourceId{
+		StorageId: utils.PublicStorageProviderID,
+		OpaqueId:  utils.PublicStorageProviderID,
+	}):
 		// path has the form "./{token}/relative/path/"
 		parts := strings.SplitN(ref.Path, "/", 3)
 		if len(parts) < 2 {
 			// FIXME ... we should expose every public link as a storage space
 			// but do we need to list them then?
-			return "", "", errtypes.BadRequest("need at least token in ref: got " + ref.String())
+			return "", "", "", errtypes.BadRequest("need at least token in ref: got " + ref.String())
 		}
 		token = parts[1]
 		if len(parts) > 2 {
 			relativePath = parts[2]
 		}
+	default:
+		// id based stat
+		parts := strings.SplitN(ref.ResourceId.OpaqueId, "/", 2)
+		if len(parts) < 2 {
+			return "", "", "", errtypes.BadRequest("OpaqueId needs to have form {token}/{shared node id}: got " + ref.String())
+		}
+		token = parts[0]
+		opaqueid = parts[1]
+		relativePath = ref.Path
 	}
 
 	return

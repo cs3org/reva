@@ -51,7 +51,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	revactx "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share"
@@ -114,6 +113,7 @@ type GatewayClient interface {
 
 	Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error)
 	ListContainer(ctx context.Context, in *provider.ListContainerRequest, opts ...grpc.CallOption) (*provider.ListContainerResponse, error)
+	GetPath(ctx context.Context, in *provider.GetPathRequest, opts ...grpc.CallOption) (*provider.GetPathResponse, error)
 
 	ListShares(ctx context.Context, in *collaboration.ListSharesRequest, opts ...grpc.CallOption) (*collaboration.ListSharesResponse, error)
 	GetShare(ctx context.Context, in *collaboration.GetShareRequest, opts ...grpc.CallOption) (*collaboration.GetShareResponse, error)
@@ -128,8 +128,8 @@ type GatewayClient interface {
 	GetUserByClaim(ctx context.Context, in *userpb.GetUserByClaimRequest, opts ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error)
 }
 
-// InitDefault initializes the handler using default values
-func (h *Handler) InitDefault(c *config.Config) {
+// Init initializes the handler using default values
+func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.machineAuthAPIKey = c.MachineAuthAPIKey
 	h.storageRegistryAddr = c.StorageregistrySvc
@@ -153,9 +153,9 @@ func (h *Handler) InitDefault(c *config.Config) {
 	h.getClient = h.getPoolClient
 }
 
-// Init initializes the handler
-func (h *Handler) Init(c *config.Config, clientGetter GatewayClientGetter) {
-	h.InitDefault(c)
+// InitWithGetter initializes the handler and adds the clientGetter
+func (h *Handler) InitWithGetter(c *config.Config, clientGetter GatewayClientGetter) {
+	h.Init(c)
 	h.getClient = clientGetter
 }
 
@@ -175,7 +175,10 @@ func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) 
 	var ref provider.Reference
 	if p := r.FormValue("path"); p != "" {
 		u := ctxpkg.ContextMustGetUser(r.Context())
-		ref = provider.Reference{Path: path.Join(h.getHomeNamespace(u), p)}
+		ref = provider.Reference{
+			// FIXME ResourceId?
+			Path: path.Join(h.getHomeNamespace(u), p),
+		}
 	} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
 		var err error
 		ref, err = utils.ParseStorageSpaceReference(spaceRef)
@@ -267,10 +270,6 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// cut off configured home namespace, paths in ocs shares are relative to it
-		currentUser := ctxpkg.ContextMustGetUser(ctx)
-		statRes.Info.Path = strings.TrimPrefix(statRes.Info.Path, h.getHomeNamespace(currentUser))
-
 		err = h.addFileInfo(ctx, s, statRes.Info)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
@@ -299,7 +298,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Get auth
-			granteeCtx := revactx.ContextSetUser(context.Background(), res.User)
+			granteeCtx := ctxpkg.ContextSetUser(context.Background(), res.User)
 
 			authRes, err := client.Authenticate(granteeCtx, &gateway.AuthenticateRequest{
 				Type:         "machine",
@@ -314,7 +313,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "machine authentication failed", nil)
 				return
 			}
-			granteeCtx = metadata.AppendToOutgoingContext(granteeCtx, revactx.TokenHeader, authRes.Token)
+			granteeCtx = metadata.AppendToOutgoingContext(granteeCtx, ctxpkg.TokenHeader, authRes.Token)
 
 			lrs, ocsResponse := getSharesList(granteeCtx, client)
 			if ocsResponse != nil {
@@ -569,9 +568,6 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// cut off configured home namespace, paths in ocs shares are relative to it
-	info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(revactx.ContextMustGetUser(ctx)))
-
 	err = h.addFileInfo(ctx, share, info)
 	if err != nil {
 		log.Error().Err(err).Msg("error mapping share data")
@@ -679,9 +675,6 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	// cut off configured home namespace, paths in ocs shares are relative to it
-	statRes.Info.Path = strings.TrimPrefix(statRes.Info.Path, h.getHomeNamespace(revactx.ContextMustGetUser(ctx)))
-
 	err = h.addFileInfo(r.Context(), share, statRes.Info)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
@@ -747,7 +740,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// we need to lookup the resource id so we can filter the list of shares later
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		target := path.Join(h.getHomeNamespace(revactx.ContextMustGetUser(ctx)), r.FormValue("path"))
+		target := path.Join(h.getHomeNamespace(ctxpkg.ContextMustGetUser(ctx)), r.FormValue("path"))
 
 		var status *rpc.Status
 		pinfo, status, err = h.getResourceInfoByPath(ctx, client, target)
@@ -812,27 +805,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// in a jailed namespace we have to point to the mount point in the users /Shares jail
-	// to do that we have to list the /Shares jail and use those paths instead of stating the shared resources
-	// The stat results would start with a path outside the jail and thus be inaccessible
-
-	var shareJailInfos []*provider.ResourceInfo
-
-	if h.sharePrefix != "/" {
-		// we only need the path from the share jail for accepted shares
-		if stateFilter == collaboration.ShareState_SHARE_STATE_ACCEPTED || stateFilter == ocsStateUnknown {
-			// only log errors. They may happen but we can continue trying to at least list the shares
-			lcRes, err := client.ListContainer(ctx, &provider.ListContainerRequest{
-				Ref: &provider.Reference{Path: path.Join(h.getHomeNamespace(revactx.ContextMustGetUser(ctx)), h.sharePrefix)},
-			})
-			if err != nil || lcRes.Status.Code != rpc.Code_CODE_OK {
-				h.logProblems(lcRes.GetStatus(), err, "could not list container, continuing without share jail path info")
-			} else {
-				shareJailInfos = lcRes.Infos
-			}
-		}
-	}
-
 	shares := make([]*conversions.ShareData, 0, len(lrsRes.GetShares()))
 
 	// TODO(refs) filter out "invalid" shares
@@ -851,10 +823,20 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			info = pinfo
 		} else {
 			var status *rpc.Status
-			info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+			// FIXME the ResourceID is the id of the resource, but we want the id of the mount point so we can fetch that path, well we have the mountpoint path in the receivedshare
+			// first stat mount point
+			mountID := &provider.ResourceId{
+				StorageId: utils.ShareStorageProviderID,
+				OpaqueId:  rs.Share.Id.OpaqueId,
+			}
+			info, status, err = h.getResourceInfoByID(ctx, client, mountID)
 			if err != nil || status.Code != rpc.Code_CODE_OK {
-				h.logProblems(status, err, "could not stat, skipping")
-				continue
+				// fallback to unmounted resource
+				info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+				if err != nil || status.Code != rpc.Code_CODE_OK {
+					h.logProblems(status, err, "could not stat, skipping")
+					continue
+				}
 			}
 		}
 
@@ -863,16 +845,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			log.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
 			continue
 		}
-
-		// cut off configured home namespace, paths in ocs shares are relative to it
-		identifier := h.mustGetIdentifiers(ctx, client, info.Owner.OpaqueId, false)
-		u := &userpb.User{
-			Id:          info.Owner,
-			Username:    identifier.Username,
-			DisplayName: identifier.DisplayName,
-			Mail:        identifier.Mail,
-		}
-		info.Path = strings.TrimPrefix(info.Path, h.getHomeNamespace(u))
 
 		data.State = mapState(rs.GetState())
 
@@ -906,11 +878,11 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// Needed because received shares can be jailed in a folder in the users home
 
 			if h.sharePrefix != "/" {
-				// if we have share jail infos use them to build the path
-				if sji := findMatch(shareJailInfos, rs.Share.ResourceId); sji != nil {
+				// if we have a mount point use it to build the path
+				if rs.MountPoint != nil && rs.MountPoint.Path != "" {
 					// override path with info from share jail
-					data.FileTarget = path.Join(h.sharePrefix, path.Base(sji.Path))
-					data.Path = path.Join(h.sharePrefix, path.Base(sji.Path))
+					data.FileTarget = path.Join(h.sharePrefix, rs.MountPoint.Path)
+					data.Path = path.Join(h.sharePrefix, rs.MountPoint.Path)
 				} else {
 					data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
 					data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
@@ -935,15 +907,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSSuccess(w, r, shares)
 }
 
-func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId) *provider.ResourceInfo {
-	for i := range shareJailInfos {
-		if shareJailInfos[i].Id != nil && shareJailInfos[i].Id.StorageId == id.StorageId && shareJailInfos[i].Id.OpaqueId == id.OpaqueId {
-			return shareJailInfos[i]
-		}
-	}
-	return nil
-}
-
 func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 
@@ -955,7 +918,7 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		filters, linkFilters, e = h.addFilters(w, r, h.getHomeNamespace(revactx.ContextMustGetUser(r.Context())))
+		filters, linkFilters, e = h.addFilters(w, r, h.getHomeNamespace(ctxpkg.ContextMustGetUser(r.Context())))
 		if e != nil {
 			// result has been written as part of addFilters
 			return
@@ -1080,12 +1043,53 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		case h.sharePrefix == "/":
 			s.FileTarget = info.Path
 			s.Path = info.Path
+			client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+			if err == nil {
+				gpRes, err := client.GetPath(ctx, &provider.GetPathRequest{
+					ResourceId: info.Id,
+				})
+				if err == nil && gpRes.Status.Code == rpc.Code_CODE_OK {
+					// TODO log error?
+					s.Path = gpRes.Path
+
+					// cut off configured home namespace, paths in ocs shares are relative to it
+					identifier := h.mustGetIdentifiers(ctx, client, info.GetOwner().GetOpaqueId(), false)
+					u := &userpb.User{
+						Id:          info.Owner,
+						Username:    identifier.Username,
+						DisplayName: identifier.DisplayName,
+						Mail:        identifier.Mail,
+					}
+					s.Path = strings.TrimPrefix(s.Path, h.getHomeNamespace(u))
+				}
+			}
+
 		case s.ShareType == conversions.ShareTypePublicLink:
 			s.FileTarget = path.Join("/", path.Base(info.Path))
 			s.Path = path.Join("/", path.Base(info.Path))
 		default:
 			s.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
 			s.Path = info.Path
+			client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+			if err == nil {
+				gpRes, err := client.GetPath(ctx, &provider.GetPathRequest{
+					ResourceId: info.Id,
+				})
+				if err == nil && gpRes.Status.Code == rpc.Code_CODE_OK {
+					// TODO log error?
+					s.Path = gpRes.Path
+				}
+
+				// cut off configured home namespace, paths in ocs shares are relative to it
+				identifier := h.mustGetIdentifiers(ctx, client, info.GetOwner().GetOpaqueId(), false)
+				u := &userpb.User{
+					Id:          info.Owner,
+					Username:    identifier.Username,
+					DisplayName: identifier.DisplayName,
+					Mail:        identifier.Mail,
+				}
+				s.Path = strings.TrimPrefix(s.Path, h.getHomeNamespace(u))
+			}
 		}
 		s.StorageID = storageIDPrefix + s.FileTarget
 		// TODO FileParent:
@@ -1230,12 +1234,13 @@ func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentif
 
 func (h *Handler) getResourceInfoByPath(ctx context.Context, client GatewayClient, path string) (*provider.ResourceInfo, *rpc.Status, error) {
 	return h.getResourceInfo(ctx, client, path, &provider.Reference{
+		// FIXME ResourceId?
 		Path: path,
 	})
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client GatewayClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, resourceid.OwnCloudResourceIDWrap(id), &provider.Reference{ResourceId: id})
+	return h.getResourceInfo(ctx, client, resourceid.OwnCloudResourceIDWrap(id), &provider.Reference{ResourceId: id, Path: "."})
 }
 
 // getResourceInfo retrieves the resource info to a target.

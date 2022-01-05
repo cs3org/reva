@@ -364,14 +364,14 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	spaceID := ""
 	mountPath := p.ProviderPath
 
-	spacePaths := decodeSpacePaths(p.Opaque)
+	spacePaths := decodeSpacePaths(p)
 	if len(spacePaths) == 0 {
 		spacePaths[""] = mountPath
 	}
 
 	var pRef *provider.Reference
 	for spaceID, mountPath = range spacePaths {
-		rootSpace, rootNode := utils.SplitStorageSpaceID(spaceID)
+		rootSpace, rootNode, _ := utils.SplitStorageSpaceID(spaceID)
 		pRef = &provider.Reference{
 			ResourceId: &provider.ResourceId{
 				StorageId: rootSpace,

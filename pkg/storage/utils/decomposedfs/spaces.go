@@ -185,9 +185,16 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	for i := range filter {
 		switch filter[i].Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			spaceTypes = append(spaceTypes, filter[i].GetSpaceType())
+			switch filter[i].GetSpaceType() {
+			case "+mountpoint":
+				// TODO include mount poits
+			case "+grant":
+				// TODO include grants
+			default:
+				spaceTypes = append(spaceTypes, filter[i].GetSpaceType())
+			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, nodeID = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
+			spaceID, nodeID, _ = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
 		}
 	}
 	if len(spaceTypes) == 0 {
@@ -226,6 +233,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// an efficient lookup would be possible if we received a spaceid&opaqueid in the request
 	// the personal spaces must also use the nodeid and not the name
 
+	numShares := 0
 	for i := range matches {
 		// always read link in case storage space id != node id
 		if target, err := os.Readlink(matches[i]); err != nil {
@@ -247,6 +255,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			}
 
 			if spaceType == "share" && utils.UserEqual(u.Id, owner) {
+				numShares++
 				// do not list shares as spaces for the owner
 				continue
 			}
@@ -262,23 +271,20 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			spaces = append(spaces, space)
 		}
 	}
-	if len(matches) == 0 && nodeID != spaceID {
+	// if there are no matches (or they happened to be spaces for the owner) and the node is a child return a space
+	if len(matches) <= numShares && nodeID != spaceID {
 		// try node id
 		target := filepath.Join(fs.o.Root, "nodes", nodeID)
 		n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
 		if err != nil {
 			return nil, err
 		}
-		space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), permissions)
-		if err != nil {
-			return nil, err
-		}
-		if space.Id.OpaqueId == spaceID {
+		if n.Exists {
+			space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), permissions)
+			if err != nil {
+				return nil, err
+			}
 			spaces = append(spaces, space)
-		} else {
-			appctx.GetLogger(ctx).Debug().Err(err).
-				Str("spaceid", spaceID).Str("nodeid", nodeID).
-				Interface("space", space).Msg("mismatching spaceid, skipping")
 		}
 	}
 
@@ -290,7 +296,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	space := req.StorageSpace
 
-	_, spaceID := utils.SplitStorageSpaceID(space.Id.OpaqueId)
+	_, spaceID, _ := utils.SplitStorageSpaceID(space.Id.OpaqueId)
 
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
 	if err != nil {
@@ -441,22 +447,12 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		Id: &provider.StorageSpaceId{OpaqueId: n.SpaceRoot.ID},
 		Root: &provider.ResourceId{
 			StorageId: n.SpaceRoot.ID,
-			OpaqueId:  n.ID,
+			OpaqueId:  n.SpaceRoot.ID,
 		},
 		Name:      sname,
 		SpaceType: spaceType,
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
-
-	// filter out spaces user cannot access (currently based on stat permission)
-	// p, err := n.ReadUserPermissions(ctx, user)
-	// if err != nil {
-	// return nil, err
-	// }
-
-	// if !(canListAllSpaces || p.Stat) {
-	// return nil,
-	// }
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 	_, canListAllSpaces := permissions["list-all-spaces"]

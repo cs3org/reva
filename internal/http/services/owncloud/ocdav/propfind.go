@@ -33,6 +33,7 @@ import (
 	"strings"
 	"time"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -42,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/publicshare"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
@@ -72,7 +74,7 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 
 	span.SetAttributes(attribute.String("component", "ocdav"))
 
-	fn := path.Join(ns, r.URL.Path)
+	fn := path.Join(ns, r.URL.Path) // TODO do we still need to jail if we query the registry about the spaces?
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
@@ -83,14 +85,25 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 		return
 	}
 
-	ref := &provider.Reference{Path: fn}
+	// retrieve a specific storage space
+	spaces, rpcStatus, err := s.lookUpStorageSpacesForPathWithChildren(ctx, fn)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, false, sublog)
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
+
+	resourceInfos, sendTusHeaders, ok := s.getResourceInfos(ctx, w, r, pf, spaces, fn, false, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
 	}
-	s.propfindResponse(ctx, w, r, ns, pf, parentInfo, resourceInfos, sublog)
+	s.propfindResponse(ctx, w, r, ns, pf, sendTusHeaders, resourceInfos, sublog)
 }
 
 func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
@@ -107,7 +120,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 	}
 
 	// retrieve a specific storage space
-	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	space, rpcStatus, err := s.lookUpStorageSpaceByID(ctx, spaceID)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -119,17 +132,10 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		return
 	}
 
-	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, true, sublog)
+	resourceInfos, sendTusHeaders, ok := s.getResourceInfos(ctx, w, r, pf, []*provider.StorageSpace{space}, r.URL.Path, true, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
-	}
-
-	// parentInfo Path is the name but we need /
-	if r.URL.Path != "" {
-		parentInfo.Path = r.URL.Path
-	} else {
-		parentInfo.Path = "/"
 	}
 
 	// prefix space id to paths
@@ -137,11 +143,11 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		resourceInfos[i].Path = path.Join("/", spaceID, resourceInfos[i].Path)
 	}
 
-	s.propfindResponse(ctx, w, r, "", pf, parentInfo, resourceInfos, sublog)
+	s.propfindResponse(ctx, w, r, "", pf, sendTusHeaders, resourceInfos, sublog)
 
 }
 
-func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(ctx, "propfind_response")
 	defer span.End()
 
@@ -178,33 +184,40 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
 	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
 
-	var disableTus bool
-	// let clients know this collection supports tus.io POST requests to start uploads
-	if parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		if parentInfo.Opaque != nil {
-			_, disableTus = parentInfo.Opaque.Map["disable_tus"]
-		}
-		if !disableTus {
-			w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderTusVersion, HeaderTusExtension}, ", "))
-			w.Header().Set(HeaderTusResumable, "1.0.0")
-			w.Header().Set(HeaderTusVersion, "1.0.0")
-			w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
-		}
+	if sendTusHeaders {
+		w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderTusVersion, HeaderTusExtension}, ", "))
+		w.Header().Set(HeaderTusResumable, "1.0.0")
+		w.Header().Set(HeaderTusVersion, "1.0.0")
+		w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
 	}
+
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
 		log.Err(err).Msg("error writing response")
 	}
 }
 
-func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, ref *provider.Reference, spacesPropfind bool, log zerolog.Logger) (*provider.ResourceInfo, []*provider.ResourceInfo, bool) {
+// TODO this is just a stat -> rename
+func (s *svc) statSpace(ctx context.Context, client gateway.GatewayAPIClient, space *provider.StorageSpace, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
+	req := &provider.StatRequest{
+		Ref:                   ref,
+		ArbitraryMetadataKeys: metadataKeys,
+	}
+	res, err := client.Stat(ctx, req)
+	if err != nil || res == nil || res.Status == nil || res.Status.Code != rpc.Code_CODE_OK {
+		return nil, res.Status, err
+	}
+	return res.Info, res.Status, nil
+}
+
+func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, spaces []*provider.StorageSpace, requestPath string, spacesPropfind bool, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
 	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
 		depth = "1"
 	}
 	// see https://tools.ietf.org/html/rfc4918#section-9.1
 	if depth != "0" && depth != "1" && depth != "infinity" {
-		log.Debug().Str("depth", depth).Msgf("invalid Depth header value")
+		log.Debug().Str("depth", depth).Msg("invalid Depth header value")
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Invalid Depth header value: %v", depth)
 		b, err := Marshal(exception{
@@ -212,14 +225,14 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			message: m,
 		})
 		HandleWebdavError(&log, w, b, err)
-		return nil, nil, false
+		return nil, false, false
 	}
 
 	client, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
-		return nil, nil, false
+		return nil, false, false
 	}
 
 	var metadataKeys []string
@@ -238,141 +251,220 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			}
 		}
 	}
-	req := &provider.StatRequest{
-		Ref:                   ref,
-		ArbitraryMetadataKeys: metadataKeys,
-	}
-	res, err := client.Stat(ctx, req)
-	if err != nil {
-		log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return nil, nil, false
-	} else if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			m := fmt.Sprintf("Resource %v not found", ref.Path)
-			b, err := Marshal(exception{
-				code:    SabredavNotFound,
-				message: m,
-			})
-			HandleWebdavError(&log, w, b, err)
-			return nil, nil, false
+
+	// we need to stat all spaces to aggregate the root etag, mtime and size
+	// TODO cache per space (hah, no longer per user + per space!)
+	var rootInfo *provider.ResourceInfo
+	var mostRecentChildInfo *provider.ResourceInfo
+	var aggregatedChildSize uint64
+	spaceInfos := make([]*provider.ResourceInfo, 0, len(spaces))
+	for _, space := range spaces {
+		if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
+			continue // not mounted
 		}
-		HandleErrorStatus(&log, w, res.Status)
-		return nil, nil, false
-	}
+		spacePath := string(space.Opaque.Map["path"].Value)
+		// TODO separate stats to the path or to the children, after statting all children update the mtime/etag
+		// TODO get mtime, and size from space as well, so we no longer have to stat here?
+		spaceRef := makeRelativeReference(space, requestPath, spacesPropfind)
+		info, status, err := s.statSpace(ctx, client, space, spaceRef, metadataKeys)
+		if err != nil || status.Code != rpc.Code_CODE_OK {
+			continue
+		}
 
-	if spacesPropfind {
-		res.Info.Path = ref.Path
-	}
+		// adjust path
+		if !spacesPropfind {
+			info.Path = filepath.Join(spacePath, spaceRef.Path)
+		} else {
+			info.Path = spaceRef.Path
+		}
 
-	parentInfo := res.Info
-	resourceInfos := []*provider.ResourceInfo{parentInfo}
+		spaceInfos = append(spaceInfos, info)
 
-	switch {
-	case !spacesPropfind && parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
-		// The propfind is requested for a file that exists
-		// In this case, we can stat the parent directory and return both
-		parentPath := path.Dir(parentInfo.Path)
-		resourceInfos = append(resourceInfos, parentInfo)
-		parentRes, err := client.Stat(ctx, &provider.StatRequest{
-			Ref:                   &provider.Reference{Path: parentPath},
-			ArbitraryMetadataKeys: metadataKeys,
-		})
-		if err != nil {
-			log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return nil, nil, false
-		} else if parentRes.Status.Code != rpc.Code_CODE_OK {
-			if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-				w.WriteHeader(http.StatusNotFound)
-				m := fmt.Sprintf("Resource %v not found", parentPath)
-				b, err := Marshal(exception{
-					code:    SabredavNotFound,
-					message: m,
-				})
-				HandleWebdavError(&log, w, b, err)
-				return nil, nil, false
+		if rootInfo == nil && requestPath == info.Path || spacesPropfind && requestPath == path.Join("/", info.Path) {
+			rootInfo = info
+		}
+
+		// Check if the space is a child of the requested path
+		if requestPath != spacePath && strings.HasPrefix(spacePath, requestPath) {
+			// aggregate child metadata
+			aggregatedChildSize += info.Size
+			if mostRecentChildInfo == nil {
+				mostRecentChildInfo = info
+				continue
 			}
-			HandleErrorStatus(&log, w, parentRes.Status)
-			return nil, nil, false
+			if mostRecentChildInfo.Mtime == nil || (info.Mtime != nil && utils.TSToUnixNano(info.Mtime) > utils.TSToUnixNano(mostRecentChildInfo.Mtime)) {
+				mostRecentChildInfo = info
+			}
 		}
-		parentInfo = parentRes.Info
+	}
 
-	case parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
-		req := &provider.ListContainerRequest{
-			Ref:                   ref,
-			ArbitraryMetadataKeys: metadataKeys,
+	if len(spaceInfos) == 0 || rootInfo == nil {
+		// TODO if we have children invent node on the fly
+		w.WriteHeader(http.StatusNotFound)
+		m := fmt.Sprintf("Resource %v not found", requestPath)
+		b, err := Marshal(exception{
+			code:    SabredavNotFound,
+			message: m,
+		})
+		HandleWebdavError(&log, w, b, err)
+		return nil, false, false
+	}
+	if mostRecentChildInfo != nil {
+		if rootInfo.Mtime == nil || (mostRecentChildInfo.Mtime != nil && utils.TSToUnixNano(mostRecentChildInfo.Mtime) > utils.TSToUnixNano(rootInfo.Mtime)) {
+			rootInfo.Mtime = mostRecentChildInfo.Mtime
+			if mostRecentChildInfo.Etag != "" {
+				rootInfo.Etag = mostRecentChildInfo.Etag
+			}
 		}
-		res, err := client.ListContainer(ctx, req)
-		if err != nil {
-			log.Error().Err(err).Msg("error sending list container grpc request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return nil, nil, false
+		if rootInfo.Etag == "" {
+			rootInfo.Etag = mostRecentChildInfo.Etag
 		}
+	}
 
-		if res.Status.Code != rpc.Code_CODE_OK {
-			HandleErrorStatus(&log, w, res.Status)
-			return nil, nil, false
-		}
-		resourceInfos = append(resourceInfos, res.Infos...)
+	// add size of children
+	rootInfo.Size += aggregatedChildSize
 
-	case depth == "infinity":
-		// FIXME: doesn't work cross-storage as the results will have the wrong paths!
-		// use a stack to explore sub-containers breadth-first
-		stack := []string{parentInfo.Path}
-		for len(stack) > 0 {
-			// retrieve path on top of stack
-			path := stack[len(stack)-1]
+	resourceInfos := []*provider.ResourceInfo{
+		rootInfo, // PROPFIND always includes the root resource
+	}
+	childInfos := map[string]*provider.ResourceInfo{}
 
-			var nRef *provider.Reference
-			if spacesPropfind {
-				nRef = &provider.Reference{
-					ResourceId: ref.ResourceId,
-					Path:       path,
+	// then add children
+	for _, spaceInfo := range spaceInfos {
+		switch {
+		case !spacesPropfind && spaceInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != "infinity":
+			// The propfind is requested for a file that exists
+
+			childPath := strings.TrimPrefix(spaceInfo.Path, requestPath)
+			childName, tail := router.ShiftPath(childPath)
+			if tail != "/" {
+				spaceInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+				spaceInfo.Checksum = nil
+				// TODO unset opaque checksum
+			}
+			spaceInfo.Path = path.Join(requestPath, childName)
+			if existingChild, ok := childInfos[childName]; ok {
+				// use most recent child
+				if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
+					childInfos[childName] = spaceInfo
 				}
 			} else {
-				nRef = &provider.Reference{Path: path}
-			}
-			req := &provider.ListContainerRequest{
-				Ref:                   nRef,
-				ArbitraryMetadataKeys: metadataKeys,
-			}
-			res, err := client.ListContainer(ctx, req)
-			if err != nil {
-				log.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
-				w.WriteHeader(http.StatusInternalServerError)
-				return nil, nil, false
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				HandleErrorStatus(&log, w, res.Status)
-				return nil, nil, false
+				childInfos[childName] = spaceInfo
 			}
 
-			stack = stack[:len(stack)-1]
+		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
+			spacePath := spaceInfo.Path
 
-			// check sub-containers in reverse order and add them to the stack
-			// the reversed order here will produce a more logical sorting of results
-			for i := len(res.Infos) - 1; i >= 0; i-- {
-				if spacesPropfind {
-					res.Infos[i].Path = utils.MakeRelativePath(filepath.Join(nRef.Path, res.Infos[i].Path))
+			switch {
+			case strings.HasPrefix(requestPath, spacePath):
+				req := &provider.ListContainerRequest{
+					Ref: &provider.Reference{
+						ResourceId: spaceInfo.Id,
+						Path:       ".",
+					},
+					ArbitraryMetadataKeys: metadataKeys,
 				}
-				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-					stack = append(stack, res.Infos[i].Path)
+				res, err := client.ListContainer(ctx, req)
+				if err != nil {
+					log.Error().Err(err).Msg("error sending list container grpc request")
+					w.WriteHeader(http.StatusInternalServerError)
+					return nil, false, false
 				}
+
+				if res.Status.Code != rpc.Code_CODE_OK {
+					log.Debug().Interface("status", res.Status).Msg("List Container not ok, skipping")
+					continue
+				}
+				if !spacesPropfind {
+					for _, info := range res.Infos {
+						info.Path = path.Join(requestPath, info.Path)
+					}
+				}
+				resourceInfos = append(resourceInfos, res.Infos...)
+			case strings.HasPrefix(spacePath, requestPath): // space is a child of the requested path
+				childPath := strings.TrimPrefix(spacePath, requestPath)
+				childName, tail := router.ShiftPath(childPath)
+				if tail != "/" {
+					spaceInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+					spaceInfo.Checksum = nil
+					// TODO unset opaque checksum
+				}
+				spaceInfo.Path = path.Join(requestPath, childName)
+				if existingChild, ok := childInfos[childName]; ok {
+					// use most recent child
+					if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
+						childInfos[childName] = spaceInfo
+					}
+				} else {
+					childInfos[childName] = spaceInfo
+				}
+			default:
+				log.Debug().Msg("unhandled")
 			}
 
-			resourceInfos = append(resourceInfos, res.Infos...)
-
-			if depth != "infinity" {
-				break
+		case depth == "infinity":
+			// use a stack to explore sub-containers breadth-first
+			if spaceInfo != rootInfo {
+				resourceInfos = append(resourceInfos, spaceInfo)
 			}
+			stack := []*provider.ResourceInfo{spaceInfo}
+			for len(stack) != 0 {
+				info := stack[0]
+				stack = stack[1:]
 
-			// TODO: stream response to avoid storing too many results in memory
+				req := &provider.ListContainerRequest{
+					Ref: &provider.Reference{
+						ResourceId: spaceInfo.Id,
+						Path:       utils.MakeRelativePath(strings.TrimPrefix(info.Path, spaceInfo.Path)),
+					},
+					ArbitraryMetadataKeys: metadataKeys,
+				}
+				res, err := client.ListContainer(ctx, req) // FIXME public link depth infinity -> "gateway: could not find provider: gateway: error calling ListStorageProviders: rpc error: code = PermissionDenied desc = auth: core access token is invalid"
+				if err != nil {
+					log.Error().Err(err).Interface("info", info).Msg("error sending list container grpc request")
+					w.WriteHeader(http.StatusInternalServerError)
+					return nil, false, false
+				}
+				if res.Status.Code != rpc.Code_CODE_OK {
+					log.Debug().Interface("status", res.Status).Msg("List Container not ok, skipping")
+					continue
+				}
+
+				// check sub-containers in reverse order and add them to the stack
+				// the reversed order here will produce a more logical sorting of results
+				for i := len(res.Infos) - 1; i >= 0; i-- {
+					// add path to resource
+					res.Infos[i].Path = filepath.Join(info.Path, res.Infos[i].Path)
+					if spacesPropfind {
+						res.Infos[i].Path = utils.MakeRelativePath(filepath.Join(info.Path, res.Infos[i].Path))
+					}
+					if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+						stack = append(stack, res.Infos[i])
+					}
+				}
+
+				resourceInfos = append(resourceInfos, res.Infos...)
+				// TODO: stream response to avoid storing too many results in memory
+				// we can do that after having stated the root.
+			}
 		}
 	}
 
-	return parentInfo, resourceInfos, true
+	// now add all aggregated child infos
+	for _, childInfo := range childInfos {
+		resourceInfos = append(resourceInfos, childInfo)
+	}
+
+	sendTusHeaders := true
+	// let clients know this collection supports tus.io POST requests to start uploads
+	if rootInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		if rootInfo.Opaque != nil {
+			_, ok := rootInfo.Opaque.Map["disable_tus"]
+			sendTusHeaders = !ok
+		}
+	}
+
+	return resourceInfos, sendTusHeaders, true
 }
 
 func requiresExplicitFetching(n *xml.Name) bool {
@@ -724,7 +816,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					// TODO what is the difference to d:quota-used-bytes (which only exists for collections)?
 					// oc:size is available on files and folders and behaves like d:getcontentlength or d:quota-used-bytes respectively
-					if ls == nil {
+					// The hasPrefix is a workaround to make children of the link root show a size if they have 0 bytes
+					if ls == nil || strings.HasPrefix(md.Path, "/"+ls.Token+"/") {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
 					} else {
 						// link share root collection has no size
