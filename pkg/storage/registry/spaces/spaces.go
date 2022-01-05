@@ -379,7 +379,8 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 	providerInfos := []*registrypb.ProviderInfo{}
 	for address, provider := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
-			Address: address,
+			Address:    address,
+			ProviderId: id,
 		}
 		filters := []*providerpb.ListStorageSpacesRequest_Filter{{
 			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_ID,
