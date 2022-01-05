@@ -20,7 +20,6 @@ package nextcloud_test
 
 import (
 	"context"
-	"fmt"
 
 	// "fmt"
 	"io"
@@ -37,7 +36,6 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -47,7 +45,6 @@ func setUpNextcloudServer() (*nextcloud.StorageDriver, *[]string, func()) {
 	var conf *nextcloud.StorageDriverConfig
 
 	ncHost := os.Getenv("NEXTCLOUD")
-	fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
 	if len(ncHost) == 0 {
 		conf = &nextcloud.StorageDriverConfig{
 			EndPoint: "http://mock.com/apps/sciencemesh/",
@@ -84,7 +81,7 @@ var _ = Describe("Nextcloud", func() {
 		user    = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "0.0.0.0:19000",
-				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				OpaqueId: "tester",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username: "tester",
@@ -93,13 +90,10 @@ var _ = Describe("Nextcloud", func() {
 
 	BeforeEach(func() {
 		var err error
-		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
-		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{
-			"root":         tmpRoot,
-			"enable_home":  true,
-			"share_folder": "/Shares",
+			"endpoint":  "http://mock.com/apps/sciencemesh/",
+			"mock_http": true,
 		}
 
 		ctx = context.Background()
