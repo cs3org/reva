@@ -20,6 +20,7 @@ package nextcloud_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"google.golang.org/grpc/metadata"
@@ -32,7 +33,6 @@ import (
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -87,13 +87,10 @@ var _ = Describe("Nextcloud", func() {
 
 	BeforeEach(func() {
 		var err error
-		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
-		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{
-			"root":         tmpRoot,
-			"enable_home":  true,
-			"share_folder": "/Shares",
+			"endpoint": "http://mock.com/apps/sciencemesh/",
+			"mock_http": true,
 		}
 
 		ctx = context.Background()
@@ -118,6 +115,7 @@ var _ = Describe("Nextcloud", func() {
 
 	Describe("New", func() {
 		It("returns a new instance", func() {
+			fmt.Println(options)
 			_, err := nextcloud.New(options)
 			Expect(err).ToNot(HaveOccurred())
 		})

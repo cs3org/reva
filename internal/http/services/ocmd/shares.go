@@ -82,7 +82,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 				// This doesn't happen when using the sciencemesh-nextcloud app, but in order to make the OCM
 				// test suite pass, this code works around that:
 				if reflect.ValueOf(reqMap["providerId"]).Kind() == reflect.Float64 {
-					providerID = fmt.Sprintf("%i", int(math.Round(reqMap["providerId"].(float64))))
+					providerID = fmt.Sprintf("%d", int(math.Round(reqMap["providerId"].(float64))))
 				} else {
 					providerID = reqMap["providerId"].(string)
 				}

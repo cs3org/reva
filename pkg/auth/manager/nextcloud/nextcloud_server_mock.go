@@ -62,7 +62,8 @@ func GetNextcloudServerMock(called *[]string) http.Handler {
 			response = responses[key]
 		}
 		if (response == Response{}) {
-			response = Response{200, fmt.Sprintf("response not defined! %s", key), serverStateEmpty}
+			fmt.Printf("%s %s %s %s", r.Method, r.URL, buf.String(), serverState)
+			response = Response{500, fmt.Sprintf("response not defined! %s", key), serverStateEmpty}
 		}
 		serverState = responses[key].newServerState
 		if serverState == `` {
