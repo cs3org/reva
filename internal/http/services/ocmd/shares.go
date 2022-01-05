@@ -91,10 +91,10 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		var protocolJson string
-		shareWith, protocolJson, meshProvider = r.FormValue("shareWith"), r.FormValue("protocol"), r.FormValue("meshProvider")
+		var protocolJSON string
+		shareWith, protocolJSON, meshProvider = r.FormValue("shareWith"), r.FormValue("protocol"), r.FormValue("meshProvider")
 		resource, providerID, owner = r.FormValue("name"), r.FormValue("providerId"), r.FormValue("owner")
-		err = json.Unmarshal([]byte(protocolJson), &protocol)
+		err = json.Unmarshal([]byte(protocolJSON), &protocol)
 		if err != nil {
 			WriteError(w, r, APIErrorInvalidParameter, "invalid protocol parameters", nil)
 		}

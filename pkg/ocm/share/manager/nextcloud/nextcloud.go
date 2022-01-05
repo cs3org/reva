@@ -213,7 +213,7 @@ func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []by
 	return resp.StatusCode, body, nil
 }
 
-// Called from both grpc CreateOCMShare for outgoing
+// Share is called from both grpc CreateOCMShare for outgoing
 // and http /ocm/shares for incoming
 // pi is provider info
 // pm is permissions

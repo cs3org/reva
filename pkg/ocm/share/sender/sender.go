@@ -45,6 +45,8 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 	return "", errors.New("json: ocm endpoint not specified for mesh provider")
 }
 
+// Send executes the POST to the OCM shares endpoint to create the share at the
+// remote site.
 func Send(requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) error {
 	requestBody, err := json.Marshal(requestBodyMap)
 	if err != nil {
