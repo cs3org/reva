@@ -29,6 +29,7 @@ import (
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/grpc/services/publicstorageprovider/mocks"
 )
 
 var (
@@ -38,13 +39,13 @@ var (
 var _ = Describe("Public Storage Provider", func() {
 	var (
 		ctx context.Context
-		gwc *MockGatewayClient
+		gwc *mocks.GatewayClient
 		psp *service
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		gwc = &MockGatewayClient{}
+		gwc = &mocks.GatewayClient{}
 		psp = &service{
 			conf:      &config{},
 			mountPath: "/public/",
@@ -52,9 +53,41 @@ var _ = Describe("Public Storage Provider", func() {
 			gateway:   gwc,
 		}
 
-	})
-
-	AfterEach(func() {
+		// common mocks
+		gwc.Mock.On(
+			"GetPublicShare",
+			mock.Anything, // ctx
+			&linkv1beta1.GetPublicShareRequest{
+				Ref: &linkv1beta1.PublicShareReference{
+					Spec: &linkv1beta1.PublicShareReference_Token{
+						Token: "public-token-123",
+					},
+				},
+				Sign: true,
+			},
+		).Return(
+			&linkv1beta1.GetPublicShareResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				Opaque: &typesv1beta1.Opaque{},
+				Share: &linkv1beta1.PublicShare{
+					Id: &linkv1beta1.PublicShareId{
+						OpaqueId: "omg",
+					},
+					Token: "public-token-123",
+					ResourceId: &providerv1beta1.ResourceId{
+						StorageId: "real-storage-id",
+						OpaqueId:  "file-id",
+					},
+					Permissions: &linkv1beta1.PublicSharePermissions{
+						Permissions: &providerv1beta1.ResourcePermissions{
+							Stat:            true,
+							CreateContainer: true,
+						},
+					},
+				},
+			},
+			nil,
+		).Once()
 
 	})
 
@@ -62,44 +95,10 @@ var _ = Describe("Public Storage Provider", func() {
 
 		Context("by path", func() {
 			It("returns the root", func() {
-				// mocks
-				gwc.Mock.On(
-					"GetPublicShare",
-					mock.Anything,
-					&linkv1beta1.GetPublicShareRequest{
-						Ref: &linkv1beta1.PublicShareReference{
-							Spec: &linkv1beta1.PublicShareReference_Token{
-								Token: "public-token-123",
-							},
-						},
-						Sign: true,
-					},
-				).Return(
-					&linkv1beta1.GetPublicShareResponse{
-						Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-						Opaque: &typesv1beta1.Opaque{},
-						Share: &linkv1beta1.PublicShare{
-							Id: &linkv1beta1.PublicShareId{
-								OpaqueId: "omg",
-							},
-							Token: "public-token-123",
-							ResourceId: &providerv1beta1.ResourceId{
-								StorageId: "real-storage-id",
-								OpaqueId:  "file-id",
-							},
-							Permissions: &linkv1beta1.PublicSharePermissions{
-								Permissions: &providerv1beta1.ResourcePermissions{
-									Stat: true,
-								},
-							},
-						},
-					},
-					nil,
-				).Once()
-
+				// individual mocks
 				gwc.Mock.On(
 					"Stat",
-					mock.Anything,
+					mock.Anything, // ctx
 					&providerv1beta1.StatRequest{
 						Ref: &providerv1beta1.Reference{
 							ResourceId: &providerv1beta1.ResourceId{
@@ -114,12 +113,14 @@ var _ = Describe("Public Storage Provider", func() {
 						Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 						Opaque: &typesv1beta1.Opaque{},
 						Info: &providerv1beta1.ResourceInfo{
-							Type: providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
+							Type:          providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
+							PermissionSet: &providerv1beta1.ResourcePermissions{},
+
 							Id: &providerv1beta1.ResourceId{
 								StorageId: "real-storage",
 								OpaqueId:  "real-file-id",
 							},
-							PermissionSet: &providerv1beta1.ResourcePermissions{},
+							Path: "/foo/baz",
 						},
 					},
 					nil,
@@ -136,51 +137,19 @@ var _ = Describe("Public Storage Provider", func() {
 
 				// check response
 				Expect(err).To(BeNil())
+				Expect(resp.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				Expect(resp.Info.Id.StorageId).To(Equal(publicStorageProviderID))
+				Expect(resp.Info.Id.OpaqueId).To(Equal("public-token-123/real-file-id"))
 				Expect(resp.Info.Path).To(Equal("/public/public-token-123"))
 			})
 		})
 
-		Context("stat the file by id", func() {
+		Context("by id", func() {
 			It("returns the root", func() {
-
-				// mocks
-				gwc.Mock.On(
-					"GetPublicShare",
-					mock.Anything,
-					&linkv1beta1.GetPublicShareRequest{
-						Ref: &linkv1beta1.PublicShareReference{
-							Spec: &linkv1beta1.PublicShareReference_Token{
-								Token: "public-token-123",
-							},
-						},
-						Sign: true,
-					},
-				).Return(
-					&linkv1beta1.GetPublicShareResponse{
-						Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-						Opaque: &typesv1beta1.Opaque{},
-						Share: &linkv1beta1.PublicShare{
-							Id: &linkv1beta1.PublicShareId{
-								OpaqueId: "omg",
-							},
-							Token: "public-token-123",
-							ResourceId: &providerv1beta1.ResourceId{
-								StorageId: "real-storage-id",
-								OpaqueId:  "file-id",
-							},
-							Permissions: &linkv1beta1.PublicSharePermissions{
-								Permissions: &providerv1beta1.ResourcePermissions{
-									Stat: true,
-								},
-							},
-						},
-					},
-					nil,
-				).Once()
-
+				// individual mocks
 				gwc.Mock.On(
 					"Stat",
-					mock.Anything,
+					mock.Anything, // ctx
 					&providerv1beta1.StatRequest{
 						Ref: &providerv1beta1.Reference{
 							ResourceId: &providerv1beta1.ResourceId{
@@ -195,44 +164,18 @@ var _ = Describe("Public Storage Provider", func() {
 						Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 						Opaque: &typesv1beta1.Opaque{},
 						Info: &providerv1beta1.ResourceInfo{
-							Type: providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
-							Id: &providerv1beta1.ResourceId{
-								StorageId: "real-storage-id",
-								OpaqueId:  "file-id",
-							},
+							Type:          providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
 							PermissionSet: &providerv1beta1.ResourcePermissions{},
-						},
-					},
-					nil,
-				)
 
-				gwc.Mock.On(
-					"Stat",
-					mock.Anything,
-					&providerv1beta1.StatRequest{
-						Ref: &providerv1beta1.Reference{
-							ResourceId: &providerv1beta1.ResourceId{
-								StorageId: "real-storage-id",
-								OpaqueId:  "file-id",
-							},
-							Path: "",
-						},
-					},
-				).Return(
-					&providerv1beta1.StatResponse{
-						Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-						Opaque: &typesv1beta1.Opaque{},
-						Info: &providerv1beta1.ResourceInfo{
-							Type: providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
 							Id: &providerv1beta1.ResourceId{
-								StorageId: "real-storage-id",
-								OpaqueId:  "file-id",
+								StorageId: "real-storage",
+								OpaqueId:  "real-file-id",
 							},
-							PermissionSet: &providerv1beta1.ResourcePermissions{},
+							Path: "/foo/baz",
 						},
 					},
 					nil,
-				).Once()
+				).Twice()
 
 				// the actual request
 				req := &providerv1beta1.StatRequest{
@@ -248,7 +191,76 @@ var _ = Describe("Public Storage Provider", func() {
 
 				// check response
 				Expect(err).To(BeNil())
+				Expect(resp.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				Expect(resp.Info.Id.StorageId).To(Equal(publicStorageProviderID))
+				Expect(resp.Info.Id.OpaqueId).To(Equal("public-token-123/real-file-id"))
 				Expect(resp.Info.Path).To(Equal("/public/public-token-123"))
+			})
+		})
+	})
+
+	Describe("When an public link user with editor role creates", func() {
+		Context("a container inside a public link", func() {
+			It("will be created", func() {
+				// individual mocks
+				gwc.Mock.On(
+					"Stat",
+					mock.Anything, // ctx
+					&providerv1beta1.StatRequest{
+						Ref: &providerv1beta1.Reference{
+							ResourceId: &providerv1beta1.ResourceId{
+								StorageId: "real-storage-id",
+								OpaqueId:  "file-id",
+							},
+							Path: "",
+						},
+					},
+				).Return(
+					&providerv1beta1.StatResponse{
+						Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+						Opaque: &typesv1beta1.Opaque{},
+						Info: &providerv1beta1.ResourceInfo{
+							Type:          providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
+							PermissionSet: &providerv1beta1.ResourcePermissions{},
+
+							Id: &providerv1beta1.ResourceId{
+								StorageId: "real-storage",
+								OpaqueId:  "real-file-id",
+							},
+							Path: "/foo/baz",
+						},
+					},
+					nil,
+				).Once()
+
+				gwc.Mock.On(
+					"CreateContainer",
+					mock.Anything, // ctx
+					&providerv1beta1.CreateContainerRequest{
+						Ref: &providerv1beta1.Reference{
+							Path: "/foo/baz/new_folder",
+						},
+					},
+				).Return(
+					&providerv1beta1.CreateContainerResponse{
+						Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+						Opaque: &typesv1beta1.Opaque{},
+					},
+					nil,
+				).Once()
+
+				// the actual request
+				req := &providerv1beta1.CreateContainerRequest{
+					Ref: &providerv1beta1.Reference{
+						Path: "/public/public-token-123/new_folder",
+					},
+				}
+
+				resp, err := psp.CreateContainer(ctx, req)
+
+				// check response
+				Expect(err).To(BeNil())
+				Expect(resp.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			})
 		})
 	})
