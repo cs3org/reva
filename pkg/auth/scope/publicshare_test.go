@@ -35,10 +35,10 @@ import (
 	"gotest.tools/assert"
 )
 
-func getPublicShareScope(resourceId *providerv1beta1.ResourceId, publicLinkRole authpb.Role) (*authpb.Scope, error) {
+func getPublicShareScope(resourceID *providerv1beta1.ResourceId, publicLinkRole authpb.Role) (*authpb.Scope, error) {
 
-	if resourceId == nil {
-		return nil, errors.New("resourceId must not be nil")
+	if resourceID == nil {
+		return nil, errors.New("resourceID must not be nil")
 	}
 
 	user := &userv1beta1.UserId{
@@ -54,7 +54,7 @@ func getPublicShareScope(resourceId *providerv1beta1.ResourceId, publicLinkRole 
 			OpaqueId: "opaque-public-link-share-id-123",
 		},
 
-		ResourceId: resourceId,
+		ResourceId: resourceID,
 
 		Permissions: &link.PublicSharePermissions{
 			Permissions: &providerv1beta1.ResourcePermissions{
@@ -236,6 +236,32 @@ func Test_StatFileOutsidePublicShareByPath(t *testing.T) {
 	assert.Equal(t, allowed, true)
 }
 
+func Test_StatFileOnDifferentPublicShareByPath(t *testing.T) {
+	ctx := context.TODO()
+
+	publicLinkResource := &providerv1beta1.ResourceId{
+		StorageId: "storage-id-123",
+		OpaqueId:  "file-id-123",
+	}
+
+	publicLinkScope, err := getPublicShareScope(
+		publicLinkResource,
+		authpb.Role_ROLE_VIEWER,
+	)
+	assert.NilError(t, err)
+
+	requestedResource := &provider.StatRequest{
+		Opaque: &typesv1beta1.Opaque{},
+		Ref: &providerv1beta1.Reference{
+			Path: "/public/token-567/../foo.txt",
+		},
+	}
+
+	allowed, err := publicshareScope(ctx, publicLinkScope, requestedResource, &log.Logger)
+	assert.NilError(t, err)
+	assert.Equal(t, allowed, false)
+}
+
 func Test_DeleteFileAsViewer(t *testing.T) {
 	ctx := context.TODO()
 
@@ -286,4 +312,60 @@ func Test_DeleteFileAsEditor(t *testing.T) {
 	allowed, err := publicshareScope(ctx, publicLinkScope, deleteRequest, &log.Logger)
 	assert.NilError(t, err)
 	assert.Equal(t, allowed, true)
+}
+
+func Test_GetPublicShare(t *testing.T) {
+	ctx := context.TODO()
+
+	publicLinkResource := &providerv1beta1.ResourceId{
+		StorageId: "storage-id-123",
+		OpaqueId:  "file-id-123",
+	}
+
+	publicLinkScope, err := getPublicShareScope(
+		publicLinkResource,
+		authpb.Role_ROLE_EDITOR,
+	)
+	assert.NilError(t, err)
+
+	publicShareRequest := &link.GetPublicShareRequest{
+		Opaque: &typesv1beta1.Opaque{},
+		Ref: &link.PublicShareReference{
+			Spec: &link.PublicShareReference_Token{
+				Token: "token-123",
+			},
+		},
+	}
+
+	allowed, err := publicshareScope(ctx, publicLinkScope, publicShareRequest, &log.Logger)
+	assert.NilError(t, err)
+	assert.Equal(t, allowed, true)
+}
+
+func Test_GetDifferentPublicShare(t *testing.T) {
+	ctx := context.TODO()
+
+	publicLinkResource := &providerv1beta1.ResourceId{
+		StorageId: "storage-id-123",
+		OpaqueId:  "file-id-123",
+	}
+
+	publicLinkScope, err := getPublicShareScope(
+		publicLinkResource,
+		authpb.Role_ROLE_EDITOR,
+	)
+	assert.NilError(t, err)
+
+	publicShareRequest := &link.GetPublicShareRequest{
+		Opaque: &typesv1beta1.Opaque{},
+		Ref: &link.PublicShareReference{
+			Spec: &link.PublicShareReference_Token{
+				Token: "token-456",
+			},
+		},
+	}
+
+	allowed, err := publicshareScope(ctx, publicLinkScope, publicShareRequest, &log.Logger)
+	assert.NilError(t, err)
+	assert.Equal(t, allowed, false)
 }
