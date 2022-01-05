@@ -1541,6 +1541,8 @@ func decodePath(s *provider.StorageSpace) (path string) {
 	if s.Opaque != nil {
 		if entry, ok := s.Opaque.Map["path"]; ok {
 			switch entry.Decoder {
+			case "plain":
+				path = string(entry.Value)
 			case "json":
 				_ = json.Unmarshal(entry.Value, &path)
 			case "toml":
