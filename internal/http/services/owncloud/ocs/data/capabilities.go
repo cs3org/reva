@@ -224,4 +224,5 @@ type Version struct {
 	Micro   int    `json:"micro" xml:"micro"` // = patch level
 	String  string `json:"string" xml:"string"`
 	Edition string `json:"edition" xml:"edition"`
+	Product string `json:"product" xml:"product"`
 }

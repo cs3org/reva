@@ -125,6 +125,7 @@ func checkResourcePath(path string) bool {
 		"/dataprovider",
 		"/data",
 		"/app/open",
+		"/app/new",
 		"/archiver",
 		"/ocs/v2.php/cloud/capabilities",
 		"/ocs/v1.php/cloud/capabilities",
