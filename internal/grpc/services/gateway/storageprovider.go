@@ -240,6 +240,9 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	}
 
 	listReq := &registry.ListStorageProvidersRequest{Opaque: req.Opaque}
+	if listReq.Opaque == nil {
+		listReq.Opaque = &typesv1beta1.Opaque{}
+	}
 	if len(filters) > 0 {
 		sdk.EncodeOpaqueMap(listReq.Opaque, filters)
 	}
