@@ -43,10 +43,10 @@ const serverStateHome = "HOME"
 var serverState = serverStateEmpty
 
 var responses = map[string]Response{
-	`POST /apps/sciencemesh/~unauthenticated/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`:       {200, `{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}`, serverStateHome},
-	`POST /apps/sciencemesh/~tester/api/user/GetUserByClaim {"claim":"claim-string","value":"value-string"}`:              {200, `{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}`, serverStateHome},
-	`POST /apps/sciencemesh/~tester/api/user/GetUserGroups {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`: {200, `["wine-lovers"]`, serverStateHome},
-	`POST /apps/sciencemesh/~tester/api/user/FindUsers some-query`:                                                        {200, `[{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}]`, serverStateHome},
+	`POST /apps/sciencemesh/~unauthenticated/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`: {200, `{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}`, serverStateHome},
+	`POST /apps/sciencemesh/~tester/api/user/GetUserByClaim {"claim":"claim-string","value":"value-string"}`:                 {200, `{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}`, serverStateHome},
+	`POST /apps/sciencemesh/~tester/api/user/GetUserGroups {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`:    {200, `["wine-lovers"]`, serverStateHome},
+	`POST /apps/sciencemesh/~tester/api/user/FindUsers some-query`:                                                           {200, `[{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}]`, serverStateHome},
 }
 
 // GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server

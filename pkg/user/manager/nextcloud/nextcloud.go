@@ -161,7 +161,8 @@ func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.Use
 	if err != nil {
 		return nil, err
 	}
-	return result, err}
+	return result, err
+}
 
 // GetUserByClaim method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
