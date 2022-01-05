@@ -1237,6 +1237,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 			srcProvider = providerInfos[i]
 			break
 		}
+		if srcProvider != nil {
+			break
+		}
 	}
 
 	if srcProvider == nil || srcRef == nil {
@@ -1273,6 +1276,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 			}
 			dstRef = unwrap(r, mountPath, root)
 			dstProvider = providerInfos[i]
+			break
+		}
+		if dstProvider != nil {
 			break
 		}
 	}
