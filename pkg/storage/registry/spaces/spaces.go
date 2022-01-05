@@ -551,7 +551,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 
 	if deepestMountPathProvider != nil {
 		if _, ok := providers[deepestMountPathProvider.Address]; !ok {
-			if err := setSpaces(deepestMountPathProvider, []*providerpb.StorageSpace{deepestMountSpace}); err != nil {
+			if err := setSpaces(deepestMountPathProvider, []*providerpb.StorageSpace{deepestMountSpace}); err == nil {
 				providers[deepestMountPathProvider.Address] = deepestMountPathProvider
 			} else {
 				appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", deepestMountPathProvider).Interface("space", deepestMountSpace).Msg("marshaling space failed, continuing")
