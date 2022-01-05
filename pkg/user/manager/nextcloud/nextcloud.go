@@ -21,6 +21,7 @@ package nextcloud
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -132,6 +133,7 @@ func (um *Manager) do(ctx context.Context, a Action, username string) (int, []by
 	req.Header.Set("X-Reva-Secret", um.sharedSecret)
 
 	req.Header.Set("Content-Type", "application/json")
+	fmt.Println(url)
 	resp, err := um.client.Do(req)
 	if err != nil {
 		panic(err)
@@ -149,14 +151,17 @@ func (um *Manager) Configure(ml map[string]interface{}) error {
 
 // GetUser method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
-	// FIXME: work around https://github.com/pondersource/nc-sciencemesh/issues/148
-	return &userpb.User{
-		Id: &userpb.UserId{
-			OpaqueId: uid.OpaqueId,
-			Idp:      "local",
-		},
-	}, nil
-}
+	bodyStr, _ := json.Marshal(uid)
+	_, respBody, err := um.do(ctx, Action{"GetUser", string(bodyStr)}, "unauthenticated")
+	if err != nil {
+		return nil, err
+	}
+	result := &userpb.User{}
+	err = json.Unmarshal(respBody, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, err}
 
 // GetUserByClaim method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {

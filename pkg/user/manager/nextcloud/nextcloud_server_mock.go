@@ -43,7 +43,7 @@ const serverStateHome = "HOME"
 var serverState = serverStateEmpty
 
 var responses = map[string]Response{
-	`POST /apps/sciencemesh/~tester/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`:       {200, `{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}`, serverStateHome},
+	`POST /apps/sciencemesh/~unauthenticated/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`:       {200, `{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}`, serverStateHome},
 	`POST /apps/sciencemesh/~tester/api/user/GetUserByClaim {"claim":"claim-string","value":"value-string"}`:              {200, `{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}`, serverStateHome},
 	`POST /apps/sciencemesh/~tester/api/user/GetUserGroups {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`: {200, `["wine-lovers"]`, serverStateHome},
 	`POST /apps/sciencemesh/~tester/api/user/FindUsers some-query`:                                                        {200, `[{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}]`, serverStateHome},
@@ -66,7 +66,8 @@ func GetNextcloudServerMock(called *[]string) http.Handler {
 			response = responses[key]
 		}
 		if (response == Response{}) {
-			response = Response{200, fmt.Sprintf("response not defined! %s", key), serverStateEmpty}
+			fmt.Printf("%s %s %s %s", r.Method, r.URL, buf.String(), serverState)
+			response = Response{500, fmt.Sprintf("response not defined! %s", key), serverStateEmpty}
 		}
 		serverState = responses[key].newServerState
 		if serverState == `` {

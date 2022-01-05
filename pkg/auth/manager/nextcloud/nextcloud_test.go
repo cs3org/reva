@@ -89,7 +89,7 @@ var _ = Describe("Nextcloud", func() {
 		var err error
 
 		options = map[string]interface{}{
-			"endpoint": "http://mock.com/apps/sciencemesh/",
+			"endpoint":  "http://mock.com/apps/sciencemesh/",
 			"mock_http": true,
 		}
 

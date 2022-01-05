@@ -148,7 +148,7 @@ var _ = Describe("Nextcloud", func() {
 				UidNumber:    0,
 				GidNumber:    0,
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`)
+			checkCalled(called, `POST /apps/sciencemesh/~unauthenticated/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`)
 		})
 	})
 
