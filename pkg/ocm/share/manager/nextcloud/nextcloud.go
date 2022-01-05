@@ -190,10 +190,10 @@ func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []by
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("am.do %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
-	req.Header.Set("X-Reva-Secret", sm.sharedSecret)
 	if err != nil {
 		return 0, nil, err
 	}
+	req.Header.Set("X-Reva-Secret", sm.sharedSecret)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := sm.client.Do(req)

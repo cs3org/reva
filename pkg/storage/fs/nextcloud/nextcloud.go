@@ -184,10 +184,10 @@ func (nc *StorageDriver) doDownloadRevision(ctx context.Context, filePath string
 	// See https://github.com/pondersource/nc-sciencemesh/issues/5
 	url := nc.endPoint + "~" + user.Username + "/api/storage/DownloadRevision/" + url.QueryEscape(key) + "/" + filePath
 	req, err := http.NewRequest(http.MethodGet, url, strings.NewReader(""))
-	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
 	if err != nil {
 		panic(err)
 	}
+	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
 
 	resp, err := nc.client.Do(req)
 	if err != nil {

@@ -123,10 +123,10 @@ func (am *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	url := am.endPoint + "~" + a.username + "/api/auth/" + a.verb
 	log.Info().Msgf("am.do %s %s %s", url, a.argS, am.sharedSecret)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
-	req.Header.Set("X-Reva-Secret", am.sharedSecret)
 	if err != nil {
 		return 0, nil, err
 	}
+	req.Header.Set("X-Reva-Secret", am.sharedSecret)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := am.client.Do(req)
