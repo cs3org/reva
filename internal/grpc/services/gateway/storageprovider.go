@@ -1539,7 +1539,17 @@ func decodeSpaces(r *registry.ProviderInfo) []*provider.StorageSpace {
 			}
 		}
 	}
-
+	if len(spaces) == 0 {
+		// we need to convert the provider into a space, needed for the static registry
+		spaces = append(spaces, &provider.StorageSpace{
+			Opaque: &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{
+				"path": {
+					Decoder: "plain",
+					Value:   []byte(r.ProviderPath),
+				},
+			}},
+		})
+	}
 	return spaces
 }
 
