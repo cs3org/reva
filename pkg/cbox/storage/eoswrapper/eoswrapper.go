@@ -166,6 +166,7 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 				r.PermissionSet.RemoveGrant = true
 				r.PermissionSet.UpdateGrant = true
 				r.PermissionSet.ListGrants = true
+				r.PermissionSet.GetQuota = true
 				return nil
 			}
 		}

@@ -136,15 +136,27 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 
 	share := publicShareResponse.GetShare()
 	role := authpb.Role_ROLE_VIEWER
+	roleStr := "viewer"
 	if share.Permissions.Permissions.InitiateFileUpload {
 		role = authpb.Role_ROLE_EDITOR
+		roleStr = "editor"
 	}
 	scope, err := scope.AddPublicShareScope(share, role, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return getUserResponse.GetUser(), scope, nil
+	u := getUserResponse.GetUser()
+	u.Opaque = &types.Opaque{
+		Map: map[string]*types.OpaqueEntry{
+			"public-share-role": {
+				Decoder: "plain",
+				Value:   []byte(roleStr),
+			},
+		},
+	}
+
+	return u, scope, nil
 }
 
 // ErrPasswordNotProvided is returned when the public share is password protected, but there was no password on the request

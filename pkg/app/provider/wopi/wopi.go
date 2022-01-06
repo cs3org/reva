@@ -136,10 +136,20 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("fileid", resource.GetId().OpaqueId)
 	q.Add("endpoint", resource.GetId().StorageId)
 	q.Add("viewmode", viewMode.String())
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if ok { // else defaults to "Guest xyz"
-		q.Add("username", u.Username)
-		q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
+		var isPublicShare bool
+		if u.Opaque != nil {
+			if _, ok := u.Opaque.Map["public-share-role"]; ok {
+				isPublicShare = true
+			}
+		}
+
+		if !isPublicShare {
+			q.Add("username", u.Username)
+			q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
+		}
 	}
 
 	q.Add("appname", p.conf.AppName)
