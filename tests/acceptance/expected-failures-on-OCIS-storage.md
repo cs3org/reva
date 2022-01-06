@@ -1343,7 +1343,13 @@ _ocs: api compatibility, return correct status code_
 -    [apiVersions/fileVersionsSharingToShares.feature:305](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L305)
 
 #### [file versions do not report the version author](https://github.com/owncloud/ocis/issues/2914)
--    [apiVersions/fileVersions.feature:474](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L474)
+- [apiVersions/fileVersionAuthor.feature:14](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L14)
+- [apiVersions/fileVersionAuthor.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L36)
+- [apiVersions/fileVersionAuthor.feature:56](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L56)
+- [apiVersions/fileVersionAuthor.feature:75](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L75)
+- [apiVersions/fileVersionAuthor.feature:101](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L101)
+- [apiVersions/fileVersionAuthor.feature:128](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L128)
+- [apiVersions/fileVersionAuthor.feature:155](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L155)
 
 ### [Allow public link sharing only for certain groups feature not implemented]
 - [apiSharePublicLink2/allowGroupToCreatePublicLinks.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/allowGroupToCreatePublicLinks.feature#L35)
