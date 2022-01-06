@@ -304,7 +304,8 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 // should be found.
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	spaceTypes := []string{}
+	spaceTypes := map[string]struct{}{}
+	var exists = struct{}{}
 	res := &provider.ListStorageSpacesResponse{
 		Status: status.NewOK(ctx),
 	}
@@ -317,7 +318,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			spaceType := f.GetSpaceType()
 			// do we need to fetch the shares?
 			if spaceType == "mountpoint" || spaceType == "grant" {
-				spaceTypes = append(spaceTypes, spaceType)
+				spaceTypes[spaceType] = exists
 				fetchShares = true
 			}
 			if spaceType == "+mountpoint" || spaceType == "+grant" {
@@ -341,11 +342,14 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	}
 
 	if len(spaceTypes) == 0 {
-		spaceTypes = []string{"virtual", "mountpoint"}
+		spaceTypes["virtual"] = exists
+		spaceTypes["mountpoint"] = exists
 		fetchShares = true
 	}
 
-	spaceTypes = append(spaceTypes, appendTypes...)
+	for _, s := range appendTypes {
+		spaceTypes[s] = exists
+	}
 
 	var receivedShares []*collaboration.ReceivedShare
 	if fetchShares {
@@ -360,8 +364,8 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		}
 		receivedShares = lsRes.Shares
 	}
-	for i := range spaceTypes {
-		switch spaceTypes[i] {
+	for k := range spaceTypes {
+		switch k {
 		case "virtual":
 			virtualRootID := &provider.ResourceId{
 				StorageId: utils.ShareStorageProviderID,

@@ -272,10 +272,11 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 
 		// adjust path
-		if !spacesPropfind {
-			info.Path = filepath.Join(spacePath, spaceRef.Path)
+		if spacesPropfind {
+			// we need to prefix the path with / to make subsequent prefix matches work
+			info.Path = filepath.Join("/", spaceRef.Path)
 		} else {
-			info.Path = spaceRef.Path
+			info.Path = filepath.Join(spacePath, spaceRef.Path)
 		}
 
 		spaceInfos = append(spaceInfos, info)
@@ -353,10 +354,9 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			}
 
 		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
-			spacePath := spaceInfo.Path
 
 			switch {
-			case strings.HasPrefix(requestPath, spacePath):
+			case strings.HasPrefix(requestPath, spaceInfo.Path):
 				req := &provider.ListContainerRequest{
 					Ref: &provider.Reference{
 						ResourceId: spaceInfo.Id,
@@ -375,14 +375,12 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					log.Debug().Interface("status", res.Status).Msg("List Container not ok, skipping")
 					continue
 				}
-				if !spacesPropfind {
-					for _, info := range res.Infos {
-						info.Path = path.Join(requestPath, info.Path)
-					}
+				for _, info := range res.Infos {
+					info.Path = path.Join(requestPath, info.Path)
 				}
 				resourceInfos = append(resourceInfos, res.Infos...)
-			case strings.HasPrefix(spacePath, requestPath): // space is a child of the requested path
-				childPath := strings.TrimPrefix(spacePath, requestPath)
+			case strings.HasPrefix(spaceInfo.Path, requestPath): // space is a child of the requested path
+				childPath := strings.TrimPrefix(spaceInfo.Path, requestPath)
 				childName, tail := router.ShiftPath(childPath)
 				if tail != "/" {
 					spaceInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER

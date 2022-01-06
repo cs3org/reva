@@ -24,7 +24,6 @@ import (
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/utils"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -383,16 +382,10 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		root      *provider.ResourceId
 		mountPath string
 	)
-	for spaceID, mp := range decodeSpacePaths(providerInfo) {
-		mountPath = mp
-		rootSpace, rootNode, err := utils.SplitStorageSpaceID(spaceID)
-		if err != nil {
-			continue
-		}
-		root = &provider.ResourceId{
-			StorageId: rootSpace,
-			OpaqueId:  rootNode,
-		}
+	for _, space := range decodeSpaces(providerInfo) {
+		mountPath = decodePath(space)
+		root = space.Root
+		break // TODO can there be more than one space for a path?
 	}
 
 	ref := unwrap(sharePathRef, mountPath, root)

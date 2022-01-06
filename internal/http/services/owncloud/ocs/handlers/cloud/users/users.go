@@ -104,23 +104,46 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
+	res, err := gc.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
+		Filters: []*provider.ListStorageSpacesRequest_Filter{
+			{
+				Type: provider.ListStorageSpacesRequest_Filter_TYPE_OWNER,
+				Term: &provider.ListStorageSpacesRequest_Filter_Owner{
+					Owner: u.Id,
+				},
+			},
+			{
+				Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
+					SpaceType: "personal",
+				},
+			},
+		},
+	})
 	if err != nil {
-		sublog.Error().Err(err).Msg("error calling GetHome")
+		sublog.Error().Err(err).Msg("error calling ListStorageSpaces")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		ocdav.HandleErrorStatus(sublog, w, getHomeRes.Status)
+	if res.Status.Code != rpc.Code_CODE_OK {
+		ocdav.HandleErrorStatus(sublog, w, res.Status)
 		return
 	}
+
+	if len(res.StorageSpaces) == 0 {
+		sublog.Error().Err(err).Msg("list spaces returned empty list")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+
+	}
+
 	var total, used uint64
 	var relative float32
 	// lightweight accounts don't have access to their storage space
 	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT {
 		getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: &provider.Reference{
-			// FIXME ResourceId?
-			Path: getHomeRes.Path,
+			ResourceId: res.StorageSpaces[0].Root,
+			Path:       ".",
 		}})
 		if err != nil {
 			sublog.Error().Err(err).Msg("error calling GetQuota")
