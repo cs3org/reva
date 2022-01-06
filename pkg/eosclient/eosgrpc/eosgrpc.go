@@ -572,7 +572,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 }
 
 // UnsetAttr unsets an extended attribute on a path.
-func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, path string) error {
+func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "UnsetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -586,6 +586,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 
 	var ktd = []string{attr.Key}
 	msg.Keystodelete = ktd
+	msg.Recursive = recursive
 
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)

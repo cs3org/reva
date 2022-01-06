@@ -213,6 +213,10 @@ func (fs *localfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error
 	info := tusd.FileInfo{}
 	data, err := ioutil.ReadFile(infoPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// Interpret os.ErrNotExist as 404 Not Found
+			err = tusd.ErrNotFound
+		}
 		return nil, err
 	}
 	if err := json.Unmarshal(data, &info); err != nil {

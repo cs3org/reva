@@ -36,7 +36,7 @@ type EOSClient interface {
 	GetFileInfoByFXID(ctx context.Context, auth Authorization, fxid string) (*FileInfo, error)
 	GetFileInfoByPath(ctx context.Context, auth Authorization, path string) (*FileInfo, error)
 	SetAttr(ctx context.Context, auth Authorization, attr *Attribute, recursive bool, path string) error
-	UnsetAttr(ctx context.Context, auth Authorization, attr *Attribute, path string) error
+	UnsetAttr(ctx context.Context, auth Authorization, attr *Attribute, recursive bool, path string) error
 	GetAttr(ctx context.Context, auth Authorization, key, path string) (*Attribute, error)
 	GetQuota(ctx context.Context, username string, rootAuth Authorization, path string) (*QuotaInfo, error)
 	SetQuota(ctx context.Context, rooAuth Authorization, info *SetQuotaInfo) error

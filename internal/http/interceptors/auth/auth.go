@@ -21,6 +21,7 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/bluele/gcache"
@@ -297,14 +298,16 @@ func getCredsForUserAgent(ua string, uam map[string]string, creds []string) []st
 		return creds
 	}
 
-	cred, ok := uam[ua]
-	if ok {
-		for _, v := range creds {
-			if v == cred {
-				return []string{cred}
+	for u, cred := range uam {
+		if strings.Contains(ua, u) {
+			for _, v := range creds {
+				if v == cred {
+					return []string{cred}
+				}
 			}
+			return creds
+
 		}
-		return creds
 	}
 
 	return creds

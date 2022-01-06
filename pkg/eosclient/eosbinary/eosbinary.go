@@ -535,12 +535,16 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 }
 
 // UnsetAttr unsets an extended attribute on a path.
-func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, path string) error {
+func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
-
-	args := []string{"attr", "-r", "rm", fmt.Sprintf("%d.%s", attr.Type, attr.Key), path}
+	var args []string
+	if recursive {
+		args = []string{"attr", "-r", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
+	} else {
+		args = []string{"attr", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
+	}
 	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return err
@@ -911,7 +915,7 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 	for _, fi := range finfos {
 		// For files, inherit ACLs from the parent
 		// And set the inode to that of their version folder
-		if !fi.IsDir {
+		if !fi.IsDir && !isVersionFolder(dirPath) {
 			if parent != nil {
 				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
 			}
