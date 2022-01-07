@@ -200,50 +200,11 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		groupsMap[u.Groups[i]] = true
 	}
 
-	var g *provider.Grant
 	// for all segments, starting at the leaf
 	cn := n
 	for cn.ID != n.SpaceRoot.ID {
-
-		var grantees []string
-		if grantees, err = cn.ListGrantees(ctx); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error listing grantees")
-			return false, err
-		}
-
-		userace := xattrs.GrantPrefix + xattrs.UserAcePrefix + u.Id.OpaqueId
-		userFound := false
-		for i := range grantees {
-			// we only need the find the user once per node
-			switch {
-			case !userFound && grantees[i] == userace:
-				g, err = cn.ReadGrant(ctx, grantees[i])
-			case strings.HasPrefix(grantees[i], xattrs.GrantPrefix+xattrs.GroupAcePrefix):
-				gr := strings.TrimPrefix(grantees[i], xattrs.GrantPrefix+xattrs.GroupAcePrefix)
-				if groupsMap[gr] {
-					g, err = cn.ReadGrant(ctx, grantees[i])
-				} else {
-					// no need to check attribute
-					continue
-				}
-			default:
-				// no need to check attribute
-				continue
-			}
-
-			switch {
-			case err == nil:
-				appctx.GetLogger(ctx).Debug().Interface("node", cn).Str("grant", grantees[i]).Interface("permissions", g.GetPermissions()).Msg("checking permissions")
-				if check(g.GetPermissions()) {
-					return true, nil
-				}
-			case isAttrUnset(err):
-				err = nil
-				appctx.GetLogger(ctx).Error().Interface("node", cn).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
-			default:
-				appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Str("grant", grantees[i]).Msg("error reading permissions")
-				return false, err
-			}
+		if ok := nodeHasPermission(ctx, cn, groupsMap, u.Id.OpaqueId, check); ok {
+			return true, nil
 		}
 
 		if cn, err = cn.Parent(); err != nil {
@@ -251,9 +212,55 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		}
 	}
 
-	// NOTE: this log is being printed 1 million times on a simple test. TODO: Check if this is expected
-	// appctx.GetLogger(ctx).Debug().Interface("permissions", NoPermissions()).Interface("node", n).Interface("user", u).Msg("no grant found, returning default permissions")
-	return false, nil
+	// also check permissions on root, eg. for for project spaces
+	return nodeHasPermission(ctx, cn, groupsMap, u.Id.OpaqueId, check), nil
+}
+
+func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool, userid string, check func(*provider.ResourcePermissions) bool) (ok bool) {
+
+	var grantees []string
+	var err error
+	if grantees, err = cn.ListGrantees(ctx); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error listing grantees")
+		return false
+	}
+
+	userace := xattrs.GrantUserAcePrefix + userid
+	userFound := false
+	for i := range grantees {
+		// we only need the find the user once per node
+		var g *provider.Grant
+		switch {
+		case !userFound && grantees[i] == userace:
+			g, err = cn.ReadGrant(ctx, grantees[i])
+		case strings.HasPrefix(grantees[i], xattrs.GrantGroupAcePrefix):
+			gr := strings.TrimPrefix(grantees[i], xattrs.GrantGroupAcePrefix)
+			if groupsMap[gr] {
+				g, err = cn.ReadGrant(ctx, grantees[i])
+			} else {
+				// no need to check attribute
+				continue
+			}
+		default:
+			// no need to check attribute
+			continue
+		}
+
+		switch {
+		case err == nil:
+			appctx.GetLogger(ctx).Debug().Interface("node", cn).Str("grant", grantees[i]).Interface("permissions", g.GetPermissions()).Msg("checking permissions")
+			if check(g.GetPermissions()) {
+				return true
+			}
+		case isAttrUnset(err):
+			appctx.GetLogger(ctx).Error().Interface("node", cn).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
+		default:
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Str("grant", grantees[i]).Msg("error reading permissions")
+			return false
+		}
+	}
+
+	return false
 }
 
 func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*userv1beta1.User, *provider.ResourcePermissions) {

@@ -116,7 +116,7 @@ var _ = Describe("Grants", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				localPath := path.Join(env.Root, "nodes", n.ID)
-				attr, err := xattr.Get(localPath, xattrs.GrantPrefix+xattrs.UserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
+				attr, err := xattr.Get(localPath, xattrs.GrantUserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(attr)).To(Equal("\x00t=A:f=:p=rw"))
 			})
