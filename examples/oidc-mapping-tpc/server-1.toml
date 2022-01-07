@@ -23,11 +23,18 @@ bearer = "localhost:13000"
 [grpc.services.storageregistry]
 [grpc.services.storageregistry.drivers.static]
 home_provider = "/home"
+
 [grpc.services.storageregistry.drivers.static.rules]
-"/home" = {"address" = "localhost:17000"}
-"/reva" = {"address" = "localhost:18000"}
-"/public" = {"address" = "localhost:16000"}
-"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:18000"}
+"/home" = {"address" = "localhost:19000"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:19000"}
+
+[grpc.services.storageprovider]
+driver = "localhome"
+mount_path = "/home"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+expose_data_server = true
+data_server_url = "http://localhost:19001/data"
+enable_home_creation = true
 
 [grpc.services.usershareprovider]
 [grpc.services.groupprovider]
@@ -48,10 +55,12 @@ providers = "providers.demo.json"
 [http]
 address = "0.0.0.0:19001"
 
+[http.services.dataprovider]
+driver = "localhome"
+
 [http.services.datagateway]
 [http.services.prometheus]
 [http.services.ocmd]
 [http.services.ocs]
 [http.services.ocdav]
 enable_http_tpc = true
-
