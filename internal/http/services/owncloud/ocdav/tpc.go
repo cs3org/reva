@@ -224,9 +224,9 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 		return err
 	}
 
-	// add authentication headers
-	xAccessToken := r.Header.Get("TransferHeaderX-Access-Token")
-	req.Header.Add("X-Access-Token", xAccessToken)
+	// add authentication header
+	bearerHeader := r.Header.Get("TransferHeaderAuthorization")
+	req.Header.Add("Authorization", bearerHeader)
 
 	// do download
 	httpDownloadRes, err := httpClient.Do(req) // lgtm[go/request-forgery]
@@ -396,10 +396,9 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 		return err
 	}
 
-	// add authentication headers
-	// set content length
-	xAccessToken := r.Header.Get("TransferHeaderX-Access-Token")
-	req.Header.Add("X-Access-Token", xAccessToken)
+	// add authentication header and content length
+	bearerHeader := r.Header.Get("TransferHeaderAuthorization")
+	req.Header.Add("Authorization", bearerHeader)
 	req.ContentLength = int64(srcInfo.GetSize())
 
 	// do Upload
