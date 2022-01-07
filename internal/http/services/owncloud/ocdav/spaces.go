@@ -202,15 +202,18 @@ func (s *svc) lookUpStorageSpaceByID(ctx context.Context, spaceID string) (*stor
 		return nil, lSSRes.Status, err
 	}
 
-	if len(lSSRes.StorageSpaces) != 1 {
+	switch len(lSSRes.StorageSpaces) {
+	case 0:
+		return nil, &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}, nil // since the caller only expects a single space return not found status
+	case 1:
+		return lSSRes.StorageSpaces[0], lSSRes.Status, nil
+	default:
 		return nil, nil, fmt.Errorf("unexpected number of spaces %d", len(lSSRes.StorageSpaces))
 	}
-	return lSSRes.StorageSpaces[0], lSSRes.Status, nil
-
 }
 func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string, spacesDavRequest bool) (*storageProvider.Reference, *rpc.Status, error) {
 	space, status, err := s.lookUpStorageSpaceByID(ctx, spaceID)
-	if err != nil {
+	if space == nil {
 		return nil, status, err
 	}
 	return makeRelativeReference(space, relativePath, spacesDavRequest), status, err
