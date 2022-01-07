@@ -169,13 +169,6 @@ func Test_StatPublicShareFileByRelativeReference(t *testing.T) {
 				StorageId: "storage-id-123",
 				OpaqueId:  "token-123/foo.txt",
 			},
-			// TODO: why don't we support this?
-			//ResourceId: &providerv1beta1.ResourceId{
-			//	StorageId: "storage-id-123",
-			//	OpaqueId:  "file-id-123",
-			//},
-			//Path: utils.MakeRelativePath("foo.txt"),
-			// we only would need to check, that we stay inside the scope (no ../../..)
 		},
 	}
 
