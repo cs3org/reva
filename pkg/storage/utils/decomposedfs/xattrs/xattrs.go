@@ -47,8 +47,10 @@ const (
 	BlobsizeAttr string = OcisPrefix + "blobsize"
 
 	// grantPrefix is the prefix for sharing related extended attributes
-	GrantPrefix    string = OcisPrefix + "grant."
-	MetadataPrefix string = OcisPrefix + "md."
+	GrantPrefix         string = OcisPrefix + "grant."
+	GrantUserAcePrefix  string = OcisPrefix + "grant." + UserAcePrefix
+	GrantGroupAcePrefix string = OcisPrefix + "grant." + GroupAcePrefix
+	MetadataPrefix      string = OcisPrefix + "md."
 
 	// favorite flag, per user
 	FavPrefix string = OcisPrefix + "fav."

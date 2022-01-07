@@ -225,7 +225,7 @@ func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool,
 		return false
 	}
 
-	userace := xattrs.GrantPrefix + xattrs.UserAcePrefix + userid
+	userace := xattrs.GrantUserAcePrefix + userid
 	userFound := false
 	for i := range grantees {
 		// we only need the find the user once per node
@@ -233,8 +233,8 @@ func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool,
 		switch {
 		case !userFound && grantees[i] == userace:
 			g, err = cn.ReadGrant(ctx, grantees[i])
-		case strings.HasPrefix(grantees[i], xattrs.GrantPrefix+xattrs.GroupAcePrefix):
-			gr := strings.TrimPrefix(grantees[i], xattrs.GrantPrefix+xattrs.GroupAcePrefix)
+		case strings.HasPrefix(grantees[i], xattrs.GrantGroupAcePrefix):
+			gr := strings.TrimPrefix(grantees[i], xattrs.GrantGroupAcePrefix)
 			if groupsMap[gr] {
 				g, err = cn.ReadGrant(ctx, grantees[i])
 			} else {
