@@ -61,6 +61,7 @@ type config struct {
 	GIDClaim        string `mapstructure:"gid_claim" docs:";The claim containing the GID of the user."`
 	UserProviderSvc string `mapstructure:"userprovidersvc" docs:";The endpoint at which the GRPC userprovider is exposed."`
 	UsersMapping    string `mapstructure:"usersmapping" docs:"; The OIDC users mapping file path"`
+	GroupClaimLabel string `mapstructure:"group_claim_label" docs:"; The group claim to be looked up to map the user (default to 'groups')."`
 }
 
 type oidcUserMapping struct {
@@ -149,6 +150,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	// claims contains the standard OIDC claims like issuer, iat, aud, ... and any other non-standard one.
 	// TODO(labkode): make claims configuration dynamic from the config file so we can add arbitrary mappings from claims to user struct.
+	// For now, only the group claim is dynamic.
 	var claims map[string]interface{}
 	if err := userInfo.Claims(&claims); err != nil {
 		return nil, nil, fmt.Errorf("oidcmapping: error unmarshaling userinfo claims: %v", err)
@@ -168,8 +170,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	if claims["preferred_username"] == nil || claims["name"] == nil {
 		return nil, nil, fmt.Errorf("oidcmapping: no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
 	}
-	if claims["groups"] == nil {
-		return nil, nil, fmt.Errorf("oidcmapping: no \"groups\" attribute found in userinfo")
+	if am.c.GroupClaimLabel == "" {
+		am.c.GroupClaimLabel = "groups"
+	}
+	if claims[am.c.GroupClaimLabel] == nil {
+		return nil, nil, fmt.Errorf("oidcmapping: no \"%s\" attribute found in userinfo", am.c.GroupClaimLabel)
 	}
 
 	// discover the user username
@@ -180,7 +185,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 			mappings = append(mappings, m.OIDCGroup)
 		}
 	}
-	intersection := intersect.Simple(claims["groups"], mappings)
+	intersection := intersect.Simple(claims[am.c.GroupClaimLabel], mappings)
 	if len(intersection) > 1 {
 		// multiple mappings is not implemented, we don't know which one to choose
 		return nil, nil, errtypes.PermissionDenied("oidcmapping: mapping failed, more than one mapping found")

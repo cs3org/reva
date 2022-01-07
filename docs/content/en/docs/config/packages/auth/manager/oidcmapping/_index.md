@@ -64,3 +64,11 @@ usersmapping = ""
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="group_claim_label" type="string" default="" %}}
+ The group claim to be looked up to map the user (default to 'groups'). [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L64)
+{{< highlight toml >}}
+[auth.manager.oidcmapping]
+group_claim_label = ""
+{{< /highlight >}}
+{{% /dir %}}
+
