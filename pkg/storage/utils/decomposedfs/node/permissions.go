@@ -257,7 +257,6 @@ func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool,
 				return true
 			}
 		case isAttrUnset(err):
-			err = nil
 			appctx.GetLogger(ctx).Error().Interface("node", cn).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 		default:
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Str("grant", grantees[i]).Msg("error reading permissions")
