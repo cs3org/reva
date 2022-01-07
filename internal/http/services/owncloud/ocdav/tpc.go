@@ -229,7 +229,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	req.Header.Add("X-Access-Token", xAccessToken)
 
 	// do download
-	httpDownloadRes, err := httpClient.Do(req)
+	httpDownloadRes, err := httpClient.Do(req) // lgtm[go/request-forgery]
 	if err != nil {
 		return err
 	}
@@ -403,7 +403,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	req.ContentLength = int64(srcInfo.GetSize())
 
 	// do Upload
-	httpUploadRes, err := httpClient.Do(req)
+	httpUploadRes, err := httpClient.Do(req) // lgtm[go/request-forgery]
 
 	if err != nil {
 		return err
