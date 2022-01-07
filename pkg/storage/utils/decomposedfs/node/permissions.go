@@ -213,11 +213,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 	}
 
 	// also check permissions on root, eg. for for project spaces
-	if ok := nodeHasPermission(ctx, cn, groupsMap, u.Id.OpaqueId, check); ok {
-		return true, nil
-	}
-
-	return false, nil
+	return nodeHasPermission(ctx, cn, groupsMap, u.Id.OpaqueId, check), nil
 }
 
 func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool, userid string, check func(*provider.ResourcePermissions) bool) (ok bool) {
