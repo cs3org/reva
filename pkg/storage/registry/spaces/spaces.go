@@ -90,15 +90,10 @@ type StorageProviderClient interface {
 }
 
 type config struct {
-	Providers    map[string]*Provider `mapstructure:"providers"`
-	HomeTemplate string               `mapstructure:"home_template"`
+	Providers map[string]*Provider `mapstructure:"providers"`
 }
 
 func (c *config) init() {
-
-	if c.HomeTemplate == "" {
-		c.HomeTemplate = "/"
-	}
 
 	if len(c.Providers) == 0 {
 		c.Providers = map[string]*Provider{
@@ -165,10 +160,6 @@ func New(m map[string]interface{}, getClientFunc GetStorageProviderServiceClient
 		resourceNameCache:               make(map[string]string),
 		getStorageProviderServiceClient: getClientFunc,
 	}
-	r.homeTemplate, err = template.New("home_template").Funcs(sprig.TxtFuncMap()).Parse(c.HomeTemplate)
-	if err != nil {
-		return nil, err
-	}
 	return r, nil
 }
 
@@ -186,8 +177,6 @@ type GetStorageProviderServiceClientFunc func(addr string) (StorageProviderClien
 
 type registry struct {
 	c *config
-	// the template to use when determining the home provider
-	homeTemplate *template.Template
 	// a map of resources to providers
 	resources         map[string][]*registrypb.ProviderInfo
 	resourceNameCache map[string]string
