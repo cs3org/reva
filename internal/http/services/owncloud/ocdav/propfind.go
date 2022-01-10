@@ -379,7 +379,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					info.Path = path.Join(requestPath, info.Path)
 				}
 				resourceInfos = append(resourceInfos, res.Infos...)
-			case strings.HasPrefix(spaceInfo.Path, requestPath): // space is a child of the requested path
+			case strings.HasPrefix(spaceInfo.Path, requestPath): // space is a deep child of the requested path
 				childPath := strings.TrimPrefix(spaceInfo.Path, requestPath)
 				childName, tail := router.ShiftPath(childPath)
 				if tail != "/" {
@@ -387,15 +387,20 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					spaceInfo.Checksum = nil
 					// TODO unset opaque checksum
 				}
-				spaceInfo.Path = path.Join(requestPath, childName)
 				if existingChild, ok := childInfos[childName]; ok {
 					// use most recent child
 					if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
-						childInfos[childName] = spaceInfo
+						childInfos[childName].Mtime = spaceInfo.Mtime
+						childInfos[childName].Etag = spaceInfo.Etag
+					}
+					// only update fileid if the resource is a direct child
+					if tail == "/" {
+						childInfos[childName].Id = spaceInfo.Id
 					}
 				} else {
 					childInfos[childName] = spaceInfo
 				}
+				spaceInfo.Path = path.Join(requestPath, childName)
 			default:
 				log.Debug().Msg("unhandled")
 			}
