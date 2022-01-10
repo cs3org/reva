@@ -23,7 +23,6 @@ import (
 	"archive/zip"
 	"context"
 	"io"
-	"path"
 	"path/filepath"
 	"time"
 
@@ -40,77 +39,25 @@ type Config struct {
 
 // Archiver is the struct able to create an archive
 type Archiver struct {
-	files      []string
-	dir        string
+	resources  []*provider.ResourceId
 	walker     walker.Walker
 	downloader downloader.Downloader
 	config     Config
 }
 
 // NewArchiver creates a new archiver able to create an archive containing the files in the list
-func NewArchiver(files []string, w walker.Walker, d downloader.Downloader, config Config) (*Archiver, error) {
-	if len(files) == 0 {
+func NewArchiver(r []*provider.ResourceId, w walker.Walker, d downloader.Downloader, config Config) (*Archiver, error) {
+	if len(r) == 0 {
 		return nil, ErrEmptyList{}
 	}
 
-	dir := getDeepestCommonDir(files)
-	if pathIn(files, dir) {
-		dir = filepath.Dir(dir)
-	}
-
 	arc := &Archiver{
-		dir:        dir,
-		files:      files,
+		resources:  r,
 		walker:     w,
 		downloader: d,
 		config:     config,
 	}
 	return arc, nil
-}
-
-// pathIn verifies that the path `f`is in the `files`list
-func pathIn(files []string, f string) bool {
-	f = filepath.Clean(f)
-	for _, file := range files {
-		if filepath.Clean(file) == f {
-			return true
-		}
-	}
-	return false
-}
-
-func getDeepestCommonDir(files []string) string {
-
-	if len(files) == 0 {
-		return ""
-	}
-
-	// find the maximum common substring from left
-	res := path.Clean(files[0]) + "/"
-
-	for _, file := range files[1:] {
-		file = path.Clean(file) + "/"
-
-		if len(file) < len(res) {
-			res, file = file, res
-		}
-
-		for i := 0; i < len(res); i++ {
-			if res[i] != file[i] {
-				res = res[:i]
-			}
-		}
-
-	}
-
-	// the common substring could be between two / - inside a file name
-	for i := len(res) - 1; i >= 0; i-- {
-		if res[i] == '/' {
-			res = res[:i+1]
-			break
-		}
-	}
-	return filepath.Clean(res)
 }
 
 // CreateTar creates a tar and write it into the dst Writer
@@ -119,9 +66,9 @@ func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 
 	var filesCount, sizeFiles int64
 
-	for _, root := range a.files {
+	for _, root := range a.resources {
 
-		err := a.walker.Walk(ctx, root, func(path string, info *provider.ResourceInfo, err error) error {
+		err := a.walker.Walk(ctx, root, func(wd string, info *provider.ResourceInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -143,15 +90,8 @@ func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 				}
 			}
 
-			// TODO (gdelmont): remove duplicates if the resources requested overlaps
-			fileName, err := filepath.Rel(a.dir, path)
-
-			if err != nil {
-				return err
-			}
-
 			header := tar.Header{
-				Name:    fileName,
+				Name:    filepath.Join(wd, info.Path),
 				ModTime: time.Unix(int64(info.Mtime.Seconds), 0),
 			}
 
@@ -171,7 +111,7 @@ func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 			}
 
 			if !isDir {
-				err = a.downloader.Download(ctx, path, w)
+				err = a.downloader.Download(ctx, info.Id, w)
 				if err != nil {
 					return err
 				}
@@ -193,9 +133,9 @@ func (a *Archiver) CreateZip(ctx context.Context, dst io.Writer) error {
 
 	var filesCount, sizeFiles int64
 
-	for _, root := range a.files {
+	for _, root := range a.resources {
 
-		err := a.walker.Walk(ctx, root, func(path string, info *provider.ResourceInfo, err error) error {
+		err := a.walker.Walk(ctx, root, func(wd string, info *provider.ResourceInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -217,18 +157,8 @@ func (a *Archiver) CreateZip(ctx context.Context, dst io.Writer) error {
 				}
 			}
 
-			// TODO (gdelmont): remove duplicates if the resources requested overlaps
-			fileName, err := filepath.Rel(a.dir, path)
-			if err != nil {
-				return err
-			}
-
-			if fileName == "" {
-				return nil
-			}
-
 			header := zip.FileHeader{
-				Name:     fileName,
+				Name:     filepath.Join(wd, info.Path),
 				Modified: time.Unix(int64(info.Mtime.Seconds), 0),
 			}
 
@@ -244,7 +174,7 @@ func (a *Archiver) CreateZip(ctx context.Context, dst io.Writer) error {
 			}
 
 			if !isDir {
-				err = a.downloader.Download(ctx, path, dst)
+				err = a.downloader.Download(ctx, info.Id, dst)
 				if err != nil {
 					return err
 				}
