@@ -25,6 +25,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
 )
 
@@ -48,7 +49,8 @@ func convertFileInfoToResourceInfo(path string, f fs.FileInfo) *provider.Resourc
 	}
 	return &provider.ResourceInfo{
 		Type: t,
-		Path: path,
+		Path: f.Name(),
+		Id:   &provider.ResourceId{OpaqueId: path},
 		Size: uint64(f.Size()),
 		Mtime: &typesv1beta1.Timestamp{
 			Seconds: uint64(f.ModTime().Second()),
@@ -58,11 +60,13 @@ func convertFileInfoToResourceInfo(path string, f fs.FileInfo) *provider.Resourc
 
 func mockWalkFunc(fn walker.WalkFunc) filepath.WalkFunc {
 	return func(path string, info fs.FileInfo, err error) error {
-		return fn(path, convertFileInfoToResourceInfo(path, info), err)
+		_, relativePath := router.ShiftPath(path)
+		_, relativePath = router.ShiftPath(relativePath)
+		return fn(filepath.Dir(relativePath), convertFileInfoToResourceInfo(path, info), err)
 	}
 }
 
 // Walk walks into the local file system using the built-in filepath.Walk go function
-func (m *mockWalker) Walk(_ context.Context, root string, fn walker.WalkFunc) error {
-	return filepath.Walk(root, mockWalkFunc(fn))
+func (m *mockWalker) Walk(_ context.Context, root *provider.ResourceId, fn walker.WalkFunc) error {
+	return filepath.Walk(root.OpaqueId, mockWalkFunc(fn))
 }

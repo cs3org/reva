@@ -38,12 +38,12 @@ import (
 //
 // The error result returned by the function controls how Walk continues. If the function returns the special value SkipDir, Walk skips the current directory.
 // Otherwise, if the function returns a non-nil error, Walk stops entirely and returns that error.
-type WalkFunc func(path string, info *provider.ResourceInfo, err error) error
+type WalkFunc func(wd string, info *provider.ResourceInfo, err error) error
 
 // Walker is an interface implemented by objects that are able to walk from a dir rooted into the passed path
 type Walker interface {
 	// Walk walks the file tree rooted at root, calling fn for each file or folder in the tree, including the root.
-	Walk(context.Context, string, WalkFunc) error
+	Walk(ctx context.Context, root *provider.ResourceId, fn WalkFunc) error
 }
 
 type revaWalker struct {
@@ -56,14 +56,14 @@ func NewWalker(gtw gateway.GatewayAPIClient) Walker {
 }
 
 // Walk walks the file tree rooted at root, calling fn for each file or folder in the tree, including the root.
-func (r *revaWalker) Walk(ctx context.Context, root string, fn WalkFunc) error {
+func (r *revaWalker) Walk(ctx context.Context, root *provider.ResourceId, fn WalkFunc) error {
 	info, err := r.stat(ctx, root)
 
 	if err != nil {
-		return fn(root, nil, err)
+		return fn("", nil, err)
 	}
 
-	err = r.walkRecursively(ctx, root, info, fn)
+	err = r.walkRecursively(ctx, "", info, fn)
 
 	if err == filepath.SkipDir {
 		return nil
@@ -72,21 +72,21 @@ func (r *revaWalker) Walk(ctx context.Context, root string, fn WalkFunc) error {
 	return err
 }
 
-func (r *revaWalker) walkRecursively(ctx context.Context, path string, info *provider.ResourceInfo, fn WalkFunc) error {
+func (r *revaWalker) walkRecursively(ctx context.Context, wd string, info *provider.ResourceInfo, fn WalkFunc) error {
 
 	if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		return fn(path, info, nil)
+		return fn(wd, info, nil)
 	}
 
-	list, err := r.readDir(ctx, path)
-	errFn := fn(path, info, err)
+	list, err := r.readDir(ctx, info.Id)
+	errFn := fn(wd, info, err)
 
 	if err != nil || errFn != nil {
 		return errFn
 	}
 
 	for _, file := range list {
-		err = r.walkRecursively(ctx, file.Path, file, fn)
+		err = r.walkRecursively(ctx, filepath.Join(wd, info.Path), file, fn)
 		if err != nil && (file.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER || err != filepath.SkipDir) {
 			return err
 		}
@@ -95,39 +95,31 @@ func (r *revaWalker) walkRecursively(ctx context.Context, path string, info *pro
 	return nil
 }
 
-func (r *revaWalker) readDir(ctx context.Context, path string) ([]*provider.ResourceInfo, error) {
-	resp, err := r.gtw.ListContainer(ctx, &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			Path: path,
-		},
-	})
+func (r *revaWalker) readDir(ctx context.Context, id *provider.ResourceId) ([]*provider.ResourceInfo, error) {
+	resp, err := r.gtw.ListContainer(ctx, &provider.ListContainerRequest{Ref: &provider.Reference{ResourceId: id, Path: "."}})
 
 	switch {
 	case err != nil:
 		return nil, err
 	case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
-		return nil, errtypes.NotFound(path)
+		return nil, errtypes.NotFound(id.String())
 	case resp.Status.Code != rpc.Code_CODE_OK:
-		return nil, errtypes.InternalError(fmt.Sprintf("error reading dir %s", path))
+		return nil, errtypes.InternalError(fmt.Sprintf("error listing container %+v", id))
 	}
 
 	return resp.Infos, nil
 }
 
-func (r *revaWalker) stat(ctx context.Context, path string) (*provider.ResourceInfo, error) {
-	resp, err := r.gtw.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Path: path,
-		},
-	})
+func (r *revaWalker) stat(ctx context.Context, id *provider.ResourceId) (*provider.ResourceInfo, error) {
+	resp, err := r.gtw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: id, Path: "."}})
 
 	switch {
 	case err != nil:
 		return nil, err
 	case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
-		return nil, errtypes.NotFound(path)
+		return nil, errtypes.NotFound(id.String())
 	case resp.Status.Code != rpc.Code_CODE_OK:
-		return nil, errtypes.InternalError(fmt.Sprintf("error getting stats from %s", path))
+		return nil, errtypes.InternalError(fmt.Sprintf("error stating %+v", id))
 	}
 
 	return resp.Info, nil
