@@ -164,7 +164,11 @@ type cachedRegistryClient struct {
 func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *registry.ListStorageProvidersRequest, opts ...grpc.CallOption) (*registry.ListStorageProvidersResponse, error) {
 	cache := c.caches[listproviders]
 
-	key := sdk.DecodeOpaqueMap(in.Opaque)["storage_id"]
+	user := ctxpkg.ContextMustGetUser(ctx)
+
+	storageID := sdk.DecodeOpaqueMap(in.Opaque)["storage_id"]
+
+	key := user.GetId().GetOpaqueId() + storageID
 	if key != "" {
 		s := &registry.ListStorageProvidersResponse{}
 		if err := pullFromCache(cache, key, s); err == nil {
@@ -176,9 +180,9 @@ func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *reg
 	switch {
 	case err != nil:
 		return nil, err
-	case resp.Status.Code != rpc.Code_CODE_OK && resp.Status.Code != rpc.Code_CODE_NOT_FOUND:
+	case resp.Status.Code != rpc.Code_CODE_OK:
 		return resp, nil
-	case key == "":
+	case storageID == "":
 		return resp, nil
 	default:
 		return resp, pushToCache(cache, key, resp)
