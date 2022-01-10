@@ -32,6 +32,8 @@ import (
 	"github.com/BurntSushi/toml"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -47,7 +49,6 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
-
 	gstatus "google.golang.org/grpc/status"
 )
 
@@ -290,7 +291,12 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 }
 
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
-	// TODO: needs to be fixed
+	opaque := req.Opaque
+	var purge bool
+	if opaque != nil {
+		_, purge = opaque.Map["purge"]
+	}
+
 	storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
@@ -311,12 +317,92 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 
 	res, err := c.DeleteStorageSpace(ctx, req)
 	if err != nil {
-		return &provider.DeleteStorageSpaceResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call DeleteStorageSpace", err),
-		}, nil
+		code := gstatus.Code(err)
+		if storageid == utils.ShareStorageProviderID && code == codes.Unimplemented {
+			res = &provider.DeleteStorageSpaceResponse{
+				Status: status.NewOK(ctx),
+			}
+		} else {
+			return &provider.DeleteStorageSpaceResponse{
+				Status: status.NewStatusFromErrType(ctx, "gateway could not call DeleteStorageSpace", err),
+			}, nil
+		}
 	}
 
 	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return res, nil
+	}
+
+	if purge {
+		log := appctx.GetLogger(ctx)
+		log.Debug().Msg("purging storage space")
+		// List all shares in this storage space
+		lsRes, err := s.ListShares(ctx, &collaborationv1beta1.ListSharesRequest{
+			Filters: []*collaborationv1beta1.Filter{
+				{
+					// TODO: introduce the new fiter type to the CS3 API
+					Type: collaborationv1beta1.Filter_Type(7),
+					Term: &collaborationv1beta1.Filter_ResourceId{ResourceId: &provider.ResourceId{StorageId: storageid}},
+				},
+			},
+		})
+		switch {
+		case err != nil:
+			return &provider.DeleteStorageSpaceResponse{
+				Status: status.NewStatusFromErrType(ctx, "gateway could not delete shares of StorageSpace", err),
+			}, nil
+		case lsRes.Status.Code != rpc.Code_CODE_OK:
+			// TODO: Ignore `NotFound`?
+			return &provider.DeleteStorageSpaceResponse{
+				Status: status.NewInternal(ctx, "gateway could not delete shares of StorageSpace"),
+			}, nil
+		}
+		for _, share := range lsRes.Shares {
+			rsRes, err := s.RemoveShare(ctx, &collaborationv1beta1.RemoveShareRequest{
+				Ref: &collaborationv1beta1.ShareReference{
+					Spec: &collaborationv1beta1.ShareReference_Id{Id: share.Id},
+				},
+			})
+			if err != nil || rsRes.Status.Code != rpc.Code_CODE_OK {
+				log.Error().Err(err).Interface("status", rsRes.Status).Str("share_id", share.Id.OpaqueId).Msg("failed to delete share")
+			}
+		}
+
+		// List all public shares in this storage space
+		lpsRes, err := s.ListPublicShares(ctx, &linkv1beta1.ListPublicSharesRequest{
+			Filters: []*linkv1beta1.ListPublicSharesRequest_Filter{
+				{
+					// TODO: introduce the new fiter type to the CS3 API
+					Type: linkv1beta1.ListPublicSharesRequest_Filter_Type(4),
+					Term: &linkv1beta1.ListPublicSharesRequest_Filter_ResourceId{ResourceId: &provider.ResourceId{StorageId: storageid}},
+				},
+			},
+		})
+		switch {
+		case err != nil:
+			return &provider.DeleteStorageSpaceResponse{
+				Status: status.NewStatusFromErrType(ctx, "gateway could not delete shares of StorageSpace", err),
+			}, nil
+		case lpsRes.Status.Code != rpc.Code_CODE_OK:
+			// TODO: Ignore `NotFound`?
+			return &provider.DeleteStorageSpaceResponse{
+				Status: status.NewInternal(ctx, "gateway could not delete shares of StorageSpace"),
+			}, nil
+		}
+		for _, share := range lpsRes.Share {
+			rsRes, err := s.RemovePublicShare(ctx, &linkv1beta1.RemovePublicShareRequest{
+				Ref: &linkv1beta1.PublicShareReference{
+					Spec: &linkv1beta1.PublicShareReference_Id{Id: share.Id},
+				},
+			})
+			if err != nil || rsRes.Status.Code != rpc.Code_CODE_OK {
+				log.Error().Err(err).Interface("status", rsRes.Status).Str("share_id", share.Id.OpaqueId).Msg("failed to delete share")
+			}
+		}
+	}
+
 	return res, nil
 }
 

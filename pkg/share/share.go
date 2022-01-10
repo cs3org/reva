@@ -121,6 +121,8 @@ func MatchesFilter(share *collaboration.Share, filter *collaboration.Filter) boo
 		// This filter type is used to filter out "denial shares". These are currently implemented by having the permission "0".
 		// I.e. if the permission is 0 we don't want to show it.
 		return int(conversions.RoleFromResourcePermissions(share.Permissions.Permissions).OCSPermissions()) != 0
+	case collaboration.Filter_Type(7):
+		return share.ResourceId.StorageId == filter.GetResourceId().GetStorageId()
 	default:
 		return false
 	}
