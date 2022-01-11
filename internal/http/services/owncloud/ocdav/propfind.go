@@ -258,6 +258,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	var mostRecentChildInfo *provider.ResourceInfo
 	var aggregatedChildSize uint64
 	spaceInfos := make([]*provider.ResourceInfo, 0, len(spaces))
+	spaceMap := map[*provider.ResourceInfo]*provider.Reference{}
 	for _, space := range spaces {
 		if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
 			continue // not mounted
@@ -279,6 +280,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			info.Path = filepath.Join(spacePath, spaceRef.Path)
 		}
 
+		spaceMap[info] = spaceRef
 		spaceInfos = append(spaceInfos, info)
 
 		if rootInfo == nil && requestPath == info.Path || spacesPropfind && requestPath == path.Join("/", info.Path) {
@@ -354,14 +356,10 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			}
 
 		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
-
 			switch {
 			case strings.HasPrefix(requestPath, spaceInfo.Path):
 				req := &provider.ListContainerRequest{
-					Ref: &provider.Reference{
-						ResourceId: spaceInfo.Id,
-						Path:       ".",
-					},
+					Ref:                   spaceMap[spaceInfo],
 					ArbitraryMetadataKeys: metadataKeys,
 				}
 				res, err := client.ListContainer(ctx, req)
@@ -418,7 +416,8 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				req := &provider.ListContainerRequest{
 					Ref: &provider.Reference{
 						ResourceId: spaceInfo.Id,
-						Path:       utils.MakeRelativePath(strings.TrimPrefix(info.Path, spaceInfo.Path)),
+						// TODO here we cut of the path that we added after stating the space above
+						Path: utils.MakeRelativePath(strings.TrimPrefix(info.Path, spaceInfo.Path)),
 					},
 					ArbitraryMetadataKeys: metadataKeys,
 				}
