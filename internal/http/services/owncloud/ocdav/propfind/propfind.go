@@ -16,10 +16,9 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdav
+package propfind
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -34,11 +33,15 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/props"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -50,25 +53,32 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"google.golang.org/grpc"
 )
 
-const (
-	_nsDav      = "DAV:"
-	_nsOwncloud = "http://owncloud.org/ns"
-	_nsOCS      = "http://open-collaboration-services.org/ns"
+// GatewayClient is the interface that's being uses to interact with the gateway
+type GatewayClient interface {
+	ListPublicShares(ctx context.Context, in *link.ListPublicSharesRequest, opts ...grpc.CallOption) (*link.ListPublicSharesResponse, error)
+	Stat(ctx context.Context, in *sprovider.StatRequest, opts ...grpc.CallOption) (*sprovider.StatResponse, error)
+	ListContainer(ctx context.Context, in *sprovider.ListContainerRequest, opts ...grpc.CallOption) (*sprovider.ListContainerResponse, error)
+}
 
-	_propOcFavorite = "http://owncloud.org/ns/favorite"
+// GetGatewayServiceClientFunc is a callback used to pass in a StorageProviderClient during testing
+type GetGatewayServiceClientFunc func() (GatewayClient, error)
+type PropfindHandler struct {
+	PublicURL string
+	getClient GetGatewayServiceClientFunc
+}
 
-	// RFC1123 time that mimics oc10. time.RFC1123 would end in "UTC", see https://github.com/golang/go/issues/13781
-	RFC1123 = "Mon, 02 Jan 2006 15:04:05 GMT"
-
-	// _propQuotaUncalculated = "-1"
-	_propQuotaUnknown = "-2"
-	// _propQuotaUnlimited    = "-3"
-)
+func NewPropfindHandler(publicURL string, getClientFunc GetGatewayServiceClientFunc) *PropfindHandler {
+	return &PropfindHandler{
+		PublicURL: publicURL,
+		getClient: getClientFunc,
+	}
+}
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
-func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
+func (p *PropfindHandler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
 
@@ -78,7 +88,7 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
-	pf, status, err := readPropfind(r.Body)
+	pf, status, err := ReadPropfind(r.Body)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
@@ -86,7 +96,14 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 	}
 
 	// retrieve a specific storage space
-	spaces, rpcStatus, err := s.lookUpStorageSpacesForPathWithChildren(ctx, fn)
+	client, err := p.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error retrieving a gateway service client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	spaces, rpcStatus, err := spacelookup.LookUpStorageSpacesForPathWithChildren(ctx, client.(gateway.GatewayAPIClient), fn)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -94,25 +111,31 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		errors.HandleErrorStatus(&sublog, w, rpcStatus)
 		return
 	}
 
-	resourceInfos, sendTusHeaders, ok := s.getResourceInfos(ctx, w, r, pf, spaces, fn, false, sublog)
+	resourceInfos, sendTusHeaders, ok := p.getResourceInfos(ctx, w, r, pf, spaces, fn, false, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
 	}
-	s.propfindResponse(ctx, w, r, ns, pf, sendTusHeaders, resourceInfos, sublog)
+	p.propfindResponse(ctx, w, r, ns, pf, sendTusHeaders, resourceInfos, sublog)
 }
 
-func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
+func (p *PropfindHandler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_propfind")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
+	client, err := p.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	pf, status, err := readPropfind(r.Body)
+	pf, status, err := ReadPropfind(r.Body)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
@@ -120,19 +143,14 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 	}
 
 	// retrieve a specific storage space
-	space, rpcStatus, err := s.lookUpStorageSpaceByID(ctx, spaceID)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	space, rpcStatus, err := spacelookup.LookUpStorageSpaceByID(ctx, client.(gateway.GatewayAPIClient), spaceID)
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		errors.HandleErrorStatus(&sublog, w, rpcStatus)
 		return
 	}
 
-	resourceInfos, sendTusHeaders, ok := s.getResourceInfos(ctx, w, r, pf, []*provider.StorageSpace{space}, r.URL.Path, true, sublog)
+	resourceInfos, sendTusHeaders, ok := p.getResourceInfos(ctx, w, r, pf, []*provider.StorageSpace{space}, r.URL.Path, true, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
@@ -143,11 +161,11 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		resourceInfos[i].Path = path.Join("/", spaceID, resourceInfos[i].Path)
 	}
 
-	s.propfindResponse(ctx, w, r, "", pf, sendTusHeaders, resourceInfos, sublog)
+	p.propfindResponse(ctx, w, r, "", pf, sendTusHeaders, resourceInfos, sublog)
 
 }
 
-func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+func (p *PropfindHandler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf PropfindXML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(ctx, "propfind_response")
 	defer span.End()
 
@@ -156,7 +174,7 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 		filters = append(filters, publicshare.ResourceIDFilter(resourceInfos[i].Id))
 	}
 
-	client, err := s.getClient()
+	client, err := p.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -175,20 +193,20 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 		span.SetStatus(codes.Error, err.Error())
 	}
 
-	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, namespace, linkshares)
+	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, linkshares)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
-	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 
 	if sendTusHeaders {
-		w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderTusVersion, HeaderTusExtension}, ", "))
-		w.Header().Set(HeaderTusResumable, "1.0.0")
-		w.Header().Set(HeaderTusVersion, "1.0.0")
-		w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
+		w.Header().Add(net.HeaderAccessControlExposeHeaders, strings.Join([]string{net.HeaderTusResumable, net.HeaderTusVersion, net.HeaderTusExtension}, ", "))
+		w.Header().Set(net.HeaderTusResumable, "1.0.0")
+		w.Header().Set(net.HeaderTusVersion, "1.0.0")
+		w.Header().Set(net.HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
 	}
 
 	w.WriteHeader(http.StatusMultiStatus)
@@ -198,7 +216,7 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 }
 
 // TODO this is just a stat -> rename
-func (s *svc) statSpace(ctx context.Context, client gateway.GatewayAPIClient, space *provider.StorageSpace, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
+func (p *PropfindHandler) statSpace(ctx context.Context, client gateway.GatewayAPIClient, space *provider.StorageSpace, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
 	req := &provider.StatRequest{
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,
@@ -210,8 +228,8 @@ func (s *svc) statSpace(ctx context.Context, client gateway.GatewayAPIClient, sp
 	return res.Info, res.Status, nil
 }
 
-func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, spaces []*provider.StorageSpace, requestPath string, spacesPropfind bool, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
-	depth := r.Header.Get(HeaderDepth)
+func (p *PropfindHandler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf PropfindXML, spaces []*provider.StorageSpace, requestPath string, spacesPropfind bool, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
+	depth := r.Header.Get(net.HeaderDepth)
 	if depth == "" {
 		depth = "1"
 	}
@@ -220,15 +238,12 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		log.Debug().Str("depth", depth).Msg("invalid Depth header value")
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Invalid Depth header value: %v", depth)
-		b, err := Marshal(exception{
-			code:    SabredavBadRequest,
-			message: m,
-		})
-		HandleWebdavError(&log, w, b, err)
+		b, err := errors.Marshal(errors.SabredavBadRequest, m, "")
+		errors.HandleWebdavError(&log, w, b, err)
 		return nil, false, false
 	}
 
-	client, err := s.getClient()
+	client, err := p.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -266,8 +281,8 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		spacePath := string(space.Opaque.Map["path"].Value)
 		// TODO separate stats to the path or to the children, after statting all children update the mtime/etag
 		// TODO get mtime, and size from space as well, so we no longer have to stat here?
-		spaceRef := makeRelativeReference(space, requestPath, spacesPropfind)
-		info, status, err := s.statSpace(ctx, client, space, spaceRef, metadataKeys)
+		spaceRef := spacelookup.MakeRelativeReference(space, requestPath, spacesPropfind)
+		info, status, err := p.statSpace(ctx, client.(gateway.GatewayAPIClient), space, spaceRef, metadataKeys)
 		if err != nil || status.Code != rpc.Code_CODE_OK {
 			continue
 		}
@@ -305,11 +320,8 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		// TODO if we have children invent node on the fly
 		w.WriteHeader(http.StatusNotFound)
 		m := fmt.Sprintf("Resource %v not found", requestPath)
-		b, err := Marshal(exception{
-			code:    SabredavNotFound,
-			message: m,
-		})
-		HandleWebdavError(&log, w, b, err)
+		b, err := errors.Marshal(errors.SabredavNotFound, m, "")
+		errors.HandleWebdavError(&log, w, b, err)
 		return nil, false, false
 	}
 	if mostRecentChildInfo != nil {
@@ -471,7 +483,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 
 func requiresExplicitFetching(n *xml.Name) bool {
 	switch n.Space {
-	case _nsDav:
+	case net.NsDav:
 		switch n.Local {
 		case "quota-available-bytes", "quota-used-bytes":
 			//  A <DAV:allprop> PROPFIND request SHOULD NOT return DAV:quota-available-bytes and DAV:quota-used-bytes
@@ -480,54 +492,54 @@ func requiresExplicitFetching(n *xml.Name) bool {
 		default:
 			return false
 		}
-	case _nsOwncloud:
+	case net.NsOwncloud:
 		switch n.Local {
 		case "favorite", "share-types", "checksums", "size":
 			return true
 		default:
 			return false
 		}
-	case _nsOCS:
+	case net.NsOCS:
 		return false
 	}
 	return true
 }
 
 // from https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/xml.go#L178-L205
-func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
+func ReadPropfind(r io.Reader) (pf PropfindXML, status int, err error) {
 	c := countingReader{r: r}
 	if err = xml.NewDecoder(&c).Decode(&pf); err != nil {
 		if err == io.EOF {
 			if c.n == 0 {
 				// An empty body means to propfind allprop.
 				// http://www.webdav.org/specs/rfc4918.html#METHOD_PROPFIND
-				return propfindXML{Allprop: new(struct{})}, 0, nil
+				return PropfindXML{Allprop: new(struct{})}, 0, nil
 			}
-			err = errInvalidPropfind
+			err = errors.ErrorInvalidPropfind
 		}
-		return propfindXML{}, http.StatusBadRequest, err
+		return PropfindXML{}, http.StatusBadRequest, err
 	}
 
 	if pf.Allprop == nil && pf.Include != nil {
-		return propfindXML{}, http.StatusBadRequest, errInvalidPropfind
+		return PropfindXML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
 	}
 	if pf.Allprop != nil && (pf.Prop != nil || pf.Propname != nil) {
-		return propfindXML{}, http.StatusBadRequest, errInvalidPropfind
+		return PropfindXML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
 	}
 	if pf.Prop != nil && pf.Propname != nil {
-		return propfindXML{}, http.StatusBadRequest, errInvalidPropfind
+		return PropfindXML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
 	}
 	if pf.Propname == nil && pf.Allprop == nil && pf.Prop == nil {
 		// jfd: I think <d:prop></d:prop> is perfectly valid ... treat it as allprop
-		return propfindXML{Allprop: new(struct{})}, 0, nil
+		return PropfindXML{Allprop: new(struct{})}, 0, nil
 	}
 	return pf, 0, nil
 }
 
-func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string, linkshares map[string]struct{}) (string, error) {
-	responses := make([]*responseXML, 0, len(mds))
+func MultistatusResponse(ctx context.Context, pf *PropfindXML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) (string, error) {
+	responses := make([]*ResponseXML, 0, len(mds))
 	for i := range mds {
-		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns, linkshares)
+		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, linkshares)
 		if err != nil {
 			return "", err
 		}
@@ -544,55 +556,23 @@ func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*p
 	return msg, nil
 }
 
-func (s *svc) xmlEscaped(val string) []byte {
-	buf := new(bytes.Buffer)
-	xml.Escape(buf, []byte(val))
-	return buf.Bytes()
-}
-
-func (s *svc) newPropNS(namespace string, local string, val string) *propertyXML {
-	return &propertyXML{
-		XMLName:  xml.Name{Space: namespace, Local: local},
-		Lang:     "",
-		InnerXML: s.xmlEscaped(val),
-	}
-}
-
-// TODO properly use the space
-func (s *svc) newProp(key, val string) *propertyXML {
-	return &propertyXML{
-		XMLName:  xml.Name{Space: "", Local: key},
-		Lang:     "",
-		InnerXML: s.xmlEscaped(val),
-	}
-}
-
-// TODO properly use the space
-func (s *svc) newPropRaw(key, val string) *propertyXML {
-	return &propertyXML{
-		XMLName:  xml.Name{Space: "", Local: key},
-		Lang:     "",
-		InnerXML: []byte(val),
-	}
-}
-
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
-func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, linkshares map[string]struct{}) (*responseXML, error) {
+func mdToPropResponse(ctx context.Context, pf *PropfindXML, md *provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) (*ResponseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
-	baseURI := ctx.Value(ctxKeyBaseURI).(string)
+	baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
 
 	ref := path.Join(baseURI, md.Path)
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
 
-	response := responseXML{
-		Href:     encodePath(ref),
-		Propstat: []propstatXML{},
+	response := ResponseXML{
+		Href:     net.EncodePath(ref),
+		Propstat: []PropstatXML{},
 	}
 
 	var ls *link.PublicShare
@@ -600,7 +580,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	// -1 indicates uncalculated
 	// -2 indicates unknown (default)
 	// -3 indicates unlimited
-	quota := _propQuotaUnknown
+	quota := net.PropQuotaUnknown
 	size := fmt.Sprintf("%d", md.Size)
 	// TODO refactor helper functions: GetOpaqueJSONEncoded(opaque, key string, *struct) err, GetOpaquePlainEncoded(opaque, key) value, err
 	// or use ok like pattern and return bool?
@@ -619,7 +599,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 	role := conversions.RoleFromResourcePermissions(md.PermissionSet)
 
-	isShared := !isCurrentUserOwner(ctx, md.Owner)
+	isShared := !net.IsCurrentUserOwner(ctx, md.Owner)
 	var wdp string
 	isPublic := ls != nil
 	if md.PermissionSet != nil {
@@ -632,13 +612,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
 
-	propstatOK := propstatXML{
+	propstatOK := PropstatXML{
 		Status: "HTTP/1.1 200 OK",
-		Prop:   []*propertyXML{},
+		Prop:   []*props.PropertyXML{},
 	}
-	propstatNotFound := propstatXML{
+	propstatNotFound := PropstatXML{
 		Status: "HTTP/1.1 404 Not Found",
-		Prop:   []*propertyXML{},
+		Prop:   []*props.PropertyXML{},
 	}
 	// when allprops has been requested
 	if pf.Allprop != nil {
@@ -647,8 +627,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		if md.Id != nil {
 			id := resourceid.OwnCloudResourceIDWrap(md.Id)
 			propstatOK.Prop = append(propstatOK.Prop,
-				s.newProp("oc:id", id),
-				s.newProp("oc:fileid", id),
+				props.NewProp("oc:id", id),
+				props.NewProp("oc:fileid", id),
 			)
 		}
 
@@ -656,37 +636,37 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			// etags must be enclosed in double quotes and cannot contain them.
 			// See https://tools.ietf.org/html/rfc7232#section-2.3 for details
 			// TODO(jfd) handle weak tags that start with 'W/'
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", quoteEtag(md.Etag)))
+			propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getetag", quoteEtag(md.Etag)))
 		}
 
 		if md.PermissionSet != nil {
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", wdp))
+			propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:permissions", wdp))
 		}
 
 		// always return size, well nearly always ... public link shares are a little weird
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
+			propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("d:resourcetype", "<d:collection/>"))
 			if ls == nil {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
+				propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:size", size))
 			}
 			// A <DAV:allprop> PROPFIND request SHOULD NOT return DAV:quota-available-bytes and DAV:quota-used-bytes
 			// from https://www.rfc-editor.org/rfc/rfc4331.html#section-2
-			// propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", size))
-			// propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-available-bytes", quota))
+			// propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:quota-used-bytes", size))
+			// propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:quota-available-bytes", quota))
 		} else {
 			propstatOK.Prop = append(propstatOK.Prop,
-				s.newProp("d:resourcetype", ""),
-				s.newProp("d:getcontentlength", size),
+				props.NewProp("d:resourcetype", ""),
+				props.NewProp("d:getcontentlength", size),
 			)
 			if md.MimeType != "" {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", md.MimeType))
+				propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getcontenttype", md.MimeType))
 			}
 		}
 		// Finder needs the getLastModified property to work.
 		if md.Mtime != nil {
 			t := utils.TSToTime(md.Mtime).UTC()
-			lastModifiedString := t.Format(RFC1123)
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
+			lastModifiedString := t.Format(net.RFC1123)
+			propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getlastmodified", lastModifiedString))
 		}
 
 		// stay bug compatible with oc10, see https://github.com/owncloud/core/pull/38304#issuecomment-762185241
@@ -717,20 +697,20 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 		if checksums.Len() > 0 {
 			checksums.WriteString("</oc:checksum>")
-			propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:checksums", checksums.String()))
+			propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("oc:checksums", checksums.String()))
 		}
 
 		// ls do not report any properties as missing by default
 		if ls == nil {
 			// favorites from arbitrary metadata
 			if k := md.GetArbitraryMetadata(); k == nil {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+				propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:favorite", "0"))
 			} else if amd := k.GetMetadata(); amd == nil {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-			} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", v))
+				propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:favorite", "0"))
+			} else if v, ok := amd[net.PropOcFavorite]; ok && v != "" {
+				propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:favorite", v))
 			} else {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+				propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:favorite", "0"))
 			}
 		}
 		// TODO return other properties ... but how do we put them in a namespace?
@@ -738,21 +718,21 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// otherwise return only the requested properties
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
-			case _nsOwncloud:
+			case net.NsOwncloud:
 				switch pf.Prop[i].Local {
 				// TODO(jfd): maybe phoenix and the other clients can just use this id as an opaque string?
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
 				case "fileid": // phoenix only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", resourceid.OwnCloudResourceIDWrap(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:fileid", resourceid.OwnCloudResourceIDWrap(md.Id)))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:fileid", ""))
 					}
 				case "id": // desktop client only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", resourceid.OwnCloudResourceIDWrap(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:id", resourceid.OwnCloudResourceIDWrap(md.Id)))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:id", ""))
 					}
 				case "permissions": // both
 					// oc:permissions take several char flags to indicate the permissions the user has on this node:
@@ -764,78 +744,78 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// R = Shareable (Reshare)
 					// M = Mounted
 					// in contrast, the ocs:share-permissions further down below indicate clients the maximum permissions that can be granted
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", wdp))
+					propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:permissions", wdp))
 				case "public-link-permission": // only on a share root node
 					if ls != nil && md.PermissionSet != nil {
 						propstatOK.Prop = append(
 							propstatOK.Prop,
-							s.newProp("oc:public-link-permission", strconv.FormatUint(uint64(role.OCSPermissions()), 10)))
+							props.NewProp("oc:public-link-permission", strconv.FormatUint(uint64(role.OCSPermissions()), 10)))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-permission", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:public-link-permission", ""))
 					}
 				case "public-link-item-type": // only on a share root node
 					if ls != nil {
 						if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-item-type", "folder"))
+							propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:public-link-item-type", "folder"))
 						} else {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-item-type", "file"))
+							propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:public-link-item-type", "file"))
 							// redirectref is another option
 						}
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-item-type", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:public-link-item-type", ""))
 					}
 				case "public-link-share-datetime":
 					if ls != nil && ls.Mtime != nil {
 						t := utils.TSToTime(ls.Mtime).UTC() // TODO or ctime?
-						shareTimeString := t.Format(RFC1123)
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-datetime", shareTimeString))
+						shareTimeString := t.Format(net.RFC1123)
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:public-link-share-datetime", shareTimeString))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-datetime", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:public-link-share-datetime", ""))
 					}
 				case "public-link-share-owner":
 					if ls != nil && ls.Owner != nil {
-						if isCurrentUserOwner(ctx, ls.Owner) {
+						if net.IsCurrentUserOwner(ctx, ls.Owner) {
 							u := ctxpkg.ContextMustGetUser(ctx)
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-owner", u.Username))
+							propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:public-link-share-owner", u.Username))
 						} else {
 							u, _ := ctxpkg.ContextGetUser(ctx)
 							sublog.Error().Interface("share", ls).Interface("user", u).Msg("the current user in the context should be the owner of a public link share")
-							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-owner", ""))
+							propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:public-link-share-owner", ""))
 						}
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-owner", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:public-link-share-owner", ""))
 					}
 				case "public-link-expiration":
 					if ls != nil && ls.Expiration != nil {
 						t := utils.TSToTime(ls.Expiration).UTC()
-						expireTimeString := t.Format(RFC1123)
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-expiration", expireTimeString))
+						expireTimeString := t.Format(net.RFC1123)
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:public-link-expiration", expireTimeString))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-expiration", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:public-link-expiration", ""))
 					}
-					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-expiration", ""))
+					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:public-link-expiration", ""))
 				case "size": // phoenix only
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					// TODO what is the difference to d:quota-used-bytes (which only exists for collections)?
 					// oc:size is available on files and folders and behaves like d:getcontentlength or d:quota-used-bytes respectively
 					// The hasPrefix is a workaround to make children of the link root show a size if they have 0 bytes
 					if ls == nil || strings.HasPrefix(md.Path, "/"+ls.Token+"/") {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:size", size))
 					} else {
 						// link share root collection has no size
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:size", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:size", ""))
 					}
 				case "owner-id": // phoenix only
 					if md.Owner != nil {
-						if isCurrentUserOwner(ctx, md.Owner) {
+						if net.IsCurrentUserOwner(ctx, md.Owner) {
 							u := ctxpkg.ContextMustGetUser(ctx)
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", u.Username))
+							propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:owner-id", u.Username))
 						} else {
 							sublog.Debug().Msg("TODO fetch user username")
-							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
+							propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:owner-id", ""))
 						}
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:owner-id", ""))
 					}
 				case "favorite": // phoenix only
 					// TODO: can be 0 or 1?, in oc10 it is present or not
@@ -843,17 +823,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// TODO: this boolean favorite property is so horribly wrong ... either it is presont, or it is not ... unless ... it is possible to have a non binary value ... we need to double check
 					if ls == nil {
 						if k := md.GetArbitraryMetadata(); k == nil {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+							propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:favorite", "0"))
 						} else if amd := k.GetMetadata(); amd == nil {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-						} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "1"))
+							propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:favorite", "0"))
+						} else if v, ok := amd[net.PropOcFavorite]; ok && v != "" {
+							propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:favorite", "1"))
 						} else {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+							propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:favorite", "0"))
 						}
 					} else {
 						// link share root collection has no favorite
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:favorite", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:favorite", ""))
 					}
 				case "checksums": // desktop ... not really ... the desktop sends the OC-Checksum header
 
@@ -885,9 +865,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 					if checksums.Len() > 13 {
 						checksums.WriteString("</oc:checksum>")
-						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:checksums", checksums.String()))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("oc:checksums", checksums.String()))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:checksums", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:checksums", ""))
 					}
 				case "share-types": // desktop
 					var types strings.Builder
@@ -906,21 +886,21 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 
 					if types.Len() != 0 {
-						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:share-types", types.String()))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("oc:share-types", types.String()))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:"+pf.Prop[i].Local, ""))
 					}
 				case "owner-display-name": // phoenix only
 					if md.Owner != nil {
-						if isCurrentUserOwner(ctx, md.Owner) {
+						if net.IsCurrentUserOwner(ctx, md.Owner) {
 							u := ctxpkg.ContextMustGetUser(ctx)
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", u.DisplayName))
+							propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:owner-display-name", u.DisplayName))
 						} else {
 							sublog.Debug().Msg("TODO fetch user displayname")
-							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-display-name", ""))
+							propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:owner-display-name", ""))
 						}
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-display-name", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:owner-display-name", ""))
 					}
 				case "downloadURL": // desktop
 					if isPublic && md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
@@ -939,9 +919,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 							path = sb.String()
 						}
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:downloadURL", s.c.PublicURL+baseURI+path))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:downloadURL", publicURL+baseURI+path))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:"+pf.Prop[i].Local, ""))
 					}
 				case "signature-auth":
 					if isPublic {
@@ -956,9 +936,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							sb.WriteString(expiration.Format(time.RFC3339))
 							sb.WriteString("</oc:expiration>")
 
-							propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:signature-auth", sb.String()))
+							propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("oc:signature-auth", sb.String()))
 						} else {
-							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:signature-auth", ""))
+							propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:signature-auth", ""))
 						}
 					}
 				case "privatelink": // phoenix only
@@ -974,15 +954,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// TODO(jfd): double check the client behavior with reva on backup restore
 					fallthrough
 				default:
-					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
+					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:"+pf.Prop[i].Local, ""))
 				}
-			case _nsDav:
+			case net.NsDav:
 				switch pf.Prop[i].Local {
 				case "getetag": // both
 					if md.Etag != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", quoteEtag(md.Etag)))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getetag", quoteEtag(md.Etag)))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getetag", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:getetag", ""))
 					}
 				case "getcontentlength": // both
 					// see everts stance on this https://stackoverflow.com/a/31621912, he points to http://tools.ietf.org/html/rfc4918#section-15.3
@@ -991,53 +971,53 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// which is not the case ... so we don't return it on collections. owncloud has oc:size for that
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontentlength", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:getcontentlength", ""))
 					} else {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getcontentlength", size))
 					}
 				case "resourcetype": // both
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("d:resourcetype", "<d:collection/>"))
 					} else {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", ""))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:resourcetype", ""))
 						// redirectref is another option
 					}
 				case "getcontenttype": // phoenix
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						// directories have no contenttype
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontenttype", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:getcontenttype", ""))
 					} else if md.MimeType != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", md.MimeType))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getcontenttype", md.MimeType))
 					}
 				case "getlastmodified": // both
 					// TODO we cannot find out if md.Mtime is set or not because ints in go default to 0
 					if md.Mtime != nil {
 						t := utils.TSToTime(md.Mtime).UTC()
-						lastModifiedString := t.Format(RFC1123)
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
+						lastModifiedString := t.Format(net.RFC1123)
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getlastmodified", lastModifiedString))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getlastmodified", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:getlastmodified", ""))
 					}
 				case "quota-used-bytes": // RFC 4331
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						// always returns the current usage,
 						// in oc10 there seems to be a bug that makes the size in webdav differ from the one in the user properties, not taking shares into account
 						// in ocis we plan to always mak the quota a property of the storage space
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", size))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:quota-used-bytes", size))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:quota-used-bytes", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:quota-used-bytes", ""))
 					}
 				case "quota-available-bytes": // RFC 4331
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						// oc10 returns -3 for unlimited, -2 for unknown, -1 for uncalculated
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-available-bytes", quota))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:quota-available-bytes", quota))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:quota-available-bytes", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:quota-available-bytes", ""))
 					}
 				default:
-					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
+					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:"+pf.Prop[i].Local, ""))
 				}
-			case _nsOCS:
+			case net.NsOCS:
 				switch pf.Prop[i].Local {
 				// ocs:share-permissions indicate clients the maximum permissions that can be granted:
 				// 1 = read
@@ -1054,21 +1034,21 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							perms &^= conversions.PermissionCreate
 							perms &^= conversions.PermissionDelete
 						}
-						propstatOK.Prop = append(propstatOK.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, strconv.FormatUint(uint64(perms), 10)))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewPropNS(pf.Prop[i].Space, pf.Prop[i].Local, strconv.FormatUint(uint64(perms), 10)))
 					}
 				default:
-					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
+					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:"+pf.Prop[i].Local, ""))
 				}
 			default:
 				// handle custom properties
 				if k := md.GetArbitraryMetadata(); k == nil {
-					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
+					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
 				} else if amd := k.GetMetadata(); amd == nil {
-					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
+					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
 				} else if v, ok := amd[metadataKeyOf(&pf.Prop[i])]; ok && v != "" {
-					propstatOK.Prop = append(propstatOK.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, v))
+					propstatOK.Prop = append(propstatOK.Prop, props.NewPropNS(pf.Prop[i].Space, pf.Prop[i].Local, v))
 				} else {
-					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
+					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
 				}
 			}
 		}
@@ -1092,17 +1072,6 @@ func quoteEtag(etag string) string {
 	return `"` + strings.Trim(etag, `"`) + `"`
 }
 
-// a file is only yours if you are the owner
-func isCurrentUserOwner(ctx context.Context, owner *userv1beta1.UserId) bool {
-	contextUser, ok := ctxpkg.ContextGetUser(ctx)
-	if ok && contextUser.Id != nil && owner != nil &&
-		contextUser.Id.Idp == owner.Idp &&
-		contextUser.Id.OpaqueId == owner.OpaqueId {
-		return true
-	}
-	return false
-}
-
 type countingReader struct {
 	n int
 	r io.Reader
@@ -1116,7 +1085,7 @@ func (c *countingReader) Read(p []byte) (int, error) {
 
 func metadataKeyOf(n *xml.Name) string {
 	switch {
-	case n.Space == _nsDav && n.Local == "quota-available-bytes":
+	case n.Space == net.NsDav && n.Local == "quota-available-bytes":
 		return "quota"
 	default:
 		return fmt.Sprintf("%s/%s", n.Space, n.Local)
@@ -1124,15 +1093,15 @@ func metadataKeyOf(n *xml.Name) string {
 }
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for propfind)
-type propfindProps []xml.Name
+type PropfindProps []xml.Name
 
 // UnmarshalXML appends the property names enclosed within start to pn.
 //
 // It returns an error if start does not contain any properties or if
 // properties contain values. Character data between properties is ignored.
-func (pn *propfindProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+func (pn *PropfindProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	for {
-		t, err := next(d)
+		t, err := props.Next(d)
 		if err != nil {
 			return err
 		}
@@ -1146,7 +1115,7 @@ func (pn *propfindProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) er
 			*/
 			return nil
 		case xml.StartElement:
-			t, err = next(d)
+			t, err = props.Next(d)
 			if err != nil {
 				return err
 			}
@@ -1159,52 +1128,32 @@ func (pn *propfindProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) er
 }
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_propfind
-type propfindXML struct {
+type PropfindXML struct {
 	XMLName  xml.Name      `xml:"DAV: propfind"`
 	Allprop  *struct{}     `xml:"DAV: allprop"`
 	Propname *struct{}     `xml:"DAV: propname"`
-	Prop     propfindProps `xml:"DAV: prop"`
-	Include  propfindProps `xml:"DAV: include"`
+	Prop     PropfindProps `xml:"DAV: prop"`
+	Include  PropfindProps `xml:"DAV: include"`
 }
 
-type responseXML struct {
-	XMLName             xml.Name      `xml:"d:response"`
-	Href                string        `xml:"d:href"`
-	Propstat            []propstatXML `xml:"d:propstat"`
-	Status              string        `xml:"d:status,omitempty"`
-	Error               *errorXML     `xml:"d:error"`
-	ResponseDescription string        `xml:"d:responsedescription,omitempty"`
+type ResponseXML struct {
+	XMLName             xml.Name         `xml:"d:response"`
+	Href                string           `xml:"d:href"`
+	Propstat            []PropstatXML    `xml:"d:propstat"`
+	Status              string           `xml:"d:status,omitempty"`
+	Error               *errors.ErrorXML `xml:"d:error"`
+	ResponseDescription string           `xml:"d:responsedescription,omitempty"`
 }
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_propstat
-type propstatXML struct {
+type PropstatXML struct {
 	// Prop requires DAV: to be the default namespace in the enclosing
 	// XML. This is due to the standard encoding/xml package currently
 	// not honoring namespace declarations inside a xmltag with a
 	// parent element for anonymous slice elements.
 	// Use of multistatusWriter takes care of this.
-	Prop                []*propertyXML `xml:"d:prop>_ignored_"`
-	Status              string         `xml:"d:status"`
-	Error               *errorXML      `xml:"d:error"`
-	ResponseDescription string         `xml:"d:responsedescription,omitempty"`
-}
-
-// Property represents a single DAV resource property as defined in RFC 4918.
-// http://www.webdav.org/specs/rfc4918.html#data.model.for.resource.properties
-type propertyXML struct {
-	// XMLName is the fully qualified name that identifies this property.
-	XMLName xml.Name
-
-	// Lang is an optional xml:lang attribute.
-	Lang string `xml:"xml:lang,attr,omitempty"`
-
-	// InnerXML contains the XML representation of the property value.
-	// See http://www.webdav.org/specs/rfc4918.html#property_values
-	//
-	// Property values of complex type or mixed-content must have fully
-	// expanded XML namespaces or be self-contained with according
-	// XML namespace declarations. They must not rely on any XML
-	// namespace declarations within the scope of the XML document,
-	// even including the DAV: namespace.
-	InnerXML []byte `xml:",innerxml"`
+	Prop                []*props.PropertyXML `xml:"d:prop>_ignored_"`
+	Status              string               `xml:"d:status"`
+	Error               *errors.ErrorXML     `xml:"d:error"`
+	ResponseDescription string               `xml:"d:responsedescription,omitempty"`
 }

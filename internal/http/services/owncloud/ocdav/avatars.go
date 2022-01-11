@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"net/http"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
@@ -57,7 +58,7 @@ func (h *AvatarsHandler) Handler(s *svc) http.Handler {
 				log.Error().Err(err).Msg("error decoding string")
 				w.WriteHeader(http.StatusInternalServerError)
 			}
-			w.Header().Set(HeaderContentType, "image/png")
+			w.Header().Set(net.HeaderContentType, "image/png")
 			if _, err := w.Write(decoded); err != nil {
 				log.Error().Err(err).Msg("error writing data response")
 			}

@@ -29,6 +29,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/props"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/spacelookup"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 
@@ -80,9 +85,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		if u.Username != username {
 			log.Debug().Str("username", username).Interface("user", u).Msg("trying to read another users trash")
 			// listing other users trash is forbidden, no auth will change that
-			b, err := Marshal(exception{
-				code: SabredavNotAuthenticated,
-			})
+			b, err := errors.Marshal(errors.SabredavNotAuthenticated, "", "")
 			if err != nil {
 				log.Error().Msgf("error marshaling xml response: %s", b)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -123,7 +126,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 				return
 			}
 			if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-				HandleErrorStatus(log, w, getHomeRes.Status)
+				errors.HandleErrorStatus(log, w, getHomeRes.Status)
 				return
 			}
 			basePath = getHomeRes.Path
@@ -135,9 +138,9 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		}
 		if key != "" && r.Method == MethodMove {
 			// find path in url relative to trash base
-			trashBase := ctx.Value(ctxKeyBaseURI).(string)
+			trashBase := ctx.Value(net.CtxKeyBaseURI).(string)
 			baseURI := path.Join(path.Dir(trashBase), "files", username)
-			ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
+			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, baseURI)
 			r = r.WithContext(ctx)
 
 			// TODO make request.php optional in destination header
@@ -167,12 +170,18 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "list_trashbin")
 	defer span.End()
 
-	depth := r.Header.Get(HeaderDepth)
+	depth := r.Header.Get(net.HeaderDepth)
 	if depth == "" {
 		depth = "1"
 	}
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	// see https://tools.ietf.org/html/rfc4918#section-9.1
 	if depth != "0" && depth != "1" && depth != "infinity" {
@@ -188,8 +197,8 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
-		w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+		w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
+		w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 		w.WriteHeader(http.StatusMultiStatus)
 		_, err = w.Write([]byte(propRes))
 		if err != nil {
@@ -199,7 +208,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	pf, status, err := readPropfind(r.Body)
+	pf, status, err := propfind.ReadPropfind(r.Body)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
@@ -216,17 +225,17 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	space, rpcstatus, err := s.lookUpStorageSpaceForPath(ctx, basePath)
+	space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, basePath)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if rpcstatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcstatus)
+		errors.HandleErrorStatus(&sublog, w, rpcstatus)
 		return
 	}
-	ref := makeRelativeReference(space, basePath, false)
+	ref := spacelookup.MakeRelativeReference(space, basePath, false)
 
 	// ask gateway for recycle items
 	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: path.Join(key, itemPath)})
@@ -238,7 +247,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, getRecycleRes.Status)
+		errors.HandleErrorStatus(&sublog, w, getRecycleRes.Status)
 		return
 	}
 
@@ -265,7 +274,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 			}
 
 			if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-				HandleErrorStatus(&sublog, w, getRecycleRes.Status)
+				errors.HandleErrorStatus(&sublog, w, getRecycleRes.Status)
 				return
 			}
 			items = append(items, getRecycleRes.RecycleItems...)
@@ -293,8 +302,8 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
-	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	_, err = w.Write([]byte(propRes))
 	if err != nil {
@@ -303,25 +312,25 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, items []*provider.RecycleItem) (string, error) {
-	responses := make([]*responseXML, 0, len(items)+1)
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfind.PropfindXML, items []*provider.RecycleItem) (string, error) {
+	responses := make([]*propfind.ResponseXML, 0, len(items)+1)
 	// add trashbin dir . entry
-	responses = append(responses, &responseXML{
-		Href: encodePath(ctx.Value(ctxKeyBaseURI).(string) + "/"), // url encode response.Href TODO
-		Propstat: []propstatXML{
+	responses = append(responses, &propfind.ResponseXML{
+		Href: net.EncodePath(ctx.Value(net.CtxKeyBaseURI).(string) + "/"), // url encode response.Href TODO
+		Propstat: []propfind.PropstatXML{
 			{
 				Status: "HTTP/1.1 200 OK",
-				Prop: []*propertyXML{
-					s.newPropRaw("d:resourcetype", "<d:collection/>"),
+				Prop: []*props.PropertyXML{
+					props.NewPropRaw("d:resourcetype", "<d:collection/>"),
 				},
 			},
 			{
 				Status: "HTTP/1.1 404 Not Found",
-				Prop: []*propertyXML{
-					s.newProp("oc:trashbin-original-filename", ""),
-					s.newProp("oc:trashbin-original-location", ""),
-					s.newProp("oc:trashbin-delete-datetime", ""),
-					s.newProp("d:getcontentlength", ""),
+				Prop: []*props.PropertyXML{
+					props.NewProp("oc:trashbin-original-filename", ""),
+					props.NewProp("oc:trashbin-original-location", ""),
+					props.NewProp("oc:trashbin-delete-datetime", ""),
+					props.NewProp("d:getcontentlength", ""),
 				},
 			},
 		},
@@ -348,17 +357,17 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 // itemToPropResponse needs to create a listing that contains a key and destination
 // the key is the name of an entry in the trash listing
 // for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id
-func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, item *provider.RecycleItem) (*responseXML, error) {
+func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *userpb.User, pf *propfind.PropfindXML, item *provider.RecycleItem) (*propfind.ResponseXML, error) {
 
-	baseURI := ctx.Value(ctxKeyBaseURI).(string)
+	baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
 	ref := path.Join(baseURI, u.Username, item.Key)
 	if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
 
-	response := responseXML{
-		Href:     encodePath(ref), // url encode response.Href
-		Propstat: []propstatXML{},
+	response := propfind.ResponseXML{
+		Href:     net.EncodePath(ref), // url encode response.Href
+		Propstat: []propfind.PropstatXML{},
 	}
 
 	// TODO(jfd): if the path we list here is taken from the ListRecycle request we rely on the gateway to prefix it with the mount point
@@ -369,86 +378,86 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 	// when allprops has been requested
 	if pf.Allprop != nil {
 		// return all known properties
-		response.Propstat = append(response.Propstat, propstatXML{
+		response.Propstat = append(response.Propstat, propfind.PropstatXML{
 			Status: "HTTP/1.1 200 OK",
-			Prop:   []*propertyXML{},
+			Prop:   []*props.PropertyXML{},
 		})
 		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, props.NewProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, props.NewProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, props.NewProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, props.NewProp("oc:trashbin-delete-datetime", dTime))
 		if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, props.NewPropRaw("d:resourcetype", "<d:collection/>"))
 			// TODO(jfd): decide if we can and want to list oc:size for folders
 		} else {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
-				s.newProp("d:resourcetype", ""),
-				s.newProp("d:getcontentlength", fmt.Sprintf("%d", item.Size)),
+				props.NewProp("d:resourcetype", ""),
+				props.NewProp("d:getcontentlength", fmt.Sprintf("%d", item.Size)),
 			)
 		}
 
 	} else {
 		// otherwise return only the requested properties
-		propstatOK := propstatXML{
+		propstatOK := propfind.PropstatXML{
 			Status: "HTTP/1.1 200 OK",
-			Prop:   []*propertyXML{},
+			Prop:   []*props.PropertyXML{},
 		}
-		propstatNotFound := propstatXML{
+		propstatNotFound := propfind.PropstatXML{
 			Status: "HTTP/1.1 404 Not Found",
-			Prop:   []*propertyXML{},
+			Prop:   []*props.PropertyXML{},
 		}
 		size := fmt.Sprintf("%d", item.Size)
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
-			case _nsOwncloud:
+			case net.NsOwncloud:
 				switch pf.Prop[i].Local {
 				case "oc:size":
 					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getcontentlength", size))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:size", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:size", ""))
 					}
 				case "trashbin-original-filename":
 					// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
+					propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
 				case "trashbin-original-location":
 					// TODO (jfd) double check and clarify the cs3 spec what the Key is about and if Path is only the folder that contains the file or if it includes the filename
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
+					propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
 				case "trashbin-delete-datetime":
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
+					propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:trashbin-delete-datetime", dTime))
 				case "trashbin-delete-timestamp":
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
+					propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
 				default:
-					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
+					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:"+pf.Prop[i].Local, ""))
 				}
-			case _nsDav:
+			case net.NsDav:
 				switch pf.Prop[i].Local {
 				case "getcontentlength":
 					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontentlength", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:getcontentlength", ""))
 					} else {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getcontentlength", size))
 					}
 				case "resourcetype":
 					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("d:resourcetype", "<d:collection/>"))
 					} else {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", ""))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:resourcetype", ""))
 						// redirectref is another option
 					}
 				case "getcontenttype":
 					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", "httpd/unix-directory"))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getcontenttype", "httpd/unix-directory"))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontenttype", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:getcontenttype", ""))
 					}
 				default:
-					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
+					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:"+pf.Prop[i].Local, ""))
 				}
 			default:
 				// TODO (jfd) lookup shortname for unknown namespaces?
-				propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp(pf.Prop[i].Space+":"+pf.Prop[i].Local, ""))
+				propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp(pf.Prop[i].Space+":"+pf.Prop[i].Local, ""))
 			}
 		}
 		response.Propstat = append(response.Propstat, propstatOK, propstatNotFound)
@@ -463,7 +472,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
 
-	overwrite := r.Header.Get(HeaderOverwrite)
+	overwrite := r.Header.Get(net.HeaderOverwrite)
 
 	overwrite = strings.ToUpper(overwrite)
 	if overwrite == "" {
@@ -481,17 +490,17 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	space, rpcstatus, err := s.lookUpStorageSpaceForPath(ctx, dst)
+	space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, dst)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if rpcstatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcstatus)
+		errors.HandleErrorStatus(&sublog, w, rpcstatus)
 		return
 	}
-	dstRef := makeRelativeReference(space, dst, false)
+	dstRef := spacelookup.MakeRelativeReference(space, dst, false)
 
 	dstStatReq := &provider.StatRequest{
 		Ref: dstRef,
@@ -505,7 +514,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	}
 
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&sublog, w, dstStatRes.Status)
+		errors.HandleErrorStatus(&sublog, w, dstStatRes.Status)
 		return
 	}
 
@@ -513,7 +522,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	// restore location exists, and if it doesn't returns a conflict error code.
 	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst) {
 		parentStatReq := &provider.StatRequest{
-			Ref: makeRelativeReference(space, filepath.Dir(dst), false),
+			Ref: spacelookup.MakeRelativeReference(space, filepath.Dir(dst), false),
 		}
 
 		parentStatResponse, err := client.Stat(ctx, parentStatReq)
@@ -524,7 +533,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		}
 
 		if parentStatResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			HandleErrorStatus(&sublog, w, &rpc.Status{Code: rpc.Code_CODE_FAILED_PRECONDITION})
+			errors.HandleErrorStatus(&sublog, w, &rpc.Status{Code: rpc.Code_CODE_FAILED_PRECONDITION})
 			return
 		}
 	}
@@ -536,12 +545,12 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		if overwrite != "T" {
 			sublog.Warn().Str("overwrite", overwrite).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
-			b, err := Marshal(exception{
-				code:    SabredavPreconditionFailed,
-				message: "The destination node already exists, and the overwrite header is set to false",
-				header:  HeaderOverwrite,
-			})
-			HandleWebdavError(&sublog, w, b, err)
+			b, err := errors.Marshal(
+				errors.SabredavPreconditionFailed,
+				"The destination node already exists, and the overwrite header is set to false",
+				net.HeaderOverwrite,
+			)
+			errors.HandleWebdavError(&sublog, w, b, err)
 			return
 		}
 		// delete existing tree
@@ -554,19 +563,19 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		}
 
 		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-			HandleErrorStatus(&sublog, w, delRes.Status)
+			errors.HandleErrorStatus(&sublog, w, delRes.Status)
 			return
 		}
 	}
 
-	sourceSpace, rpcstatus, err := s.lookUpStorageSpaceForPath(ctx, basePath)
+	sourceSpace, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, basePath)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if rpcstatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcstatus)
+		errors.HandleErrorStatus(&sublog, w, rpcstatus)
 		return
 	}
 	req := &provider.RestoreRecycleItemRequest{
@@ -574,7 +583,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		// this means we can only undelete on the same storage, not to a different folder
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
 		// TODO currently limited to the home storage
-		Ref:        makeRelativeReference(sourceSpace, basePath, false),
+		Ref:        spacelookup.MakeRelativeReference(sourceSpace, basePath, false),
 		Key:        path.Join(key, itemPath),
 		RestoreRef: dstRef,
 	}
@@ -589,13 +598,10 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 			w.WriteHeader(http.StatusForbidden)
-			b, err := Marshal(exception{
-				code:    SabredavPermissionDenied,
-				message: "Permission denied to restore",
-			})
-			HandleWebdavError(&sublog, w, b, err)
+			b, err := errors.Marshal(errors.SabredavPermissionDenied, "Permission denied to restore", "")
+			errors.HandleWebdavError(&sublog, w, b, err)
 		}
-		HandleErrorStatus(&sublog, w, res.Status)
+		errors.HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 
@@ -606,15 +612,15 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, dstStatRes.Status)
+		errors.HandleErrorStatus(&sublog, w, dstStatRes.Status)
 		return
 	}
 
 	info := dstStatRes.Info
-	w.Header().Set(HeaderContentType, info.MimeType)
-	w.Header().Set(HeaderETag, info.Etag)
-	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
-	w.Header().Set(HeaderOCETag, info.Etag)
+	w.Header().Set(net.HeaderContentType, info.MimeType)
+	w.Header().Set(net.HeaderETag, info.Etag)
+	w.Header().Set(net.HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
+	w.Header().Set(net.HeaderOCETag, info.Etag)
 
 	w.WriteHeader(successCode)
 }
@@ -635,19 +641,19 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 
 	// set key as opaque id, the storageprovider will use it as the key for the
 	// storage drives  PurgeRecycleItem key call
-	space, status, err := s.lookUpStorageSpaceForPath(ctx, basePath)
+	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, basePath)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
 
 	req := &provider.PurgeRecycleRequest{
-		Ref: makeRelativeReference(space, basePath, false),
+		Ref: spacelookup.MakeRelativeReference(space, basePath, false),
 		Key: path.Join(key, itemPath),
 	}
 
@@ -664,11 +670,8 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		sublog.Debug().Str("path", basePath).Str("key", key).Interface("status", res.Status).Msg("resource not found")
 		w.WriteHeader(http.StatusConflict)
 		m := fmt.Sprintf("path %s not found", basePath)
-		b, err := Marshal(exception{
-			code:    SabredavConflict,
-			message: m,
-		})
-		HandleWebdavError(&sublog, w, b, err)
+		b, err := errors.Marshal(errors.SabredavConflict, m, "")
+		errors.HandleWebdavError(&sublog, w, b, err)
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		w.WriteHeader(http.StatusForbidden)
 		var m string
@@ -677,13 +680,10 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		} else {
 			m = "Permission denied to delete"
 		}
-		b, err := Marshal(exception{
-			code:    SabredavPermissionDenied,
-			message: m,
-		})
-		HandleWebdavError(&sublog, w, b, err)
+		b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+		errors.HandleWebdavError(&sublog, w, b, err)
 	default:
-		HandleErrorStatus(&sublog, w, res.Status)
+		errors.HandleErrorStatus(&sublog, w, res.Status)
 	}
 }
 

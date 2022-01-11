@@ -29,10 +29,14 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/props"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
@@ -49,11 +53,8 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		sublog.Debug().Err(err).Msg("error reading proppatch")
 		w.WriteHeader(status)
 		m := fmt.Sprintf("Error reading proppatch: %v", err)
-		b, err := Marshal(exception{
-			code:    SabredavBadRequest,
-			message: m,
-		})
-		HandleWebdavError(&sublog, w, b, err)
+		b, err := errors.Marshal(errors.SabredavBadRequest, m, "")
+		errors.HandleWebdavError(&sublog, w, b, err)
 		return
 	}
 
@@ -64,18 +65,18 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		return
 	}
 
-	space, rpcStatus, err := s.lookUpStorageSpaceForPath(ctx, fn)
+	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, c, fn)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		errors.HandleErrorStatus(&sublog, w, rpcStatus)
 		return
 	}
 	// check if resource exists
-	statReq := &provider.StatRequest{Ref: makeRelativeReference(space, fn, false)}
+	statReq := &provider.StatRequest{Ref: spacelookup.MakeRelativeReference(space, fn, false)}
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc stat request")
@@ -87,24 +88,21 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			m := fmt.Sprintf("Resource %v not found", fn)
-			b, err := Marshal(exception{
-				code:    SabredavNotFound,
-				message: m,
-			})
-			HandleWebdavError(&sublog, w, b, err)
+			b, err := errors.Marshal(errors.SabredavNotFound, m, "")
+			errors.HandleWebdavError(&sublog, w, b, err)
 		}
-		HandleErrorStatus(&sublog, w, statRes.Status)
+		errors.HandleErrorStatus(&sublog, w, statRes.Status)
 		return
 	}
 
-	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, makeRelativeReference(space, fn, false), pp, sublog)
+	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, spacelookup.MakeRelativeReference(space, fn, false), pp, sublog)
 	if !ok {
 		// handleProppatch handles responses in error cases so we can just return
 		return
 	}
 
 	nRef := strings.TrimPrefix(fn, ns)
-	nRef = path.Join(ctx.Value(ctxKeyBaseURI).(string), nRef)
+	nRef = path.Join(ctx.Value(net.CtxKeyBaseURI).(string), nRef)
 	if statRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		nRef += "/"
 	}
@@ -118,6 +116,13 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
 
+	c, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	pp, status, err := readProppatch(r.Body)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading proppatch")
@@ -126,7 +131,7 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	}
 
 	// retrieve a specific storage space
-	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path, true)
+	ref, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, c, spaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -134,16 +139,10 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		errors.HandleErrorStatus(&sublog, w, rpcStatus)
 		return
 	}
 
-	c, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 	// check if resource exists
 	statReq := &provider.StatRequest{
 		Ref: ref,
@@ -156,7 +155,7 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, statRes.Status)
+		errors.HandleErrorStatus(&sublog, w, statRes.Status)
 		return
 	}
 
@@ -167,7 +166,7 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	}
 
 	nRef := path.Join(spaceID, statRes.Info.Path)
-	nRef = path.Join(ctx.Value(ctxKeyBaseURI).(string), nRef)
+	nRef = path.Join(ctx.Value(net.CtxKeyBaseURI).(string), nRef)
 	if statRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		nRef += "/"
 	}
@@ -232,14 +231,11 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 						w.WriteHeader(http.StatusForbidden)
 						m := fmt.Sprintf("Permission denied to remove properties on resource %v", ref.Path)
-						b, err := Marshal(exception{
-							code:    SabredavPermissionDenied,
-							message: m,
-						})
-						HandleWebdavError(&log, w, b, err)
+						b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+						errors.HandleWebdavError(&log, w, b, err)
 						return nil, nil, false
 					}
-					HandleErrorStatus(&log, w, res.Status)
+					errors.HandleErrorStatus(&log, w, res.Status)
 					return nil, nil, false
 				}
 				if key == "http://owncloud.org/ns/favorite" {
@@ -269,14 +265,11 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 						w.WriteHeader(http.StatusForbidden)
 						m := fmt.Sprintf("Permission denied to set properties on resource %v", ref.Path)
-						b, err := Marshal(exception{
-							code:    SabredavPermissionDenied,
-							message: m,
-						})
-						HandleWebdavError(&log, w, b, err)
+						b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+						errors.HandleWebdavError(&log, w, b, err)
 						return nil, nil, false
 					}
-					HandleErrorStatus(&log, w, res.Status)
+					errors.HandleErrorStatus(&log, w, res.Status)
 					return nil, nil, false
 				}
 
@@ -313,8 +306,8 @@ func (s *svc) handleProppatchResponse(ctx context.Context, w http.ResponseWriter
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
-	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
 		log.Err(err).Msg("error writing response")
@@ -322,29 +315,29 @@ func (s *svc) handleProppatchResponse(ctx context.Context, w http.ResponseWriter
 }
 
 func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.Name, removedProps []xml.Name, ref string) (string, error) {
-	responses := make([]responseXML, 0, 1)
-	response := responseXML{
-		Href:     encodePath(ref),
-		Propstat: []propstatXML{},
+	responses := make([]propfind.ResponseXML, 0, 1)
+	response := propfind.ResponseXML{
+		Href:     net.EncodePath(ref),
+		Propstat: []propfind.PropstatXML{},
 	}
 
 	if len(acceptedProps) > 0 {
-		propstatBody := []*propertyXML{}
+		propstatBody := []*props.PropertyXML{}
 		for i := range acceptedProps {
-			propstatBody = append(propstatBody, s.newPropNS(acceptedProps[i].Space, acceptedProps[i].Local, ""))
+			propstatBody = append(propstatBody, props.NewPropNS(acceptedProps[i].Space, acceptedProps[i].Local, ""))
 		}
-		response.Propstat = append(response.Propstat, propstatXML{
+		response.Propstat = append(response.Propstat, propfind.PropstatXML{
 			Status: "HTTP/1.1 200 OK",
 			Prop:   propstatBody,
 		})
 	}
 
 	if len(removedProps) > 0 {
-		propstatBody := []*propertyXML{}
+		propstatBody := []*props.PropertyXML{}
 		for i := range removedProps {
-			propstatBody = append(propstatBody, s.newPropNS(removedProps[i].Space, removedProps[i].Local, ""))
+			propstatBody = append(propstatBody, props.NewPropNS(removedProps[i].Space, removedProps[i].Local, ""))
 		}
-		response.Propstat = append(response.Propstat, propstatXML{
+		response.Propstat = append(response.Propstat, propfind.PropstatXML{
 			Status: "HTTP/1.1 204 No Content",
 			Prop:   propstatBody,
 		})
@@ -364,7 +357,7 @@ func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.N
 
 func (s *svc) isBooleanProperty(prop string) bool {
 	// TODO add other properties we know to be boolean?
-	return prop == _propOcFavorite
+	return prop == net.PropOcFavorite
 }
 
 func (s *svc) as0or1(val string) string {
@@ -390,11 +383,11 @@ type Proppatch struct {
 	// remove them, it sets them.
 	Remove bool
 	// Props contains the properties to be set or removed.
-	Props []propertyXML
+	Props []props.PropertyXML
 }
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for proppatch)
-type proppatchProps []propertyXML
+type proppatchProps []props.PropertyXML
 
 // UnmarshalXML appends the property names and values enclosed within start
 // to ps.
@@ -407,7 +400,7 @@ type proppatchProps []propertyXML
 func (ps *proppatchProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	lang := xmlLang(start, "")
 	for {
-		t, err := next(d)
+		t, err := props.Next(d)
 		if err != nil {
 			return err
 		}
@@ -418,7 +411,7 @@ func (ps *proppatchProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) e
 			}
 			return nil
 		case xml.StartElement:
-			p := propertyXML{}
+			p := props.PropertyXML{}
 			err = d.DecodeElement(&p, &elem)
 			if err != nil {
 				return err
@@ -453,17 +446,17 @@ func readProppatch(r io.Reader) (patches []Proppatch, status int, err error) {
 	for _, op := range pu.SetRemove {
 		remove := false
 		switch op.XMLName {
-		case xml.Name{Space: _nsDav, Local: "set"}:
+		case xml.Name{Space: net.NsDav, Local: "set"}:
 			// No-op.
-		case xml.Name{Space: _nsDav, Local: "remove"}:
+		case xml.Name{Space: net.NsDav, Local: "remove"}:
 			for _, p := range op.Prop {
 				if len(p.InnerXML) > 0 {
-					return nil, http.StatusBadRequest, errInvalidProppatch
+					return nil, http.StatusBadRequest, errors.ErrInvalidProppatch
 				}
 			}
 			remove = true
 		default:
-			return nil, http.StatusBadRequest, errInvalidProppatch
+			return nil, http.StatusBadRequest, errors.ErrInvalidProppatch
 		}
 		patches = append(patches, Proppatch{Remove: remove, Props: op.Prop})
 	}
@@ -480,25 +473,3 @@ func xmlLang(s xml.StartElement, d string) string {
 	}
 	return d
 }
-
-// Next returns the next token, if any, in the XML stream of d.
-// RFC 4918 requires to ignore comments, processing instructions
-// and directives.
-// http://www.webdav.org/specs/rfc4918.html#property_values
-// http://www.webdav.org/specs/rfc4918.html#xml-extensibility
-func next(d *xml.Decoder) (xml.Token, error) {
-	for {
-		t, err := d.Token()
-		if err != nil {
-			return t, err
-		}
-		switch t.(type) {
-		case xml.Comment, xml.Directive, xml.ProcInst:
-			continue
-		default:
-			return t, nil
-		}
-	}
-}
-
-var errInvalidProppatch = errors.New("webdav: invalid proppatch")

@@ -26,6 +26,8 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/pkg/appctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
@@ -35,18 +37,24 @@ func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(r.Context()).With().Str("path", fn).Logger()
-	space, status, err := s.lookUpStorageSpaceForPath(r.Context(), fn)
+	client, err := s.getClient()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	space, status, err := spacelookup.LookUpStorageSpaceForPath(r.Context(), client, fn)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
 
-	s.handleDelete(r.Context(), w, r, makeRelativeReference(space, fn, false), sublog)
+	s.handleDelete(r.Context(), w, r, spacelookup.MakeRelativeReference(space, fn, false), sublog)
 }
 
 func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
@@ -72,32 +80,23 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			w.WriteHeader(http.StatusNotFound)
 			// TODO path might be empty or relative...
 			m := fmt.Sprintf("Resource %v not found", ref.Path)
-			b, err := Marshal(exception{
-				code:    SabredavNotFound,
-				message: m,
-			})
-			HandleWebdavError(&log, w, b, err)
+			b, err := errors.Marshal(errors.SabredavNotFound, m, "")
+			errors.HandleWebdavError(&log, w, b, err)
 		}
 		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 			w.WriteHeader(http.StatusForbidden)
 			// TODO path might be empty or relative...
 			m := fmt.Sprintf("Permission denied to delete %v", ref.Path)
-			b, err := Marshal(exception{
-				code:    SabredavPermissionDenied,
-				message: m,
-			})
-			HandleWebdavError(&log, w, b, err)
+			b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+			errors.HandleWebdavError(&log, w, b, err)
 		}
 		if res.Status.Code == rpc.Code_CODE_INTERNAL && res.Status.Message == "can't delete mount path" {
 			w.WriteHeader(http.StatusForbidden)
-			b, err := Marshal(exception{
-				code:    SabredavPermissionDenied,
-				message: res.Status.Message,
-			})
-			HandleWebdavError(&log, w, b, err)
+			b, err := errors.Marshal(errors.SabredavPermissionDenied, res.Status.Message, "")
+			errors.HandleWebdavError(&log, w, b, err)
 		}
 
-		HandleErrorStatus(&log, w, res.Status)
+		errors.HandleErrorStatus(&log, w, res.Status)
 		return
 	}
 
@@ -110,9 +109,14 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
+	client, err := s.getClient()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	// retrieve a specific storage space
-	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path, true)
+	ref, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -120,7 +124,7 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		errors.HandleErrorStatus(&sublog, w, rpcStatus)
 		return
 	}
 

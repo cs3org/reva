@@ -26,7 +26,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
@@ -126,7 +126,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		ocdav.HandleErrorStatus(sublog, w, res.Status)
+		errors.HandleErrorStatus(sublog, w, res.Status)
 		return
 	}
 
@@ -152,7 +152,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if getQuotaRes.Status.Code != rpc.Code_CODE_OK {
-			ocdav.HandleErrorStatus(sublog, w, getQuotaRes.Status)
+			errors.HandleErrorStatus(sublog, w, getQuotaRes.Status)
 			return
 		}
 		total = getQuotaRes.TotalBytes

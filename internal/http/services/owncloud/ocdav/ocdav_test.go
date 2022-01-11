@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
@@ -37,7 +38,7 @@ then this method alone will cost a huge amount of time.
 */
 func BenchmarkEncodePath(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_ = encodePath("/some/path/Folder %^*(#1)")
+		_ = net.EncodePath("/some/path/Folder %^*(#1)")
 	}
 }
 
@@ -53,9 +54,9 @@ func TestWrapResourceID(t *testing.T) {
 func TestExtractDestination(t *testing.T) {
 	expected := "/dst"
 	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
-	request.Header.Set(HeaderDestination, "https://example.org/remote.php/dav/dst")
+	request.Header.Set(net.HeaderDestination, "https://example.org/remote.php/dav/dst")
 
-	ctx := context.WithValue(context.Background(), ctxKeyBaseURI, "remote.php/dav")
+	ctx := context.WithValue(context.Background(), net.CtxKeyBaseURI, "remote.php/dav")
 	destination, err := extractDestination(request.WithContext(ctx))
 	if err != nil {
 		t.Errorf("Expected err to be nil got %s", err)
@@ -81,7 +82,7 @@ func TestExtractDestinationWithoutHeader(t *testing.T) {
 
 func TestExtractDestinationWithInvalidDestination(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
-	request.Header.Set(HeaderDestination, "://example.org/remote.php/dav/dst")
+	request.Header.Set(net.HeaderDestination, "://example.org/remote.php/dav/dst")
 	_, err := extractDestination(request)
 	if err == nil {
 		t.Errorf("Expected err to be nil got %s", err)
@@ -94,9 +95,9 @@ func TestExtractDestinationWithInvalidDestination(t *testing.T) {
 
 func TestExtractDestinationWithDestinationWrongBaseURI(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
-	request.Header.Set(HeaderDestination, "https://example.org/remote.php/dav/dst")
+	request.Header.Set(net.HeaderDestination, "https://example.org/remote.php/dav/dst")
 
-	ctx := context.WithValue(context.Background(), ctxKeyBaseURI, "remote.php/webdav")
+	ctx := context.WithValue(context.Background(), net.CtxKeyBaseURI, "remote.php/webdav")
 	_, err := extractDestination(request.WithContext(ctx))
 	if err == nil {
 		t.Errorf("Expected err to be nil got %s", err)
