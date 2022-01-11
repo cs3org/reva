@@ -36,7 +36,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
@@ -53,14 +52,13 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"google.golang.org/grpc"
 )
+
+//go:generate mockery -name GatewayClient
 
 // GatewayClient is the interface that's being uses to interact with the gateway
 type GatewayClient interface {
-	ListPublicShares(ctx context.Context, in *link.ListPublicSharesRequest, opts ...grpc.CallOption) (*link.ListPublicSharesResponse, error)
-	Stat(ctx context.Context, in *sprovider.StatRequest, opts ...grpc.CallOption) (*sprovider.StatResponse, error)
-	ListContainer(ctx context.Context, in *sprovider.ListContainerRequest, opts ...grpc.CallOption) (*sprovider.ListContainerResponse, error)
+	gateway.GatewayAPIClient
 }
 
 // GetGatewayServiceClientFunc is a callback used to pass in a StorageProviderClient during testing
