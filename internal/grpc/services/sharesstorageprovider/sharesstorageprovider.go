@@ -317,14 +317,15 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			spaceType := f.GetSpaceType()
 			// do we need to fetch the shares?
-			if spaceType == "mountpoint" || spaceType == "grant" {
-				spaceTypes[spaceType] = exists
-				fetchShares = true
-			}
 			if spaceType == "+mountpoint" || spaceType == "+grant" {
 				appendTypes = append(appendTypes, strings.TrimPrefix(spaceType, "+"))
 				fetchShares = true
+				continue
 			}
+			if spaceType == "mountpoint" || spaceType == "grant" {
+				fetchShares = true
+			}
+			spaceTypes[spaceType] = exists
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 			spaceid, shareid, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
 			if err != nil {
