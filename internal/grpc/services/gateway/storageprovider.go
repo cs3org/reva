@@ -35,6 +35,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"google.golang.org/grpc/codes"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -46,6 +47,8 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
+
+	gstatus "google.golang.org/grpc/status"
 )
 
 /*  About caching
@@ -558,15 +561,16 @@ func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*p
 	c, _, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.TouchFileResponse{
-			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find reference %+v", req.Ref), err),
+			Status: status.NewStatusFromErrType(ctx, "TouchFile ref="+req.Ref.String(), err),
 		}, nil
 	}
 
 	res, err := c.TouchFile(ctx, req)
 	if err != nil {
-		return &provider.TouchFileResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call TouchFile", err),
-		}, nil
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.TouchFileResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling TouchFile")
 	}
 
 	return res, nil
@@ -651,9 +655,10 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 
 	res, err := c.SetArbitraryMetadata(ctx, req)
 	if err != nil {
-		return &provider.SetArbitraryMetadataResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call SetArbitraryMetadata", err),
-		}, nil
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.SetArbitraryMetadataResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling SetArbitraryMetadata")
 	}
 
 	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
@@ -673,12 +678,13 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 
 	res, err := c.UnsetArbitraryMetadata(ctx, req)
 	if err != nil {
-		return &provider.UnsetArbitraryMetadataResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call UnsetArbitraryMetadata", err),
-		}, nil
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.UnsetArbitraryMetadataResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling UnsetArbitraryMetadata")
 	}
-
 	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+
 	return res, nil
 }
 
@@ -695,9 +701,10 @@ func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provi
 
 	res, err := c.SetLock(ctx, req)
 	if err != nil {
-		return &provider.SetLockResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call SetLock", err),
-		}, nil
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.SetLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling SetLock")
 	}
 
 	return res, nil
@@ -705,20 +712,19 @@ func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provi
 
 // GetLock returns an existing lock on the given reference
 func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
-	var c provider.ProviderAPIClient
-	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.GetLockResponse{
-			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
+			Status: status.NewStatusFromErrType(ctx, "GetLock ref="+req.Ref.String(), err),
 		}, nil
 	}
 
 	res, err := c.GetLock(ctx, req)
 	if err != nil {
-		return &provider.GetLockResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call GetLock", err),
-		}, nil
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.GetLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling GetLock")
 	}
 
 	return res, nil
@@ -726,20 +732,19 @@ func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provi
 
 // RefreshLock refreshes an existing lock on the given reference
 func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
-	var c provider.ProviderAPIClient
-	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.RefreshLockResponse{
-			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
+			Status: status.NewStatusFromErrType(ctx, "RefreshLock ref="+req.Ref.String(), err),
 		}, nil
 	}
 
 	res, err := c.RefreshLock(ctx, req)
 	if err != nil {
-		return &provider.RefreshLockResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call RefreshLock", err),
-		}, nil
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.RefreshLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling RefreshLock")
 	}
 
 	return res, nil
@@ -747,20 +752,19 @@ func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest)
 
 // Unlock removes an existing lock from the given reference
 func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
-	var c provider.ProviderAPIClient
-	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.UnlockResponse{
-			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
+			Status: status.NewStatusFromErrType(ctx, "Unlock ref="+req.Ref.String(), err),
 		}, nil
 	}
 
 	res, err := c.Unlock(ctx, req)
 	if err != nil {
-		return &provider.UnlockResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call Unlock", err),
-		}, nil
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.UnlockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling Unlock")
 	}
 
 	return res, nil

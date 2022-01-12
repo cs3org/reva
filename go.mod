@@ -27,7 +27,7 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang/protobuf v1.5.2
-	github.com/gomodule/redigo v1.8.6
+	github.com/gomodule/redigo v1.8.8
 	github.com/google/go-cmp v0.5.6
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-querystring v1.1.0 // indirect
@@ -39,7 +39,7 @@ require (
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/juliangruber/go-intersect v1.1.0
-	github.com/mattn/go-sqlite3 v1.14.10
+	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/mileusna/useragent v1.0.2
 	github.com/minio/minio-go/v7 v7.0.20
 	github.com/mitchellh/copystructure v1.2.0 // indirect

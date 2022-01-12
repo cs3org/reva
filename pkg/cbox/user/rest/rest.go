@@ -128,9 +128,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
-	url := fmt.Sprintf("%s/Identity?filter=%s:%s&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
-		m.conf.APIBaseURL, param, url.QueryEscape(val))
+func (m *manager) getUser(ctx context.Context, url string) (map[string]interface{}, error) {
 	responseData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
@@ -151,17 +149,38 @@ func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[st
 	}
 
 	if len(users) != 1 {
-		return nil, errors.New("rest: user not found: " + param + ": " + val)
+		return nil, errors.New("rest: user not found for URL: " + url)
 	}
 
 	return users[0], nil
+}
+
+func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/Identity?filter=%s:%s&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
+		m.conf.APIBaseURL, param, url.QueryEscape(val))
+	return m.getUser(ctx, url)
+}
+
+func (m *manager) getLightweightUser(ctx context.Context, mail string) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/Identity?filter=primaryAccountEmail:%s&filter=upn:contains:guest&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
+		m.conf.APIBaseURL, url.QueryEscape(mail))
+	return m.getUser(ctx, url)
 }
 
 func (m *manager) getInternalUserID(ctx context.Context, uid *userpb.UserId) (string, error) {
 
 	internalID, err := m.fetchCachedInternalID(uid)
 	if err != nil {
-		userData, err := m.getUserByParam(ctx, "upn", uid.OpaqueId)
+		var (
+			userData map[string]interface{}
+			err      error
+		)
+		if uid.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+			// Lightweight accounts need to be fetched by email
+			userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(uid.OpaqueId, "guest:"))
+		} else {
+			userData, err = m.getUserByParam(ctx, "upn", uid.OpaqueId)
+		}
 		if err != nil {
 			return "", err
 		}
@@ -217,7 +236,16 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	u, err := m.fetchCachedUserDetails(uid)
 	if err != nil {
-		userData, err := m.getUserByParam(ctx, "upn", uid.OpaqueId)
+		var (
+			userData map[string]interface{}
+			err      error
+		)
+		if uid.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+			// Lightweight accounts need to be fetched by email
+			userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(uid.OpaqueId, "guest:"))
+		} else {
+			userData, err = m.getUserByParam(ctx, "upn", uid.OpaqueId)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -252,7 +280,12 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 
 	userData, err := m.getUserByParam(ctx, claim, value)
 	if err != nil {
-		return nil, err
+		// Lightweight accounts need to be fetched by email
+		if strings.HasPrefix(value, "guest:") {
+			if userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(value, "guest:")); err != nil {
+				return nil, err
+			}
+		}
 	}
 	u := m.parseAndCacheUser(ctx, userData)
 

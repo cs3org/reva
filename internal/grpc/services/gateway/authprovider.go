@@ -21,24 +21,19 @@ package gateway
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
@@ -118,13 +113,19 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	ctx = ctxpkg.ContextSetToken(ctx, token)
 	ctx = ctxpkg.ContextSetUser(ctx, res.User)
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token)
-	scope, err := s.expandScopes(ctx, res.TokenScope)
+
+	// Commenting out as the token size can get too big
+	// For now, we'll try to resolve all resources on every request
+	// TODO(ishank011): Add a cache for these
+	/* scope, err := s.expandScopes(ctx, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error expanding token scope")
 		return &gateway.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error expanding access token scope"),
 		}, nil
 	}
+	*/
+	scope := res.TokenScope
 
 	token, err = s.tokenmgr.MintToken(ctx, &u, scope)
 	if err != nil {
@@ -233,6 +234,7 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.Pro
 	return nil, errtypes.InternalError("gateway: error finding an auth provider for type: " + authType)
 }
 
+/*
 func (s *svc) expandScopes(ctx context.Context, scopeMap map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx)
 	newMap := make(map[string]*authpb.Scope)
@@ -303,3 +305,4 @@ func (s *svc) statAndAddResource(ctx context.Context, r *storageprovider.Resourc
 
 	return scope.AddResourceInfoScope(statResponse.Info, role, scopeMap)
 }
+*/

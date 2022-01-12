@@ -1001,7 +1001,7 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 	})
 	var previousXAttr = ""
 	for _, p := range partsBySpace {
-		partsByEqual := strings.Split(p, "=") // we have kv pairs like [size 14]
+		partsByEqual := strings.SplitN(p, "=", 2) // we have kv pairs like [size 14]
 		if len(partsByEqual) == 2 {
 			// handle xattrn and xattrv special cases
 			switch {
