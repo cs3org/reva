@@ -29,6 +29,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -110,10 +112,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			if r.Header.Get("Depth") == "" {
 				w.WriteHeader(http.StatusMethodNotAllowed)
-				b, err := Marshal(exception{
-					code:    SabredavMethodNotAllowed,
-					message: "Listing members of this collection is disabled",
-				})
+				b, err := errors.Marshal(errors.SabredavMethodNotAllowed, "Listing members of this collection is disabled", "")
 				if err != nil {
 					log.Error().Msgf("error marshaling xml response: %s", b)
 					w.WriteHeader(http.StatusInternalServerError)
@@ -146,37 +145,37 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			contextUser, ok := ctxpkg.ContextGetUser(ctx)
 			if ok && isOwner(requestUserID, contextUser) {
 				// use home storage handler when user was detected
-				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
-				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+				base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "files", requestUserID)
+				ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 				r = r.WithContext(ctx)
 
 				h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
 			} else {
 				r.URL.Path = oldPath
-				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
-				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+				base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "files")
+				ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 				r = r.WithContext(ctx)
 
 				h.FilesHandler.Handler(s).ServeHTTP(w, r)
 			}
 		case "meta":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")
-			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
+			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "meta")
+			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.MetaHandler.Handler(s).ServeHTTP(w, r)
 		case "trash-bin":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "trash-bin")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "trash-bin")
+			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
 		case "spaces":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "spaces")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "spaces")
+			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.SpacesHandler.Handler(s).ServeHTTP(w, r)
 		case "public-files":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
-			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
+			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "public-files")
+			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			c, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
@@ -209,18 +208,12 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
 				if hasValidBasicAuthHeader {
-					b, err := Marshal(exception{
-						code:    SabredavNotAuthenticated,
-						message: "Username or password was incorrect",
-					})
-					HandleWebdavError(log, w, b, err)
+					b, err := errors.Marshal(errors.SabredavNotAuthenticated, "Username or password was incorrect", "")
+					errors.HandleWebdavError(log, w, b, err)
 					return
 				}
-				b, err := Marshal(exception{
-					code:    SabredavNotAuthenticated,
-					message: "No 'Authorization: Basic' header found",
-				})
-				HandleWebdavError(log, w, b, err)
+				b, err := errors.Marshal(errors.SabredavNotAuthenticated, "No 'Authorization: Basic' header found", "")
+				errors.HandleWebdavError(log, w, b, err)
 				return
 			case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
 				w.WriteHeader(http.StatusNotFound)
@@ -270,11 +263,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 		default:
 			w.WriteHeader(http.StatusNotFound)
-			b, err := Marshal(exception{
-				code:    SabredavNotFound,
-				message: "File not found in root",
-			})
-			HandleWebdavError(log, w, b, err)
+			b, err := errors.Marshal(errors.SabredavNotFound, "File not found in root", "")
+			errors.HandleWebdavError(log, w, b, err)
 		}
 	})
 }

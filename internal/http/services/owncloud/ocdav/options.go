@@ -21,6 +21,8 @@ package ocdav
 import (
 	"net/http"
 	"strings"
+
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
 )
 
 func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request) {
@@ -28,19 +30,19 @@ func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request) {
 	allow += " MOVE, UNLOCK, PROPFIND, MKCOL, REPORT, SEARCH,"
 	allow += " PUT" // TODO(jfd): only for files ... but we cannot create the full path without a user ... which we only have when credentials are sent
 
-	isPublic := strings.Contains(r.Context().Value(ctxKeyBaseURI).(string), "public-files")
+	isPublic := strings.Contains(r.Context().Value(net.CtxKeyBaseURI).(string), "public-files")
 
-	w.Header().Set(HeaderContentType, "application/xml")
+	w.Header().Set(net.HeaderContentType, "application/xml")
 	w.Header().Set("Allow", allow)
 	w.Header().Set("DAV", "1, 2")
 	w.Header().Set("MS-Author-Via", "DAV")
 	if !isPublic {
-		w.Header().Add(HeaderAccessControlAllowHeaders, HeaderTusResumable)
-		w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderTusVersion, HeaderTusExtension}, ","))
-		w.Header().Set(HeaderTusResumable, "1.0.0") // TODO(jfd): only for dirs?
-		w.Header().Set(HeaderTusVersion, "1.0.0")
-		w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
-		w.Header().Set(HeaderTusChecksumAlgorithm, "md5,sha1,crc32")
+		w.Header().Add(net.HeaderAccessControlAllowHeaders, net.HeaderTusResumable)
+		w.Header().Add(net.HeaderAccessControlExposeHeaders, strings.Join([]string{net.HeaderTusResumable, net.HeaderTusVersion, net.HeaderTusExtension}, ","))
+		w.Header().Set(net.HeaderTusResumable, "1.0.0") // TODO(jfd): only for dirs?
+		w.Header().Set(net.HeaderTusVersion, "1.0.0")
+		w.Header().Set(net.HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
+		w.Header().Set(net.HeaderTusChecksumAlgorithm, "md5,sha1,crc32")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
