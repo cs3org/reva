@@ -27,17 +27,23 @@ import (
 type ctxKey int
 
 const (
+	// CtxKeyBaseURI is the key of the base URI context field
 	CtxKeyBaseURI ctxKey = iota
 
-	NsDav      = "DAV:"
+	// NsDav is the Dav ns
+	NsDav = "DAV:"
+	// NsOwncloud is the owncloud ns
 	NsOwncloud = "http://owncloud.org/ns"
-	NsOCS      = "http://open-collaboration-services.org/ns"
+	// NsOCS is the OCS ns
+	NsOCS = "http://open-collaboration-services.org/ns"
 
 	// RFC1123 time that mimics oc10. time.RFC1123 would end in "UTC", see https://github.com/golang/go/issues/13781
 	RFC1123 = "Mon, 02 Jan 2006 15:04:05 GMT"
 
+	// PropQuotaUnknown is the quota unknown property
 	PropQuotaUnknown = "-2"
-	PropOcFavorite   = "http://owncloud.org/ns/favorite"
+	// PropOcFavorite is the favorite ns property
+	PropOcFavorite = "http://owncloud.org/ns/favorite"
 )
 
 // replaceAllStringSubmatchFunc is taken from 'Go: Replace String with Regular Expression Callback'
@@ -58,7 +64,7 @@ func replaceAllStringSubmatchFunc(re *regexp.Regexp, str string, repl func([]str
 
 var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@!$])`)
 
-// encodePath encodes the path of a url.
+// EncodePath encodes the path of a url.
 //
 // slashes (/) are treated as path-separators.
 // ported from https://github.com/sabre-io/http/blob/bb27d1a8c92217b34e778ee09dcf79d9a2936e84/lib/functions.php#L369-L379

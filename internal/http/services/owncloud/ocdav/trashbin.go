@@ -312,7 +312,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfind.PropfindXML, items []*provider.RecycleItem) (string, error) {
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfind.XML, items []*provider.RecycleItem) (string, error) {
 	responses := make([]*propfind.ResponseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &propfind.ResponseXML{
@@ -357,7 +357,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 // itemToPropResponse needs to create a listing that contains a key and destination
 // the key is the name of an entry in the trash listing
 // for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id
-func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *userpb.User, pf *propfind.PropfindXML, item *provider.RecycleItem) (*propfind.ResponseXML, error) {
+func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *userpb.User, pf *propfind.XML, item *provider.RecycleItem) (*propfind.ResponseXML, error) {
 
 	baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
 	ref := path.Join(baseURI, u.Username, item.Key)

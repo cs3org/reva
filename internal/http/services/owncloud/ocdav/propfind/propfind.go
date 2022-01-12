@@ -63,20 +63,24 @@ type GatewayClient interface {
 
 // GetGatewayServiceClientFunc is a callback used to pass in a StorageProviderClient during testing
 type GetGatewayServiceClientFunc func() (GatewayClient, error)
-type PropfindHandler struct {
+
+// Handler handles propfind requests
+type Handler struct {
 	PublicURL string
 	getClient GetGatewayServiceClientFunc
 }
 
-func NewPropfindHandler(publicURL string, getClientFunc GetGatewayServiceClientFunc) *PropfindHandler {
-	return &PropfindHandler{
+// NewHandler returns a new PropfindHandler instance
+func NewHandler(publicURL string, getClientFunc GetGatewayServiceClientFunc) *Handler {
+	return &Handler{
 		PublicURL: publicURL,
 		getClient: getClientFunc,
 	}
 }
 
+// HandlePathPropfind handles a path based propfind request
 // ns is the namespace that is prefixed to the path in the cs3 namespace
-func (p *PropfindHandler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
+func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
 
@@ -121,7 +125,8 @@ func (p *PropfindHandler) HandlePathPropfind(w http.ResponseWriter, r *http.Requ
 	p.propfindResponse(ctx, w, r, ns, pf, sendTusHeaders, resourceInfos, sublog)
 }
 
-func (p *PropfindHandler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
+// HandleSpacesPropfind handles a spaces based propfind request
+func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_propfind")
 	defer span.End()
 
@@ -142,6 +147,11 @@ func (p *PropfindHandler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Re
 
 	// retrieve a specific storage space
 	space, rpcStatus, err := spacelookup.LookUpStorageSpaceByID(ctx, client.(gateway.GatewayAPIClient), spaceID)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error looking up the space by id")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
 		errors.HandleErrorStatus(&sublog, w, rpcStatus)
@@ -163,7 +173,7 @@ func (p *PropfindHandler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Re
 
 }
 
-func (p *PropfindHandler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf PropfindXML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf XML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(ctx, "propfind_response")
 	defer span.End()
 
@@ -214,7 +224,7 @@ func (p *PropfindHandler) propfindResponse(ctx context.Context, w http.ResponseW
 }
 
 // TODO this is just a stat -> rename
-func (p *PropfindHandler) statSpace(ctx context.Context, client gateway.GatewayAPIClient, space *provider.StorageSpace, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
+func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient, space *provider.StorageSpace, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
 	req := &provider.StatRequest{
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,
@@ -226,7 +236,7 @@ func (p *PropfindHandler) statSpace(ctx context.Context, client gateway.GatewayA
 	return res.Info, res.Status, nil
 }
 
-func (p *PropfindHandler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf PropfindXML, spaces []*provider.StorageSpace, requestPath string, spacesPropfind bool, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
+func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, spaces []*provider.StorageSpace, requestPath string, spacesPropfind bool, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
 	depth := r.Header.Get(net.HeaderDepth)
 	if depth == "" {
 		depth = "1"
@@ -503,38 +513,40 @@ func requiresExplicitFetching(n *xml.Name) bool {
 	return true
 }
 
+// ReadPropfind extracts and parses the propfind XML information from a Reader
 // from https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/xml.go#L178-L205
-func ReadPropfind(r io.Reader) (pf PropfindXML, status int, err error) {
+func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 	c := countingReader{r: r}
 	if err = xml.NewDecoder(&c).Decode(&pf); err != nil {
 		if err == io.EOF {
 			if c.n == 0 {
 				// An empty body means to propfind allprop.
 				// http://www.webdav.org/specs/rfc4918.html#METHOD_PROPFIND
-				return PropfindXML{Allprop: new(struct{})}, 0, nil
+				return XML{Allprop: new(struct{})}, 0, nil
 			}
 			err = errors.ErrorInvalidPropfind
 		}
-		return PropfindXML{}, http.StatusBadRequest, err
+		return XML{}, http.StatusBadRequest, err
 	}
 
 	if pf.Allprop == nil && pf.Include != nil {
-		return PropfindXML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
+		return XML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
 	}
 	if pf.Allprop != nil && (pf.Prop != nil || pf.Propname != nil) {
-		return PropfindXML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
+		return XML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
 	}
 	if pf.Prop != nil && pf.Propname != nil {
-		return PropfindXML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
+		return XML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
 	}
 	if pf.Propname == nil && pf.Allprop == nil && pf.Prop == nil {
 		// jfd: I think <d:prop></d:prop> is perfectly valid ... treat it as allprop
-		return PropfindXML{Allprop: new(struct{})}, 0, nil
+		return XML{Allprop: new(struct{})}, 0, nil
 	}
 	return pf, 0, nil
 }
 
-func MultistatusResponse(ctx context.Context, pf *PropfindXML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) (string, error) {
+// MultistatusResponse converts a list of resource infos into a multistatus response string
+func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) (string, error) {
 	responses := make([]*ResponseXML, 0, len(mds))
 	for i := range mds {
 		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, linkshares)
@@ -557,7 +569,7 @@ func MultistatusResponse(ctx context.Context, pf *PropfindXML, mds []*provider.R
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
-func mdToPropResponse(ctx context.Context, pf *PropfindXML, md *provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) (*ResponseXML, error) {
+func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) (*ResponseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
@@ -1090,14 +1102,15 @@ func metadataKeyOf(n *xml.Name) string {
 	}
 }
 
+// Props represents properties related to a resource
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for propfind)
-type PropfindProps []xml.Name
+type Props []xml.Name
 
 // UnmarshalXML appends the property names enclosed within start to pn.
 //
 // It returns an error if start does not contain any properties or if
 // properties contain values. Character data between properties is ignored.
-func (pn *PropfindProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+func (pn *Props) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	for {
 		t, err := props.Next(d)
 		if err != nil {
@@ -1125,15 +1138,17 @@ func (pn *PropfindProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) er
 	}
 }
 
+// XML holds the xml representation of a propfind
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_propfind
-type PropfindXML struct {
-	XMLName  xml.Name      `xml:"DAV: propfind"`
-	Allprop  *struct{}     `xml:"DAV: allprop"`
-	Propname *struct{}     `xml:"DAV: propname"`
-	Prop     PropfindProps `xml:"DAV: prop"`
-	Include  PropfindProps `xml:"DAV: include"`
+type XML struct {
+	XMLName  xml.Name  `xml:"DAV: propfind"`
+	Allprop  *struct{} `xml:"DAV: allprop"`
+	Propname *struct{} `xml:"DAV: propname"`
+	Prop     Props     `xml:"DAV: prop"`
+	Include  Props     `xml:"DAV: include"`
 }
 
+// ResponseXML holds the xml representation of a propfind response
 type ResponseXML struct {
 	XMLName             xml.Name         `xml:"d:response"`
 	Href                string           `xml:"d:href"`
@@ -1143,6 +1158,7 @@ type ResponseXML struct {
 	ResponseDescription string           `xml:"d:responsedescription,omitempty"`
 }
 
+// PropstatXML holds the xml representation of a propfind response
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_propstat
 type PropstatXML struct {
 	// Prop requires DAV: to be the default namespace in the enclosing

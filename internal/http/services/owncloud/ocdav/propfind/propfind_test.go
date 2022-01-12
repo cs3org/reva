@@ -36,7 +36,7 @@ import (
 
 var _ = Describe("Propfind", func() {
 	var (
-		handler *propfind.PropfindHandler
+		handler *propfind.Handler
 		client  *mocks.GatewayClient
 		ctx     context.Context
 	)
@@ -44,13 +44,13 @@ var _ = Describe("Propfind", func() {
 	JustBeforeEach(func() {
 		ctx = context.Background()
 		client = &mocks.GatewayClient{}
-		handler = propfind.NewPropfindHandler("127.0.0.1:3000", func() (propfind.GatewayClient, error) {
+		handler = propfind.NewHandler("127.0.0.1:3000", func() (propfind.GatewayClient, error) {
 			return client, nil
 		})
 	})
 
-	Describe("NewPropfindHandler", func() {
-		It("returns a hanlder", func() {
+	Describe("NewHandler", func() {
+		It("returns a handler", func() {
 			Expect(handler).ToNot(BeNil())
 		})
 	})

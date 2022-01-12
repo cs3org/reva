@@ -23,7 +23,7 @@ import (
 	"encoding/xml"
 )
 
-// Property represents a single DAV resource property as defined in RFC 4918.
+// PropertyXML represents a single DAV resource property as defined in RFC 4918.
 // http://www.webdav.org/specs/rfc4918.html#data.model.for.resource.properties
 type PropertyXML struct {
 	// XMLName is the fully qualified name that identifies this property.
@@ -49,6 +49,7 @@ func xmlEscaped(val string) []byte {
 	return buf.Bytes()
 }
 
+// NewPropNS returns a new PropertyXML instance
 func NewPropNS(namespace string, local string, val string) *PropertyXML {
 	return &PropertyXML{
 		XMLName:  xml.Name{Space: namespace, Local: local},
@@ -57,6 +58,7 @@ func NewPropNS(namespace string, local string, val string) *PropertyXML {
 	}
 }
 
+// NewProp returns a new PropertyXML instance while xml-escaping the value
 // TODO properly use the space
 func NewProp(key, val string) *PropertyXML {
 	return &PropertyXML{
@@ -66,6 +68,7 @@ func NewProp(key, val string) *PropertyXML {
 	}
 }
 
+// NewPropRaw returns a new PropertyXML instance for the given key/value pair
 // TODO properly use the space
 func NewPropRaw(key, val string) *PropertyXML {
 	return &PropertyXML{

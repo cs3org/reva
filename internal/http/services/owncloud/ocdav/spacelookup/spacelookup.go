@@ -93,6 +93,7 @@ func LookUpStorageSpacesForPathWithChildren(ctx context.Context, client gateway.
 	return lSSRes.StorageSpaces, lSSRes.Status, nil
 }
 
+// LookUpStorageSpaceByID find a space by ID
 func LookUpStorageSpaceByID(ctx context.Context, client gateway.GatewayAPIClient, spaceID string) (*storageProvider.StorageSpace, *rpc.Status, error) {
 	// retrieve a specific storage space
 	lSSReq := &storageProvider.ListStorageSpacesRequest{
@@ -123,6 +124,8 @@ func LookUpStorageSpaceByID(ctx context.Context, client gateway.GatewayAPIClient
 		return nil, nil, fmt.Errorf("unexpected number of spaces %d", len(lSSRes.StorageSpaces))
 	}
 }
+
+// LookUpStorageSpaceReference find a space by id and returns a relative reference
 func LookUpStorageSpaceReference(ctx context.Context, client gateway.GatewayAPIClient, spaceID string, relativePath string, spacesDavRequest bool) (*storageProvider.Reference, *rpc.Status, error) {
 	space, status, err := LookUpStorageSpaceByID(ctx, client, spaceID)
 	if space == nil {
@@ -131,6 +134,7 @@ func LookUpStorageSpaceReference(ctx context.Context, client gateway.GatewayAPIC
 	return MakeRelativeReference(space, relativePath, spacesDavRequest), status, err
 }
 
+// MakeRelativeReference returns a relative reference for the given space and path
 func MakeRelativeReference(space *storageProvider.StorageSpace, relativePath string, spacesDavRequest bool) *storageProvider.Reference {
 	if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
 		return nil // not mounted

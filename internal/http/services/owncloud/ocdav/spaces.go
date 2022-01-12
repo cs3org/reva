@@ -64,7 +64,7 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 
 		switch r.Method {
 		case MethodPropfind:
-			p := propfind.NewPropfindHandler(config.PublicURL, func() (propfind.GatewayClient, error) {
+			p := propfind.NewHandler(config.PublicURL, func() (propfind.GatewayClient, error) {
 				return pool.GetGatewayServiceClient(config.GatewaySvc)
 			})
 			p.HandleSpacesPropfind(w, r, spaceID)

@@ -25,7 +25,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 )
 
-// a file is only yours if you are the owner
+// IsCurrentUserOwner returns whether the context user is the given owner or not
 func IsCurrentUserOwner(ctx context.Context, owner *userv1beta1.UserId) bool {
 	contextUser, ok := ctxpkg.ContextGetUser(ctx)
 	if ok && contextUser.Id != nil && owner != nil &&

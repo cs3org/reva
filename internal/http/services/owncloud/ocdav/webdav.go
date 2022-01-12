@@ -68,7 +68,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		r.URL.Path = newPath
 		switch r.Method {
 		case MethodPropfind:
-			p := propfind.NewPropfindHandler(config.PublicURL, func() (propfind.GatewayClient, error) {
+			p := propfind.NewHandler(config.PublicURL, func() (propfind.GatewayClient, error) {
 				return pool.GetGatewayServiceClient(config.GatewaySvc)
 			})
 			p.HandlePathPropfind(w, r, ns)

@@ -59,6 +59,7 @@ var (
 	}
 )
 
+// Exception represents a ocdav exception
 type Exception struct {
 	Code    code
 	Message string
@@ -80,6 +81,7 @@ func Marshal(code code, message string, header string) ([]byte, error) {
 	return []byte(xml.Header + string(xmlstring)), err
 }
 
+// ErrorXML holds the xml representation of an error
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
 type ErrorXML struct {
 	XMLName   xml.Name `xml:"d:error"`
@@ -92,7 +94,10 @@ type ErrorXML struct {
 	Header string `xml:"s:header,omitempty"`
 }
 
+// ErrorInvalidPropfind is an invalid propfind error
 var ErrorInvalidPropfind = errors.New("webdav: invalid propfind")
+
+// ErrInvalidProppatch is an invalid proppatch error
 var ErrInvalidProppatch = errors.New("webdav: invalid proppatch")
 
 // HandleErrorStatus checks the status code, logs a Debug or Error level message
