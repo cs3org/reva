@@ -391,12 +391,12 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[0]).Msg("could not read link, skipping")
 	}
 
-	node, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
+	n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
 	if err != nil {
 		return err
 	}
 
-	err = fs.tp.Delete(ctx, node)
+	err = fs.tp.Delete(ctx, n)
 	if err != nil {
 		return err
 	}
@@ -406,7 +406,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
-	trashPathMatches, err := filepath.Glob(node.InternalPath() + ".T.*")
+	trashPathMatches, err := filepath.Glob(n.InternalPath() + node.TrashIDDelimiter)
 	if err != nil {
 		return err
 	}
@@ -498,6 +498,9 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		})
 		if err != nil || !ok {
 			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
+		}
+		if strings.Contains(space.Root.OpaqueId, node.TrashIDDelimiter) {
+			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %+v", user.Username, space))
 		}
 	}
 
