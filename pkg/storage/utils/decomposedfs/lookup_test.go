@@ -22,7 +22,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

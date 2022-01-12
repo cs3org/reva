@@ -23,7 +23,7 @@ import (
 	"os"
 
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"

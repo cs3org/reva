@@ -30,7 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/stretchr/testify/mock"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
