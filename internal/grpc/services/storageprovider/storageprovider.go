@@ -1026,15 +1026,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 	key, itemPath := router.ShiftPath(req.Key)
 	if key != "" {
 		if err := s.storage.PurgeRecycleItem(ctx, req.Ref, key, itemPath); err != nil {
-			var st *rpc.Status
-			switch err.(type) {
-			case errtypes.IsNotFound:
-				st = status.NewNotFound(ctx, "path not found when purging recycle item")
-			case errtypes.PermissionDenied:
-				st = status.NewPermissionDenied(ctx, err, "permission denied")
-			default:
-				st = status.NewInternal(ctx, "error purging recycle item")
-			}
+			st := status.NewStatusFromErrType(ctx, "error purging recycle item", err)
 			appctx.GetLogger(ctx).
 				Error().
 				Err(err).
@@ -1048,15 +1040,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 		}
 	} else if err := s.storage.EmptyRecycle(ctx, req.Ref); err != nil {
 		// otherwise try emptying the whole recycle bin
-		var st *rpc.Status
-		switch err.(type) {
-		case errtypes.IsNotFound:
-			st = status.NewNotFound(ctx, "path not found when purging recycle bin")
-		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
-		default:
-			st = status.NewInternal(ctx, "error purging recycle bin")
-		}
+		st := status.NewStatusFromErrType(ctx, "error emptying recycle", err)
 		appctx.GetLogger(ctx).
 			Error().
 			Err(err).

@@ -25,6 +25,8 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	rtrace "github.com/cs3org/reva/pkg/trace"
@@ -90,7 +92,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
 	sublog.Debug().Msg("handlePropfindOnToken")
 
-	depth := r.Header.Get(HeaderDepth)
+	depth := r.Header.Get(net.HeaderDepth)
 	if depth == "" {
 		depth = "1"
 	}
@@ -102,7 +104,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		return
 	}
 
-	pf, status, err := readPropfind(r.Body)
+	pf, status, err := propfind.ReadPropfind(r.Body)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
@@ -114,15 +116,15 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
 
-	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, nil)
+	propRes, err := propfind.MultistatusResponse(ctx, &pf, infos, s.c.PublicURL, ns, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
-	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
 		sublog.Err(err).Msg("error writing response")

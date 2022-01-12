@@ -30,81 +30,11 @@ import (
 	"strings"
 	"testing"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	downMock "github.com/cs3org/reva/pkg/storage/utils/downloader/mock"
 	walkerMock "github.com/cs3org/reva/pkg/storage/utils/walker/mock"
 	"github.com/cs3org/reva/pkg/test"
 )
-
-func TestGetDeepestCommonDir(t *testing.T) {
-	tests := []struct {
-		name     string
-		paths    []string
-		expected string
-	}{
-		{
-			name:     "no paths",
-			paths:    []string{},
-			expected: "",
-		},
-		{
-			name:     "one path",
-			paths:    []string{"/aa/bb/cc"},
-			expected: "/aa/bb/cc",
-		},
-		{
-			name:     "root as common parent",
-			paths:    []string{"/aa/bb/bb", "/bb/cc"},
-			expected: "/",
-		},
-		{
-			name:     "common parent",
-			paths:    []string{"/aa/bb/cc", "/aa/bb/dd"},
-			expected: "/aa/bb",
-		},
-		{
-			name:     "common parent",
-			paths:    []string{"/aa/bb/cc", "/aa/bb/dd", "/aa/test"},
-			expected: "/aa",
-		},
-		{
-			name:     "common parent",
-			paths:    []string{"/aa/bb/cc/", "/aa/bb/dd/", "/aa/test/"},
-			expected: "/aa",
-		},
-		{
-			name:     "one is common parent",
-			paths:    []string{"/aa", "/aa/bb/dd", "/aa/test"},
-			expected: "/aa",
-		},
-		{
-			name:     "one is common parent",
-			paths:    []string{"/aa/", "/aa/bb/dd/", "/aa/test"},
-			expected: "/aa",
-		},
-		{
-			name:     "one is common parent",
-			paths:    []string{"/aa/bb/dd", "/aa/", "/aa/test"},
-			expected: "/aa",
-		},
-		{
-			name:     "one is common parent",
-			paths:    []string{"/reva/einstein/test", "/reva/einstein"},
-			expected: "/reva/einstein",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-
-			res := getDeepestCommonDir(tt.paths)
-			if res != tt.expected {
-				t.Fatalf("getDeepestCommondDir() failed: paths=%+v expected=%s got=%s", tt.paths, tt.expected, res)
-			}
-
-		})
-
-	}
-}
 
 func UnTar(dir string, r io.Reader) error {
 	tr := tar.NewReader(r)
@@ -482,15 +412,15 @@ func TestCreateTar(t *testing.T) {
 			}
 			defer cleanup()
 
-			filesAbs := []string{}
+			resources := []*provider.ResourceId{}
 			for _, f := range tt.files {
-				filesAbs = append(filesAbs, path.Join(tmpdir, f))
+				resources = append(resources, &provider.ResourceId{OpaqueId: path.Join(tmpdir, f)})
 			}
 
 			w := walkerMock.NewWalker()
 			d := downMock.NewDownloader()
 
-			arch, err := NewArchiver(filesAbs, w, d, tt.config)
+			arch, err := NewArchiver(resources, w, d, tt.config)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -520,7 +450,7 @@ func TestCreateTar(t *testing.T) {
 				}
 				defer cleanup()
 				if !test.DirEquals(tarTmpDir, expectedTmp) {
-					t.Fatalf("untar dir different from expected")
+					t.Fatalf("untar dir %s different from expected %s", tarTmpDir, expectedTmp)
 				}
 			}
 
@@ -930,15 +860,15 @@ func TestCreateZip(t *testing.T) {
 			}
 			defer cleanup()
 
-			filesAbs := []string{}
+			resources := []*provider.ResourceId{}
 			for _, f := range tt.files {
-				filesAbs = append(filesAbs, path.Join(tmpdir, f))
+				resources = append(resources, &provider.ResourceId{OpaqueId: path.Join(tmpdir, f)})
 			}
 
 			w := walkerMock.NewWalker()
 			d := downMock.NewDownloader()
 
-			arch, err := NewArchiver(filesAbs, w, d, tt.config)
+			arch, err := NewArchiver(resources, w, d, tt.config)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -968,7 +898,7 @@ func TestCreateZip(t *testing.T) {
 				}
 				defer cleanup()
 				if !test.DirEquals(zipTmpDir, expectedTmp) {
-					t.Fatalf("unzip dir different from expected")
+					t.Fatalf("unzip dir %s different from expected %s", zipTmpDir, expectedTmp)
 				}
 			}
 

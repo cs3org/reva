@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package nextcloud_test
+package ocdav_test
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestNextcloud(t *testing.T) {
+func TestOcdav(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Nextcloud Suite")
+	RunSpecs(t, "Ocdav Suite")
 }

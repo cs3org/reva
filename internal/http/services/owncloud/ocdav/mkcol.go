@@ -26,6 +26,8 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/pkg/appctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
@@ -43,21 +45,27 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 		}
 	}
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	parentPath := path.Dir(fn)
 
-	space, status, err := s.lookUpStorageSpaceForPath(ctx, parentPath)
+	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, parentPath)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", parentPath).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
 
-	s.handleMkcol(ctx, w, r, makeRelativeReference(space, parentPath, false), makeRelativeReference(space, fn, false), sublog)
+	s.handleMkcol(ctx, w, r, spacelookup.MakeRelativeReference(space, parentPath, false), spacelookup.MakeRelativeReference(space, fn, false), sublog)
 }
 
 func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) {
@@ -65,8 +73,14 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID 
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	parentRef, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, path.Dir(r.URL.Path), true)
+	parentRef, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, path.Dir(r.URL.Path), true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -74,11 +88,11 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID 
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		errors.HandleErrorStatus(&sublog, w, rpcStatus)
 		return
 	}
 
-	childRef, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path, true)
+	childRef, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -86,7 +100,7 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID 
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		errors.HandleErrorStatus(&sublog, w, rpcStatus)
 		return
 	}
 
@@ -123,13 +137,10 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 			// all ancestors must already exist, or the method must fail
 			// with a 409 (Conflict) status code.
 			w.WriteHeader(http.StatusConflict)
-			b, err := Marshal(exception{
-				code:    SabredavNotFound,
-				message: "Parent node does not exist",
-			})
-			HandleWebdavError(&log, w, b, err)
+			b, err := errors.Marshal(errors.SabredavNotFound, "Parent node does not exist", "")
+			errors.HandleWebdavError(&log, w, b, err)
 		} else {
-			HandleErrorStatus(&log, w, parentStatRes.Status)
+			errors.HandleErrorStatus(&log, w, parentStatRes.Status)
 		}
 		return
 	}
@@ -146,13 +157,10 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if statRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
 		if statRes.Status.Code == rpc.Code_CODE_OK {
 			w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
-			b, err := Marshal(exception{
-				code:    SabredavMethodNotAllowed,
-				message: "The resource you tried to create already exists",
-			})
-			HandleWebdavError(&log, w, b, err)
+			b, err := errors.Marshal(errors.SabredavMethodNotAllowed, "The resource you tried to create already exists", "")
+			errors.HandleWebdavError(&log, w, b, err)
 		} else {
-			HandleErrorStatus(&log, w, statRes.Status)
+			errors.HandleErrorStatus(&log, w, statRes.Status)
 		}
 		return
 	}
@@ -174,12 +182,9 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusForbidden)
 		// TODO path could be empty or relative...
 		m := fmt.Sprintf("Permission denied to create %v", childRef.Path)
-		b, err := Marshal(exception{
-			code:    SabredavPermissionDenied,
-			message: m,
-		})
-		HandleWebdavError(&log, w, b, err)
+		b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+		errors.HandleWebdavError(&log, w, b, err)
 	default:
-		HandleErrorStatus(&log, w, res.Status)
+		errors.HandleErrorStatus(&log, w, res.Status)
 	}
 }

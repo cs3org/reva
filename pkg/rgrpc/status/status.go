@@ -135,16 +135,16 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 	case nil:
 		NewOK(ctx)
 	case errtypes.IsNotFound:
-		return NewNotFound(ctx, "gateway: "+msg+": "+err.Error())
+		return NewNotFound(ctx, msg+": "+err.Error())
 	case errtypes.IsInvalidCredentials:
 		// TODO this maps badly
-		return NewUnauthenticated(ctx, err, "gateway: "+msg+": "+err.Error())
+		return NewUnauthenticated(ctx, err, msg+": "+err.Error())
 	case errtypes.PermissionDenied:
-		return NewPermissionDenied(ctx, e, "gateway: "+msg+": "+err.Error())
+		return NewPermissionDenied(ctx, e, msg+": "+err.Error())
 	case errtypes.IsNotSupported:
-		return NewUnimplemented(ctx, err, "gateway: "+msg+":"+err.Error())
+		return NewUnimplemented(ctx, err, msg+":"+err.Error())
 	case errtypes.BadRequest:
-		return NewInvalidArg(ctx, "gateway: "+msg+":"+err.Error())
+		return NewInvalidArg(ctx, msg+":"+err.Error())
 	}
 
 	// map GRPC status codes coming from the auth middleware
@@ -154,11 +154,11 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		if ok {
 			switch st.Code() {
 			case codes.NotFound:
-				return NewNotFound(ctx, "gateway: "+msg+": "+err.Error())
+				return NewNotFound(ctx, msg+": "+err.Error())
 			case codes.Unauthenticated:
-				return NewUnauthenticated(ctx, err, "gateway: "+msg+": "+err.Error())
+				return NewUnauthenticated(ctx, err, msg+": "+err.Error())
 			case codes.PermissionDenied:
-				return NewPermissionDenied(ctx, err, "gateway: "+msg+": "+err.Error())
+				return NewPermissionDenied(ctx, err, msg+": "+err.Error())
 			}
 		}
 		// the actual error can be wrapped multiple times
@@ -168,7 +168,7 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		}
 	}
 
-	return NewInternal(ctx, "gateway: "+msg+":"+err.Error())
+	return NewInternal(ctx, msg+":"+err.Error())
 }
 
 // NewErrorFromCode returns a standardized Error for a given RPC code.

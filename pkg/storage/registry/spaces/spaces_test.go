@@ -189,11 +189,14 @@ var _ = Describe("Spaces", func() {
 			p := providers[0]
 			Expect(p.Address).To(Equal("127.0.0.1:13020"))
 
-			spacePaths := map[string]string{}
-			err = json.Unmarshal(p.Opaque.Map["space_paths"].Value, &spacePaths)
+			spaces := []*provider.StorageSpace{}
+			err = json.Unmarshal(p.Opaque.Map["spaces"].Value, &spaces)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(spacePaths)).To(Equal(1))
-			Expect(spacePaths["foospace"]).To(Equal("/thepath"))
+			Expect(len(spaces)).To(Equal(1))
+
+			Expect(spaces[0].Opaque.Map["path"].Decoder).To(Equal("plain"))
+			spacePath := string(spaces[0].Opaque.Map["path"].Value)
+			Expect(spacePath).To(Equal("/thepath"))
 		})
 	})
 
@@ -295,12 +298,27 @@ var _ = Describe("Spaces", func() {
 				p := providers[0]
 				Expect(p.Address).To(Equal("127.0.0.1:13022"))
 
-				spacePaths := map[string]string{}
-				err = json.Unmarshal(p.Opaque.Map["space_paths"].Value, &spacePaths)
+				spaces := []*provider.StorageSpace{}
+				err = json.Unmarshal(p.Opaque.Map["spaces"].Value, &spaces)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(spacePaths)).To(Equal(2))
-				Expect(spacePaths["bazspace1"]).To(Equal("/projects/Baz space 1"))
-				Expect(spacePaths["bazspace2"]).To(Equal("/projects/Baz space 2"))
+				Expect(len(spaces)).To(Equal(2))
+
+				baz1Found, baz2Found := false, false
+				for _, space := range spaces {
+					spacePath := string(space.Opaque.Map["path"].Value)
+					switch space.Id.OpaqueId {
+					case "bazspace1":
+						baz1Found = true
+						Expect(spacePath).To(Equal("/projects/Baz space 1"))
+					case "bazspace2":
+						baz2Found = true
+						Expect(spacePath).To(Equal("/projects/Baz space 2"))
+					default:
+						Fail("unexpected space id")
+					}
+				}
+				Expect(baz1Found).To(BeTrue())
+				Expect(baz2Found).To(BeTrue())
 			})
 
 			It("returns an empty list when a non-existent id is given", func() {
@@ -324,11 +342,15 @@ var _ = Describe("Spaces", func() {
 				p := providers[0]
 				Expect(p.Address).To(Equal("127.0.0.1:13021"))
 
-				spacePaths := map[string]string{}
-				err = json.Unmarshal(p.Opaque.Map["space_paths"].Value, &spacePaths)
+				spaces := []*provider.StorageSpace{}
+				err = json.Unmarshal(p.Opaque.Map["spaces"].Value, &spaces)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(spacePaths)).To(Equal(1))
-				Expect(spacePaths["barspace"]).To(Equal("/users/Alice"))
+				Expect(len(spaces)).To(Equal(1))
+
+				Expect(spaces[0].Id.OpaqueId).To(Equal("barspace"))
+				Expect(spaces[0].Opaque.Map["path"].Decoder).To(Equal("plain"))
+				spacePath := string(spaces[0].Opaque.Map["path"].Value)
+				Expect(spacePath).To(Equal("/users/Alice"))
 
 				filters = map[string]string{
 					"storage_id": "bazspace2",
@@ -340,11 +362,13 @@ var _ = Describe("Spaces", func() {
 				p = providers[0]
 				Expect(p.Address).To(Equal("127.0.0.1:13022"))
 
-				spacePaths = map[string]string{}
-				err = json.Unmarshal(p.Opaque.Map["space_paths"].Value, &spacePaths)
+				err = json.Unmarshal(p.Opaque.Map["spaces"].Value, &spaces)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(spacePaths)).To(Equal(1))
-				Expect(spacePaths["bazspace2"]).To(Equal("/projects/Baz space 2"))
+				Expect(len(spaces)).To(Equal(1))
+				Expect(spaces[0].Id.OpaqueId).To(Equal("bazspace2"))
+				Expect(spaces[0].Opaque.Map["path"].Decoder).To(Equal("plain"))
+				spacePath = string(spaces[0].Opaque.Map["path"].Value)
+				Expect(spacePath).To(Equal("/projects/Baz space 2"))
 			})
 		})
 	})

@@ -20,17 +20,16 @@ package ocdav
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"path"
-	"regexp"
 	"strings"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -45,12 +44,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-)
-
-type ctxKey int
-
-const (
-	ctxKeyBaseURI ctxKey = iota
 )
 
 var (
@@ -121,6 +114,10 @@ type svc struct {
 	davHandler       *DavHandler
 	favoritesManager favorite.Manager
 	client           *http.Client
+}
+
+func (s *svc) Config() *Config {
+	return s.c
 }
 
 func getFavoritesManager(c *Config) (favorite.Manager, error) {
@@ -228,7 +225,7 @@ func (s *svc) Handler() http.Handler {
 			// for oc we need to prepend /home as the path that will be passed to the home storage provider
 			// will not contain the username
 			base = path.Join(base, "webdav")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			s.webDavHandler.Handler(s).ServeHTTP(w, r)
 			return
@@ -238,7 +235,7 @@ func (s *svc) Handler() http.Handler {
 			// for oc we need to prepend the path to user homes
 			// or we take the path starting at /dav and allow rewriting it?
 			base = path.Join(base, "dav")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			s.davHandler.Handler(s).ServeHTTP(w, r)
 			return
@@ -328,7 +325,7 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 }
 
 func extractDestination(r *http.Request) (string, error) {
-	dstHeader := r.Header.Get(HeaderDestination)
+	dstHeader := r.Header.Get(net.HeaderDestination)
 	if dstHeader == "" {
 		return "", errors.Wrap(errInvalidValue, "destination header is empty")
 	}
@@ -337,7 +334,7 @@ func extractDestination(r *http.Request) (string, error) {
 		return "", errors.Wrap(errInvalidValue, err.Error())
 	}
 
-	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
+	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
 	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 	// Strip the base URI from the destination. The destination might contain redirection prefixes which need to be handled
 	urlSplit := strings.Split(dstURL.Path, baseURI)
@@ -346,37 +343,4 @@ func extractDestination(r *http.Request) (string, error) {
 	}
 
 	return urlSplit[1], nil
-}
-
-// replaceAllStringSubmatchFunc is taken from 'Go: Replace String with Regular Expression Callback'
-// see: https://elliotchance.medium.com/go-replace-string-with-regular-expression-callback-f89948bad0bb
-func replaceAllStringSubmatchFunc(re *regexp.Regexp, str string, repl func([]string) string) string {
-	result := ""
-	lastIndex := 0
-	for _, v := range re.FindAllSubmatchIndex([]byte(str), -1) {
-		groups := []string{}
-		for i := 0; i < len(v); i += 2 {
-			groups = append(groups, str[v[i]:v[i+1]])
-		}
-		result += str[lastIndex:v[0]] + repl(groups)
-		lastIndex = v[1]
-	}
-	return result + str[lastIndex:]
-}
-
-var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@!$])`)
-
-// encodePath encodes the path of a url.
-//
-// slashes (/) are treated as path-separators.
-// ported from https://github.com/sabre-io/http/blob/bb27d1a8c92217b34e778ee09dcf79d9a2936e84/lib/functions.php#L369-L379
-func encodePath(path string) string {
-	return replaceAllStringSubmatchFunc(hrefre, path, func(groups []string) string {
-		b := groups[1]
-		var sb strings.Builder
-		for i := 0; i < len(b); i++ {
-			sb.WriteString(fmt.Sprintf("%%%x", b[i]))
-		}
-		return sb.String()
-	})
 }

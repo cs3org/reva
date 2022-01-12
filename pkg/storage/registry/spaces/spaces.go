@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -91,15 +90,10 @@ type StorageProviderClient interface {
 }
 
 type config struct {
-	Providers    map[string]*Provider `mapstructure:"providers"`
-	HomeTemplate string               `mapstructure:"home_template"`
+	Providers map[string]*Provider `mapstructure:"providers"`
 }
 
 func (c *config) init() {
-
-	if c.HomeTemplate == "" {
-		c.HomeTemplate = "/"
-	}
 
 	if len(c.Providers) == 0 {
 		c.Providers = map[string]*Provider{
@@ -166,10 +160,6 @@ func New(m map[string]interface{}, getClientFunc GetStorageProviderServiceClient
 		resourceNameCache:               make(map[string]string),
 		getStorageProviderServiceClient: getClientFunc,
 	}
-	r.homeTemplate, err = template.New("home_template").Funcs(sprig.TxtFuncMap()).Parse(c.HomeTemplate)
-	if err != nil {
-		return nil, err
-	}
 	return r, nil
 }
 
@@ -187,8 +177,6 @@ type GetStorageProviderServiceClientFunc func(addr string) (StorageProviderClien
 
 type registry struct {
 	c *config
-	// the template to use when determining the home provider
-	homeTemplate *template.Template
 	// a map of resources to providers
 	resources         map[string][]*registrypb.ProviderInfo
 	resourceNameCache map[string]string
@@ -218,14 +206,18 @@ func (r *registry) GetProvider(ctx context.Context, space *providerpb.StorageSpa
 					continue
 				}
 			}
-			pi := &registrypb.ProviderInfo{Address: address}
-			opaque, err := spacePathsToOpaque(map[string]string{"unused": spacePath})
-			if err != nil {
-				appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
+
+			setPath(space, spacePath)
+
+			p := &registrypb.ProviderInfo{
+				Address: address,
+			}
+			validSpaces := []*providerpb.StorageSpace{space}
+			if err := setSpaces(p, validSpaces); err != nil {
+				appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Interface("spaces", validSpaces).Msg("marshaling spaces failed, continuing")
 				continue
 			}
-			pi.Opaque = opaque
-			return pi, nil // return the first match we find
+			return p, nil // return the first match we find
 		}
 	}
 	return nil, errtypes.NotFound("no provider found for space")
@@ -281,13 +273,91 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"], findMountpoint, findGrant), nil
 	case filters["path"] != "":
 		return r.findProvidersForAbsolutePathReference(ctx, filters["path"], b), nil
-		// TODO add filter for all spaces the user can manage?
 	case len(filters) == 0:
 		// return all providers
 		return r.findAllProviders(ctx), nil
 	default:
-		return nil, errors.New("filters misconfigured")
+		return r.findProvidersForFilter(ctx, r.buildFilters(filters)), nil
 	}
+}
+
+func (r *registry) buildFilters(filterMap map[string]string) []*providerpb.ListStorageSpacesRequest_Filter {
+	filters := []*providerpb.ListStorageSpacesRequest_Filter{}
+	for k, f := range filterMap {
+		switch k {
+		case "space_id":
+			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_ID,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_Id{
+					Id: &providerpb.StorageSpaceId{
+						OpaqueId: f,
+					},
+				},
+			})
+		case "space_type":
+			filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+					SpaceType: f,
+				},
+			})
+		}
+	}
+	if filterMap["owner_id"] != "" && filterMap["owner_idp"] != "" {
+		filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_OWNER,
+			Term: &providerpb.ListStorageSpacesRequest_Filter_Owner{
+				Owner: &userpb.UserId{
+					Idp:      filterMap["owner_idp"],
+					OpaqueId: filterMap["owner_id"],
+				},
+			},
+		})
+	}
+	return filters
+}
+
+func (r *registry) findProvidersForFilter(ctx context.Context, filters []*providerpb.ListStorageSpacesRequest_Filter) []*registrypb.ProviderInfo {
+
+	currentUser := ctxpkg.ContextMustGetUser(ctx)
+	providerInfos := []*registrypb.ProviderInfo{}
+	for address, provider := range r.c.Providers {
+		p := &registrypb.ProviderInfo{
+			Address: address,
+		}
+		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters)
+		if err != nil {
+			appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Msg("findStorageSpaceOnProvider by id failed, continuing")
+			continue
+		}
+
+		validSpaces := []*providerpb.StorageSpace{}
+		if len(spaces) > 0 {
+			for _, space := range spaces {
+				var sc *spaceConfig
+				var ok bool
+				var spacePath string
+				// filter unconfigured space types
+				if sc, ok = provider.Spaces[space.SpaceType]; !ok {
+					continue
+				}
+				spacePath, err = sc.SpacePath(currentUser, space)
+				if err != nil {
+					appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
+					continue
+				}
+				setPath(space, spacePath)
+				validSpaces = append(validSpaces, space)
+			}
+
+			if err := setSpaces(p, validSpaces); err != nil {
+				appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Interface("spaces", validSpaces).Msg("marshaling spaces failed, continuing")
+				continue
+			}
+			providerInfos = append(providerInfos, p)
+		}
+	}
+	return providerInfos
 }
 
 // findProvidersForResource looks up storage providers based on a resource id
@@ -359,14 +429,11 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 					appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
 					continue
 				}
+				setPath(space, spacePath)
 			}
-
-			spacePaths := map[string]string{
-				space.Id.OpaqueId: spacePath,
-			}
-			p.Opaque, err = spacePathsToOpaque(spacePaths)
-			if err != nil {
-				appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
+			validSpaces := []*providerpb.StorageSpace{space}
+			if err := setSpaces(p, validSpaces); err != nil {
+				appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Interface("spaces", validSpaces).Msg("marshaling spaces failed, continuing")
 				continue
 			}
 			// we can stop after we found the first space
@@ -389,9 +456,10 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 	deepestMountPath := ""
 	var deepestMountSpace *providerpb.StorageSpace
 	var deepestMountPathProvider *registrypb.ProviderInfo
-	providers := map[string]map[string]string{}
+	providers := map[string]*registrypb.ProviderInfo{}
 	for address, provider := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
+			Opaque:  &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{}},
 			Address: address,
 		}
 		var spaces []*providerpb.StorageSpace
@@ -411,13 +479,14 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 			continue
 		}
 
-		spacePaths := map[string]string{}
+		validSpaces := []*providerpb.StorageSpace{}
 		for _, space := range spaces {
 			var sc *spaceConfig
 			var ok bool
 
 			if space.SpaceType == "grant" {
-				spacePaths[space.Id.OpaqueId] = "." // a . indicates a grant, the gateway will do a findMountpoint for it
+				setPath(space, ".") // a . indicates a grant, the gateway will do a findMountpoint for it
+				validSpaces = append(validSpaces, space)
 				continue
 			}
 
@@ -430,10 +499,12 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 				appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
 				continue
 			}
+			setPath(space, spacePath)
 
+			// determine deepest mount point
 			switch {
 			case spacePath == path && unique:
-				spacePaths[space.Id.OpaqueId] = spacePath
+				validSpaces = append(validSpaces, space)
 
 				deepestMountPath = spacePath
 				deepestMountSpace = space
@@ -442,7 +513,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 			case strings.HasPrefix(spacePath, path) && !unique:
 				// and add all providers below and exactly matching the path
 				// requested /foo, mountPath /foo/sub
-				spacePaths[space.Id.OpaqueId] = spacePath
+				validSpaces = append(validSpaces, space)
 				if len(spacePath) > len(deepestMountPath) {
 					deepestMountPath = spacePath
 					deepestMountSpace = space
@@ -458,32 +529,30 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 			}
 		}
 
-		if len(spacePaths) > 0 {
-			providers[p.Address] = spacePaths
+		if len(validSpaces) > 0 {
+			if err := setSpaces(p, validSpaces); err != nil {
+				appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Msg("marshaling spaces failed, continuing")
+				continue
+			}
+			providers[p.Address] = p
 		}
 	}
 
 	if deepestMountPathProvider != nil {
-		if spacePaths, ok := providers[deepestMountPathProvider.Address]; ok {
-			spacePaths[deepestMountSpace.Id.OpaqueId] = deepestMountPath
-		} else {
-			providers[deepestMountPathProvider.Address] = map[string]string{deepestMountSpace.Id.OpaqueId: deepestMountPath}
+		if _, ok := providers[deepestMountPathProvider.Address]; !ok {
+			if err := setSpaces(deepestMountPathProvider, []*providerpb.StorageSpace{deepestMountSpace}); err == nil {
+				providers[deepestMountPathProvider.Address] = deepestMountPathProvider
+			} else {
+				appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", deepestMountPathProvider).Interface("space", deepestMountSpace).Msg("marshaling space failed, continuing")
+			}
 		}
 	}
 
-	pis := make([]*registrypb.ProviderInfo, 0, len(providers))
-	for addr, spacePaths := range providers {
-		pi := &registrypb.ProviderInfo{Address: addr}
-		opaque, err := spacePathsToOpaque(spacePaths)
-		if err != nil {
-			appctx.GetLogger(ctx).Debug().Err(err).Msg("marshaling space paths map failed, continuing")
-			continue
-		}
-		pi.Opaque = opaque
-		pis = append(pis, pi)
+	providerInfos := []*registrypb.ProviderInfo{}
+	for _, p := range providers {
+		providerInfos = append(providerInfos, p)
 	}
-
-	return pis
+	return providerInfos
 }
 
 // findAllProviders returns a list of all storage providers
@@ -498,19 +567,34 @@ func (r *registry) findAllProviders(ctx context.Context) []*registrypb.ProviderI
 	return pis
 }
 
-func spacePathsToOpaque(spacePaths map[string]string) (*typesv1beta1.Opaque, error) {
-	spacePathsJSON, err := json.Marshal(spacePaths)
-	if err != nil {
-		return nil, err
+func setPath(space *providerpb.StorageSpace, path string) {
+	if space.Opaque == nil {
+		space.Opaque = &typesv1beta1.Opaque{}
 	}
-	return &typesv1beta1.Opaque{
-		Map: map[string]*typesv1beta1.OpaqueEntry{
-			"space_paths": {
-				Decoder: "json",
-				Value:   spacePathsJSON,
-			},
-		},
-	}, nil
+	if space.Opaque.Map == nil {
+		space.Opaque.Map = map[string]*typesv1beta1.OpaqueEntry{}
+	}
+	space.Opaque.Map["path"] = &typesv1beta1.OpaqueEntry{
+		Decoder: "plain",
+		Value:   []byte(path),
+	}
+}
+func setSpaces(providerInfo *registrypb.ProviderInfo, spaces []*providerpb.StorageSpace) error {
+	if providerInfo.Opaque == nil {
+		providerInfo.Opaque = &typesv1beta1.Opaque{}
+	}
+	if providerInfo.Opaque.Map == nil {
+		providerInfo.Opaque.Map = map[string]*typesv1beta1.OpaqueEntry{}
+	}
+	spacesBytes, err := json.Marshal(spaces)
+	if err != nil {
+		return err
+	}
+	providerInfo.Opaque.Map["spaces"] = &typesv1beta1.OpaqueEntry{
+		Decoder: "json",
+		Value:   spacesBytes,
+	}
+	return nil
 }
 
 func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, filters []*providerpb.ListStorageSpacesRequest_Filter) ([]*providerpb.StorageSpace, error) {

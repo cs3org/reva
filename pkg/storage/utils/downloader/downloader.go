@@ -35,7 +35,7 @@ import (
 // Downloader is the interface implemented by the objects that are able to
 // download a path into a destination Writer
 type Downloader interface {
-	Download(context.Context, string, io.Writer) error
+	Download(context.Context, *provider.ResourceId, io.Writer) error
 }
 
 type revaDownloader struct {
@@ -61,10 +61,11 @@ func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, prot string)
 }
 
 // Download downloads a resource given the path to the dst Writer
-func (r *revaDownloader) Download(ctx context.Context, path string, dst io.Writer) error {
+func (r *revaDownloader) Download(ctx context.Context, id *provider.ResourceId, dst io.Writer) error {
 	downResp, err := r.gtw.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
 		Ref: &provider.Reference{
-			Path: path,
+			ResourceId: id,
+			Path:       ".",
 		},
 	})
 
@@ -98,7 +99,7 @@ func (r *revaDownloader) Download(ctx context.Context, path string, dst io.Write
 	if httpRes.StatusCode != http.StatusOK {
 		switch httpRes.StatusCode {
 		case http.StatusNotFound:
-			return errtypes.NotFound(path)
+			return errtypes.NotFound(id.String())
 		default:
 			return errtypes.InternalError(httpRes.Status)
 		}

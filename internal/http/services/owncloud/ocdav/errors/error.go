@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdav
+package errors
 
 import (
 	"encoding/xml"
@@ -59,20 +59,21 @@ var (
 	}
 )
 
-type exception struct {
-	code    code
-	message string
-	header  string
+// Exception represents a ocdav exception
+type Exception struct {
+	Code    code
+	Message string
+	Header  string
 }
 
 // Marshal just calls the xml marshaller for a given exception.
-func Marshal(e exception) ([]byte, error) {
-	xmlstring, err := xml.Marshal(&errorXML{
+func Marshal(code code, message string, header string) ([]byte, error) {
+	xmlstring, err := xml.Marshal(&ErrorXML{
 		Xmlnsd:    "DAV",
 		Xmlnss:    "http://sabredav.org/ns",
-		Exception: codesEnum[e.code],
-		Message:   e.message,
-		Header:    e.header,
+		Exception: codesEnum[code],
+		Message:   message,
+		Header:    header,
 	})
 	if err != nil {
 		return []byte(""), err
@@ -80,8 +81,9 @@ func Marshal(e exception) ([]byte, error) {
 	return []byte(xml.Header + string(xmlstring)), err
 }
 
+// ErrorXML holds the xml representation of an error
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
-type errorXML struct {
+type ErrorXML struct {
 	XMLName   xml.Name `xml:"d:error"`
 	Xmlnsd    string   `xml:"xmlns:d,attr"`
 	Xmlnss    string   `xml:"xmlns:s,attr"`
@@ -92,7 +94,11 @@ type errorXML struct {
 	Header string `xml:"s:header,omitempty"`
 }
 
-var errInvalidPropfind = errors.New("webdav: invalid propfind")
+// ErrorInvalidPropfind is an invalid propfind error
+var ErrorInvalidPropfind = errors.New("webdav: invalid propfind")
+
+// ErrInvalidProppatch is an invalid proppatch error
+var ErrInvalidProppatch = errors.New("webdav: invalid proppatch")
 
 // HandleErrorStatus checks the status code, logs a Debug or Error level message
 // and writes an appropriate http status

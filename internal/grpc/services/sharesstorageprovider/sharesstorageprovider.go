@@ -304,7 +304,8 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 // should be found.
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	spaceTypes := []string{}
+	spaceTypes := map[string]struct{}{}
+	var exists = struct{}{}
 	res := &provider.ListStorageSpacesResponse{
 		Status: status.NewOK(ctx),
 	}
@@ -316,14 +317,15 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			spaceType := f.GetSpaceType()
 			// do we need to fetch the shares?
-			if spaceType == "mountpoint" || spaceType == "grant" {
-				spaceTypes = append(spaceTypes, spaceType)
-				fetchShares = true
-			}
 			if spaceType == "+mountpoint" || spaceType == "+grant" {
 				appendTypes = append(appendTypes, strings.TrimPrefix(spaceType, "+"))
 				fetchShares = true
+				continue
 			}
+			if spaceType == "mountpoint" || spaceType == "grant" {
+				fetchShares = true
+			}
+			spaceTypes[spaceType] = exists
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 			spaceid, shareid, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
 			if err != nil {
@@ -341,11 +343,14 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	}
 
 	if len(spaceTypes) == 0 {
-		spaceTypes = []string{"virtual", "mountpoint"}
+		spaceTypes["virtual"] = exists
+		spaceTypes["mountpoint"] = exists
 		fetchShares = true
 	}
 
-	spaceTypes = append(spaceTypes, appendTypes...)
+	for _, s := range appendTypes {
+		spaceTypes[s] = exists
+	}
 
 	var receivedShares []*collaboration.ReceivedShare
 	if fetchShares {
@@ -360,8 +365,8 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		}
 		receivedShares = lsRes.Shares
 	}
-	for i := range spaceTypes {
-		switch spaceTypes[i] {
+	for k := range spaceTypes {
+		switch k {
 		case "virtual":
 			virtualRootID := &provider.ResourceId{
 				StorageId: utils.ShareStorageProviderID,

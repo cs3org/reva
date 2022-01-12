@@ -27,6 +27,9 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	rtrace "github.com/cs3org/reva/pkg/trace"
@@ -56,25 +59,31 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	dstPath = path.Join(ns, dstPath)
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", srcPath).Str("dst", dstPath).Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	srcSpace, status, err := s.lookUpStorageSpaceForPath(ctx, srcPath)
+	srcSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, srcPath)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", srcPath).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
-	dstSpace, status, err := s.lookUpStorageSpaceForPath(ctx, dstPath)
+	dstSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, dstPath)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", srcPath).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
 
@@ -83,7 +92,7 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 		dstSpace.Root = srcSpace.Root
 	}
 
-	s.handleMove(ctx, w, r, makeRelativeReference(srcSpace, srcPath, false), makeRelativeReference(dstSpace, dstPath, false), sublog)
+	s.handleMove(ctx, w, r, spacelookup.MakeRelativeReference(srcSpace, srcPath, false), spacelookup.MakeRelativeReference(dstSpace, dstPath, false), sublog)
 }
 
 func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
@@ -97,8 +106,15 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 	}
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", srcSpaceID).Str("path", r.URL.Path).Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	// retrieve a specific storage space
-	srcRef, status, err := s.lookUpStorageSpaceReference(ctx, srcSpaceID, r.URL.Path, true)
+	srcRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, srcSpaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -106,14 +122,14 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 	}
 
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
 
 	dstSpaceID, dstRelPath := router.ShiftPath(dst)
 
 	// retrieve a specific storage space
-	dstRef, status, err := s.lookUpStorageSpaceReference(ctx, dstSpaceID, dstRelPath, true)
+	dstRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, dstSpaceID, dstRelPath, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -121,7 +137,7 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 	}
 
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
 
@@ -129,7 +145,7 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 }
 
 func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, log zerolog.Logger) {
-	overwrite := r.Header.Get(HeaderOverwrite)
+	overwrite := r.Header.Get(net.HeaderOverwrite)
 	log.Debug().Str("overwrite", overwrite).Msg("move")
 
 	overwrite = strings.ToUpper(overwrite)
@@ -161,13 +177,10 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
-			b, err := Marshal(exception{
-				code:    SabredavNotFound,
-				message: m,
-			})
-			HandleWebdavError(&log, w, b, err)
+			b, err := errors.Marshal(errors.SabredavNotFound, m, "")
+			errors.HandleWebdavError(&log, w, b, err)
 		}
-		HandleErrorStatus(&log, w, srcStatRes.Status)
+		errors.HandleErrorStatus(&log, w, srcStatRes.Status)
 		return
 	}
 
@@ -180,7 +193,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&log, w, srcStatRes.Status)
+		errors.HandleErrorStatus(&log, w, srcStatRes.Status)
 		return
 	}
 
@@ -204,7 +217,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		}
 
 		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-			HandleErrorStatus(&log, w, delRes.Status)
+			errors.HandleErrorStatus(&log, w, delRes.Status)
 			return
 		}
 	} else {
@@ -225,7 +238,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 				log.Debug().Interface("parent", dst).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
 			} else {
-				HandleErrorStatus(&log, w, intStatRes.Status)
+				errors.HandleErrorStatus(&log, w, intStatRes.Status)
 			}
 			return
 		}
@@ -244,13 +257,10 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		if mRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 			w.WriteHeader(http.StatusForbidden)
 			m := fmt.Sprintf("Permission denied to move %v", src.Path)
-			b, err := Marshal(exception{
-				code:    SabredavPermissionDenied,
-				message: m,
-			})
-			HandleWebdavError(&log, w, b, err)
+			b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+			errors.HandleWebdavError(&log, w, b, err)
 		}
-		HandleErrorStatus(&log, w, mRes.Status)
+		errors.HandleErrorStatus(&log, w, mRes.Status)
 		return
 	}
 
@@ -262,14 +272,14 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	}
 
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&log, w, dstStatRes.Status)
+		errors.HandleErrorStatus(&log, w, dstStatRes.Status)
 		return
 	}
 
 	info := dstStatRes.Info
-	w.Header().Set(HeaderContentType, info.MimeType)
-	w.Header().Set(HeaderETag, info.Etag)
-	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
-	w.Header().Set(HeaderOCETag, info.Etag)
+	w.Header().Set(net.HeaderContentType, info.MimeType)
+	w.Header().Set(net.HeaderETag, info.Etag)
+	w.Header().Set(net.HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
+	w.Header().Set(net.HeaderOCETag, info.Etag)
 	w.WriteHeader(successCode)
 }

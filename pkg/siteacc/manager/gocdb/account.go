@@ -21,7 +21,6 @@ package gocdb
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 
@@ -65,8 +64,6 @@ func writeAccount(account *data.Account, operation string, address string, apiKe
 	if err != nil {
 		return errors.Wrap(err, "unable to marshal the user data")
 	}
-
-	fmt.Println(string(jsonData))
 
 	req, err := http.NewRequest(http.MethodPost, endpointURL.String(), bytes.NewReader(jsonData))
 	if err != nil {

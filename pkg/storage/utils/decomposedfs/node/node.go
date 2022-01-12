@@ -833,15 +833,15 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 	// 1. we can start iterating over the acls / grants on the node or
 	// 2. we can iterate over the number of groups
 	// The current implementation tries to be defensive for cases where users have hundreds or thousands of groups, so we iterate over the existing acls.
-	userace := xattrs.GrantPrefix + xattrs.UserAcePrefix + u.Id.OpaqueId
+	userace := xattrs.GrantUserAcePrefix + u.Id.OpaqueId
 	userFound := false
 	for i := range grantees {
 		switch {
 		// we only need to find the user once
 		case !userFound && grantees[i] == userace:
 			g, err = n.ReadGrant(ctx, grantees[i])
-		case strings.HasPrefix(grantees[i], xattrs.GrantPrefix+xattrs.GroupAcePrefix): // only check group grantees
-			gr := strings.TrimPrefix(grantees[i], xattrs.GrantPrefix+xattrs.GroupAcePrefix)
+		case strings.HasPrefix(grantees[i], xattrs.GrantGroupAcePrefix): // only check group grantees
+			gr := strings.TrimPrefix(grantees[i], xattrs.GrantGroupAcePrefix)
 			if groupsMap[gr] {
 				g, err = n.ReadGrant(ctx, grantees[i])
 			} else {
@@ -921,7 +921,7 @@ func (n *Node) hasUserShares(ctx context.Context) bool {
 	}
 
 	for i := range g {
-		if strings.Contains(g[i], xattrs.GrantPrefix+xattrs.UserAcePrefix) {
+		if strings.HasPrefix(g[i], xattrs.GrantUserAcePrefix) {
 			return true
 		}
 	}

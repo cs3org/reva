@@ -19,19 +19,12 @@
 package ocdav
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"path"
-	"strconv"
-	"strings"
 
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/utils"
 )
 
 // SpacesHandler handles trashbin requests
@@ -50,6 +43,7 @@ func (h *SpacesHandler) init(c *Config) error {
 
 // Handler handles requests
 func (h *SpacesHandler) Handler(s *svc) http.Handler {
+	config := s.Config()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ctx := r.Context()
 		// log := appctx.GetLogger(ctx)
@@ -70,7 +64,10 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 
 		switch r.Method {
 		case MethodPropfind:
-			s.handleSpacesPropfind(w, r, spaceID)
+			p := propfind.NewHandler(config.PublicURL, func() (propfind.GatewayClient, error) {
+				return pool.GetGatewayServiceClient(config.GatewaySvc)
+			})
+			p.HandleSpacesPropfind(w, r, spaceID)
 		case MethodProppatch:
 			s.handleSpacesProppatch(w, r, spaceID)
 		case MethodLock:
@@ -101,134 +98,4 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		}
 	})
-}
-
-// lookUpStorageSpacesForPath returns:
-// th storage spaces responsible for a path
-// the status and error for the lookup
-func (s *svc) lookUpStorageSpaceForPath(ctx context.Context, path string) (*storageProvider.StorageSpace, *rpc.Status, error) {
-	// Get the getway client
-	gatewayClient, err := s.getClient()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// TODO add filter to only fetch spaces changed in the last 30 sec?
-	// TODO cache space information, invalidate after ... 5min? so we do not need to fetch all spaces?
-	// TODO use ListContainerStream to listen for changes
-	// retrieve a specific storage space
-	lSSReq := &storageProvider.ListStorageSpacesRequest{
-		Opaque: &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"path": {
-					Decoder: "plain",
-					Value:   []byte(path),
-				},
-				"unique": {
-					Decoder: "plain",
-					Value:   []byte(strconv.FormatBool(true)),
-				},
-			},
-		},
-	}
-
-	lSSRes, err := gatewayClient.ListStorageSpaces(ctx, lSSReq)
-	if err != nil || lSSRes.Status.Code != rpc.Code_CODE_OK {
-		return nil, lSSRes.Status, err
-	}
-	switch len(lSSRes.StorageSpaces) {
-	case 0:
-		return nil, status.NewNotFound(ctx, "no space found"), nil
-	case 1:
-		return lSSRes.StorageSpaces[0], lSSRes.Status, nil
-	}
-
-	return nil, status.NewInternal(ctx, "too many spaces returned"), nil
-}
-
-// lookUpStorageSpacesForPathWithChildren returns:
-// the list of storage spaces responsible for a path
-// the status and error for the lookup
-func (s *svc) lookUpStorageSpacesForPathWithChildren(ctx context.Context, path string) ([]*storageProvider.StorageSpace, *rpc.Status, error) {
-	// Get the getway client
-	gatewayClient, err := s.getClient()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// TODO add filter to only fetch spaces changed in the last 30 sec?
-	// TODO cache space information, invalidate after ... 5min? so we do not need to fetch all spaces?
-	// TODO use ListContainerStream to listen for changes
-	// retrieve a specific storage space
-	lSSReq := &storageProvider.ListStorageSpacesRequest{
-		Opaque: &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"path":            {Decoder: "plain", Value: []byte(path)},
-				"withChildMounts": {Decoder: "plain", Value: []byte("true")},
-			}},
-	}
-
-	lSSRes, err := gatewayClient.ListStorageSpaces(ctx, lSSReq)
-	if err != nil || lSSRes.Status.Code != rpc.Code_CODE_OK {
-		return nil, lSSRes.Status, err
-	}
-
-	return lSSRes.StorageSpaces, lSSRes.Status, nil
-}
-func (s *svc) lookUpStorageSpaceByID(ctx context.Context, spaceID string) (*storageProvider.StorageSpace, *rpc.Status, error) {
-	// Get the getway client
-	gatewayClient, err := s.getClient()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// retrieve a specific storage space
-	lSSReq := &storageProvider.ListStorageSpacesRequest{
-		Opaque: &typesv1beta1.Opaque{},
-		Filters: []*storageProvider.ListStorageSpacesRequest_Filter{
-			{
-				Type: storageProvider.ListStorageSpacesRequest_Filter_TYPE_ID,
-				Term: &storageProvider.ListStorageSpacesRequest_Filter_Id{
-					Id: &storageProvider.StorageSpaceId{
-						OpaqueId: spaceID,
-					},
-				},
-			},
-		},
-	}
-
-	lSSRes, err := gatewayClient.ListStorageSpaces(ctx, lSSReq)
-	if err != nil || lSSRes.Status.Code != rpc.Code_CODE_OK {
-		return nil, lSSRes.Status, err
-	}
-
-	if len(lSSRes.StorageSpaces) != 1 {
-		return nil, nil, fmt.Errorf("unexpected number of spaces %d", len(lSSRes.StorageSpaces))
-	}
-	return lSSRes.StorageSpaces[0], lSSRes.Status, nil
-
-}
-func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string, spacesDavRequest bool) (*storageProvider.Reference, *rpc.Status, error) {
-	space, status, err := s.lookUpStorageSpaceByID(ctx, spaceID)
-	if err != nil {
-		return nil, status, err
-	}
-	return makeRelativeReference(space, relativePath, spacesDavRequest), status, err
-}
-
-func makeRelativeReference(space *storageProvider.StorageSpace, relativePath string, spacesDavRequest bool) *storageProvider.Reference {
-	if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
-		return nil // not mounted
-	}
-	spacePath := string(space.Opaque.Map["path"].Value)
-	relativeSpacePath := "."
-	if strings.HasPrefix(relativePath, spacePath) {
-		relativeSpacePath = utils.MakeRelativePath(strings.TrimPrefix(relativePath, spacePath))
-	} else if spacesDavRequest {
-		relativeSpacePath = utils.MakeRelativePath(relativePath)
-	}
-	return &storageProvider.Reference{
-		ResourceId: space.Root,
-		Path:       relativeSpacePath,
-	}
 }
