@@ -43,9 +43,8 @@ func init() {
 }
 
 type manager struct {
-	c           *config
-	userfilter  *template.Template
-	groupfilter *template.Template
+	c          *config
+	userfilter *template.Template
 }
 
 type config struct {
@@ -124,7 +123,6 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	if c.FindFilter == "" {
 		c.FindFilter = c.UserFilter
 	}
-	c.GroupFilter = strings.ReplaceAll(c.GroupFilter, "%s", "{{.OpaqueId}}")
 
 	if c.Nobody == 0 {
 		c.Nobody = 99
@@ -134,11 +132,6 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	m.userfilter, err = template.New("uf").Funcs(sprig.TxtFuncMap()).Parse(c.UserFilter)
 	if err != nil {
 		err := errors.Wrap(err, fmt.Sprintf("error parsing userfilter tpl:%s", c.UserFilter))
-		panic(err)
-	}
-	m.groupfilter, err = template.New("gf").Funcs(sprig.TxtFuncMap()).Parse(c.GroupFilter)
-	if err != nil {
-		err := errors.Wrap(err, fmt.Sprintf("error parsing groupfilter tpl:%s", c.GroupFilter))
 		panic(err)
 	}
 	return nil
@@ -433,11 +426,6 @@ func (m *manager) getFindFilter(query string) string {
 	return strings.ReplaceAll(m.c.FindFilter, "{{query}}", ldap.EscapeFilter(query))
 }
 
-func (m *manager) getGroupFilter(uid interface{}) string {
-	b := bytes.Buffer{}
-	if err := m.groupfilter.Execute(&b, uid); err != nil {
-		err := errors.Wrap(err, fmt.Sprintf("error executing group template: userid:%+v", uid))
-		panic(err)
-	}
-	return b.String()
+func (m *manager) getGroupFilter(memberName string) string {
+	return strings.ReplaceAll(m.c.GroupFilter, "{{query}}", ldap.EscapeFilter(memberName))
 }
