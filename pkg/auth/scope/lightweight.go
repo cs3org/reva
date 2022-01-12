@@ -20,6 +20,7 @@ package scope
 
 import (
 	"context"
+	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -34,10 +35,39 @@ func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource in
 	// These cannot be resolved from here, but need to be added to the scope from
 	// where the call to mint tokens is made.
 	// From here, we only allow ListReceivedShares calls
-	if _, ok := resource.(*collaboration.ListReceivedSharesRequest); ok {
+	switch v := resource.(type) {
+	case *collaboration.ListReceivedSharesRequest:
 		return true, nil
+	case string:
+		return checkLightweightPath(v), nil
 	}
 	return false, nil
+}
+
+func checkLightweightPath(path string) bool {
+	paths := []string{
+		"/ocs/v2.php/apps/files_sharing/api/v1/shares",
+		"/ocs/v1.php/apps/files_sharing/api/v1/shares",
+		"/ocs/v2.php/apps/files_sharing//api/v1/shares",
+		"/ocs/v1.php/apps/files_sharing//api/v1/shares",
+		"/ocs/v2.php/cloud/capabilities",
+		"/ocs/v1.php/cloud/capabilities",
+		"/ocs/v2.php/cloud/user",
+		"/ocs/v1.php/cloud/user",
+		"/remote.php/webdav",
+		"/remote.php/dav/files",
+		"/app/open",
+		"/app/new",
+		"/archiver",
+		"/dataprovider",
+		"/data",
+	}
+	for _, p := range paths {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // AddLightweightAccountScope adds the scope to allow access to lightweight user.

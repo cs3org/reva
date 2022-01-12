@@ -23,11 +23,13 @@ import (
 	"fmt"
 	"path"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -321,7 +323,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 	}
 
 	// if we don't need to create/delete references then we return early.
-	if !s.c.CommitShareToStorageRef {
+	if !s.c.CommitShareToStorageRef || ctxpkg.ContextMustGetUser(ctx).Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
 		return res, nil
 	}
 

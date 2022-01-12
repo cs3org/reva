@@ -54,7 +54,10 @@ func receivedShareScope(_ context.Context, scope *authpb.Scope, resource interfa
 // AddReceivedShareScope adds the scope to allow access to a received user/group share and
 // the shared resource.
 func AddReceivedShareScope(share *collaboration.ReceivedShare, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-	val, err := utils.MarshalProtoV1ToJSON(share)
+	// Create a new "scope share" to only expose the required fields to the scope.
+	scopeShare := &collaboration.Share{Id: share.Share.Id, Owner: share.Share.Owner, Creator: share.Share.Creator, ResourceId: share.Share.ResourceId}
+
+	val, err := utils.MarshalProtoV1ToJSON(&collaboration.ReceivedShare{Share: scopeShare})
 	if err != nil {
 		return nil, err
 	}
