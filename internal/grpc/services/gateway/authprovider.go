@@ -118,6 +118,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	ctx = ctxpkg.ContextSetToken(ctx, token)
 	ctx = ctxpkg.ContextSetUser(ctx, res.User)
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token)
+
+	// TODO(ishank011): Add a cache for these
 	scope, err := s.expandScopes(ctx, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error expanding token scope")

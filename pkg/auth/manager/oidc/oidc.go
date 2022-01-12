@@ -23,6 +23,7 @@ package oidc
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	oidc "github.com/coreos/go-oidc"
@@ -130,6 +131,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	if claims["email_verified"] == nil { // This is not set in simplesamlphp
 		claims["email_verified"] = false
 	}
+	if claims["preferred_username"] == nil {
+		claims["preferred_username"] = claims[am.c.IDClaim]
+	}
+	if claims["name"] == nil {
+		claims["name"] = claims[am.c.IDClaim]
+	}
 
 	if claims["email"] == nil {
 		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
@@ -158,7 +165,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	userID := &user.UserId{
 		OpaqueId: claims[am.c.IDClaim].(string), // a stable non reassignable id
 		Idp:      claims["issuer"].(string),     // in the scope of this issuer
-		Type:     user.UserType_USER_TYPE_PRIMARY,
+		Type:     getUserType(claims[am.c.IDClaim].(string)),
 	}
 	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
 	if err != nil {
@@ -235,4 +242,18 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 
 	am.provider = provider
 	return am.provider, nil
+}
+
+func getUserType(upn string) user.UserType {
+	var t user.UserType
+	switch {
+	case strings.HasPrefix(upn, "guest"):
+		t = user.UserType_USER_TYPE_LIGHTWEIGHT
+	case strings.Contains(upn, "@"):
+		t = user.UserType_USER_TYPE_FEDERATED
+	default:
+		t = user.UserType_USER_TYPE_PRIMARY
+	}
+	return t
+
 }
