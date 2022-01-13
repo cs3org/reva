@@ -781,7 +781,16 @@ func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provide
 // - The size is summed up for all providers
 // TODO cache info
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	c, _, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.StatResponse{
+			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
+		}, nil
+	}
 
+	return c.Stat(ctx, &provider.StatRequest{Opaque: req.Opaque, Ref: req.Ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
+
+	/* TODO: Delete Me!
 	requestPath := req.Ref.Path
 	// find the providers
 	providerInfos, err := s.findSpaces(ctx, req.Ref)
@@ -899,6 +908,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		return &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
 	}
 	return &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: info}, nil
+	*/
 }
 
 func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gateway.GatewayAPI_ListContainerStreamServer) error {
