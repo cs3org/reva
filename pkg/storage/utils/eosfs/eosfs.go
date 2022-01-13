@@ -69,7 +69,7 @@ const (
 )
 
 // LockKeyAttr is the key in the xattr for sp
-const LockKeyAttr = "user.iop.lock"
+const LockKeyAttr = "iop.lock"
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
@@ -691,13 +691,115 @@ func decodeLock(raw string) (*provider.Lock, error) {
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock) error {
+	// TODO (gdelmont): check if the new lock is already expired?
+
+	oldLock, err := fs.GetLock(ctx, ref)
+	if err != nil {
+		switch err.(type) {
+		case errtypes.NotFound:
+			// the lock does not exist
+			return errtypes.BadRequest("file was not locked")
+		default:
+			return err
+		}
+	}
+
+	user, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error getting user")
+	}
+
+	// check if the user hold the old lock
+	if oldLock.User != nil && !utils.UserEqual(oldLock.User, user.Id) {
+		return errtypes.BadRequest("caller does not hold the lock")
+	}
+
+	// check if the holder is the same of the new lock
+	if !sameHolder(oldLock, newLock) {
+		return errtypes.BadRequest("caller does not hold the lock")
+	}
+
+	// the cs3apis require to have the write permission on the resource
+	// to set a lock
+	has, err := fs.hasWriteAccess(ctx, user, ref)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
+	}
+	if !has {
+		return errtypes.BadRequest("user has not write access on resource")
+	}
+
+	// set the xattr with the new value
+	path, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error resolving reference")
+	}
+	path = fs.wrap(ctx, path)
+
+	auth, err := fs.getUserAuth(ctx, user, path)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
+	}
+
+	encodedLock, err := encodeLock(newLock)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error encoding lock")
+	}
+
+	attr := &eosclient.Attribute{
+		Type: UserAttr,
+		Key:  LockKeyAttr,
+		Val:  encodedLock,
+	}
+
+	return fs.c.SetAttr(ctx, auth, attr, false, false, path)
+}
+
+func sameHolder(l1, l2 *provider.Lock) bool {
+	same := true
+	if l1.User != nil || l2.User != nil {
+		same = utils.UserEqual(l1.User, l2.User)
+	}
+	if l1.AppName != "" || l2.AppName != "" {
+		same = l1.AppName == l2.AppName
+	}
+	return same
 }
 
 // Unlock removes an existing lock from the given reference
 func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference) error {
-	return errtypes.NotSupported("unimplemented")
+	lock, err := fs.GetLock(ctx, ref)
+	if err != nil {
+		switch err.(type) {
+		case errtypes.NotFound:
+			// the lock does not exist
+			return errtypes.BadRequest("file was not locked")
+		default:
+			return err
+		}
+	}
+
+	user, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+
+	if lock.User != nil && !utils.UserEqual(lock.User, user.Id) {
+		return errtypes.BadRequest("caller does not hold the lock")
+	}
+
+	path, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error resolving reference")
+	}
+	path = fs.wrap(ctx, path)
+
+	auth, err := fs.getUserAuth(ctx, user, path)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
+	}
+	return fs.c.UnsetAttr(ctx, auth, &eosclient.Attribute{Type: UserAttr, Key: LockKeyAttr}, false, path)
 }
 
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
