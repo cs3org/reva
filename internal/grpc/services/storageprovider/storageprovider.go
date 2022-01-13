@@ -507,13 +507,13 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 			st = status.NewAlreadyExists(ctx, err, "already exists")
 		default:
 			st = status.NewInternal(ctx, "error listing spaces")
+			appctx.GetLogger(ctx).
+				Error().
+				Err(err).
+				Interface("status", st).
+				Interface("request", req).
+				Msg("failed to create storage space")
 		}
-		appctx.GetLogger(ctx).
-			Error().
-			Err(err).
-			Interface("status", st).
-			Interface("request", req).
-			Msg("failed to create storage space")
 		return &provider.CreateStorageSpaceResponse{
 			Status: st,
 		}, nil
