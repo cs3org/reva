@@ -781,14 +781,14 @@ func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provide
 // - The size is summed up for all providers
 // TODO cache info
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	c, _, err := s.find(ctx, req.Ref)
+	c, _, ref, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
 		}, nil
 	}
 
-	return c.Stat(ctx, &provider.StatRequest{Opaque: req.Opaque, Ref: req.Ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
+	return c.Stat(ctx, &provider.StatRequest{Opaque: req.Opaque, Ref: ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
 
 	/* TODO: Delete Me!
 	requestPath := req.Ref.Path
