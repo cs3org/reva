@@ -504,7 +504,14 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 				st = status.NewUnimplemented(ctx, err, "not implemented")
 			}
 		case errtypes.AlreadyExists:
+			// usually an already existing space is no issue that we want to consider as error
 			st = status.NewAlreadyExists(ctx, err, "already exists")
+			appctx.GetLogger(ctx).
+				Debug().
+				Err(err).
+				Interface("status", st).
+				Interface("request", req).
+				Msg("Unexpected already exists status")
 		default:
 			st = status.NewInternal(ctx, "error listing spaces")
 		}

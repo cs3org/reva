@@ -73,53 +73,71 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	}
 
-	if n.Exists {
-		return nil, errtypes.AlreadyExists("decomposedfs: spaces: space already exists")
-	}
-
-	// spaceid and nodeid must be the same
-	// TODO enforce a uuid?
-	n.ID = spaceID
-
-	if err := fs.tp.CreateDir(ctx, n); err != nil {
-		return nil, err
-	}
-
-	// always enable propagation on the storage space root
-	nodePath := n.InternalPath()
-	// mark the space root node as the end of propagation
-	if err = xattr.Set(nodePath, xattrs.PropagationAttr, []byte("1")); err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
-		return nil, err
-	}
-
-	if err := fs.createHiddenSpaceFolder(ctx, n); err != nil {
-		return nil, err
-	}
-
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
 	}
 
-	if err := n.ChangeOwner(u.Id); err != nil {
-		return nil, err
-	}
+	if !n.Exists {
 
-	err = fs.createStorageSpace(ctx, req.Type, n.ID)
-	if err != nil {
-		return nil, err
-	}
+		// spaceid and nodeid must be the same
+		// TODO enforce a uuid?
+		n.ID = spaceID
 
-	if q := req.GetQuota(); q != nil {
-		// set default space quota
-		if err := n.SetMetadata(xattrs.QuotaAttr, strconv.FormatUint(q.QuotaMaxBytes, 10)); err != nil {
+		if err := fs.tp.CreateDir(ctx, n); err != nil {
 			return nil, err
 		}
-	}
 
-	if err := n.SetMetadata(xattrs.SpaceNameAttr, req.Name); err != nil {
-		return nil, err
+		// always enable propagation on the storage space root
+		nodePath := n.InternalPath()
+		// mark the space root node as the end of propagation
+		if err = xattr.Set(nodePath, xattrs.PropagationAttr, []byte("1")); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
+			return nil, err
+		}
+
+		if err := fs.createHiddenSpaceFolder(ctx, n); err != nil {
+			return nil, err
+		}
+
+		if err := n.ChangeOwner(u.Id); err != nil {
+			return nil, err
+		}
+
+		err = fs.createStorageSpace(ctx, req.Type, n.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if q := req.GetQuota(); q != nil {
+			// set default space quota
+			if err := n.SetMetadata(xattrs.QuotaAttr, strconv.FormatUint(q.QuotaMaxBytes, 10)); err != nil {
+				return nil, err
+			}
+		}
+
+		if err := n.SetMetadata(xattrs.SpaceNameAttr, req.Name); err != nil {
+			return nil, err
+		}
+
+		ctx = context.WithValue(ctx, SpaceGrant, struct{}{})
+
+		if err := fs.AddGrant(ctx, &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: spaceID,
+				OpaqueId:  spaceID,
+			},
+		}, &provider.Grant{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
+				Id: &provider.Grantee_UserId{
+					UserId: u.Id,
+				},
+			},
+			Permissions: ocsconv.NewManagerRole().CS3ResourcePermissions(),
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	resp := &provider.CreateStorageSpaceResponse{
@@ -139,22 +157,6 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 			Quota:     req.GetQuota(),
 			SpaceType: req.GetType(),
 		},
-	}
-
-	ctx = context.WithValue(ctx, SpaceGrant, struct{}{})
-
-	if err := fs.AddGrant(ctx, &provider.Reference{
-		ResourceId: resp.StorageSpace.Root,
-	}, &provider.Grant{
-		Grantee: &provider.Grantee{
-			Type: provider.GranteeType_GRANTEE_TYPE_USER,
-			Id: &provider.Grantee_UserId{
-				UserId: u.Id,
-			},
-		},
-		Permissions: ocsconv.NewManagerRole().CS3ResourcePermissions(),
-	}); err != nil {
-		return nil, err
 	}
 
 	return resp, nil
