@@ -106,11 +106,11 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 	am.oidcUsersMapping = map[string]*oidcUserMapping{}
 	f, err := ioutil.ReadFile(c.UsersMapping)
 	if err != nil {
-		return fmt.Errorf("oidcmapping: error reading oidc users mapping file: +%v", err)
+		// failed to read the users mapping file or no mapping defined, move on (TODO would be nice to log something)
+		return nil
 	}
 
 	oidcUsers := []*oidcUserMapping{}
-
 	err = json.Unmarshal(f, &oidcUsers)
 	if err != nil {
 		return fmt.Errorf("oidcmapping: error unmarshalling oidc users mapping file: +%v", err)
@@ -148,7 +148,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, fmt.Errorf("oidcmapping: error getting userinfo: +%v", err)
 	}
 
-	// claims contains the standard OIDC claims like issuer, iat, aud, ... and any other non-standard one.
+	// claims contains the standard OIDC claims like iss, iat, aud, ... and any other non-standard one.
 	// TODO(labkode): make claims configuration dynamic from the config file so we can add arbitrary mappings from claims to user struct.
 	// For now, only the group claim is dynamic.
 	var claims map[string]interface{}
@@ -158,8 +158,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
 
-	if claims["issuer"] == nil { // This is not set in simplesamlphp
-		claims["issuer"] = am.c.Issuer
+	if claims["iss"] == nil { // This is not set in simplesamlphp
+		claims["iss"] = am.c.Issuer
 	}
 	if claims["email_verified"] == nil { // This is not set in simplesamlphp
 		claims["email_verified"] = false
@@ -173,24 +173,28 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	if am.c.GroupClaimLabel == "" {
 		am.c.GroupClaimLabel = "groups"
 	}
-	if claims[am.c.GroupClaimLabel] == nil {
-		return nil, nil, fmt.Errorf("oidcmapping: no \"%s\" attribute found in userinfo", am.c.GroupClaimLabel)
+	if claims[am.c.GroupClaimLabel] == nil && len(am.oidcUsersMapping) > 0 {
+		// we are required to perform a user mapping but the group claim is not available
+		return nil, nil, fmt.Errorf("oidcmapping: no \"%s\" claim found in userinfo", am.c.GroupClaimLabel)
 	}
 
-	// discover the user username
+	// map and discover the user's username if a mapping is defined
 	var username string
-	mappings := make([]string, 0, len(am.oidcUsersMapping))
-	for _, m := range am.oidcUsersMapping {
-		if m.OIDCIssuer == claims["issuer"] {
-			mappings = append(mappings, m.OIDCGroup)
+	if len(am.oidcUsersMapping) > 0 {
+		mappings := make([]string, 0, len(am.oidcUsersMapping))
+		for _, m := range am.oidcUsersMapping {
+			if m.OIDCIssuer == claims["iss"] {
+				mappings = append(mappings, m.OIDCGroup)
+			}
 		}
-	}
-	intersection := intersect.Simple(claims[am.c.GroupClaimLabel], mappings)
-	if len(intersection) > 1 {
-		// multiple mappings is not implemented, we don't know which one to choose
-		return nil, nil, errtypes.PermissionDenied("oidcmapping: mapping failed, more than one mapping found")
-	}
-	if len(intersection) == 1 {
+		intersection := intersect.Simple(claims[am.c.GroupClaimLabel], mappings)
+		if len(intersection) > 1 {
+			// multiple mappings are not implemented as we cannot decide which one to choose
+			return nil, nil, errtypes.PermissionDenied("oidcmapping: mapping failed, more than one mapping found")
+		}
+		if len(intersection) == 0 {
+			return nil, nil, errtypes.PermissionDenied("oidcmapping: no mapping found for the given group claim")
+		}
 		for _, m := range intersection {
 			username = am.oidcUsersMapping[m.(string)].Username
 		}
@@ -231,9 +235,10 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		userID.Type = getUserByClaimResp.GetUser().GetId().Type
 		userID.OpaqueId = getUserByClaimResp.GetUser().GetId().OpaqueId
 	} else {
+		// TODO(lopresti) this is the standard non-mapping case, should merge here the oidc.go code
 		username = claims["preferred_username"].(string)
 		userID.OpaqueId = claims[am.c.IDClaim].(string)
-		userID.Idp = claims["issuer"].(string)
+		userID.Idp = claims["iss"].(string)
 	}
 
 	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
