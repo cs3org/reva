@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -195,6 +196,9 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 			spaceID, nodeID, _ = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
+			if strings.Contains(nodeID, "/") {
+				return []*provider.StorageSpace{}, nil
+			}
 		}
 	}
 	if len(spaceTypes) == 0 {
