@@ -37,12 +37,10 @@ import (
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"google.golang.org/grpc/codes"
 
-	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	sdk "github.com/cs3org/reva/pkg/sdk/common"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
@@ -770,15 +768,7 @@ func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provide
 	return res, nil
 }
 
-// Stat returns the Resoure info for a given resource by forwarding the request to all responsible providers.
-// In the simplest case there is only one provider, eg. when statting a relative or id based reference
-// However the registry can return multiple providers for a reference and Stat needs to take them all into account:
-// The registry returns multiple providers when
-// 1. embedded providers need to be taken into account, eg: there aro two providers /foo and /bar and / is being statted
-// 2. multiple providers form a virtual view, eg: there are twe providers /users/[a-k] and /users/[l-z] and /users is being statted
-// In contrast to ListContainer Stat can treat these cases equally by forwarding the request to all providers and aggregating the metadata:
-// - The most recent mtime determines the etag
-// - The size is summed up for all providers
+// Stat returns the Resoure info for a given resource by forwarding the request to the responsible provider.
 // TODO cache info
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	c, _, ref, err := s.findAndUnwrap(ctx, req.Ref)
@@ -807,7 +797,21 @@ func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gate
 // - The size of the root ... is summed up for all providers
 // TODO cache info
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	c, _, ref, err := s.findAndUnwrap(ctx, req.Ref)
+	if err != nil {
+		// we have no provider -> not found
+		return &provider.ListContainerResponse{
+			Status: status.NewNotFound(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref)),
+		}, nil
+	}
 
+	return c.ListContainer(ctx, &provider.ListContainerRequest{
+		Opaque:                req.Opaque,
+		Ref:                   ref,
+		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+	})
+
+	/* TODO: Delete me!
 	requestPath := req.Ref.Path
 	// find the providers
 	providerInfos, err := s.findSpaces(ctx, req.Ref)
@@ -976,6 +980,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 		Infos:  returnInfos,
 	}, nil
+	*/
 }
 
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
