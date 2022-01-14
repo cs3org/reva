@@ -24,7 +24,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/url"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -785,17 +784,7 @@ func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gate
 	return errtypes.NotSupported("Unimplemented")
 }
 
-// ListContainer lists the Resoure infos for a given resource by forwarding the request to all responsible providers.
-// In the simplest case there is only one provider, eg. when listing a relative or id based reference
-// However the registry can return multiple providers for a reference and ListContainer needs to take them all into account:
-// The registry returns multiple providers when
-// 1. embedded providers need to be taken into account, eg: there aro two providers /foo and /bar and / is being listed
-//    /foo and /bar need to be added to the listing of /
-// 2. multiple providers form a virtual view, eg: there are twe providers /users/[a-k] and /users/[l-z] and /users is being listed
-// In contrast to Stat ListContainer has to forward the request to all providers, collect the results and aggregate the metadata:
-// - The most recent mtime determines the etag of the listed collection
-// - The size of the root ... is summed up for all providers
-// TODO cache info
+// ListContainer lists the Resoure infos for a given resource by forwarding the request to the responsible provider.
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	c, _, ref, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
@@ -810,177 +799,6 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		Ref:                   ref,
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
-
-	/* TODO: Delete me!
-	requestPath := req.Ref.Path
-	// find the providers
-	providerInfos, err := s.findSpaces(ctx, req.Ref)
-	if err != nil {
-		// we have no provider -> not found
-		return &provider.ListContainerResponse{
-			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
-		}, nil
-	}
-	// list /foo, mount points at /foo/bar, /foo/bif, /foo/bar/bam
-	// 1. which provider needs to be listed
-	// 2. which providers need to be statted
-	// result:
-	// + /foo/bif -> stat  /foo/bif
-	// + /foo/bar -> stat  /foo/bar && /foo/bar/bif (and take the youngest metadata)
-
-	// list /foo, mount points at /foo, /foo/bif, /foo/bar/bam
-	// 1. which provider needs to be listed -> /foo listen
-	// 2. which providers need to be statted
-	// result:
-	// + /foo/fil.txt   -> list /foo
-	// + /foo/blarg.md  -> list /foo
-	// + /foo/bif       -> stat  /foo/bif
-	// + /foo/bar       -> stat  /foo/bar/bam (and construct metadata for /foo/bar)
-
-	infos := map[string]*provider.ResourceInfo{}
-	for i := range providerInfos {
-
-		// get client for storage provider
-		c, err := s.getStorageProviderClient(ctx, providerInfos[i])
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("service", "gateway").Msg("could not get storage provider client, skipping")
-			continue
-		}
-
-		for _, space := range decodeSpaces(providerInfos[i]) {
-			mountPath := decodePath(space)
-			root := space.Root
-			// build reference for the provider - copy to avoid side effects
-			r := &provider.Reference{
-				ResourceId: req.Ref.ResourceId,
-				Path:       req.Ref.Path,
-			}
-			// NOTE: There are problems in the following case:
-			// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
-			// Then it will request path "/projects/projectA" from the provider
-			// But it should only request "/" as the ResourceId already points to the correct resource
-			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
-				r.Path = "/"
-			}
-			providerRef := unwrap(r, mountPath, root)
-
-			// ref Path: ., Id: a-b-c-d, provider path: /personal/a-b-c-d, provider id: a-b-c-d ->
-			// ref Path: ., Id: a-b-c-d, provider path: /home, provider id: a-b-c-d ->
-			// ref path: /foo/mop, provider path: /foo -> list(spaceid, ./mop)
-			// ref path: /foo, provider path: /foo
-			// if the requested path matches or is below a mount point we can list on that provider
-			//           requested path   provider path
-			// above   = /foo           <=> /foo/bar        -> stat(spaceid, .)    -> add metadata for /foo/bar
-			// above   = /foo           <=> /foo/bar/bif    -> stat(spaceid, .)    -> add metadata for /foo/bar
-			// matches = /foo/bar       <=> /foo/bar        -> list(spaceid, .)
-			// below   = /foo/bar/bif   <=> /foo/bar        -> list(spaceid, ./bif)
-			switch {
-			case requestPath == "": // id based request
-				fallthrough
-			case strings.HasPrefix(requestPath, "."): // space request
-				fallthrough
-			case strings.HasPrefix(requestPath, mountPath): //  requested path is below mount point
-				rsp, err := c.ListContainer(ctx, &provider.ListContainerRequest{
-					Opaque:                req.Opaque,
-					Ref:                   providerRef,
-					ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-				})
-				if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
-					appctx.GetLogger(ctx).Error().Err(err).Str("service", "gateway").Msg("could not list provider, skipping")
-					continue
-				}
-
-				if utils.IsAbsoluteReference(req.Ref) {
-					var prefix string
-					if utils.IsAbsolutePathReference(providerRef) {
-						prefix = mountPath
-					} else {
-						prefix = path.Join(mountPath, providerRef.Path)
-					}
-					for j := range rsp.Infos {
-
-						rsp.Infos[j].Path = path.Join(prefix, rsp.Infos[j].Path)
-					}
-				}
-				for i := range rsp.Infos {
-					if info, ok := infos[rsp.Infos[i].Path]; ok {
-						if info.Mtime != nil && rsp.Infos[i].Mtime != nil && utils.TSToUnixNano(rsp.Infos[i].Mtime) > utils.TSToUnixNano(info.Mtime) {
-							continue
-						}
-					}
-					// replace with younger info
-					infos[rsp.Infos[i].Path] = rsp.Infos[i]
-				}
-			case strings.HasPrefix(mountPath, requestPath): // requested path is above mount point
-				//  requested path     provider path
-				//  /foo           <=> /foo/bar          -> stat(spaceid, .)    -> add metadata for /foo/bar
-				//  /foo           <=> /foo/bar/bif      -> stat(spaceid, .)    -> add metadata for /foo/bar, overwrite type with dir
-				statResp, err := c.Stat(ctx, &provider.StatRequest{
-					Opaque:                req.Opaque,
-					Ref:                   providerRef,
-					ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-				})
-				if err != nil {
-					appctx.GetLogger(ctx).Error().Err(err).Str("service", "gateway").Msg("could not stat parent mount for list, skipping")
-					continue
-				}
-				if statResp.Status.Code != rpc.Code_CODE_OK {
-					appctx.GetLogger(ctx).Debug().Interface("status", statResp.Status).Str("service", "gateway").Msg("stating parent mount for list was not ok, skipping")
-					continue
-				}
-				if statResp.Info == nil {
-					appctx.GetLogger(ctx).Error().Err(err).Str("service", "gateway").Msg("stat response for list carried no info, skipping")
-					continue
-				}
-
-				// is the mount point a direct child of the requested resurce? only works for absolute paths ... hmmm
-				if filepath.Dir(mountPath) != requestPath {
-					// mountpoint is deeper than one level
-					// -> make child a folder
-					statResp.Info.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-					statResp.Info.MimeType = "httpd/unix-directory"
-					// -> unset checksums for a folder
-					statResp.Info.Checksum = nil
-					if statResp.Info.Opaque != nil {
-						delete(statResp.Info.Opaque.Map, "md5")
-						delete(statResp.Info.Opaque.Map, "adler32")
-					}
-				}
-
-				// -> update metadata for /foo/bar -> set path to './bar'?
-				statResp.Info.Path = strings.TrimPrefix(mountPath, requestPath)
-				statResp.Info.Path, _ = router.ShiftPath(statResp.Info.Path)
-				statResp.Info.Path = utils.MakeRelativePath(statResp.Info.Path)
-				// TODO invent resourceid? or unset resourceid? derive from path?
-
-				if utils.IsAbsoluteReference(req.Ref) {
-					statResp.Info.Path = path.Join(requestPath, statResp.Info.Path)
-				}
-
-				if info, ok := infos[statResp.Info.Path]; !ok {
-					// replace with younger info
-					infos[statResp.Info.Path] = statResp.Info
-				} else if info.Mtime == nil || (statResp.Info.Mtime != nil && utils.TSToUnixNano(statResp.Info.Mtime) > utils.TSToUnixNano(info.Mtime)) {
-					// replace with younger info
-					infos[statResp.Info.Path] = statResp.Info
-				}
-			default:
-				log := appctx.GetLogger(ctx)
-				log.Err(err).Str("service", "gateway").Msg("unhandled ListContainer case")
-			}
-		}
-	}
-
-	returnInfos := make([]*provider.ResourceInfo, 0, len(infos))
-	for path := range infos {
-		returnInfos = append(returnInfos, infos[path])
-	}
-	return &provider.ListContainerResponse{
-		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-		Infos:  returnInfos,
-	}, nil
-	*/
 }
 
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
@@ -999,14 +817,7 @@ func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersio
 		}, nil
 	}
 
-	res, err := c.ListFileVersions(ctx, req)
-	if err != nil {
-		return &provider.ListFileVersionsResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call ListFileVersions", err),
-		}, nil
-	}
-
-	return res, nil
+	return c.ListFileVersions(ctx, req)
 }
 
 func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
@@ -1036,12 +847,21 @@ func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.
 
 // TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
 func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	providerInfos, err := s.findSpaces(ctx, req.Ref)
+	c, _, ref, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListRecycleResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
 		}, nil
 	}
+	return c.ListRecycle(ctx, &provider.ListRecycleRequest{
+		Opaque: req.Opaque,
+		FromTs: req.FromTs,
+		ToTs:   req.ToTs,
+		Ref:    ref,
+		Key:    req.Key,
+	})
+
+	/* TODO: Delete me!
 	for i := range providerInfos {
 
 		// get client for storage provider
@@ -1106,6 +926,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 	return &provider.ListRecycleResponse{
 		Status: status.NewNotFound(ctx, "ListRecycle no matching provider found ref="+req.Ref.String()),
 	}, nil
+	*/
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
