@@ -74,7 +74,7 @@ require (
 	golang.org/x/sys v0.0.0-20211025201205-69cdffdb9359
 	golang.org/x/term v0.0.0-20210916214954-140adaaadfaf
 	google.golang.org/genproto v0.0.0-20211021150943-2b146023228c
-	google.golang.org/grpc v1.42.0
+	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gotest.tools v2.2.0+incompatible
@@ -85,5 +85,4 @@ go 1.16
 replace (
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
-	google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
 )
