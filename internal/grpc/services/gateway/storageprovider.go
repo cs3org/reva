@@ -24,7 +24,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -500,37 +499,48 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
-	ref := &provider.Reference{ResourceId: req.ResourceId}
-	c, p, err := s.find(ctx, ref)
+	c, _, ref, err := s.findAndUnwrap(ctx, &provider.Reference{ResourceId: req.ResourceId})
 	if err != nil {
 		return &provider.GetPathResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find reference %+v", ref), err),
 		}, nil
 	}
 
-	mountPath := ""
-	for _, space := range decodeSpaces(p) {
-		mountPath = decodePath(space)
-		break // TODO can there be more than one space for a path?
-	}
+	req.ResourceId = ref.ResourceId
+	return c.GetPath(ctx, req)
 
-	res, err := c.GetPath(ctx, req)
-	if err != nil {
-		return &provider.GetPathResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call GetPath", err),
-		}, nil
-	}
+	/*
+		c, p, err := s.find(ctx, ref)
+		if err != nil {
+			return &provider.GetPathResponse{
+				Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find reference %+v", ref), err),
+			}, nil
+		}
 
-	if res.Status.Code != rpc.Code_CODE_OK {
+		mountPath := ""
+		for _, space := range decodeSpaces(p) {
+			mountPath = decodePath(space)
+			break // TODO can there be more than one space for a path?
+		}
+
+		res, err := c.GetPath(ctx, req)
+		if err != nil {
+			return &provider.GetPathResponse{
+				Status: status.NewStatusFromErrType(ctx, "gateway could not call GetPath", err),
+			}, nil
+		}
+
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return &provider.GetPathResponse{
+				Status: res.Status,
+			}, nil
+		}
+
 		return &provider.GetPathResponse{
 			Status: res.Status,
+			Path:   filepath.Join(mountPath, res.GetPath()),
 		}, nil
-	}
-
-	return &provider.GetPathResponse{
-		Status: res.Status,
-		Path:   filepath.Join(mountPath, res.GetPath()),
-	}, nil
+	*/
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
@@ -621,33 +631,6 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
 	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
 	return c.Move(ctx, req)
-
-	/*
-		// do we try to rename the root of a mountpoint?
-		// TODO how do we determine if the destination resides on the same storage space?
-		if req.Source.Path == "." {
-			req.Destination.ResourceId = req.Source.ResourceId
-			req.Destination.Path = utils.MakeRelativePath(filepath.Base(req.Destination.Path))
-		} else {
-			_, destinationProviderInfo, req.Destination, err = s.findAndUnwrap(ctx, req.Destination)
-			if err != nil {
-				return &provider.MoveResponse{
-					Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Destination), err),
-				}, nil
-			}
-
-			// if the storage id is the same the storage provider decides if the move is allowedy or not
-			if sourceProviderInfo.Address != destinationProviderInfo.Address {
-				return &provider.MoveResponse{
-					Status: status.NewUnimplemented(ctx, nil, "gateway does not support cross storage move, use copy and delete"),
-				}, nil
-			}
-		}
-
-		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
-		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
-		return c.Move(ctx, req)
-	*/
 }
 
 func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
