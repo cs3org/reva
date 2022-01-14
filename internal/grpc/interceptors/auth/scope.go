@@ -164,6 +164,8 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 				}
 			}
 		}
+	} else if _, ok := listStorageSpaces(req); ok {
+		return nil
 	}
 
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
@@ -245,13 +247,13 @@ func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool)
 	case *provider.InitiateFileDownloadRequest:
 		return v.GetRef(), true
 	case *appprovider.OpenInAppRequest:
-		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id, Path: "."}, true
 	case *gateway.OpenInAppRequest:
 		return v.GetRef(), true
 
 		// App provider requests
 	case *appregistry.GetAppProvidersRequest:
-		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id, Path: "."}, true
 	}
 
 	if !hasEditorRole {
@@ -287,4 +289,17 @@ func extractShareRef(req interface{}) (*collaboration.ShareReference, bool) {
 		return &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: v.GetShare().GetShare().GetId()}}, true
 	}
 	return nil, false
+}
+
+func listStorageSpaces(req interface{}) (*provider.ListStorageSpacesRequest, bool) {
+	switch req.(type) {
+	case *provider.ListStorageSpacesRequest:
+		// TODO: checks
+		return nil, true
+	case *registry.ListStorageProvidersRequest:
+		// TODO: checks
+		return nil, true
+	default:
+		return nil, false
+	}
 }
