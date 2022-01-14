@@ -214,7 +214,9 @@ var _ = Describe("gateway", func() {
 		})
 
 		Describe("ListContainer", func() {
-			It("merges the lists of both shards", func() {
+			// Note: The Gateway doesn't merge any lists any more. This needs to be done by the client
+			// TODO: Move the tests to a place where they can actually test something
+			PIt("merges the lists of both shards", func() {
 				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -222,7 +224,7 @@ var _ = Describe("gateway", func() {
 				Expect(infos2Paths(listRes.Infos)).To(ConsistOf([]string{"/projects/a - project", "/projects/z - project"}))
 			})
 
-			It("propagates the etags from both shards", func() {
+			PIt("propagates the etags from both shards", func() {
 				rootEtag := getProjectsEtag()
 
 				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
@@ -297,7 +299,12 @@ var _ = Describe("gateway", func() {
 				Expect(createRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				space := createRes.StorageSpace
 
-				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
+				ref := &storagep.Reference{
+					ResourceId: space.Root,
+					Path:       ".",
+				}
+
+				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: ref})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -311,12 +318,18 @@ var _ = Describe("gateway", func() {
 
 			It("lists individual project spaces", func() {
 				By("trying to list a non-existent space")
-				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{Path: "/projects/does-not-exist"}})
+				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{
+					ResourceId: &storagep.ResourceId{
+						StorageId: "does-not-exist",
+						OpaqueId:  "neither-supposed-to-exist",
+					},
+					Path: ".",
+				}})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
 				By("listing an existing space")
-				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{Path: "/projects/a - project"}})
+				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{ResourceId: shard1Space.Root, Path: "."}})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				Expect(len(listRes.Infos)).To(Equal(2))
@@ -324,7 +337,7 @@ var _ = Describe("gateway", func() {
 				for _, i := range listRes.Infos {
 					paths = append(paths, i.Path)
 				}
-				Expect(paths).To(ConsistOf([]string{"/projects/a - project/file.txt", "/projects/a - project/.space"}))
+				Expect(paths).To(ConsistOf([]string{"file.txt", ".space"}))
 			})
 
 		})
@@ -419,9 +432,9 @@ var _ = Describe("gateway", func() {
 				for _, i := range listRes.Infos {
 					if i.Path == "file.txt" {
 						fileInfo = i
-					} else if i.Path == "Projects" {
-						// embeddedInfo = i
-					}
+					} // else if i.Path == "Projects" {
+					// embeddedInfo = i
+					// }
 
 				}
 				Expect(fileInfo).ToNot(BeNil())
