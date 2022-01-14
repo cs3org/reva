@@ -596,47 +596,58 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 }
 
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	var c provider.ProviderAPIClient
-	var sourceProviderInfo, destinationProviderInfo *registry.ProviderInfo
-	var err error
-
-	c, sourceProviderInfo, req.Source, err = s.findAndUnwrap(ctx, req.Source)
+	c, sourceProviderInfo, sref, err := s.findAndUnwrap(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Source), err),
 		}, nil
 	}
 
-	// do we try to rename the root of a mountpoint?
-	// TODO how do we determine if the destination resides on the same storage space?
-	if req.Source.Path == "." {
-		req.Destination.ResourceId = req.Source.ResourceId
-		req.Destination.Path = utils.MakeRelativePath(filepath.Base(req.Destination.Path))
-	} else {
-		_, destinationProviderInfo, req.Destination, err = s.findAndUnwrap(ctx, req.Destination)
-		if err != nil {
-			return &provider.MoveResponse{
-				Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Destination), err),
-			}, nil
-		}
-
-		// if the storage id is the same the storage provider decides if the move is allowedy or not
-		if sourceProviderInfo.Address != destinationProviderInfo.Address {
-			return &provider.MoveResponse{
-				Status: status.NewUnimplemented(ctx, nil, "gateway does not support cross storage move, use copy and delete"),
-			}, nil
-		}
-	}
-
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
-	res, err := c.Move(ctx, req)
+	_, destProviderInfo, dref, err := s.findAndUnwrap(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call Move", err),
+			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Source), err),
 		}, nil
 	}
-	return res, nil
+
+	if sourceProviderInfo.Address != destProviderInfo.Address {
+		return &provider.MoveResponse{
+			Status: status.NewUnimplemented(ctx, nil, "gateway does not support cross storage move, use copy and delete"),
+		}, nil
+	}
+
+	req.Source = sref
+	req.Destination = dref
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
+	return c.Move(ctx, req)
+
+	/*
+		// do we try to rename the root of a mountpoint?
+		// TODO how do we determine if the destination resides on the same storage space?
+		if req.Source.Path == "." {
+			req.Destination.ResourceId = req.Source.ResourceId
+			req.Destination.Path = utils.MakeRelativePath(filepath.Base(req.Destination.Path))
+		} else {
+			_, destinationProviderInfo, req.Destination, err = s.findAndUnwrap(ctx, req.Destination)
+			if err != nil {
+				return &provider.MoveResponse{
+					Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Destination), err),
+				}, nil
+			}
+
+			// if the storage id is the same the storage provider decides if the move is allowedy or not
+			if sourceProviderInfo.Address != destinationProviderInfo.Address {
+				return &provider.MoveResponse{
+					Status: status.NewUnimplemented(ctx, nil, "gateway does not support cross storage move, use copy and delete"),
+				}, nil
+			}
+		}
+
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
+		return c.Move(ctx, req)
+	*/
 }
 
 func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
@@ -895,123 +906,6 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 
 	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
-
-	/*
-		// requestPath := req.Ref.Path
-		providerInfos, err := s.findSpaces(ctx, req.Ref)
-		if err != nil {
-			return &provider.RestoreRecycleItemResponse{
-				Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
-			}, nil
-		}
-		var srcProvider *registry.ProviderInfo
-		var srcRef *provider.Reference
-		for i := range providerInfos {
-
-			for _, space := range decodeSpaces(providerInfos[i]) {
-				mountPath := decodePath(space)
-				root := space.Root
-				// build reference for the provider
-				r := &provider.Reference{
-					ResourceId: req.Ref.ResourceId,
-					Path:       req.Ref.Path,
-				}
-				// NOTE: There are problems in the following case:
-				// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
-				// Then it will request path "/projects/projectA" from the provider
-				// But it should only request "/" as the ResourceId already points to the correct resource
-				// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-				if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
-					r.Path = "/"
-				}
-				srcRef = unwrap(r, mountPath, root)
-				srcProvider = providerInfos[i]
-				break
-			}
-			if srcProvider != nil {
-				break
-			}
-		}
-
-		if srcProvider == nil || srcRef == nil {
-			return &provider.RestoreRecycleItemResponse{
-				Status: status.NewNotFound(ctx, "RestoreRecycleItemResponse no matching provider found ref="+req.Ref.String()),
-			}, nil
-		}
-
-		// find destination
-		dstProviderInfos, err := s.findSpaces(ctx, req.RestoreRef)
-		if err != nil {
-			return &provider.RestoreRecycleItemResponse{
-				Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.RestoreRef), err),
-			}, nil
-		}
-		var dstProvider *registry.ProviderInfo
-		var dstRef *provider.Reference
-		for i := range dstProviderInfos {
-			for _, space := range decodeSpaces(dstProviderInfos[i]) {
-				mountPath := decodePath(space)
-				root := space.Root
-				// build reference for the provider
-				r := &provider.Reference{
-					ResourceId: req.RestoreRef.ResourceId,
-					Path:       req.RestoreRef.Path,
-				}
-				// NOTE: There are problems in the following case:
-				// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
-				// Then it will request path "/projects/projectA" from the provider
-				// But it should only request "/" as the ResourceId already points to the correct resource
-				// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-				if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
-					r.Path = "/"
-				}
-				dstRef = unwrap(r, mountPath, root)
-				dstProvider = providerInfos[i]
-				break
-			}
-			if dstProvider != nil {
-				break
-			}
-		}
-
-		if dstProvider == nil || dstRef == nil {
-			return &provider.RestoreRecycleItemResponse{
-				Status: status.NewNotFound(ctx, "RestoreRecycleItemResponse no matching destination provider found ref="+req.RestoreRef.String()),
-			}, nil
-		}
-
-		if srcRef.ResourceId.StorageId != dstRef.ResourceId.StorageId || srcProvider.Address != dstProvider.Address {
-			return &provider.RestoreRecycleItemResponse{
-				// TODO in Move() we return an unimplemented / supported ... align?
-				Status: status.NewPermissionDenied(ctx, err, "gateway: cross-storage restores are forbidden"),
-			}, nil
-		}
-
-		// get client for storage provider
-		c, err := s.getStorageProviderClient(ctx, srcProvider)
-		if err != nil {
-			return &provider.RestoreRecycleItemResponse{
-				Status: status.NewStatusFromErrType(ctx, "gateway could not get storage provider client", err),
-			}, nil
-		}
-
-		req.Ref = srcRef
-		req.RestoreRef = dstRef
-
-		res, err := c.RestoreRecycleItem(ctx, req)
-		if err != nil {
-			return &provider.RestoreRecycleItemResponse{
-				Status: status.NewStatusFromErrType(ctx, "gateway could not call RestoreRecycleItem", err),
-			}, nil
-		}
-
-		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
-		if req.RestoreRef != nil {
-			s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
-		}
-
-		return res, nil
-	*/
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
