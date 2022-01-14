@@ -3,6 +3,7 @@ address = "0.0.0.0:17000"
 
 [shared]
 jwt_secret = "jwt_secret"
+gatewaysvc = "localhost:17000"
 
 # services to enable
 [grpc.services.gateway]
