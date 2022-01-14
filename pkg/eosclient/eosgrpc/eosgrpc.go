@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 
 	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
+	eos "github.com/cs3org/reva/pkg/eosclient/utils"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
@@ -613,8 +614,40 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 }
 
 // GetAttr returns the attribute specified by key
-func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, name, path string) (*eosclient.Attribute, error) {
-	return nil, errtypes.NotSupported("GetAttr function not yet implemented")
+func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key, path string) (*eosclient.Attribute, error) {
+	info, err := c.GetFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range info.Attrs {
+		if k == key {
+			attr, err := getAttribute(k, v)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("eosgrpc: cannot parse attribute key=%s value=%s", k, v))
+			}
+			return attr, nil
+		}
+	}
+	return nil, errtypes.NotFound(fmt.Sprintf("key %s not found", key))
+}
+
+func getAttribute(key, val string) (*eosclient.Attribute, error) {
+	// key is in the form sys.forced.checksum
+	type2key := strings.SplitN(key, ".", 2) // type2key = ["sys", "forced.checksum"]
+	if len(type2key) != 2 {
+		return nil, errtypes.InternalError("wrong attr format to deserialize")
+	}
+	t, err := eos.AttrStringToType(type2key[0])
+	if err != nil {
+		return nil, err
+	}
+	attr := &eosclient.Attribute{
+		Type: t,
+		Key:  type2key[1],
+		Val:  val,
+	}
+	return attr, nil
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path
