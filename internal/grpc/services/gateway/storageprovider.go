@@ -863,14 +863,29 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
-	c, _, ref, err := s.findAndUnwrap(ctx, req.Ref)
+	c, si, ref, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
 		}, nil
 	}
 
+	_, di, rref, err := s.findAndUnwrap(ctx, req.RestoreRef)
+	if err != nil {
+		return &provider.RestoreRecycleItemResponse{
+			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
+		}, nil
+	}
+
+	if si.Address != di.Address {
+		return &provider.RestoreRecycleItemResponse{
+			// TODO in Move() we return an unimplemented / supported ... align?
+			Status: status.NewPermissionDenied(ctx, err, "gateway: cross-storage restores are forbidden"),
+		}, nil
+	}
+
 	req.Ref = ref
+	req.RestoreRef = rref
 	res, err := c.RestoreRecycleItem(ctx, req)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
