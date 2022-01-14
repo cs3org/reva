@@ -550,6 +550,10 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
+	if errorIfExists {
+		msg.Create = true
+	}
+
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
 
 	// Now send the req and see what happens
