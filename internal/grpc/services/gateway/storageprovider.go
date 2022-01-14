@@ -860,177 +860,17 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 		Ref:    ref,
 		Key:    req.Key,
 	})
-
-	/* TODO: Delete me!
-	for i := range providerInfos {
-
-		// get client for storage provider
-		c, err := s.getStorageProviderClient(ctx, providerInfos[i])
-		if err != nil {
-			return &provider.ListRecycleResponse{
-				Status: status.NewStatusFromErrType(ctx, "gateway could not get storage provider client", err),
-			}, nil
-		}
-
-		for _, space := range decodeSpaces(providerInfos[i]) {
-			mountPath := decodePath(space)
-			root := space.Root
-			// build reference for the provider
-			r := &provider.Reference{
-				ResourceId: req.Ref.ResourceId,
-				Path:       req.Ref.Path,
-			}
-			// NOTE: There are problems in the following case:
-			// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
-			// Then it will request path "/projects/projectA" from the provider
-			// But it should only request "/" as the ResourceId already points to the correct resource
-			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
-				r.Path = "/"
-			}
-			providerRef := unwrap(r, mountPath, root)
-
-			// there are three valid cases when listing trash
-			// 1. id based references of a space
-			// 2. path based references of a space
-			// 3. relative reference -> forward as is
-
-			// we can ignore spaces below the mount point
-			// -> only match exact references
-
-			res, err := c.ListRecycle(ctx, &provider.ListRecycleRequest{
-				Opaque: req.Opaque,
-				FromTs: req.FromTs,
-				ToTs:   req.ToTs,
-				Ref:    providerRef,
-				Key:    req.Key,
-			})
-			if err != nil {
-				return &provider.ListRecycleResponse{
-					Status: status.NewStatusFromErrType(ctx, "gateway could not call ListRecycle", err),
-				}, nil
-			}
-
-			if utils.IsAbsoluteReference(req.Ref) {
-				for j := range res.RecycleItems {
-					// wrap(res.RecycleItems[j].Ref, p) only handles ResourceInfo
-					res.RecycleItems[j].Ref.Path = path.Join(mountPath, res.RecycleItems[j].Ref.Path)
-				}
-			}
-
-			return res, nil
-		}
-
-	}
-
-	return &provider.ListRecycleResponse{
-		Status: status.NewNotFound(ctx, "ListRecycle no matching provider found ref="+req.Ref.String()),
-	}, nil
-	*/
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
-	// requestPath := req.Ref.Path
-	providerInfos, err := s.findSpaces(ctx, req.Ref)
+	c, _, ref, err := s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
 		}, nil
 	}
-	var srcProvider *registry.ProviderInfo
-	var srcRef *provider.Reference
-	for i := range providerInfos {
 
-		for _, space := range decodeSpaces(providerInfos[i]) {
-			mountPath := decodePath(space)
-			root := space.Root
-			// build reference for the provider
-			r := &provider.Reference{
-				ResourceId: req.Ref.ResourceId,
-				Path:       req.Ref.Path,
-			}
-			// NOTE: There are problems in the following case:
-			// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
-			// Then it will request path "/projects/projectA" from the provider
-			// But it should only request "/" as the ResourceId already points to the correct resource
-			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
-				r.Path = "/"
-			}
-			srcRef = unwrap(r, mountPath, root)
-			srcProvider = providerInfos[i]
-			break
-		}
-		if srcProvider != nil {
-			break
-		}
-	}
-
-	if srcProvider == nil || srcRef == nil {
-		return &provider.RestoreRecycleItemResponse{
-			Status: status.NewNotFound(ctx, "RestoreRecycleItemResponse no matching provider found ref="+req.Ref.String()),
-		}, nil
-	}
-
-	// find destination
-	dstProviderInfos, err := s.findSpaces(ctx, req.RestoreRef)
-	if err != nil {
-		return &provider.RestoreRecycleItemResponse{
-			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.RestoreRef), err),
-		}, nil
-	}
-	var dstProvider *registry.ProviderInfo
-	var dstRef *provider.Reference
-	for i := range dstProviderInfos {
-		for _, space := range decodeSpaces(dstProviderInfos[i]) {
-			mountPath := decodePath(space)
-			root := space.Root
-			// build reference for the provider
-			r := &provider.Reference{
-				ResourceId: req.RestoreRef.ResourceId,
-				Path:       req.RestoreRef.Path,
-			}
-			// NOTE: There are problems in the following case:
-			// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
-			// Then it will request path "/projects/projectA" from the provider
-			// But it should only request "/" as the ResourceId already points to the correct resource
-			// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
-			if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
-				r.Path = "/"
-			}
-			dstRef = unwrap(r, mountPath, root)
-			dstProvider = providerInfos[i]
-			break
-		}
-		if dstProvider != nil {
-			break
-		}
-	}
-
-	if dstProvider == nil || dstRef == nil {
-		return &provider.RestoreRecycleItemResponse{
-			Status: status.NewNotFound(ctx, "RestoreRecycleItemResponse no matching destination provider found ref="+req.RestoreRef.String()),
-		}, nil
-	}
-
-	if srcRef.ResourceId.StorageId != dstRef.ResourceId.StorageId || srcProvider.Address != dstProvider.Address {
-		return &provider.RestoreRecycleItemResponse{
-			// TODO in Move() we return an unimplemented / supported ... align?
-			Status: status.NewPermissionDenied(ctx, err, "gateway: cross-storage restores are forbidden"),
-		}, nil
-	}
-
-	// get client for storage provider
-	c, err := s.getStorageProviderClient(ctx, srcProvider)
-	if err != nil {
-		return &provider.RestoreRecycleItemResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not get storage provider client", err),
-		}, nil
-	}
-
-	req.Ref = srcRef
-	req.RestoreRef = dstRef
-
+	req.Ref = ref
 	res, err := c.RestoreRecycleItem(ctx, req)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
@@ -1039,11 +879,124 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	}
 
 	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
-	if req.RestoreRef != nil {
-		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
-	}
-
 	return res, nil
+
+	/*
+		// requestPath := req.Ref.Path
+		providerInfos, err := s.findSpaces(ctx, req.Ref)
+		if err != nil {
+			return &provider.RestoreRecycleItemResponse{
+				Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
+			}, nil
+		}
+		var srcProvider *registry.ProviderInfo
+		var srcRef *provider.Reference
+		for i := range providerInfos {
+
+			for _, space := range decodeSpaces(providerInfos[i]) {
+				mountPath := decodePath(space)
+				root := space.Root
+				// build reference for the provider
+				r := &provider.Reference{
+					ResourceId: req.Ref.ResourceId,
+					Path:       req.Ref.Path,
+				}
+				// NOTE: There are problems in the following case:
+				// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
+				// Then it will request path "/projects/projectA" from the provider
+				// But it should only request "/" as the ResourceId already points to the correct resource
+				// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
+				if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
+					r.Path = "/"
+				}
+				srcRef = unwrap(r, mountPath, root)
+				srcProvider = providerInfos[i]
+				break
+			}
+			if srcProvider != nil {
+				break
+			}
+		}
+
+		if srcProvider == nil || srcRef == nil {
+			return &provider.RestoreRecycleItemResponse{
+				Status: status.NewNotFound(ctx, "RestoreRecycleItemResponse no matching provider found ref="+req.Ref.String()),
+			}, nil
+		}
+
+		// find destination
+		dstProviderInfos, err := s.findSpaces(ctx, req.RestoreRef)
+		if err != nil {
+			return &provider.RestoreRecycleItemResponse{
+				Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.RestoreRef), err),
+			}, nil
+		}
+		var dstProvider *registry.ProviderInfo
+		var dstRef *provider.Reference
+		for i := range dstProviderInfos {
+			for _, space := range decodeSpaces(dstProviderInfos[i]) {
+				mountPath := decodePath(space)
+				root := space.Root
+				// build reference for the provider
+				r := &provider.Reference{
+					ResourceId: req.RestoreRef.ResourceId,
+					Path:       req.RestoreRef.Path,
+				}
+				// NOTE: There are problems in the following case:
+				// Given a req.Ref.Path = "/projects" and a mountpath = "/projects/projectA"
+				// Then it will request path "/projects/projectA" from the provider
+				// But it should only request "/" as the ResourceId already points to the correct resource
+				// TODO: We need to cut the path in case the resourceId is already pointing to correct resource
+				if r.Path != "" && strings.HasPrefix(mountPath, r.Path) { // requesting the root in that case - No Path accepted
+					r.Path = "/"
+				}
+				dstRef = unwrap(r, mountPath, root)
+				dstProvider = providerInfos[i]
+				break
+			}
+			if dstProvider != nil {
+				break
+			}
+		}
+
+		if dstProvider == nil || dstRef == nil {
+			return &provider.RestoreRecycleItemResponse{
+				Status: status.NewNotFound(ctx, "RestoreRecycleItemResponse no matching destination provider found ref="+req.RestoreRef.String()),
+			}, nil
+		}
+
+		if srcRef.ResourceId.StorageId != dstRef.ResourceId.StorageId || srcProvider.Address != dstProvider.Address {
+			return &provider.RestoreRecycleItemResponse{
+				// TODO in Move() we return an unimplemented / supported ... align?
+				Status: status.NewPermissionDenied(ctx, err, "gateway: cross-storage restores are forbidden"),
+			}, nil
+		}
+
+		// get client for storage provider
+		c, err := s.getStorageProviderClient(ctx, srcProvider)
+		if err != nil {
+			return &provider.RestoreRecycleItemResponse{
+				Status: status.NewStatusFromErrType(ctx, "gateway could not get storage provider client", err),
+			}, nil
+		}
+
+		req.Ref = srcRef
+		req.RestoreRef = dstRef
+
+		res, err := c.RestoreRecycleItem(ctx, req)
+		if err != nil {
+			return &provider.RestoreRecycleItemResponse{
+				Status: status.NewStatusFromErrType(ctx, "gateway could not call RestoreRecycleItem", err),
+			}, nil
+		}
+
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+		if req.RestoreRef != nil {
+			s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.RestoreRef.ResourceId)
+		}
+
+		return res, nil
+	*/
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
