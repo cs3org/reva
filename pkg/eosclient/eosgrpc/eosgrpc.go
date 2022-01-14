@@ -530,7 +530,7 @@ func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, in
 }
 
 // SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
+func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "SetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 

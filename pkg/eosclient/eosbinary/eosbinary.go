@@ -316,7 +316,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 			Key:  lwShareAttrKey,
 			Val:  sysACL,
 		}
-		if err = c.SetAttr(ctx, auth, sysACLAttr, finfo.IsDir, path); err != nil {
+		if err = c.SetAttr(ctx, auth, sysACLAttr, false, finfo.IsDir, path); err != nil {
 			return err
 		}
 		return nil
@@ -334,7 +334,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 			Key:  userACLEvalKey,
 			Val:  "1",
 		}
-		if err = c.SetAttr(ctx, auth, userACLAttr, false, path); err != nil {
+		if err = c.SetAttr(ctx, auth, userACLAttr, false, false, path); err != nil {
 			return err
 		}
 	}
@@ -380,7 +380,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 			Key:  lwShareAttrKey,
 			Val:  sysACL,
 		}
-		if err = c.SetAttr(ctx, auth, sysACLAttr, finfo.IsDir, path); err != nil {
+		if err = c.SetAttr(ctx, auth, sysACLAttr, false, finfo.IsDir, path); err != nil {
 			return err
 		}
 		return nil
@@ -516,7 +516,7 @@ func (c *Client) mergeParentACLsForFiles(ctx context.Context, auth eosclient.Aut
 }
 
 // SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
+func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
