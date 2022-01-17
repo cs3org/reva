@@ -369,10 +369,8 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		if len(matches) != 1 {
 			return fmt.Errorf("delete space failed: found %d matching spaces", len(matches))
 		}
-		if err := os.RemoveAll(matches[0]); err != nil {
-			return err
-		}
-		return nil
+
+		return os.RemoveAll(matches[0])
 	}
 
 	spaceID := req.Id.OpaqueId
