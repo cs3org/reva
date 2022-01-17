@@ -365,6 +365,47 @@ func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (str
 	return external, nil
 }
 
+func (fs *eosfs) resolveRefForbidShareFolder(ctx context.Context, ref *provider.Reference) (string, eosclient.Authorization, error) {
+	p, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: error resolving reference")
+	}
+	if fs.isShareFolder(ctx, p) {
+		return "", eosclient.Authorization{}, errtypes.PermissionDenied("eosfs: cannot perform operation under the virtual share folder")
+	}
+	fn := fs.wrap(ctx, p)
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: no user in ctx")
+	}
+	auth, err := fs.getUserAuth(ctx, u, fn)
+	if err != nil {
+		return "", eosclient.Authorization{}, err
+	}
+
+	return fn, auth, nil
+}
+
+func (fs *eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Reference) (string, eosclient.Authorization, error) {
+	p, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: error resolving reference")
+	}
+	fn := fs.wrap(ctx, p)
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: no user in ctx")
+	}
+	auth, err := fs.getUserAuth(ctx, u, fn)
+	if err != nil {
+		return "", eosclient.Authorization{}, err
+	}
+
+	return fn, auth, nil
+}
+
 // resolve takes in a request path or request id and returns the unwrapped path.
 func (fs *eosfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
 	if ref.ResourceId != nil {
@@ -459,19 +500,9 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 		return errtypes.BadRequest("eosfs: no metadata set")
 	}
 
-	p, err := fs.resolve(ctx, ref)
+	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "eosfs: error resolving reference")
-	}
-	fn := fs.wrap(ctx, p)
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
+		return err
 	}
 
 	for k, v := range md.Metadata {
@@ -501,19 +532,9 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 		return errtypes.BadRequest("eosfs: no keys set")
 	}
 
-	p, err := fs.resolve(ctx, ref)
+	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "eosfs: error resolving reference")
-	}
-	fn := fs.wrap(ctx, p)
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
+		return err
 	}
 
 	for _, k := range keys {
@@ -556,18 +577,7 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-
-	p, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error resolving reference")
-	}
-	fn := fs.wrap(ctx, p)
-
-	auth, err := fs.getUserAuth(ctx, u, fn)
+	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return err
 	}
@@ -594,12 +604,10 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 }
 
 func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
-	p, err := fs.resolve(ctx, ref)
+	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "eosfs: error resolving reference")
+		return err
 	}
-
-	fn := fs.wrap(ctx, p)
 
 	position := eosclient.EndPosition
 
@@ -612,16 +620,6 @@ func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *prov
 	grant := &provider.Grant{
 		Grantee:     g,
 		Permissions: &provider.ResourcePermissions{},
-	}
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-
-	auth, err := fs.getUserAuth(ctx, u, fn)
-	if err != nil {
-		return err
 	}
 
 	eosACL, err := fs.getEosACL(ctx, grant)
@@ -702,17 +700,7 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 		Type:      eosACLType,
 	}
 
-	p, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error resolving reference")
-	}
-	fn := fs.wrap(ctx, p)
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
+	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return err
 	}
@@ -734,17 +722,7 @@ func (fs *eosfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pr
 }
 
 func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
-	p, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error resolving reference")
-	}
-	fn := fs.wrap(ctx, p)
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
+	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -1209,50 +1187,26 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 
 func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	p, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return nil
-	}
 
-	auth, err := fs.getUserAuth(ctx, u, p)
+	fn, auth, err := fs.resolveRefForbidShareFolder(ctx, ref)
 	if err != nil {
 		return err
 	}
+	log.Info().Msgf("eosfs: createdir: path=%s", fn)
 
-	log.Info().Msgf("eosfs: createdir: path=%s", p)
-
-	if fs.isShareFolder(ctx, p) {
-		return errtypes.PermissionDenied("eosfs: cannot create folder under the share folder")
-	}
-
-	fn := fs.wrap(ctx, p)
 	return fs.c.CreateDir(ctx, auth, fn)
 }
 
 // TouchFile as defined in the storage.FS interface
 func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	p, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return nil
-	}
 
-	auth, err := fs.getUserAuth(ctx, u, p)
+	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return err
 	}
+	log.Info().Msgf("eosfs: touch file: path=%s", fn)
 
-	log.Info().Msgf("eosfs: touch file: path=%s", p)
-
-	fn := fs.wrap(ctx, p)
 	return fs.c.Touch(ctx, auth, fn)
 }
 
@@ -1409,22 +1363,7 @@ func (fs *eosfs) moveShadow(ctx context.Context, oldPath, newPath string) error 
 }
 
 func (fs *eosfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	p, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error resolving reference")
-	}
-
-	if fs.isShareFolder(ctx, p) {
-		return nil, errtypes.PermissionDenied("eosfs: cannot download under the virtual share folder")
-	}
-
-	fn := fs.wrap(ctx, p)
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
+	fn, auth, err := fs.resolveRefForbidShareFolder(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -1433,24 +1372,33 @@ func (fs *eosfs) Download(ctx context.Context, ref *provider.Reference) (io.Read
 }
 
 func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
-	p, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error resolving reference")
-	}
+	var auth eosclient.Authorization
+	var fn string
+	var err error
 
-	if fs.isShareFolder(ctx, p) {
-		return nil, errtypes.PermissionDenied("eosfs: cannot list revisions under the virtual share folder")
-	}
+	if !fs.conf.EnableHome && fs.conf.ImpersonateOwnerforRevisions {
+		// We need to access the revisions for a non-home reference.
+		// We'll get the owner of the particular resource and impersonate them
+		// if we have access to it.
+		md, err := fs.GetMD(ctx, ref, nil)
+		if err != nil {
+			return nil, err
+		}
+		fn = fs.wrap(ctx, md.Path)
 
-	fn := fs.wrap(ctx, p)
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
-	if err != nil {
-		return nil, err
+		if md.PermissionSet.ListFileVersions {
+			auth, err = fs.getUIDGateway(ctx, md.Owner)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list revisions")
+		}
+	} else {
+		fn, auth, err = fs.resolveRefForbidShareFolder(ctx, ref)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	eosRevisions, err := fs.c.ListVersions(ctx, auth, fn)
@@ -1467,48 +1415,66 @@ func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 }
 
 func (fs *eosfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
-	p, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error resolving reference")
-	}
+	var auth eosclient.Authorization
+	var fn string
+	var err error
 
-	if fs.isShareFolder(ctx, p) {
-		return nil, errtypes.PermissionDenied("eosfs: cannot download revision under the virtual share folder")
-	}
+	if !fs.conf.EnableHome && fs.conf.ImpersonateOwnerforRevisions {
+		// We need to access the revisions for a non-home reference.
+		// We'll get the owner of the particular resource and impersonate them
+		// if we have access to it.
+		md, err := fs.GetMD(ctx, ref, nil)
+		if err != nil {
+			return nil, err
+		}
+		fn = fs.wrap(ctx, md.Path)
 
-	fn := fs.wrap(ctx, p)
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
-	if err != nil {
-		return nil, err
+		if md.PermissionSet.InitiateFileDownload {
+			auth, err = fs.getUIDGateway(ctx, md.Owner)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to download revisions")
+		}
+	} else {
+		fn, auth, err = fs.resolveRefForbidShareFolder(ctx, ref)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return fs.c.ReadVersion(ctx, auth, fn, revisionKey)
 }
 
 func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
-	p, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error resolving reference")
-	}
+	var auth eosclient.Authorization
+	var fn string
+	var err error
 
-	if fs.isShareFolder(ctx, p) {
-		return errtypes.PermissionDenied("eosfs: cannot restore revision under the virtual share folder")
-	}
+	if !fs.conf.EnableHome && fs.conf.ImpersonateOwnerforRevisions {
+		// We need to access the revisions for a non-home reference.
+		// We'll get the owner of the particular resource and impersonate them
+		// if we have access to it.
+		md, err := fs.GetMD(ctx, ref, nil)
+		if err != nil {
+			return err
+		}
+		fn = fs.wrap(ctx, md.Path)
 
-	fn := fs.wrap(ctx, p)
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
-	if err != nil {
-		return err
+		if md.PermissionSet.RestoreFileVersion {
+			auth, err = fs.getUIDGateway(ctx, md.Owner)
+			if err != nil {
+				return err
+			}
+		} else {
+			return errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore revisions")
+		}
+	} else {
+		fn, auth, err = fs.resolveRefForbidShareFolder(ctx, ref)
+		if err != nil {
+			return err
+		}
 	}
 
 	return fs.c.RollbackToVersion(ctx, auth, fn, revisionKey)
