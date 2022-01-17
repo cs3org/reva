@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"time"
 
 	oidc "github.com/coreos/go-oidc"
@@ -59,9 +60,10 @@ type config struct {
 	IDClaim         string `mapstructure:"id_claim" docs:"sub;The claim containing the ID of the user."`
 	UIDClaim        string `mapstructure:"uid_claim" docs:";The claim containing the UID of the user."`
 	GIDClaim        string `mapstructure:"gid_claim" docs:";The claim containing the GID of the user."`
+	GatewaySvc      string `mapstructure:"gatewaysvc" docs:";The endpoint at which the GRPC gateway is exposed."`
 	UserProviderSvc string `mapstructure:"userprovidersvc" docs:";The endpoint at which the GRPC userprovider is exposed."`
 	UsersMapping    string `mapstructure:"usersmapping" docs:"; The OIDC users mapping file path"`
-	GroupClaimLabel string `mapstructure:"group_claim_label" docs:"; The group claim to be looked up to map the user (default to 'groups')."`
+	GroupClaim      string `mapstructure:"group_claim" docs:"; The group claim to be looked up to map the user (default to 'groups')."`
 }
 
 type oidcUserMapping struct {
@@ -104,23 +106,30 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 	am.c = c
 
 	am.oidcUsersMapping = map[string]*oidcUserMapping{}
-	f, err := ioutil.ReadFile(c.UsersMapping)
-	if err != nil {
-		// failed to read the users mapping file or no mapping defined, move on (TODO would be nice to log something)
+	if c.UsersMapping == "" {
+		// no mapping defined, leave the map empty and move on
 		return nil
 	}
 
+	f, err := ioutil.ReadFile(c.UsersMapping)
+	if err != nil {
+		return fmt.Errorf("oidcmapping: error reading the users mapping file: +%v", err)
+	}
 	oidcUsers := []*oidcUserMapping{}
 	err = json.Unmarshal(f, &oidcUsers)
 	if err != nil {
-		return fmt.Errorf("oidcmapping: error unmarshalling oidc users mapping file: +%v", err)
+		return fmt.Errorf("oidcmapping: error unmarshalling the users mapping file: +%v", err)
 	}
 
 	for _, u := range oidcUsers {
 		if _, found := am.oidcUsersMapping[u.OIDCGroup]; found {
-			return errors.New("oidcmapping: mapping error, multiple users mapped to a single group")
+			return fmt.Errorf("oidcmapping: mapping error, group \"%s\" is mapped to multiple users", u.OIDCGroup)
 		}
 		am.oidcUsersMapping[u.OIDCGroup] = u
+	}
+
+	if am.c.GroupClaim == "" {
+		am.c.GroupClaim = "groups"
 	}
 
 	return nil
@@ -164,40 +173,21 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	if claims["email_verified"] == nil { // This is not set in simplesamlphp
 		claims["email_verified"] = false
 	}
+	if claims["preferred_username"] == nil {
+		claims["preferred_username"] = claims[am.c.IDClaim]
+	}
+	if claims["name"] == nil {
+		claims["name"] = claims[am.c.IDClaim]
+	}
+	if claims["name"] == nil {
+		return nil, nil, fmt.Errorf("no \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
+	}
 	if claims["email"] == nil {
-		return nil, nil, fmt.Errorf("oidcmapping: no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
+		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
 	}
-	if claims["preferred_username"] == nil || claims["name"] == nil {
-		return nil, nil, fmt.Errorf("oidcmapping: no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
-	}
-	if am.c.GroupClaimLabel == "" {
-		am.c.GroupClaimLabel = "groups"
-	}
-	if claims[am.c.GroupClaimLabel] == nil && len(am.oidcUsersMapping) > 0 {
-		// we are required to perform a user mapping but the group claim is not available
-		return nil, nil, fmt.Errorf("oidcmapping: no \"%s\" claim found in userinfo", am.c.GroupClaimLabel)
-	}
-
-	// map and discover the user's username if a mapping is defined
-	var username string
-	if len(am.oidcUsersMapping) > 0 {
-		mappings := make([]string, 0, len(am.oidcUsersMapping))
-		for _, m := range am.oidcUsersMapping {
-			if m.OIDCIssuer == claims["iss"] {
-				mappings = append(mappings, m.OIDCGroup)
-			}
-		}
-		intersection := intersect.Simple(claims[am.c.GroupClaimLabel], mappings)
-		if len(intersection) > 1 {
-			// multiple mappings are not implemented as we cannot decide which one to choose
-			return nil, nil, errtypes.PermissionDenied("oidcmapping: mapping failed, more than one mapping found")
-		}
-		if len(intersection) == 0 {
-			return nil, nil, errtypes.PermissionDenied("oidcmapping: no mapping found for the given group claim")
-		}
-		for _, m := range intersection {
-			username = am.oidcUsersMapping[m.(string)].Username
-		}
+	userClaim := "preferred_username"
+	if claims["preferred_username"] == nil {
+		userClaim = "email" // must be defined as per the above check
 	}
 
 	var uid, gid float64
@@ -208,44 +198,72 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		gid, _ = claims[am.c.GIDClaim].(float64)
 	}
 
-	gwc, err := pool.GetUserProviderServiceClient(am.c.UserProviderSvc)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "oidcmapping: error getting gateway grpc client")
-	}
-
 	userID := &user.UserId{
 		OpaqueId: "",
 		Idp:      "",
-		Type:     user.UserType_USER_TYPE_PRIMARY,
+		Type:     user.UserType_USER_TYPE_INVALID,
 	}
 
-	if username != "" {
-		getUserByClaimResp, err := gwc.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
+	var username string
+	if len(am.oidcUsersMapping) > 0 {
+		// map and discover the user's username when a mapping is defined
+		if claims[am.c.GroupClaim] == nil {
+			// we are required to perform a user mapping but the group claim is not available
+			return nil, nil, fmt.Errorf("oidcmapping: no \"%s\" claim found in userinfo", am.c.GroupClaim)
+		}
+		mappings := make([]string, 0, len(am.oidcUsersMapping))
+		for _, m := range am.oidcUsersMapping {
+			if m.OIDCIssuer == claims["iss"] {
+				mappings = append(mappings, m.OIDCGroup)
+			}
+		}
+		intersection := intersect.Simple(claims[am.c.GroupClaim], mappings)
+		if len(intersection) > 1 {
+			// multiple mappings are not implemented as we cannot decide which one to choose
+			return nil, nil, errtypes.PermissionDenied("oidcmapping: mapping failed, more than one mapping found")
+		}
+		if len(intersection) == 0 {
+			return nil, nil, errtypes.PermissionDenied("oidcmapping: no mapping found for the given group claim")
+		}
+		for _, m := range intersection {
+			username = am.oidcUsersMapping[m.(string)].Username
+		}
+
+		upsc, err := pool.GetUserProviderServiceClient(am.c.UserProviderSvc)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "oidcmapping: error getting gateway grpc client")
+		}
+		getUserByClaimResp, err := upsc.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
 			Claim: "username",
 			Value: username,
 		})
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "oidcmapping: error getting user by claim username (\"%v\")", username)
+			return nil, nil, errors.Wrapf(err, "oidcmapping: error getting user by username \"%v\"", username)
 		}
 		if getUserByClaimResp.Status.Code != rpc.Code_CODE_OK {
 			return nil, nil, status.NewErrorFromCode(getUserByClaimResp.Status.Code, "oidcmapping")
 		}
-
+		// take the properties of the mapped target user to populate the userID
 		userID.Idp = getUserByClaimResp.GetUser().GetId().Idp
-		userID.Type = getUserByClaimResp.GetUser().GetId().Type
 		userID.OpaqueId = getUserByClaimResp.GetUser().GetId().OpaqueId
+		userID.Type = getUserByClaimResp.GetUser().GetId().Type
 	} else {
-		// TODO(lopresti) this is the standard non-mapping case, should merge here the oidc.go code
-		username = claims["preferred_username"].(string)
-		userID.OpaqueId = claims[am.c.IDClaim].(string)
-		userID.Idp = claims["iss"].(string)
+		// no mapping to be applied
+		username = claims[userClaim].(string)
+		userID.OpaqueId = claims[am.c.IDClaim].(string) // a stable non reassignable id
+		userID.Idp = claims["iss"].(string)             // in the scope of this issuer
+		userID.Type = getUserType(claims[am.c.IDClaim].(string))
 	}
 
+	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "oidc: error getting gateway grpc client")
+	}
 	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
 		UserId: userID,
 	})
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "oidcmapping: error getting user groups")
+		return nil, nil, errors.Wrapf(err, "oidcmapping: error getting user groups for [%+v]", userID)
 	}
 	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
 		return nil, nil, status.NewErrorFromCode(getGroupsResp.Status.Code, "oidcmapping")
@@ -264,9 +282,16 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	log.Debug().Msgf("returning user: %v", u)
 
 	var scopes map[string]*authpb.Scope
-	scopes, err = scope.AddOwnerScope(nil)
-	if err != nil {
-		return nil, nil, err
+	if userID != nil && userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
+		scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		scopes, err = scope.AddOwnerScope(nil)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return u, scopes, nil
@@ -308,4 +333,18 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 
 	am.provider = provider
 	return am.provider, nil
+}
+
+func getUserType(upn string) user.UserType {
+	var t user.UserType
+	switch {
+	case strings.HasPrefix(upn, "guest"):
+		t = user.UserType_USER_TYPE_LIGHTWEIGHT
+	case strings.Contains(upn, "@"):
+		t = user.UserType_USER_TYPE_FEDERATED
+	default:
+		t = user.UserType_USER_TYPE_PRIMARY
+	}
+	return t
+
 }
