@@ -61,6 +61,9 @@ const (
 	QuotaUncalculated = "-1"
 	QuotaUnknown      = "-2"
 	QuotaUnlimited    = "-3"
+
+	// TrashIDDelimiter represents the characters used to separate the nodeid and the deletion time.
+	TrashIDDelimiter = ".T."
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance

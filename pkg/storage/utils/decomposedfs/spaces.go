@@ -344,6 +344,35 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 
 // DeleteStorageSpace deletes a storage space
 func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	opaque := req.Opaque
+	var purge bool
+	if opaque != nil {
+		_, purge = opaque.Map["purge"]
+	}
+
+	if purge {
+		ip := fs.lu.InternalPath(req.Id.OpaqueId)
+		matches, err := filepath.Glob(ip)
+		if err != nil {
+			return err
+		}
+
+		// TODO: remove blobs
+		if err := os.RemoveAll(matches[0]); err != nil {
+			return err
+		}
+
+		matches, err = filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, req.Id.OpaqueId))
+		if err != nil {
+			return err
+		}
+		if len(matches) != 1 {
+			return fmt.Errorf("delete space failed: found %d matching spaces", len(matches))
+		}
+
+		return os.RemoveAll(matches[0])
+	}
+
 	spaceID := req.Id.OpaqueId
 
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
@@ -352,7 +381,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	}
 
 	if len(matches) != 1 {
-		return fmt.Errorf("update space failed: found %d matching spaces", len(matches))
+		return fmt.Errorf("delete space failed: found %d matching spaces", len(matches))
 	}
 
 	target, err := os.Readlink(matches[0])
@@ -360,12 +389,12 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[0]).Msg("could not read link, skipping")
 	}
 
-	node, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
+	n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
 	if err != nil {
 		return err
 	}
 
-	err = fs.tp.Delete(ctx, node)
+	err = fs.tp.Delete(ctx, n)
 	if err != nil {
 		return err
 	}
@@ -374,7 +403,16 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	if err != nil {
 		return err
 	}
-	return nil
+
+	trashPathMatches, err := filepath.Glob(n.InternalPath() + node.TrashIDDelimiter + "*")
+	if err != nil {
+		return err
+	}
+	if len(trashPathMatches) != 1 {
+		return fmt.Errorf("delete space failed: found %d matching trashed spaces", len(trashPathMatches))
+	}
+	trashPath := trashPathMatches[0]
+	return os.Symlink(trashPath, filepath.Join(filepath.Dir(matches[0]), filepath.Base(trashPath)))
 }
 
 // createHiddenSpaceFolder bootstraps a storage space root with a hidden ".space" folder used to store space related
@@ -458,6 +496,9 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		})
 		if err != nil || !ok {
 			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
+		}
+		if strings.Contains(space.Root.OpaqueId, node.TrashIDDelimiter) {
+			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %+v", user.Username, space))
 		}
 	}
 

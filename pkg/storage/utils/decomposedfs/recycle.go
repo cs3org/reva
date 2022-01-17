@@ -122,7 +122,7 @@ func (fs *Decomposedfs) createTrashItem(ctx context.Context, parentNode, interme
 		log.Error().Err(err).Msg("error reading trash link, skipping")
 		return nil, err
 	}
-	parts := strings.SplitN(filepath.Base(parentNode), ".T.", 2)
+	parts := strings.SplitN(filepath.Base(parentNode), node.TrashIDDelimiter, 2)
 	if len(parts) != 2 {
 		log.Error().Str("trashnode", trashnode).Interface("parts", parts).Msg("malformed trash link, skipping")
 		return nil, errors.New("malformed trash link")
@@ -191,7 +191,7 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*p
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Msg("error reading trash link, skipping")
 			continue
 		}
-		parts := strings.SplitN(filepath.Base(trashnode), ".T.", 2)
+		parts := strings.SplitN(filepath.Base(trashnode), node.TrashIDDelimiter, 2)
 		if len(parts) != 2 {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("trashnode", trashnode).Interface("parts", parts).Msg("malformed trash link, skipping")
 			continue
