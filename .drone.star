@@ -229,6 +229,26 @@ def buildAndPublishDocker():
                     ],
                 },
             },
+            {
+                "name": "publish-docker-revad-ceph-latest",
+                "pull": "always",
+                "image": "plugins/docker",
+                "settings": {
+                    "repo": "cs3org/revad",
+                    "tags": "latest-ceph",
+                    "dockerfile": "Dockerfile.revad-ceph",
+                    "username": {
+                        "from_secret": "dockerhub_username",
+                    },
+                    "password": {
+                        "from_secret": "dockerhub_password",
+                    },
+                    "custom_dns": [
+                        "128.142.17.5",
+                        "128.142.16.5",
+                    ],
+                },
+            },
         ],
     }
 
@@ -469,6 +489,26 @@ def release():
                     "repo": "cs3org/revad",
                     "tags": "${DRONE_TAG}-eos",
                     "dockerfile": "Dockerfile.revad-eos",
+                    "username": {
+                        "from_secret": "dockerhub_username",
+                    },
+                    "password": {
+                        "from_secret": "dockerhub_password",
+                    },
+                    "custom_dns": [
+                        "128.142.17.5",
+                        "128.142.16.5",
+                    ],
+                },
+            },
+            {
+                "name": "docker-revad-ceph-tag",
+                "pull": "always",
+                "image": "plugins/docker",
+                "settings": {
+                    "repo": "cs3org/revad",
+                    "tags": "${DRONE_TAG}-ceph",
+                    "dockerfile": "Dockerfile.revad-ceph",
                     "username": {
                         "from_secret": "dockerhub_username",
                     },

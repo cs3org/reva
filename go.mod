@@ -42,6 +42,7 @@ require (
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/juliangruber/go-intersect v1.1.0
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
+	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
 	github.com/mileusna/useragent v1.0.2
 	github.com/minio/minio-go/v7 v7.0.20
 	github.com/mitchellh/copystructure v1.2.0 // indirect
@@ -73,6 +74,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.3.0
 	golang.org/x/crypto v0.0.0-20211215165025-cf75a172585e
 	golang.org/x/oauth2 v0.0.0-20211005180243-6b3c2da341f1
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20211025201205-69cdffdb9359
 	golang.org/x/term v0.0.0-20210916214954-140adaaadfaf
 	google.golang.org/genproto v0.0.0-20211021150943-2b146023228c
