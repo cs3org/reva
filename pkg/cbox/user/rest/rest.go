@@ -143,7 +143,7 @@ func (m *manager) getUser(ctx context.Context, url string) (map[string]interface
 
 		t, _ := userData["type"].(string)
 		userType := getUserType(t, userData["upn"].(string))
-		if userType != userpb.UserType_USER_TYPE_APPLICATION && userType != userpb.UserType_USER_TYPE_FEDERATED {
+		if userType != userpb.UserType_USER_TYPE_APPLICATION {
 			users = append(users, userData)
 		}
 	}
@@ -290,15 +290,15 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 	}
 
 	var userData map[string]interface{}
-	if strings.HasPrefix(value, "guest:") {
+	if claim == "upn" && strings.HasPrefix(value, "guest:") {
 		// Lightweight accounts need to be fetched by email, regardless of the demanded claim
-		if userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(value, "guest:")); err != nil {
-			return nil, err
-		}
+		userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(value, "guest:"))
 	} else {
-		if userData, err = m.getUserByParam(ctx, claim, value); err != nil {
-			return nil, errors.Wrap(err, "rest: failed getUserByParam, claim="+claim+", value="+value)
-		}
+		userData, err = m.getUserByParam(ctx, claim, value)
+	}
+
+	if err != nil {
+		return nil, err
 	}
 	u, err := m.parseAndCacheUser(ctx, userData)
 	if err != nil {
@@ -329,7 +329,10 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 			continue
 		}
 
-		upn, _ := usrInfo["upn"].(string)
+		upn, ok := usrInfo["upn"].(string)
+		if !ok {
+			continue
+		}
 		mail, _ := usrInfo["primaryAccountEmail"].(string)
 		name, _ := usrInfo["displayName"].(string)
 		uidNumber, _ := usrInfo["uid"].(float64)
@@ -337,7 +340,7 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 		t, _ := usrInfo["type"].(string)
 		userType := getUserType(t, upn)
 
-		if userType == userpb.UserType_USER_TYPE_APPLICATION || userType == userpb.UserType_USER_TYPE_FEDERATED {
+		if userType == userpb.UserType_USER_TYPE_APPLICATION {
 			continue
 		}
 
@@ -372,7 +375,7 @@ func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 
 	// Look at namespaces filters. If the query starts with:
 	// "a" => look into primary/secondary/service accounts
-	// "l" => look into lightweight accounts
+	// "l" => look into lightweight/federated accounts
 	// none => look into primary
 
 	parts := strings.SplitN(query, ":", 2)
@@ -413,7 +416,7 @@ func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 	case "a":
 		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_PRIMARY, userpb.UserType_USER_TYPE_SECONDARY, userpb.UserType_USER_TYPE_SERVICE}
 	case "l":
-		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_LIGHTWEIGHT}
+		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_LIGHTWEIGHT, userpb.UserType_USER_TYPE_FEDERATED}
 	}
 
 	for _, u := range users {

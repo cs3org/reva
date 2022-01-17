@@ -131,8 +131,8 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	var total, used uint64
 	var relative float32
-	// lightweight accounts don't have access to their storage space
-	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+	// lightweight and federated accounts don't have access to their storage space
+	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT && u.Id.Type != userpb.UserType_USER_TYPE_FEDERATED {
 		getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
 		if err != nil {
 			sublog.Error().Err(err).Msg("error calling GetQuota")
