@@ -63,6 +63,22 @@ var _ = Describe("Filecache", func() {
 		os.Remove(testDbFile.Name())
 	})
 
+	Describe("ListStorages", func() {
+		It("returns all storages", func() {
+			storages, err := cache.ListStorages(false)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(storages)).To(Equal(2))
+			Expect(storages).To(ConsistOf([]int{1, 2}))
+		})
+
+		It("returns all home storages", func() {
+			storages, err := cache.ListStorages(true)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(storages)).To(Equal(1))
+			Expect(storages).To(ConsistOf([]int{1}))
+		})
+	})
+
 	Describe("GetNumericStorageID", func() {
 		It("returns the proper storage id", func() {
 			nid, err := cache.GetNumericStorageID("home::admin")

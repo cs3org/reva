@@ -68,6 +68,31 @@ func New(driver string, sqldb *sql.DB) (*Cache, error) {
 	}, nil
 }
 
+// ListStorages returns the list of numeric ids of all storages
+// Optionally only home storages are considered
+func (c *Cache) ListStorages(onlyHome bool) ([]int, error) {
+	query := "SELECT numeric_id FROM oc_storages"
+	if onlyHome {
+		query += " WHERE id LIKE 'home::%'"
+	}
+	rows, err := c.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	storages := []int{}
+	for rows.Next() {
+		var numeric_id int
+		err := rows.Scan(&numeric_id)
+		if err != nil {
+			return nil, err
+		}
+		storages = append(storages, numeric_id)
+	}
+	return storages, nil
+}
+
 // GetNumericStorageID returns the database id for the given storage
 func (c *Cache) GetNumericStorageID(id string) (int, error) {
 	row := c.db.QueryRow("SELECT numeric_id FROM oc_storages WHERE id = ?", id)
