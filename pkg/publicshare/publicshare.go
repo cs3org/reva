@@ -33,6 +33,12 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 )
 
+const (
+	// StorageIDFilterType defines a new filter type for storage id.
+	// TODO: Remove this once the filter type is in the CS3 API.
+	StorageIDFilterType link.ListPublicSharesRequest_Filter_Type = 4
+)
+
 // Manager manipulates public shares.
 type Manager interface {
 	CreatePublicShare(ctx context.Context, u *user.User, md *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error)
@@ -95,12 +101,24 @@ func ResourceIDFilter(id *provider.ResourceId) *link.ListPublicSharesRequest_Fil
 	}
 }
 
+// StorageIDFilter is an abstraction for creating filter by storage id.
+func StorageIDFilter(id string) *link.ListPublicSharesRequest_Filter {
+	return &link.ListPublicSharesRequest_Filter{
+		Type: StorageIDFilterType,
+		Term: &link.ListPublicSharesRequest_Filter_ResourceId{
+			ResourceId: &provider.ResourceId{
+				StorageId: id,
+			},
+		},
+	}
+}
+
 // MatchesFilter tests if the share passes the filter.
 func MatchesFilter(share *link.PublicShare, filter *link.ListPublicSharesRequest_Filter) bool {
 	switch filter.Type {
 	case link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID:
 		return utils.ResourceIDEqual(share.ResourceId, filter.GetResourceId())
-	case link.ListPublicSharesRequest_Filter_Type(4):
+	case StorageIDFilterType:
 		return share.ResourceId.StorageId == filter.GetResourceId().GetStorageId()
 	default:
 		return false

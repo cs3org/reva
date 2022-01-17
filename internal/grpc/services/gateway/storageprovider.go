@@ -42,21 +42,16 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	sdk "github.com/cs3org/reva/pkg/sdk/common"
+	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
 	gstatus "google.golang.org/grpc/status"
-)
-
-const (
-	// ShareSpaceFilterType represents a share filter type to filter by space ids.
-	ShareSpaceFilterType collaborationv1beta1.Filter_Type = 7
-	// PublicShareSpaceFilterType represents a publicshare filter type to filter by space ids.
-	PublicShareSpaceFilterType linkv1beta1.ListPublicSharesRequest_Filter_Type = 4
 )
 
 /*  About caching
@@ -344,13 +339,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 	log.Debug().Msg("purging storage space")
 	// List all shares in this storage space
 	lsRes, err := s.ListShares(ctx, &collaborationv1beta1.ListSharesRequest{
-		Filters: []*collaborationv1beta1.Filter{
-			{
-				// TODO: introduce the new fiter type to the CS3 API
-				Type: ShareSpaceFilterType,
-				Term: &collaborationv1beta1.Filter_ResourceId{ResourceId: &provider.ResourceId{StorageId: storageid}},
-			},
-		},
+		Filters: []*collaborationv1beta1.Filter{share.StorageIDFilter(storageid)},
 	})
 	switch {
 	case err != nil:
@@ -375,13 +364,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 
 	// List all public shares in this storage space
 	lpsRes, err := s.ListPublicShares(ctx, &linkv1beta1.ListPublicSharesRequest{
-		Filters: []*linkv1beta1.ListPublicSharesRequest_Filter{
-			{
-				// TODO: introduce the new fiter type to the CS3 API
-				Type: PublicShareSpaceFilterType,
-				Term: &linkv1beta1.ListPublicSharesRequest_Filter_ResourceId{ResourceId: &provider.ResourceId{StorageId: storageid}},
-			},
-		},
+		Filters: []*linkv1beta1.ListPublicSharesRequest_Filter{publicshare.StorageIDFilter(storageid)},
 	})
 	switch {
 	case err != nil:
