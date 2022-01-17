@@ -404,12 +404,12 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
-	trashPathMatches, err := filepath.Glob(n.InternalPath() + node.TrashIDDelimiter)
+	trashPathMatches, err := filepath.Glob(n.InternalPath() + node.TrashIDDelimiter + "*")
 	if err != nil {
 		return err
 	}
 	if len(trashPathMatches) != 1 {
-		return fmt.Errorf("delete space failed: found %d matching trashed spaces", len(matches))
+		return fmt.Errorf("delete space failed: found %d matching trashed spaces", len(trashPathMatches))
 	}
 	trashPath := trashPathMatches[0]
 	return os.Symlink(trashPath, filepath.Join(filepath.Dir(matches[0]), filepath.Base(trashPath)))
