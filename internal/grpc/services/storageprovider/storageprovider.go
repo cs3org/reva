@@ -488,7 +488,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
-			st = status.NewNotFound(ctx, "not found when listing spaces")
+			st = status.NewNotFound(ctx, "not found when creating space")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		case errtypes.NotSupported:
@@ -506,7 +506,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 		case errtypes.AlreadyExists:
 			st = status.NewAlreadyExists(ctx, err, "already exists")
 		default:
-			st = status.NewInternal(ctx, "error listing spaces")
+			st = status.NewInternal(ctx, "error creating space")
 			appctx.GetLogger(ctx).
 				Error().
 				Err(err).
