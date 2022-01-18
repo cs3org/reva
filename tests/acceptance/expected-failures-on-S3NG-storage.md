@@ -990,20 +990,20 @@ Scenario Outline: search for entry with emoji by pattern
 -   [apiWebdavOperations/search.feature:255](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/search.feature#L255) Scenario: search for entries across various folders by tags using REPORT method
 
 And other missing implementation of favorites
--   [apiFavorites/favorites.feature:128](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L128)
--   [apiFavorites/favorites.feature:129](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L129)
--   [apiFavorites/favorites.feature:148](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L148)
--   [apiFavorites/favorites.feature:149](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L149)
--   [apiFavorites/favorites.feature:176](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L176)
--   [apiFavorites/favorites.feature:177](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L177)
+-   [apiFavorites/favorites.feature:158](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L158)
+-   [apiFavorites/favorites.feature:159](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L159)
+-   [apiFavorites/favorites.feature:183](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L183)
+-   [apiFavorites/favorites.feature:184](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L184)
+-   [apiFavorites/favorites.feature:216](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L216)
+-   [apiFavorites/favorites.feature:217](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L217)
 -   [apiFavorites/favoritesSharingToShares.feature:21](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L21)
 -   [apiFavorites/favoritesSharingToShares.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L22)
--   [apiFavorites/favoritesSharingToShares.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L35)
--   [apiFavorites/favoritesSharingToShares.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L36)
--   [apiFavorites/favoritesSharingToShares.feature:48](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L48)
--   [apiFavorites/favoritesSharingToShares.feature:49](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L49)
--   [apiFavorites/favoritesSharingToShares.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L62)
--   [apiFavorites/favoritesSharingToShares.feature:63](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L63)
+-   [apiFavorites/favoritesSharingToShares.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L40)
+-   [apiFavorites/favoritesSharingToShares.feature:41](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L41)
+-   [apiFavorites/favoritesSharingToShares.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L58)
+-   [apiFavorites/favoritesSharingToShares.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L59)
+-   [apiFavorites/favoritesSharingToShares.feature:77](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L77)
+-   [apiFavorites/favoritesSharingToShares.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L78)
 
 #### [WWW-Authenticate header for unauthenticated requests is not clear](https://github.com/owncloud/ocis/issues/2285)
 Scenario Outline: Unauthenticated call
@@ -1376,6 +1376,3 @@ _ocs: api compatibility, return correct status code_
 ### [Content-type is not multipart/byteranges when downloading file with Range Header](https://github.com/owncloud/ocis/issues/2677)
 -   [apiWebdavOperations/downloadFile.feature:169](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L169)
 -   [apiWebdavOperations/downloadFile.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L170)
-
-### [Calculate personal space id in tests when running on reva](https://github.com/owncloud/core/issues/39617)
--   [apiWebdavUpload1/uploadFile.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L32)
