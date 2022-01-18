@@ -29,8 +29,10 @@ import (
 
 // Options for the cephfs module
 type Options struct {
+	Config       string `mapstructure:"config"`
 	GatewaySvc   string `mapstructure:"gatewaysvc"`
 	IndexPool    string `mapstructure:"index_pool"`
+	Keyring      string `mapstructure:"keyring"`
 	Root         string `mapstructure:"root"`
 	ShadowFolder string `mapstructure:"shadow_folder"`
 	ShareFolder  string `mapstructure:"share_folder"`
@@ -49,10 +51,22 @@ func (c *Options) fillDefaults() {
 		c.IndexPool = "path_index"
 	}
 
+	if c.Config == "" {
+		c.Config = "/etc/ceph/ceph.conf"
+	} else {
+		c.Config = addLeadingSlash(c.Config) //force absolute path in case leading "/" is omitted
+	}
+
+	if c.Keyring == "" {
+		c.Keyring = "/etc/ceph/keyring"
+	} else {
+		c.Keyring = addLeadingSlash(c.Keyring)
+	}
+
 	if c.Root == "" {
 		c.Root = "/home"
 	} else {
-		c.Root = addLeadingSlash(c.Root) //force absolute path in case leading "/" is omitted
+		c.Root = addLeadingSlash(c.Root)
 	}
 
 	if c.ShadowFolder == "" {

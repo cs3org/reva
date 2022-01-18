@@ -77,7 +77,7 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 		return nil, errors.New("cephfs: can't create caches")
 	}
 
-	adminConn := newAdminConn(c.IndexPool)
+	adminConn := newAdminConn(c)
 	if adminConn == nil {
 		return nil, errors.Wrap(err, "cephfs: Couldn't create admin connections")
 	}
@@ -562,30 +562,64 @@ func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 	return getRevaError(err)
 }
 
+func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	user := fs.makeUser(ctx)
+	path, err := user.resolveRef(ref)
+	if err != nil {
+		return getRevaError(err)
+	}
+
+	user.op(func(cv *cacheVal) {
+		if err = cv.mount.Open(path, , 0); err != nil {
+			return
+		}
+
+		//TODO(tmourati): Add entry id logic
+	})
+
+	return getRevaError(err)
+}
+
 func (fs *cephfs) EmptyRecycle(ctx context.Context) error {
-	return errtypes.NotSupported("cephfs: empty recycle not supported")
+	return errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (r *provider.CreateStorageSpaceResponse, err error) {
-	return nil, errors.New("cephfs: createStorageSpace not supported")
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
-	panic("implement me")
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
-	return errors.New("cephfs: restoreRecycleItem not supported")
+	return errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
-	return errors.New("cephfs: purgeRecycleItem not supported")
+	return errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, permissions map[string]struct{}) ([]*provider.StorageSpace, error) {
-	return nil, errors.New("cephfs: listStorageSpaces not supported")
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	return nil, errors.New("cephfs: updateStorageSpace not supported")
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+func (fs *cephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+func (fs *cephfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
 }

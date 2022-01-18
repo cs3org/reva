@@ -29,7 +29,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	cephfs2 "github.com/ceph/go-ceph/cephfs"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -75,8 +74,10 @@ func isDir(t provider.ResourceType) bool {
 	return t == provider.ResourceType_RESOURCE_TYPE_CONTAINER
 }
 
+// TODO: Use when fileids are available
+/*
 func (fs *cephfs) makeFIDPath(fid string) string {
-	return "" //filepath.Join(fs.conf.EIDFolder, fid)
+	return "" // filepath.Join(fs.conf.EIDFolder, fid) EIDFolder does not exist
 }
 
 func (fs *cephfs) makeFID(absolutePath string, inode string) (rid *provider.ResourceId, err error) {
@@ -99,6 +100,7 @@ func (fs *cephfs) getFIDPath(cv *cacheVal, path string) (fid string, err error) 
 
 	return fs.makeFIDPath(string(buffer)), err
 }
+ */
 
 func calcChecksum(filepath string, mt Mount, stat Statx) (checksum string, err error) {
 	file, err := mt.Open(filepath, os.O_RDONLY, 0)
@@ -195,6 +197,8 @@ func walkPath(path string, f func(string) error, reverse bool) (err error) {
 	return
 }
 
+// TODO: Use when fileids are available
+/*
 func (fs *cephfs) writeIndex(oid string, value string) (err error) {
 	return fs.adminConn.radosIO.WriteFull(oid, []byte(value))
 }
@@ -243,3 +247,4 @@ func (fs *cephfs) resolveIndex(oid string) (fullPath string, err error) {
 		currPath.Reset()
 	}
 }
+ */
