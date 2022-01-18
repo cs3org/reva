@@ -111,9 +111,18 @@ func New(driver string, sqldb *sql.DB) (*Cache, error) {
 // ListStorages returns the list of numeric ids of all storages
 // Optionally only home storages are considered
 func (c *Cache) ListStorages(onlyHome bool) ([]*Storage, error) {
-	query := "SELECT id, numeric_id FROM oc_storages"
+	query := ""
 	if onlyHome {
-		query += " WHERE id LIKE 'home::%'"
+		mountPointConcat := ""
+		if c.driver == "mysql" {
+			mountPointConcat = "m.mount_point = CONCAT('/', m.user_id, '/')"
+		} else { // sqlite3
+			mountPointConcat = "m.mount_point = '/' || m.user_id || '/'"
+		}
+
+		query = "SELECT s.id, s.numeric_id FROM oc_storages s JOIN oc_mounts m ON s.numeric_id = m.storage_id WHERE " + mountPointConcat
+	} else {
+		query = "SELECT id, numeric_id FROM oc_storages"
 	}
 	rows, err := c.db.Query(query)
 	if err != nil {
