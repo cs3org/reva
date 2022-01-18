@@ -42,6 +42,46 @@ type Cache struct {
 	db     *sql.DB
 }
 
+// Storage represents a storage entry in the database
+type Storage struct {
+	ID        string
+	NumericID int
+}
+
+// File represents an entry of the file cache
+type File struct {
+	ID              int
+	Storage         int
+	Parent          int
+	MimePart        int
+	MimeType        int
+	MimeTypeString  string
+	Size            int
+	MTime           int
+	StorageMTime    int
+	UnencryptedSize int
+	Permissions     int
+	Encrypted       bool
+	Path            string
+	Name            string
+	Etag            string
+	Checksum        string
+}
+
+// TrashItem represents a trash item of the file cache
+type TrashItem struct {
+	ID        int
+	Name      string
+	User      string
+	Path      string
+	Timestamp int
+}
+
+// Scannable describes the interface providing a Scan method
+type Scannable interface {
+	Scan(...interface{}) error
+}
+
 // NewMysql returns a new Cache instance connecting to a MySQL database
 func NewMysql(dsn string) (*Cache, error) {
 	sqldb, err := sql.Open("mysql", dsn)
@@ -70,8 +110,8 @@ func New(driver string, sqldb *sql.DB) (*Cache, error) {
 
 // ListStorages returns the list of numeric ids of all storages
 // Optionally only home storages are considered
-func (c *Cache) ListStorages(onlyHome bool) ([]int, error) {
-	query := "SELECT numeric_id FROM oc_storages"
+func (c *Cache) ListStorages(onlyHome bool) ([]*Storage, error) {
+	query := "SELECT id, numeric_id FROM oc_storages"
 	if onlyHome {
 		query += " WHERE id LIKE 'home::%'"
 	}
@@ -81,16 +121,32 @@ func (c *Cache) ListStorages(onlyHome bool) ([]int, error) {
 	}
 	defer rows.Close()
 
-	storages := []int{}
+	storages := []*Storage{}
 	for rows.Next() {
-		var numeric_id int
-		err := rows.Scan(&numeric_id)
+		storage := &Storage{}
+		err := rows.Scan(&storage.ID, &storage.NumericID)
 		if err != nil {
 			return nil, err
 		}
-		storages = append(storages, numeric_id)
+		storages = append(storages, storage)
 	}
 	return storages, nil
+}
+
+// GetStorage returns the storage with the given numeric id
+func (c *Cache) GetStorage(numeridID interface{}) (*Storage, error) {
+	numericID, err := toIntID(numeridID)
+	if err != nil {
+		return nil, err
+	}
+	row := c.db.QueryRow("SELECT id, numeric_id FROM oc_storages WHERE numeric_id = ?", numericID)
+	s := &Storage{}
+	switch err := row.Scan(&s.ID, &s.NumericID); err {
+	case nil:
+		return s, nil
+	default:
+		return nil, err
+	}
 }
 
 // GetNumericStorageID returns the database id for the given storage
@@ -176,40 +232,6 @@ func (c *Cache) GetStorageOwnerByFileID(numericID interface{}) (string, error) {
 	default:
 		return "", err
 	}
-}
-
-// File represents an entry of the file cache
-type File struct {
-	ID              int
-	Storage         int
-	Parent          int
-	MimePart        int
-	MimeType        int
-	MimeTypeString  string
-	Size            int
-	MTime           int
-	StorageMTime    int
-	UnencryptedSize int
-	Permissions     int
-	Encrypted       bool
-	Path            string
-	Name            string
-	Etag            string
-	Checksum        string
-}
-
-// TrashItem represents a trash item of the file cache
-type TrashItem struct {
-	ID        int
-	Name      string
-	User      string
-	Path      string
-	Timestamp int
-}
-
-// Scannable describes the interface providing a Scan method
-type Scannable interface {
-	Scan(...interface{}) error
 }
 
 func (c *Cache) rowToFile(row Scannable) (*File, error) {

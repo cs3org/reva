@@ -54,6 +54,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -1950,9 +1951,101 @@ func (fs *owncloudsqlfs) HashFile(path string) (string, string, string, error) {
 	}
 }
 
-func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
-	// TODO(corby): Implement
-	return nil, errtypes.NotSupported("list storage spaces")
+func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, _ map[string]struct{}) ([]*provider.StorageSpace, error) {
+	var (
+		spaceID = "*"
+		err     error
+	)
+
+	filteringUnsupportedSpaceTypes := false
+
+	for i := range filter {
+		switch filter[i].Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			t := filter[i].GetSpaceType()
+			filteringUnsupportedSpaceTypes = filteringUnsupportedSpaceTypes || (t != "personal" && !strings.HasPrefix(t, "+"))
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			spaceID, _, _ = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
+		}
+	}
+	if filteringUnsupportedSpaceTypes {
+		// owncloudsql only supports personal spaces, no need to search for something else
+		return []*provider.StorageSpace{}, nil
+	}
+
+	spaces := []*provider.StorageSpace{}
+	if spaceID == "*" {
+		spaces, err = fs.listAllPersonalSpaces()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		space, err := fs.getSpaceByID(spaceID)
+		if err != nil {
+			return nil, err
+		}
+		spaces = append(spaces, space)
+	}
+	return spaces, nil
+}
+
+func (fs *owncloudsqlfs) listAllPersonalSpaces() ([]*provider.StorageSpace, error) {
+	storages, err := fs.filecache.ListStorages(true)
+	if err != nil {
+		return nil, err
+	}
+	spaces := []*provider.StorageSpace{}
+	for _, storage := range storages {
+		owner := strings.TrimPrefix(storage.ID, "home::")
+		u := &userpb.User{Id: &userpb.UserId{OpaqueId: owner}, Username: owner}
+		root, err := fs.filecache.Get(storage.NumericID, "")
+		if err != nil {
+			return nil, err
+		}
+		space := &provider.StorageSpace{
+			Id: &provider.StorageSpaceId{OpaqueId: strconv.Itoa(storage.NumericID)},
+			Root: &provider.ResourceId{
+				StorageId: strconv.Itoa(storage.NumericID),
+				OpaqueId:  strconv.Itoa(root.ID),
+			},
+			Name:      u.Username,
+			SpaceType: "personal",
+			Mtime:     &types.Timestamp{Seconds: uint64(root.MTime)},
+			Owner:     u,
+		}
+		spaces = append(spaces, space)
+	}
+	return spaces, nil
+}
+
+func (fs *owncloudsqlfs) getSpaceByID(spaceID string) (*provider.StorageSpace, error) {
+	storage, err := fs.filecache.GetStorage(spaceID)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasPrefix(storage.ID, "home::") {
+		return nil, fmt.Errorf("only personal spaces are supported")
+	}
+
+	root, err := fs.filecache.Get(storage.NumericID, "")
+	if err != nil {
+		return nil, err
+	}
+	owner := strings.TrimPrefix(storage.ID, "home::")
+	u := &userpb.User{Id: &userpb.UserId{OpaqueId: owner}, Username: owner}
+
+	space := &provider.StorageSpace{
+		Id: &provider.StorageSpaceId{OpaqueId: strconv.Itoa(storage.NumericID)},
+		Root: &provider.ResourceId{
+			StorageId: strconv.Itoa(storage.NumericID),
+			OpaqueId:  strconv.Itoa(root.ID),
+		},
+		Name:      u.Username,
+		SpaceType: "personal",
+		Mtime:     &types.Timestamp{Seconds: uint64(root.MTime)},
+		Owner:     u,
+	}
+	return space, nil
 }
 
 // UpdateStorageSpace updates a storage space
