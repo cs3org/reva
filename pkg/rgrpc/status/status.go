@@ -159,6 +159,8 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 				return NewUnauthenticated(ctx, err, msg+": "+err.Error())
 			case codes.PermissionDenied:
 				return NewPermissionDenied(ctx, err, msg+": "+err.Error())
+			case codes.Unimplemented:
+				return NewUnimplemented(ctx, err, msg+": "+err.Error())
 			}
 		}
 		// the actual error can be wrapped multiple times

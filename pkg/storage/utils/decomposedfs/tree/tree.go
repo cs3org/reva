@@ -420,7 +420,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	// first make node appear in the space trash
 	// parent id and name are stored as extended attributes in the node itself
 	trashLink := filepath.Join(t.root, "trash", n.SpaceRoot.ID, n.ID)
-	err = os.Symlink("../../nodes/"+n.ID+".T."+deletionTime, trashLink)
+	err = os.Symlink("../../nodes/"+n.ID+node.TrashIDDelimiter+deletionTime, trashLink)
 	if err != nil {
 		// To roll back changes
 		// TODO unset trashOriginAttr
@@ -430,7 +430,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	// at this point we have a symlink pointing to a non existing destination, which is fine
 
 	// rename the trashed node so it is not picked up when traversing up the tree and matches the symlink
-	trashPath := nodePath + ".T." + deletionTime
+	trashPath := nodePath + node.TrashIDDelimiter + deletionTime
 	err = os.Rename(nodePath, trashPath)
 	if err != nil {
 		// To roll back changes
@@ -840,7 +840,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 	err = recycleNode.FindStorageSpaceRoot()
 
 	if path == "" || path == "/" {
-		parts := strings.SplitN(filepath.Base(link), ".T.", 2)
+		parts := strings.SplitN(filepath.Base(link), node.TrashIDDelimiter, 2)
 		if len(parts) != 2 {
 			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
 			return

@@ -1264,6 +1264,8 @@ _ocs: api compatibility, return correct status code_
 - [apiVersions/fileVersionAuthor.feature:101](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L101)
 - [apiVersions/fileVersionAuthor.feature:128](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L128)
 - [apiVersions/fileVersionAuthor.feature:155](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L155)
+- [apiVersions/fileVersionAuthor.feature:180](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L180)
+- [apiVersions/fileVersionAuthor.feature:220](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L220)
 
 ### [Allow public link sharing only for certain groups feature not implemented]
 - [apiSharePublicLink2/allowGroupToCreatePublicLinks.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/allowGroupToCreatePublicLinks.feature#L35)
