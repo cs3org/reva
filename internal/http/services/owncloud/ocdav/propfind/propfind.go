@@ -575,7 +575,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 
 	baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
 
-	ref := path.Join(baseURI, md.Path)
+	ref := md.Path
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
