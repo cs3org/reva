@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocisci
+package demo
 
 import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -25,10 +25,10 @@ import (
 )
 
 func init() {
-	registry.Register("ocisci", New)
+	registry.Register("demo", New)
 }
 
-// New returns a new permission manager specific for the CI
+// New returns a new demo permission manager
 func New(c map[string]interface{}) (permission.Manager, error) {
 	return manager{}, nil
 }
@@ -37,7 +37,7 @@ type manager struct {
 }
 
 func (m manager) CheckPermission(permission string, subject string, ref *provider.Reference) bool {
-	// We can currently return false all the time.
+	// We can currently return true all the time.
 	// Once we beginn testing roles we need to somehow check the roles of the users here
-	return false
+	return true
 }

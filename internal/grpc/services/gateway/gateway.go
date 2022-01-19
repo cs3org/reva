@@ -57,6 +57,7 @@ type config struct {
 	GroupProviderEndpoint         string `mapstructure:"groupprovidersvc"`
 	DataTxEndpoint                string `mapstructure:"datatx"`
 	DataGatewayEndpoint           string `mapstructure:"datagateway"`
+	PermissionsEndpoint           string `mapstructure:"permissionssvc"`
 	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
 	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
 	DisableHomeCreationOnLogin    bool   `mapstructure:"disable_home_creation_on_login"`
@@ -71,7 +72,6 @@ type config struct {
 	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
 	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
 	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
-	PermissionsEndpoint string                            `mapstructure:"permissionssvc"`
 }
 
 // sets defaults

@@ -7,6 +7,6 @@ jwt_secret = "Pive-Fumkiu4"
 address = "0.0.0.0:10000"
 
 [grpc.services.permissions]
-driver = "ocisci"
+driver = "demo"
 
 [grpc.services.publicshareprovider.drivers.ocisci]
