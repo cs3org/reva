@@ -233,7 +233,7 @@ func (m *mgr) convertToCS3Share(ctx context.Context, s DBShare, storageMountID s
 			OpaqueId: s.ID,
 		},
 		ResourceId: &provider.ResourceId{
-			StorageId: storageMountID + "!" + s.ItemStorage,
+			StorageId: s.ItemStorage,
 			OpaqueId:  s.FileSource,
 		},
 		Permissions: &collaboration.SharePermissions{Permissions: permissions},

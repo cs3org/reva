@@ -338,6 +338,13 @@ var _ = Describe("SQL manager", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 		})
+
+		It("works with filters", func() {
+			loginAs(otherUser)
+			shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{{Type: collaboration.Filter_TYPE_EXCLUDE_DENIALS}})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(shares)).To(Equal(1))
+		})
 	})
 
 	Describe("GetReceivedShare", func() {

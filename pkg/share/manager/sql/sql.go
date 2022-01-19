@@ -357,7 +357,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 		)
 	SELECT COALESCE(r.uid_owner, '') AS uid_owner, COALESCE(r.uid_initiator, '') AS uid_initiator, COALESCE(r.share_with, '')
 	AS share_with, COALESCE(r.file_source, '') AS file_source, COALESCE(r2.file_target, r.file_target), r.id, r.stime, r.permissions, r.share_type, COALESCE(r2.accepted, r.accepted),
-	r.numeric_id, COALESCE(r.parent, -1) AS parent FROM results r LEFT JOIN results r2 ON r.id = r2.parent WHERE r.parent IS NULL;`
+	r.numeric_id, COALESCE(r.parent, -1) AS parent FROM results r LEFT JOIN results r2 ON r.id = r2.parent WHERE r.parent IS NULL`
 
 	filterQuery, filterParams, err := translateFilters(filters)
 	if err != nil {
@@ -368,7 +368,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 	if filterQuery != "" {
 		query = fmt.Sprintf("%s AND (%s)", query, filterQuery)
 	}
-
+	query += ";"
 	rows, err := m.db.Query(query, params...)
 	if err != nil {
 		return nil, err
@@ -621,7 +621,7 @@ func translateFilters(filters []*collaboration.Filter) (string, []interface{}, e
 		case collaboration.Filter_TYPE_RESOURCE_ID:
 			filterQuery += "("
 			for i, f := range filters {
-				filterQuery += "item_source=?"
+				filterQuery += "file_source=?"
 				params = append(params, f.GetResourceId().OpaqueId)
 
 				if i != len(filters)-1 {
@@ -632,7 +632,7 @@ func translateFilters(filters []*collaboration.Filter) (string, []interface{}, e
 		case collaboration.Filter_TYPE_GRANTEE_TYPE:
 			filterQuery += "("
 			for i, f := range filters {
-				filterQuery += "share_type=?"
+				filterQuery += "r.share_type=?"
 				params = append(params, granteeTypeToShareType(f.GetGranteeType()))
 
 				if i != len(filters)-1 {
@@ -642,7 +642,7 @@ func translateFilters(filters []*collaboration.Filter) (string, []interface{}, e
 			filterQuery += ")"
 		case collaboration.Filter_TYPE_EXCLUDE_DENIALS:
 			// TODO this may change once the mapping of permission to share types is completed (cf. pkg/cbox/utils/conversions.go)
-			filterQuery += "permissions > 0"
+			filterQuery += "r.permissions > 0"
 		default:
 			return "", nil, fmt.Errorf("filter type is not supported")
 		}

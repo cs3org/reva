@@ -67,7 +67,12 @@ func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provid
 		}
 		spaces = append(spaces, space)
 	} else {
-		space, err := fs.getSpaceByNumericID(ctx, spaceID)
+		id, err := strconv.Atoi(spaceID)
+		if err != nil {
+			// non-numeric space id -> this request is not for us
+			return []*provider.StorageSpace{}, nil
+		}
+		space, err := fs.getSpaceByNumericID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +140,7 @@ func (fs *owncloudsqlfs) getPersonalSpace(owner *userpb.User) (*provider.Storage
 	return space, nil
 }
 
-func (fs *owncloudsqlfs) getSpaceByNumericID(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
+func (fs *owncloudsqlfs) getSpaceByNumericID(ctx context.Context, spaceID int) (*provider.StorageSpace, error) {
 	storage, err := fs.filecache.GetStorage(spaceID)
 	if err != nil {
 		return nil, err
