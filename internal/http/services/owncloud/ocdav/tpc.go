@@ -117,29 +117,32 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.Request, ns string) {
 	src := r.Header.Get("Source")
 	dst := path.Join(ns, r.URL.Path)
-	overwrite := r.Header.Get("Overwrite")
-	depth := r.Header.Get("Depth")
-	if depth == "" {
-		depth = "infinity"
-	}
-
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
+
+	overwrite, err := extractOverwrite(w, r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		m := fmt.Sprintf("Overwrite header is set to incorrect value %v", overwrite)
+		b, err := Marshal(exception{
+			code:    SabredavBadRequest,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
+		return
+	}
+	depth, err := extractDepth(w, r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		m := fmt.Sprintf("Depth header is set to incorrect value %v", depth)
+		b, err := Marshal(exception{
+			code:    SabredavBadRequest,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
+		return
+	}
+
 	sublog.Debug().Str("overwrite", overwrite).Str("depth", depth).Msg("TPC Pull")
-
-	overwrite = strings.ToUpper(overwrite)
-	if overwrite == "" {
-		overwrite = "T"
-	}
-
-	if overwrite != "T" && overwrite != "F" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	if depth != "infinity" && depth != "0" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
 
 	// get Gateway client
 	client, err := s.getClient()
@@ -163,7 +166,7 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	if overwrite == "F" {
+	if dstStatRes.Status.Code == rpc.Code_CODE_OK && overwrite == "F" {
 		sublog.Warn().Str("overwrite", overwrite).Msg("Destination already exists")
 		w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 		return
@@ -183,19 +186,16 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClient, r *http.Request, w http.ResponseWriter, recurse bool, ns string) error {
 	src := r.Header.Get("Source")
 	dst := path.Join(ns, r.URL.Path)
-	size := 1024
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("src", src).Str("dst", dst).Msg("Performing HTTP Pull")
+	sublog := appctx.GetLogger(ctx)
+	sublog.Debug().Str("src", src).Str("dst", dst).Msg("Performing HTTP Pull")
 
 	// get upload url
 	uReq := &provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{Path: dst},
 		Opaque: &typespb.Opaque{
 			Map: map[string]*typespb.OpaqueEntry{
-				"Upload-Length": {
-					Decoder: "plain",
-					// TODO: handle case where size is not known in advance
-					Value: []byte(fmt.Sprintf("%d", size)),
+				"sizedeferred": {
+					Value: []byte("true"),
 				},
 			},
 		},
@@ -225,7 +225,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	}
 
 	// add authentication header
-	bearerHeader := r.Header.Get("TransferHeaderAuthorization")
+	bearerHeader := r.Header.Get(HeaderTransferAuth)
 	req.Header.Add("Authorization", bearerHeader)
 
 	// do download
@@ -240,26 +240,24 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	}
 
 	// send performance markers periodically every PerfMarkerResponseTime (5 seconds unless configured).
-	// seconds as transfer progreses
+	// seconds as transfer progresses
 	wc := WriteCounter{0, time.Now(), w}
 	tempReader := io.TeeReader(httpDownloadRes.Body, &wc)
 
 	// do Upload
-	if size > 0 {
-		httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, tempReader)
-		if err != nil {
-			return err
-		}
-		httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
-		httpUploadRes, err := s.client.Do(httpUploadReq)
-		if err != nil {
-			return err
-		}
+	httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, tempReader)
+	if err != nil {
+		return err
+	}
+	httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
+	httpUploadRes, err := s.client.Do(httpUploadReq)
+	if err != nil {
+		return err
+	}
 
-		defer httpUploadRes.Body.Close()
-		if httpUploadRes.StatusCode != http.StatusOK {
-			return err
-		}
+	defer httpUploadRes.Body.Close()
+	if httpUploadRes.StatusCode != http.StatusOK {
+		return err
 	}
 	return nil
 }
@@ -284,29 +282,33 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.Request, ns string) {
 	src := path.Join(ns, r.URL.Path)
 	dst := r.Header.Get("Destination")
-	overwrite := r.Header.Get("Overwrite")
-	depth := r.Header.Get("Depth")
-	if depth == "" {
-		depth = "infinity"
-	}
-
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
+
+	overwrite, err := extractOverwrite(w, r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		m := fmt.Sprintf("Overwrite header is set to incorrect value %v", overwrite)
+		b, err := Marshal(exception{
+			code:    SabredavBadRequest,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
+		return
+	}
+
+	depth, err := extractDepth(w, r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		m := fmt.Sprintf("Depth header is set to incorrect value %v", depth)
+		b, err := Marshal(exception{
+			code:    SabredavBadRequest,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
+		return
+	}
+
 	sublog.Debug().Str("overwrite", overwrite).Str("depth", depth).Msg("HTTPPush")
-
-	overwrite = strings.ToUpper(overwrite)
-	if overwrite == "" {
-		overwrite = "T"
-	}
-
-	if overwrite != "T" && overwrite != "F" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	if depth != "infinity" && depth != "0" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
 
 	// get Gateway client
 	client, err := s.getClient()
@@ -344,8 +346,8 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	src := path.Join(ns, r.URL.Path)
 	dst := r.Header.Get("Destination")
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("src", src).Str("dst", dst).Msg("Performing HTTP Push")
+	sublog := appctx.GetLogger(ctx)
+	sublog.Debug().Str("src", src).Str("dst", dst).Msg("Performing HTTP Push")
 
 	// get download url
 	dReq := &provider.InitiateFileDownloadRequest{
@@ -397,7 +399,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	}
 
 	// add authentication header and content length
-	bearerHeader := r.Header.Get("TransferHeaderAuthorization")
+	bearerHeader := r.Header.Get(HeaderTransferAuth)
 	req.Header.Add("Authorization", bearerHeader)
 	req.ContentLength = int64(srcInfo.GetSize())
 
@@ -414,5 +416,4 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	}
 
 	return nil
-
 }
