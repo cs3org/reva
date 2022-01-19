@@ -57,7 +57,13 @@ func Parse(acls string, delimiter string) (*ACLs, error) {
 		if t == "" || isComment(t) {
 			continue
 		}
-		entry, err := ParseEntry(t)
+		var err error
+		var entry *Entry
+		if strings.HasPrefix(t, TypeLightweight) {
+			entry, err = ParseLWEntry(t)
+		} else {
+			entry, err = ParseEntry(t)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -130,6 +136,24 @@ func ParseEntry(singleSysACL string) (*Entry, error) {
 		Type:        tokens[0],
 		Qualifier:   tokens[1],
 		Permissions: tokens[2],
+	}, nil
+}
+
+// ParseLWEntry parses a single lightweight ACL
+func ParseLWEntry(singleSysACL string) (*Entry, error) {
+	if !strings.HasPrefix(singleSysACL, TypeLightweight+":") {
+		return nil, errInvalidACL
+	}
+	singleSysACL = strings.TrimPrefix(singleSysACL, TypeLightweight+":")
+
+	tokens := strings.Split(singleSysACL, "=")
+	if len(tokens) != 2 {
+		return nil, errInvalidACL
+	}
+	return &Entry{
+		Type:        TypeLightweight,
+		Qualifier:   tokens[0],
+		Permissions: tokens[1],
 	}, nil
 }
 

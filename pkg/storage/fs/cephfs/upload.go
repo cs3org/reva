@@ -16,82 +16,90 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package localfs
+//go:build ceph
+// +build ceph
+
+package cephfs
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
+	cephfs2 "github.com/ceph/go-ceph/cephfs"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	ctx2 "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
-var defaultFilePerm = os.FileMode(0664)
-
-func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (fs *cephfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+	user := fs.makeUser(ctx)
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "localfs: error retrieving upload")
+		metadata := map[string]string{"sizedeferred": "true"}
+		uploadIDs, err := fs.InitiateUpload(ctx, ref, 0, metadata)
+		if err != nil {
+			return err
+		}
+		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
+			return errors.Wrap(err, "cephfs: error retrieving upload")
+		}
 	}
 
 	uploadInfo := upload.(*fileUpload)
 
 	p := uploadInfo.info.Storage["InternalDestination"]
-	ok, err := chunking.IsChunked(p)
+	ok, err := IsChunked(p)
 	if err != nil {
-		return errors.Wrap(err, "localfs: error checking path")
+		return errors.Wrap(err, "cephfs: error checking path")
 	}
 	if ok {
 		var assembledFile string
-		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
+		p, assembledFile, err = NewChunkHandler(ctx, fs).WriteChunk(p, r)
 		if err != nil {
 			return err
 		}
 		if p == "" {
 			if err = uploadInfo.Terminate(ctx); err != nil {
-				return errors.Wrap(err, "localfs: error removing auxiliary files")
+				return errors.Wrap(err, "cephfs: error removing auxiliary files")
 			}
 			return errtypes.PartialContent(ref.String())
 		}
 		uploadInfo.info.Storage["InternalDestination"] = p
-		fd, err := os.Open(assembledFile)
+
+		user.op(func(cv *cacheVal) {
+			r, err = cv.mount.Open(assembledFile, os.O_RDONLY, 0)
+		})
 		if err != nil {
-			return errors.Wrap(err, "localfs: error opening assembled file")
+			return errors.Wrap(err, "cephfs: error opening assembled file")
 		}
-		defer fd.Close()
-		defer os.RemoveAll(assembledFile)
-		r = fd
+		defer r.Close()
+		defer user.op(func(cv *cacheVal) {
+			_ = cv.mount.Unlink(assembledFile)
+		})
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
-		return errors.Wrap(err, "localfs: error writing to binary file")
+		return errors.Wrap(err, "cephfs: error writing to binary file")
 	}
 
 	return uploadInfo.FinishUpload(ctx)
 }
 
-// InitiateUpload returns upload ids corresponding to different protocols it supports
-// It resolves the resource and then reuses the NewUpload function
-// Currently requires the uploadLength to be set
-// TODO to implement LengthDeferrerDataStore make size optional
-// TODO read optional content for small files in this request
-func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-
-	np, err := fs.resolve(ctx, ref)
+func (fs *cephfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+	user := fs.makeUser(ctx)
+	np, err := user.resolveRef(ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "localfs: error resolving reference")
+		return nil, errors.Wrap(err, "cephfs: error resolving reference")
 	}
 
 	info := tusd.FileInfo{
@@ -125,64 +133,63 @@ func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.
-func (fs *localfs) UseIn(composer *tusd.StoreComposer) {
+func (fs *cephfs) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(fs)
 	composer.UseTerminater(fs)
-	// TODO composer.UseConcater(fs)
-	// TODO composer.UseLengthDeferrer(fs)
 }
 
-// NewUpload creates a new upload using the size as the file's length. To determine where to write the binary data
-// the Fileinfo metadata must contain a dir and a filename.
-// returns a unique id which is used to identify the upload. The properties Size and MetaData will be filled.
-func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
-
+func (fs *cephfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("info", info).Msg("localfs: NewUpload")
+	log.Debug().Interface("info", info).Msg("cephfs: NewUpload")
+
+	user := fs.makeUser(ctx)
 
 	fn := info.MetaData["filename"]
 	if fn == "" {
-		return nil, errors.New("localfs: missing filename in metadata")
+		return nil, errors.New("cephfs: missing filename in metadata")
 	}
 	info.MetaData["filename"] = filepath.Clean(info.MetaData["filename"])
 
 	dir := info.MetaData["dir"]
 	if dir == "" {
-		return nil, errors.New("localfs: missing dir in metadata")
+		return nil, errors.New("cephfs: missing dir in metadata")
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	np := fs.wrap(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
-
-	log.Debug().Interface("info", info).Msg("localfs: resolved filename")
+	np := filepath.Join(info.MetaData["dir"], info.MetaData["filename"])
 
 	info.ID = uuid.New().String()
 
-	binPath, err := fs.getUploadPath(ctx, info.ID)
-	if err != nil {
-		return nil, errors.Wrap(err, "localfs: error resolving upload path")
-	}
-	usr := ctxpkg.ContextMustGetUser(ctx)
+	binPath := fs.getUploadPath(info.ID)
+
 	info.Storage = map[string]string{
-		"Type":                "LocalStore",
+		"Type":                "Cephfs",
 		"BinPath":             binPath,
 		"InternalDestination": np,
 
-		"Idp":      usr.Id.Idp,
-		"UserId":   usr.Id.OpaqueId,
-		"UserName": usr.Username,
-		"UserType": utils.UserTypeToString(usr.Id.Type),
+		"Idp":      user.Id.Idp,
+		"UserId":   user.Id.OpaqueId,
+		"UserName": user.Username,
+		"UserType": utils.UserTypeToString(user.Id.Type),
 
 		"LogLevel": log.GetLevel().String(),
 	}
-	// Create binary file with no content
-	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
 
-	u := &fileUpload{
+	// Create binary file with no content
+	user.op(func(cv *cacheVal) {
+		var f *cephfs2.File
+		defer closeFile(f)
+		f, err = cv.mount.Open(binPath, os.O_CREATE|os.O_WRONLY, filePermDefault)
+		if err != nil {
+			return
+		}
+	})
+	//TODO: if we get two same upload ids, the second one can't upload at all
+	if err != nil {
+		return
+	}
+
+	upload = &fileUpload{
 		info:     info,
 		binPath:  binPath,
 		infoPath: binPath + ".info",
@@ -190,56 +197,64 @@ func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tu
 		ctx:      ctx,
 	}
 
-	// writeInfo creates the file by itself if necessary
-	err = u.writeInfo()
-	if err != nil {
-		return nil, err
+	if !info.SizeIsDeferred && info.Size == 0 {
+		log.Debug().Interface("info", info).Msg("cephfs: finishing upload for empty file")
+		// no need to create info file and finish directly
+		err = upload.FinishUpload(ctx)
+
+		return
 	}
 
-	return u, nil
+	// writeInfo creates the file by itself if necessary
+	err = upload.(*fileUpload).writeInfo()
+
+	return
 }
 
-func (fs *localfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
-	return filepath.Join(fs.conf.Uploads, uploadID), nil
+func (fs *cephfs) getUploadPath(uploadID string) string {
+	return filepath.Join(fs.conf.UploadFolder, uploadID)
 }
 
 // GetUpload returns the Upload for the given upload id
-func (fs *localfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
-	binPath, err := fs.getUploadPath(ctx, id)
+func (fs *cephfs) GetUpload(ctx context.Context, id string) (fup tusd.Upload, err error) {
+	binPath := fs.getUploadPath(id)
+	info := tusd.FileInfo{}
 	if err != nil {
-		return nil, err
+		return nil, errtypes.NotFound("bin path for upload " + id + " not found")
 	}
 	infoPath := binPath + ".info"
-	info := tusd.FileInfo{}
-	data, err := ioutil.ReadFile(infoPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Interpret os.ErrNotExist as 404 Not Found
-			err = tusd.ErrNotFound
-		}
-		return nil, err
-	}
-	if err := json.Unmarshal(data, &info); err != nil {
-		return nil, err
-	}
 
-	stat, err := os.Stat(binPath)
+	var data bytes.Buffer
+	f, err := fs.adminConn.adminMount.Open(infoPath, os.O_RDONLY, 0)
 	if err != nil {
-		return nil, err
+		return
 	}
-
-	info.Offset = stat.Size()
+	_, err = io.Copy(&data, f)
+	if err != nil {
+		return
+	}
+	if err = json.Unmarshal(data.Bytes(), &info); err != nil {
+		return
+	}
 
 	u := &userpb.User{
 		Id: &userpb.UserId{
 			Idp:      info.Storage["Idp"],
 			OpaqueId: info.Storage["UserId"],
-			Type:     utils.UserTypeMap(info.Storage["UserType"]),
 		},
 		Username: info.Storage["UserName"],
 	}
+	ctx = ctx2.ContextSetUser(ctx, u)
+	user := fs.makeUser(ctx)
 
-	ctx = ctxpkg.ContextSetUser(ctx, u)
+	var stat Statx
+	user.op(func(cv *cacheVal) {
+		stat, err = cv.mount.Statx(binPath, cephfs2.StatxSize, 0)
+	})
+	if err != nil {
+		return
+	}
+	info.Offset = int64(stat.Size)
 
 	return &fileUpload{
 		info:     info,
@@ -258,7 +273,7 @@ type fileUpload struct {
 	// binPath is the path to the binary file (which has no extension)
 	binPath string
 	// only fs knows how to handle metadata and versions
-	fs *localfs
+	fs *cephfs
 	// a context with a user
 	ctx context.Context
 }
@@ -269,19 +284,27 @@ func (upload *fileUpload) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
 }
 
 // GetReader returns an io.Reader for the upload
-func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
-	return os.Open(upload.binPath)
+func (upload *fileUpload) GetReader(ctx context.Context) (file io.Reader, err error) {
+	user := upload.fs.makeUser(upload.ctx)
+	user.op(func(cv *cacheVal) {
+		file, err = cv.mount.Open(upload.binPath, os.O_RDONLY, 0)
+	})
+	return
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
-func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
-	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
+func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (n int64, err error) {
+	var file io.WriteCloser
+	user := upload.fs.makeUser(upload.ctx)
+	user.op(func(cv *cacheVal) {
+		file, err = cv.mount.Open(upload.binPath, os.O_WRONLY|os.O_APPEND, 0)
+	})
 	if err != nil {
 		return 0, err
 	}
 	defer file.Close()
 
-	n, err := io.Copy(file, src)
+	n, err = io.Copy(file, src)
 
 	// If the HTTP PATCH request gets interrupted in the middle (e.g. because
 	// the user wants to pause the upload), Go's net/http returns an io.ErrUnexpectedEOF.
@@ -302,14 +325,26 @@ func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.R
 // writeInfo updates the entire information. Everything will be overwritten.
 func (upload *fileUpload) writeInfo() error {
 	data, err := json.Marshal(upload.info)
+
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(upload.infoPath, data, defaultFilePerm)
+	user := upload.fs.makeUser(upload.ctx)
+	user.op(func(cv *cacheVal) {
+		var file io.WriteCloser
+		if file, err = cv.mount.Open(upload.infoPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, filePermDefault); err != nil {
+			return
+		}
+		defer file.Close()
+
+		_, err = io.Copy(file, bytes.NewReader(data))
+	})
+
+	return err
 }
 
 // FinishUpload finishes an upload and moves the file to the internal destination
-func (upload *fileUpload) FinishUpload(ctx context.Context) error {
+func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 
 	np := upload.info.Storage["InternalDestination"]
 
@@ -319,47 +354,39 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// the local storage does not store metadata
 	// the fileid is based on the path, so no we do not need to copy it to the new file
 	// the local storage does not track revisions
-	//}
+	// }
 
 	// if destination exists
-	if _, err := os.Stat(np); err == nil {
-		// create revision
-		if err := upload.fs.archiveRevision(upload.ctx, np); err != nil {
-			return err
-		}
-	}
+	// if _, err := os.Stat(np); err == nil {
+	// create revision
+	//	if err := upload.fs.archiveRevision(upload.ctx, np); err != nil {
+	//		return err
+	//	}
+	// }
 
-	//err := os.Rename(upload.binPath, np)
-	//
-	//os.Rename is replaced by the code below to allow for the DataDirectory
-	//and Uploads directory to be on diferent file systems.
-	inputFile, err := os.Open(upload.binPath)
+	user := upload.fs.makeUser(upload.ctx)
+	log := appctx.GetLogger(ctx)
+
+	user.op(func(cv *cacheVal) {
+		err = cv.mount.Rename(upload.binPath, np)
+	})
 	if err != nil {
-		return err
+		return errors.Wrap(err, upload.binPath)
 	}
-	outputFile, err := os.Create(np)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(outputFile, inputFile)
-	if err != nil {
-		return err
-	}
-	inputFile.Close()
-	outputFile.Close()
 
 	// only delete the upload if it was successfully written to the fs
-	if err := os.Remove(upload.infoPath); err != nil {
-		if !os.IsNotExist(err) {
-			log := appctx.GetLogger(ctx)
-			log.Err(err).Interface("info", upload.info).Msg("localfs: could not delete upload info")
+	user.op(func(cv *cacheVal) {
+		err = cv.mount.Unlink(upload.infoPath)
+	})
+	if err != nil {
+		if err.Error() != errNotFound {
+			log.Err(err).Interface("info", upload.info).Msg("cephfs: could not delete upload metadata")
 		}
 	}
 
 	// TODO: set mtime if specified in metadata
 
-	// metadata propagation is left to the storage implementation
-	return err
+	return
 }
 
 // To implement the termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
@@ -367,17 +394,20 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the upload needs to implement Terminate
 
 // AsTerminatableUpload returns a a TerminatableUpload
-func (fs *localfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
+func (fs *cephfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
 
 // Terminate terminates the upload
-func (upload *fileUpload) Terminate(ctx context.Context) error {
-	if err := os.Remove(upload.infoPath); err != nil {
-		return err
-	}
-	if err := os.Remove(upload.binPath); err != nil {
-		return err
-	}
-	return nil
+func (upload *fileUpload) Terminate(ctx context.Context) (err error) {
+	user := upload.fs.makeUser(upload.ctx)
+
+	user.op(func(cv *cacheVal) {
+		if err = cv.mount.Unlink(upload.infoPath); err != nil {
+			return
+		}
+		err = cv.mount.Unlink(upload.binPath)
+	})
+
+	return
 }
