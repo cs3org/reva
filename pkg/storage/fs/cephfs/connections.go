@@ -116,11 +116,15 @@ type adminConn struct {
 }
 
 func newAdminConn(conf *Options) *adminConn {
-	rados, err := rados2.NewConn()
+	rados, err := rados2.NewConnWithUser(conf.ClientId)
 	if err != nil {
 		return nil
 	}
 	if err = rados.ReadConfigFile(conf.Config); err != nil {
+		return nil
+	}
+
+	if err = rados.SetConfigOption("keyring", conf.Keyring); err != nil {
 		return nil
 	}
 
@@ -181,7 +185,7 @@ func newAdminConn(conf *Options) *adminConn {
 
 func newConn(user *User) *cacheVal {
 	var perm *cephfs2.UserPerm
-	mount, err := cephfs2.CreateMount()
+	mount, err := cephfs2.CreateMountWithId(user.fs.conf.ClientId)
 	if err != nil {
 		return destroyCephConn(mount, perm)
 	}

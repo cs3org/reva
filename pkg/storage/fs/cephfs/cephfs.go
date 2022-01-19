@@ -119,7 +119,7 @@ func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
 	}
 
 	err = walkPath(user.home, func(path string) error {
-		return fs.adminConn.adminMount.MakeDir(path, dirPermDefault)
+		return fs.adminConn.adminMount.MakeDir(path, fs.conf.DirPerms)
 	}, false)
 	if err != nil {
 		return getRevaError(err)
@@ -136,7 +136,7 @@ func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
 	}
 
 	user.op(func(cv *cacheVal) {
-		err = cv.mount.MakeDir(removeLeadingSlash(fs.conf.ShareFolder), dirPermDefault)
+		err = cv.mount.MakeDir(removeLeadingSlash(fs.conf.ShareFolder), fs.conf.DirPerms)
 		if err != nil && err.Error() == errFileExists {
 			err = nil
 		}
@@ -153,7 +153,7 @@ func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error 
 	}
 
 	user.op(func(cv *cacheVal) {
-		if err = cv.mount.MakeDir(path, dirPermDefault); err != nil {
+		if err = cv.mount.MakeDir(path, fs.conf.DirPerms); err != nil {
 			return
 		}
 
@@ -494,7 +494,7 @@ func (fs *cephfs) CreateReference(ctx context.Context, path string, targetURI *u
 		if !strings.HasPrefix(strings.TrimPrefix(path, user.home), fs.conf.ShareFolder) {
 			err = errors.New("cephfs: can't create reference outside a share folder")
 		} else {
-			err = cv.mount.MakeDir(path, dirPermDefault)
+			err = cv.mount.MakeDir(path, fs.conf.DirPerms)
 		}
 	})
 	if err != nil {
@@ -570,7 +570,9 @@ func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error 
 	}
 
 	user.op(func(cv *cacheVal) {
-		if err = cv.mount.Open(path, , 0); err != nil {
+		var file *cephfs2.File
+		defer closeFile(file)
+		if file, err = cv.mount.Open(path, os.O_CREATE | os.O_WRONLY, fs.conf.FilePerms); err != nil {
 			return
 		}
 

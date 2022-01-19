@@ -41,8 +41,8 @@ type Mount = *cephfs2.MountInfo
 type Statx = *cephfs2.CephStatx
 
 var dirPermFull = uint32(0777)
-var dirPermDefault = uint32(0775)
-var filePermDefault = uint32(0660)
+var dirPermDefault = uint32(0700)
+var filePermDefault = uint32(0640)
 
 func closeDir(directory *cephfs2.Directory) {
 	if directory != nil {

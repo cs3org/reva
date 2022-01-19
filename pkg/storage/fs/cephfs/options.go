@@ -29,6 +29,7 @@ import (
 
 // Options for the cephfs module
 type Options struct {
+	ClientId     string `mapstructure:"client_id"`
 	Config       string `mapstructure:"config"`
 	GatewaySvc   string `mapstructure:"gatewaysvc"`
 	IndexPool    string `mapstructure:"index_pool"`
@@ -40,6 +41,8 @@ type Options struct {
 	UserLayout   string `mapstructure:"user_layout"`
 
 	DisableHome    bool   `mapstructure:"disable_home"`
+	DirPerms       uint32 `mapstructure:"dir_perms"`
+	FilePerms      uint32 `mapstructure:"file_perms"`
 	UserQuotaBytes uint64 `mapstructure:"user_quota_bytes"`
 	HiddenDirs     map[string]bool
 }
@@ -55,6 +58,10 @@ func (c *Options) fillDefaults() {
 		c.Config = "/etc/ceph/ceph.conf"
 	} else {
 		c.Config = addLeadingSlash(c.Config) //force absolute path in case leading "/" is omitted
+	}
+
+	if c.ClientId == "" {
+		c.ClientId = "admin"
 	}
 
 	if c.Keyring == "" {
@@ -96,7 +103,13 @@ func (c *Options) fillDefaults() {
 		removeLeadingSlash(c.ShadowFolder): true,
 	}
 
-	c.DisableHome = false // it is currently only home based
+	if c.DirPerms == 0 {
+		c.DirPerms = dirPermDefault
+	}
+
+	if c.FilePerms == 0 {
+		c.FilePerms = filePermDefault
+	}
 
 	if c.UserQuotaBytes == 0 {
 		c.UserQuotaBytes = 50000000000
