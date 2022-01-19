@@ -458,7 +458,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 					// add path to resource
 					res.Infos[i].Path = filepath.Join(info.Path, res.Infos[i].Path)
 					if spacesPropfind {
-						res.Infos[i].Path = utils.MakeRelativePath(res.Infos[i].Path)
+						res.Infos[i].Path = utils.MakeRelativePath(filepath.Join(info.Path, res.Infos[i].Path))
 					}
 					if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						stack = append(stack, res.Infos[i])
@@ -575,7 +575,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 
 	baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
 
-	ref := md.Path
+	ref := filepath.Join(baseURI, md.Path)
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
