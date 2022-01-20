@@ -64,11 +64,11 @@ userprovidersvc = ""
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="usersmapping" type="string" default="" %}}
- The OIDC users mapping file path [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L65)
+{{% dir name="users_mapping" type="string" default="" %}}
+ The optional OIDC users mapping file path [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L65)
 {{< highlight toml >}}
 [auth.manager.oidcmapping]
-usersmapping = ""
+users_mapping = ""
 {{< /highlight >}}
 {{% /dir %}}
 

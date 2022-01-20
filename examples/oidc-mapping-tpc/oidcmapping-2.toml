@@ -18,7 +18,7 @@ issuer = "https://iam-escape.cloud.cnaf.infn.it/"
 # ESCAPE adopted the WLCG groups as group claims
 group_claim = "wlcg.groups"
 # The OIDC users mapping file path
-usersmapping = "users-oidcmapping-2.demo.json"
+users_mapping = "users-oidcmapping-2.demo.json"
 
 [grpc.services.userprovider]
 driver = "json"

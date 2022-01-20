@@ -62,7 +62,7 @@ type config struct {
 	GIDClaim        string `mapstructure:"gid_claim" docs:";The claim containing the GID of the user."`
 	GatewaySvc      string `mapstructure:"gatewaysvc" docs:";The endpoint at which the GRPC gateway is exposed."`
 	UserProviderSvc string `mapstructure:"userprovidersvc" docs:";The endpoint at which the GRPC userprovider is exposed."`
-	UsersMapping    string `mapstructure:"usersmapping" docs:"; The OIDC users mapping file path"`
+	UsersMapping    string `mapstructure:"users_mapping" docs:"; The optional OIDC users mapping file path"`
 	GroupClaim      string `mapstructure:"group_claim" docs:"; The group claim to be looked up to map the user (default to 'groups')."`
 }
 
@@ -75,6 +75,9 @@ type oidcUserMapping struct {
 func (c *config) init() {
 	if c.IDClaim == "" {
 		c.IDClaim = "sub"
+	}
+	if c.GroupClaim == "" {
+		c.GroupClaim = "groups"
 	}
 }
 
@@ -126,10 +129,6 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 			return fmt.Errorf("oidcmapping: mapping error, group \"%s\" is mapped to multiple users", u.OIDCGroup)
 		}
 		am.oidcUsersMapping[u.OIDCGroup] = u
-	}
-
-	if am.c.GroupClaim == "" {
-		am.c.GroupClaim = "groups"
 	}
 
 	return nil
