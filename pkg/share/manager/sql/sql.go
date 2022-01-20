@@ -277,7 +277,15 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	uid := ctxpkg.ContextMustGetUser(ctx).Username
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source, file_target, id, stime, permissions, share_type FROM oc_share WHERE (uid_owner=? or uid_initiator=?)"
+	query := `
+		SELECT
+			coalesce(s.uid_owner, '') as uid_owner, coalesce(s.uid_initiator, '') as uid_initiator,
+			coalesce(s.share_with, '') as share_with, coalesce(s.file_source, '') as file_source,
+			s.file_target, s.id, s.stime, s.permissions, s.share_type, fc.storage as storage
+		FROM oc_share s
+		LEFT JOIN oc_filecache fc ON fc.fileid = file_source
+		WHERE (uid_owner=? or uid_initiator=?)
+	`
 	params := []interface{}{uid, uid}
 
 	var (
@@ -310,7 +318,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 	var s DBShare
 	shares := []*collaboration.Share{}
 	for rows.Next() {
-		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.ItemStorage); err != nil {
 			continue
 		}
 		share, err := m.convertToCS3Share(ctx, s, m.storageMountID)
