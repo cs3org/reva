@@ -259,7 +259,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 
 	err = t.createNode(n, owner)
 	if err != nil {
-		return nil
+		return
 	}
 
 	// make child appear in listings
