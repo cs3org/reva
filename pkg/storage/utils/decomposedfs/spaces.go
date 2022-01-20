@@ -290,13 +290,21 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 // UpdateStorageSpace updates a storage space
 func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	space := req.StorageSpace
+	var restore bool
+	if req.Opaque != nil {
+		_, restore = req.Opaque.Map["restore"]
+	}
 
+	space := req.StorageSpace
 	_, spaceID, _ := utils.SplitStorageSpaceID(space.Id.OpaqueId)
 
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
 	if err != nil {
 		return nil, err
+	}
+
+	if restore {
+		// restore logic here
 	}
 
 	if len(matches) != 1 {
