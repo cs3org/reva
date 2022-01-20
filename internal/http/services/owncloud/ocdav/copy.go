@@ -66,12 +66,14 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	src := path.Join(ns, r.URL.Path)
 	dst, err := extractDestination(r)
 	if err != nil {
+		appctx.GetLogger(ctx).Warn().Msg("HTTP COPY: failed to extract destination")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	for _, r := range nameRules {
 		if !r.Test(dst) {
+			appctx.GetLogger(ctx).Warn().Msgf("HTTP COPY: destination %s failed validation", dst)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}

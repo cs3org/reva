@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -123,6 +124,7 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Overwrite header is set to incorrect value %v", overwrite)
+		sublog.Warn().Msgf("HTTP TPC Pull: %s", m)
 		b, err := Marshal(exception{
 			code:    SabredavBadRequest,
 			message: m,
@@ -130,19 +132,7 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 		HandleWebdavError(&sublog, w, b, err)
 		return
 	}
-	depth, err := extractDepth(w, r)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		m := fmt.Sprintf("Depth header is set to incorrect value %v", depth)
-		b, err := Marshal(exception{
-			code:    SabredavBadRequest,
-			message: m,
-		})
-		HandleWebdavError(&sublog, w, b, err)
-		return
-	}
-
-	sublog.Debug().Str("overwrite", overwrite).Str("depth", depth).Msg("TPC Pull")
+	sublog.Debug().Str("overwrite", overwrite).Msg("TPC Pull")
 
 	// get Gateway client
 	client, err := s.getClient()
@@ -165,7 +155,6 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 		HandleErrorStatus(&sublog, w, dstStatRes.Status)
 		return
 	}
-
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK && overwrite == "F" {
 		sublog.Warn().Str("overwrite", overwrite).Msg("Destination already exists")
 		w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
@@ -173,17 +162,15 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	w.WriteHeader(http.StatusAccepted)
-
-	err = s.performHTTPPull(ctx, client, r, w, depth == "infinity", ns)
+	err = s.performHTTPPull(ctx, client, r, w, ns)
 	if err != nil {
-		sublog.Error().Err(err).Str("depth", depth).Msg("error descending directory")
-		w.WriteHeader(http.StatusInternalServerError)
+		sublog.Error().Err(err).Msg("error performing TPC Pull")
 		return
 	}
 	fmt.Fprintf(w, "success: Created")
 }
 
-func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClient, r *http.Request, w http.ResponseWriter, recurse bool, ns string) error {
+func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClient, r *http.Request, w http.ResponseWriter, ns string) error {
 	src := r.Header.Get("Source")
 	dst := path.Join(ns, r.URL.Path)
 	sublog := appctx.GetLogger(ctx)
@@ -202,10 +189,12 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	}
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return err
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
+		w.WriteHeader(http.StatusInternalServerError)
 		return fmt.Errorf("status code %d", uRes.Status.Code)
 	}
 
@@ -221,6 +210,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 
 	req, err := http.NewRequest("GET", src, nil)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return err
 	}
 
@@ -231,12 +221,19 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	// do download
 	httpDownloadRes, err := httpClient.Do(req) // lgtm[go/request-forgery]
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return err
 	}
 	defer httpDownloadRes.Body.Close()
 
+	if httpDownloadRes.StatusCode == http.StatusNotImplemented {
+		// source is a folder, fail
+		w.WriteHeader(http.StatusBadRequest)
+		return errors.New("Third-Party copy of a folder is not supported")
+	}
 	if httpDownloadRes.StatusCode != http.StatusOK {
-		return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
+		w.WriteHeader(http.StatusInternalServerError)
+		return fmt.Errorf("Remote GET returned status code %d", httpDownloadRes.StatusCode)
 	}
 
 	// send performance markers periodically every PerfMarkerResponseTime (5 seconds unless configured).
@@ -247,16 +244,19 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	// do Upload
 	httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, tempReader)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return err
 	}
 	httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
 	httpUploadRes, err := s.client.Do(httpUploadReq)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return err
 	}
 
 	defer httpUploadRes.Body.Close()
 	if httpUploadRes.StatusCode != http.StatusOK {
+		w.WriteHeader(httpUploadRes.StatusCode)
 		return err
 	}
 	return nil
@@ -288,6 +288,7 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Overwrite header is set to incorrect value %v", overwrite)
+		sublog.Warn().Msgf("HTTP TPC Push: %s", m)
 		b, err := Marshal(exception{
 			code:    SabredavBadRequest,
 			message: m,
@@ -296,19 +297,7 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	depth, err := extractDepth(w, r)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		m := fmt.Sprintf("Depth header is set to incorrect value %v", depth)
-		b, err := Marshal(exception{
-			code:    SabredavBadRequest,
-			message: m,
-		})
-		HandleWebdavError(&sublog, w, b, err)
-		return
-	}
-
-	sublog.Debug().Str("overwrite", overwrite).Str("depth", depth).Msg("HTTPPush")
+	sublog.Debug().Str("overwrite", overwrite).Msg("TPC Push")
 
 	// get Gateway client
 	client, err := s.getClient()
@@ -330,19 +319,22 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 		HandleErrorStatus(&sublog, w, srcStatRes.Status)
 		return
 	}
+	if srcStatRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		sublog.Error().Msg("Third-Party copy of a folder is not supported")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	w.WriteHeader(http.StatusAccepted)
-	err = s.performHTTPPush(ctx, client, r, w, srcStatRes.Info, depth == "infinity", ns)
+	err = s.performHTTPPush(ctx, client, r, w, srcStatRes.Info, ns)
 	if err != nil {
-		sublog.Error().Err(err).Str("depth", depth).Msg("error descending directory")
-		w.WriteHeader(http.StatusInternalServerError)
+		sublog.Error().Err(err).Msg("error performing TPC Push")
 		return
 	}
 	fmt.Fprintf(w, "success: Created")
-
 }
 
-func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClient, r *http.Request, w http.ResponseWriter, srcInfo *provider.ResourceInfo, recurse bool, ns string) error {
+func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClient, r *http.Request, w http.ResponseWriter, srcInfo *provider.ResourceInfo, ns string) error {
 	src := path.Join(ns, r.URL.Path)
 	dst := r.Header.Get("Destination")
 
@@ -356,10 +348,12 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 
 	dRes, err := client.InitiateFileDownload(ctx, dReq)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return err
 	}
 
 	if dRes.Status.Code != rpc.Code_CODE_OK {
+		w.WriteHeader(http.StatusInternalServerError)
 		return fmt.Errorf("status code %d", dRes.Status.Code)
 	}
 
@@ -373,17 +367,20 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	// do download
 	httpDownloadReq, err := rhttp.NewRequest(ctx, "GET", downloadEP, nil)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return err
 	}
 	httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, downloadToken)
 
 	httpDownloadRes, err := s.client.Do(httpDownloadReq)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return err
 	}
 	defer httpDownloadRes.Body.Close()
 	if httpDownloadRes.StatusCode != http.StatusOK {
-		return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
+		w.WriteHeader(httpDownloadRes.StatusCode)
+		return fmt.Errorf("Remote PUT returned status code %d", httpDownloadRes.StatusCode)
 	}
 
 	// send performance markers periodically ever $PerfMarkerResponseTime
@@ -395,6 +392,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	httpClient := &http.Client{}
 	req, err := http.NewRequest("PUT", dst, tempReader)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return err
 	}
 
@@ -405,13 +403,14 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 
 	// do Upload
 	httpUploadRes, err := httpClient.Do(req) // lgtm[go/request-forgery]
-
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return err
 	}
 	defer httpUploadRes.Body.Close()
 
 	if httpUploadRes.StatusCode != http.StatusOK {
+		w.WriteHeader(httpUploadRes.StatusCode)
 		return err
 	}
 
