@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
@@ -351,6 +352,9 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	}
 
 	if purge {
+		if !strings.Contains(req.Id.OpaqueId, node.TrashIDDelimiter) {
+			return errtypes.NewErrtypeFromStatus(status.NewInvalidArg(ctx, "can't purge enabled space"))
+		}
 		ip := fs.lu.InternalPath(req.Id.OpaqueId)
 		matches, err := filepath.Glob(ip)
 		if err != nil {
