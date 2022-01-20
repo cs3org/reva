@@ -6,3 +6,4 @@ During the second step all shares, including public shares, in the space will be
 When deleting a space the blobs are currently not yet deleted since the decomposedfs will receive some changes soon.
 
 https://github.com/cs3org/reva/pull/2431
+https://github.com/cs3org/reva/pull/2458

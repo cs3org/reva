@@ -593,6 +593,8 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 			st = status.NewNotFound(ctx, "not found when deleting space")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.BadRequest:
+			st = status.NewInvalidArg(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error deleting space: "+req.Id.String())
 		}
