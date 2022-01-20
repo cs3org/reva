@@ -65,7 +65,13 @@ var _ = Describe("gateway", func() {
 			},
 			Username: "einstein",
 		}
-		homeRef = &storagep.Reference{Path: "/users/f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"}
+		homeRef = &storagep.Reference{
+			ResourceId: &storagep.ResourceId{
+				StorageId: user.Id.OpaqueId,
+				OpaqueId:  user.Id.OpaqueId,
+			},
+			Path: ".",
+		}
 
 		infos2Etags = func(infos []*storagep.ResourceInfo) map[string]string {
 			etags := map[string]string{}
@@ -208,7 +214,9 @@ var _ = Describe("gateway", func() {
 		})
 
 		Describe("ListContainer", func() {
-			It("merges the lists of both shards", func() {
+			// Note: The Gateway doesn't merge any lists any more. This needs to be done by the client
+			// TODO: Move the tests to a place where they can actually test something
+			PIt("merges the lists of both shards", func() {
 				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -216,7 +224,7 @@ var _ = Describe("gateway", func() {
 				Expect(infos2Paths(listRes.Infos)).To(ConsistOf([]string{"/projects/a - project", "/projects/z - project"}))
 			})
 
-			It("propagates the etags from both shards", func() {
+			PIt("propagates the etags from both shards", func() {
 				rootEtag := getProjectsEtag()
 
 				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
@@ -291,7 +299,12 @@ var _ = Describe("gateway", func() {
 				Expect(createRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				space := createRes.StorageSpace
 
-				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: projectsRef})
+				ref := &storagep.Reference{
+					ResourceId: space.Root,
+					Path:       ".",
+				}
+
+				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: ref})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -305,12 +318,18 @@ var _ = Describe("gateway", func() {
 
 			It("lists individual project spaces", func() {
 				By("trying to list a non-existent space")
-				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{Path: "/projects/does-not-exist"}})
+				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{
+					ResourceId: &storagep.ResourceId{
+						StorageId: "does-not-exist",
+						OpaqueId:  "neither-supposed-to-exist",
+					},
+					Path: ".",
+				}})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
 				By("listing an existing space")
-				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{Path: "/projects/a - project"}})
+				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{ResourceId: shard1Space.Root, Path: "."}})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				Expect(len(listRes.Infos)).To(Equal(2))
@@ -318,7 +337,7 @@ var _ = Describe("gateway", func() {
 				for _, i := range listRes.Infos {
 					paths = append(paths, i.Path)
 				}
-				Expect(paths).To(ConsistOf([]string{"/projects/a - project/file.txt", "/projects/a - project/.space"}))
+				Expect(paths).To(ConsistOf([]string{"file.txt", ".space"}))
 			})
 
 		})
@@ -326,11 +345,12 @@ var _ = Describe("gateway", func() {
 
 	Context("with a basic user storage", func() {
 		var (
-			fs            storage.FS
-			embeddedFs    storage.FS
-			homeSpace     *storagep.StorageSpace
-			embeddedSpace *storagep.StorageSpace
-			embeddedRef   *storagep.Reference
+			fs              storage.FS
+			embeddedFs      storage.FS
+			homeSpace       *storagep.StorageSpace
+			embeddedSpace   *storagep.StorageSpace
+			embeddedSpaceID string
+			embeddedRef     *storagep.Reference
 		)
 
 		BeforeEach(func() {
@@ -352,8 +372,10 @@ var _ = Describe("gateway", func() {
 				"treetime_accounting": true,
 			})
 			Expect(err).ToNot(HaveOccurred())
-			err = fs.CreateHome(ctx)
+
+			r, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
 			Expect(err).ToNot(HaveOccurred())
+			Expect(r.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			spaces, err := fs.ListStorageSpaces(ctx, []*storagep.ListStorageSpacesRequest_Filter{}, nil)
 			Expect(err).ToNot(HaveOccurred())
@@ -374,7 +396,7 @@ var _ = Describe("gateway", func() {
 				"treetime_accounting": true,
 			})
 			Expect(err).ToNot(HaveOccurred())
-			res, err := embeddedFs.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
+			res, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
 				Type:  "project",
 				Name:  "embedded project",
 				Owner: user,
@@ -382,13 +404,20 @@ var _ = Describe("gateway", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			embeddedSpace = res.StorageSpace
-			embeddedRef = &storagep.Reference{Path: path.Join(homeRef.Path, "Projects", embeddedSpace.Id.OpaqueId)}
+			embeddedRef = &storagep.Reference{
+				ResourceId: &storagep.ResourceId{
+					StorageId: embeddedSpace.Id.OpaqueId,
+					OpaqueId:  embeddedSpace.Id.OpaqueId,
+				},
+				Path: ".", //  path.Join(homeRef.Path, "Projects", embeddedSpace.Id.OpaqueId),
+			}
 			err = helpers.Upload(ctx,
 				embeddedFs,
 				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/embedded.txt"},
 				[]byte("22"),
 			)
 			Expect(err).ToNot(HaveOccurred())
+			embeddedSpaceID = embeddedSpace.Id.OpaqueId
 		})
 
 		Describe("ListContainer", func() {
@@ -399,27 +428,27 @@ var _ = Describe("gateway", func() {
 				Expect(len(listRes.Infos)).To(Equal(2))
 
 				var fileInfo *storagep.ResourceInfo
-				var embeddedInfo *storagep.ResourceInfo
+				// var embeddedInfo *storagep.ResourceInfo
 				for _, i := range listRes.Infos {
-					if i.Path == "/users/f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c/file.txt" {
+					if i.Path == "file.txt" {
 						fileInfo = i
-					} else if i.Path == "/users/f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c/Projects" {
-						embeddedInfo = i
-					}
+					} // else if i.Path == "Projects" {
+					// embeddedInfo = i
+					// }
 
 				}
 				Expect(fileInfo).ToNot(BeNil())
 				Expect(fileInfo.Owner.OpaqueId).To(Equal(user.Id.OpaqueId))
-				Expect(fileInfo.Path).To(Equal("/users/f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c/file.txt"))
+				Expect(fileInfo.Path).To(Equal("file.txt"))
 				Expect(fileInfo.Size).To(Equal(uint64(1)))
 
-				Expect(embeddedInfo).ToNot(BeNil())
-				Expect(embeddedInfo.Owner.OpaqueId).To(Equal(user.Id.OpaqueId))
-				Expect(embeddedInfo.Path).To(Equal("/users/f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c/Projects"))
-				Expect(embeddedInfo.Size).To(Equal(uint64(2)))
+				// Expect(embeddedInfo).ToNot(BeNil())
+				// Expect(embeddedInfo.Owner.OpaqueId).To(Equal(user.Id.OpaqueId))
+				// Expect(embeddedInfo.Path).To(Equal("Projects"))
+				// Expect(embeddedInfo.Size).To(Equal(uint64(2)))
 			})
 
-			It("lists the embedded project space", func() {
+			PIt("lists the embedded project space", func() {
 				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: embeddedRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -447,9 +476,11 @@ var _ = Describe("gateway", func() {
 
 				info := statRes.Info
 				Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(info.Path).To(Equal(homeRef.Path))
+				Expect(info.Path).To(Equal(user.Id.OpaqueId))
 				Expect(info.Owner.OpaqueId).To(Equal(user.Id.OpaqueId))
-				Expect(info.Size).To(Equal(uint64(3))) // home: 1, embedded: 2
+
+				// TODO: size aggregating is done by the client now - so no chance testing that here
+				// Expect(info.Size).To(Equal(uint64(3))) // home: 1, embedded: 2
 			})
 
 			It("stats the embedded space", func() {
@@ -459,12 +490,13 @@ var _ = Describe("gateway", func() {
 
 				info := statRes.Info
 				Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(info.Path).To(Equal(embeddedRef.Path))
+				Expect(info.Path).To(Equal(embeddedSpaceID))
 				Expect(info.Owner.OpaqueId).To(Equal(user.Id.OpaqueId))
 				Expect(info.Size).To(Equal(uint64(2)))
 			})
 
-			It("propagates Sizes from within the root space", func() {
+			PIt("propagates Sizes from within the root space", func() {
+				// TODO: this cannot work atm as the propagation is not done by the gateway anymore
 				statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -503,7 +535,7 @@ var _ = Describe("gateway", func() {
 				Expect(statRes.Info.Size).To(Equal(uint64(33)))
 			})
 
-			It("propagates Sizes from within the embedded space", func() {
+			PIt("propagates Sizes from within the embedded space", func() {
 				statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -585,7 +617,7 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag3).ToNot(Equal(newEtag2))
 			})
 
-			It("propagates Etags from within the embedded space", func() {
+			PIt("propagates Etags from within the embedded space", func() {
 				statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))

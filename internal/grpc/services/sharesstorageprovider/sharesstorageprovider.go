@@ -278,6 +278,12 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 }
 
 func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
+	// TODO: Needs to find a path for a given resourceID
+	// It should
+	// - getPath of the resourceID - probably requires owner permissions -> needs machine auth
+	// - getPath of every received share on the same space - needs also owner permissions -> needs machine auth
+	// - find the shortest root path that is a prefix of the resource path
+	// alternatively implement this on storageprovider - it needs to know about grants to do so
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
