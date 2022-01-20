@@ -543,7 +543,7 @@ func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*
 		SELECT s.*, storages.numeric_id 
 		FROM oc_share s
 		LEFT JOIN oc_storages storages ON ` + homeConcat + `
-		WHERE s.id=? OR s.parent=?` + userSelect + `
+		WHERE s.id=? OR s.parent=? ` + userSelect + `
 	)
 	SELECT COALESCE(r.uid_owner, '') AS uid_owner, COALESCE(r.uid_initiator, '') AS uid_initiator, COALESCE(r.share_with, '')
 		AS share_with, COALESCE(r.file_source, '') AS file_source, COALESCE(r2.file_target, r.file_target), r.id, r.stime, r.permissions, r.share_type, COALESCE(r2.accepted, r.accepted),

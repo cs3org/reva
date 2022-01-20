@@ -539,7 +539,7 @@ func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filec
 
 // GetPathByID returns the storage relative path for the file id, without the internal namespace
 func (fs *owncloudsqlfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	ip, err := fs.filecache.Path(id.OpaqueId)
+	ip, err := fs.resolve(ctx, &provider.Reference{ResourceId: id})
 	if err != nil {
 		return "", err
 	}
@@ -594,7 +594,7 @@ func (fs *owncloudsqlfs) DenyGrant(ctx context.Context, ref *provider.Reference,
 }
 
 func (fs *owncloudsqlfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	return nil
+	return nil // Nop
 }
 
 func (fs *owncloudsqlfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
