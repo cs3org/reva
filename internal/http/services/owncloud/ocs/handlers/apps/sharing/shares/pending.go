@@ -52,13 +52,13 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	share, ocsResponse := getShareFromID(ctx, client, shareID)
+	rs, ocsResponse := getReceivedShareFromID(ctx, client, shareID)
 	if ocsResponse != nil {
 		response.WriteOCSResponse(w, r, *ocsResponse, nil)
 		return
 	}
 
-	sharedResource, ocsResponse := getSharedResource(ctx, client, share)
+	sharedResource, ocsResponse := getSharedResource(ctx, client, rs.Share.Share.ResourceId)
 	if ocsResponse != nil {
 		response.WriteOCSResponse(w, r, *ocsResponse, nil)
 		return
@@ -76,7 +76,7 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	var mountPoints []string
 	sharesToAccept := map[string]bool{shareID: true}
 	for _, s := range lrs.Shares {
-		if utils.ResourceIDEqual(s.Share.ResourceId, share.Share.GetResourceId()) {
+		if utils.ResourceIDEqual(s.Share.ResourceId, rs.Share.Share.GetResourceId()) {
 			if s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
 				mount = s.MountPoint.Path
 			} else {
@@ -183,9 +183,9 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 }
 
-// getShareFromID uses a client to the gateway to fetch a share based on its ID.
-func getShareFromID(ctx context.Context, client GatewayClient, shareID string) (*collaboration.GetShareResponse, *response.Response) {
-	s, err := client.GetShare(ctx, &collaboration.GetShareRequest{
+// getReceivedShareFromID uses a client to the gateway to fetch a share based on its ID.
+func getReceivedShareFromID(ctx context.Context, client GatewayClient, shareID string) (*collaboration.GetReceivedShareResponse, *response.Response) {
+	s, err := client.GetReceivedShare(ctx, &collaboration.GetReceivedShareRequest{
 		Ref: &collaboration.ShareReference{
 			Spec: &collaboration.ShareReference_Id{
 				Id: &collaboration.ShareId{
@@ -213,10 +213,10 @@ func getShareFromID(ctx context.Context, client GatewayClient, shareID string) (
 }
 
 // getSharedResource attempts to get a shared resource from the storage from the resource reference.
-func getSharedResource(ctx context.Context, client GatewayClient, share *collaboration.GetShareResponse) (*provider.StatResponse, *response.Response) {
+func getSharedResource(ctx context.Context, client GatewayClient, resId *provider.ResourceId) (*provider.StatResponse, *response.Response) {
 	res, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
-			ResourceId: share.Share.GetResourceId(),
+			ResourceId: resId,
 		},
 	})
 	if err != nil {
