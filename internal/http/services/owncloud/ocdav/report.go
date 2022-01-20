@@ -110,7 +110,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			}
 
 			// TODO: implement GetPath on storage provider to fix this
-			statRes.Info.Path = filepath.Join("/users/"+currentUser.Id.OpaqueId, statRes.Info.Path)
+			statRes.Info.Path = path.Join("/users/"+currentUser.Id.OpaqueId, statRes.Info.Path)
 
 			infos = append(infos, statRes.Info)
 		}
