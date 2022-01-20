@@ -579,39 +579,6 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 
 	req.ResourceId = ref.ResourceId
 	return c.GetPath(ctx, req)
-
-	/*
-		c, p, err := s.find(ctx, ref)
-		if err != nil {
-			return &provider.GetPathResponse{
-				Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find reference %+v", ref), err),
-			}, nil
-		}
-
-		mountPath := ""
-		for _, space := range decodeSpaces(p) {
-			mountPath = decodePath(space)
-			break // TODO can there be more than one space for a path?
-		}
-
-		res, err := c.GetPath(ctx, req)
-		if err != nil {
-			return &provider.GetPathResponse{
-				Status: status.NewStatusFromErrType(ctx, "gateway could not call GetPath", err),
-			}, nil
-		}
-
-		if res.Status.Code != rpc.Code_CODE_OK {
-			return &provider.GetPathResponse{
-				Status: res.Status,
-			}, nil
-		}
-
-		return &provider.GetPathResponse{
-			Status: res.Status,
-			Path:   filepath.Join(mountPath, res.GetPath()),
-		}, nil
-	*/
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
