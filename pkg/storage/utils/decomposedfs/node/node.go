@@ -482,7 +482,7 @@ func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 
 // AsResourceInfo return the node as CS3 ResourceInfo
 func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
-	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
+	sublog := appctx.GetLogger(ctx).With().Interface("node", n.ID).Logger()
 
 	var fn string
 	nodePath := n.lu.InternalPath(n.ID)
