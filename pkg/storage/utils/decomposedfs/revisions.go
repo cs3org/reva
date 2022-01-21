@@ -165,6 +165,8 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
+	// FIXME check is locked
+
 	// move current version to new revision
 	nodePath := fs.lu.InternalPath(kp[0])
 	var fi os.FileInfo

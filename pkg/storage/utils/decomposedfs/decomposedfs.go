@@ -36,6 +36,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/props"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -434,6 +435,8 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return
 	}
 
+	// FIXME check is locked
+
 	return fs.tp.Move(ctx, oldNode, newNode)
 }
 
@@ -521,6 +524,38 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 	case !ok:
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
+
+	//lockID := // TODO read from context?
+	// WebDAV uses the Token
+	/*
+				from https://datatracker.ietf.org/doc/html/rfc4918#section-7
+
+				Of the methods defined in HTTP and WebDAV, PUT, POST, PROPPATCH,
+				LOCK, UNLOCK, MOVE, COPY (for the destination resource), DELETE, and
+				MKCOL are affected by write locks.  All other HTTP/WebDAV methods
+				defined so far -- GET in particular -- function independently of a
+				write lock.
+
+				from https://datatracker.ietf.org/doc/html/rfc4918#section-7.5
+
+					In order to prevent these collisions, a lock token MUST be submitted
+				by an authorized principal for all locked resources that a method may
+				change or the method MUST fail.  A lock token is submitted when it
+				appears in an If header.  For example, if a resource is to be moved
+				and both the source and destination are locked, then two lock tokens
+				must be submitted in the If header, one for the source and the other
+				for the destination.
+
+				If: <http://www.example.com/users/f/fielding/index.html>
+		         (<urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6>)
+
+	*/
+	//if node.IsLocked(ctx, lockID) {
+	// hm get current lock, compare lock ids then decide if ok or return error? with current lockid
+
+	//	return errtypes.PermissionDenied("file locked") // TODO by whom? user? app? return current lockid?
+	//}
+	// FIXME check is locked
 
 	return fs.tp.Delete(ctx, node)
 }
@@ -618,14 +653,26 @@ func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lo
 
 	lockPath := node.InternalPath() + ".lock"
 
+	// FIXME check is locked
+
 	// O_EXCL to make open fail when the file already exists
-	f, err := os.OpenFile(lockPath, os.O_EXCL|os.O_CREATE|os.O_WRONLY, os.ModeExclusive)
+	f, err := os.OpenFile(lockPath, os.O_EXCL|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not create lock file")
 	}
 	defer f.Close()
 
-	if err := json.NewEncoder(f).Encode(lock); err != nil {
+	// TODO remove LockDiscovery once https://github.com/cs3org/cs3apis/pull/162 is merged
+	ld := &props.LockDiscovery{
+		LockID:     lock.Metadata,
+		Type:       lock.Type,
+		Expiration: lock.Mtime,
+		UserID:     lock.GetUser(),
+		App:        lock.GetAppName(),
+	}
+
+	// TODO version lock data?
+	if err := json.NewEncoder(f).Encode(ld); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not write lock file")
 	}
 
@@ -661,21 +708,29 @@ func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference
 	}
 	defer f.Close()
 
-	oldLock := &provider.Lock{}
+	oldLock := &props.LockDiscovery{}
 	if err := json.NewDecoder(f).Decode(oldLock); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not read lock")
 	}
 
 	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.GetUser(), u.Id) {
+	if !utils.UserEqual(oldLock.UserID, u.Id) {
 		return errtypes.PermissionDenied("cannot refresh lock of another holder")
 	}
 
-	if !utils.UserEqual(oldLock.GetUser(), lock.GetUser()) {
+	if !utils.UserEqual(oldLock.UserID, lock.GetUser()) {
 		return errtypes.PermissionDenied("cannot change holder when refreshing a lock")
 	}
+	// TODO remove LockDiscovery once https://github.com/cs3org/cs3apis/pull/162 is merged
+	ld := &props.LockDiscovery{
+		LockID:     lock.Metadata,
+		Type:       lock.Type,
+		Expiration: lock.Mtime,
+		UserID:     lock.GetUser(),
+		App:        lock.GetAppName(),
+	}
 
-	if err := json.NewEncoder(f).Encode(lock); err != nil {
+	if err := json.NewEncoder(f).Encode(ld); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not write lock file")
 	}
 
@@ -710,15 +765,15 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference) err
 		return errors.Wrap(err, "Decomposedfs: could not open lock file")
 	}
 
-	oldLock := &provider.Lock{}
+	oldLock := &props.LockDiscovery{}
 	if err := json.NewDecoder(f).Decode(oldLock); err != nil {
 		_ = f.Close()
 		return errors.Wrap(err, "Decomposedfs: could not read lock")
 	}
 
-	// TODO is the app in the context?
+	// TODO read lockid from request
 	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.GetUser(), u.Id) {
+	if !utils.UserEqual(oldLock.UserID, u.Id) {
 		_ = f.Close()
 		return errtypes.PermissionDenied("mismatching holder")
 	}

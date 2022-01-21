@@ -86,13 +86,13 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		if u.Username != username {
 			log.Debug().Str("username", username).Interface("user", u).Msg("trying to read another users trash")
 			// listing other users trash is forbidden, no auth will change that
-			b, err := errors.Marshal(errors.SabredavNotAuthenticated, "", "")
+			w.WriteHeader(http.StatusUnauthorized)
+			b, err := errors.Marshal(http.StatusUnauthorized, "", "")
 			if err != nil {
 				log.Error().Msgf("error marshaling xml response: %s", b)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			w.WriteHeader(http.StatusUnauthorized)
 			_, err = w.Write(b)
 			if err != nil {
 				log.Error().Msgf("error writing xml response: %s", b)
@@ -546,7 +546,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 			sublog.Warn().Str("overwrite", overwrite).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 			b, err := errors.Marshal(
-				errors.SabredavPreconditionFailed,
+				http.StatusPreconditionFailed,
 				"The destination node already exists, and the overwrite header is set to false",
 				net.HeaderOverwrite,
 			)
@@ -598,7 +598,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 			w.WriteHeader(http.StatusForbidden)
-			b, err := errors.Marshal(errors.SabredavPermissionDenied, "Permission denied to restore", "")
+			b, err := errors.Marshal(http.StatusForbidden, "Permission denied to restore", "")
 			errors.HandleWebdavError(&sublog, w, b, err)
 		}
 		errors.HandleErrorStatus(&sublog, w, res.Status)
@@ -670,7 +670,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		sublog.Debug().Str("path", basePath).Str("key", key).Interface("status", res.Status).Msg("resource not found")
 		w.WriteHeader(http.StatusConflict)
 		m := fmt.Sprintf("path %s not found", basePath)
-		b, err := errors.Marshal(errors.SabredavConflict, m, "")
+		b, err := errors.Marshal(http.StatusConflict, m, "")
 		errors.HandleWebdavError(&sublog, w, b, err)
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		w.WriteHeader(http.StatusForbidden)
@@ -680,7 +680,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		} else {
 			m = "Permission denied to delete"
 		}
-		b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+		b, err := errors.Marshal(http.StatusForbidden, m, "")
 		errors.HandleWebdavError(&sublog, w, b, err)
 	default:
 		errors.HandleErrorStatus(&sublog, w, res.Status)

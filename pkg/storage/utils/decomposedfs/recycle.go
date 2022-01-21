@@ -279,6 +279,8 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 		return errtypes.PermissionDenied(key)
 	}
 
+	// FIXME check is locked
+
 	// Run the restore func
 	return restoreFunc()
 }

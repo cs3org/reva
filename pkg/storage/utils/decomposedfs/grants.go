@@ -62,6 +62,8 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
+	// FIXME check is locked
+
 	np := fs.lu.InternalPath(node.ID)
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
@@ -141,6 +143,8 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 	case !ok:
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
+
+	// FIXME check is locked
 
 	var attr string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {

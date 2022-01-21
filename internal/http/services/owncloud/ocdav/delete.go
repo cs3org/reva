@@ -58,6 +58,15 @@ func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string
 }
 
 func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
+
+	// FIXME use middleware to check if Header? no, we need to forward the If header so the backend can handle it properly
+	/*
+		ih, ok := parseIfHeader(r.Header.Get("If"))
+		if !ok {
+			return http.StatusBadRequest, errors.ErrInvalidIfHeader
+		}
+	*/
+
 	client, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
@@ -80,19 +89,19 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			w.WriteHeader(http.StatusNotFound)
 			// TODO path might be empty or relative...
 			m := fmt.Sprintf("Resource %v not found", ref.Path)
-			b, err := errors.Marshal(errors.SabredavNotFound, m, "")
+			b, err := errors.Marshal(http.StatusNotFound, m, "")
 			errors.HandleWebdavError(&log, w, b, err)
 		}
 		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 			w.WriteHeader(http.StatusForbidden)
 			// TODO path might be empty or relative...
 			m := fmt.Sprintf("Permission denied to delete %v", ref.Path)
-			b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+			b, err := errors.Marshal(http.StatusForbidden, m, "")
 			errors.HandleWebdavError(&log, w, b, err)
 		}
 		if res.Status.Code == rpc.Code_CODE_INTERNAL && res.Status.Message == "can't delete mount path" {
 			w.WriteHeader(http.StatusForbidden)
-			b, err := errors.Marshal(errors.SabredavPermissionDenied, res.Status.Message, "")
+			b, err := errors.Marshal(http.StatusForbidden, res.Status.Message, "")
 			errors.HandleWebdavError(&log, w, b, err)
 		}
 

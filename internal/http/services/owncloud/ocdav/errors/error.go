@@ -28,51 +28,79 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type code int
+var sabreException = map[int]string{
 
-const (
+	//http.StatusMultipleChoices:   "Multiple Choices",
+	//http.StatusMovedPermanently:  "Moved Permanently",
+	//http.StatusFound:             "Found",
+	//http.StatusSeeOther:          "See Other",
+	//http.StatusNotModified:       "Not Modified",
+	//http.StatusUseProxy:          "Use Proxy",
+	//http.StatusTemporaryRedirect: "Temporary Redirect",
+	//http.StatusPermanentRedirect: "Permanent Redirect",
 
-	// SabredavBadRequest maps to HTTP 400
-	SabredavBadRequest code = iota
-	// SabredavMethodNotAllowed maps to HTTP 405
-	SabredavMethodNotAllowed
-	// SabredavNotAuthenticated maps to HTTP 401
-	SabredavNotAuthenticated
-	// SabredavPreconditionFailed maps to HTTP 412
-	SabredavPreconditionFailed
-	// SabredavPermissionDenied maps to HTTP 403
-	SabredavPermissionDenied
-	// SabredavNotFound maps to HTTP 404
-	SabredavNotFound
-	// SabredavConflict maps to HTTP 409
-	SabredavConflict
-)
+	http.StatusBadRequest:       "Sabre\\DAV\\Exception\\BadRequest",
+	http.StatusUnauthorized:     "Sabre\\DAV\\Exception\\NotAuthenticated",
+	http.StatusPaymentRequired:  "Sabre\\DAV\\Exception\\PaymentRequired",
+	http.StatusForbidden:        "Sabre\\DAV\\Exception\\Forbidden", // InvalidResourceType, InvalidSyncToken, TooManyMatches
+	http.StatusNotFound:         "Sabre\\DAV\\Exception\\NotFound",
+	http.StatusMethodNotAllowed: "Sabre\\DAV\\Exception\\MethodNotAllowed",
+	//http.StatusNotAcceptable:                "Not Acceptable",
+	//http.StatusProxyAuthRequired:            "Proxy Authentication Required",
+	//http.StatusRequestTimeout:               "Request Timeout",
+	http.StatusConflict: "Sabre\\DAV\\Exception\\Conflict", // LockTokenMatchesRequestUri
+	//http.StatusGone:                         "Gone",
+	http.StatusLengthRequired:     "Sabre\\DAV\\Exception\\LengthRequired",
+	http.StatusPreconditionFailed: "Sabre\\DAV\\Exception\\PreconditionFailed",
+	//http.StatusRequestEntityTooLarge:        "Request Entity Too Large",
+	//http.StatusRequestURITooLong:            "Request URI Too Long",
+	http.StatusUnsupportedMediaType:         "Sabre\\DAV\\Exception\\UnsupportedMediaType", // ReportNotSupported
+	http.StatusRequestedRangeNotSatisfiable: "Sabre\\DAV\\Exception\\RequestedRangeNotSatisfiable",
+	//http.StatusExpectationFailed:            "Expectation Failed",
+	//http.StatusTeapot:                       "I'm a teapot",
+	//http.StatusMisdirectedRequest:           "Misdirected Request",
+	//http.StatusUnprocessableEntity:          "Unprocessable Entity",
+	http.StatusLocked: "Sabre\\DAV\\Exception\\Locked", // ConflictingLock
+	//http.StatusFailedDependency:             "Failed Dependency",
+	//http.StatusTooEarly:                     "Too Early",
+	//http.StatusUpgradeRequired:              "Upgrade Required",
+	//http.StatusPreconditionRequired:         "Precondition Required",
+	//http.StatusTooManyRequests:              "Too Many Requests",
+	//http.StatusRequestHeaderFieldsTooLarge:  "Request Header Fields Too Large",
+	//http.StatusUnavailableForLegalReasons:   "Unavailable For Legal Reasons",
 
-var (
-	codesEnum = []string{
-		"Sabre\\DAV\\Exception\\BadRequest",
-		"Sabre\\DAV\\Exception\\MethodNotAllowed",
-		"Sabre\\DAV\\Exception\\NotAuthenticated",
-		"Sabre\\DAV\\Exception\\PreconditionFailed",
-		"Sabre\\DAV\\Exception\\PermissionDenied",
-		"Sabre\\DAV\\Exception\\NotFound",
-		"Sabre\\DAV\\Exception\\Conflict",
-	}
-)
+	//http.StatusInternalServerError:           "Internal Server Error",
+	http.StatusNotImplemented: "Sabre\\DAV\\Exception\\NotImplemented",
+	//http.StatusBadGateway:                    "Bad Gateway",
+	http.StatusServiceUnavailable: "Sabre\\DAV\\Exception\\ServiceUnavailable",
+	//http.StatusGatewayTimeout:                "Gateway Timeout",
+	//http.StatusHTTPVersionNotSupported:       "HTTP Version Not Supported",
+	//http.StatusVariantAlsoNegotiates:         "Variant Also Negotiates",
+	http.StatusInsufficientStorage: "Sabre\\DAV\\Exception\\InsufficientStorage",
+	//http.StatusLoopDetected:                  "Loop Detected",
+	//http.StatusNotExtended:                   "Not Extended",
+	//http.StatusNetworkAuthenticationRequired: "Network Authentication Required",
+}
+
+// SabreException returns a sabre exception text for the HTTP status code. It returns the empty
+// string if the code is unknown.
+func SabreException(code int) string {
+	return sabreException[code]
+}
 
 // Exception represents a ocdav exception
 type Exception struct {
-	Code    code
+	Code    int
 	Message string
 	Header  string
 }
 
 // Marshal just calls the xml marshaller for a given exception.
-func Marshal(code code, message string, header string) ([]byte, error) {
+func Marshal(code int, message string, header string) ([]byte, error) {
 	xmlstring, err := xml.Marshal(&ErrorXML{
 		Xmlnsd:    "DAV",
 		Xmlnss:    "http://sabredav.org/ns",
-		Exception: codesEnum[code],
+		Exception: sabreException[code],
 		Message:   message,
 		Header:    header,
 	})
@@ -98,11 +126,36 @@ type ErrorXML struct {
 	Header string `xml:"s:header,omitempty"`
 }
 
-// ErrorInvalidPropfind is an invalid propfind error
-var ErrorInvalidPropfind = errors.New("webdav: invalid propfind")
-
-// ErrInvalidProppatch is an invalid proppatch error
-var ErrInvalidProppatch = errors.New("webdav: invalid proppatch")
+var (
+	// ErrInvalidDepth is an invalid depth header error
+	ErrInvalidDepth = errors.New("webdav: invalid depth")
+	// ErrInvalidPropfind is an invalid propfind error
+	ErrInvalidPropfind = errors.New("webdav: invalid propfind")
+	// ErrInvalidProppatch is an invalid proppatch error
+	ErrInvalidProppatch = errors.New("webdav: invalid proppatch")
+	// ErrUnsupportedLockInfo is an invalid lock error
+	ErrInvalidLockInfo = errors.New("webdav: invalid lock info")
+	// ErrUnsupportedLockInfo is an unsupported lock error
+	ErrUnsupportedLockInfo = errors.New("webdav: unsupported lock info")
+	// ErrInvalidTimeout is an invalid timeout error
+	ErrInvalidTimeout = errors.New("webdav: invalid timeout")
+	// ErrInvalidIfHeader is an invalid if header error
+	ErrInvalidIfHeader = errors.New("webdav: invalid If header")
+	// ErrUnsupportedMethod is an unsupported method error
+	ErrUnsupportedMethod = errors.New("webdav: unsupported method")
+	// ErrInvalidLockToken is an invalid lock token error
+	ErrInvalidLockToken = errors.New("webdav: invalid lock token")
+	// ErrConfirmationFailed is returned by a LockSystem's Confirm method.
+	ErrConfirmationFailed = errors.New("webdav: confirmation failed")
+	// ErrForbidden is returned by a LockSystem's Unlock method.
+	ErrForbidden = errors.New("webdav: forbidden")
+	// ErrLocked is returned by a LockSystem's Create, Refresh and Unlock methods.
+	ErrLocked = errors.New("webdav: locked")
+	// ErrNoSuchLock is returned by a LockSystem's Refresh and Unlock methods.
+	ErrNoSuchLock = errors.New("webdav: no such lock")
+	// ErrNotImplemented is returned when hitting not implemented code paths
+	ErrNotImplemented = errors.New("webdav: not implemented")
+)
 
 // HandleErrorStatus checks the status code, logs a Debug or Error level message
 // and writes an appropriate http status

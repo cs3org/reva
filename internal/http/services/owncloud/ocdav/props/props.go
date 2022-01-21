@@ -21,6 +21,10 @@ package props
 import (
 	"bytes"
 	"encoding/xml"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 // PropertyXML represents a single DAV resource property as defined in RFC 4918.
@@ -96,4 +100,46 @@ func Next(d *xml.Decoder) (xml.Token, error) {
 			return t, nil
 		}
 	}
+}
+
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_activelock
+// <!ELEMENT activelock (lockscope, locktype, depth, owner?, timeout?,
+//           locktoken?, lockroot)>
+type ActiveLock struct {
+	XMLName   xml.Name  `xml:"activelock"`
+	Exclusive *struct{} `xml:"lockscope>exclusive,omitempty"`
+	Shared    *struct{} `xml:"lockscope>shared,omitempty"`
+	Write     *struct{} `xml:"locktype>write,omitempty"`
+	Depth     string    `xml:"depth"`
+	Owner     Owner     `xml:"owner,omitempty"`
+	Timeout   string    `xml:"timeout,omitempty"`
+	Locktoken string    `xml:"locktoken>href"`
+	Lockroot  string    `xml:"lockroot>href,omitempty"`
+}
+
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_owner
+type Owner struct {
+	InnerXML string `xml:",innerxml"`
+}
+
+// FTXME remove once https://github.com/cs3org/cs3apis/pull/162 is merged
+type LockDiscovery struct {
+	// Opaque
+	LockID     string
+	Type       provider.LockType
+	UserID     *userpb.UserId
+	App        string
+	Expiration *types.Timestamp
+}
+
+func Escape(s string) string {
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '"', '&', '\'', '<', '>':
+			b := bytes.NewBuffer(nil)
+			xml.EscapeText(b, []byte(s))
+			return b.String()
+		}
+	}
+	return s
 }

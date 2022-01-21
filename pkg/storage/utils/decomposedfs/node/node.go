@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"hash"
 	"io"
@@ -33,14 +34,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
-
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/props"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -48,15 +46,19 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 )
 
 // Define keys and values used in the node metadata
 const (
-	FavoriteKey   = "http://owncloud.org/ns/favorite"
-	ShareTypesKey = "http://owncloud.org/ns/share-types"
-	ChecksumsKey  = "http://owncloud.org/ns/checksums"
-	UserShareType = "0"
-	QuotaKey      = "quota"
+	LockdiscoveryKey = "DAV:lockdiscovery"
+	FavoriteKey      = "http://owncloud.org/ns/favorite"
+	ShareTypesKey    = "http://owncloud.org/ns/share-types"
+	ChecksumsKey     = "http://owncloud.org/ns/checksums"
+	UserShareType    = "0"
+	QuotaKey         = "quota"
 
 	QuotaUncalculated = "-1"
 	QuotaUnknown      = "-2"
@@ -255,7 +257,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 			return c, nil // if the file does not exist we return a node that has Exists = false
 		}
 
-		return nil, errors.Wrap(err, "Decomposedfs: Wrap: readlink error")
+		return nil, errors.Wrap(err, "decomposedfs: Wrap: readlink error")
 	}
 
 	var c *Node
@@ -266,7 +268,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 		}
 		c.SpaceRoot = n.SpaceRoot
 	} else {
-		return nil, fmt.Errorf("Decomposedfs: expected '../ prefix, got' %+v", link)
+		return nil, fmt.Errorf("decomposedfs: expected '../ prefix, got' %+v", link)
 	}
 
 	return c, nil
@@ -275,7 +277,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 // Parent returns the parent node
 func (n *Node) Parent() (p *Node, err error) {
 	if n.ParentID == "" {
-		return nil, fmt.Errorf("Decomposedfs: root has no parent")
+		return nil, fmt.Errorf("decomposedfs: root has no parent")
 	}
 	p = &Node{
 		lu:        n.lu,
@@ -602,6 +604,12 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		}
 		metadata[FavoriteKey] = favorite
 	}
+	// read locks
+	if _, ok := mdKeysMap[LockdiscoveryKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && (returnAllKeys || ok) {
+		if n.hasLocks(ctx) {
+			readLocksIntoOpaque(ctx, nodePath+".lock", ri)
+		}
+	}
 
 	// share indicator
 	if _, ok := mdKeysMap[ShareTypesKey]; returnAllKeys || ok {
@@ -611,7 +619,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 
 	// checksums
-	if _, ok := mdKeysMap[ChecksumsKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && returnAllKeys || ok {
+	if _, ok := mdKeysMap[ChecksumsKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && (returnAllKeys || ok) {
 		// TODO which checksum was requested? sha1 adler32 or md5? for now hardcode sha1?
 		readChecksumIntoResourceChecksum(ctx, nodePath, storageprovider.XSSHA1, ri)
 		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSMD5, ri)
@@ -739,6 +747,58 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not read quota")
 	}
+}
+
+func readLocksIntoOpaque(ctx context.Context, lockPath string, ri *provider.ResourceInfo) {
+	f, err := os.Open(lockPath)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not open lock file")
+		return
+	}
+	defer f.Close()
+
+	lock := &props.LockDiscovery{}
+	if err := json.NewDecoder(f).Decode(lock); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not read lock file")
+	}
+
+	// reencode to ensure valid json
+	var b []byte
+	if b, err = json.Marshal(lock); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not marshal locks")
+	}
+	if ri.Opaque == nil {
+		ri.Opaque = &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{},
+		}
+	}
+	ri.Opaque.Map["lock"] = &types.OpaqueEntry{
+		Decoder: "json",
+		Value:   b,
+	}
+	// TODO support advisory locks?
+}
+
+// IsLocked checks if a file is locked with the given lock id
+func (n Node) IsLocked(ctx context.Context, lockID string) bool {
+	// check lock
+	lockPath := n.InternalPath() + ".lock"
+
+	f, err := os.Open(lockPath)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	lock := &props.LockDiscovery{}
+	if err := json.NewDecoder(f).Decode(lock); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not decode lock file")
+		return false
+	}
+	if lockID != lock.LockID {
+		return true
+	}
+	return false
 }
 
 // HasPropagation checks if the propagation attribute exists and is set to "1"
@@ -953,6 +1013,13 @@ func (n *Node) hasUserShares(ctx context.Context) bool {
 		}
 	}
 	return false
+}
+
+// TODO only exclusive locks for WOPI? or advisory locks?
+func (n *Node) hasLocks(ctx context.Context) bool {
+	lockpath := n.InternalPath() + ".lock"
+	_, err := os.Stat(lockpath) // FIXME better error checking
+	return err == nil
 }
 
 func parseMTime(v string) (t time.Time, err error) {

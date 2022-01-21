@@ -244,7 +244,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		log.Debug().Str("depth", dh).Msg(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Invalid Depth header value: %v", dh)
-		b, err := errors.Marshal(errors.SabredavBadRequest, m, "")
+		b, err := errors.Marshal(http.StatusBadRequest, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
 		return nil, false, false
 	}
@@ -326,7 +326,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		// TODO if we have children invent node on the fly
 		w.WriteHeader(http.StatusNotFound)
 		m := fmt.Sprintf("Resource %v not found", requestPath)
-		b, err := errors.Marshal(errors.SabredavNotFound, m, "")
+		b, err := errors.Marshal(http.StatusNotFound, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
 		return nil, false, false
 	}
@@ -348,6 +348,12 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	resourceInfos := []*provider.ResourceInfo{
 		rootInfo, // PROPFIND always includes the root resource
 	}
+
+	if rootInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		// no need to stat any other spaces, we got our file stat already
+		return resourceInfos, true, true
+	}
+
 	childInfos := map[string]*provider.ResourceInfo{}
 
 	// then add children
@@ -524,19 +530,19 @@ func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 				// http://www.webdav.org/specs/rfc4918.html#METHOD_PROPFIND
 				return XML{Allprop: new(struct{})}, 0, nil
 			}
-			err = errors.ErrorInvalidPropfind
+			err = errors.ErrInvalidPropfind
 		}
 		return XML{}, http.StatusBadRequest, err
 	}
 
 	if pf.Allprop == nil && pf.Include != nil {
-		return XML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
+		return XML{}, http.StatusBadRequest, errors.ErrInvalidPropfind
 	}
 	if pf.Allprop != nil && (pf.Prop != nil || pf.Propname != nil) {
-		return XML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
+		return XML{}, http.StatusBadRequest, errors.ErrInvalidPropfind
 	}
 	if pf.Prop != nil && pf.Propname != nil {
-		return XML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
+		return XML{}, http.StatusBadRequest, errors.ErrInvalidPropfind
 	}
 	if pf.Propname == nil && pf.Allprop == nil && pf.Prop == nil {
 		// jfd: I think <d:prop></d:prop> is perfectly valid ... treat it as allprop
@@ -594,6 +600,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	// -3 indicates unlimited
 	quota := net.PropQuotaUnknown
 	size := strconv.FormatUint(md.Size, 10)
+	var lock *props.LockDiscovery
 	// TODO refactor helper functions: GetOpaqueJSONEncoded(opaque, key string, *struct) err, GetOpaquePlainEncoded(opaque, key) value, err
 	// or use ok like pattern and return bool?
 	if md.Opaque != nil && md.Opaque.Map != nil {
@@ -606,6 +613,13 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		}
 		if md.Opaque.Map["quota"] != nil && md.Opaque.Map["quota"].Decoder == "plain" {
 			quota = string(md.Opaque.Map["quota"].Value)
+		}
+		if md.Opaque.Map["lock"] != nil && md.Opaque.Map["lock"].Decoder == "json" {
+			lock = &props.LockDiscovery{}
+			err := json.Unmarshal(md.Opaque.Map["lock"].Value, lock)
+			if err != nil {
+				sublog.Error().Err(err).Msg("could not unmarshal locks json")
+			}
 		}
 	}
 
@@ -724,6 +738,10 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			} else {
 				propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:favorite", "0"))
 			}
+		}
+
+		if lock != nil {
+			propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("d:lockdiscovery", activeLocks(&sublog, lock)))
 		}
 		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
@@ -1026,6 +1044,12 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:quota-available-bytes", ""))
 					}
+				case "lockdiscovery": // http://www.webdav.org/specs/rfc2518.html#PROPERTY_lockdiscovery
+					if lock == nil {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:lockdiscovery", ""))
+					} else {
+						propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("d:lockdiscovery", activeLocks(&sublog, lock)))
+					}
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:"+pf.Prop[i].Local, ""))
 				}
@@ -1074,6 +1098,67 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	}
 
 	return &response, nil
+}
+
+func activeLocks(log *zerolog.Logger, lock *props.LockDiscovery) string {
+	if lock == nil || lock.Type == provider.LockType_LOCK_TYPE_INVALID {
+		return ""
+	}
+	expiration := "Infinity"
+	if lock.Expiration != nil {
+		now := uint64(time.Now().Unix())
+		if lock.Expiration.Seconds < now {
+			return "" // lock expired
+		}
+		expiration = "Second-" + strconv.FormatUint(lock.Expiration.Seconds-now, 10)
+	}
+
+	// xml.Encode cannot render emptytags like <d:write/>, see https://github.com/golang/go/issues/21399
+	var activelocks strings.Builder
+	activelocks.WriteString("<d:activelock>")
+	// webdav locktype write | transaction
+	switch lock.Type {
+	case provider.LockType_LOCK_TYPE_EXCL:
+		fallthrough
+	case provider.LockType_LOCK_TYPE_WRITE:
+		activelocks.WriteString("<d:locktype><d:write/></d:locktype>")
+	}
+	// webdav lockscope exclusive, shared, or local
+	switch lock.Type {
+	case provider.LockType_LOCK_TYPE_EXCL:
+		fallthrough
+	case provider.LockType_LOCK_TYPE_WRITE:
+		activelocks.WriteString("<d:lockscope><d:exclusive/></d:lockscope>")
+	case provider.LockType_LOCK_TYPE_SHARED:
+		activelocks.WriteString("<d:lockscope><d:shared/></d:lockscope>")
+	}
+	// we currently only support depth infinity
+	activelocks.WriteString("<d:depth>Infinity</d:depth>")
+
+	if lock.UserID != nil {
+		// TODO document that we just invented cs3:user: to expose the cs3 userid via webdav
+		activelocks.WriteString("<d:owner><d:href>cs3:user:")
+		activelocks.WriteString(props.Escape(lock.UserID.OpaqueId + "@" + lock.UserID.Idp))
+		activelocks.WriteString("</d:href></d:owner>")
+	}
+	if lock.App != "" {
+		// TODO document that we just invented d:application and cs3:app: to expose the WOPI application in xml
+		activelocks.WriteString("<d:application><d:href>cs3:app:")
+		user := props.Escape(lock.App)
+		activelocks.WriteString(user)
+		activelocks.WriteString("</d:href></d:application>")
+	}
+	activelocks.WriteString("<d:timeout>")
+	activelocks.WriteString(expiration)
+	activelocks.WriteString("</d:timeout>")
+	if lock.LockID != "" {
+		activelocks.WriteString("<d:locktoken><d:href>opaquelocktoken:")
+		activelocks.WriteString(props.Escape(lock.LockID))
+		activelocks.WriteString("</d:href></d:locktoken>")
+	}
+	// lockroot is only used when setting the lock
+	activelocks.WriteString("</d:activelock>")
+	return activelocks.String()
 }
 
 // be defensive about wrong encoded etags

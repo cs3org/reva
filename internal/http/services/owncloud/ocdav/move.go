@@ -177,7 +177,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
-			b, err := errors.Marshal(errors.SabredavNotFound, m, "")
+			b, err := errors.Marshal(http.StatusNotFound, m, "")
 			errors.HandleWebdavError(&log, w, b, err)
 		}
 		errors.HandleErrorStatus(&log, w, srcStatRes.Status)
@@ -257,7 +257,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		if mRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 			w.WriteHeader(http.StatusForbidden)
 			m := fmt.Sprintf("Permission denied to move %v", src.Path)
-			b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+			b, err := errors.Marshal(http.StatusForbidden, m, "")
 			errors.HandleWebdavError(&log, w, b, err)
 		}
 		errors.HandleErrorStatus(&log, w, mRes.Status)

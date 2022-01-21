@@ -159,7 +159,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 			// all ancestors must already exist, or the method must fail
 			// with a 409 (Conflict) status code.
 			w.WriteHeader(http.StatusConflict)
-			b, err := errors.Marshal(errors.SabredavNotFound, "Parent node does not exist", "")
+			b, err := errors.Marshal(http.StatusConflict, "Parent node does not exist", "")
 			errors.HandleWebdavError(&log, w, b, err)
 		} else {
 			errors.HandleErrorStatus(&log, w, parentStatRes.Status)
@@ -179,7 +179,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if statRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
 		if statRes.Status.Code == rpc.Code_CODE_OK {
 			w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
-			b, err := errors.Marshal(errors.SabredavMethodNotAllowed, "The resource you tried to create already exists", "")
+			b, err := errors.Marshal(http.StatusMethodNotAllowed, "The resource you tried to create already exists", "")
 			errors.HandleWebdavError(&log, w, b, err)
 		} else {
 			errors.HandleErrorStatus(&log, w, statRes.Status)
@@ -204,7 +204,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusForbidden)
 		// TODO path could be empty or relative...
 		m := fmt.Sprintf("Permission denied to create %v", childRef.Path)
-		b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+		b, err := errors.Marshal(http.StatusForbidden, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
 	default:
 		errors.HandleErrorStatus(&log, w, res.Status)

@@ -248,7 +248,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		switch uRes.Status.Code {
 		case rpc.Code_CODE_PERMISSION_DENIED:
 			w.WriteHeader(http.StatusForbidden)
-			b, err := errors.Marshal(errors.SabredavPermissionDenied, "permission denied: you have no permission to upload content", "")
+			b, err := errors.Marshal(http.StatusForbidden, "permission denied: you have no permission to upload content", "")
 			errors.HandleWebdavError(&log, w, b, err)
 		case rpc.Code_CODE_NOT_FOUND:
 			w.WriteHeader(http.StatusConflict)
@@ -289,7 +289,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		}
 		if httpRes.StatusCode == errtypes.StatusChecksumMismatch {
 			w.WriteHeader(http.StatusBadRequest)
-			b, err := errors.Marshal(errors.SabredavBadRequest, "The computed checksum does not match the one received from the client.", "")
+			b, err := errors.Marshal(http.StatusBadRequest, "The computed checksum does not match the one received from the client.", "")
 			errors.HandleWebdavError(&log, w, b, err)
 			return
 		}

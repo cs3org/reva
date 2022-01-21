@@ -146,6 +146,15 @@ func LaterTS(t1 *types.Timestamp, t2 *types.Timestamp) *types.Timestamp {
 	return t2
 }
 
+// TSNow returns the current UTC timestamp
+func TSNow() *types.Timestamp {
+	t := time.Now().UTC()
+	return &types.Timestamp{
+		Seconds: uint64(t.Unix()),
+		Nanos:   uint32(t.Nanosecond()),
+	}
+}
+
 // ExtractGranteeID returns the ID, user or group, set in the GranteeId object
 func ExtractGranteeID(grantee *provider.Grantee) (*userpb.UserId, *grouppb.GroupId) {
 	switch t := grantee.Id.(type) {
