@@ -143,7 +143,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		},
 	}
 
-	ctx = context.WithValue(ctx, SpaceGrant, struct{}{})
+	ctx = context.WithValue(ctx, utils.SpaceGrant, struct{}{})
 
 	if err := fs.AddGrant(ctx, &provider.Reference{
 		ResourceId: resp.StorageSpace.Root,

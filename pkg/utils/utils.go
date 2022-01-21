@@ -55,6 +55,9 @@ var (
 
 	// PublicStorageProviderID is the id used by the sharestorageprovider
 	PublicStorageProviderID = "7993447f-687f-490d-875c-ac95e89a62a4"
+
+	// SpaceGrant is used to signal the storageprovider that the grant is on a space
+	SpaceGrant struct{}
 )
 
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
