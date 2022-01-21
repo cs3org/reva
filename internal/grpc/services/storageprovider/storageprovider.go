@@ -1128,6 +1128,15 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
+	// TODO: update CS3 APIs
+	if req.Opaque != nil {
+		_, spacegrant := req.Opaque.Map["spacegrant"]
+		if spacegrant {
+			ctx = context.WithValue(ctx, utils.SpaceGrant, struct{}{})
+		}
+
+	}
+
 	// check grantee type is valid
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
 		return &provider.AddGrantResponse{

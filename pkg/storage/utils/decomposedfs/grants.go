@@ -29,11 +29,9 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/xattr"
 )
-
-// SpaceGrant is the key used to signal not to create a new space when a grant is assigned to a storage space.
-var SpaceGrant struct{}
 
 // DenyGrant denies access to a resource.
 func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
@@ -72,7 +70,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	}
 
 	// when a grant is added to a space, do not add a new space under "shares"
-	if spaceGrant := ctx.Value(SpaceGrant); spaceGrant == nil {
+	if spaceGrant := ctx.Value(utils.SpaceGrant); spaceGrant == nil {
 		err := fs.createStorageSpace(ctx, "share", node.ID)
 		if err != nil {
 			return err
