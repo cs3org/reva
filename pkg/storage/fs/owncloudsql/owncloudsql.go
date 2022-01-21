@@ -594,7 +594,7 @@ func (fs *owncloudsqlfs) DenyGrant(ctx context.Context, ref *provider.Reference,
 }
 
 func (fs *owncloudsqlfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	return nil // Nop
+	return errtypes.NotSupported("owncloudsqlfs: add grant not supported")
 }
 
 func (fs *owncloudsqlfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
