@@ -288,7 +288,10 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 			Status: status.NewStatusFromErrType(ctx, "gateway could not call UpdateStorageSpace", err),
 		}, nil
 	}
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
+
+	if res.Status.Code == rpc.Code_CODE_OK {
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
+	}
 	return res, nil
 }
 

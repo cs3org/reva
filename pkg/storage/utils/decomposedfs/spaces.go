@@ -213,7 +213,8 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	matches := []string{}
 	for _, spaceType := range spaceTypes {
-		m, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
+		path := filepath.Join(fs.o.Root, "spaces", spaceType, nodeID+"*")
+		m, err := filepath.Glob(path)
 		if err != nil {
 			return nil, err
 		}
@@ -298,13 +299,28 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	space := req.StorageSpace
 	_, spaceID, _ := utils.SplitStorageSpaceID(space.Id.OpaqueId)
 
+	if restore {
+		matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID+node.TrashIDDelimiter+"*"))
+		if err != nil {
+			return nil, err
+		}
+
+		if len(matches) != 1 {
+			return &provider.UpdateStorageSpaceResponse{
+				Status: &v1beta11.Status{
+					Code:    v1beta11.Code_CODE_NOT_FOUND,
+					Message: fmt.Sprintf("restoring space failed: found %d matching spaces", len(matches)),
+				},
+			}, nil
+
+		}
+
+		// restore logic here
+	}
+
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
 	if err != nil {
 		return nil, err
-	}
-
-	if restore {
-		// restore logic here
 	}
 
 	if len(matches) != 1 {
@@ -505,9 +521,13 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		if err != nil || !ok {
 			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
 		}
-		if strings.Contains(space.Root.OpaqueId, node.TrashIDDelimiter) {
-			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %+v", user.Username, space))
-		}
+
+		// FIXME: I want to be enabled again :(
+		/*
+			if strings.Contains(space.Root.OpaqueId, node.TrashIDDelimiter) {
+				return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %+v", user.Username, space))
+			}
+		*/
 	}
 
 	space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
