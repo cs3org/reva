@@ -330,7 +330,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 							MountPoint: s.MountPoint,
 							State:      collaboration.ShareState_SHARE_STATE_ACCEPTED,
 						},
-						UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state, mount_point"}},
+						UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}},
 					}
 
 					shareRes, err := client.UpdateReceivedShare(granteeCtx, updateRequest)
