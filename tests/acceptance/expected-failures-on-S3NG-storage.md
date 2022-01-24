@@ -921,19 +921,10 @@ And other missing implementation of favorites
 -  [apiFavorites/favorites.feature:159](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L159)
 -  [apiFavorites/favorites.feature:183](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L183)
 -  [apiFavorites/favorites.feature:184](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L184)
--  [apiFavorites/favorites.feature:185](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L185)
 -  [apiFavorites/favorites.feature:216](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L216)
 -  [apiFavorites/favorites.feature:217](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L217)
 -  [apiFavorites/favoritesSharingToShares.feature:77](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L77)
 -  [apiFavorites/favoritesSharingToShares.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L78)
-
-#### [resource inside Shares dir is not found using the spaces WebDAV API](https://github.com/owncloud/ocis/issues/2968)
--   [apiFavorites/favorites.feature:164](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L164)
--   [apiFavorites/favoritesSharingToShares.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L27)
--   [apiFavorites/favoritesSharingToShares.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L46)
--   [apiFavorites/favoritesSharingToShares.feature:64](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L64)
--   [apiFavorites/favoritesSharingToShares.feature:83](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L83)
--   [apiFavorites/favoritesSharingToShares.feature:102](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L102)
 
 #### [WWW-Authenticate header for unauthenticated requests is not clear](https://github.com/owncloud/ocis/issues/2285)
 Scenario Outline: Unauthenticated call
