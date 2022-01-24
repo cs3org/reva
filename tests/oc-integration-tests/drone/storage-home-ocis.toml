@@ -23,12 +23,14 @@ mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://revad-services:12001/data"
 enable_home_creation = true
+gateway_addr = "0.0.0.0:19000"
 
 [grpc.services.storageprovider.drivers.ocis]
 root = "/drone/src/tmp/reva/data"
 enable_home = true
 treetime_accounting = true
 treesize_accounting = true
+gateway_addr = "0.0.0.0:19000"
 
 # we have a locally running dataprovider
 [http]

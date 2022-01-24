@@ -39,6 +39,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
@@ -101,6 +102,8 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 	lu.Options = o
 
 	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
+
+	o.GatewayAddr = sharedconf.GetGatewaySVC(o.GatewayAddr)
 	return New(o, lu, p, tp)
 }
 

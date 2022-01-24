@@ -1,0 +1,12 @@
+# This config file will start a reva service that:
+# - serves the ocis ci permissions service
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+
+[grpc]
+address = "0.0.0.0:10000"
+
+[grpc.services.permissions]
+driver = "demo"
+
+[grpc.services.publicshareprovider.drivers.ocisci]
