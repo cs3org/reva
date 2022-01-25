@@ -1092,7 +1092,9 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 		switch err.(type) {
 		case errtypes.NotSupported:
 			// ignore - setting storage grants is optional
-			st = status.NewOK(ctx)
+			return &provider.DenyGrantResponse{
+				Status: status.NewOK(ctx),
+			}, nil
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when setting grants")
 		case errtypes.PermissionDenied:
@@ -1140,7 +1142,9 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 		switch err.(type) {
 		case errtypes.NotSupported:
 			// ignore - setting storage grants is optional
-			st = status.NewOK(ctx)
+			return &provider.AddGrantResponse{
+				Status: status.NewOK(ctx),
+			}, nil
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when setting grants")
 		case errtypes.PermissionDenied:
@@ -1178,7 +1182,9 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 		switch err.(type) {
 		case errtypes.NotSupported:
 			// ignore - setting storage grants is optional
-			st = status.NewOK(ctx)
+			return &provider.UpdateGrantResponse{
+				Status: status.NewOK(ctx),
+			}, nil
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when updating grant")
 		case errtypes.PermissionDenied:
