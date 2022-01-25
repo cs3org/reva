@@ -213,10 +213,10 @@ func getReceivedShareFromID(ctx context.Context, client GatewayClient, shareID s
 }
 
 // getSharedResource attempts to get a shared resource from the storage from the resource reference.
-func getSharedResource(ctx context.Context, client GatewayClient, resId *provider.ResourceId) (*provider.StatResponse, *response.Response) {
+func getSharedResource(ctx context.Context, client GatewayClient, resID *provider.ResourceId) (*provider.StatResponse, *response.Response) {
 	res, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
-			ResourceId: resId,
+			ResourceId: resID,
 		},
 	})
 	if err != nil {
