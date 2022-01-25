@@ -19,6 +19,10 @@ issuer = "https://iam-escape.cloud.cnaf.infn.it/"
 group_claim = "wlcg.groups"
 # The OIDC users mapping file path
 users_mapping = "users-oidcmapping-1.demo.json"
+# If your local identity provider service configuration includes further claims,
+# please configure them also here
+#uid_claim = ""
+#gid_claim = ""
 
 [grpc.services.userprovider]
 driver = "json"
