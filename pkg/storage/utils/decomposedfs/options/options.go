@@ -50,6 +50,8 @@ type Options struct {
 	Owner     string `mapstructure:"owner"`
 	OwnerIDP  string `mapstructure:"owner_idp"`
 	OwnerType string `mapstructure:"owner_type"`
+
+	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
 // New returns a new Options instance for the given configuration
