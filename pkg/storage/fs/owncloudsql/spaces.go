@@ -96,21 +96,22 @@ func (fs *owncloudsqlfs) DeleteStorageSpace(ctx context.Context, req *provider.D
 	return errtypes.NotSupported("delete storage space")
 }
 
-func (fs *owncloudsqlfs) listAllPersonalSpaces(ctx context.Context) ([]*provider.StorageSpace, error) {
-	storages, err := fs.filecache.ListStorages(true)
-	if err != nil {
-		return nil, err
-	}
-	spaces := []*provider.StorageSpace{}
-	for _, storage := range storages {
-		space, err := fs.storageToSpace(ctx, storage)
-		if err != nil {
-			return nil, err
-		}
-		spaces = append(spaces, space)
-	}
-	return spaces, nil
-}
+//  Note: currently unused but will be used later
+// func (fs *owncloudsqlfs) listAllPersonalSpaces(ctx context.Context) ([]*provider.StorageSpace, error) {
+// 	storages, err := fs.filecache.ListStorages(true)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	spaces := []*provider.StorageSpace{}
+// 	for _, storage := range storages {
+// 		space, err := fs.storageToSpace(ctx, storage)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		spaces = append(spaces, space)
+// 	}
+// 	return spaces, nil
+// }
 
 func (fs *owncloudsqlfs) getPersonalSpace(owner *userpb.User) (*provider.StorageSpace, error) {
 	storageID, err := fs.filecache.GetNumericStorageID("home::" + owner.Username)
