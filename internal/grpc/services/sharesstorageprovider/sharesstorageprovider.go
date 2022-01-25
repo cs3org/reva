@@ -285,24 +285,7 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 	// - getPath of every received share on the same space - needs also owner permissions -> needs machine auth
 	// - find the shortest root path that is a prefix of the resource path
 	// alternatively implement this on storageprovider - it needs to know about grants to do so
-
-	receivedShare, rpcStatus, err := s.resolveReference(ctx, &provider.Reference{ResourceId: req.ResourceId})
-	appctx.GetLogger(ctx).Debug().
-		Interface("resourceId", req.ResourceId).
-		Interface("received_share", receivedShare).
-		Msg("sharesstorageprovider: Got GetPath request")
-	if err != nil {
-		return nil, err
-	}
-	if rpcStatus != nil {
-		return &provider.GetPathResponse{
-			Status: rpcStatus,
-		}, nil
-	}
-
-	return s.gateway.GetPath(ctx, &provider.GetPathRequest{
-		ResourceId: receivedShare.Share.ResourceId,
-	})
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {

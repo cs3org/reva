@@ -298,24 +298,6 @@ var _ = Describe("Sharesstorageprovider", func() {
 			}, nil)
 		})
 
-		Describe("GetPath", func() {
-			It("returns the path", func() {
-				gw.On("GetPath", mock.Anything, mock.Anything).Return(&sprovider.GetPathResponse{
-					Status: status.NewOK(context.Background()),
-					Path:   "/shareddir",
-				}, nil)
-				res, err := s.GetPath(ctx, &sprovider.GetPathRequest{
-					ResourceId: &sprovider.ResourceId{
-						StorageId: utils.ShareStorageProviderID,
-						OpaqueId:  "shareddir",
-					},
-				})
-				Expect(err).ToNot(HaveOccurred())
-				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
-				Expect(res.Path).To(Equal("/shareddir"))
-			})
-		})
-
 		Describe("Stat", func() {
 			It("stats the root shares folder", func() {
 				res, err := s.Stat(ctx, BaseStatRequest)
