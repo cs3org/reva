@@ -32,6 +32,7 @@ type Config struct {
 	StorageregistrySvc       string                            `mapstructure:"storage_registry_svc"`
 	DefaultUploadProtocol    string                            `mapstructure:"default_upload_protocol"`
 	UserAgentChunkingMap     map[string]string                 `mapstructure:"user_agent_chunking_map"`
+	GroupBasedCapabilities   map[string][]string               `mapstructure:"group_based_capabilities"`
 	SharePrefix              string                            `mapstructure:"share_prefix"`
 	HomeNamespace            string                            `mapstructure:"home_namespace"`
 	AdditionalInfoAttribute  string                            `mapstructure:"additional_info_attribute"`
