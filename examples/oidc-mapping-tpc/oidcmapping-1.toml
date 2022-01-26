@@ -12,7 +12,6 @@ auth_manager = "oidcmapping"
 [grpc.services.authprovider.auth_managers.json]
 users = "users.json"
 [grpc.services.authprovider.auth_managers.oidcmapping]
-userprovidersvc = "localhost:13000"
 gatewaysvc = "localhost:19000"
 issuer = "https://iam-escape.cloud.cnaf.infn.it/"
 # ESCAPE adopted the WLCG groups as group claims
