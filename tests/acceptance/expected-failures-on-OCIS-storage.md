@@ -914,26 +914,26 @@ API, search, favorites, config, capabilities, not existing endpoints, CORS and o
 
 #### [Trying to access another user's file gives http 403 instead of 404](https://github.com/owncloud/ocis/issues/2175)
 _ocdav: api compatibility, return correct status code_
--   [apiAuthWebDav/webDavDELETEAuth.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L38) Scenario: send DELETE requests to another user's webDav endpoints as normal user
--   [apiAuthWebDav/webDavPROPFINDAuth.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPFINDAuth.feature#L39)  Scenario: send PROPFIND requests to another user's webDav endpoints as normal user
--   [apiAuthWebDav/webDavPROPPATCHAuth.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPPATCHAuth.feature#L40) Scenario: send PROPPATCH requests to another user's webDav endpoints as normal user
--   [apiAuthWebDav/webDavMKCOLAuth.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMKCOLAuth.feature#L36) Scenario: send MKCOL requests to another user's webDav endpoints as normal user
+-   [apiAuthWebDav/webDavDELETEAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L58) Scenario: send DELETE requests to another user's webDav endpoints as normal user
+-   [apiAuthWebDav/webDavPROPFINDAuth.feature:57](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPFINDAuth.feature#L57)  Scenario: send PROPFIND requests to another user's webDav endpoints as normal user
+-   [apiAuthWebDav/webDavPROPPATCHAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPPATCHAuth.feature#L58) Scenario: send PROPPATCH requests to another user's webDav endpoints as normal user
+-   [apiAuthWebDav/webDavMKCOLAuth.feature:54](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMKCOLAuth.feature#L54) Scenario: send MKCOL requests to another user's webDav endpoints as normal user
 
 #### [trying to lock file of another user gives http 200](https://github.com/owncloud/ocis/issues/2176)
--   [apiAuthWebDav/webDavLOCKAuth.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavLOCKAuth.feature#L40) Scenario: send LOCK requests to another user's webDav endpoints as normal user
+-   [apiAuthWebDav/webDavLOCKAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavLOCKAuth.feature#L58) Scenario: send LOCK requests to another user's webDav endpoints as normal user
 
 #### [Renaming a resource to banned name is allowed](https://github.com/owncloud/ocis/issues/1295)
 _ocdav: api compatibility, return correct status code_
--   [apiAuthWebDav/webDavMOVEAuth.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMOVEAuth.feature#L39) Scenario: send MOVE requests to another user's webDav endpoints as normal user
+-   [apiAuthWebDav/webDavMOVEAuth.feature:57](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMOVEAuth.feature#L57) Scenario: send MOVE requests to another user's webDav endpoints as normal user
 
 #### [send POST requests to another user's webDav endpoints as normal user](https://github.com/owncloud/ocis/issues/1287)
 _ocdav: api compatibility, return correct status code_
--   [apiAuthWebDav/webDavPOSTAuth.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPOSTAuth.feature#L40)  Scenario: send POST requests to another user's webDav endpoints as normal user
+-   [apiAuthWebDav/webDavPOSTAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPOSTAuth.feature#L58)  Scenario: send POST requests to another user's webDav endpoints as normal user
 
 #### [Using double slash in URL to access a folder gives 501 and other status codes](https://github.com/owncloud/ocis/issues/1667)
--   [apiAuthWebDav/webDavSpecialURLs.feature:24](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavSpecialURLs.feature#L24)
--   [apiAuthWebDav/webDavSpecialURLs.feature:69](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavSpecialURLs.feature#L69)
--   [apiAuthWebDav/webDavSpecialURLs.feature:91](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavSpecialURLs.feature#L91)
+-   [apiAuthWebDav/webDavSpecialURLs.feature:34](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavSpecialURLs.feature#L34)
+-   [apiAuthWebDav/webDavSpecialURLs.feature:121](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavSpecialURLs.feature#L121)
+-   [apiAuthWebDav/webDavSpecialURLs.feature:163](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavSpecialURLs.feature#L163)
 
 #### [Default capabilities for normal user not same as in oC-core](https://github.com/owncloud/ocis/issues/1285)
 #### [Difference in response content of status.php and default capabilities](https://github.com/owncloud/ocis/issues/1286)
@@ -1071,8 +1071,8 @@ Scenario Outline: A disabled user cannot use webdav
 -   [apiAuth/cors.feature:185](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuth/cors.feature#L185)
 
 #### [App Passwords/Tokens for legacy WebDAV clients](https://github.com/owncloud/ocis/issues/197)
--   [apiAuthWebDav/webDavDELETEAuth.feature:80](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L80)
--   [apiAuthWebDav/webDavDELETEAuth.feature:94](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L94)
+-   [apiAuthWebDav/webDavDELETEAuth.feature:136](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L136)
+-   [apiAuthWebDav/webDavDELETEAuth.feature:162](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L162)
 
 #### [various sharing settings cannot be set](https://github.com/owncloud/ocis/issues/1328)
 - [apiCapabilities/capabilities.feature:8](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L8)
@@ -1374,5 +1374,12 @@ _ocs: api compatibility, return correct status code_
 -   [apiShareOperationsToShares2/shareAccessByID.feature:125](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/shareAccessByID.feature#L125)
 
 ### [Content-type is not multipart/byteranges when downloading file with Range Header](https://github.com/owncloud/ocis/issues/2677)
--   [apiWebdavOperations/downloadFile.feature:169](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L169)
--   [apiWebdavOperations/downloadFile.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L170)
+- [apiWebdavOperations/downloadFile.feature:169](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L169)
+- [apiWebdavOperations/downloadFile.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L170)
+
+#### [Creating a new folder which is a substring of Shares leads to Unknown Error](https://github.com/owncloud/ocis/issues/3033)
+-   [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L29)
+-   [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L32)
+-   [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:45](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L45)
+-   [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:48](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L48)
+-   [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:60](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L60)
