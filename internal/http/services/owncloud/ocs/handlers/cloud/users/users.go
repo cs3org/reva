@@ -129,7 +129,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		ocdav.HandleErrorStatus(sublog, w, getHomeRes.Status)
 		return
 	}
-	var total, used uint64
+	var total, used uint64 = 2, 1
 	var relative float32
 	// lightweight and federated accounts don't have access to their storage space
 	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT && u.Id.Type != userpb.UserType_USER_TYPE_FEDERATED {
