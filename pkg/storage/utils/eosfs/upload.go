@@ -22,6 +22,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -67,7 +68,10 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
+
+	// We need the auth corresponding to the parent directory
+	// as the file might not exist at the moment
+	auth, err := fs.getUserAuth(ctx, u, path.Dir(fn))
 	if err != nil {
 		return err
 	}

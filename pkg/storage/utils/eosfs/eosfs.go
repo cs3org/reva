@@ -1003,7 +1003,7 @@ func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64,
 	// lightweight accounts don't have quota nodes, so we're passing an empty string as path
 	auth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
-		return 0, 0, errors.Wrap(err, "eosfs: error getting uid and gid for user")
+		return 0, 0, err
 	}
 
 	rootAuth, err := fs.getRootAuth(ctx)
@@ -1187,13 +1187,28 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 
 func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
+	p, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error resolving reference")
+	}
+	if fs.isShareFolder(ctx, p) {
+		return errtypes.PermissionDenied("eosfs: cannot perform operation under the virtual share folder")
+	}
+	fn := fs.wrap(ctx, p)
 
-	fn, auth, err := fs.resolveRefForbidShareFolder(ctx, ref)
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+
+	// We need the auth corresponding to the parent directory
+	// as the file might not exist at the moment
+	auth, err := fs.getUserAuth(ctx, u, path.Dir(fn))
 	if err != nil {
 		return err
 	}
-	log.Info().Msgf("eosfs: createdir: path=%s", fn)
 
+	log.Info().Msgf("eosfs: createdir: path=%s", fn)
 	return fs.c.CreateDir(ctx, auth, fn)
 }
 
@@ -1954,7 +1969,7 @@ func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 	}
 	info, err := fs.c.GetFileInfoByPath(ctx, rootAuth, fn)
 	if err != nil {
-		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting file info by path")
+		return eosclient.Authorization{}, err
 	}
 	auth := eosclient.Authorization{
 		Role: eosclient.Role{
