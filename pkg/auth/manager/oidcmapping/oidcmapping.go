@@ -215,12 +215,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, status.NewErrorFromCode(getGroupsResp.Status.Code, "oidc")
 	}
 
-	var uid, gid float64
+	var uid, gid int64
 	if am.c.UIDClaim != "" {
-		uid, _ = claims[am.c.UIDClaim].(float64)
+		uid, _ = claims[am.c.UIDClaim].(int64)
 	}
 	if am.c.GIDClaim != "" {
-		gid, _ = claims[am.c.GIDClaim].(float64)
+		gid, _ = claims[am.c.GIDClaim].(int64)
 	}
 
 	u := &user.User{
@@ -230,8 +230,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Mail:         claims["email"].(string),
 		MailVerified: claims["email_verified"].(bool),
 		DisplayName:  claims["name"].(string),
-		UidNumber:    int64(uid),
-		GidNumber:    int64(gid),
+		UidNumber:    uid,
+		GidNumber:    gid,
 	}
 	log.Debug().Msgf("returning user: %v", u)
 
@@ -342,6 +342,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 		if am.c.GIDClaim != "" {
 			claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
 		}
+		appctx.GetLogger(ctx).Debug().Msgf("resolveUser: claims '%+v' overridden from mapped user '%v'", claims, username)
 	}
 	return nil
 }
