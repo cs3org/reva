@@ -596,16 +596,16 @@ Scenario Outline: Retrieving folder quota when quota is set and a file was recei
 
 #### [changing user quota gives ocs status 103 / Cannot set quota](https://github.com/owncloud/product/issues/247)
 _requires a [CS3 user provisioning api that can update the quota for a user](https://github.com/cs3org/cs3apis/pull/95#issuecomment-772780683)_
--   [apiShareOperationsToShares2/uploadToShare.feature:168](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L168)
--   [apiShareOperationsToShares2/uploadToShare.feature:169](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L169)
--   [apiShareOperationsToShares2/uploadToShare.feature:188](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L188)
--   [apiShareOperationsToShares2/uploadToShare.feature:189](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L189)
--   [apiShareOperationsToShares2/uploadToShare.feature:210](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L210)
--   [apiShareOperationsToShares2/uploadToShare.feature:211](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L211)
--   [apiShareOperationsToShares2/uploadToShare.feature:230](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L230)
--   [apiShareOperationsToShares2/uploadToShare.feature:231](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L231)
--   [apiShareOperationsToShares2/uploadToShare.feature:252](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L252)
--   [apiShareOperationsToShares2/uploadToShare.feature:253](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L253)
+-   [apiShareOperationsToShares2/uploadToShare.feature:193](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L193)
+-   [apiShareOperationsToShares2/uploadToShare.feature:194](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L194)
+-   [apiShareOperationsToShares2/uploadToShare.feature:218](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L218)
+-   [apiShareOperationsToShares2/uploadToShare.feature:219](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L219)
+-   [apiShareOperationsToShares2/uploadToShare.feature:245](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L245)
+-   [apiShareOperationsToShares2/uploadToShare.feature:246](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L246)
+-   [apiShareOperationsToShares2/uploadToShare.feature:270](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L270)
+-   [apiShareOperationsToShares2/uploadToShare.feature:271](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L271)
+-   [apiShareOperationsToShares2/uploadToShare.feature:297](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L297)
+-   [apiShareOperationsToShares2/uploadToShare.feature:298](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L298)
 
 
 #### [not possible to move file into a received folder](https://github.com/owncloud/ocis/issues/764)
