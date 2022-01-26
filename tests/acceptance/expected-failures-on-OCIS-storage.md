@@ -1156,6 +1156,12 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 #### moving a share from the /Shares jail to a user home is no longer supported.
 -   [apiShareManagementToShares/mergeShare.feature:89](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L89)
 
+#### Additional shares to the same resource (e.g. user and group share) are now auto-accepted with the existing mountpoint
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:553](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:553)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:554](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:554)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:575](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:575)
+-   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:576](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:576)
+
 
 ### To triage
 _The below features have been added after I last categorized them. AFAICT they are bugs. @jfd_
