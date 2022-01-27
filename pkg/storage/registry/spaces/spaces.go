@@ -510,7 +510,12 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 				deepestMountSpace = space
 				deepestMountPathProvider = p
 
-			case strings.HasPrefix(spacePath, path) && !unique:
+			// NOTE:
+			// path = /users/{uuid}/Sh (trying to stat personal spaces file 'Sh')
+			// spacePath = /user/{uuid}/Shares (SharesStorageProvider)
+			// => personal space is not returned as the shares storage provider is the deepestMountPathProvider
+			// Experimental solution: refine case logic
+			case !unique && spacePathIsBelowPath(spacePath, path):
 				// and add all providers below and exactly matching the path
 				// requested /foo, mountPath /foo/sub
 				validSpaces = append(validSpaces, space)
@@ -612,4 +617,17 @@ func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, 
 		return nil, nil
 	}
 	return res.StorageSpaces, nil
+}
+
+func spacePathIsBelowPath(spacePath string, path string) bool {
+	// return strings.HasPrefix(spacePath, path)
+	if spacePath == path {
+		return true
+	}
+
+	r, err := filepath.Rel(path, spacePath)
+	if err != nil {
+		return false
+	}
+	return !strings.HasPrefix(r, "..")
 }
