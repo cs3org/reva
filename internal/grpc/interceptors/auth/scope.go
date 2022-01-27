@@ -50,6 +50,13 @@ const (
 	scopeCacheExpiration = 3600
 )
 
+var roleRankings = map[authpb.Role]int{
+	authpb.Role_ROLE_VIEWER:   0,
+	authpb.Role_ROLE_UPLOADER: 1,
+	authpb.Role_ROLE_EDITOR:   2,
+	authpb.Role_ROLE_OWNER:    3,
+}
+
 func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, user *userpb.User, gatewayAddr string, mgr token.Manager) error {
 	log := appctx.GetLogger(ctx)
 	client, err := pool.GetGatewayServiceClient(gatewayAddr)
@@ -57,15 +64,15 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 		return err
 	}
 
-	hasEditorRole := false
+	highestRole := authpb.Role_ROLE_VIEWER
 	for _, v := range tokenScope {
-		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR {
-			hasEditorRole = true
+		if roleRankings[v.Role] > roleRankings[highestRole] {
+			highestRole = v.Role
 			break
 		}
 	}
 
-	if ref, ok := extractRef(req, hasEditorRole); ok {
+	if ref, ok := extractRef(req, highestRole); ok {
 		// The request is for a storage reference. This can be the case for multiple scenarios:
 		// - If the path is not empty, the request might be coming from a share where the accessor is
 		//   trying to impersonate the owner, since the share manager doesn't know the
@@ -240,7 +247,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 
 }
 
-func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool) {
+func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
 	switch v := req.(type) {
 	// Read requests
 	case *registry.GetStorageProvidersRequest:
@@ -256,15 +263,16 @@ func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool)
 	case *gateway.OpenInAppRequest:
 		return v.GetRef(), true
 
-		// App provider requests
+	// App provider requests
 	case *appregistry.GetAppProvidersRequest:
 		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	}
 
-	if !hasEditorRole {
-		return nil, false
-	}
+	return nil, false
 
+}
+
+func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
 	switch v := req.(type) {
 	// Write Requests
 	case *provider.CreateContainerRequest:
@@ -281,7 +289,27 @@ func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool)
 		return v.GetRef(), true
 	case *provider.UnsetArbitraryMetadataRequest:
 		return v.GetRef(), true
+	}
 
+	return nil, false
+
+}
+
+func extractRef(req interface{}, role authpb.Role) (*provider.Reference, bool) {
+	switch role {
+	case authpb.Role_ROLE_UPLOADER:
+		return extractRefForUploaderRole(req)
+	case authpb.Role_ROLE_VIEWER:
+		return extractRefForReaderRole(req)
+	default: // Owner or editor role
+		ref, ok := extractRefForReaderRole(req)
+		if ok {
+			return ref, true
+		}
+		ref, ok = extractRefForUploaderRole(req)
+		if ok {
+			return ref, true
+		}
 	}
 	return nil, false
 }

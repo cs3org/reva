@@ -38,6 +38,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/eosclient"
@@ -1677,59 +1678,17 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		if u.Opaque != nil {
 			if publicShare, ok := u.Opaque.Map["public-share-role"]; ok {
 				if string(publicShare.Value) == "editor" {
-					return &provider.ResourcePermissions{
-						CreateContainer:      true,
-						Delete:               true,
-						GetPath:              true,
-						GetQuota:             true,
-						InitiateFileDownload: true,
-						InitiateFileUpload:   true,
-						ListContainer:        true,
-						ListFileVersions:     true,
-						ListGrants:           true,
-						ListRecycle:          true,
-						Move:                 true,
-						PurgeRecycle:         true,
-						RestoreFileVersion:   true,
-						RestoreRecycleItem:   true,
-						Stat:                 true,
-					}
+					return conversions.NewEditorRole().CS3ResourcePermissions()
+				} else if string(publicShare.Value) == "uploader" {
+					return conversions.NewUploaderRole().CS3ResourcePermissions()
 				}
-				return &provider.ResourcePermissions{
-					GetPath:              true,
-					GetQuota:             true,
-					InitiateFileDownload: true,
-					ListContainer:        true,
-					ListFileVersions:     true,
-					ListRecycle:          true,
-					ListGrants:           true,
-					Stat:                 true,
-				}
+				// Default to viewer role
+				return conversions.NewViewerRole().CS3ResourcePermissions()
 			}
 		}
 
-		return &provider.ResourcePermissions{
-			// owner has all permissions
-			AddGrant:             true,
-			CreateContainer:      true,
-			Delete:               true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			InitiateFileUpload:   true,
-			ListContainer:        true,
-			ListFileVersions:     true,
-			ListGrants:           true,
-			ListRecycle:          true,
-			Move:                 true,
-			PurgeRecycle:         true,
-			RemoveGrant:          true,
-			RestoreFileVersion:   true,
-			RestoreRecycleItem:   true,
-			Stat:                 true,
-			UpdateGrant:          true,
-			DenyGrant:            true,
-		}
+		// owner has all permissions
+		return conversions.NewManagerRole().CS3ResourcePermissions()
 	}
 
 	auth, err := fs.getUserAuth(ctx, u, eosFileInfo.File)

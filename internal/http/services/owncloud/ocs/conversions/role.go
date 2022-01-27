@@ -242,7 +242,7 @@ func NewCoownerRole() *Role {
 // NewUploaderRole creates an uploader role
 func NewUploaderRole() *Role {
 	return &Role{
-		Name: RoleViewer,
+		Name: RoleUploader,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			Stat:               true,
 			ListContainer:      true,
