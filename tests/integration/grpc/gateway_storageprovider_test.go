@@ -91,10 +91,11 @@ var _ = Describe("gateway", func() {
 
 	BeforeEach(func() {
 		dependencies = map[string]string{
-			"gateway":  "gateway.toml",
-			"users":    "userprovider-json.toml",
-			"storage":  "storageprovider-ocis.toml",
-			"storage2": "storageprovider-ocis.toml",
+			"gateway":     "gateway.toml",
+			"users":       "userprovider-json.toml",
+			"storage":     "storageprovider-ocis.toml",
+			"storage2":    "storageprovider-ocis.toml",
+			"permissions": "permissions-ocis-ci.toml",
 		}
 	})
 
@@ -167,6 +168,7 @@ var _ = Describe("gateway", func() {
 				"homestorage": "storageprovider-ocis.toml",
 				"storage":     "storageprovider-ocis.toml",
 				"storage2":    "storageprovider-ocis.toml",
+				"permissions": "permissions-ocis-ci.toml",
 			}
 		})
 
