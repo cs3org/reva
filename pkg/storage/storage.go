@@ -62,7 +62,7 @@ type FS interface {
 	GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error)
 	RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
 	Unlock(ctx context.Context, ref *provider.Reference) error
-	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, permissions map[string]struct{}) ([]*provider.StorageSpace, error)
+	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)
 	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error

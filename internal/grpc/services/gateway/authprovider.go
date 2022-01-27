@@ -128,6 +128,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
+	// scope := res.TokenScope
+
 	token, err = s.tokenmgr.MintToken(ctx, &u, scope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")

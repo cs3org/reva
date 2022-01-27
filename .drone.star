@@ -106,6 +106,8 @@ def main(ctx):
         litmusOcisOldWebdav(),
         litmusOcisNewWebdav(),
         litmusOcisSpacesDav(),
+        # virtual views don't work on edge at the moment
+        #virtualViews(),
     ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
 
 def buildAndPublishDocker():
@@ -216,6 +218,26 @@ def buildAndPublishDocker():
                     "repo": "cs3org/revad",
                     "tags": "latest-eos",
                     "dockerfile": "Dockerfile.revad-eos",
+                    "username": {
+                        "from_secret": "dockerhub_username",
+                    },
+                    "password": {
+                        "from_secret": "dockerhub_password",
+                    },
+                    "custom_dns": [
+                        "128.142.17.5",
+                        "128.142.16.5",
+                    ],
+                },
+            },
+            {
+                "name": "publish-docker-revad-ceph-latest",
+                "pull": "always",
+                "image": "plugins/docker",
+                "settings": {
+                    "repo": "cs3org/revad",
+                    "tags": "latest-ceph",
+                    "dockerfile": "Dockerfile.revad-ceph",
                     "username": {
                         "from_secret": "dockerhub_username",
                     },
@@ -481,6 +503,84 @@ def release():
                     ],
                 },
             },
+            {
+                "name": "docker-revad-ceph-tag",
+                "pull": "always",
+                "image": "plugins/docker",
+                "settings": {
+                    "repo": "cs3org/revad",
+                    "tags": "${DRONE_TAG}-ceph",
+                    "dockerfile": "Dockerfile.revad-ceph",
+                    "username": {
+                        "from_secret": "dockerhub_username",
+                    },
+                    "password": {
+                        "from_secret": "dockerhub_password",
+                    },
+                    "custom_dns": [
+                        "128.142.17.5",
+                        "128.142.16.5",
+                    ],
+                },
+            },
+        ],
+        "depends_on": ["changelog"],
+    }
+
+def virtualViews():
+    return {
+        "kind": "pipeline",
+        "type": "docker",
+        "name": "virtual-views",
+        "platform": {
+            "os": "linux",
+            "arch": "amd64",
+        },
+        "trigger": {
+            "event": {
+                "include": [
+                    "pull_request",
+                    "tag",
+                ],
+            },
+        },
+        "steps": [
+            makeStep("build-ci"),
+            {
+                "name": "revad-services",
+                "image": "registry.cern.ch/docker.io/library/golang:1.17",
+                "detach": True,
+                "commands": [
+                    "cd /drone/src/tests/oc-integration-tests/drone/",
+                    "/drone/src/cmd/revad/revad -c frontend-global.toml &",
+                    "/drone/src/cmd/revad/revad -c gateway.toml &",
+                    "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
+                    "/drone/src/cmd/revad/revad -c storage-local-1.toml &",
+                    "/drone/src/cmd/revad/revad -c storage-local-2.toml &",
+                    "/drone/src/cmd/revad/revad -c users.toml",
+                ],
+            },
+            cloneOc10TestReposStep(),
+            {
+                "name": "oC10APIAcceptanceTestsOcisStorage",
+                "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
+                "commands": [
+                    "cd /drone/src",
+                    "make test-acceptance-api",
+                ],
+                "environment": {
+                    "PATH_TO_CORE": "/drone/src/tmp/testrunner",
+                    "TEST_SERVER_URL": "http://revad-services:20180",
+                    "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
+                    "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/*",
+                    "STORAGE_DRIVER": "OCIS",
+                    "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
+                    "TEST_REVA": "true",
+                    "REGULAR_USER_PASSWORD": "relativity",
+                    "SEND_SCENARIO_LINE_REFERENCES": "true",
+                    "BEHAT_SUITE": "apiVirtualViews",
+                },
+            },
         ],
         "depends_on": ["changelog"],
     }
@@ -516,6 +616,7 @@ def litmusOcisOldWebdav():
                     "/drone/src/cmd/revad/revad -c storage-shares.toml &",
                     "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
                     "/drone/src/cmd/revad/revad -c shares.toml &",
+                    "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
                     "/drone/src/cmd/revad/revad -c users.toml",
                 ],
             },
@@ -571,6 +672,7 @@ def litmusOcisNewWebdav():
                     "/drone/src/cmd/revad/revad -c storage-shares.toml &",
                     "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
                     "/drone/src/cmd/revad/revad -c shares.toml &",
+                    "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
                     "/drone/src/cmd/revad/revad -c users.toml",
                 ],
             },
@@ -627,6 +729,7 @@ def litmusOcisSpacesDav():
                     "/drone/src/cmd/revad/revad -c storage-shares.toml &",
                     "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
                     "/drone/src/cmd/revad/revad -c shares.toml &",
+                    "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
                     "/drone/src/cmd/revad/revad -c users.toml",
                 ],
             },
@@ -695,6 +798,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                             "/drone/src/cmd/revad/revad -c machine-auth.toml &",
                             "/drone/src/cmd/revad/revad -c storage-users-ocis.toml &",
                             "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
+                            "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
                             "/drone/src/cmd/revad/revad -c ldap-users.toml",
                         ],
                     },
@@ -716,7 +820,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                             "REVA_LDAP_HOSTNAME": "ldap",
                             "TEST_REVA": "true",
                             "SEND_SCENARIO_LINE_REFERENCES": "true",
-                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis",
+                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@personalSpace&&~@issue-ocis-3023",
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md",
@@ -771,6 +875,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                             "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
                             "/drone/src/cmd/revad/revad -c storage-shares.toml &",
                             "/drone/src/cmd/revad/revad -c ldap-users.toml &",
+                            "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
                             "/drone/src/cmd/revad/revad -c machine-auth.toml",
                         ],
                     },
@@ -792,7 +897,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                             "REVA_LDAP_HOSTNAME": "ldap",
                             "TEST_REVA": "true",
                             "SEND_SCENARIO_LINE_REFERENCES": "true",
-                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis",
+                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@personalSpace&&~@issue-ocis-3023",
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-S3NG-storage.md",

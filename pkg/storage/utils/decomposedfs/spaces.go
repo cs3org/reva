@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -36,6 +37,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
@@ -166,7 +168,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 // The list can be filtered by space type or space id.
 // Spaces are persisted with symlinks in /spaces/<type>/<spaceid> pointing to ../../nodes/<nodeid>, the root node of the space
 // The spaceid is a concatenation of storageid + "!" + nodeid
-func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, permissions map[string]struct{}) ([]*provider.StorageSpace, error) {
+func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	// TODO check filters
 
 	// TODO when a space symlink is broken delete the space for cleanup
@@ -233,6 +235,29 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// the personal spaces must also use the nodeid and not the name
 
 	numShares := 0
+	client, err := pool.GetGatewayServiceClient(fs.o.GatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	user := ctxpkg.ContextMustGetUser(ctx)
+	checkRes, err := client.CheckPermission(ctx, &permissionsv1beta1.CheckPermissionRequest{
+		Permission: "list-all-spaces",
+		SubjectRef: &permissionsv1beta1.SubjectReference{
+			Spec: &permissionsv1beta1.SubjectReference_UserId{
+				UserId: user.Id,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	canListAllSpaces := false
+	if checkRes.Status.Code == v1beta11.Code_CODE_OK {
+		canListAllSpaces = true
+	}
+
 	for i := range matches {
 		var target string
 		var err error
@@ -258,7 +283,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 
 		// TODO apply more filters
-		space, err := fs.storageSpaceFromNode(ctx, n, spaceType, matches[i], permissions)
+		space, err := fs.storageSpaceFromNode(ctx, n, spaceType, matches[i], canListAllSpaces)
 		if err != nil {
 			if _, ok := err.(errtypes.IsPermissionDenied); !ok {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
@@ -277,7 +302,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			return nil, err
 		}
 		if n.Exists {
-			space, err := fs.storageSpaceFromNode(ctx, n, "*", n.InternalPath(), permissions)
+			space, err := fs.storageSpaceFromNode(ctx, n, "*", n.InternalPath(), canListAllSpaces)
 			if err != nil {
 				return nil, err
 			}
@@ -452,7 +477,7 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, space
 	return nil
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, spaceType, nodePath string, permissions map[string]struct{}) (*provider.StorageSpace, error) {
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, spaceType, nodePath string, canListAllSpaces bool) (*provider.StorageSpace, error) {
 	owner, err := n.Owner()
 	if err != nil {
 		return nil, err
@@ -493,7 +518,6 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	user := ctxpkg.ContextMustGetUser(ctx)
-	_, canListAllSpaces := permissions["list-all-spaces"]
 	if !canListAllSpaces {
 		ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
 			return p.Stat

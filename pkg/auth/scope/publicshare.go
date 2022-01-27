@@ -27,6 +27,7 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -81,6 +82,8 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.ResourceInfo.Id}), nil
 	case *gateway.OpenInAppRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *permissionsv1beta1.CheckPermissionRequest:
+		return true, nil
 
 	// Editor role
 	// need to return appropriate status codes in the ocs/ocdav layers.
