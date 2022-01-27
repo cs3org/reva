@@ -67,10 +67,6 @@ func Parse(acls string, delimiter string) (*ACLs, error) {
 		if err != nil {
 			return nil, err
 		}
-		// for now we ignore default / empty qualifiers
-		// if entry.Qualifier == "" {
-		//	continue
-		// }
 		entries = append(entries, entry)
 	}
 
@@ -129,7 +125,14 @@ type Entry struct {
 func ParseEntry(singleSysACL string) (*Entry, error) {
 	tokens := strings.Split(singleSysACL, ":")
 	if len(tokens) != 3 {
-		return nil, errInvalidACL
+		if len(tokens) == 2 {
+			// The ACL entries might be stored as type:qualifier=permissions
+			// Handle that case separately
+			parts := (strings.Split(tokens[1], "="))
+			tokens = []string{tokens[0], parts[0], parts[1]}
+		} else {
+			return nil, errInvalidACL
+		}
 	}
 
 	return &Entry{
