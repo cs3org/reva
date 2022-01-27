@@ -91,10 +91,11 @@ var _ = Describe("gateway", func() {
 
 	BeforeEach(func() {
 		dependencies = map[string]string{
-			"gateway":  "gateway.toml",
-			"users":    "userprovider-json.toml",
-			"storage":  "storageprovider-ocis.toml",
-			"storage2": "storageprovider-ocis.toml",
+			"gateway":     "gateway.toml",
+			"users":       "userprovider-json.toml",
+			"storage":     "storageprovider-ocis.toml",
+			"storage2":    "storageprovider-ocis.toml",
+			"permissions": "permissions-ocis-ci.toml",
 		}
 	})
 
@@ -167,6 +168,7 @@ var _ = Describe("gateway", func() {
 				"homestorage": "storageprovider-ocis.toml",
 				"storage":     "storageprovider-ocis.toml",
 				"storage2":    "storageprovider-ocis.toml",
+				"permissions": "permissions-ocis-ci.toml",
 			}
 		})
 
@@ -355,10 +357,11 @@ var _ = Describe("gateway", func() {
 
 		BeforeEach(func() {
 			dependencies = map[string]string{
-				"gateway":  "gateway.toml",
-				"users":    "userprovider-json.toml",
-				"storage":  "storageprovider-ocis.toml",
-				"storage2": "storageprovider-ocis.toml",
+				"gateway":     "gateway.toml",
+				"users":       "userprovider-json.toml",
+				"storage":     "storageprovider-ocis.toml",
+				"storage2":    "storageprovider-ocis.toml",
+				"permissions": "permissions-ocis-ci.toml",
 			}
 		})
 
@@ -367,6 +370,7 @@ var _ = Describe("gateway", func() {
 			fs, err = ocis.New(map[string]interface{}{
 				"root":                revads["storage"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
+				"gateway_addr":        revads["gateway"].GrpcAddress,
 				"enable_home":         true,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
@@ -377,7 +381,7 @@ var _ = Describe("gateway", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(r.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-			spaces, err := fs.ListStorageSpaces(ctx, []*storagep.ListStorageSpacesRequest_Filter{}, nil)
+			spaces, err := fs.ListStorageSpaces(ctx, []*storagep.ListStorageSpacesRequest_Filter{})
 			Expect(err).ToNot(HaveOccurred())
 			homeSpace = spaces[0]
 

@@ -702,7 +702,7 @@ func (fs *s3FS) RestoreRecycleItem(ctx context.Context, ref *provider.Reference,
 	return errtypes.NotSupported("restore recycle")
 }
 
-func (fs *s3FS) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, _ map[string]struct{}) ([]*provider.StorageSpace, error) {
+func (fs *s3FS) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 

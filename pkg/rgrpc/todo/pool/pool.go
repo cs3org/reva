@@ -32,6 +32,7 @@ import (
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -70,6 +71,7 @@ var (
 	ocmCores               = newProvider()
 	publicShareProviders   = newProvider()
 	preferencesProviders   = newProvider()
+	permissionsProviders   = newProvider()
 	appRegistries          = newProvider()
 	appProviders           = newProvider()
 	storageRegistries      = newProvider()
@@ -346,6 +348,25 @@ func GetPreferencesClient(endpoint string) (preferences.PreferencesAPIClient, er
 
 	v := preferences.NewPreferencesAPIClient(conn)
 	preferencesProviders.conn[endpoint] = v
+	return v, nil
+}
+
+// GetPermissionsClient returns a new PermissionsClient.
+func GetPermissionsClient(endpoint string) (permissions.PermissionsAPIClient, error) {
+	permissionsProviders.m.Lock()
+	defer permissionsProviders.m.Unlock()
+
+	if c, ok := permissionsProviders.conn[endpoint]; ok {
+		return c.(permissions.PermissionsAPIClient), nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	v := permissions.NewPermissionsAPIClient(conn)
+	permissionsProviders.conn[endpoint] = v
 	return v, nil
 }
 
