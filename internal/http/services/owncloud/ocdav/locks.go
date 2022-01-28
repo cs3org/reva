@@ -45,6 +45,18 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+// From RFC4918 http://www.webdav.org/specs/rfc4918.html#lock-tokens
+// This specification encourages servers to create Universally Unique Identifiers (UUIDs) for lock tokens,
+// and to use the URI form defined by "A Universally Unique Identifier (UUID) URN Namespace" ([RFC4122]).
+// However, servers are free to use any URI (e.g., from another scheme) so long as it meets the uniqueness
+// requirements. For example, a valid lock token might be constructed using the "opaquelocktoken" scheme
+// defined in Appendix C.
+//
+// Example: "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+//
+// we stick to the recommendation and use the URN Namespace
+const lockTokenPrefix = "urn:uuid:"
+
 // TODO(jfd) implement lock
 // see Web Distributed Authoring and Versioning (WebDAV) Locking Protocol:
 // https://www.greenbytes.de/tech/webdav/draft-reschke-webdav-locking-latest.html
@@ -178,18 +190,13 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 		Ref: details.Root,
 		Lock: &provider.Lock{
 			Type: provider.LockType_LOCK_TYPE_EXCL,
-			Holder: &provider.Lock_User{
-				User: details.UserID, // no way to set an app lock? TODO maybe via the ownerxml
-			},
-			// TODO misuse MTime as expiration, until https://github.com/cs3org/cs3apis/pull/162 is merged
-			Mtime: &types.Timestamp{
+			User: details.UserID, // no way to set an app lock? TODO maybe via the ownerxml
+			//AppName: , // TODO use a urn scheme?
+			Expiration: &types.Timestamp{
 				Seconds: uint64(expiration.Unix()),
 				Nanos:   uint32(expiration.Nanosecond()),
 			},
-			// FIXME send as opaque when Metadata is changed to an Opaque Map,
-			// we need it as part of the Lock so it will be persisted
-			// see https://github.com/cs3org/cs3apis/pull/162#issuecomment-1018580448
-			Metadata: token.String(),
+			LockId: lockTokenPrefix + token.String(), // can be a token or a Coded-URL
 		},
 	}
 	res, err := cls.client.SetLock(ctx, r)
@@ -199,7 +206,7 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 	if res.Status.Code != rpc.Code_CODE_OK {
 		return "", errtypes.NewErrtypeFromStatus(res.Status)
 	}
-	return token.String(), nil
+	return lockTokenPrefix + token.String(), nil
 }
 
 func (cls *cs3LS) Refresh(ctx context.Context, now time.Time, token string, duration time.Duration) (LockDetails, error) {
@@ -315,7 +322,27 @@ func parseDepth(s string) int {
 	}
 	return invalidDepth
 }
-
+func addLockIDToOpaque(o *types.Opaque, l string) {
+	if o == nil {
+		o = &types.Opaque{}
+	}
+	if o.Map == nil {
+		o.Map = map[string]*types.OpaqueEntry{}
+	}
+	o.Map["lockid"] = &types.OpaqueEntry{
+		Decoder: "plain",
+		Value:   []byte(l),
+	}
+}
+func readLockFromOpaque(o *types.Opaque) string {
+	if o == nil || o.Map == nil {
+		return ""
+	}
+	if e, ok := o.Map["lockid"]; ok && e.Decoder == "plain" {
+		return string(e.Value)
+	}
+	return ""
+}
 func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (retStatus int, retErr error) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
@@ -363,7 +390,7 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 		if token == "" {
 			return http.StatusBadRequest, errors.ErrInvalidLockToken
 		}
-		ld, err = s.LockSystem.Refresh(ctx, now, token, duration) // TODO remove opaquelocktoken: or urn:uuid: prefix? or leave as is?
+		ld, err = s.LockSystem.Refresh(ctx, now, token, duration)
 		if err != nil {
 			if err == errors.ErrNoSuchLock {
 				return http.StatusPreconditionFailed, err
@@ -426,7 +453,6 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 				created = true
 			}
 		*/
-		// TODO add opaquelocktoken: or urn:uuid: prefix? or leave as is?
 		// http://www.webdav.org/specs/rfc4918.html#HEADER_Lock-Token says that the
 		// Lock-Token value is a Coded-URL. We add angle brackets.
 		w.Header().Set("Lock-Token", "<"+token+">")

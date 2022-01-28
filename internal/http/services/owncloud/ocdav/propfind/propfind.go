@@ -600,7 +600,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	// -3 indicates unlimited
 	quota := net.PropQuotaUnknown
 	size := strconv.FormatUint(md.Size, 10)
-	var lock *props.LockDiscovery
+	var lock *provider.Lock
 	// TODO refactor helper functions: GetOpaqueJSONEncoded(opaque, key string, *struct) err, GetOpaquePlainEncoded(opaque, key) value, err
 	// or use ok like pattern and return bool?
 	if md.Opaque != nil && md.Opaque.Map != nil {
@@ -615,7 +615,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			quota = string(md.Opaque.Map["quota"].Value)
 		}
 		if md.Opaque.Map["lock"] != nil && md.Opaque.Map["lock"].Decoder == "json" {
-			lock = &props.LockDiscovery{}
+			lock = &provider.Lock{}
 			err := json.Unmarshal(md.Opaque.Map["lock"].Value, lock)
 			if err != nil {
 				sublog.Error().Err(err).Msg("could not unmarshal locks json")
@@ -1100,7 +1100,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	return &response, nil
 }
 
-func activeLocks(log *zerolog.Logger, lock *props.LockDiscovery) string {
+func activeLocks(log *zerolog.Logger, lock *provider.Lock) string {
 	if lock == nil || lock.Type == provider.LockType_LOCK_TYPE_INVALID {
 		return ""
 	}
@@ -1135,25 +1135,25 @@ func activeLocks(log *zerolog.Logger, lock *props.LockDiscovery) string {
 	// we currently only support depth infinity
 	activelocks.WriteString("<d:depth>Infinity</d:depth>")
 
-	if lock.UserID != nil {
+	if lock.User != nil {
 		// TODO document that we just invented cs3:user: to expose the cs3 userid via webdav
 		activelocks.WriteString("<d:owner><d:href>cs3:user:")
-		activelocks.WriteString(props.Escape(lock.UserID.OpaqueId + "@" + lock.UserID.Idp))
+		activelocks.WriteString(props.Escape(lock.User.OpaqueId + "@" + lock.User.Idp))
 		activelocks.WriteString("</d:href></d:owner>")
 	}
-	if lock.App != "" {
+	if lock.AppName != "" {
 		// TODO document that we just invented d:application and cs3:app: to expose the WOPI application in xml
 		activelocks.WriteString("<d:application><d:href>cs3:app:")
-		user := props.Escape(lock.App)
+		user := props.Escape(lock.AppName)
 		activelocks.WriteString(user)
 		activelocks.WriteString("</d:href></d:application>")
 	}
 	activelocks.WriteString("<d:timeout>")
 	activelocks.WriteString(expiration)
 	activelocks.WriteString("</d:timeout>")
-	if lock.LockID != "" {
-		activelocks.WriteString("<d:locktoken><d:href>opaquelocktoken:")
-		activelocks.WriteString(props.Escape(lock.LockID))
+	if lock.LockId != "" {
+		activelocks.WriteString("<d:locktoken><d:href>")
+		activelocks.WriteString(props.Escape(lock.LockId))
 		activelocks.WriteString("</d:href></d:locktoken>")
 	}
 	// lockroot is only used when setting the lock

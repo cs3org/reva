@@ -21,10 +21,6 @@ package props
 import (
 	"bytes"
 	"encoding/xml"
-
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 // PropertyXML represents a single DAV resource property as defined in RFC 4918.
@@ -120,16 +116,6 @@ type ActiveLock struct {
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_owner
 type Owner struct {
 	InnerXML string `xml:",innerxml"`
-}
-
-// FTXME remove once https://github.com/cs3org/cs3apis/pull/162 is merged
-type LockDiscovery struct {
-	// Opaque
-	LockID     string
-	Type       provider.LockType
-	UserID     *userpb.UserId
-	App        string
-	Expiration *types.Timestamp
 }
 
 func Escape(s string) string {

@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
 )
@@ -59,13 +60,20 @@ func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string
 
 func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
 
-	// FIXME use middleware to check if Header? no, we need to forward the If header so the backend can handle it properly
-	/*
-		ih, ok := parseIfHeader(r.Header.Get("If"))
-		if !ok {
-			return http.StatusBadRequest, errors.ErrInvalidIfHeader
-		}
-	*/
+	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "delete")
+	defer span.End()
+
+	req := &provider.DeleteRequest{Ref: ref}
+
+	// FIXME the lock token is part of the application level protocol, it should be part of the DeleteRequest message not the outgoing context
+	ih, ok := parseIfHeader(r.Header.Get("If"))
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return // errors.ErrInvalidIfHeader
+	}
+	if len(ih.lists) == 1 && len(ih.lists[0].conditions) == 1 {
+		addLockIDToOpaque(req.Opaque, ih.lists[0].conditions[0].Token)
+	}
 
 	client, err := s.getClient()
 	if err != nil {
@@ -73,43 +81,47 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "delete")
-	defer span.End()
-
-	req := &provider.DeleteRequest{Ref: ref}
 	res, err := client.Delete(ctx, req)
 	if err != nil {
 		span.RecordError(err)
 		log.Error().Err(err).Msg("error performing delete grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
-	} else if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			// TODO path might be empty or relative...
-			m := fmt.Sprintf("Resource %v not found", ref.Path)
-			b, err := errors.Marshal(http.StatusNotFound, m, "")
-			errors.HandleWebdavError(&log, w, b, err)
+	}
+	switch res.Status.Code {
+	case rpc.Code_CODE_OK:
+		w.WriteHeader(http.StatusNoContent)
+	case rpc.Code_CODE_NOT_FOUND:
+		w.WriteHeader(http.StatusNotFound)
+		// TODO path might be empty or relative...
+		m := fmt.Sprintf("Resource %v not found", ref.Path)
+		b, err := errors.Marshal(http.StatusNotFound, m, "")
+		errors.HandleWebdavError(&log, w, b, err)
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		status := http.StatusForbidden
+		if lockID := readLockFromOpaque(res.Opaque); lockID != "" {
+			// http://www.webdav.org/specs/rfc4918.html#HEADER_Lock-Token says that the
+			// Lock-Token value is a Coded-URL. We add angle brackets.
+			w.Header().Set("Lock-Token", "<"+lockID+">")
+			status = http.StatusLocked
 		}
-		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
-			w.WriteHeader(http.StatusForbidden)
-			// TODO path might be empty or relative...
-			m := fmt.Sprintf("Permission denied to delete %v", ref.Path)
-			b, err := errors.Marshal(http.StatusForbidden, m, "")
-			errors.HandleWebdavError(&log, w, b, err)
-		}
-		if res.Status.Code == rpc.Code_CODE_INTERNAL && res.Status.Message == "can't delete mount path" {
+		w.WriteHeader(status)
+		// TODO path might be empty or relative...
+		m := fmt.Sprintf("Permission denied to delete %v", ref.Path)
+		b, err := errors.Marshal(status, m, "")
+		errors.HandleWebdavError(&log, w, b, err)
+	case rpc.Code_CODE_INTERNAL:
+		if res.Status.Message == "can't delete mount path" {
 			w.WriteHeader(http.StatusForbidden)
 			b, err := errors.Marshal(http.StatusForbidden, res.Status.Message, "")
 			errors.HandleWebdavError(&log, w, b, err)
 		}
-
-		errors.HandleErrorStatus(&log, w, res.Status)
-		return
+	default:
+		status := status.HTTPStatusFromCode(res.Status.Code)
+		w.WriteHeader(status)
+		b, err := errors.Marshal(status, res.Status.Message, "")
+		errors.HandleWebdavError(&log, w, b, err)
 	}
-
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID string) {
