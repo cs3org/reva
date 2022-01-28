@@ -52,7 +52,8 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 		return
 	}
 
-	// stat prefered path to make sure it isn't there
+	// stat requested path to make sure it isn't existing yet
+	// NOTE: It could be on another storage provider than the 'parent' of it
 	sr, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
 			Path: fn,
