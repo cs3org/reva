@@ -24,6 +24,7 @@ package status
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -141,6 +142,9 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		return NewUnauthenticated(ctx, err, msg+": "+err.Error())
 	case errtypes.PermissionDenied:
 		return NewPermissionDenied(ctx, e, msg+": "+err.Error())
+	case errtypes.Locked:
+		// FIXME a locked error returns the current lockid
+		return NewPermissionDenied(ctx, e, msg+": "+err.Error())
 	case errtypes.IsNotSupported:
 		return NewUnimplemented(ctx, err, msg+":"+err.Error())
 	case errtypes.BadRequest:
@@ -182,4 +186,37 @@ func NewErrorFromCode(code rpc.Code, pkgname string) error {
 func getTrace(ctx context.Context) string {
 	span := trace.SpanFromContext(ctx)
 	return span.SpanContext().TraceID().String()
+}
+
+// a mapping from the CS3 status codes to http codes
+var httpStatusCode = map[rpc.Code]int{
+	rpc.Code_CODE_ABORTED:              http.StatusConflict,
+	rpc.Code_CODE_ALREADY_EXISTS:       http.StatusConflict,
+	rpc.Code_CODE_CANCELLED:            499, // Client Closed Request
+	rpc.Code_CODE_DATA_LOSS:            http.StatusInternalServerError,
+	rpc.Code_CODE_DEADLINE_EXCEEDED:    http.StatusGatewayTimeout,
+	rpc.Code_CODE_FAILED_PRECONDITION:  http.StatusBadRequest,
+	rpc.Code_CODE_INSUFFICIENT_STORAGE: http.StatusInsufficientStorage,
+	rpc.Code_CODE_INTERNAL:             http.StatusInternalServerError,
+	rpc.Code_CODE_INVALID:              http.StatusInternalServerError,
+	rpc.Code_CODE_INVALID_ARGUMENT:     http.StatusBadRequest,
+	rpc.Code_CODE_NOT_FOUND:            http.StatusNotFound,
+	rpc.Code_CODE_OK:                   http.StatusOK,
+	rpc.Code_CODE_OUT_OF_RANGE:         http.StatusBadRequest,
+	rpc.Code_CODE_PERMISSION_DENIED:    http.StatusForbidden,
+	rpc.Code_CODE_REDIRECTION:          http.StatusTemporaryRedirect, // or permanent?
+	rpc.Code_CODE_RESOURCE_EXHAUSTED:   http.StatusTooManyRequests,
+	rpc.Code_CODE_UNAUTHENTICATED:      http.StatusUnauthorized,
+	rpc.Code_CODE_UNAVAILABLE:          http.StatusServiceUnavailable,
+	rpc.Code_CODE_UNIMPLEMENTED:        http.StatusNotImplemented,
+	rpc.Code_CODE_UNKNOWN:              http.StatusInternalServerError,
+}
+
+// HTTPStatusFromCode returns an HTTP status code for the rpc code. It returns
+// an internal server error (500) if the code is unknown
+func HTTPStatusFromCode(code rpc.Code) int {
+	if s, ok := httpStatusCode[code]; ok {
+		return s
+	}
+	return http.StatusInternalServerError
 }

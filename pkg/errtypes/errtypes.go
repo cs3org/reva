@@ -50,6 +50,19 @@ func (e PermissionDenied) Error() string { return "error: permission denied: " +
 // IsPermissionDenied implements the IsPermissionDenied interface.
 func (e PermissionDenied) IsPermissionDenied() {}
 
+// Locked is the error to use when a resource cannot be modified because of a lock.
+type Locked string
+
+func (e Locked) Error() string { return "error: locked by " + string(e) }
+
+// we need to be able to return the lockid
+func (e Locked) LockID() string {
+	return string(e)
+}
+
+// IsLocked implements the IsLocked interface.
+func (e Locked) IsLocked() {}
+
 // AlreadyExists is the error to use when a resource something is not found.
 type AlreadyExists string
 
@@ -168,6 +181,12 @@ type IsPermissionDenied interface {
 	IsPermissionDenied()
 }
 
+// IsLocked is the interface to implement
+// to specify that an resource is locked.
+type IsLocked interface {
+	IsLocked()
+}
+
 // IsPartialContent is the interface to implement
 // to specify that the client request has partial data.
 type IsPartialContent interface {
@@ -209,10 +228,13 @@ func NewErrtypeFromStatus(status *rpc.Status) error {
 		return NotSupported(status.Message)
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		return PermissionDenied(status.Message)
-		// case rpc.Code_CODE_DATA_LOSS: ?
-		//	IsPartialContent
-		// case rpc.Code_CODE_FAILED_PRECONDITION: ?
-		//	IsChecksumMismatch
+		// FIXME add locked status?
+	//case rpc.Code_CODE_LOCKED:
+	//	return Locked(status.Message)
+	// case rpc.Code_CODE_DATA_LOSS: ?
+	//	IsPartialContent
+	// case rpc.Code_CODE_FAILED_PRECONDITION: ?
+	//	IsChecksumMismatch
 	case rpc.Code_CODE_INSUFFICIENT_STORAGE:
 		return InsufficientStorage(status.Message)
 	case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_FAILED_PRECONDITION, rpc.Code_CODE_OUT_OF_RANGE:
