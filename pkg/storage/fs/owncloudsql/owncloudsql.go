@@ -489,11 +489,6 @@ func (fs *owncloudsqlfs) getUserStorage(user string) (int, error) {
 	return id, err
 }
 
-// CreateStorageSpace creates a storage space
-func (fs *owncloudsqlfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, errtypes.NotSupported("unimplemented: CreateStorageSpace")
-}
-
 func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filecache.File, ip string, mdKeys []string) (*provider.ResourceInfo, error) {
 	mdKeysMap := make(map[string]struct{})
 	for _, k := range mdKeys {
@@ -507,8 +502,8 @@ func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filec
 
 	isDir := entry.MimeTypeString == "httpd/unix-directory"
 	ri := &provider.ResourceInfo{
-		Id:       &provider.ResourceId{OpaqueId: strconv.Itoa(entry.ID)},
-		Path:     fs.toStoragePath(ctx, ip),
+		Id:       &provider.ResourceId{StorageId: strconv.Itoa(entry.Storage), OpaqueId: strconv.Itoa(entry.ID)},
+		Path:     filepath.Base(ip),
 		Type:     getResourceType(isDir),
 		Etag:     entry.Etag,
 		MimeType: entry.MimeTypeString,
@@ -544,7 +539,7 @@ func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filec
 
 // GetPathByID returns the storage relative path for the file id, without the internal namespace
 func (fs *owncloudsqlfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	ip, err := fs.filecache.Path(id.OpaqueId)
+	ip, err := fs.resolve(ctx, &provider.Reference{ResourceId: id})
 	if err != nil {
 		return "", err
 	}
@@ -579,6 +574,9 @@ func (fs *owncloudsqlfs) resolve(ctx context.Context, ref *provider.Reference) (
 				return "", err
 			}
 			p = filepath.Join(owner, p)
+		}
+		if ref.GetPath() != "" {
+			p = filepath.Join(p, ref.GetPath())
 		}
 		return fs.toInternalPath(ctx, p), nil
 	}
@@ -1948,21 +1946,6 @@ func (fs *owncloudsqlfs) HashFile(path string) (string, string, string, error) {
 
 		return string(sha1h.Sum(nil)), string(md5h.Sum(nil)), string(adler32h.Sum(nil)), nil
 	}
-}
-
-func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
-	// TODO(corby): Implement
-	return nil, errtypes.NotSupported("list storage spaces")
-}
-
-// UpdateStorageSpace updates a storage space
-func (fs *owncloudsqlfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	return nil, errtypes.NotSupported("update storage space")
-}
-
-// DeleteStorageSpace deletes a storage space
-func (fs *owncloudsqlfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
-	return errtypes.NotSupported("delete storage space")
 }
 
 func readChecksumIntoResourceChecksum(ctx context.Context, checksums, algo string, ri *provider.ResourceInfo) {
