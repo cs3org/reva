@@ -602,7 +602,7 @@ func (fs *cephfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativeP
 	return errtypes.NotSupported("unimplemented")
 }
 
-func (fs *cephfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, permissions map[string]struct{}) ([]*provider.StorageSpace, error) {
+func (fs *cephfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
