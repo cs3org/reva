@@ -491,7 +491,7 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 
 		// TODO(labkode): SetArbitraryMetadata does not have semantics for recursivity.
 		// We set it to false
-		err := fs.c.SetAttr(ctx, auth, attr, false, fn)
+		err := fs.c.SetAttr(ctx, auth, attr, false, false, fn)
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error setting xattr in eos driver")
 		}
@@ -645,9 +645,8 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 			// old lock expired
 			// TODO (gdelmont): make this part atomic
 			return fs.c.SetAttr(ctx, auth, attr, false, false, path)
-		} else {
-			return err
 		}
+		return err
 	}
 
 	return nil
@@ -693,6 +692,10 @@ func decodeLock(raw string) (*provider.Lock, error) {
 // RefreshLock refreshes an existing lock on the given reference
 func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock) error {
 	// TODO (gdelmont): check if the new lock is already expired?
+
+	if newLock.Type == provider.LockType_LOCK_TYPE_SHARED {
+		return errtypes.NotSupported("shared lock not yet implemented")
+	}
 
 	oldLock, err := fs.GetLock(ctx, ref)
 	if err != nil {
@@ -1457,7 +1460,7 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 	}
 
 	for _, attr := range attrs {
-		err = fs.c.SetAttr(ctx, rootAuth, attr, recursiveAttr, path)
+		err = fs.c.SetAttr(ctx, rootAuth, attr, false, recursiveAttr, path)
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error setting attribute")
 		}
@@ -1549,7 +1552,7 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 		Val:  targetURI.String(),
 	}
 
-	if err := fs.c.SetAttr(ctx, rootAuth, attr, false, tmp); err != nil {
+	if err := fs.c.SetAttr(ctx, rootAuth, attr, false, false, tmp); err != nil {
 		err = errors.Wrapf(err, "eosfs: error setting reva.ref attr on file: %q", tmp)
 		return err
 	}
