@@ -604,7 +604,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		metadata[FavoriteKey] = favorite
 	}
 	// read locks
-	if _, ok := mdKeysMap[LockdiscoveryKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && (returnAllKeys || ok) {
+	if _, ok := mdKeysMap[LockdiscoveryKey]; returnAllKeys || ok {
 		if n.hasLocks(ctx) {
 			readLocksIntoOpaque(ctx, nodePath+".lock", ri)
 		}
