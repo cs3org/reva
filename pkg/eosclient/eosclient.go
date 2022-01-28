@@ -144,3 +144,7 @@ type Authorization struct {
 // AttrAlreadyExistsError is the error raised when setting
 // an already existing attr on a resource
 const AttrAlreadyExistsError = errtypes.BadRequest("attr already exists")
+
+// AttrNotExistsError is the error raised when removing
+// an attribute that does not exist
+const AttrNotExistsError = errtypes.BadRequest("attr not exists")

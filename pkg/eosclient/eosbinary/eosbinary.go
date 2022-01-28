@@ -547,6 +547,10 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	}
 	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
+		var exErr *exec.ExitError
+		if errors.As(err, &exErr) && exErr.ExitCode() == 61 {
+			return eosclient.AttrNotExistsError
+		}
 		return err
 	}
 	return nil
