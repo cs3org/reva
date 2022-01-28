@@ -116,7 +116,7 @@ type adminConn struct {
 }
 
 func newAdminConn(conf *Options) *adminConn {
-	rados, err := rados2.NewConnWithUser(conf.ClientId)
+	rados, err := rados2.NewConnWithUser(conf.ClientID)
 	if err != nil {
 		return nil
 	}
@@ -185,7 +185,7 @@ func newAdminConn(conf *Options) *adminConn {
 
 func newConn(user *User) *cacheVal {
 	var perm *cephfs2.UserPerm
-	mount, err := cephfs2.CreateMountWithId(user.fs.conf.ClientId)
+	mount, err := cephfs2.CreateMountWithId(user.fs.conf.ClientID)
 	if err != nil {
 		return destroyCephConn(mount, perm)
 	}

@@ -29,8 +29,8 @@ import (
 
 // Options for the cephfs module
 type Options struct {
-	ClientId     string `mapstructure:"client_id"`
-	Config       string `mapstructure:"config"`
+	ClientID string `mapstructure:"client_id"`
+	Config   string `mapstructure:"config"`
 	GatewaySvc   string `mapstructure:"gatewaysvc"`
 	IndexPool    string `mapstructure:"index_pool"`
 	Keyring      string `mapstructure:"keyring"`
@@ -60,8 +60,8 @@ func (c *Options) fillDefaults() {
 		c.Config = addLeadingSlash(c.Config) //force absolute path in case leading "/" is omitted
 	}
 
-	if c.ClientId == "" {
-		c.ClientId = "admin"
+	if c.ClientID == "" {
+		c.ClientID = "admin"
 	}
 
 	if c.Keyring == "" {
