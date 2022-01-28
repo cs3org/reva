@@ -53,6 +53,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -66,6 +67,9 @@ const (
 	// UserAttr is the user extended attribute.
 	UserAttr
 )
+
+// LockKeyAttr is the key in the xattr for sp
+const LockKeyAttr = "user.iop.lock"
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
@@ -537,12 +541,153 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 
 // GetLock returns an existing lock on the given reference
 func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
-	return nil, errtypes.NotSupported("unimplemented")
+	path, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "eosfs: error resolving reference")
+	}
+	path = fs.wrap(ctx, path)
+
+	user, err := getUser(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "eosfs: no user in ctx")
+	}
+	auth, err := fs.getUserAuth(ctx, user, path)
+	if err != nil {
+		return nil, errors.Wrap(err, "eosfs: error getting uid and gid for user")
+	}
+
+	// the cs3apis require to have the read permission on the resource
+	// to get the eventual lock.
+	has, err := fs.hasReadAccess(ctx, user, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "eosfs: error checking read access to resource")
+	}
+	if !has {
+		return nil, errtypes.BadRequest("user has not read access on resource")
+	}
+
+	attr, err := fs.c.GetAttr(ctx, auth, "user."+LockKeyAttr, path)
+	if err != nil {
+		return nil, errors.Wrap(err, "eosfs: error getting lock value")
+	}
+
+	lock, err := decodeLock(attr.Val)
+	if err != nil {
+		return nil, errors.Wrap(err, "eosfs: error decoding attr value")
+	}
+
+	// check if the lock is expired
+	if isExpired(lock) {
+		// we do not remove the attr at this point, as it will be
+		// removed by the next call to SetLock
+		return nil, errtypes.NotFound("resource not locked")
+	}
+
+	return lock, nil
 }
 
 // SetLock puts a lock on the given reference
-func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provider.Lock) error {
+	if l.Type == provider.LockType_LOCK_TYPE_SHARED {
+		return errtypes.NotSupported("shared lock not yet implemented")
+	}
+
+	path, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error resolving reference")
+	}
+	path = fs.wrap(ctx, path)
+
+	user, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+	auth, err := fs.getUserAuth(ctx, user, path)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
+	}
+
+	// the cs3apis require to have the write permission on the resource
+	// to set a lock. because in eos we can set attrs even if the user does
+	// not have the write permission, we need to check if the user that made
+	// the request has it
+	has, err := fs.hasWriteAccess(ctx, user, ref)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
+	}
+	if !has {
+		return errtypes.BadRequest("user has not write access on resource")
+	}
+
+	encodedLock, err := encodeLock(l)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error encoding lock")
+	}
+
+	attr := &eosclient.Attribute{
+		Type: UserAttr,
+		Key:  LockKeyAttr,
+		Val:  encodedLock,
+	}
+
+	err = fs.c.SetAttr(ctx, auth, attr, true, false, path)
+	if err != nil {
+		if errors.Is(err, eosclient.AttrAlreadyExistsError) {
+			// the lock was already set, we need to check if it is expired
+			// and eventually "reset" it
+			oldLock, err := fs.GetLock(ctx, ref)
+			if err != nil {
+				return errors.Wrap(err, "eosfs: error getting lock")
+			}
+			if !isExpired(oldLock) {
+				return errtypes.BadRequest("lock already set")
+			}
+			// old lock expired
+			// TODO (gdelmont): make this part atomic
+			return fs.c.SetAttr(ctx, auth, attr, false, false, path)
+		} else {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (fs *eosfs) hasWriteAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
+	resInfo, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return false, err
+	}
+	return resInfo.PermissionSet.InitiateFileUpload, nil
+}
+
+func (fs *eosfs) hasReadAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
+	resInfo, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return false, err
+	}
+	return resInfo.PermissionSet.InitiateFileDownload, nil
+}
+
+func isExpired(l *provider.Lock) bool {
+	return uint64(time.Now().Unix()) > l.Expiration.Seconds
+}
+
+func encodeLock(l *provider.Lock) (string, error) {
+	data, err := json.Marshal(l)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func decodeLock(raw string) (*provider.Lock, error) {
+	l := new(provider.Lock)
+	err := json.Unmarshal([]byte(raw), l)
+	if err != nil {
+		return nil, err
+	}
+	return l, nil
 }
 
 // RefreshLock refreshes an existing lock on the given reference
