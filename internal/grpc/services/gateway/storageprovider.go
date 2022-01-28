@@ -743,6 +743,7 @@ func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provi
 		return nil, errors.Wrap(err, "gateway: error calling SetLock")
 	}
 
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.GetRef().ResourceId)
 	return res, nil
 }
 
