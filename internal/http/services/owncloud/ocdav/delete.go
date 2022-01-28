@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -67,12 +68,15 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 
 	// FIXME the lock token is part of the application level protocol, it should be part of the DeleteRequest message not the outgoing context
 	ih, ok := parseIfHeader(r.Header.Get("If"))
-	if !ok {
+	if ok {
+		if len(ih.lists) == 1 && len(ih.lists[0].conditions) == 1 {
+			req.Opaque = utils.AppendPlainToOpaque(req.Opaque, "lockid", ih.lists[0].conditions[0].Token)
+		}
+	} else if r.Header.Get("If") != "" {
 		w.WriteHeader(http.StatusBadRequest)
-		return // errors.ErrInvalidIfHeader
-	}
-	if len(ih.lists) == 1 && len(ih.lists[0].conditions) == 1 {
-		addLockIDToOpaque(req.Opaque, ih.lists[0].conditions[0].Token)
+		b, err := errors.Marshal(http.StatusBadRequest, "invalid if header", "")
+		errors.HandleWebdavError(&log, w, b, err)
+		return
 	}
 
 	client, err := s.getClient()
@@ -99,7 +103,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		errors.HandleWebdavError(&log, w, b, err)
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		status := http.StatusForbidden
-		if lockID := readLockFromOpaque(res.Opaque); lockID != "" {
+		if lockID := utils.ReadPlainFromOpaque(res.Opaque, "lockid"); lockID != "" {
 			// http://www.webdav.org/specs/rfc4918.html#HEADER_Lock-Token says that the
 			// Lock-Token value is a Coded-URL. We add angle brackets.
 			w.Header().Set("Lock-Token", "<"+lockID+">")

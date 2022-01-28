@@ -322,27 +322,6 @@ func parseDepth(s string) int {
 	}
 	return invalidDepth
 }
-func addLockIDToOpaque(o *types.Opaque, l string) {
-	if o == nil {
-		o = &types.Opaque{}
-	}
-	if o.Map == nil {
-		o.Map = map[string]*types.OpaqueEntry{}
-	}
-	o.Map["lockid"] = &types.OpaqueEntry{
-		Decoder: "plain",
-		Value:   []byte(l),
-	}
-}
-func readLockFromOpaque(o *types.Opaque) string {
-	if o == nil || o.Map == nil {
-		return ""
-	}
-	if e, ok := o.Map["lockid"]; ok && e.Decoder == "plain" {
-		return string(e.Value)
-	}
-	return ""
-}
 func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (retStatus int, retErr error) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
