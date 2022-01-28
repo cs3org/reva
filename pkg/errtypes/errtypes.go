@@ -229,7 +229,7 @@ func NewErrtypeFromStatus(status *rpc.Status) error {
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		return PermissionDenied(status.Message)
 		// FIXME add locked status?
-	//case rpc.Code_CODE_LOCKED:
+	// case rpc.Code_CODE_LOCKED:
 	//	return Locked(status.Message)
 	// case rpc.Code_CODE_DATA_LOSS: ?
 	//	IsPartialContent
