@@ -45,6 +45,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+// Most of this is taken from https://github.com/golang/net/blob/master/webdav/lock.go
+
 // From RFC4918 http://www.webdav.org/specs/rfc4918.html#lock-tokens
 // This specification encourages servers to create Universally Unique Identifiers (UUIDs) for lock tokens,
 // and to use the URI form defined by "A Universally Unique Identifier (UUID) URN Namespace" ([RFC4122]).
@@ -153,7 +155,7 @@ type LockSystem interface {
 	//
 	// See http://www.webdav.org/specs/rfc4918.html#rfc.section.9.11.1 for
 	// when to use each error.
-	Unlock(ctx context.Context, now time.Time, token string) error
+	Unlock(ctx context.Context, now time.Time, ref *provider.Reference, token string) error
 }
 
 // NewCS3LS returns a new CS3 based LockSystem.
@@ -173,10 +175,12 @@ func (cls *cs3LS) Confirm(ctx context.Context, now time.Time, name0, name1 strin
 
 func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails) (string, error) {
 	// always assume depth infinity?
-	//if !details.ZeroDepth {
-	// The CS3 Lock api currently has no depth property, it only locks single resources
-	//	return "", errors.ErrUnsupportedLockInfo
-	//}
+	/*
+		if !details.ZeroDepth {
+		 The CS3 Lock api currently has no depth property, it only locks single resources
+			return "", errors.ErrUnsupportedLockInfo
+		}
+	*/
 
 	// Having a lock token provides no special access rights. Anyone can find out anyone
 	// else's lock token by performing lock discovery. Locks must be enforced based upon
@@ -212,8 +216,21 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 func (cls *cs3LS) Refresh(ctx context.Context, now time.Time, token string, duration time.Duration) (LockDetails, error) {
 	return LockDetails{}, errors.ErrNotImplemented
 }
-func (cls *cs3LS) Unlock(ctx context.Context, now time.Time, token string) error {
-	return errors.ErrNotImplemented
+func (cls *cs3LS) Unlock(ctx context.Context, now time.Time, ref *provider.Reference, token string) error {
+	r := &provider.UnlockRequest{
+		Ref: ref,
+		Lock: &provider.Lock{
+			LockId: token, // can be a token or a Coded-URL
+		},
+	}
+	res, err := cls.client.Unlock(ctx, r)
+	if err != nil {
+		return err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return errtypes.NewErrtypeFromStatus(res.Status)
+	}
+	return nil
 }
 
 // LockDetails are a lock's metadata.
@@ -356,7 +373,7 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 	}
 
 	u := ctxpkg.ContextMustGetUser(ctx)
-	token, ld, now, created := "", LockDetails{UserID: u.Id, Root: ref}, time.Now(), false
+	token, ld, now, created := "", LockDetails{UserID: u.Id, Root: ref, Duration: duration}, time.Now(), false
 	if li == (lockInfo{}) {
 		// An empty lockInfo means to refresh the lock.
 		ih, ok := parseIfHeader(r.Header.Get("If"))
@@ -395,13 +412,9 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 			return status, err
 		}
 		*/
-		ld = LockDetails{
-			Root:      ref,
-			UserID:    u.Id,
-			Duration:  duration,
-			OwnerXML:  li.Owner.InnerXML, // TODO optional, should be a URL
-			ZeroDepth: depth == 0,
-		}
+		ld.OwnerXML = li.Owner.InnerXML // TODO optional, should be a URL
+		ld.ZeroDepth = depth == 0
+
 		//TODO: @jfd the code tries to create a lock for a file that may not even exist,
 		//      should we do that in the decomposedfs as well? the node does not exist
 		//      this actually is a name based lock ... ugh
@@ -415,7 +428,10 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 
 		defer func() {
 			if retErr != nil {
-				s.LockSystem.Unlock(ctx, now, token)
+				if err := s.LockSystem.Unlock(ctx, now, ref, token); err != nil {
+					appctx.GetLogger(ctx).Error().Err(err).Interface("lock", ld).Msg("could not unlock after failed lock")
+				}
+
 			}
 		}()
 
@@ -472,7 +488,46 @@ func writeLockInfo(w io.Writer, token string, ld LockDetails) (int, error) {
 	)
 }
 
-// TODO(jfd): implement unlock
-func (s *svc) handleUnlock(w http.ResponseWriter, r *http.Request, ns string) {
-	w.WriteHeader(http.StatusNotImplemented)
+func (s *svc) handleUnlock(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
+	defer span.End()
+
+	span.SetAttributes(attribute.String("component", "ocdav"))
+
+	fn := path.Join(ns, r.URL.Path) // TODO do we still need to jail if we query the registry about the spaces?
+
+	client, err := s.getClient()
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	// TODO instead of using a string namespace ns pass in the space with the request?
+	ref, cs3Status, err := spacelookup.LookupReferenceForPath(ctx, client, fn)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if cs3Status.Code != rpc.Code_CODE_OK {
+		return http.StatusInternalServerError, errtypes.NewErrtypeFromStatus(cs3Status)
+	}
+
+	// http://www.webdav.org/specs/rfc4918.html#HEADER_Lock-Token says that the
+	// Lock-Token value is a Coded-URL. We strip its angle brackets.
+	t := r.Header.Get("Lock-Token")
+	if len(t) < 2 || t[0] != '<' || t[len(t)-1] != '>' {
+		return http.StatusBadRequest, errors.ErrInvalidLockToken
+	}
+	t = t[1 : len(t)-1]
+
+	switch err = s.LockSystem.Unlock(r.Context(), time.Now(), ref, t); err {
+	case nil:
+		return http.StatusNoContent, err
+	case errors.ErrForbidden:
+		return http.StatusForbidden, err
+	case errors.ErrLocked:
+		return http.StatusLocked, err
+	case errors.ErrNoSuchLock:
+		return http.StatusConflict, err
+	default:
+		return http.StatusInternalServerError, err
+	}
 }
