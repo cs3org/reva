@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -160,35 +161,13 @@ var (
 // HandleErrorStatus checks the status code, logs a Debug or Error level message
 // and writes an appropriate http status
 func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status) {
-	switch s.Code {
-	case rpc.Code_CODE_OK:
-		log.Debug().Interface("status", s).Msg("ok")
-		w.WriteHeader(http.StatusOK)
-	case rpc.Code_CODE_NOT_FOUND:
-		log.Debug().Interface("status", s).Msg("resource not found")
-		w.WriteHeader(http.StatusNotFound)
-	case rpc.Code_CODE_PERMISSION_DENIED:
-		log.Debug().Interface("status", s).Msg("permission denied")
-		w.WriteHeader(http.StatusForbidden)
-	case rpc.Code_CODE_UNAUTHENTICATED:
-		log.Debug().Interface("status", s).Msg("unauthenticated")
-		w.WriteHeader(http.StatusUnauthorized)
-	case rpc.Code_CODE_INVALID_ARGUMENT:
-		log.Debug().Interface("status", s).Msg("bad request")
-		w.WriteHeader(http.StatusBadRequest)
-	case rpc.Code_CODE_UNIMPLEMENTED:
-		log.Debug().Interface("status", s).Msg("not implemented")
-		w.WriteHeader(http.StatusNotImplemented)
-	case rpc.Code_CODE_INSUFFICIENT_STORAGE:
-		log.Debug().Interface("status", s).Msg("insufficient storage")
-		w.WriteHeader(http.StatusInsufficientStorage)
-	case rpc.Code_CODE_FAILED_PRECONDITION:
-		log.Debug().Interface("status", s).Msg("destination does not exist")
-		w.WriteHeader(http.StatusConflict)
-	default:
-		log.Error().Interface("status", s).Msg("grpc request failed")
-		w.WriteHeader(http.StatusInternalServerError)
+	hsc := status.HTTPStatusFromCode(s.Code)
+	if hsc == http.StatusInternalServerError {
+		log.Error().Interface("status", s).Int("code", hsc).Msg(http.StatusText(hsc))
+	} else {
+		log.Debug().Interface("status", s).Int("code", hsc).Msg(http.StatusText(hsc))
 	}
+	w.WriteHeader(hsc)
 }
 
 // HandleWebdavError checks the status code, logs an error and creates a webdav response body
