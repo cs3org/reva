@@ -52,6 +52,25 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 		return
 	}
 
+	// stat prefered path to make sure it isn't there
+	sr, err := client.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Path: fn,
+		},
+	})
+	if err != nil {
+		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if sr.Status.Code != rpc.Code_CODE_NOT_FOUND {
+		sublog.Info().Err(err).Str("path", fn).Interface("code", sr.Status.Code).Msg("response code for stat was unexpected")
+		// tests want this errorcode. StatusConflict would be more logical
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	parentPath := path.Dir(fn)
 
 	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, parentPath)
