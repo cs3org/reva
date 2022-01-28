@@ -624,5 +624,7 @@ func isSubpath(p string, path string) bool {
 	if err != nil {
 		return false
 	}
-	return !strings.HasPrefix(r, "..")
+
+	// TODO: What does it mean if path contains "..."? (eg /users/8cc34f34-1472-103c-9043-0bc474e6e19c/... )
+	return !strings.HasPrefix(r, "..") || strings.HasPrefix(r, "...")
 }
