@@ -22,6 +22,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 )
 
@@ -139,3 +140,7 @@ type Authorization struct {
 	Role  Role
 	Token string
 }
+
+// AttrAlreadyExistsError is the error raised when setting
+// an already existing attr on a resource
+const AttrAlreadyExistsError = errtypes.BadRequest("attr already exists")
