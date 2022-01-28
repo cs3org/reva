@@ -370,3 +370,27 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
 }
+
+func AppendPlainToOpaque(o *types.Opaque, key, value string) *types.Opaque {
+	if o == nil {
+		o = &types.Opaque{}
+	}
+	if o.Map == nil {
+		o.Map = map[string]*types.OpaqueEntry{}
+	}
+	o.Map[key] = &types.OpaqueEntry{
+		Decoder: "plain",
+		Value:   []byte(value),
+	}
+	return o
+}
+
+func ReadPlainFromOpaque(o *types.Opaque, key string) string {
+	if o == nil || o.Map == nil {
+		return ""
+	}
+	if e, ok := o.Map[key]; ok && e.Decoder == "plain" {
+		return string(e.Value)
+	}
+	return ""
+}
