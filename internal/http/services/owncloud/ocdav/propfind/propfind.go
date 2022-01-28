@@ -1107,10 +1107,17 @@ func activeLocks(log *zerolog.Logger, lock *provider.Lock) string {
 	expiration := "Infinity"
 	if lock.Expiration != nil {
 		now := uint64(time.Now().Unix())
-		if lock.Expiration.Seconds < now {
-			return "" // lock expired
-		}
-		expiration = "Second-" + strconv.FormatUint(lock.Expiration.Seconds-now, 10)
+		// Should we hide expared locks here? No.
+		//
+		// If the timeout expires, then the lock SHOULD be removed.  In this
+		// case the server SHOULD act as if an UNLOCK method was executed by the
+		// server on the resource using the lock token of the timed-out lock,
+		// performed with its override authority.
+		//
+		// see https://datatracker.ietf.org/doc/html/rfc4918#section-6.6
+		if lock.Expiration.Seconds >= now {
+			expiration = "Second-" + strconv.FormatUint(lock.Expiration.Seconds-now, 10)
+		} // otherwise report as infinity lock, after all the storage did not delete the lock
 	}
 
 	// xml.Encode cannot render emptytags like <d:write/>, see https://github.com/golang/go/issues/21399

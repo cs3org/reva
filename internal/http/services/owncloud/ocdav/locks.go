@@ -431,7 +431,6 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 				if err := s.LockSystem.Unlock(ctx, now, ref, token); err != nil {
 					appctx.GetLogger(ctx).Error().Err(err).Interface("lock", ld).Msg("could not unlock after failed lock")
 				}
-
 			}
 		}()
 
