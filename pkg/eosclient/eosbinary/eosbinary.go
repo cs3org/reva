@@ -520,15 +520,23 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
-	var args []string
+
+	args := []string{"attr"}
 	if recursive {
-		args = []string{"attr", "-r", "set", serializeAttribute(attr), path}
-	} else {
-		args = []string{"attr", "set", serializeAttribute(attr), path}
+		args = append(args, "-r")
 	}
+	args = append(args, "set")
+	if errorIfExists {
+		args = append(args, "-c")
+	}
+	args = append(args, serializeAttribute(attr), path)
 
 	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
+		var exErr *exec.ExitError
+		if errors.As(err, &exErr) && exErr.ExitCode() == 17 {
+			return eosclient.AttrAlreadyExistsError
+		}
 		return err
 	}
 	return nil
