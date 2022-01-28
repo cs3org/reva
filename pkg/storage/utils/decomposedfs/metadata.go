@@ -60,6 +60,14 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
+	// check lock
+	if lock := n.ReadLock(ctx); lock != nil {
+		lockID, _ := ctxpkg.ContextGetLockID(ctx)
+		if lock.LockId != lockID {
+			return errtypes.Locked(lock.LockId)
+		}
+	}
+
 	nodePath := n.InternalPath()
 
 	errs := []error{}
@@ -146,6 +154,14 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 		return errtypes.InternalError(err.Error())
 	case !ok:
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
+	// check lock
+	if lock := n.ReadLock(ctx); lock != nil {
+		lockID, _ := ctxpkg.ContextGetLockID(ctx)
+		if lock.LockId != lockID {
+			return errtypes.Locked(lock.LockId)
+		}
 	}
 
 	nodePath := n.InternalPath()

@@ -29,6 +29,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
@@ -279,7 +280,13 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 		return errtypes.PermissionDenied(key)
 	}
 
-	// FIXME check is locked
+	// check lock
+	if lock := targetNode.ReadLock(ctx); lock != nil {
+		lockID, _ := ctxpkg.ContextGetLockID(ctx)
+		if lock.LockId != lockID {
+			return errtypes.Locked(lock.LockId)
+		}
+	}
 
 	// Run the restore func
 	return restoreFunc()

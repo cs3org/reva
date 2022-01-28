@@ -25,6 +25,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
@@ -62,7 +63,13 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	// FIXME check is locked
+	// check lock
+	if lock := node.ReadLock(ctx); lock != nil {
+		lockID, _ := ctxpkg.ContextGetLockID(ctx)
+		if lock.LockId != lockID {
+			return errtypes.Locked(lock.LockId)
+		}
+	}
 
 	np := fs.lu.InternalPath(node.ID)
 	e := ace.FromGrant(g)
@@ -144,7 +151,13 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	// FIXME check is locked
+	// check lock
+	if lock := node.ReadLock(ctx); lock != nil {
+		lockID, _ := ctxpkg.ContextGetLockID(ctx)
+		if lock.LockId != lockID {
+			return errtypes.Locked(lock.LockId)
+		}
+	}
 
 	var attr string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {

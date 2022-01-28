@@ -312,6 +312,14 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
+	// check lock
+	if lock := n.ReadLock(ctx); lock != nil {
+		lockID, _ := ctxpkg.ContextGetLockID(ctx)
+		if lock.LockId != lockID {
+			return errtypes.Locked(lock.LockId)
+		}
+	}
+
 	// verify child does not exist, yet
 	if n, err = n.Child(ctx, name); err != nil {
 		return
@@ -434,7 +442,13 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return
 	}
 
-	// FIXME check is locked
+	// check lock on target
+	if lock := newNode.ReadLock(ctx); lock != nil {
+		lockID, _ := ctxpkg.ContextGetLockID(ctx)
+		if lock.LockId != lockID {
+			return errtypes.Locked(lock.LockId) // return we must return the current lockid
+		}
+	}
 
 	return fs.tp.Move(ctx, oldNode, newNode)
 }
@@ -524,34 +538,11 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	// WebDAV uses the Token
-	/*
-				from https://datatracker.ietf.org/doc/html/rfc4918#section-7
-
-				Of the methods defined in HTTP and WebDAV, PUT, POST, PROPPATCH,
-				LOCK, UNLOCK, MOVE, COPY (for the destination resource), DELETE, and
-				MKCOL are affected by write locks.  All other HTTP/WebDAV methods
-				defined so far -- GET in particular -- function independently of a
-				write lock.
-
-				from https://datatracker.ietf.org/doc/html/rfc4918#section-7.5
-
-					In order to prevent these collisions, a lock token MUST be submitted
-				by an authorized principal for all locked resources that a method may
-				change or the method MUST fail.  A lock token is submitted when it
-				appears in an If header.  For example, if a resource is to be moved
-				and both the source and destination are locked, then two lock tokens
-				must be submitted in the If header, one for the source and the other
-				for the destination.
-
-				If: <http://www.example.com/users/f/fielding/index.html>
-		         (<urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6>)
-
-	*/
+	// check lock
 	if lock := node.ReadLock(ctx); lock != nil {
 		lockID, _ := ctxpkg.ContextGetLockID(ctx)
 		if lock.LockId != lockID {
-			return errtypes.Locked(lock.LockId) // return we must return the current lockid
+			return errtypes.Locked(lock.LockId)
 		}
 	}
 
@@ -649,10 +640,15 @@ func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lo
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
+	// check lock
+	if lock := node.ReadLock(ctx); lock != nil {
+		lockID, _ := ctxpkg.ContextGetLockID(ctx)
+		if lock.LockId != lockID {
+			return errtypes.Locked(lock.LockId)
+		}
+	}
+
 	lockPath := node.InternalPath() + ".lock"
-
-	// FIXME check is locked
-
 	// O_EXCL to make open fail when the file already exists
 	f, err := os.OpenFile(lockPath, os.O_EXCL|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
