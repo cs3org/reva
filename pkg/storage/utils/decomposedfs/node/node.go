@@ -38,7 +38,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/props"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -757,7 +756,7 @@ func readLocksIntoOpaque(ctx context.Context, lockPath string, ri *provider.Reso
 	}
 	defer f.Close()
 
-	lock := &props.LockDiscovery{}
+	lock := &provider.Lock{}
 	if err := json.NewDecoder(f).Decode(lock); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not read lock file")
 	}
@@ -779,26 +778,23 @@ func readLocksIntoOpaque(ctx context.Context, lockPath string, ri *provider.Reso
 	// TODO support advisory locks?
 }
 
-// IsLocked checks if a file is locked with the given lock id
-func (n Node) IsLocked(ctx context.Context, lockID string) bool {
+// ReadLock reads the lock id for a node
+func (n Node) ReadLock(ctx context.Context) *provider.Lock {
 	// check lock
 	lockPath := n.InternalPath() + ".lock"
 
 	f, err := os.Open(lockPath)
 	if err != nil {
-		return false
+		return nil
 	}
 	defer f.Close()
 
-	lock := &props.LockDiscovery{}
+	lock := &provider.Lock{}
 	if err := json.NewDecoder(f).Decode(lock); err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not decode lock file")
-		return false
+		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not decode lock file, ignoring")
+		return nil
 	}
-	if lockID != lock.LockID {
-		return true
-	}
-	return false
+	return lock
 }
 
 // HasPropagation checks if the propagation attribute exists and is set to "1"

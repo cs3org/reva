@@ -36,7 +36,6 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/props"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -525,7 +524,6 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	//lockID := // TODO read from context?
 	// WebDAV uses the Token
 	/*
 				from https://datatracker.ietf.org/doc/html/rfc4918#section-7
@@ -550,12 +548,12 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 		         (<urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6>)
 
 	*/
-	//if node.IsLocked(ctx, lockID) {
-	// hm get current lock, compare lock ids then decide if ok or return error? with current lockid
-
-	//	return errtypes.PermissionDenied("file locked") // TODO by whom? user? app? return current lockid?
-	//}
-	// FIXME check is locked
+	if lock := node.ReadLock(ctx); lock != nil {
+		lockID, _ := ctxpkg.ContextGetLockID(ctx)
+		if lock.LockId != lockID {
+			return errtypes.Locked(lock.LockId) // return we must return the current lockid
+		}
+	}
 
 	return fs.tp.Delete(ctx, node)
 }
@@ -662,17 +660,8 @@ func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lo
 	}
 	defer f.Close()
 
-	// TODO remove LockDiscovery once https://github.com/cs3org/cs3apis/pull/162 is merged
-	ld := &props.LockDiscovery{
-		LockID:     lock.Metadata,
-		Type:       lock.Type,
-		Expiration: lock.Mtime,
-		UserID:     lock.GetUser(),
-		App:        lock.GetAppName(),
-	}
-
 	// TODO version lock data?
-	if err := json.NewEncoder(f).Encode(ld); err != nil {
+	if err := json.NewEncoder(f).Encode(lock); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not write lock file")
 	}
 
@@ -708,29 +697,21 @@ func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference
 	}
 	defer f.Close()
 
-	oldLock := &props.LockDiscovery{}
+	oldLock := &provider.Lock{}
 	if err := json.NewDecoder(f).Decode(oldLock); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not read lock")
 	}
 
 	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.UserID, u.Id) {
+	if !utils.UserEqual(oldLock.User, u.Id) {
 		return errtypes.PermissionDenied("cannot refresh lock of another holder")
 	}
 
-	if !utils.UserEqual(oldLock.UserID, lock.GetUser()) {
+	if !utils.UserEqual(oldLock.User, lock.GetUser()) {
 		return errtypes.PermissionDenied("cannot change holder when refreshing a lock")
 	}
-	// TODO remove LockDiscovery once https://github.com/cs3org/cs3apis/pull/162 is merged
-	ld := &props.LockDiscovery{
-		LockID:     lock.Metadata,
-		Type:       lock.Type,
-		Expiration: lock.Mtime,
-		UserID:     lock.GetUser(),
-		App:        lock.GetAppName(),
-	}
 
-	if err := json.NewEncoder(f).Encode(ld); err != nil {
+	if err := json.NewEncoder(f).Encode(lock); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not write lock file")
 	}
 
@@ -765,7 +746,7 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference) err
 		return errors.Wrap(err, "Decomposedfs: could not open lock file")
 	}
 
-	oldLock := &props.LockDiscovery{}
+	oldLock := &provider.Lock{}
 	if err := json.NewDecoder(f).Decode(oldLock); err != nil {
 		_ = f.Close()
 		return errors.Wrap(err, "Decomposedfs: could not read lock")
@@ -773,7 +754,7 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference) err
 
 	// TODO read lockid from request
 	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.UserID, u.Id) {
+	if !utils.UserEqual(oldLock.User, u.Id) {
 		_ = f.Close()
 		return errtypes.PermissionDenied("mismatching holder")
 	}
