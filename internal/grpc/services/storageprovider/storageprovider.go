@@ -29,6 +29,7 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -664,30 +665,40 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	}
 
 	// check DeleteRequest for any known opaque properties.
+	// FIXME these should be part of the DeleteRequest object
 	if req.Opaque != nil {
-		_, ok := req.Opaque.Map["deleting_shared_resource"]
-		if ok {
+		if _, ok := req.Opaque.Map["deleting_shared_resource"]; ok {
 			// it is a binary key; its existence signals true. Although, do not assume.
 			ctx = context.WithValue(ctx, appctx.DeletingSharedResource, true)
+		}
+		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
+			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
 		}
 	}
 
 	if err := s.storage.Delete(ctx, req.Ref); err != nil {
 		var st *rpc.Status
-		switch err.(type) {
+		switch e := err.(type) {
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when creating container")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, e, "permission denied")
+		case errtypes.Locked:
+			// special handling because we need to return the lock id
+			return &provider.DeleteResponse{
+				Opaque: &types.Opaque{
+					Map: map[string]*types.OpaqueEntry{
+						"lockid": {
+							Decoder: "plain",
+							Value:   []byte(e.LockID()),
+						},
+					},
+				},
+				Status: status.NewPermissionDenied(ctx, e, e.Error()),
+			}, nil
 		default:
 			st = status.NewInternal(ctx, "error deleting file: "+req.Ref.String())
 		}
-		appctx.GetLogger(ctx).
-			Error().
-			Err(err).
-			Interface("status", st).
-			Interface("reference", req.Ref).
-			Msg("failed to delete")
 		return &provider.DeleteResponse{
 			Status: st,
 		}, nil
