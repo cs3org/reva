@@ -22,6 +22,8 @@
 
 package ocdav
 
+// copy of https://github.com/golang/net/blob/master/webdav/if.go
+
 // The If header is covered by Section 10.4.
 // http://www.webdav.org/specs/rfc4918.html#HEADER_If
 

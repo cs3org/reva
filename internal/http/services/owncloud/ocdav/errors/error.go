@@ -134,7 +134,7 @@ var (
 	ErrInvalidPropfind = errors.New("webdav: invalid propfind")
 	// ErrInvalidProppatch is an invalid proppatch error
 	ErrInvalidProppatch = errors.New("webdav: invalid proppatch")
-	// ErrUnsupportedLockInfo is an invalid lock error
+	// ErrInvalidLockInfo is an invalid lock error
 	ErrInvalidLockInfo = errors.New("webdav: invalid lock info")
 	// ErrUnsupportedLockInfo is an unsupported lock error
 	ErrUnsupportedLockInfo = errors.New("webdav: unsupported lock info")

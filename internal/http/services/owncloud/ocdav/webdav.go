@@ -75,9 +75,9 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 			p.HandlePathPropfind(w, r, ns)
 		case MethodLock:
 			log := appctx.GetLogger(r.Context())
-			status := http.StatusBadRequest
+			// TODO initialize status with http.StatusBadRequest
 			// TODO initialize err with errors.ErrUnsupportedMethod
-			status, err = s.handleLock(w, r, ns)
+			status, err := s.handleLock(w, r, ns)
 			if status != 0 { // 0 would mean handleLock already sent the response
 				w.WriteHeader(status)
 				if status != http.StatusNoContent {
