@@ -1294,3 +1294,6 @@ _ocs: api compatibility, return correct status code_
 ### [send PUT requests to another user's webDav endpoints as normal user](https://github.com/owncloud/ocis/issues/2893)
 - [apiAuthWebDav/webDavPUTAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPUTAuth.feature#L58)
 
+Note: always have an empty line at the end of this file.
+The bash script that processes this file may not process a scenario reference on the last line.
+
