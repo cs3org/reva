@@ -69,6 +69,8 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 		sublog.Info().Err(err).Str("path", fn).Interface("code", sr.Status.Code).Msg("response code for stat was unexpected")
 		// tests want this errorcode. StatusConflict would be more logical
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		b, err := errors.Marshal(errors.SabredavMethodNotAllowed, "The resource you tried to create already exists", "")
+		errors.HandleWebdavError(&sublog, w, b, err)
 		return
 	}
 
