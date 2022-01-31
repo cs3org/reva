@@ -576,13 +576,6 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, errors.Wrap(err, "eosfs: error decoding attr value")
 	}
 
-	// check if the lock is expired
-	if isExpired(lock) {
-		// we do not remove the attr at this point, as it will be
-		// removed by the next call to SetLock
-		return nil, errtypes.NotFound("resource not locked")
-	}
-
 	return lock, nil
 }
 
@@ -631,25 +624,12 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 	}
 
 	err = fs.c.SetAttr(ctx, auth, attr, true, false, path)
-	if err != nil {
-		if errors.Is(err, eosclient.AttrAlreadyExistsError) {
-			// the lock was already set, we need to check if it is expired
-			// and eventually "reset" it
-			oldLock, err := fs.GetLock(ctx, ref)
-			if err != nil {
-				return errors.Wrap(err, "eosfs: error getting lock")
-			}
-			if !isExpired(oldLock) {
-				return errtypes.BadRequest("lock already set")
-			}
-			// old lock expired
-			// TODO (gdelmont): make this part atomic
-			return fs.c.SetAttr(ctx, auth, attr, false, false, path)
-		}
+	switch {
+	case errors.Is(err, eosclient.AttrAlreadyExistsError):
+		return errtypes.BadRequest("lock already set")
+	default:
 		return err
 	}
-
-	return nil
 }
 
 func (fs *eosfs) hasWriteAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
@@ -666,10 +646,6 @@ func (fs *eosfs) hasReadAccess(ctx context.Context, user *userpb.User, ref *prov
 		return false, err
 	}
 	return resInfo.PermissionSet.InitiateFileDownload, nil
-}
-
-func isExpired(l *provider.Lock) bool {
-	return uint64(time.Now().Unix()) > l.Expiration.Seconds
 }
 
 func encodeLock(l *provider.Lock) (string, error) {
