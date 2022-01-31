@@ -267,9 +267,15 @@ func readLockInfo(r io.Reader) (li lockInfo, status int, err error) {
 	}
 	// We only support exclusive (non-shared) write locks. In practice, these are
 	// the only types of locks that seem to matter.
-	if li.Exclusive == nil || li.Shared != nil || li.Write == nil {
+	// We are ignoring the prite property in the lock details, and assume a write lock is requested.
+	// https://datatracker.ietf.org/doc/html/rfc4918#section-7 only describes write locks
+	if li.Exclusive == nil || li.Shared != nil {
 		return lockInfo{}, http.StatusNotImplemented, errors.ErrUnsupportedLockInfo
 	}
+	// what should we return if the user requests a shared lock? or leaves out the locktype? the testsuite will only send the property lockscope, not locktype
+	// the oc tests cover both shared and exclusive locks. What is the WOPI lock? a shared or an exclusive lock?
+	// since it is issued by a service it seems to be an exclusive lock.
+	// the owner could be a link to the collaborative app ... to join the session
 	return li, 0, nil
 }
 
@@ -347,6 +353,15 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 
 	fn := path.Join(ns, r.URL.Path) // TODO do we still need to jail if we query the registry about the spaces?
 
+	duration, err := parseTimeout(r.Header.Get("Timeout"))
+	if err != nil {
+		return http.StatusBadRequest, errors.ErrInvalidTimeout
+	}
+	li, status, err := readLockInfo(r.Body)
+	if err != nil {
+		return status, errors.ErrInvalidLockInfo
+	}
+
 	client, err := s.getClient()
 	if err != nil {
 		return http.StatusInternalServerError, err
@@ -362,15 +377,6 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 	}
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Interface("ref", ref).Logger()
-
-	duration, err := parseTimeout(r.Header.Get("Timeout"))
-	if err != nil {
-		return http.StatusBadRequest, errors.ErrInvalidTimeout
-	}
-	li, status, err := readLockInfo(r.Body)
-	if err != nil {
-		return status, errors.ErrInvalidLockInfo
-	}
 
 	u := ctxpkg.ContextMustGetUser(ctx)
 	token, ld, now, created := "", LockDetails{UserID: u.Id, Root: ref, Duration: duration}, time.Now(), false
