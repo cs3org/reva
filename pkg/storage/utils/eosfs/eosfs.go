@@ -31,6 +31,8 @@ import (
 	"strings"
 	"time"
 
+	b64 "encoding/base64"
+
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/bluele/gcache"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -653,12 +655,16 @@ func encodeLock(l *provider.Lock) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(data), nil
+	return b64.StdEncoding.EncodeToString(data), nil
 }
 
 func decodeLock(raw string) (*provider.Lock, error) {
+	data, err := b64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, err
+	}
 	l := new(provider.Lock)
-	err := json.Unmarshal([]byte(raw), l)
+	err = json.Unmarshal(data, l)
 	if err != nil {
 		return nil, err
 	}
