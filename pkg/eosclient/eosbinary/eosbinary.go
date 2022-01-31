@@ -323,20 +323,9 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	}
 
 	sysACL := a.CitrineSerialize()
-	args := []string{"acl"}
-
+	args := []string{"acl", "--sys"}
 	if finfo.IsDir {
-		args = append(args, "--sys", "--recursive")
-	} else {
-		args = append(args, "--user")
-		userACLAttr := &eosclient.Attribute{
-			Type: SystemAttr,
-			Key:  userACLEvalKey,
-			Val:  "1",
-		}
-		if err = c.SetAttr(ctx, auth, userACLAttr, false, path); err != nil {
-			return err
-		}
+		args = append(args, "--recursive")
 	}
 
 	// set position of ACLs to add. The default is to append to the end, so no arguments will be added in this case
@@ -387,11 +376,9 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 	}
 
 	sysACL := a.CitrineSerialize()
-	args := []string{"acl"}
+	args := []string{"acl", "--sys"}
 	if finfo.IsDir {
-		args = append(args, "--sys", "--recursive")
-	} else {
-		args = append(args, "--user")
+		args = append(args, "--recursive")
 	}
 	args = append(args, sysACL, path)
 
