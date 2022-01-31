@@ -86,6 +86,15 @@ func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status
 	}
 }
 
+// NewFailedPrecondition returns a Status with FAILED_PRECONDITION.
+func NewFailedPrecondition(ctx context.Context, err error, msg string) *rpc.Status {
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_FAILED_PRECONDITION,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 // NewInsufficientStorage returns a Status with INSUFFICIENT_STORAGE.
 func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
@@ -134,9 +143,11 @@ func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
 func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Status {
 	switch e := err.(type) {
 	case nil:
-		NewOK(ctx)
+		return NewOK(ctx)
 	case errtypes.IsNotFound:
 		return NewNotFound(ctx, msg+": "+err.Error())
+	case errtypes.AlreadyExists:
+		return NewAlreadyExists(ctx, err, msg+": "+err.Error())
 	case errtypes.IsInvalidCredentials:
 		// TODO this maps badly
 		return NewUnauthenticated(ctx, err, msg+": "+err.Error())
@@ -145,6 +156,8 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 	case errtypes.Locked:
 		// FIXME a locked error returns the current lockid
 		return NewPermissionDenied(ctx, e, msg+": "+err.Error())
+	case errtypes.PreconditionFailed:
+		return NewFailedPrecondition(ctx, e, msg+": "+err.Error())
 	case errtypes.IsNotSupported:
 		return NewUnimplemented(ctx, err, msg+":"+err.Error())
 	case errtypes.BadRequest:
@@ -195,7 +208,7 @@ var httpStatusCode = map[rpc.Code]int{
 	rpc.Code_CODE_CANCELLED:            499, // Client Closed Request
 	rpc.Code_CODE_DATA_LOSS:            http.StatusInternalServerError,
 	rpc.Code_CODE_DEADLINE_EXCEEDED:    http.StatusGatewayTimeout,
-	rpc.Code_CODE_FAILED_PRECONDITION:  http.StatusBadRequest,
+	rpc.Code_CODE_FAILED_PRECONDITION:  http.StatusPreconditionFailed,
 	rpc.Code_CODE_INSUFFICIENT_STORAGE: http.StatusInsufficientStorage,
 	rpc.Code_CODE_INTERNAL:             http.StatusInternalServerError,
 	rpc.Code_CODE_INVALID:              http.StatusInternalServerError,
