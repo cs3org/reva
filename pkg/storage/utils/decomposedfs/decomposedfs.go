@@ -666,6 +666,10 @@ func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lo
 
 // RefreshLock refreshes an existing lock on the given reference
 func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	if lock.LockId == "" {
+		return errtypes.BadRequest("missing lockid")
+	}
+
 	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error resolving ref")
@@ -688,7 +692,10 @@ func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference
 	lockPath := node.InternalPath() + ".lock"
 
 	f, err := os.OpenFile(lockPath, os.O_RDWR, os.ModeExclusive)
-	if err != nil {
+	switch {
+	case os.IsNotExist(err):
+		return errtypes.PreconditionFailed("lock does not exist")
+	case err != nil:
 		return errors.Wrap(err, "Decomposedfs: could not open lock file")
 	}
 	defer f.Close()
@@ -696,6 +703,11 @@ func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference
 	oldLock := &provider.Lock{}
 	if err := json.NewDecoder(f).Decode(oldLock); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not read lock")
+	}
+
+	// check lock
+	if oldLock.LockId != lock.LockId {
+		return errtypes.PreconditionFailed("mismatching lock")
 	}
 
 	u := ctxpkg.ContextMustGetUser(ctx)
@@ -715,7 +727,11 @@ func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	if lock.LockId == "" {
+		return errtypes.BadRequest("missing lockid")
+	}
+
 	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error resolving ref")
@@ -738,7 +754,10 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference) err
 	lockPath := node.InternalPath() + ".lock"
 
 	f, err := os.OpenFile(lockPath, os.O_RDONLY, os.ModeExclusive)
-	if err != nil {
+	switch {
+	case os.IsNotExist(err):
+		return errtypes.PreconditionFailed("lock does not exist")
+	case err != nil:
 		return errors.Wrap(err, "Decomposedfs: could not open lock file")
 	}
 
@@ -748,7 +767,11 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference) err
 		return errors.Wrap(err, "Decomposedfs: could not read lock")
 	}
 
-	// TODO read lockid from request
+	// check lock
+	if oldLock.LockId != lock.LockId {
+		return errtypes.Locked(oldLock.LockId)
+	}
+
 	u := ctxpkg.ContextMustGetUser(ctx)
 	if !utils.UserEqual(oldLock.User, u.Id) {
 		_ = f.Close()

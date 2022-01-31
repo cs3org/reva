@@ -551,7 +551,7 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock 
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
