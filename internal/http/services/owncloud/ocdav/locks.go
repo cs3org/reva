@@ -345,6 +345,24 @@ func parseDepth(s string) int {
 	}
 	return invalidDepth
 }
+
+/*
+	the oc 10 wopi app code locks like this:
+
+		$storage->lockNodePersistent($file->getInternalPath(), [
+			'token' => $wopiLock,
+			'owner' => "{$user->getDisplayName()} via Office Online"
+		]);
+
+	if owner is empty it defaults to '{displayname} ({email})', which is not a url ... but ... shrug
+
+	The LockManager also defaults to exclusive locks:
+
+		$scope = ILock::LOCK_SCOPE_EXCLUSIVE;
+		if (isset($lockInfo['scope'])) {
+			$scope = $lockInfo['scope'];
+		}
+*/
 func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (retStatus int, retErr error) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
