@@ -108,7 +108,7 @@ def main(ctx):
         litmusOcisSpacesDav(),
         # virtual views don't work on edge at the moment
         #virtualViews(),
-    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
+    ] + ocisIntegrationTests(6)
 
 def buildAndPublishDocker():
     return {
