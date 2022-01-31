@@ -20,7 +20,6 @@ package rest
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -34,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -198,8 +198,15 @@ func (m *manager) getInternalUserID(ctx context.Context, uid *userpb.UserId) (st
 	return internalID, nil
 }
 
-func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]interface{}) *userpb.User {
-	upn, _ := userData["upn"].(string)
+func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]interface{}) (*userpb.User, error) {
+	id, ok := userData["id"].(string)
+	if !ok {
+		return nil, errors.New("parseAndCacheUser: Missing id in userData")
+	}
+	upn, ok := userData["upn"].(string)
+	if !ok {
+		return nil, errors.New("parseAndCacheUser: Missing upn in userData")
+	}
 	mail, _ := userData["primaryAccountEmail"].(string)
 	name, _ := userData["displayName"].(string)
 	uidNumber, _ := userData["uid"].(float64)
@@ -225,12 +232,11 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 		log := appctx.GetLogger(ctx)
 		log.Error().Err(err).Msg("rest: error caching user details")
 	}
-	if err := m.cacheInternalID(userID, userData["id"].(string)); err != nil {
+	if err := m.cacheInternalID(userID, id); err != nil {
 		log := appctx.GetLogger(ctx)
-		log.Error().Err(err).Msg("rest: error caching user details")
+		log.Error().Err(err).Msg("rest: error caching internal ID")
 	}
-	return u
-
+	return u, nil
 }
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
@@ -249,7 +255,10 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 		if err != nil {
 			return nil, err
 		}
-		u = m.parseAndCacheUser(ctx, userData)
+		u, err = m.parseAndCacheUser(ctx, userData)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if !skipFetchingGroups {
@@ -280,16 +289,21 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 		return nil, errors.New("rest: invalid field: " + claim)
 	}
 
-	userData, err := m.getUserByParam(ctx, claim, value)
-	if err != nil {
-		// Lightweight accounts need to be fetched by email
-		if strings.HasPrefix(value, "guest:") {
-			if userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(value, "guest:")); err != nil {
-				return nil, err
-			}
+	var userData map[string]interface{}
+	if strings.HasPrefix(value, "guest:") {
+		// Lightweight accounts need to be fetched by email, regardless the demanded claim
+		if userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(value, "guest:")); err != nil {
+			return nil, err
+		}
+	} else {
+		if userData, err = m.getUserByParam(ctx, claim, value); err != nil {
+			return nil, errors.Wrap(err, "rest: failed getUserByParam, claim="+claim+", value="+value)
 		}
 	}
-	u := m.parseAndCacheUser(ctx, userData)
+	u, err := m.parseAndCacheUser(ctx, userData)
+	if err != nil {
+		return nil, err
+	}
 
 	if !skipFetchingGroups {
 		userGroups, err := m.GetUserGroups(ctx, u.Id)
@@ -300,7 +314,6 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 	}
 
 	return u, nil
-
 }
 
 func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[string]*userpb.User, skipFetchingGroups bool) error {
