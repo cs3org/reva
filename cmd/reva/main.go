@@ -85,6 +85,9 @@ var (
 		appTokensListCommand(),
 		appTokensRemoveCommand(),
 		appTokensCreateCommand(),
+		setlockCommand(),
+		getlockCommand(),
+		unlockCommand(),
 		helpCommand(),
 	}
 )
