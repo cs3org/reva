@@ -313,11 +313,8 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	}
 
 	// check lock
-	if lock := n.ReadLock(ctx); lock != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if lock.LockId != lockID {
-			return errtypes.Locked(lock.LockId)
-		}
+	if err := fs.checkLock(ctx, n); err != nil {
+		return err
 	}
 
 	// verify child does not exist, yet
@@ -443,11 +440,8 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 	}
 
 	// check lock on target
-	if lock := newNode.ReadLock(ctx); lock != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if lock.LockId != lockID {
-			return errtypes.Locked(lock.LockId) // return we must return the current lockid
-		}
+	if err := fs.checkLock(ctx, newNode); err != nil {
+		return err
 	}
 
 	return fs.tp.Move(ctx, oldNode, newNode)
@@ -538,12 +532,8 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	// check lock
-	if lock := node.ReadLock(ctx); lock != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if lock.LockId != lockID {
-			return errtypes.Locked(lock.LockId)
-		}
+	if err := fs.checkLock(ctx, node); err != nil {
+		return err
 	}
 
 	return fs.tp.Delete(ctx, node)
@@ -656,7 +646,6 @@ func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lo
 	}
 	defer f.Close()
 
-	// TODO version lock data?
 	if err := json.NewEncoder(f).Encode(lock); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not write lock file")
 	}
@@ -782,4 +771,23 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, loc
 	os.Remove(lockPath)
 
 	return nil
+}
+
+func (fs *Decomposedfs) checkLock(ctx context.Context, node *node.Node) error {
+	lockID, _ := ctxpkg.ContextGetLockID(ctx)
+	lock := node.ReadLock(ctx)
+	if lock != nil {
+		switch lockID {
+		case "":
+			return errtypes.Locked(lock.LockId) // no lockid in request
+		case lock.LockId:
+			return nil // ok
+		default:
+			return errtypes.PreconditionFailed("mismatching lock")
+		}
+	}
+	if lockID != "" {
+		return errtypes.PreconditionFailed("not locked")
+	}
+	return nil // ok
 }
