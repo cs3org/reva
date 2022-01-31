@@ -229,6 +229,26 @@ def buildAndPublishDocker():
                     ],
                 },
             },
+            {
+                "name": "publish-docker-revad-ceph-latest",
+                "pull": "always",
+                "image": "plugins/docker",
+                "settings": {
+                    "repo": "cs3org/revad",
+                    "tags": "latest-ceph",
+                    "dockerfile": "Dockerfile.revad-ceph",
+                    "username": {
+                        "from_secret": "dockerhub_username",
+                    },
+                    "password": {
+                        "from_secret": "dockerhub_password",
+                    },
+                    "custom_dns": [
+                        "128.142.17.5",
+                        "128.142.16.5",
+                    ],
+                },
+            },
         ],
     }
 
@@ -481,6 +501,26 @@ def release():
                     ],
                 },
             },
+            {
+                "name": "docker-revad-ceph-tag",
+                "pull": "always",
+                "image": "plugins/docker",
+                "settings": {
+                    "repo": "cs3org/revad",
+                    "tags": "${DRONE_TAG}-ceph",
+                    "dockerfile": "Dockerfile.revad-ceph",
+                    "username": {
+                        "from_secret": "dockerhub_username",
+                    },
+                    "password": {
+                        "from_secret": "dockerhub_password",
+                    },
+                    "custom_dns": [
+                        "128.142.17.5",
+                        "128.142.16.5",
+                    ],
+                },
+            },
         ],
         "depends_on": ["changelog"],
     }
@@ -679,6 +719,7 @@ def litmusOcisSpacesDav():
                     "/drone/src/cmd/revad/revad -c gateway.toml &",
                     "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
                     "/drone/src/cmd/revad/revad -c storage-users-ocis.toml &",
+                    "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
                     "/drone/src/cmd/revad/revad -c users.toml",
                 ],
             },
@@ -767,7 +808,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                             "REVA_LDAP_HOSTNAME": "ldap",
                             "TEST_REVA": "true",
                             "SEND_SCENARIO_LINE_REFERENCES": "true",
-                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis",
+                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@personalSpace&&~@issue-ocis-3023",
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md",
@@ -842,7 +883,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                             "REVA_LDAP_HOSTNAME": "ldap",
                             "TEST_REVA": "true",
                             "SEND_SCENARIO_LINE_REFERENCES": "true",
-                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis",
+                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@personalSpace&&~@issue-ocis-3023",
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-S3NG-storage.md",

@@ -30,6 +30,8 @@ ocmcoresvc = "localhost:14000"
 ocmshareprovidersvc = "localhost:14000"
 ocminvitemanagersvc = "localhost:14000"
 ocmproviderauthorizersvc = "localhost:14000"
+# permissions
+permissionssvc = "localhost:10000"
 # other
 commit_share_to_storage_grant = true
 commit_share_to_storage_ref = true
