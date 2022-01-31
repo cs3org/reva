@@ -336,6 +336,9 @@ Synchronization features like etag propagation, setting mtime and locking files
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:176](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L176)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:177](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L177)
 
+_reva only supports exclusive write locks, but the testsuite uses "d:shared" locks. @jfd_
+-   [apiAuthWebDav/webDavSpecialURLs.feature:55](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavSpecialURLs.feature#L55)
+
 ### Share
 File and sync features in a shared scenario
 
