@@ -479,18 +479,26 @@ func writeLockInfo(w io.Writer, token string, ld LockDetails) (int, error) {
 	}
 	timeout := ld.Duration / time.Second
 	href := ld.Root.Path // FIXME add base url and space?
-	return fmt.Fprintf(w, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"+
-		"<D:prop xmlns:D=\"DAV:\"><D:lockdiscovery><D:activelock>\n"+
-		"	<D:locktype><D:write/></D:locktype>\n"+
-		"	<D:lockscope><D:exclusive/></D:lockscope>\n"+
-		"	<D:depth>%s</D:depth>\n"+
-		"	<D:owner>%s</D:owner>\n"+ // TODO render graph url? would work for users and apps
-		"	<D:timeout>Second-%d</D:timeout>\n"+
-		"	<D:locktoken><D:href>%s</D:href></D:locktoken>\n"+
-		"	<D:lockroot><D:href>%s</D:href></D:lockroot>\n"+
-		"</D:activelock></D:lockdiscovery></D:prop>",
-		depth, ld.OwnerXML, timeout, props.Escape(token), props.Escape(href),
-	)
+
+	lockdiscovery := strings.Builder{}
+	lockdiscovery.WriteString(xml.Header)
+	lockdiscovery.WriteString("<d:prop xmlns:d=\"DAV:\"><d:lockdiscovery><d:activelock>\n")
+	lockdiscovery.WriteString("  <d:locktype><d:write/></d:locktype>\n")
+	lockdiscovery.WriteString("  <d:lockscope><d:exclusive/></d:lockscope>\n")
+	lockdiscovery.WriteString(fmt.Sprintf("  <d:depth>%s</d:depth>\n", depth))
+	if ld.OwnerXML != "" {
+		lockdiscovery.WriteString(fmt.Sprintf("  <d:owner>%s</d:owner>\n", ld.OwnerXML))
+	}
+	lockdiscovery.WriteString(fmt.Sprintf("  <d:timeout>Second-%d</d:timeout>\n", timeout))
+	if token != "" {
+		lockdiscovery.WriteString(fmt.Sprintf("  <d:locktoken><d:href>%s</d:href></d:locktoken>\n", props.Escape(token)))
+	}
+	if href != "" {
+		lockdiscovery.WriteString(fmt.Sprintf("  <d:lockroot><d:href>%s</d:href></d:lockroot>\n", props.Escape(href)))
+	}
+	lockdiscovery.WriteString("</d:activelock></d:lockdiscovery></d:prop>")
+
+	return fmt.Fprint(w, lockdiscovery.String())
 }
 
 func (s *svc) handleUnlock(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {
