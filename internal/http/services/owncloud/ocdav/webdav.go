@@ -91,7 +91,20 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 				log.Error().Err(err).Msg(err.Error())
 			}
 		case MethodUnlock:
-			s.handleUnlock(w, r, ns)
+			log := appctx.GetLogger(r.Context())
+			status, err := s.handleUnlock(w, r, ns)
+			if status != 0 { // 0 would mean handleUnlock already sent the response
+				w.WriteHeader(status)
+				if status != http.StatusNoContent {
+					var b []byte
+					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
+						_, err = w.Write(b)
+					}
+				}
+			}
+			if err != nil {
+				log.Error().Err(err).Msg(err.Error())
+			}
 		case MethodProppatch:
 			s.handlePathProppatch(w, r, ns)
 		case MethodMkcol:
