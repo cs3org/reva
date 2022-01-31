@@ -48,42 +48,24 @@ const (
 	userACLEvalKey = "eval.useracl"
 )
 
-const (
-	// SystemAttr is the system extended attribute.
-	SystemAttr eosclient.AttrType = iota
-	// UserAttr is the user extended attribute.
-	UserAttr
-)
-
 func serializeAttribute(a *eosclient.Attribute) string {
 	return fmt.Sprintf("%s.%s=%s", attrTypeToString(a.Type), a.Key, a.Val)
 }
 
 func attrTypeToString(at eosclient.AttrType) string {
 	switch at {
-	case SystemAttr:
+	case eosclient.SystemAttr:
 		return "sys"
-	case UserAttr:
+	case eosclient.UserAttr:
 		return "user"
 	default:
 		return "invalid"
 	}
 }
 
-func attrStringToType(t string) (eosclient.AttrType, error) {
-	switch t {
-	case "sys":
-		return SystemAttr, nil
-	case "user":
-		return UserAttr, nil
-	default:
-		return 0, errtypes.InternalError("attr type not existing")
-	}
-}
-
 func isValidAttribute(a *eosclient.Attribute) bool {
 	// validate that an attribute is correct.
-	if (a.Type != SystemAttr && a.Type != UserAttr) || a.Key == "" {
+	if (a.Type != eosclient.SystemAttr && a.Type != eosclient.UserAttr) || a.Key == "" {
 		return false
 	}
 	return true
@@ -312,7 +294,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 			sysACL = a.CitrineSerialize()
 		}
 		sysACLAttr := &eosclient.Attribute{
-			Type: SystemAttr,
+			Type: eosclient.SystemAttr,
 			Key:  lwShareAttrKey,
 			Val:  sysACL,
 		}
@@ -330,7 +312,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	} else {
 		args = append(args, "--user")
 		userACLAttr := &eosclient.Attribute{
-			Type: SystemAttr,
+			Type: eosclient.SystemAttr,
 			Key:  userACLEvalKey,
 			Val:  "1",
 		}
@@ -376,7 +358,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 			sysACL = a.CitrineSerialize()
 		}
 		sysACLAttr := &eosclient.Attribute{
-			Type: SystemAttr,
+			Type: eosclient.SystemAttr,
 			Key:  lwShareAttrKey,
 			Val:  sysACL,
 		}
@@ -588,7 +570,7 @@ func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
 	if len(type2key) != 2 {
 		return nil, errtypes.InternalError("wrong attr format to deserialize")
 	}
-	t, err := attrStringToType(type2key[0])
+	t, err := eosclient.AttrStringToType(type2key[0])
 	if err != nil {
 		return nil, err
 	}

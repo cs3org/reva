@@ -34,10 +34,9 @@ import (
 	"syscall"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/eosclient"
 
+	"github.com/cs3org/reva/pkg/eosclient"
 	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
-	eos "github.com/cs3org/reva/pkg/eosclient/utils"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
@@ -642,7 +641,7 @@ func getAttribute(key, val string) (*eosclient.Attribute, error) {
 	if len(type2key) != 2 {
 		return nil, errtypes.InternalError("wrong attr format to deserialize")
 	}
-	t, err := eos.AttrStringToType(type2key[0])
+	t, err := eosclient.AttrStringToType(type2key[0])
 	if err != nil {
 		return nil, err
 	}
