@@ -426,7 +426,7 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 		//      this actually is a name based lock ... ugh
 		token, err = s.LockSystem.Create(ctx, now, ld)
 		if err != nil {
-			if err == errors.ErrLocked {
+			if _, ok := err.(errtypes.Locked); ok {
 				return http.StatusLocked, err
 			}
 			return http.StatusInternalServerError, err
