@@ -879,7 +879,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 func (n *Node) ListGrantees(ctx context.Context) (grantees []string, err error) {
 	var attrs []string
 	if attrs, err = xattr.List(n.InternalPath()); err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("error listing attributes")
+		appctx.GetLogger(ctx).Error().Err(err).Str("node", n.ID).Msg("error listing attributes")
 		return nil, err
 	}
 	for i := range attrs {
@@ -901,6 +901,30 @@ func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant
 		return nil, err
 	}
 	return e.Grant(), nil
+}
+
+// ListGrants lists all grants of the current node.
+func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
+	grantees, err := n.ListGrantees(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	grants := make([]*provider.Grant, 0, len(grantees))
+	for _, g := range grantees {
+		grant, err := n.ReadGrant(ctx, g)
+		if err != nil {
+			appctx.GetLogger(ctx).
+				Error().
+				Err(err).
+				Str("node", n.ID).
+				Str("grantee", g).
+				Msg("error reading grant")
+			continue
+		}
+		grants = append(grants, grant)
+	}
+	return grants, nil
 }
 
 // ReadBlobSizeAttr reads the blobsize from the xattrs
