@@ -754,7 +754,11 @@ func sameHolder(l1, l2 *provider.Lock) bool {
 
 // Unlock removes an existing lock from the given reference
 func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	lock, err := fs.GetLock(ctx, ref)
+	if lock.Type == provider.LockType_LOCK_TYPE_SHARED {
+		return errtypes.NotSupported("shared lock not yet implemented")
+	}
+
+	oldLock, err := fs.GetLock(ctx, ref)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.NotFound:
@@ -765,12 +769,17 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 		}
 	}
 
+	// check if the lock id of the lock corresponds to the stored lock
+	if oldLock.LockId != lock.LockId {
+		return errtypes.BadRequest("lock id does not match")
+	}
+
 	user, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
-	if lock.User != nil && !utils.UserEqual(lock.User, user.Id) {
+	if oldLock.User != nil && !utils.UserEqual(oldLock.User, user.Id) {
 		return errtypes.BadRequest("caller does not hold the lock")
 	}
 
