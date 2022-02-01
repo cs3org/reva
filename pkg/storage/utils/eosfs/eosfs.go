@@ -485,6 +485,10 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 			return errtypes.BadRequest(fmt.Sprintf("eosfs: key or value is empty: key:%s, value:%s", k, v))
 		}
 
+		if k == LockKeyAttr {
+			return errtypes.BadRequest(fmt.Sprintf("eosfs: key %s not allowed", k))
+		}
+
 		attr := &eosclient.Attribute{
 			Type: UserAttr,
 			Key:  k,
@@ -693,11 +697,6 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 	user, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error getting user")
-	}
-
-	// check if the user hold the old lock
-	if oldLock.User != nil && !utils.UserEqual(oldLock.User, user.Id) {
-		return errtypes.BadRequest("caller does not hold the lock")
 	}
 
 	// check if the holder is the same of the new lock
@@ -2084,7 +2083,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		}
 	}
 
-	// filter 'sys' attrs and key attr
+	// filter 'sys' attrs and the reserved lock
 	filteredAttrs := make(map[string]string)
 	for k, v := range eosFileInfo.Attrs {
 		if !strings.HasPrefix(k, "sys") && k != "user."+LockKeyAttr {
