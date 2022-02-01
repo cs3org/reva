@@ -780,7 +780,6 @@ func readLocksIntoOpaque(ctx context.Context, lockPath string, ri *provider.Reso
 
 // ReadLock reads the lock id for a node
 func (n Node) ReadLock(ctx context.Context) *provider.Lock {
-	// check lock
 	lockPath := n.InternalPath() + ".lock"
 
 	f, err := os.Open(lockPath)

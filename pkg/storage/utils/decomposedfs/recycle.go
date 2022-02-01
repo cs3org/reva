@@ -29,7 +29,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
@@ -281,11 +280,8 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 	}
 
 	// check lock
-	if lock := targetNode.ReadLock(ctx); lock != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if lock.LockId != lockID {
-			return errtypes.Locked(lock.LockId)
-		}
+	if err := fs.checkLock(ctx, targetNode); err != nil {
+		return err
 	}
 
 	// Run the restore func

@@ -28,7 +28,6 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/pkg/errors"
@@ -167,11 +166,8 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	// check lock
-	if lock := n.ReadLock(ctx); lock != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if lock.LockId != lockID {
-			return errtypes.Locked(lock.LockId)
-		}
+	if err := fs.checkLock(ctx, n); err != nil {
+		return err
 	}
 
 	// move current version to new revision

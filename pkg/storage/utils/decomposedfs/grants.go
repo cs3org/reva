@@ -25,7 +25,6 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
@@ -64,11 +63,8 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	}
 
 	// check lock
-	if lock := node.ReadLock(ctx); lock != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if lock.LockId != lockID {
-			return errtypes.Locked(lock.LockId)
-		}
+	if err := fs.checkLock(ctx, node); err != nil {
+		return err
 	}
 
 	np := fs.lu.InternalPath(node.ID)
@@ -152,11 +148,8 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 	}
 
 	// check lock
-	if lock := node.ReadLock(ctx); lock != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if lock.LockId != lockID {
-			return errtypes.Locked(lock.LockId)
-		}
+	if err := fs.checkLock(ctx, node); err != nil {
+		return err
 	}
 
 	var attr string

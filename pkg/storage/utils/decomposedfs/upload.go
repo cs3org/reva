@@ -230,25 +230,8 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 
 	// check lock
-	lockPath := n.InternalPath() + ".lock"
-
-	f, err := os.Open(lockPath)
-	switch {
-	case err == nil:
-		defer f.Close()
-
-		lock := &provider.Lock{}
-		if err := json.NewDecoder(f).Decode(lock); err != nil {
-			return nil, errors.Wrap(err, "Decomposedfs: could not read lock file")
-		}
-		u := ctxpkg.ContextMustGetUser(ctx)
-		if !utils.UserEqual(lock.GetUser(), u.Id) {
-			return nil, errtypes.PermissionDenied("locked by " + lock.GetUser().String())
-		}
-	case os.IsNotExist(err):
-		// ok
-	default:
-		return nil, errtypes.NotFound("could not open existing lock file")
+	if err := fs.checkLock(ctx, n); err != nil {
+		return nil, err
 	}
 
 	info.ID = uuid.New().String()
@@ -485,25 +468,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
 
 	// check lock
-	lockPath := n.InternalPath() + ".lock"
-
-	f, err := os.Open(lockPath)
-	switch {
-	case err == nil:
-		defer f.Close()
-
-		lock := &provider.Lock{}
-		if err := json.NewDecoder(f).Decode(lock); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not read lock file")
-		}
-		u := ctxpkg.ContextMustGetUser(ctx)
-		if !utils.UserEqual(lock.GetUser(), u.Id) {
-			return errtypes.PermissionDenied("locked by " + lock.GetUser().String())
-		}
-	case os.IsNotExist(err):
-		// ok
-	default:
-		return errtypes.NotFound("could not open existing lock file")
+	if err := upload.fs.checkLock(ctx, n); err != nil {
+		return err
 	}
 
 	_, err = node.CheckQuota(n.SpaceRoot, uint64(fi.Size()))

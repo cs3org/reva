@@ -61,11 +61,8 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	}
 
 	// check lock
-	if lock := n.ReadLock(ctx); lock != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if lock.LockId != lockID {
-			return errtypes.Locked(lock.LockId)
-		}
+	if err := fs.checkLock(ctx, n); err != nil {
+		return err
 	}
 
 	nodePath := n.InternalPath()
@@ -157,11 +154,8 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 	}
 
 	// check lock
-	if lock := n.ReadLock(ctx); lock != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if lock.LockId != lockID {
-			return errtypes.Locked(lock.LockId)
-		}
+	if err := fs.checkLock(ctx, n); err != nil {
+		return err
 	}
 
 	nodePath := n.InternalPath()
