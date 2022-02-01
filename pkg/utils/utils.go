@@ -371,6 +371,7 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 	}
 }
 
+// AppendPlainToOpaque adds a new key value pair as a plain string on the given opaque and returns it
 func AppendPlainToOpaque(o *types.Opaque, key, value string) *types.Opaque {
 	if o == nil {
 		o = &types.Opaque{}
@@ -385,6 +386,7 @@ func AppendPlainToOpaque(o *types.Opaque, key, value string) *types.Opaque {
 	return o
 }
 
+// ReadPlainFromOpaque reads a plain string from the given opaque map
 func ReadPlainFromOpaque(o *types.Opaque, key string) string {
 	if o == nil || o.Map == nil {
 		return ""

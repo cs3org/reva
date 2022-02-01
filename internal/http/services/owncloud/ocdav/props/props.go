@@ -98,7 +98,8 @@ func Next(d *xml.Decoder) (xml.Token, error) {
 	}
 }
 
-// http://www.webdav.org/specs/rfc4918.html#ELEMENT_activelock
+// ActiveLock holds active lock xml data
+//  http://www.webdav.org/specs/rfc4918.html#ELEMENT_activelock
 // <!ELEMENT activelock (lockscope, locktype, depth, owner?, timeout?,
 //           locktoken?, lockroot)>
 type ActiveLock struct {
@@ -113,11 +114,12 @@ type ActiveLock struct {
 	Lockroot  string    `xml:"lockroot>href,omitempty"`
 }
 
-// http://www.webdav.org/specs/rfc4918.html#ELEMENT_owner
+// Owner captures the inner UML of a lock owner element http://www.webdav.org/specs/rfc4918.html#ELEMENT_owner
 type Owner struct {
 	InnerXML string `xml:",innerxml"`
 }
 
+// Escape repaces ", &, ', < and > with their xml representation
 func Escape(s string) string {
 	for i := 0; i < len(s); i++ {
 		switch s[i] {

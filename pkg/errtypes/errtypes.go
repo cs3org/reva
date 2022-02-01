@@ -57,7 +57,7 @@ type Locked string
 
 func (e Locked) Error() string { return "error: locked by " + string(e) }
 
-// we need to be able to return the lockid
+// LockID returns the lock ID that caused this error
 func (e Locked) LockID() string {
 	return string(e)
 }
@@ -65,7 +65,7 @@ func (e Locked) LockID() string {
 // IsLocked implements the IsLocked interface.
 func (e Locked) IsLocked() {}
 
-// PreconditionFailed is the error to use when a request fails because a requested etag or lockid mismatches.
+// PreconditionFailed is the error to use when a request fails because a requested etag or lock ID mismatches.
 type PreconditionFailed string
 
 func (e PreconditionFailed) Error() string { return "error: precondition failed: " + string(e) }
