@@ -1144,18 +1144,20 @@ func activeLocks(log *zerolog.Logger, lock *provider.Lock) string {
 	// we currently only support depth infinity
 	activelocks.WriteString("<d:depth>Infinity</d:depth>")
 
-	if lock.User != nil {
-		// TODO document that we just invented cs3:user: to expose the cs3 userid via webdav
-		activelocks.WriteString("<d:owner><d:href>cs3:user:")
-		activelocks.WriteString(props.Escape(lock.User.OpaqueId + "@" + lock.User.Idp))
-		activelocks.WriteString("</d:href></d:owner>")
-	}
-	if lock.AppName != "" {
-		// TODO document that we just invented d:application and cs3:app: to expose the WOPI application in xml
-		activelocks.WriteString("<d:application><d:href>cs3:app:")
-		user := props.Escape(lock.AppName)
-		activelocks.WriteString(user)
-		activelocks.WriteString("</d:href></d:application>")
+	if lock.User != nil || lock.AppName != "" {
+		activelocks.WriteString("<d:owner>")
+
+		if lock.User != nil {
+			// TODO oc10 uses displayname and email, needs a user lookup
+			activelocks.WriteString(props.Escape(lock.User.OpaqueId + "@" + lock.User.Idp))
+		}
+		if lock.AppName != "" {
+			if lock.User != nil {
+				activelocks.WriteString(" via ")
+			}
+			activelocks.WriteString(props.Escape(lock.AppName))
+		}
+		activelocks.WriteString("</d:owner>")
 	}
 	activelocks.WriteString("<d:timeout>")
 	activelocks.WriteString(expiration)
