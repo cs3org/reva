@@ -267,11 +267,12 @@ func readLockInfo(r io.Reader) (li lockInfo, status int, err error) {
 	}
 	// We only support exclusive (non-shared) write locks. In practice, these are
 	// the only types of locks that seem to matter.
-	// We are ignoring the prite property in the lock details, and assume a write lock is requested.
+	// We are ignoring the any properties in the lock details, and assume an exclusive write lock is requested.
 	// https://datatracker.ietf.org/doc/html/rfc4918#section-7 only describes write locks
-	if li.Exclusive == nil || li.Shared != nil {
-		return lockInfo{}, http.StatusNotImplemented, errors.ErrUnsupportedLockInfo
-	}
+	//
+	//if li.Exclusive == nil || li.Shared != nil {
+	//	return lockInfo{}, http.StatusNotImplemented, errors.ErrUnsupportedLockInfo
+	//}
 	// what should we return if the user requests a shared lock? or leaves out the locktype? the testsuite will only send the property lockscope, not locktype
 	// the oc tests cover both shared and exclusive locks. What is the WOPI lock? a shared or an exclusive lock?
 	// since it is issued by a service it seems to be an exclusive lock.
@@ -542,12 +543,11 @@ func (s *svc) handleUnlock(w http.ResponseWriter, r *http.Request, ns string) (s
 	}
 
 	// http://www.webdav.org/specs/rfc4918.html#HEADER_Lock-Token says that the
-	// Lock-Token value is a Coded-URL. We strip its angle brackets.
+	// Lock-Token value should be a Coded-URL OR a token. We strip its angle brackets.
 	t := r.Header.Get("Lock-Token")
-	if len(t) < 2 || t[0] != '<' || t[len(t)-1] != '>' {
-		return http.StatusBadRequest, errors.ErrInvalidLockToken
+	if len(t) > 2 && t[0] == '<' && t[len(t)-1] == '>' {
+		t = t[1 : len(t)-1]
 	}
-	t = t[1 : len(t)-1]
 
 	switch err = s.LockSystem.Unlock(r.Context(), time.Now(), ref, t); err {
 	case nil:
