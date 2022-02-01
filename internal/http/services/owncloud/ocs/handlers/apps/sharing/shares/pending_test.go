@@ -115,9 +115,11 @@ var _ = Describe("The ocs API", func() {
 		)
 
 		BeforeEach(func() {
-			client.On("GetShare", mock.Anything, mock.Anything).Return(&collaboration.GetShareResponse{
+			client.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
 				Status: status.NewOK(context.Background()),
-				Share:  share,
+				Share: &collaboration.ReceivedShare{
+					Share: share,
+				},
 			}, nil)
 
 			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
