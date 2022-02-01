@@ -181,6 +181,9 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		nodeID  = spaceIDAny
 	)
 
+	// NOTE: this is not optimal. We should either adjust Method signature or add a new filter
+	includeTrashed, _ := ctx.Value(utils.ContextKeyIncludeTrash{}).(bool)
+
 	spaceTypes := []string{}
 
 	for i := range filter {
@@ -258,7 +261,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 
 		// TODO apply more filters
-		space, err := fs.storageSpaceFromNode(ctx, n, spaceType, matches[i], permissions)
+		space, err := fs.storageSpaceFromNode(ctx, n, spaceType, matches[i], permissions, includeTrashed)
 		if err != nil {
 			if _, ok := err.(errtypes.IsPermissionDenied); !ok {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
@@ -277,7 +280,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			return nil, err
 		}
 		if n.Exists {
-			space, err := fs.storageSpaceFromNode(ctx, n, "*", n.InternalPath(), permissions)
+			space, err := fs.storageSpaceFromNode(ctx, n, "*", n.InternalPath(), permissions, includeTrashed)
 			if err != nil {
 				return nil, err
 			}
@@ -472,7 +475,7 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, space
 	return nil
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, spaceType, nodePath string, permissions map[string]struct{}) (*provider.StorageSpace, error) {
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, spaceType, nodePath string, permissions map[string]struct{}, includeTrashed bool) (*provider.StorageSpace, error) {
 	owner, err := n.Owner()
 	if err != nil {
 		return nil, err
@@ -522,12 +525,9 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
 		}
 
-		// FIXME: I want to be enabled again :(
-		/*
-			if strings.Contains(space.Root.OpaqueId, node.TrashIDDelimiter) {
-				return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %+v", user.Username, space))
-			}
-		*/
+		if !includeTrashed && strings.Contains(space.Root.OpaqueId, node.TrashIDDelimiter) {
+			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %+v", user.Username, space))
+		}
 	}
 
 	space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object

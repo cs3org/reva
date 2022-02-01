@@ -529,12 +529,17 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	// Replace this as soon as we have a proper system to check the users permissions.
 	opaque := req.Opaque
 	var permissions map[string]struct{}
+	var includeTrashed bool
 	if opaque != nil {
 		entry := opaque.Map["permissions"]
 		err := json.Unmarshal(entry.Value, &permissions)
 		if err != nil {
 			return nil, err
 		}
+
+		// let's do as simple as possible until we have proper solution
+		_, includeTrashed = opaque.Map["includeTrashed"]
+		ctx = context.WithValue(ctx, utils.ContextKeyIncludeTrash{}, includeTrashed)
 	}
 
 	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters, permissions)
