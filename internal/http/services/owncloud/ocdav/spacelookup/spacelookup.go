@@ -57,7 +57,11 @@ func LookUpStorageSpaceForPath(ctx context.Context, client gateway.GatewayAPICli
 
 	lSSRes, err := client.ListStorageSpaces(ctx, lSSReq)
 	if err != nil || lSSRes.Status.Code != rpc.Code_CODE_OK {
-		return nil, lSSRes.Status, err
+		status := status.NewStatusFromErrType(ctx, "failed to lookup storage spaces", err)
+		if lSSRes != nil {
+			status = lSSRes.Status
+		}
+		return nil, status, err
 	}
 	switch len(lSSRes.StorageSpaces) {
 	case 0:

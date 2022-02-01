@@ -21,7 +21,9 @@ package sql
 import (
 	"context"
 	"strings"
+	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -65,17 +67,34 @@ type UserConverter interface {
 // GatewayUserConverter converts usernames and ids using the gateway
 type GatewayUserConverter struct {
 	gwAddr string
+
+	IDCache   *ttlcache.Cache
+	NameCache *ttlcache.Cache
 }
 
 // NewGatewayUserConverter returns a instance of GatewayUserConverter
 func NewGatewayUserConverter(gwAddr string) *GatewayUserConverter {
+	IDCache := ttlcache.NewCache()
+	_ = IDCache.SetTTL(30 * time.Second)
+	IDCache.SkipTTLExtensionOnHit(true)
+	NameCache := ttlcache.NewCache()
+	_ = NameCache.SetTTL(30 * time.Second)
+	NameCache.SkipTTLExtensionOnHit(true)
+
 	return &GatewayUserConverter{
-		gwAddr: gwAddr,
+		gwAddr:    gwAddr,
+		IDCache:   IDCache,
+		NameCache: NameCache,
 	}
 }
 
 // UserIDToUserName converts a user ID to an username
 func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *userpb.UserId) (string, error) {
+	username, err := c.NameCache.Get(userid.String())
+	if err == nil {
+		return username.(string), nil
+	}
+
 	gwConn, err := pool.GetGatewayServiceClient(c.gwAddr)
 	if err != nil {
 		return "", err
@@ -89,11 +108,17 @@ func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *use
 	if getUserResponse.Status.Code != rpc.Code_CODE_OK {
 		return "", status.NewErrorFromCode(getUserResponse.Status.Code, "gateway")
 	}
+	_ = c.NameCache.Set(userid.String(), getUserResponse.User.Username)
 	return getUserResponse.User.Username, nil
 }
 
 // UserNameToUserID converts a username to an user ID
 func (c *GatewayUserConverter) UserNameToUserID(ctx context.Context, username string) (*userpb.UserId, error) {
+	id, err := c.IDCache.Get(username)
+	if err == nil {
+		return id.(*userpb.UserId), nil
+	}
+
 	gwConn, err := pool.GetGatewayServiceClient(c.gwAddr)
 	if err != nil {
 		return nil, err
@@ -108,6 +133,7 @@ func (c *GatewayUserConverter) UserNameToUserID(ctx context.Context, username st
 	if getUserResponse.Status.Code != rpc.Code_CODE_OK {
 		return nil, status.NewErrorFromCode(getUserResponse.Status.Code, "gateway")
 	}
+	_ = c.IDCache.Set(username, getUserResponse.User.Id)
 	return getUserResponse.User.Id, nil
 }
 
@@ -233,7 +259,7 @@ func (m *mgr) convertToCS3Share(ctx context.Context, s DBShare, storageMountID s
 			OpaqueId: s.ID,
 		},
 		ResourceId: &provider.ResourceId{
-			StorageId: storageMountID + "!" + s.ItemStorage,
+			StorageId: s.ItemStorage,
 			OpaqueId:  s.FileSource,
 		},
 		Permissions: &collaboration.SharePermissions{Permissions: permissions},

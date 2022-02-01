@@ -1290,7 +1290,7 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, ref *provider.Referen
 	return fs.propagate(ctx, localRestorePath)
 }
 
-func (fs *localfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, _ map[string]struct{}) ([]*provider.StorageSpace, error) {
+func (fs *localfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 

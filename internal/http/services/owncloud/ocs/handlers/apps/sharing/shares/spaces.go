@@ -102,8 +102,16 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 		return
 	}
 
+	// TODO: change CS3 APIs
+	opaque := &types.Opaque{
+		Map: map[string]*types.OpaqueEntry{
+			"spacegrant": {},
+		},
+	}
+
 	addGrantRes, err := providerClient.AddGrant(ctx, &provider.AddGrantRequest{
-		Ref: ref,
+		Opaque: opaque,
+		Ref:    ref,
 		Grant: &provider.Grant{
 			Grantee:     &grantee,
 			Permissions: role.CS3ResourcePermissions(),

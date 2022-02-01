@@ -20,7 +20,6 @@ package storageprovider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -525,24 +524,14 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	log := appctx.GetLogger(ctx)
 
-	// This is just a quick hack to get the users permission into reva.
-	// Replace this as soon as we have a proper system to check the users permissions.
-	opaque := req.Opaque
-	var permissions map[string]struct{}
 	var includeTrashed bool
-	if opaque != nil {
-		entry := opaque.Map["permissions"]
-		err := json.Unmarshal(entry.Value, &permissions)
-		if err != nil {
-			return nil, err
-		}
-
+	if req.Opaque != nil {
 		// let's do as simple as possible until we have proper solution
-		_, includeTrashed = opaque.Map["includeTrashed"]
+		_, includeTrashed = req.Opaque.Map["includeTrashed"]
 		ctx = context.WithValue(ctx, utils.ContextKeyIncludeTrash{}, includeTrashed)
 	}
 
-	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters, permissions)
+	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -598,6 +587,8 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 			st = status.NewNotFound(ctx, "not found when deleting space")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.BadRequest:
+			st = status.NewInvalidArg(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error deleting space: "+req.Id.String())
 		}
@@ -1106,6 +1097,11 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
+		case errtypes.NotSupported:
+			// ignore - setting storage grants is optional
+			return &provider.DenyGrantResponse{
+				Status: status.NewOK(ctx),
+			}, nil
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when setting grants")
 		case errtypes.PermissionDenied:
@@ -1131,6 +1127,15 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
+	// TODO: update CS3 APIs
+	if req.Opaque != nil {
+		_, spacegrant := req.Opaque.Map["spacegrant"]
+		if spacegrant {
+			ctx = context.WithValue(ctx, utils.SpaceGrant, struct{}{})
+		}
+
+	}
+
 	// check grantee type is valid
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
 		return &provider.AddGrantResponse{
@@ -1142,6 +1147,11 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
+		case errtypes.NotSupported:
+			// ignore - setting storage grants is optional
+			return &provider.AddGrantResponse{
+				Status: status.NewOK(ctx),
+			}, nil
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when setting grants")
 		case errtypes.PermissionDenied:
@@ -1177,6 +1187,11 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 	if err := s.storage.UpdateGrant(ctx, req.Ref, req.Grant); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
+		case errtypes.NotSupported:
+			// ignore - setting storage grants is optional
+			return &provider.UpdateGrantResponse{
+				Status: status.NewOK(ctx),
+			}, nil
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when updating grant")
 		case errtypes.PermissionDenied:

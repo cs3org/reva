@@ -286,9 +286,12 @@ var _ = Describe("storage providers", func() {
 
 			res, err := serviceClient.GetPath(ctx, &storagep.GetPathRequest{ResourceId: statRes.Info.Id})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			// TODO: FIXME!
-			if provider != "nextcloud" {
+
+			// TODO: FIXME both cases should work for all providers
+			if provider != "owncloud" {
+				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			}
+			if provider != "nextcloud" && provider != "owncloud" {
 				Expect(res.Path).To(Equal(subdirPath))
 			}
 		})

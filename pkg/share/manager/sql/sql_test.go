@@ -201,12 +201,19 @@ var _ = Describe("SQL manager", func() {
 			shares, err := mgr.ListShares(ctx, []*collaboration.Filter{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
+			share := shares[0]
+			Expect(share.ResourceId.StorageId).To(Equal("1"))
 
 			shares, err = mgr.ListShares(ctx, []*collaboration.Filter{
-				share.ResourceIDFilter(&provider.ResourceId{
-					StorageId: "/",
-					OpaqueId:  "somethingElse",
-				}),
+				{
+					Type: collaboration.Filter_TYPE_RESOURCE_ID,
+					Term: &collaboration.Filter_ResourceId{
+						ResourceId: &provider.ResourceId{
+							StorageId: "/",
+							OpaqueId:  "somethingElse",
+						},
+					},
+				},
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(0))
@@ -335,6 +342,13 @@ var _ = Describe("SQL manager", func() {
 		It("lists received shares", func() {
 			loginAs(otherUser)
 			shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(shares)).To(Equal(1))
+		})
+
+		It("works with filters", func() {
+			loginAs(otherUser)
+			shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{{Type: collaboration.Filter_TYPE_EXCLUDE_DENIALS}})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 		})
