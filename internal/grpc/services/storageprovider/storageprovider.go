@@ -368,7 +368,7 @@ func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 		}, nil
 	}
 
-	if err = s.storage.Unlock(ctx, newRef); err != nil {
+	if err = s.storage.Unlock(ctx, newRef, req.Lock); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
