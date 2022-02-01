@@ -20,7 +20,6 @@ package grpc_test
 
 import (
 	"context"
-	"os"
 
 	"google.golang.org/grpc/metadata"
 
@@ -32,7 +31,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
-	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/tests/helpers"
 
@@ -64,11 +62,6 @@ func createFS(provider string, revads map[string]*Revad) (storage.FS, error) {
 		conf["root"] = revads["storage"].StorageRoot
 		conf["enable_home"] = true
 		f = ocis.New
-	case "owncloud":
-		conf["datadirectory"] = revads["storage"].StorageRoot
-		conf["userprovidersvc"] = revads["users"].GrpcAddress
-		conf["enable_home"] = true
-		f = owncloud.New
 	}
 	return f(conf)
 }
@@ -183,7 +176,7 @@ var _ = Describe("storage providers", func() {
 			switch provider {
 			case "ocis":
 				Expect(len(listRes.Infos)).To(Equal(2)) // subdir + .space
-			case "owncloud", "nextcloud":
+			case "nextcloud":
 				Expect(len(listRes.Infos)).To(Equal(1)) // subdir
 			default:
 				Fail("unknown provider")
@@ -288,10 +281,8 @@ var _ = Describe("storage providers", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// TODO: FIXME both cases should work for all providers
-			if provider != "owncloud" {
-				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			}
-			if provider != "nextcloud" && provider != "owncloud" {
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			if provider != "nextcloud" {
 				Expect(res.Path).To(Equal(subdirPath))
 			}
 		})
@@ -558,13 +549,6 @@ var _ = Describe("storage providers", func() {
 				variables = map[string]string{
 					"enable_home": "true",
 				}
-				if provider == "owncloud" {
-					redisAddress := os.Getenv("REDIS_ADDRESS")
-					if redisAddress == "" {
-						Fail("REDIS_ADDRESS not set")
-					}
-					variables["redis_address"] = redisAddress
-				}
 			})
 
 			assertCreateHome(provider)
@@ -637,8 +621,4 @@ var _ = Describe("storage providers", func() {
 		"storage": "storageprovider-ocis.toml",
 	})
 
-	suite("owncloud", map[string]string{
-		"users":   "userprovider-json.toml",
-		"storage": "storageprovider-owncloud.toml",
-	})
 })
