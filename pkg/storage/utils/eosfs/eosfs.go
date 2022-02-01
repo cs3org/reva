@@ -753,7 +753,7 @@ func sameHolder(l1, l2 *provider.Lock) bool {
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	lock, err := fs.GetLock(ctx, ref)
 	if err != nil {
 		switch err.(type) {
