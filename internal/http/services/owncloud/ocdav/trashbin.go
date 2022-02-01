@@ -533,7 +533,8 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		}
 
 		if parentStatResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			errors.HandleErrorStatus(&sublog, w, &rpc.Status{Code: rpc.Code_CODE_FAILED_PRECONDITION})
+			// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+			w.WriteHeader(http.StatusConflict)
 			return
 		}
 	}
