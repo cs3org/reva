@@ -29,7 +29,6 @@ import (
 	_ "github.com/cs3org/reva/pkg/storage/fs/localhome"
 	_ "github.com/cs3org/reva/pkg/storage/fs/nextcloud"
 	_ "github.com/cs3org/reva/pkg/storage/fs/ocis"
-	_ "github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	_ "github.com/cs3org/reva/pkg/storage/fs/owncloudsql"
 	_ "github.com/cs3org/reva/pkg/storage/fs/s3"
 	_ "github.com/cs3org/reva/pkg/storage/fs/s3ng"
