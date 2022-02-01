@@ -189,19 +189,21 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 	// see: http://www.webdav.org/specs/rfc2518.html#n-lock-tokens
 	token := uuid.New()
 
-	expiration := time.Now().UTC().Add(details.Duration)
 	r := &provider.SetLockRequest{
 		Ref: details.Root,
 		Lock: &provider.Lock{
 			Type: provider.LockType_LOCK_TYPE_EXCL,
 			User: details.UserID, // no way to set an app lock? TODO maybe via the ownerxml
 			//AppName: , // TODO use a urn scheme?
-			Expiration: &types.Timestamp{
-				Seconds: uint64(expiration.Unix()),
-				Nanos:   uint32(expiration.Nanosecond()),
-			},
 			LockId: lockTokenPrefix + token.String(), // can be a token or a Coded-URL
 		},
+	}
+	if details.Duration > 0 {
+		expiration := time.Now().UTC().Add(details.Duration)
+		r.Lock.Expiration = &types.Timestamp{
+			Seconds: uint64(expiration.Unix()),
+			Nanos:   uint32(expiration.Nanosecond()),
+		}
 	}
 	res, err := cls.client.SetLock(ctx, r)
 	if err != nil {
@@ -437,6 +439,11 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 			return status, err
 		}
 		*/
+		// TODO look up username and email
+		//  if li.Owner.InnerXML == "" {
+		//    // PHP version: 'owner' => "{$user->getDisplayName()} via Office Online"
+		//    ld.OwnerXML = ld.UserID.OpaqueId
+		//  }
 		ld.OwnerXML = li.Owner.InnerXML // TODO optional, should be a URL
 		ld.ZeroDepth = depth == 0
 
@@ -496,7 +503,6 @@ func writeLockInfo(w io.Writer, token string, ld LockDetails) (int, error) {
 	if ld.ZeroDepth {
 		depth = "0"
 	}
-	timeout := ld.Duration / time.Second
 	href := ld.Root.Path // FIXME add base url and space?
 
 	lockdiscovery := strings.Builder{}
@@ -508,7 +514,12 @@ func writeLockInfo(w io.Writer, token string, ld LockDetails) (int, error) {
 	if ld.OwnerXML != "" {
 		lockdiscovery.WriteString(fmt.Sprintf("  <d:owner>%s</d:owner>\n", ld.OwnerXML))
 	}
-	lockdiscovery.WriteString(fmt.Sprintf("  <d:timeout>Second-%d</d:timeout>\n", timeout))
+	if ld.Duration > 0 {
+		timeout := ld.Duration / time.Second
+		lockdiscovery.WriteString(fmt.Sprintf("  <d:timeout>Second-%d</d:timeout>\n", timeout))
+	} else {
+		lockdiscovery.WriteString("  <d:timeout>Infinite</d:timeout>\n")
+	}
 	if token != "" {
 		lockdiscovery.WriteString(fmt.Sprintf("  <d:locktoken><d:href>%s</d:href></d:locktoken>\n", props.Escape(token)))
 	}
