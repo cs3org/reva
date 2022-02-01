@@ -52,6 +52,28 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 		return
 	}
 
+	// stat requested path to make sure it isn't existing yet
+	// NOTE: It could be on another storage provider than the 'parent' of it
+	sr, err := client.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Path: fn,
+		},
+	})
+	if err != nil {
+		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if sr.Status.Code != rpc.Code_CODE_NOT_FOUND {
+		sublog.Info().Err(err).Str("path", fn).Interface("code", sr.Status.Code).Msg("response code for stat was unexpected")
+		// tests want this errorcode. StatusConflict would be more logical
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		b, err := errors.Marshal(errors.SabredavMethodNotAllowed, "The resource you tried to create already exists", "")
+		errors.HandleWebdavError(&sublog, w, b, err)
+		return
+	}
+
 	parentPath := path.Dir(fn)
 
 	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, parentPath)

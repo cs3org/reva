@@ -510,7 +510,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 				deepestMountSpace = space
 				deepestMountPathProvider = p
 
-			case strings.HasPrefix(spacePath, path) && !unique:
+			case !unique && isSubpath(spacePath, path):
 				// and add all providers below and exactly matching the path
 				// requested /foo, mountPath /foo/sub
 				validSpaces = append(validSpaces, space)
@@ -520,7 +520,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 					deepestMountPathProvider = p
 				}
 
-			case strings.HasPrefix(path, spacePath) && len(spacePath) > len(deepestMountPath):
+			case isSubpath(path, spacePath) && len(spacePath) > len(deepestMountPath):
 				// eg. three providers: /foo, /foo/sub, /foo/sub/bar
 				// requested /foo/sub/mob
 				deepestMountPath = spacePath
@@ -612,4 +612,18 @@ func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, 
 		return nil, nil
 	}
 	return res.StorageSpaces, nil
+}
+
+// isSubpath determines if `p` is a subpath of `path`
+func isSubpath(p string, path string) bool {
+	if p == path {
+		return true
+	}
+
+	r, err := filepath.Rel(path, p)
+	if err != nil {
+		return false
+	}
+
+	return r != ".." && !strings.HasPrefix(r, "../")
 }
