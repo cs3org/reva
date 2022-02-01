@@ -219,7 +219,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	matches := []string{}
 	for _, spaceType := range spaceTypes {
-		path := filepath.Join(fs.o.Root, "spaces", spaceType, nodeID+"*")
+		path := filepath.Join(fs.o.Root, "spaces", spaceType, nodeID)
+		if includeTrashed {
+			path += "*"
+		}
 		m, err := filepath.Glob(path)
 		if err != nil {
 			return nil, err
