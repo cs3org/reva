@@ -601,18 +601,6 @@ func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *prov
 
 	fn := fs.wrap(ctx, p)
 
-	// eos does not offer a permission bit to specify if the
-	// user can deny or not. We need to take care of that in Reva
-	// by checking context user has permission to deny
-	finfo, err := fs.GetMD(ctx, ref, nil)
-	if err != nil {
-		return errors.Wrapf(err, "eosfs: error getting metadata for file ref: %+v", ref)
-	}
-
-	if !finfo.PermissionSet.DenyGrant {
-		return errtypes.PermissionDenied(fmt.Sprintf("eosfs: context user cannot deny access to ref: %+v", ref))
-	}
-
 	position := eosclient.EndPosition
 
 	rootAuth, err := fs.getRootAuth(ctx)
