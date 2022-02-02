@@ -1833,8 +1833,8 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 	}
 
 	var xs provider.ResourceChecksum
-	if eosFileInfo.XS != nil {
-		xs.Sum = eosFileInfo.XS.XSSum
+	if eosFileInfo.Size != 0 && eosFileInfo.XS != nil {
+		xs.Sum = strings.TrimLeft(eosFileInfo.XS.XSSum, "0")
 		switch eosFileInfo.XS.XSType {
 		case "adler":
 			xs.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32
