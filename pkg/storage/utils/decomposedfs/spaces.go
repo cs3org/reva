@@ -599,7 +599,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
 		}
 
-		if !includeTrashed && strings.Contains(space.Root.OpaqueId, node.TrashIDDelimiter) {
+		if !includeTrashed && strings.Contains(n.Name, node.TrashIDDelimiter) {
 			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %+v", user.Username, space))
 		}
 	}
