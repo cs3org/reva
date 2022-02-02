@@ -272,7 +272,11 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	// TODO: needs to be fixed
 	ref := &provider.Reference{ResourceId: req.StorageSpace.Root}
-	c, _, err := s.find(ctx, ref)
+	var restore bool
+	if req.Opaque != nil {
+		_, restore = req.Opaque.Map["restore"]
+	}
+	c, _, err := s.find(ctx, ref, restore)
 	if err != nil {
 		return &provider.UpdateStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find reference %+v", ref), err),
@@ -311,7 +315,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 		StorageId: storageid,
 		OpaqueId:  opaqeid,
 	}}
-	c, _, err := s.find(ctx, ref)
+	c, _, err := s.find(ctx, ref, false)
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find reference %+v", ref), err),
@@ -606,7 +610,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 }
 
 func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
-	c, _, err := s.find(ctx, req.Ref)
+	c, _, err := s.find(ctx, req.Ref, false)
 	if err != nil {
 		return &provider.TouchFileResponse{
 			Status: status.NewStatusFromErrType(ctx, "TouchFile ref="+req.Ref.String(), err),
@@ -744,7 +748,7 @@ func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provi
 
 // GetLock returns an existing lock on the given reference
 func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
-	c, _, err := s.find(ctx, req.Ref)
+	c, _, err := s.find(ctx, req.Ref, false)
 	if err != nil {
 		return &provider.GetLockResponse{
 			Status: status.NewStatusFromErrType(ctx, "GetLock ref="+req.Ref.String(), err),
@@ -764,7 +768,7 @@ func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provi
 
 // RefreshLock refreshes an existing lock on the given reference
 func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
-	c, _, err := s.find(ctx, req.Ref)
+	c, _, err := s.find(ctx, req.Ref, false)
 	if err != nil {
 		return &provider.RefreshLockResponse{
 			Status: status.NewStatusFromErrType(ctx, "RefreshLock ref="+req.Ref.String(), err),
@@ -784,7 +788,7 @@ func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest)
 
 // Unlock removes an existing lock from the given reference
 func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
-	c, _, err := s.find(ctx, req.Ref)
+	c, _, err := s.find(ctx, req.Ref, false)
 	if err != nil {
 		return &provider.UnlockResponse{
 			Status: status.NewStatusFromErrType(ctx, "Unlock ref="+req.Ref.String(), err),
@@ -977,15 +981,15 @@ func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*prov
 
 func (s *svc) findByPath(ctx context.Context, path string) (provider.ProviderAPIClient, *registry.ProviderInfo, error) {
 	ref := &provider.Reference{Path: path}
-	return s.find(ctx, ref)
+	return s.find(ctx, ref, false)
 }
 
 // find looks up the provider that is responsible for the given request
 // It will return a client that the caller can use to make the call, as well as the ProviderInfo. It:
 // - contains the provider path, which is the mount point of the provider
 // - may contain a list of storage spaces with their id and space path
-func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *registry.ProviderInfo, error) {
-	p, err := s.findSpaces(ctx, ref)
+func (s *svc) find(ctx context.Context, ref *provider.Reference, includeTrashed bool) (provider.ProviderAPIClient, *registry.ProviderInfo, error) {
+	p, err := s.findSpaces(ctx, ref, includeTrashed)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -997,7 +1001,7 @@ func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.Provi
 // FIXME findAndUnwrap currently just returns the first provider ... which may not be what is needed.
 // for the ListRecycle call we need an exact match, for Stat and List we need to query all related providers
 func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *registry.ProviderInfo, *provider.Reference, error) {
-	c, p, err := s.find(ctx, ref)
+	c, p, err := s.find(ctx, ref, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -1035,7 +1039,7 @@ func (s *svc) getStorageRegistryClient(_ context.Context, address string) (regis
 	return s.cache.StorageRegistryClient(c), nil
 }
 
-func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
+func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference, includeTrashed bool) ([]*registry.ProviderInfo, error) {
 	switch {
 	case ref == nil:
 		return nil, errtypes.BadRequest("missing reference")
@@ -1056,7 +1060,14 @@ func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*regis
 	}
 
 	listReq := &registry.ListStorageProvidersRequest{
-		Opaque: &typesv1beta1.Opaque{},
+		Opaque: &typesv1beta1.Opaque{Map: make(map[string]*typesv1beta1.OpaqueEntry)},
+	}
+
+	if includeTrashed {
+		listReq.Opaque.Map["includeTrashed"] = &typesv1beta1.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte("true"),
+		}
 	}
 	sdk.EncodeOpaqueMap(listReq.Opaque, filters)
 

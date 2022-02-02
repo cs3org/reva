@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -332,7 +333,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	_, spaceID, _ := utils.SplitStorageSpaceID(space.Id.OpaqueId)
 
 	if restore {
-		matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID+node.TrashIDDelimiter+"*"))
+		matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
 		if err != nil {
 			return nil, err
 		}
@@ -347,7 +348,24 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 
 		}
 
-		// restore logic here
+		target, err := os.Readlink(matches[0])
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[0]).Msg("could not read link, skipping")
+		}
+
+		n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
+		if err != nil {
+			return nil, err
+		}
+
+		newnode := *n
+		newnode.Name = strings.Split(n.Name, node.TrashIDDelimiter)[0]
+		newnode.Exists = false
+
+		err = fs.tp.Move(ctx, n, &newnode)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
@@ -453,7 +471,12 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
-	err = fs.tp.Delete(ctx, n)
+	// don't delete - just rename
+	dn := *n
+	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
+	dn.Name = n.Name + node.TrashIDDelimiter + deletionTime
+	dn.Exists = false
+	err = fs.tp.Move(ctx, n, &dn)
 	if err != nil {
 		return err
 	}
@@ -463,7 +486,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
-	trashPathMatches, err := filepath.Glob(n.InternalPath() + node.TrashIDDelimiter + "*")
+	trashPathMatches, err := filepath.Glob(dn.InternalPath())
 	if err != nil {
 		return err
 	}
