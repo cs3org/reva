@@ -424,32 +424,6 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		_, purge = opaque.Map["purge"]
 	}
 
-	if purge {
-		if !strings.Contains(req.Id.OpaqueId, node.TrashIDDelimiter) {
-			return errtypes.NewErrtypeFromStatus(status.NewInvalidArg(ctx, "can't purge enabled space"))
-		}
-		ip := fs.lu.InternalPath(req.Id.OpaqueId)
-		matches, err := filepath.Glob(ip)
-		if err != nil {
-			return err
-		}
-
-		// TODO: remove blobs
-		if err := os.RemoveAll(matches[0]); err != nil {
-			return err
-		}
-
-		matches, err = filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, req.Id.OpaqueId))
-		if err != nil {
-			return err
-		}
-		if len(matches) != 1 {
-			return fmt.Errorf("delete space failed: found %d matching spaces", len(matches))
-		}
-
-		return os.RemoveAll(matches[0])
-	}
-
 	spaceID := req.Id.OpaqueId
 
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
@@ -471,6 +445,44 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
+	if purge {
+		if !strings.Contains(n.Name, node.TrashIDDelimiter) {
+			return errtypes.NewErrtypeFromStatus(status.NewInvalidArg(ctx, "can't purge enabled space"))
+		}
+		ip := fs.lu.InternalPath(req.Id.OpaqueId)
+		matches, err := filepath.Glob(ip)
+		if err != nil {
+			return err
+		}
+
+		// TODO: remove blobs
+		if err := os.RemoveAll(matches[0]); err != nil {
+			return err
+		}
+
+		matches, err = filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, req.Id.OpaqueId))
+		if err != nil {
+			return err
+		}
+		if len(matches) != 1 {
+			return fmt.Errorf("delete space failed: found %d matching spaces", len(matches))
+		}
+
+		if err := os.RemoveAll(matches[0]); err != nil {
+			return err
+		}
+
+		matches, err = filepath.Glob(filepath.Join(fs.o.Root, "nodes", "root", req.Id.OpaqueId+node.TrashIDDelimiter+"*"))
+		if err != nil {
+			return err
+		}
+
+		if len(matches) != 1 {
+			return fmt.Errorf("delete root node failed: found %d matching root nodes", len(matches))
+		}
+
+		return os.RemoveAll(matches[0])
+	}
 	// don't delete - just rename
 	dn := *n
 	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
@@ -567,7 +579,15 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		},
 		Name:      sname,
 		SpaceType: spaceType,
+		Opaque:    &types.Opaque{Map: make(map[string]*types.OpaqueEntry)},
 		// Mtime is set either as node.tmtime or as fi.mtime below
+	}
+
+	if strings.Contains(n.Name, node.TrashIDDelimiter) {
+		space.Opaque.Map["trashed"] = &types.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte("trashed"),
+		}
 	}
 
 	user := ctxpkg.ContextMustGetUser(ctx)
