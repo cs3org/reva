@@ -60,9 +60,6 @@ var (
 	SpaceGrant struct{}
 )
 
-// ContextKeyIncludeTrash is temporarily used to get that information into the storage provider
-type ContextKeyIncludeTrash struct{}
-
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
 // i.e: /a/b/c/d/e contains prefix /a/b/c
 func Skip(source string, prefixes []string) bool {

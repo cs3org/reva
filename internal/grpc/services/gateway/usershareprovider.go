@@ -380,7 +380,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	log := appctx.GetLogger(ctx)
 
 	idReference := &provider.Reference{ResourceId: resourceID}
-	storageProvider, _, err := s.find(ctx, idReference, false)
+	storageProvider, _, err := s.find(ctx, idReference)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).
@@ -413,7 +413,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	log.Debug().Str("share_path", sharePath).Msg("remove reference of share")
 
 	sharePathRef := &provider.Reference{Path: sharePath}
-	homeProvider, providerInfo, err := s.find(ctx, sharePathRef, false)
+	homeProvider, providerInfo, err := s.find(ctx, sharePathRef)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).
@@ -477,7 +477,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 		Grantee: g,
 	}
 
-	c, _, err := s.find(ctx, ref, false)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).
@@ -514,7 +514,7 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 		},
 	}
 
-	c, _, err := s.find(ctx, ref, false)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).
@@ -550,7 +550,7 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		},
 	}
 
-	c, _, err := s.find(ctx, ref, false)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).
@@ -587,7 +587,7 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		},
 	}
 
-	c, _, err := s.find(ctx, ref, false)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).

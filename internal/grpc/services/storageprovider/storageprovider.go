@@ -524,13 +524,6 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	log := appctx.GetLogger(ctx)
 
-	var includeTrashed bool
-	if req.Opaque != nil {
-		// let's do as simple as possible until we have proper solution
-		_, includeTrashed = req.Opaque.Map["includeTrashed"]
-		ctx = context.WithValue(ctx, utils.ContextKeyIncludeTrash{}, includeTrashed)
-	}
-
 	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters)
 	if err != nil {
 		var st *rpc.Status

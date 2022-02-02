@@ -266,12 +266,11 @@ func (r *registry) GetProvider(ctx context.Context, space *providerpb.StorageSpa
 // below   = /foo/bar/bif   <=> /foo/bar        -> list(spaceid, ./bif)
 func (r *registry) ListProviders(ctx context.Context, filters map[string]string) ([]*registrypb.ProviderInfo, error) {
 	b, _ := strconv.ParseBool(filters["unique"])
-	it, _ := strconv.ParseBool(filters["includeTrashed"])
 	switch {
 	case filters["storage_id"] != "" && filters["opaque_id"] != "":
 		findMountpoint := filters["type"] == "mountpoint"
 		findGrant := !findMountpoint && filters["path"] == "" // relvative references, by definition, occur in the correct storage, so do not look for grants
-		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"], findMountpoint, findGrant, it), nil
+		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"], findMountpoint, findGrant), nil
 	case filters["path"] != "":
 		return r.findProvidersForAbsolutePathReference(ctx, filters["path"], b), nil
 	case len(filters) == 0:
@@ -326,7 +325,7 @@ func (r *registry) findProvidersForFilter(ctx context.Context, filters []*provid
 		p := &registrypb.ProviderInfo{
 			Address: address,
 		}
-		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters, false)
+		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters)
 		if err != nil {
 			appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Msg("findStorageSpaceOnProvider by id failed, continuing")
 			continue
@@ -364,7 +363,7 @@ func (r *registry) findProvidersForFilter(ctx context.Context, filters []*provid
 // findProvidersForResource looks up storage providers based on a resource id
 // for the root of a space the res.StorageId is the same as the res.OpaqueId
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
-func (r *registry) findProvidersForResource(ctx context.Context, id string, findMoundpoint, findGrant bool, includeTrashed bool) []*registrypb.ProviderInfo {
+func (r *registry) findProvidersForResource(ctx context.Context, id string, findMoundpoint, findGrant bool) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 	providerInfos := []*registrypb.ProviderInfo{}
 	for address, provider := range r.c.Providers {
@@ -398,7 +397,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 				},
 			})
 		}
-		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters, includeTrashed)
+		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters)
 		if err != nil {
 			appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Msg("findStorageSpaceOnProvider by id failed, continuing")
 			continue
@@ -474,7 +473,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 			},
 		})
 
-		spaces, err = r.findStorageSpaceOnProvider(ctx, p.Address, filters, false)
+		spaces, err = r.findStorageSpaceOnProvider(ctx, p.Address, filters)
 		if err != nil {
 			appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Msg("findStorageSpaceOnProvider failed, continuing")
 			continue
@@ -598,24 +597,13 @@ func setSpaces(providerInfo *registrypb.ProviderInfo, spaces []*providerpb.Stora
 	return nil
 }
 
-func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, filters []*providerpb.ListStorageSpacesRequest_Filter, includeTrashed bool) ([]*providerpb.StorageSpace, error) {
+func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, filters []*providerpb.ListStorageSpacesRequest_Filter) ([]*providerpb.StorageSpace, error) {
 	c, err := r.getStorageProviderServiceClient(addr)
 	if err != nil {
 		return nil, err
 	}
 	req := &providerpb.ListStorageSpacesRequest{
 		Filters: filters,
-	}
-
-	if includeTrashed {
-		req.Opaque = &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"includeTrashed": {
-					Decoder: "plain",
-					Value:   []byte("true"),
-				},
-			},
-		}
 	}
 
 	res, err := c.ListStorageSpaces(ctx, req)

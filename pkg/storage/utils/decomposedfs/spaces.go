@@ -185,9 +185,6 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		nodeID  = spaceIDAny
 	)
 
-	// NOTE: this is not optimal. We should either adjust Method signature or add a new filter
-	includeTrashed, _ := ctx.Value(utils.ContextKeyIncludeTrash{}).(bool)
-
 	spaceTypes := []string{}
 
 	for i := range filter {
@@ -221,9 +218,6 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	matches := []string{}
 	for _, spaceType := range spaceTypes {
 		path := filepath.Join(fs.o.Root, "spaces", spaceType, nodeID)
-		if includeTrashed {
-			path += "*"
-		}
 		m, err := filepath.Glob(path)
 		if err != nil {
 			return nil, err
@@ -291,7 +285,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 
 		// TODO apply more filters
-		space, err := fs.storageSpaceFromNode(ctx, n, spaceType, matches[i], canListAllSpaces, includeTrashed)
+		space, err := fs.storageSpaceFromNode(ctx, n, spaceType, matches[i], canListAllSpaces)
 		if err != nil {
 			if _, ok := err.(errtypes.IsPermissionDenied); !ok {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
@@ -310,7 +304,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			return nil, err
 		}
 		if n.Exists {
-			space, err := fs.storageSpaceFromNode(ctx, n, "*", n.InternalPath(), canListAllSpaces, includeTrashed)
+			space, err := fs.storageSpaceFromNode(ctx, n, "*", n.InternalPath(), canListAllSpaces)
 			if err != nil {
 				return nil, err
 			}
@@ -542,7 +536,7 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, space
 	return nil
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, spaceType, nodePath string, canListAllSpaces bool, includeTrashed bool) (*provider.StorageSpace, error) {
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, spaceType, nodePath string, canListAllSpaces bool) (*provider.StorageSpace, error) {
 	owner, err := n.Owner()
 	if err != nil {
 		return nil, err
@@ -599,7 +593,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
 		}
 
-		if !includeTrashed && strings.Contains(n.Name, node.TrashIDDelimiter) {
+		if strings.Contains(n.Name, node.TrashIDDelimiter) {
 			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %+v", user.Username, space))
 		}
 	}
