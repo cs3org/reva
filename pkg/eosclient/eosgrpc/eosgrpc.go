@@ -49,7 +49,6 @@ import (
 const (
 	versionPrefix = ".sys.v#."
 	// lwShareAttrKey = "reva.lwshare"
-	userACLEvalKey = "eval.useracl"
 )
 
 const (
