@@ -774,6 +774,10 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, loc
 }
 
 func (fs *Decomposedfs) checkLock(ctx context.Context, node *node.Node) error {
+	if node == nil {
+		return nil // no node, no lock
+	}
+
 	lockID, _ := ctxpkg.ContextGetLockID(ctx)
 	lock := node.ReadLock(ctx)
 	if lock != nil {
