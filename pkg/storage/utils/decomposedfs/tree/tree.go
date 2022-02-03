@@ -439,6 +439,9 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 
+	// Remove lock file if it exists
+	_ = os.Remove(n.LockFilePath())
+
 	// finally remove the entry from the parent dir
 	src := filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name)
 	err = os.Remove(src)
@@ -470,6 +473,10 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 		if err != nil {
 			return nil, nil, nil, err
 		}
+	}
+
+	if err := targetNode.CheckLock(ctx); err != nil {
+		return nil, nil, nil, err
 	}
 
 	parent, err := targetNode.Parent()
