@@ -279,11 +279,6 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 		return errtypes.PermissionDenied(key)
 	}
 
-	// check lock
-	if err := fs.checkLock(ctx, targetNode); err != nil {
-		return err
-	}
-
 	// Run the restore func
 	return restoreFunc()
 }

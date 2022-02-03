@@ -166,7 +166,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	// check lock
-	if err := fs.checkLock(ctx, n); err != nil {
+	if err := n.CheckLock(ctx); err != nil {
 		return err
 	}
 

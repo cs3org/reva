@@ -61,7 +61,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	}
 
 	// check lock
-	if err := fs.checkLock(ctx, n); err != nil {
+	if err := n.CheckLock(ctx); err != nil {
 		return err
 	}
 
@@ -154,7 +154,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 	}
 
 	// check lock
-	if err := fs.checkLock(ctx, n); err != nil {
+	if err := n.CheckLock(ctx); err != nil {
 		return err
 	}
 

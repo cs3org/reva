@@ -23,7 +23,6 @@ package decomposedfs
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -313,7 +312,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	}
 
 	// check lock
-	if err := fs.checkLock(ctx, n); err != nil {
+	if err := n.CheckLock(ctx); err != nil {
 		return err
 	}
 
@@ -440,7 +439,7 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 	}
 
 	// check lock on target
-	if err := fs.checkLock(ctx, newNode); err != nil {
+	if err := newNode.CheckLock(ctx); err != nil {
 		return err
 	}
 
@@ -532,7 +531,7 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	if err := fs.checkLock(ctx, node); err != nil {
+	if err := node.CheckLock(ctx); err != nil {
 		return err
 	}
 
@@ -589,24 +588,7 @@ func (fs *Decomposedfs) GetLock(ctx context.Context, ref *provider.Reference) (*
 	case !ok:
 		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
-
-	lockPath := node.InternalPath() + ".lock"
-
-	f, err := os.Open(lockPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound("no lock found")
-		}
-		return nil, errors.Wrap(err, "Decomposedfs: could not open lock file")
-	}
-	defer f.Close()
-
-	lock := &provider.Lock{}
-	if err := json.NewDecoder(f).Decode(lock); err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: could not read lock file")
-	}
-
-	return lock, nil
+	return node.ReadLock(ctx)
 }
 
 // SetLock puts a lock on the given reference
@@ -630,27 +612,7 @@ func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lo
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	// check lock
-	if lock := node.ReadLock(ctx); lock != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if lock.LockId != lockID {
-			return errtypes.Locked(lock.LockId)
-		}
-	}
-
-	lockPath := node.InternalPath() + ".lock"
-	// O_EXCL to make open fail when the file already exists
-	f, err := os.OpenFile(lockPath, os.O_EXCL|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not create lock file")
-	}
-	defer f.Close()
-
-	if err := json.NewEncoder(f).Encode(lock); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not write lock file")
-	}
-
-	return nil
+	return node.SetLock(ctx, lock)
 }
 
 // RefreshLock refreshes an existing lock on the given reference
@@ -678,41 +640,7 @@ func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	lockPath := node.InternalPath() + ".lock"
-
-	f, err := os.OpenFile(lockPath, os.O_RDWR, os.ModeExclusive)
-	switch {
-	case os.IsNotExist(err):
-		return errtypes.PreconditionFailed("lock does not exist")
-	case err != nil:
-		return errors.Wrap(err, "Decomposedfs: could not open lock file")
-	}
-	defer f.Close()
-
-	oldLock := &provider.Lock{}
-	if err := json.NewDecoder(f).Decode(oldLock); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not read lock")
-	}
-
-	// check lock
-	if oldLock.LockId != lock.LockId {
-		return errtypes.PreconditionFailed("mismatching lock")
-	}
-
-	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.User, u.Id) {
-		return errtypes.PermissionDenied("cannot refresh lock of another holder")
-	}
-
-	if !utils.UserEqual(oldLock.User, lock.GetUser()) {
-		return errtypes.PermissionDenied("cannot change holder when refreshing a lock")
-	}
-
-	if err := json.NewEncoder(f).Encode(lock); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not write lock file")
-	}
-
-	return nil
+	return node.RefreshLock(ctx, lock)
 }
 
 // Unlock removes an existing lock from the given reference
@@ -740,58 +668,5 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, loc
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	lockPath := node.InternalPath() + ".lock"
-
-	f, err := os.OpenFile(lockPath, os.O_RDONLY, os.ModeExclusive)
-	switch {
-	case os.IsNotExist(err):
-		return errtypes.PreconditionFailed("lock does not exist")
-	case err != nil:
-		return errors.Wrap(err, "Decomposedfs: could not open lock file")
-	}
-
-	oldLock := &provider.Lock{}
-	if err := json.NewDecoder(f).Decode(oldLock); err != nil {
-		_ = f.Close()
-		return errors.Wrap(err, "Decomposedfs: could not read lock")
-	}
-
-	// check lock
-	if oldLock.LockId != lock.LockId {
-		return errtypes.Locked(oldLock.LockId)
-	}
-
-	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.User, u.Id) {
-		_ = f.Close()
-		return errtypes.PermissionDenied("mismatching holder")
-	}
-	_ = f.Close()
-
-	os.Remove(lockPath)
-
-	return nil
-}
-
-func (fs *Decomposedfs) checkLock(ctx context.Context, node *node.Node) error {
-	if node == nil {
-		return nil // no node, no lock
-	}
-
-	lockID, _ := ctxpkg.ContextGetLockID(ctx)
-	lock := node.ReadLock(ctx)
-	if lock != nil {
-		switch lockID {
-		case "":
-			return errtypes.Locked(lock.LockId) // no lockid in request
-		case lock.LockId:
-			return nil // ok
-		default:
-			return errtypes.PreconditionFailed("mismatching lock")
-		}
-	}
-	if lockID != "" {
-		return errtypes.PreconditionFailed("not locked")
-	}
-	return nil // ok
+	return node.Unlock(ctx, lock)
 }

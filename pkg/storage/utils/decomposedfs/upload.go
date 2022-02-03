@@ -230,7 +230,7 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 
 	// check lock
-	if err := fs.checkLock(ctx, n); err != nil {
+	if err := n.CheckLock(ctx); err != nil {
 		return nil, err
 	}
 
@@ -468,7 +468,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
 
 	// check lock
-	if err := upload.fs.checkLock(ctx, n); err != nil {
+	if err := n.CheckLock(ctx); err != nil {
 		return err
 	}
 

@@ -63,7 +63,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	}
 
 	// check lock
-	if err := fs.checkLock(ctx, node); err != nil {
+	if err := node.CheckLock(ctx); err != nil {
 		return err
 	}
 
@@ -148,7 +148,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 	}
 
 	// check lock
-	if err := fs.checkLock(ctx, node); err != nil {
+	if err := node.CheckLock(ctx); err != nil {
 		return err
 	}
 
