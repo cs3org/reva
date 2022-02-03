@@ -558,6 +558,11 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	e := c.getRespError(resp, err)
+
+	if resp != nil && resp.Error != nil && resp.Error.Code == 17 {
+		return eosclient.AttrAlreadyExistsError
+	}
+
 	if e != nil {
 		log.Error().Str("func", "SetAttr").Str("path", path).Str("err", e.Error()).Msg("")
 		return e
@@ -599,6 +604,11 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
+
+	if resp != nil && resp.Error != nil && resp.Error.Code == 61 {
+		return eosclient.AttrNotExistsError
+	}
+
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "UnsetAttr").Str("path", path).Str("err", e.Error()).Msg("")
