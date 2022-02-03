@@ -494,15 +494,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 
 	trashPath := dn.InternalPath()
 	np := filepath.Join(filepath.Dir(matches[0]), filepath.Base(trashPath))
-
-	// TODO: This is bad. We need a proper solution. DO NOT MERGE!
-	if strings.Contains(np, "project") {
-		err = os.Symlink(trashPath, np)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return os.Symlink(trashPath, np)
 }
 
 // createHiddenSpaceFolder bootstraps a storage space root with a hidden ".space" folder used to store space related
@@ -596,7 +588,13 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		}
 
 		if strings.Contains(n.Name, node.TrashIDDelimiter) {
-			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %+v", user.Username, space))
+			ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
+				// TODO: Which permission do I need to see the space?
+				return p.AddGrant
+			})
+			if err != nil || !ok {
+				return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %+v", user.Username, space))
+			}
 		}
 	}
 
