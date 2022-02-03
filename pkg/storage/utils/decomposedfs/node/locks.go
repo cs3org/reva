@@ -39,6 +39,11 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 		lockID, _ := ctxpkg.ContextGetLockID(ctx)
 		if l.LockId != lockID {
 			return errtypes.Locked(l.LockId)
+		} else {
+			err := os.Remove(n.LockFilePath())
+			if err != nil {
+				return err
+			}
 		}
 	}
 

@@ -37,10 +37,11 @@ var _ = Describe("Node locks", func() {
 	var (
 		env *helpers.TestEnv
 
-		lock *provider.Lock
-		n    *node.Node
-		id   string
-		name string
+		lock      *provider.Lock
+		wrongLock *provider.Lock
+		n         *node.Node
+		id        string
+		name      string
 	)
 
 	BeforeEach(func() {
@@ -49,6 +50,11 @@ var _ = Describe("Node locks", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		lock = &provider.Lock{
+			Type:   provider.LockType_LOCK_TYPE_EXCL,
+			User:   env.Owner.Id,
+			LockId: uuid.New().String(),
+		}
+		wrongLock = &provider.Lock{
 			Type:   provider.LockType_LOCK_TYPE_EXCL,
 			User:   env.Owner.Id,
 			LockId: uuid.New().String(),
@@ -75,6 +81,27 @@ var _ = Describe("Node locks", func() {
 			_, err = os.Stat(n.LockFilePath())
 			Expect(err).ToNot(HaveOccurred())
 		})
+
+		It("refuses to lock if already locked an existing lock was not provided", func() {
+			err := n.SetLock(env.Ctx, lock)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = n.SetLock(env.Ctx, lock)
+			Expect(err).To(HaveOccurred())
+
+			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, wrongLock.LockId)
+			err = n.SetLock(env.Ctx, lock)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("relocks if the existing lock was provided", func() {
+			err := n.SetLock(env.Ctx, lock)
+			Expect(err).ToNot(HaveOccurred())
+
+			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, lock.LockId)
+			err = n.SetLock(env.Ctx, lock)
+			Expect(err).ToNot(HaveOccurred())
+		})
 	})
 
 	Context("with an existing lock", func() {
@@ -90,12 +117,10 @@ var _ = Describe("Node locks", func() {
 			})
 
 			It("refuses to unlock without having the proper lock", func() {
-				wrongLock := &provider.Lock{
-					Type:   provider.LockType_LOCK_TYPE_EXCL,
-					User:   env.Owner.Id,
-					LockId: uuid.New().String(),
-				}
-				err := n.Unlock(env.Ctx, wrongLock)
+				err := n.Unlock(env.Ctx, nil)
+				Expect(err.Error()).To(ContainSubstring(lock.LockId))
+
+				err = n.Unlock(env.Ctx, wrongLock)
 				Expect(err.Error()).To(ContainSubstring(lock.LockId))
 			})
 
