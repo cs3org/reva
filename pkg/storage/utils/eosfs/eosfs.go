@@ -564,7 +564,7 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 
 	// the cs3apis require to have the read permission on the resource
 	// to get the eventual lock.
-	has, err := fs.userHasReadAccess(ctx, user, ref)
+	has, err := fs.userHasReadAccess(ctx, user, path)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error checking read access to resource")
 	}
@@ -610,7 +610,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 	// to set a lock. because in eos we can set attrs even if the user does
 	// not have the write permission, we need to check if the user that made
 	// the request has it
-	has, err := fs.userHasWriteAccess(ctx, user, ref)
+	has, err := fs.userHasWriteAccess(ctx, user, path)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
 	}
@@ -621,7 +621,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 	// the user in the lock could differ from the user in the context
 	// in that case, also the user in the lock MUST have the write permission
 	if !utils.UserEqual(user.Id, l.User) {
-		has, err := fs.userIDHasWriteAccess(ctx, l.User, ref)
+		has, err := fs.userIDHasWriteAccess(ctx, l.User, path)
 		if err != nil {
 			return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
 		}
@@ -668,8 +668,11 @@ func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*use
 	return res.User, nil
 }
 
-func (fs *eosfs) userHasWriteAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
+func (fs *eosfs) userHasWriteAccess(ctx context.Context, user *userpb.User, path string) (bool, error) {
 	ctx = ctxpkg.ContextSetUser(ctx, user)
+	ref := &provider.Reference{
+		Path: path,
+	}
 	resInfo, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
 		return false, err
@@ -677,16 +680,19 @@ func (fs *eosfs) userHasWriteAccess(ctx context.Context, user *userpb.User, ref 
 	return resInfo.PermissionSet.InitiateFileUpload, nil
 }
 
-func (fs *eosfs) userIDHasWriteAccess(ctx context.Context, userID *userpb.UserId, ref *provider.Reference) (bool, error) {
+func (fs *eosfs) userIDHasWriteAccess(ctx context.Context, userID *userpb.UserId, path string) (bool, error) {
 	user, err := fs.getUserFromID(ctx, userID)
 	if err != nil {
 		return false, nil
 	}
-	return fs.userHasWriteAccess(ctx, user, ref)
+	return fs.userHasWriteAccess(ctx, user, path)
 }
 
-func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
+func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, path string) (bool, error) {
 	ctx = ctxpkg.ContextSetUser(ctx, user)
+	ref := &provider.Reference{
+		Path: path,
+	}
 	resInfo, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
 		return false, err
@@ -694,12 +700,12 @@ func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, ref *
 	return resInfo.PermissionSet.InitiateFileDownload, nil
 }
 
-func (fs *eosfs) userIDHasReadAccess(ctx context.Context, userID *userpb.UserId, ref *provider.Reference) (bool, error) {
+func (fs *eosfs) userIDHasReadAccess(ctx context.Context, userID *userpb.UserId, path string) (bool, error) {
 	user, err := fs.getUserFromID(ctx, userID)
 	if err != nil {
 		return false, err
 	}
-	return fs.userHasReadAccess(ctx, user, ref)
+	return fs.userHasReadAccess(ctx, user, path)
 }
 
 func encodeLock(l *provider.Lock) (string, error) {
@@ -752,9 +758,15 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 		return errtypes.BadRequest("caller does not hold the lock")
 	}
 
+	path, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error resolving reference")
+	}
+	path = fs.wrap(ctx, path)
+
 	// the cs3apis require to have the write permission on the resource
 	// to set a lock
-	has, err := fs.userHasWriteAccess(ctx, user, ref)
+	has, err := fs.userHasWriteAccess(ctx, user, path)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
 	}
@@ -763,12 +775,6 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 	}
 
 	// set the xattr with the new value
-	path, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error resolving reference")
-	}
-	path = fs.wrap(ctx, path)
-
 	auth, err := fs.getUserAuth(ctx, user, path)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
