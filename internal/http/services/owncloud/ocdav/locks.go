@@ -272,9 +272,9 @@ func readLockInfo(r io.Reader) (li lockInfo, status int, err error) {
 	// We are ignoring the any properties in the lock details, and assume an exclusive write lock is requested.
 	// https://datatracker.ietf.org/doc/html/rfc4918#section-7 only describes write locks
 	//
-	//if li.Exclusive == nil || li.Shared != nil {
-	//	return lockInfo{}, http.StatusNotImplemented, errors.ErrUnsupportedLockInfo
-	//}
+	// if li.Exclusive == nil || li.Shared != nil {
+	//   return lockInfo{}, http.StatusNotImplemented, errors.ErrUnsupportedLockInfo
+	// }
 	// what should we return if the user requests a shared lock? or leaves out the locktype? the testsuite will only send the property lockscope, not locktype
 	// the oc tests cover both shared and exclusive locks. What is the WOPI lock? a shared or an exclusive lock?
 	// since it is issued by a service it seems to be an exclusive lock.

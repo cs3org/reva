@@ -125,7 +125,7 @@ func Escape(s string) string {
 		switch s[i] {
 		case '"', '&', '\'', '<', '>':
 			b := bytes.NewBuffer(nil)
-			xml.EscapeText(b, []byte(s))
+			_ = xml.EscapeText(b, []byte(s))
 			return b.String()
 		}
 	}
