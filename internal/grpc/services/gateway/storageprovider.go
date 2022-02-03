@@ -285,7 +285,10 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 			Status: status.NewStatusFromErrType(ctx, "gateway could not call UpdateStorageSpace", err),
 		}, nil
 	}
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.StorageSpace.Root)
+
+	id := res.StorageSpace.Root
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), id)
+	s.cache.RemoveListStorageProviders(id)
 	return res, nil
 }
 
@@ -322,7 +325,9 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 		}, nil
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), &provider.ResourceId{OpaqueId: req.Id.OpaqueId})
+	id := &provider.ResourceId{OpaqueId: req.Id.OpaqueId}
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), id)
+	s.cache.RemoveListStorageProviders(id)
 
 	if dsRes.Status.Code != rpc.Code_CODE_OK {
 		return dsRes, nil

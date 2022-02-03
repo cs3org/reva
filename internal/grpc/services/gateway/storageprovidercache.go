@@ -128,6 +128,22 @@ func (c Caches) RemoveStat(user *userpb.User, res *provider.ResourceId) {
 	}
 }
 
+// RemoveListStorageProviders removes a reference from the listproviders cache
+func (c Caches) RemoveListStorageProviders(res *provider.ResourceId) {
+	if res == nil {
+		return
+	}
+	sid := res.StorageId
+
+	cache := c[listproviders]
+	for _, key := range cache.GetKeys() {
+		if strings.Contains(key, sid) {
+			_ = cache.Remove(key)
+			continue
+		}
+	}
+}
+
 func initCache(ttlSeconds int) *ttlcache.Cache {
 	cache := ttlcache.NewCache()
 	_ = cache.SetTTL(time.Duration(ttlSeconds) * time.Second)
