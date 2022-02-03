@@ -19,6 +19,9 @@
 package runtime
 
 import (
+	"context"
+	"time"
+
 	"github.com/cs3org/reva/pkg/registry"
 	"github.com/rs/zerolog"
 )
@@ -28,13 +31,20 @@ type Option func(o *Options)
 
 // Options defines the available options for this package.
 type Options struct {
-	Logger   *zerolog.Logger
-	Registry registry.Registry
+	Logger              *zerolog.Logger
+	Registry            registry.Registry
+	ServiceName         string
+	ServiceUUID         string
+	NamespaceConfig     map[string]string
+	RegistrationRefresh time.Duration
+	Context             context.Context
 }
 
 // newOptions initializes the available default options.
 func newOptions(opts ...Option) Options {
-	opt := Options{}
+	opt := Options{
+		Context: context.TODO(),
+	}
 
 	for _, o := range opts {
 		o(&opt)
@@ -54,5 +64,38 @@ func WithLogger(logger *zerolog.Logger) Option {
 func WithRegistry(r registry.Registry) Option {
 	return func(o *Options) {
 		o.Registry = r
+	}
+}
+
+// WithRegistrationRefresh provides a function to set the time for a registration refresh.
+func WithRegistrationRefresh(t time.Duration) Option {
+	return func(o *Options) {
+		o.RegistrationRefresh = t
+	}
+}
+
+// WithServiceName provides a function to set the service name.
+func WithServiceName(n string) Option {
+	return func(o *Options) {
+		o.ServiceName = n
+	}
+}
+
+// WithServiceUUID provides a function to set the service UUID.
+func WithServiceUUID(uuid string) Option {
+	return func(o *Options) {
+		o.ServiceUUID = uuid
+	}
+}
+
+func WithNameSpaceConfig(c map[string]string) Option {
+	return func(o *Options) {
+		o.NamespaceConfig = c
+	}
+}
+
+func WithContext(c context.Context) Option {
+	return func(o *Options) {
+		o.Context = c
 	}
 }

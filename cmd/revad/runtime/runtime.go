@@ -45,12 +45,17 @@ import (
 func Run(mainConf map[string]interface{}, pidFile, logLevel string) {
 	logConf := parseLogConfOrDie(mainConf["log"], logLevel)
 	logger := initLogger(logConf)
-	RunWithOptions(mainConf, pidFile, WithLogger(logger))
+	RunWithOptions(
+		mainConf,
+		pidFile,
+		WithLogger(logger),
+	)
 }
 
 // RunWithOptions runs a reva server with the given config file, pid file and options.
 func RunWithOptions(mainConf map[string]interface{}, pidFile string, opts ...Option) {
 	options := newOptions(opts...)
+
 	parseSharedConfOrDie(mainConf["shared"])
 	coreConf := parseCoreConfOrDie(mainConf["core"])
 
@@ -69,7 +74,7 @@ func RunWithOptions(mainConf map[string]interface{}, pidFile string, opts ...Opt
 		}
 	}
 
-	run(mainConf, coreConf, options.Logger, pidFile)
+	run(mainConf, coreConf, pidFile, opts...)
 }
 
 type coreConf struct {
@@ -83,7 +88,10 @@ type coreConf struct {
 	TracingService string `mapstructure:"tracing_service"`
 }
 
-func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Logger, filename string) {
+func run(mainConf map[string]interface{}, coreConf *coreConf, filename string, opts ...Option) {
+	options := newOptions(opts...)
+	logger := options.Logger
+
 	host, _ := os.Hostname()
 	logger.Info().Msgf("host info: %s", host)
 
@@ -99,10 +107,13 @@ func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Lo
 	}
 	listeners := initListeners(watcher, servers, logger)
 
-	start(mainConf, servers, listeners, logger, watcher)
+	start(mainConf, servers, listeners, watcher, opts...)
 }
 
-func initListeners(watcher *grace.Watcher, servers map[string]grace.Server, log *zerolog.Logger) map[string]net.Listener {
+func initListeners(
+	watcher *grace.Watcher, servers map[string]grace.Server, log *zerolog.Logger,
+) map[string]net.Listener {
+
 	listeners, err := watcher.GetListeners(servers)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting sockets")
@@ -184,7 +195,10 @@ func handlePIDFlag(l *zerolog.Logger, pidFile string) (*grace.Watcher, error) {
 	return w, nil
 }
 
-func start(mainConf map[string]interface{}, servers map[string]grace.Server, listeners map[string]net.Listener, log *zerolog.Logger, watcher *grace.Watcher) {
+func start(mainConf map[string]interface{}, servers map[string]grace.Server, listeners map[string]net.Listener, watcher *grace.Watcher, opts ...Option) {
+	options := newOptions(opts...)
+	log := options.Logger
+
 	if isEnabledHTTP(mainConf) {
 		go func() {
 			if err := servers["http"].(*rhttp.Server).Start(listeners["http"]); err != nil {
@@ -201,6 +215,28 @@ func start(mainConf map[string]interface{}, servers map[string]grace.Server, lis
 			}
 		}()
 	}
+
+	if options.Registry != nil {
+		for protocol, l := range listeners {
+			serviceName := options.ServiceName
+			if namespace, ok := options.NamespaceConfig[protocol]; ok {
+				serviceName = namespace + "." + options.ServiceName
+			}
+			if err := registerEndpoint(
+				options.Context,
+				serviceName,
+				options.ServiceUUID,
+				l.Addr().String(),
+				protocol,
+				log,
+				options.RegistrationRefresh,
+			); err != nil {
+				log.Error().Err(err).Msg("error adding the service to the registry")
+				watcher.Exit(1)
+			}
+		}
+	}
+
 	watcher.TrapSignals()
 }
 
