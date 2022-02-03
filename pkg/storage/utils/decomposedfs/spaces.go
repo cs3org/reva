@@ -487,7 +487,22 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
-	return os.RemoveAll(matches[0])
+	err = os.RemoveAll(matches[0])
+	if err != nil {
+		return err
+	}
+
+	trashPath := dn.InternalPath()
+	np := filepath.Join(filepath.Dir(matches[0]), filepath.Base(trashPath))
+
+	// TODO: This is bad. We need a proper solution. DO NOT MERGE!
+	if strings.Contains(np, "project") {
+		err = os.Symlink(trashPath, np)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // createHiddenSpaceFolder bootstraps a storage space root with a hidden ".space" folder used to store space related
