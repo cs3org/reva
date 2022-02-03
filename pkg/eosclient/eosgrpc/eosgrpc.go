@@ -501,22 +501,6 @@ func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, in
 		}
 	}
 
-	// Read user ACLs if sys.eval.useracl is set
-	if userACLEval, ok := info.Attrs["sys."+userACLEvalKey]; ok && userACLEval == "1" {
-		if userACL, ok := info.Attrs["user.acl"]; ok {
-			userAcls, err := acl.Parse(userACL, acl.ShortTextForm)
-			if err != nil {
-				return nil
-			}
-			for _, e := range userAcls.Entries {
-				err = info.SysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
-				if err != nil {
-					return nil
-				}
-			}
-		}
-	}
-
 	// We need to inherit the ACLs for the parent directory as these are not available for files
 	if !info.IsDir {
 		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
