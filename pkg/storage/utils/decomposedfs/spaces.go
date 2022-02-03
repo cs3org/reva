@@ -487,20 +487,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
-	err = os.RemoveAll(matches[0])
-	if err != nil {
-		return err
-	}
-
-	trashPathMatches, err := filepath.Glob(dn.InternalPath())
-	if err != nil {
-		return err
-	}
-	if len(trashPathMatches) != 1 {
-		return fmt.Errorf("delete space failed: found %d matching trashed spaces", len(trashPathMatches))
-	}
-	trashPath := trashPathMatches[0]
-	return os.Symlink(trashPath, filepath.Join(filepath.Dir(matches[0]), filepath.Base(trashPath)))
+	return os.RemoveAll(matches[0])
 }
 
 // createHiddenSpaceFolder bootstraps a storage space root with a hidden ".space" folder used to store space related
