@@ -20,6 +20,7 @@ package decomposedfs
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -531,6 +532,26 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, space
 }
 
 func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, spaceType, nodePath string, canListAllSpaces bool) (*provider.StorageSpace, error) {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	if !canListAllSpaces {
+		ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
+			return p.Stat
+		})
+		if err != nil || !ok {
+			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %s", user.Username, n.SpaceRoot.ID))
+		}
+
+		if strings.Contains(n.Name, node.TrashIDDelimiter) {
+			ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
+				// TODO: Which permission do I need to see the space?
+				return p.AddGrant
+			})
+			if err != nil || !ok {
+				return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %s", user.Username, n.SpaceRoot.ID))
+			}
+		}
+	}
+
 	owner, err := n.Owner()
 	if err != nil {
 		return nil, err
@@ -559,7 +580,39 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 
 	spaceType = filepath.Base(filepath.Dir(matches[0]))
 
+	grants, err := n.ListGrants(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	m := make(map[string]*provider.ResourcePermissions, len(grants))
+	for _, g := range grants {
+		var id string
+		switch g.Grantee.Type {
+		case provider.GranteeType_GRANTEE_TYPE_GROUP:
+			id = g.Grantee.GetGroupId().OpaqueId
+		case provider.GranteeType_GRANTEE_TYPE_USER:
+			id = g.Grantee.GetUserId().OpaqueId
+		default:
+			continue
+		}
+
+		m[id] = g.Permissions
+	}
+	marshalled, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+
 	space := &provider.StorageSpace{
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"grants": {
+					Decoder: "json",
+					Value:   marshalled,
+				},
+			},
+		},
 		Id: &provider.StorageSpaceId{OpaqueId: n.SpaceRoot.ID},
 		Root: &provider.ResourceId{
 			StorageId: n.SpaceRoot.ID,
@@ -567,7 +620,6 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		},
 		Name:      sname,
 		SpaceType: spaceType,
-		Opaque:    &types.Opaque{Map: make(map[string]*types.OpaqueEntry)},
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
 
@@ -575,26 +627,6 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		space.Opaque.Map["trashed"] = &types.OpaqueEntry{
 			Decoder: "plain",
 			Value:   []byte("trashed"),
-		}
-	}
-
-	user := ctxpkg.ContextMustGetUser(ctx)
-	if !canListAllSpaces {
-		ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
-			return p.Stat
-		})
-		if err != nil || !ok {
-			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %+v", user.Username, space))
-		}
-
-		if strings.Contains(n.Name, node.TrashIDDelimiter) {
-			ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
-				// TODO: Which permission do I need to see the space?
-				return p.AddGrant
-			})
-			if err != nil || !ok {
-				return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %+v", user.Username, space))
-			}
 		}
 	}
 
