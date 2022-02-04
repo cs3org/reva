@@ -44,7 +44,22 @@ const (
 	PropQuotaUnknown = "-2"
 	// PropOcFavorite is the favorite ns property
 	PropOcFavorite = "http://owncloud.org/ns/favorite"
+
+	// DepthZero represents the webdav zero depth value
+	DepthZero Depth = "0"
+	// DepthOne represents the webdav one depth value
+	DepthOne Depth = "1"
+	// DepthInfinity represents the webdav infinity depth value
+	DepthInfinity Depth = "infinity"
 )
+
+// Depth is a type representing the webdav depth header value
+type Depth string
+
+// String returns the string representation of the webdav depth value
+func (d Depth) String() string {
+	return string(d)
+}
 
 // replaceAllStringSubmatchFunc is taken from 'Go: Replace String with Regular Expression Callback'
 // see: https://elliotchance.medium.com/go-replace-string-with-regular-expression-callback-f89948bad0bb
@@ -77,4 +92,24 @@ func EncodePath(path string) string {
 		}
 		return sb.String()
 	})
+}
+
+// ParseDepth parses the depth header value defined in https://tools.ietf.org/html/rfc4918#section-9.1
+// Valid values are "0", "1" and "infinity". An empty string will be parsed to "1".
+// For all other values this method returns an error.
+func ParseDepth(s string) (Depth, error) {
+	if s == "" {
+		return DepthOne, nil
+	}
+
+	switch strings.ToLower(s) {
+	case DepthZero.String():
+		return DepthZero, nil
+	case DepthOne.String():
+		return DepthOne, nil
+	case DepthInfinity.String():
+		return DepthInfinity, nil
+	default:
+		return "", fmt.Errorf("invalid depth: %s", s)
+	}
 }
