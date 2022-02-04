@@ -845,12 +845,10 @@ API, search, favorites, config, capabilities, not existing endpoints, CORS and o
 
 #### [Different version, edition and productname in status request and capabilities request](https://github.com/owncloud/ocis/issues/2174)
 -   [apiMain/status.feature:5](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/status.feature#L5) Scenario: Status.php is correct
-#### [ocs config endpoint only accessible by authorized users](https://github.com/owncloud/ocis/issues/1338)
 
 #### [Ability to return error messages in Webdav response bodies](https://github.com/owncloud/ocis/issues/1293)
 -   [apiAuthOcs/ocsDELETEAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsDELETEAuth.feature#L10) Scenario: send DELETE requests to OCS endpoints as admin with wrong password
 -   [apiAuthOcs/ocsGETAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L10) Scenario: using OCS anonymously
--   [apiAuthOcs/ocsGETAuth.feature:33](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L33) Scenario: ocs config end point accessible by unauthorized users
 -   [apiAuthOcs/ocsGETAuth.feature:53](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L53) Scenario: using OCS with non-admin basic auth
 -   [apiAuthOcs/ocsGETAuth.feature:88](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L88) Scenario: using OCS as normal user with wrong password
 -   [apiAuthOcs/ocsGETAuth.feature:121](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L121) Scenario:using OCS with admin basic auth
@@ -1062,7 +1060,7 @@ Scenario Outline: A disabled user cannot use webdav
 - [apiCapabilities/capabilities.feature:737](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L737)
 - [apiCapabilities/capabilities.feature:766](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L766)
 - [apiCapabilities/capabilities.feature:795](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L795)
-- [apiCapabilities/capabilities.feature:827](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L827)  
+- [apiCapabilities/capabilities.feature:827](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilities.feature#L827)
 - [apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature:25](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature#L25)
 - [apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature#L26)
 - [apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature:44](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareWhenExcludedFromSharing.feature#L44)
@@ -1310,4 +1308,3 @@ _ocs: api compatibility, return correct status code_
 
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
-
