@@ -19,6 +19,7 @@
 package node_test
 
 import (
+	"encoding/json"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -207,6 +208,25 @@ var _ = Describe("Node", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				Expect(ri.Etag).ToNot(Equal(before))
+			})
+
+			It("includes the lock in the Opaque", func() {
+				lock := &provider.Lock{
+					Type:   provider.LockType_LOCK_TYPE_EXCL,
+					User:   env.Owner.Id,
+					LockId: "foo",
+				}
+				n.SetLock(env.Ctx, lock)
+
+				perms := node.OwnerPermissions()
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ri.Opaque.Map["lock"]).ToNot(BeNil())
+
+				storedLock := &provider.Lock{}
+				err = json.Unmarshal(ri.Opaque.Map["lock"].Value, storedLock)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(storedLock).To(Equal(lock))
 			})
 		})
 	})
