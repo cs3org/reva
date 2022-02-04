@@ -84,7 +84,10 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{}
+	return []string{
+		"/v1.php/config",
+		"/v2.php/config",
+	}
 }
 
 func (s *svc) routerInit() error {
