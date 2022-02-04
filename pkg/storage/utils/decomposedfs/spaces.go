@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -217,7 +218,8 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	matches := []string{}
 	for _, spaceType := range spaceTypes {
-		m, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
+		path := filepath.Join(fs.o.Root, "spaces", spaceType, nodeID)
+		m, err := filepath.Glob(path)
 		if err != nil {
 			return nil, err
 		}
@@ -317,9 +319,49 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 // UpdateStorageSpace updates a storage space
 func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	space := req.StorageSpace
+	var restore bool
+	if req.Opaque != nil {
+		_, restore = req.Opaque.Map["restore"]
+	}
 
+	space := req.StorageSpace
 	_, spaceID, _ := utils.SplitStorageSpaceID(space.Id.OpaqueId)
+
+	if restore {
+		matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
+		if err != nil {
+			return nil, err
+		}
+
+		if len(matches) != 1 {
+			return &provider.UpdateStorageSpaceResponse{
+				Status: &v1beta11.Status{
+					Code:    v1beta11.Code_CODE_NOT_FOUND,
+					Message: fmt.Sprintf("restoring space failed: found %d matching spaces", len(matches)),
+				},
+			}, nil
+
+		}
+
+		target, err := os.Readlink(matches[0])
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[0]).Msg("could not read link, skipping")
+		}
+
+		n, err := node.ReadNode(ctx, fs.lu, filepath.Base(target))
+		if err != nil {
+			return nil, err
+		}
+
+		newnode := *n
+		newnode.Name = strings.Split(n.Name, node.TrashIDDelimiter)[0]
+		newnode.Exists = false
+
+		err = fs.tp.Move(ctx, n, &newnode)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
 	if err != nil {
@@ -377,32 +419,6 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		_, purge = opaque.Map["purge"]
 	}
 
-	if purge {
-		if !strings.Contains(req.Id.OpaqueId, node.TrashIDDelimiter) {
-			return errtypes.NewErrtypeFromStatus(status.NewInvalidArg(ctx, "can't purge enabled space"))
-		}
-		ip := fs.lu.InternalPath(req.Id.OpaqueId)
-		matches, err := filepath.Glob(ip)
-		if err != nil {
-			return err
-		}
-
-		// TODO: remove blobs
-		if err := os.RemoveAll(matches[0]); err != nil {
-			return err
-		}
-
-		matches, err = filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, req.Id.OpaqueId))
-		if err != nil {
-			return err
-		}
-		if len(matches) != 1 {
-			return fmt.Errorf("delete space failed: found %d matching spaces", len(matches))
-		}
-
-		return os.RemoveAll(matches[0])
-	}
-
 	spaceID := req.Id.OpaqueId
 
 	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, spaceID))
@@ -424,7 +440,50 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
-	err = fs.tp.Delete(ctx, n)
+	if purge {
+		if !strings.Contains(n.Name, node.TrashIDDelimiter) {
+			return errtypes.NewErrtypeFromStatus(status.NewInvalidArg(ctx, "can't purge enabled space"))
+		}
+		ip := fs.lu.InternalPath(req.Id.OpaqueId)
+		matches, err := filepath.Glob(ip)
+		if err != nil {
+			return err
+		}
+
+		// TODO: remove blobs
+		if err := os.RemoveAll(matches[0]); err != nil {
+			return err
+		}
+
+		matches, err = filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceTypeAny, req.Id.OpaqueId))
+		if err != nil {
+			return err
+		}
+		if len(matches) != 1 {
+			return fmt.Errorf("delete space failed: found %d matching spaces", len(matches))
+		}
+
+		if err := os.RemoveAll(matches[0]); err != nil {
+			return err
+		}
+
+		matches, err = filepath.Glob(filepath.Join(fs.o.Root, "nodes", "root", req.Id.OpaqueId+node.TrashIDDelimiter+"*"))
+		if err != nil {
+			return err
+		}
+
+		if len(matches) != 1 {
+			return fmt.Errorf("delete root node failed: found %d matching root nodes", len(matches))
+		}
+
+		return os.RemoveAll(matches[0])
+	}
+	// don't delete - just rename
+	dn := *n
+	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
+	dn.Name = n.Name + node.TrashIDDelimiter + deletionTime
+	dn.Exists = false
+	err = fs.tp.Move(ctx, n, &dn)
 	if err != nil {
 		return err
 	}
@@ -434,15 +493,9 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
-	trashPathMatches, err := filepath.Glob(n.InternalPath() + node.TrashIDDelimiter + "*")
-	if err != nil {
-		return err
-	}
-	if len(trashPathMatches) != 1 {
-		return fmt.Errorf("delete space failed: found %d matching trashed spaces", len(trashPathMatches))
-	}
-	trashPath := trashPathMatches[0]
-	return os.Symlink(trashPath, filepath.Join(filepath.Dir(matches[0]), filepath.Base(trashPath)))
+	trashPath := dn.InternalPath()
+	np := filepath.Join(filepath.Dir(matches[0]), filepath.Base(trashPath))
+	return os.Symlink(trashPath, np)
 }
 
 // createHiddenSpaceFolder bootstraps a storage space root with a hidden ".space" folder used to store space related
@@ -487,8 +540,15 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		if err != nil || !ok {
 			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %s", user.Username, n.SpaceRoot.ID))
 		}
-		if n.SpaceRoot != nil && strings.Contains(n.SpaceRoot.ID, node.TrashIDDelimiter) {
-			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %s", user.Username, n.SpaceRoot.ID))
+
+		if strings.Contains(n.Name, node.TrashIDDelimiter) {
+			ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
+				// TODO: Which permission do I need to see the space?
+				return p.AddGrant
+			})
+			if err != nil || !ok {
+				return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %s", user.Username, n.SpaceRoot.ID))
+			}
 		}
 	}
 
@@ -561,6 +621,13 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		Name:      sname,
 		SpaceType: spaceType,
 		// Mtime is set either as node.tmtime or as fi.mtime below
+	}
+
+	if strings.Contains(n.Name, node.TrashIDDelimiter) {
+		space.Opaque.Map["trashed"] = &types.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte("trashed"),
+		}
 	}
 
 	space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object

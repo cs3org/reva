@@ -286,9 +286,11 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 		}, nil
 	}
 
-	id := res.StorageSpace.Root
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), id)
-	s.cache.RemoveListStorageProviders(id)
+	if res.Status.Code == rpc.Code_CODE_OK {
+		id := res.StorageSpace.Root
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), id)
+		s.cache.RemoveListStorageProviders(id)
+	}
 	return res, nil
 }
 
@@ -1089,8 +1091,9 @@ func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*regis
 	}
 
 	listReq := &registry.ListStorageProvidersRequest{
-		Opaque: &typesv1beta1.Opaque{},
+		Opaque: &typesv1beta1.Opaque{Map: make(map[string]*typesv1beta1.OpaqueEntry)},
 	}
+
 	sdk.EncodeOpaqueMap(listReq.Opaque, filters)
 
 	return s.findProvider(ctx, listReq)
