@@ -291,6 +291,13 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}, nil
 	}
 
+	// FIXME these should be part of the InitiateFileUploadRequest object
+	if req.Opaque != nil {
+		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
+			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
+		}
+	}
+
 	metadata := map[string]string{}
 	var uploadLength int64
 	if req.Opaque != nil && req.Opaque.Map != nil {
