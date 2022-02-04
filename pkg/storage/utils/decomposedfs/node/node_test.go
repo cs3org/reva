@@ -216,11 +216,13 @@ var _ = Describe("Node", func() {
 					User:   env.Owner.Id,
 					LockId: "foo",
 				}
-				n.SetLock(env.Ctx, lock)
+				err := n.SetLock(env.Ctx, lock)
+				Expect(err).ToNot(HaveOccurred())
 
 				perms := node.OwnerPermissions()
 				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(ri.Opaque).ToNot(BeNil())
 				Expect(ri.Opaque.Map["lock"]).ToNot(BeNil())
 
 				storedLock := &provider.Lock{}
