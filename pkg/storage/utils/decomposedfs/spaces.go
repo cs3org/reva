@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
@@ -533,11 +532,6 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, space
 }
 
 func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, spaceType, nodePath string, canListAllSpaces bool) (*provider.StorageSpace, error) {
-	if n == nil {
-		// TODO: Why is this called with nil node?
-		return nil, errors.New("can't create storage space from nil node")
-	}
-
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if !canListAllSpaces {
 		ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
