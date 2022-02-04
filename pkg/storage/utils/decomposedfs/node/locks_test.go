@@ -40,8 +40,17 @@ var _ = Describe("Node locks", func() {
 		lock      *provider.Lock
 		wrongLock *provider.Lock
 		n         *node.Node
-		id        string
-		name      string
+		n2        *node.Node
+
+		otherUser = &userpb.User{
+			Id: &userpb.UserId{
+				Idp:      "idp",
+				OpaqueId: "foo",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
+			},
+			Username: "foo",
+		}
+		otherCtx = ctxpkg.ContextSetUser(context.Background(), otherUser)
 	)
 
 	BeforeEach(func() {
@@ -59,9 +68,8 @@ var _ = Describe("Node locks", func() {
 			User:   env.Owner.Id,
 			LockId: uuid.New().String(),
 		}
-		id = "fooId"
-		name = "foo"
-		n = node.New(id, "", name, 10, "", env.Owner.Id, env.Lookup)
+		n = node.New("tobelockedid", "", "tobelocked", 10, "", env.Owner.Id, env.Lookup)
+		n2 = node.New("neverlockedid", "", "neverlocked", 10, "", env.Owner.Id, env.Lookup)
 	})
 
 	AfterEach(func() {
@@ -110,6 +118,65 @@ var _ = Describe("Node locks", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		Describe("ReadLock", func() {
+			It("returns the lock", func() {
+				l, err := n.ReadLock(env.Ctx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(l).To(Equal(lock))
+			})
+
+			It("reporst an error when the node wasn't locked", func() {
+				_, err := n2.ReadLock(env.Ctx)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("no lock found"))
+			})
+		})
+
+		Describe("RefreshLock", func() {
+			var (
+				newLock *provider.Lock
+			)
+
+			JustBeforeEach(func() {
+				newLock = &provider.Lock{
+					Type:   provider.LockType_LOCK_TYPE_EXCL,
+					User:   env.Owner.Id,
+					LockId: lock.LockId,
+				}
+			})
+
+			It("fails when the node is unlocked", func() {
+				err := n2.RefreshLock(env.Ctx, lock)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("precondition failed"))
+			})
+
+			It("refuses to refresh the lock without holding the lock", func() {
+				newLock.LockId = "somethingsomething"
+				err := n.RefreshLock(env.Ctx, newLock)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("mismatching"))
+			})
+
+			It("refuses to refresh the lock for other users than the lock holder", func() {
+				err := n.RefreshLock(otherCtx, newLock)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("permission denied"))
+			})
+
+			It("refuses to change the lock holder", func() {
+				newLock.User = otherUser.Id
+				err := n.RefreshLock(env.Ctx, newLock)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("permission denied"))
+			})
+
+			It("refreshes the lock", func() {
+				err := n.RefreshLock(env.Ctx, newLock)
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
 		Describe("Unlock", func() {
 			It("refuses to unlock without having a lock", func() {
 				err := n.Unlock(env.Ctx, nil)
@@ -125,16 +192,6 @@ var _ = Describe("Node locks", func() {
 			})
 
 			It("refuses to unlock for others even if they have the lock", func() {
-				otherUser := &userpb.User{
-					Id: &userpb.UserId{
-						Idp:      "idp",
-						OpaqueId: "foo",
-						Type:     userpb.UserType_USER_TYPE_PRIMARY,
-					},
-					Username: "foo",
-				}
-				otherCtx := ctxpkg.ContextSetUser(context.Background(), otherUser)
-
 				err := n.Unlock(otherCtx, lock)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("mismatching"))
