@@ -92,14 +92,10 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
 	sublog.Debug().Msg("handlePropfindOnToken")
 
-	depth := r.Header.Get(net.HeaderDepth)
-	if depth == "" {
-		depth = "1"
-	}
-
-	// see https://tools.ietf.org/html/rfc4918#section-10.2
-	if depth != "0" && depth != "1" && depth != "infinity" {
-		sublog.Debug().Msgf("invalid Depth header value %s", depth)
+	dh := r.Header.Get(net.HeaderDepth)
+	depth, err := net.ParseDepth(dh)
+	if err != nil {
+		sublog.Debug().Msg(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -114,7 +110,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	// prefix tokenStatInfo.Path with token
 	tokenStatInfo.Path = filepath.Join(r.URL.Path, tokenStatInfo.Path)
 
-	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
+	infos := s.getPublicFileInfos(onContainer, depth == net.DepthZero, tokenStatInfo)
 
 	propRes, err := propfind.MultistatusResponse(ctx, &pf, infos, s.c.PublicURL, ns, nil)
 	if err != nil {

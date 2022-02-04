@@ -47,7 +47,7 @@ type copy struct {
 	source      *provider.Reference
 	sourceInfo  *provider.ResourceInfo
 	destination *provider.Reference
-	depth       string
+	depth       net.Depth
 	successCode int
 }
 
@@ -105,7 +105,7 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 
 	if err := s.executePathCopy(ctx, client, w, r, cp); err != nil {
-		sublog.Error().Err(err).Str("depth", cp.depth).Msg("error executing path copy")
+		sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error executing path copy")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.WriteHeader(cp.successCode)
@@ -136,7 +136,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
 
-		if cp.depth != "infinity" {
+		if cp.depth != net.DepthInfinity {
 			return nil
 		}
 
@@ -325,7 +325,7 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 
 	err = s.executeSpacesCopy(ctx, w, client, cp)
 	if err != nil {
-		sublog.Error().Err(err).Str("depth", cp.depth).Msg("error descending directory")
+		sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error descending directory")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.WriteHeader(cp.successCode)
@@ -358,7 +358,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 
 		// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
 
-		if cp.depth != "infinity" {
+		if cp.depth != net.DepthInfinity {
 			return nil
 		}
 
@@ -488,16 +488,23 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		errors.HandleWebdavError(log, w, b, err)
 		return nil
 	}
-	depth, err := extractDepth(w, r)
+	dh := r.Header.Get(net.HeaderDepth)
+	depth, err := net.ParseDepth(dh)
+
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		m := fmt.Sprintf("Depth header is set to incorrect value %v", depth)
+		m := fmt.Sprintf("Depth header is set to incorrect value %v", dh)
 		b, err := errors.Marshal(errors.SabredavBadRequest, m, "")
 		errors.HandleWebdavError(log, w, b, err)
 		return nil
 	}
+	if dh == "" {
+		// net.ParseDepth returns "1" for an empty value but copy expects "infinity"
+		// so we overwrite it here
+		depth = net.DepthInfinity
+	}
 
-	log.Debug().Str("overwrite", overwrite).Str("depth", depth).Msg("copy")
+	log.Debug().Str("overwrite", overwrite).Str("depth", depth.String()).Msg("copy")
 
 	client, err := s.getClient()
 	if err != nil {
@@ -604,15 +611,4 @@ func extractOverwrite(w http.ResponseWriter, r *http.Request) (string, error) {
 	}
 
 	return overwrite, nil
-}
-
-func extractDepth(w http.ResponseWriter, r *http.Request) (string, error) {
-	depth := r.Header.Get(net.HeaderDepth)
-	if depth == "" {
-		depth = "infinity"
-	}
-	if depth != "infinity" && depth != "0" {
-		return "", errInvalidValue
-	}
-	return depth, nil
 }

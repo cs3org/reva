@@ -170,12 +170,16 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "list_trashbin")
 	defer span.End()
 
-	depth := r.Header.Get(net.HeaderDepth)
-	if depth == "" {
-		depth = "1"
+	sublog := appctx.GetLogger(ctx).With().Logger()
+
+	dh := r.Header.Get(net.HeaderDepth)
+	depth, err := net.ParseDepth(dh)
+	if err != nil {
+		sublog.Debug().Str("depth", dh).Msg(err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Logger()
 	client, err := s.getClient()
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
@@ -183,14 +187,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	// see https://tools.ietf.org/html/rfc4918#section-9.1
-	if depth != "0" && depth != "1" && depth != "infinity" {
-		sublog.Debug().Str("depth", depth).Msgf("invalid Depth header value")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	if depth == "0" {
+	if depth == net.DepthZero {
 		propRes, err := h.formatTrashPropfind(ctx, s, u, nil, nil)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error formatting propfind")
@@ -253,7 +250,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 	items := getRecycleRes.RecycleItems
 
-	if depth == "infinity" {
+	if depth == net.DepthInfinity {
 		var stack []string
 		// check sub-containers in reverse order and add them to the stack
 		// the reversed order here will produce a more logical sorting of results

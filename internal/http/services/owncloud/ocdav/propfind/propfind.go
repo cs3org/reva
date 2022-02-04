@@ -237,15 +237,12 @@ func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient
 }
 
 func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, spaces []*provider.StorageSpace, requestPath string, spacesPropfind bool, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
-	depth := r.Header.Get(net.HeaderDepth)
-	if depth == "" {
-		depth = "1"
-	}
-	// see https://tools.ietf.org/html/rfc4918#section-9.1
-	if depth != "0" && depth != "1" && depth != "infinity" {
-		log.Debug().Str("depth", depth).Msg("invalid Depth header value")
+	dh := r.Header.Get(net.HeaderDepth)
+	depth, err := net.ParseDepth(dh)
+	if err != nil {
+		log.Debug().Str("depth", dh).Msg(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
-		m := fmt.Sprintf("Invalid Depth header value: %v", depth)
+		m := fmt.Sprintf("Invalid Depth header value: %v", dh)
 		b, err := errors.Marshal(errors.SabredavBadRequest, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
 		return nil, false, false
@@ -355,7 +352,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	// then add children
 	for _, spaceInfo := range spaceInfos {
 		switch {
-		case !spacesPropfind && spaceInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != "infinity":
+		case !spacesPropfind && spaceInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != net.DepthInfinity:
 			// The propfind is requested for a file that exists
 
 			childPath := strings.TrimPrefix(spaceInfo.Path, requestPath)
@@ -375,7 +372,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 				childInfos[childName] = spaceInfo
 			}
 
-		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
+		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == net.DepthOne:
 			switch {
 			case strings.HasPrefix(requestPath, spaceInfo.Path):
 				req := &provider.ListContainerRequest{
@@ -423,7 +420,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 				log.Debug().Msg("unhandled")
 			}
 
-		case depth == "infinity":
+		case depth == net.DepthInfinity:
 			// use a stack to explore sub-containers breadth-first
 			if spaceInfo != rootInfo {
 				resourceInfos = append(resourceInfos, spaceInfo)
@@ -472,9 +469,11 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	// now add all aggregated child infos
-	for _, childInfo := range childInfos {
-		resourceInfos = append(resourceInfos, childInfo)
+	if rootInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		// now add all aggregated child infos
+		for _, childInfo := range childInfos {
+			resourceInfos = append(resourceInfos, childInfo)
+		}
 	}
 
 	sendTusHeaders := true
