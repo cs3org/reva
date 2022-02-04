@@ -574,6 +574,9 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 
 	attr, err := fs.c.GetAttr(ctx, auth, "user."+LockKeyAttr, path)
 	if err != nil {
+		if err == eosclient.AttrNotExistsError {
+			return nil, errtypes.NotFound("eosfs: lock not found")
+		}
 		return nil, errors.Wrap(err, "eosfs: error getting lock value")
 	}
 
@@ -668,11 +671,8 @@ func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*use
 	return res.User, nil
 }
 
-func (fs *eosfs) userHasWriteAccess(ctx context.Context, user *userpb.User, path string) (bool, error) {
+func (fs *eosfs) userHasWriteAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
 	ctx = ctxpkg.ContextSetUser(ctx, user)
-	ref := &provider.Reference{
-		Path: path,
-	}
 	resInfo, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
 		return false, err
@@ -680,19 +680,16 @@ func (fs *eosfs) userHasWriteAccess(ctx context.Context, user *userpb.User, path
 	return resInfo.PermissionSet.InitiateFileUpload, nil
 }
 
-func (fs *eosfs) userIDHasWriteAccess(ctx context.Context, userID *userpb.UserId, path string) (bool, error) {
+func (fs *eosfs) userIDHasWriteAccess(ctx context.Context, userID *userpb.UserId, ref *provider.Reference) (bool, error) {
 	user, err := fs.getUserFromID(ctx, userID)
 	if err != nil {
 		return false, nil
 	}
-	return fs.userHasWriteAccess(ctx, user, path)
+	return fs.userHasWriteAccess(ctx, user, ref)
 }
 
-func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, path string) (bool, error) {
+func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
 	ctx = ctxpkg.ContextSetUser(ctx, user)
-	ref := &provider.Reference{
-		Path: path,
-	}
 	resInfo, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
 		return false, err
@@ -700,12 +697,12 @@ func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, path 
 	return resInfo.PermissionSet.InitiateFileDownload, nil
 }
 
-func (fs *eosfs) userIDHasReadAccess(ctx context.Context, userID *userpb.UserId, path string) (bool, error) {
+func (fs *eosfs) userIDHasReadAccess(ctx context.Context, userID *userpb.UserId, ref *provider.Reference) (bool, error) {
 	user, err := fs.getUserFromID(ctx, userID)
 	if err != nil {
 		return false, err
 	}
-	return fs.userHasReadAccess(ctx, user, path)
+	return fs.userHasReadAccess(ctx, user, ref)
 }
 
 func encodeLock(l *provider.Lock) (string, error) {
