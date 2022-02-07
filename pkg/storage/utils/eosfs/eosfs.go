@@ -623,7 +623,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 
 	// the user in the lock could differ from the user in the context
 	// in that case, also the user in the lock MUST have the write permission
-	if !utils.UserEqual(user.Id, l.User) {
+	if l.User != nil && !utils.UserEqual(user.Id, l.User) {
 		has, err := fs.userIDHasWriteAccess(ctx, l.User, path)
 		if err != nil {
 			return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
