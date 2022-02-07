@@ -404,7 +404,7 @@ func (s *svc) handleSpacesLock(w http.ResponseWriter, r *http.Request, spaceID s
 	}
 
 	// retrieve a specific storage space
-	space, cs3Status, err := spacelookup.LookUpStorageSpaceByID(ctx, client.(gateway.GatewayAPIClient), spaceID)
+	space, cs3Status, err := spacelookup.LookUpStorageSpaceByID(ctx, client, spaceID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

@@ -77,6 +77,9 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 			// TODO initialize status with http.StatusBadRequest
 			// TODO initialize err with errors.ErrUnsupportedMethod
 			status, err := s.handleSpacesLock(w, r, spaceID)
+			if err != nil {
+				log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+			}
 			if status != 0 { // 0 would mean handleLock already sent the response
 				w.WriteHeader(status)
 				if status != http.StatusNoContent {
@@ -84,14 +87,17 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
 						_, err = w.Write(b)
 					}
+					if err != nil {
+						log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+					}
 				}
-			}
-			if err != nil {
-				log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
 			}
 		case MethodUnlock:
 			log := appctx.GetLogger(r.Context())
 			status, err := s.handleUnlock(w, r, spaceID)
+			if err != nil {
+				log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+			}
 			if status != 0 { // 0 would mean handleUnlock already sent the response
 				w.WriteHeader(status)
 				if status != http.StatusNoContent {
@@ -99,10 +105,10 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
 						_, err = w.Write(b)
 					}
+					if err != nil {
+						log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+					}
 				}
-			}
-			if err != nil {
-				log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
 			}
 		case MethodMkcol:
 			s.handleSpacesMkCol(w, r, spaceID)
