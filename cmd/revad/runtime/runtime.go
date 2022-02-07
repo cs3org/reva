@@ -311,6 +311,15 @@ func parseCoreConfOrDie(v interface{}) *coreConf {
 		os.Exit(1)
 	}
 
+	// tracing defaults to enabled if not explicitly configured
+	if v == nil {
+		c.TracingEnabled = true
+		c.TracingEndpoint = "localhost:6831"
+	} else if _, ok := v.(map[string]interface{})["tracing_enabled"]; !ok {
+		c.TracingEnabled = true
+		c.TracingEndpoint = "localhost:6831"
+	}
+
 	return c
 }
 
