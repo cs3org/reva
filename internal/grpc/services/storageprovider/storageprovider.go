@@ -1157,6 +1157,15 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 		}, nil
 	}
 
+	prefixMountpoint := utils.IsAbsoluteReference(req.Ref)
+	for _, md := range items {
+		if err := s.wrapReference(ctx, md.Ref, prefixMountpoint); err != nil {
+			return &provider.ListRecycleResponse{
+				Status: status.NewInternal(ctx, err, "error wrapping path"),
+			}, nil
+		}
+	}
+
 	res := &provider.ListRecycleResponse{
 		Status:       status.NewOK(ctx),
 		RecycleItems: items,
@@ -1534,6 +1543,18 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMou
 	if prefixMountpoint {
 		// TODO move mount path prefixing to the gateway
 		ri.Path = path.Join(s.mountPath, ri.Path)
+	}
+	return nil
+}
+
+func (s *service) wrapReference(ctx context.Context, ref *provider.Reference, prefixMountpoint bool) error {
+	if ref.ResourceId != nil && ref.ResourceId.StorageId == "" {
+		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
+		ref.ResourceId.StorageId = s.mountID
+	}
+	if prefixMountpoint {
+		// TODO move mount path prefixing to the gateway
+		ref.Path = path.Join(s.mountPath, ref.Path)
 	}
 	return nil
 }
