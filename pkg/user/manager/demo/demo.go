@@ -54,19 +54,27 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	if user, ok := m.catalog[uid.OpaqueId]; ok {
 		if uid.Idp == "" || user.Id.Idp == uid.Idp {
-			return user, nil
+			u := *user
+			if skipFetchingGroups {
+				u.Groups = nil
+			}
+			return &u, nil
 		}
 	}
 	return nil, errtypes.NotFound(uid.OpaqueId)
 }
 
-func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	for _, u := range m.catalog {
 		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
-			return u, nil
+			user := *u
+			if skipFetchingGroups {
+				user.Groups = nil
+			}
+			return &user, nil
 		}
 	}
 	return nil, errtypes.NotFound(value)
@@ -91,18 +99,22 @@ func userContains(u *userpb.User, query string) bool {
 	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query) || strings.Contains(u.Id.OpaqueId, query)
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 	users := []*userpb.User{}
 	for _, u := range m.catalog {
 		if userContains(u, query) {
-			users = append(users, u)
+			user := *u
+			if skipFetchingGroups {
+				user.Groups = nil
+			}
+			users = append(users, &user)
 		}
 	}
 	return users, nil
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
-	user, err := m.GetUser(ctx, uid)
+	user, err := m.GetUser(ctx, uid, false)
 	if err != nil {
 		return nil, err
 	}

@@ -87,19 +87,27 @@ func New(m map[string]interface{}) (group.Manager, error) {
 	}, nil
 }
 
-func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error) {
+func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId, skipFetchingMembers bool) (*grouppb.Group, error) {
 	for _, g := range m.groups {
 		if g.Id.GetOpaqueId() == gid.OpaqueId || g.GroupName == gid.OpaqueId {
-			return g, nil
+			group := *g
+			if skipFetchingMembers {
+				group.Members = nil
+			}
+			return &group, nil
 		}
 	}
 	return nil, errtypes.NotFound(gid.OpaqueId)
 }
 
-func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*grouppb.Group, error) {
+func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string, skipFetchingMembers bool) (*grouppb.Group, error) {
 	for _, g := range m.groups {
 		if groupClaim, err := extractClaim(g, claim); err == nil && value == groupClaim {
-			return g, nil
+			group := *g
+			if skipFetchingMembers {
+				group.Members = nil
+			}
+			return &group, nil
 		}
 	}
 	return nil, errtypes.NotFound(value)
@@ -119,11 +127,15 @@ func extractClaim(g *grouppb.Group, claim string) (string, error) {
 	return "", errors.New("json: invalid field")
 }
 
-func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Group, error) {
+func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMembers bool) ([]*grouppb.Group, error) {
 	groups := []*grouppb.Group{}
 	for _, g := range m.groups {
 		if groupContains(g, query) {
-			groups = append(groups, g)
+			group := *g
+			if skipFetchingMembers {
+				group.Members = nil
+			}
+			groups = append(groups, &group)
 		}
 	}
 	return groups, nil
