@@ -19,6 +19,7 @@
 package propfind
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -218,7 +219,7 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 	}
 
 	w.WriteHeader(http.StatusMultiStatus)
-	if _, err := w.Write([]byte(propRes)); err != nil {
+	if _, err := w.Write(propRes); err != nil {
 		log.Err(err).Msg("error writing response")
 	}
 }
@@ -545,24 +546,26 @@ func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 }
 
 // MultistatusResponse converts a list of resource infos into a multistatus response string
-func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) (string, error) {
+func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) ([]byte, error) {
 	responses := make([]*ResponseXML, 0, len(mds))
 	for i := range mds {
 		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, linkshares)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		responses = append(responses, res)
 	}
 	responsesXML, err := xml.Marshal(&responses)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	msg := `<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `
-	msg += `xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`
-	msg += string(responsesXML) + `</d:multistatus>`
-	return msg, nil
+	var buf bytes.Buffer
+	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `)
+	buf.WriteString(`xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`)
+	buf.Write(responsesXML)
+	buf.WriteString(`</d:multistatus>`)
+	return buf.Bytes(), nil
 }
 
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
@@ -590,7 +593,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	// -2 indicates unknown (default)
 	// -3 indicates unlimited
 	quota := net.PropQuotaUnknown
-	size := fmt.Sprintf("%d", md.Size)
+	size := strconv.FormatUint(md.Size, 10)
 	// TODO refactor helper functions: GetOpaqueJSONEncoded(opaque, key string, *struct) err, GetOpaquePlainEncoded(opaque, key) value, err
 	// or use ok like pattern and return bool?
 	if md.Opaque != nil && md.Opaque.Map != nil {
@@ -693,7 +696,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				} else {
 					checksums.WriteString(" MD5:")
 				}
-				checksums.WriteString(string(e.Value))
+				checksums.Write(e.Value)
 			}
 			if e, ok := md.Opaque.Map["adler32"]; ok {
 				if checksums.Len() == 0 {
@@ -701,7 +704,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				} else {
 					checksums.WriteString(" ADLER32:")
 				}
-				checksums.WriteString(string(e.Value))
+				checksums.Write(e.Value)
 			}
 		}
 		if checksums.Len() > 0 {
@@ -861,7 +864,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 							} else {
 								checksums.WriteString(" MD5:")
 							}
-							checksums.WriteString(string(e.Value))
+							checksums.Write(e.Value)
 						}
 						if e, ok := md.Opaque.Map["adler32"]; ok {
 							if checksums.Len() == 0 {
@@ -869,7 +872,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 							} else {
 								checksums.WriteString(" ADLER32:")
 							}
-							checksums.WriteString(string(e.Value))
+							checksums.Write(e.Value)
 						}
 					}
 					if checksums.Len() > 13 {

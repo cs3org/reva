@@ -122,7 +122,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
 	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
-	if _, err := w.Write([]byte(propRes)); err != nil {
+	if _, err := w.Write(propRes); err != nil {
 		sublog.Err(err).Msg("error writing response")
 	}
 }

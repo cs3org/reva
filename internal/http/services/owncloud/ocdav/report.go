@@ -124,7 +124,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 		w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
 		w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 		w.WriteHeader(http.StatusMultiStatus)
-		if _, err := w.Write([]byte(responsesXML)); err != nil {
+		if _, err := w.Write(responsesXML); err != nil {
 			log.Err(err).Msg("error writing response")
 		}
 	}
