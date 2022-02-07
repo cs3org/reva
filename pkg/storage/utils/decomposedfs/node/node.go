@@ -115,7 +115,7 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 		xattrs.OwnerIDPAttr:  new.Idp,
 		xattrs.OwnerTypeAttr: utils.UserTypeToString(new.Type)}
 
-	if err := xattrs.SetMutltiple(nodePath, attribs); err != nil {
+	if err := xattrs.SetMultiple(nodePath, attribs); err != nil {
 		return err
 	}
 
@@ -132,6 +132,7 @@ func (n *Node) SetMetadata(key string, val string) (err error) {
 	return nil
 }
 
+// GetMetadata reads the metadata for the given key
 func (n *Node) GetMetadata(key string) (val string, err error) {
 	nodePath := n.InternalPath()
 	if val, err := xattrs.Get(nodePath, key); err != nil {
@@ -159,7 +160,7 @@ func (n *Node) WriteMetadata(owner *userpb.UserId) (err error) {
 		attribs[xattrs.OwnerIDPAttr] = owner.Idp
 		attribs[xattrs.OwnerTypeAttr] = utils.UserTypeToString(owner.Type)
 	}
-	if err := xattrs.SetMutltiple(nodePath, attribs); err != nil {
+	if err := xattrs.SetMultiple(nodePath, attribs); err != nil {
 		return err
 	}
 	return
