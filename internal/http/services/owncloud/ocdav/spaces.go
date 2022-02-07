@@ -76,7 +76,7 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 			log := appctx.GetLogger(r.Context())
 			// TODO initialize status with http.StatusBadRequest
 			// TODO initialize err with errors.ErrUnsupportedMethod
-			status, err := s.handleLock(w, r, spaceID)
+			status, err := s.handleSpacesLock(w, r, spaceID)
 			if status != 0 { // 0 would mean handleLock already sent the response
 				w.WriteHeader(status)
 				if status != http.StatusNoContent {

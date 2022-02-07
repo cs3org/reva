@@ -374,15 +374,6 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 
 	fn := path.Join(ns, r.URL.Path) // TODO do we still need to jail if we query the registry about the spaces?
 
-	duration, err := parseTimeout(r.Header.Get("Timeout"))
-	if err != nil {
-		return http.StatusBadRequest, errors.ErrInvalidTimeout
-	}
-	li, status, err := readLockInfo(r.Body)
-	if err != nil {
-		return status, errors.ErrInvalidLockInfo
-	}
-
 	client, err := s.getClient()
 	if err != nil {
 		return http.StatusInternalServerError, err
@@ -397,7 +388,48 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 		return http.StatusInternalServerError, errtypes.NewErrtypeFromStatus(cs3Status)
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Interface("ref", ref).Logger()
+	return s.lockReference(ctx, w, r, ref)
+}
+
+func (s *svc) handleSpacesLock(w http.ResponseWriter, r *http.Request, spaceID string) (retStatus int, retErr error) {
+	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
+	defer span.End()
+
+	span.SetAttributes(attribute.String("component", "ocdav"))
+
+	client, err := s.getClient()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// retrieve a specific storage space
+	space, cs3Status, err := spacelookup.LookUpStorageSpaceByID(ctx, client.(gateway.GatewayAPIClient), spaceID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if cs3Status.Code != rpc.Code_CODE_OK {
+		return http.StatusInternalServerError, errtypes.NewErrtypeFromStatus(cs3Status)
+	}
+
+	ref := spacelookup.MakeRelativeReference(space, r.URL.Path, true)
+
+	return s.lockReference(ctx, w, r, ref)
+}
+
+func (s *svc) lockReference(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference) (retStatus int, retErr error) {
+	sublog := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
+	duration, err := parseTimeout(r.Header.Get("Timeout"))
+	if err != nil {
+		return http.StatusBadRequest, errors.ErrInvalidTimeout
+	}
+
+	li, status, err := readLockInfo(r.Body)
+	if err != nil {
+		return status, errors.ErrInvalidLockInfo
+	}
 
 	u := ctxpkg.ContextMustGetUser(ctx)
 	token, ld, now, created := "", LockDetails{UserID: u.Id, Root: ref, Duration: duration}, time.Now(), false
