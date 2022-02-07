@@ -16,11 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package registry
 
-import (
-	// Load share cache drivers.
-	_ "github.com/cs3org/reva/pkg/share/cache/memory"
-	_ "github.com/cs3org/reva/pkg/share/cache/redis"
-	// Add your own here
-)
+import "github.com/cs3org/reva/pkg/share/cache"
+
+// NewFunc is the function that cache warmup implementations
+// should register at init time.
+type NewFunc func(map[string]interface{}) (cache.Warmup, error)
+
+// NewFuncs is a map containing all the registered cache warmup implementations.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new cache warmup function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
+}
