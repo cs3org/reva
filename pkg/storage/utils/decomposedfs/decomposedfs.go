@@ -351,11 +351,11 @@ func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) 
 	return fmt.Errorf("unimplemented: TouchFile")
 }
 
-// FIXME: This comment should explain briefly what a reference is in this context.
 // CreateReference creates a reference as a node folder with the target stored in extended attributes
 // There is no difference between the /Shares folder and normal nodes because the storage is not supposed to be accessible
 // without the storage provider. In effect everything is a shadow namespace.
 // To mimic the eos and owncloud driver we only allow references as children of the "/Shares" folder
+// FIXME: This comment should explain briefly what a reference is in this context.
 func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) (err error) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "CreateReference")
 	defer span.End()
