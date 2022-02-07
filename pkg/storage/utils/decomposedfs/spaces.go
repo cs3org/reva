@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
-	"github.com/pkg/xattr"
 )
 
 const (
@@ -92,9 +91,8 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	}
 
 	// always enable propagation on the storage space root
-	nodePath := n.InternalPath()
 	// mark the space root node as the end of propagation
-	if err = xattr.Set(nodePath, xattrs.PropagationAttr, []byte("1")); err != nil {
+	if err = n.SetMetadata(xattrs.PropagationAttr, "1"); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
 		return nil, err
 	}
@@ -541,10 +539,9 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	// TODO apply more filters
-
-	sname := ""
-	if bytes, err := xattr.Get(n.InternalPath(), xattrs.SpaceNameAttr); err == nil {
-		sname = string(bytes)
+	var sname string
+	if sname, err = n.GetMetadata(xattrs.SpaceNameAttr); err != nil {
+		// FIXME: Is that a severe problem?
 	}
 
 	if err := n.FindStorageSpaceRoot(); err != nil {
@@ -635,14 +632,14 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	// quota
-	v, err := xattr.Get(nodePath, xattrs.QuotaAttr)
+	v, err := xattrs.Get(nodePath, xattrs.QuotaAttr)
 	if err == nil {
 		// make sure we have a proper signed int
 		// we use the same magic numbers to indicate:
 		// -1 = uncalculated
 		// -2 = unknown
 		// -3 = unlimited
-		if quota, err := strconv.ParseUint(string(v), 10, 64); err == nil {
+		if quota, err := strconv.ParseUint(v, 10, 64); err == nil {
 			space.Quota = &provider.Quota{
 				QuotaMaxBytes: quota,
 				QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?

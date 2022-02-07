@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
@@ -126,4 +127,56 @@ func CopyMetadata(s, t string, filter func(attributeName string) bool) error {
 		}
 	}
 	return nil
+}
+
+// The primitive function to set the extended attribute
+func Set(filePath string, key string, val string) error {
+
+	if err := xattr.Set(filePath, key, []byte(val)); err != nil {
+		return errors.Wrap(err, "xattrs: Could not write xtended attribute")
+	}
+	return nil
+}
+
+func SetMutltiple(filePath string, attribs map[string]string) error {
+
+	// FIXME: Lock here
+	for key, val := range attribs {
+		if err := Set(filePath, key, val); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Primitive function to get a value of extended attribs
+func Get(filePath, key string) (string, error) {
+
+	v, err := xattr.Get(filePath, key)
+	if err != nil {
+		return "", errors.Wrap(err, "xattrs: Can not read value")
+	}
+	val := string(v)
+	return val, nil
+}
+
+// Primitive function to get all extended attributes back
+func All(filePath string) (map[string]string, error) {
+	var attribs = make(map[string]string)
+	var attrNames []string
+	var err error
+	if attrNames, err = xattr.List(filePath); err != nil {
+		return attribs, errors.Wrap(err, "xattrs: Can not list extended attributes")
+	}
+
+	for i := range attrNames {
+		name := attrNames[i]
+		val, err := xattr.Get(filePath, name)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to read extended attrib")
+		}
+		attribs[name] = string(val)
+	}
+
+	return attribs, nil
 }
