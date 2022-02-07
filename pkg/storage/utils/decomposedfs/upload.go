@@ -64,11 +64,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 	uploadInfo := upload.(*fileUpload)
 
 	p := uploadInfo.info.Storage["NodeName"]
-	ok, err := chunking.IsChunked(p) // check chunking v1
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error checking path")
-	}
-	if ok {
+	if chunking.IsChunked(p) { // check chunking v1
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {
@@ -360,10 +356,7 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 // This method can also handle lookups for paths which contain chunking information.
 func (fs *Decomposedfs) lookupNode(ctx context.Context, spaceRoot *node.Node, path string) (*node.Node, error) {
 	p := path
-	isChunked, err := chunking.IsChunked(path)
-	if err != nil {
-		return nil, err
-	}
+	isChunked := chunking.IsChunked(path)
 	if isChunked {
 		chunkInfo, err := chunking.GetChunkBLOBInfo(path)
 		if err != nil {
