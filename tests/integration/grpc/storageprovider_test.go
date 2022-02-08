@@ -175,7 +175,7 @@ var _ = Describe("storage providers", func() {
 
 			switch provider {
 			case "ocis":
-				Expect(len(listRes.Infos)).To(Equal(2)) // subdir + .space
+				Expect(len(listRes.Infos)).To(Equal(1)) // subdir
 			case "nextcloud":
 				Expect(len(listRes.Infos)).To(Equal(1)) // subdir
 			default:
