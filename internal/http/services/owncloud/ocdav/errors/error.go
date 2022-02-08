@@ -31,6 +31,9 @@ import (
 
 var sabreException = map[int]string{
 
+	// the commented states have no corresponding exception in sabre/dav,
+	// see https://github.com/sabre-io/dav/tree/master/lib/DAV/Exception
+
 	// http.StatusMultipleChoices:   "Multiple Choices",
 	// http.StatusMovedPermanently:  "Moved Permanently",
 	// http.StatusFound:             "Found",
