@@ -35,6 +35,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/props"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -421,7 +422,7 @@ func (s *svc) handleSpacesLock(w http.ResponseWriter, r *http.Request, spaceID s
 
 func (s *svc) lockReference(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference) (retStatus int, retErr error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
-	duration, err := parseTimeout(r.Header.Get("Timeout"))
+	duration, err := parseTimeout(r.Header.Get(net.HeaderTimeout))
 	if err != nil {
 		return http.StatusBadRequest, errors.ErrInvalidTimeout
 	}
@@ -435,7 +436,7 @@ func (s *svc) lockReference(ctx context.Context, w http.ResponseWriter, r *http.
 	token, ld, now, created := "", LockDetails{UserID: u.Id, Root: ref, Duration: duration}, time.Now(), false
 	if li == (lockInfo{}) {
 		// An empty lockInfo means to refresh the lock.
-		ih, ok := parseIfHeader(r.Header.Get("If"))
+		ih, ok := parseIfHeader(r.Header.Get(net.HeaderIf))
 		if !ok {
 			return http.StatusBadRequest, errors.ErrInvalidIfHeader
 		}
@@ -457,7 +458,7 @@ func (s *svc) lockReference(ctx context.Context, w http.ResponseWriter, r *http.
 		// Section 9.10.3 says that "If no Depth header is submitted on a LOCK request,
 		// then the request MUST act as if a "Depth:infinity" had been submitted."
 		depth := infiniteDepth
-		if hdr := r.Header.Get("Depth"); hdr != "" {
+		if hdr := r.Header.Get(net.HeaderDepth); hdr != "" {
 			depth = parseDepth(hdr)
 			if depth != 0 && depth != infiniteDepth {
 				// Section 9.10.3 says that "Values other than 0 or infinity must not be
@@ -587,7 +588,7 @@ func (s *svc) handleUnlock(w http.ResponseWriter, r *http.Request, ns string) (s
 
 	// http://www.webdav.org/specs/rfc4918.html#HEADER_Lock-Token says that the
 	// Lock-Token value should be a Coded-URL OR a token. We strip its angle brackets.
-	t := r.Header.Get("Lock-Token")
+	t := r.Header.Get(net.HeaderLockToken)
 	if len(t) > 2 && t[0] == '<' && t[len(t)-1] == '>' {
 		t = t[1 : len(t)-1]
 	}

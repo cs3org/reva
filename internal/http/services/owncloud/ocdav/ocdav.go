@@ -197,7 +197,7 @@ func (s *svc) Handler() http.Handler {
 
 		// TODO(jfd): do we need this?
 		// fake litmus testing for empty namespace: see https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/litmus_test_server.go#L58-L89
-		if r.Header.Get("X-Litmus") == "props: 3 (propfind_invalid2)" {
+		if r.Header.Get(net.HeaderLitmus) == "props: 3 (propfind_invalid2)" {
 			http.Error(w, "400 Bad Request", http.StatusBadRequest)
 			return
 		}

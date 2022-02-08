@@ -27,6 +27,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -66,13 +67,13 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 
 	req := &provider.DeleteRequest{Ref: ref}
 
-	// FIXME the lock token is part of the application level protocol, it should be part of the DeleteRequest message not the outgoing context
-	ih, ok := parseIfHeader(r.Header.Get("If"))
+	// FIXME the lock token is part of the application level protocol, it should be part of the DeleteRequest message not the opaque
+	ih, ok := parseIfHeader(r.Header.Get(net.HeaderIf))
 	if ok {
 		if len(ih.lists) == 1 && len(ih.lists[0].conditions) == 1 {
 			req.Opaque = utils.AppendPlainToOpaque(req.Opaque, "lockid", ih.lists[0].conditions[0].Token)
 		}
-	} else if r.Header.Get("If") != "" {
+	} else if r.Header.Get(net.HeaderIf) != "" {
 		w.WriteHeader(http.StatusBadRequest)
 		b, err := errors.Marshal(http.StatusBadRequest, "invalid if header", "")
 		errors.HandleWebdavError(&log, w, b, err)

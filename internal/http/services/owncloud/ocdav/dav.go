@@ -110,7 +110,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				r.URL.Path = path.Join(r.URL.Path, contextUser.Username)
 			}
 
-			if r.Header.Get("Depth") == "" {
+			if r.Header.Get(net.HeaderDepth) == "" {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 				b, err := errors.Marshal(http.StatusMethodNotAllowed, "Listing members of this collection is disabled", "")
 				if err != nil {
