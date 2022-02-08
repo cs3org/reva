@@ -125,10 +125,10 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 	case err != nil:
 		return errors.Wrap(err, "Decomposedfs: could not open lock file")
 	}
+	defer f.Close()
 
 	oldLock := &provider.Lock{}
 	if err := json.NewDecoder(f).Decode(oldLock); err != nil {
-		_ = f.Close()
 		return errors.Wrap(err, "Decomposedfs: could not read lock")
 	}
 
@@ -139,10 +139,8 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 
 	u := ctxpkg.ContextMustGetUser(ctx)
 	if !utils.UserEqual(oldLock.User, u.Id) {
-		_ = f.Close()
 		return errtypes.PermissionDenied("mismatching holder")
 	}
-	_ = f.Close()
 
 	return os.Remove(f.Name())
 }
