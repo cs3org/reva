@@ -399,7 +399,7 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 			// do not catch the error to not shadow the original error
 			if childCreated && childNode != nil {
 				if tmpErr := fs.tp.Delete(ctx, childNode); tmpErr != nil {
-					appctx.GetLogger(ctx).Error().Err(tmpErr).Msg("Can not clean up child node after error")
+					appctx.GetLogger(ctx).Error().Err(tmpErr).Str("node_id", childNode.ID).Msg("Can not clean up child node after error")
 				}
 			}
 			if parentCreated && parentNode != nil {
