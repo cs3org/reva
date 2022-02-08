@@ -222,7 +222,9 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	defer func() {
 		if err != nil {
 			// do not catch the error to not shadow the original error
-			fs.tp.Delete(ctx, n)
+			if tmpErr := fs.tp.Delete(ctx, n); tmpErr != nil {
+				appctx.GetLogger(ctx).Error().Err(tmpErr).Msg("Can not revert file system change after error")
+			}
 		}
 	}()
 
@@ -396,10 +398,15 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 		if err != nil {
 			// do not catch the error to not shadow the original error
 			if childCreated && childNode != nil {
-				fs.tp.Delete(ctx, childNode)
+				if tmpErr := fs.tp.Delete(ctx, childNode); tmpErr != nil {
+					appctx.GetLogger(ctx).Error().Err(tmpErr).Msg("Can not clean up child node after error")
+				}
 			}
 			if parentCreated && parentNode != nil {
-				fs.tp.Delete(ctx, parentNode)
+				if tmpErr := fs.tp.Delete(ctx, parentNode); tmpErr != nil {
+					appctx.GetLogger(ctx).Error().Err(tmpErr).Msg("Can not clean up parent node after error")
+				}
+
 			}
 		}
 	}()
