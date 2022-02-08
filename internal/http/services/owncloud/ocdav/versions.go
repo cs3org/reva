@@ -174,7 +174,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
 	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
-	_, err = w.Write([]byte(propRes))
+	_, err = w.Write(propRes)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error writing body")
 		return

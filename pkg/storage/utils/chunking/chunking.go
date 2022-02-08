@@ -29,10 +29,14 @@ import (
 	"strings"
 )
 
+var (
+	chunkingPathRE = regexp.MustCompile(`-chunking-\w+-[0-9]+-[0-9]+$`)
+)
+
 // IsChunked checks if a given path refers to a chunk or not
-func IsChunked(fn string) (bool, error) {
+func IsChunked(fn string) bool {
 	// FIXME: also need to check whether the OC-Chunked header is set
-	return regexp.MatchString(`-chunking-\w+-[0-9]+-[0-9]+$`, fn)
+	return chunkingPathRE.MatchString(fn)
 }
 
 // ChunkBLOBInfo stores info about a particular chunk

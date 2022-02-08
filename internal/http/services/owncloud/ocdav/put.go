@@ -298,12 +298,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	ok, err := chunking.IsChunked(ref.Path)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if ok {
+	if chunking.IsChunked(ref.Path) {
 		chunk, err := chunking.GetChunkBLOBInfo(ref.Path)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

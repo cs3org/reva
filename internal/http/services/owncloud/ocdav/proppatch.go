@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -309,12 +310,12 @@ func (s *svc) handleProppatchResponse(ctx context.Context, w http.ResponseWriter
 	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
 	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
-	if _, err := w.Write([]byte(propRes)); err != nil {
+	if _, err := w.Write(propRes); err != nil {
 		log.Err(err).Msg("error writing response")
 	}
 }
 
-func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.Name, removedProps []xml.Name, ref string) (string, error) {
+func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.Name, removedProps []xml.Name, ref string) ([]byte, error) {
 	responses := make([]propfind.ResponseXML, 0, 1)
 	response := propfind.ResponseXML{
 		Href:     net.EncodePath(ref),
@@ -346,13 +347,15 @@ func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.N
 	responses = append(responses, response)
 	responsesXML, err := xml.Marshal(&responses)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	msg := `<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `
-	msg += `xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`
-	msg += string(responsesXML) + `</d:multistatus>`
-	return msg, nil
+	var buf bytes.Buffer
+	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `)
+	buf.WriteString(`xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`)
+	buf.Write(responsesXML)
+	buf.WriteString(`</d:multistatus>`)
+	return buf.Bytes(), nil
 }
 
 func (s *svc) isBooleanProperty(prop string) bool {

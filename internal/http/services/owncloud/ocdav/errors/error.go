@@ -19,6 +19,7 @@
 package errors
 
 import (
+	"bytes"
 	"encoding/xml"
 	"net/http"
 
@@ -76,9 +77,12 @@ func Marshal(code code, message string, header string) ([]byte, error) {
 		Header:    header,
 	})
 	if err != nil {
-		return []byte(""), err
+		return nil, err
 	}
-	return []byte(xml.Header + string(xmlstring)), err
+	var buf bytes.Buffer
+	buf.WriteString(xml.Header)
+	buf.Write(xmlstring)
+	return buf.Bytes(), err
 }
 
 // ErrorXML holds the xml representation of an error

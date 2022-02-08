@@ -189,7 +189,7 @@ func encodeXML(res Response) ([]byte, error) {
 		return nil, err
 	}
 	b := new(bytes.Buffer)
-	b.Write([]byte(xml.Header))
+	b.WriteString(xml.Header)
 	b.Write(marshalled)
 	return b.Bytes(), nil
 }

@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -197,7 +198,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
 		w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 		w.WriteHeader(http.StatusMultiStatus)
-		_, err = w.Write([]byte(propRes))
+		_, err = w.Write(propRes)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error writing body")
 			return
@@ -302,14 +303,14 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
 	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
-	_, err = w.Write([]byte(propRes))
+	_, err = w.Write(propRes)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error writing body")
 		return
 	}
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfind.XML, items []*provider.RecycleItem) (string, error) {
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfind.XML, items []*provider.RecycleItem) ([]byte, error) {
 	responses := make([]*propfind.ResponseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &propfind.ResponseXML{
@@ -336,19 +337,21 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 	for i := range items {
 		res, err := h.itemToPropResponse(ctx, s, u, pf, items[i])
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		responses = append(responses, res)
 	}
 	responsesXML, err := xml.Marshal(&responses)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	msg := `<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `
-	msg += `xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`
-	msg += string(responsesXML) + `</d:multistatus>`
-	return msg, nil
+	var buf bytes.Buffer
+	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `)
+	buf.WriteString(`xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`)
+	buf.Write(responsesXML)
+	buf.WriteString(`</d:multistatus>`)
+	return buf.Bytes(), nil
 }
 
 // itemToPropResponse needs to create a listing that contains a key and destination
