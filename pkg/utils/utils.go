@@ -352,3 +352,11 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
 }
+
+// AppendNowToPath appends the now timestamp just before the extension (if present)
+func AppendNowToPath(p string) string {
+	now := time.Now().Format("2006-01-02T15.04.05")
+	ext := path.Ext(p)
+	baseFile := strings.TrimSuffix(p, ext)
+	return fmt.Sprintf("%s.%s%s", baseFile, now, ext)
+}
