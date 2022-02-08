@@ -33,6 +33,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
@@ -136,6 +137,24 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
 		HandleErrorStatus(&log, w, sRes.Status)
 		return
+	}
+
+	if sRes.Status.Code == rpc.Code_CODE_OK {
+		// the file already exists
+		// will append a timestamp to the end of the file
+		// sorry, this code is not atomic, data loss may occur :'(
+
+		user, ok := ctxpkg.ContextGetUser(ctx)
+		if !ok {
+			log.Error().Msg("error getting user from context")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if hasUploaderRole(user) {
+			ref.Path = utils.AppendNowToPath(ref.Path)
+			log.Debug().Msgf("user %s has uploader role, changed file destination to %s", user.Username, ref.Path)
+		}
 	}
 
 	info := sRes.Info
