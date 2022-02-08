@@ -222,7 +222,7 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 
 	// update the owner
 	u := ctxpkg.ContextMustGetUser(ctx)
-	if err = h.WriteNodeMetadata(u.Id); err != nil {
+	if err = h.WriteAllNodeMetadata(u.Id); err != nil {
 		return
 	}
 

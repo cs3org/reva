@@ -602,7 +602,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	tryWritingChecksum(&sublog, n, "adler32", adler32h)
 
 	// who will become the owner?  the owner of the parent actually ... not the currently logged in user
-	err = n.WriteMetadata(&userpb.UserId{
+	err = n.WriteAllNodeMetadata(&userpb.UserId{
 		Idp:      upload.info.Storage["OwnerIdp"],
 		OpaqueId: upload.info.Storage["OwnerId"],
 	})

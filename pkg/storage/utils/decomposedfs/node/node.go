@@ -135,14 +135,14 @@ func (n *Node) SetMetadata(key string, val string) (err error) {
 // GetMetadata reads the metadata for the given key
 func (n *Node) GetMetadata(key string) (val string, err error) {
 	nodePath := n.InternalPath()
-	if val, err := xattrs.Get(nodePath, key); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not get extended attribute")
+	if val, err = xattrs.Get(nodePath, key); err != nil {
+		return "", errors.Wrap(err, "Decomposedfs: could not get extended attribute")
 	}
-	return val
+	return val, nil
 }
 
-// WriteMetadata writes the Node metadata to disk
-func (n *Node) WriteMetadata(owner *userpb.UserId) (err error) {
+// WriteAllNodeMetadata writes the Node metadata to disk
+func (n *Node) WriteAllNodeMetadata(owner *userpb.UserId) (err error) {
 	attribs := make(map[string]string)
 
 	attribs[xattrs.ParentidAttr] = n.ParentID
@@ -176,11 +176,11 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	nodePath := n.InternalPath()
 
 	// lookup parent id in extended attributes
-	var attrBytes []byte
-	attrBytes, err = xattrs.Get(nodePath, xattrs.ParentidAttr)
+	var attr string
+	attr, err = xattrs.Get(nodePath, xattrs.ParentidAttr)
 	switch {
 	case err == nil:
-		n.ParentID = string(attrBytes)
+		n.ParentID = attr
 	case isAttrUnset(err):
 		return nil, errtypes.InternalError(err.Error())
 	case isNotFound(err):
@@ -194,14 +194,14 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 		n.SpaceRoot = n
 	}
 	// lookup name in extended attributes
-	if attrBytes, err = xattrs.Get(nodePath, xattrs.NameAttr); err == nil {
-		n.Name = string(attrBytes)
+	if attr, err = xattrs.Get(nodePath, xattrs.NameAttr); err == nil {
+		n.Name = attr
 	} else {
 		return
 	}
 	// lookup blobID in extended attributes
-	if attrBytes, err = xattrs.Get(nodePath, xattrs.BlobIDAttr); err == nil {
-		n.BlobID = string(attrBytes)
+	if attr, err = xattrs.Get(nodePath, xattrs.BlobIDAttr); err == nil {
+		n.BlobID = string(attr)
 	} else {
 		return
 	}
@@ -313,13 +313,13 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	// TODO what if this is a reference?
 	nodePath := n.InternalPath()
 	// lookup parent id in extended attributes
-	var attrBytes []byte
+	var attr string
 	var err error
 	// lookup ID in extended attributes
-	attrBytes, err = xattrs.Get(nodePath, xattrs.OwnerIDAttr)
+	attr, err = xattrs.Get(nodePath, xattrs.OwnerIDAttr)
 	switch {
 	case err == nil:
-		owner.OpaqueId = string(attrBytes)
+		owner.OpaqueId = string(attr)
 	case isAttrUnset(err), isNotFound(err):
 		fallthrough
 	default:
@@ -327,10 +327,10 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	}
 
 	// lookup IDP in extended attributes
-	attrBytes, err = xattrs.Get(nodePath, xattrs.OwnerIDPAttr)
+	attr, err = xattrs.Get(nodePath, xattrs.OwnerIDPAttr)
 	switch {
 	case err == nil:
-		owner.Idp = string(attrBytes)
+		owner.Idp = string(attr)
 	case isAttrUnset(err), isNotFound(err):
 		fallthrough
 	default:
@@ -338,10 +338,10 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	}
 
 	// lookup type in extended attributes
-	attrBytes, err = xattrs.Get(nodePath, xattrs.OwnerTypeAttr)
+	attr, err = xattrs.Get(nodePath, xattrs.OwnerTypeAttr)
 	switch {
 	case err == nil:
-		owner.Type = utils.UserTypeMap(string(attrBytes))
+		owner.Type = utils.UserTypeMap(string(attr))
 	case isAttrUnset(err), isNotFound(err):
 		fallthrough
 	default:
@@ -491,7 +491,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		return
 	}
 
-	var target []byte
+	var target string
 	switch {
 	case fi.IsDir():
 		if target, err = xattrs.Get(nodePath, xattrs.ReferenceAttr); err == nil {
@@ -679,7 +679,7 @@ func readChecksumIntoResourceChecksum(ctx context.Context, nodePath, algo string
 	case err == nil:
 		ri.Checksum = &provider.ResourceChecksum{
 			Type: storageprovider.PKG2GRPCXS(algo),
-			Sum:  hex.EncodeToString(v),
+			Sum:  hex.EncodeToString([]byte(v)),
 		}
 	case isAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("checksum not set")
@@ -701,7 +701,7 @@ func readChecksumIntoOpaque(ctx context.Context, nodePath, algo string, ri *prov
 		}
 		ri.Opaque.Map[algo] = &types.OpaqueEntry{
 			Decoder: "plain",
-			Value:   []byte(hex.EncodeToString(v)),
+			Value:   []byte(hex.EncodeToString([]byte(v))),
 		}
 	case isAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("checksum not set")
@@ -730,7 +730,7 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 			}
 			ri.Opaque.Map[QuotaKey] = &types.OpaqueEntry{
 				Decoder: "plain",
-				Value:   v,
+				Value:   []byte(v),
 			}
 		} else {
 			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("quota", string(v)).Msg("malformed quota")
@@ -754,11 +754,11 @@ func (n *Node) HasPropagation() (propagation bool) {
 
 // GetTMTime reads the tmtime from the extended attributes
 func (n *Node) GetTMTime() (tmTime time.Time, err error) {
-	var b []byte
+	var b string
 	if b, err = xattrs.Get(n.lu.InternalPath(n.ID), xattrs.TreeMTimeAttr); err != nil {
 		return
 	}
-	return time.Parse(time.RFC3339Nano, string(b))
+	return time.Parse(time.RFC3339Nano, b)
 }
 
 // SetTMTime writes the tmtime to the extended attributes
@@ -768,7 +768,7 @@ func (n *Node) SetTMTime(t time.Time) (err error) {
 
 // GetTreeSize reads the treesize from the extended attributes
 func (n *Node) GetTreeSize() (treesize uint64, err error) {
-	var b []byte
+	var b string
 	if b, err = xattrs.Get(n.InternalPath(), xattrs.TreesizeAttr); err != nil {
 		return
 	}
@@ -896,12 +896,12 @@ func (n *Node) ListGrantees(ctx context.Context) (grantees []string, err error) 
 
 // ReadGrant reads a CS3 grant
 func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant, err error) {
-	var b []byte
+	var b string
 	if b, err = xattrs.Get(n.InternalPath(), grantee); err != nil {
 		return nil, err
 	}
 	var e *ace.ACE
-	if e, err = ace.Unmarshal(strings.TrimPrefix(grantee, xattrs.GrantPrefix), b); err != nil {
+	if e, err = ace.Unmarshal(strings.TrimPrefix(grantee, xattrs.GrantPrefix), []byte(b)); err != nil {
 		return nil, err
 	}
 	return e.Grant(), nil
@@ -933,11 +933,11 @@ func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
 
 // ReadBlobSizeAttr reads the blobsize from the xattrs
 func ReadBlobSizeAttr(path string) (int64, error) {
-	attrBytes, err := xattrs.Get(path, xattrs.BlobsizeAttr)
+	attr, err := xattrs.Get(path, xattrs.BlobsizeAttr)
 	if err != nil {
 		return 0, errors.Wrapf(err, "error reading blobsize xattr")
 	}
-	blobSize, err := strconv.ParseInt(string(attrBytes), 10, 64)
+	blobSize, err := strconv.ParseInt(string(attr), 10, 64)
 	if err != nil {
 		return 0, errors.Wrapf(err, "invalid blobsize xattr format")
 	}
@@ -1008,7 +1008,7 @@ var CheckQuota = func(spaceRoot *Node, fileSize uint64) (quotaSufficient bool, e
 	}
 	quotaByte, _ := xattrs.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
 	var total uint64
-	if quotaByte == nil {
+	if quotaByte == "" {
 		// if quota is not set, it means unlimited
 		return true, nil
 	}

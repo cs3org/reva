@@ -118,9 +118,9 @@ func (t *Tree) Setup(owner *userpb.UserId, propagateToRoot bool) error {
 	}
 
 	// set propagation flag
-	v := []byte("0")
+	v := "0"
 	if propagateToRoot {
-		v = []byte("1")
+		v = "1"
 	}
 	if err = n.SetMetadata(xattrs.PropagationAttr, v); err != nil {
 		return err
@@ -779,7 +779,7 @@ func (t *Tree) createNode(n *node.Node, owner *userpb.UserId) (err error) {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
-	return n.WriteMetadata(owner)
+	return n.WriteAllNodeMetadata(owner)
 }
 
 // TODO refactor the returned params into Node properties? would make all the path transformations go away...
