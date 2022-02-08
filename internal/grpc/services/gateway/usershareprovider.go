@@ -83,7 +83,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		case rpc.Code_CODE_OK:
 			// ok
 		case rpc.Code_CODE_UNIMPLEMENTED:
-			appctx.GetLogger(ctx).Debug().Interface("status", status).Interface("req", req).Msg("not supported, ignoring")
+			appctx.GetLogger(ctx).Debug().Interface("status", status).Interface("req", req).Msg("storing grants not supported, ignoring")
 		default:
 			return &collaboration.CreateShareResponse{
 				Status: status,
@@ -494,12 +494,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling DenyGrant")
 	}
-	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx,
-			"error committing share to storage grant"), nil
-	}
-
-	return status.NewOK(ctx), nil
+	return grantRes.Status, nil
 }
 
 func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
@@ -531,12 +526,7 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling AddGrant")
 	}
-	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx,
-			"error committing share to storage grant"), nil
-	}
-
-	return status.NewOK(ctx), nil
+	return grantRes.Status, nil
 }
 
 func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
