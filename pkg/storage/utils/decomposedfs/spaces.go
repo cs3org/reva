@@ -99,10 +99,6 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	}
 
-	if err := fs.createHiddenSpaceFolder(ctx, n); err != nil {
-		return nil, err
-	}
-
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
@@ -496,19 +492,6 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	trashPath := dn.InternalPath()
 	np := filepath.Join(filepath.Dir(matches[0]), filepath.Base(trashPath))
 	return os.Symlink(trashPath, np)
-}
-
-// createHiddenSpaceFolder bootstraps a storage space root with a hidden ".space" folder used to store space related
-// metadata such as a description or an image.
-// Internally createHiddenSpaceFolder leverages the use of node.Child() to create a new node under the space root.
-// createHiddenSpaceFolder is just a contextual alias for node.Child() for ".spaces".
-func (fs *Decomposedfs) createHiddenSpaceFolder(ctx context.Context, r *node.Node) error {
-	hiddenSpace, err := r.Child(ctx, ".space")
-	if err != nil {
-		return err
-	}
-
-	return fs.tp.CreateDir(ctx, hiddenSpace)
 }
 
 func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, spaceID string) error {
