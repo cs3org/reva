@@ -121,13 +121,7 @@ type Owner struct {
 
 // Escape repaces ", &, ', < and > with their xml representation
 func Escape(s string) string {
-	for i := 0; i < len(s); i++ {
-		switch s[i] {
-		case '"', '&', '\'', '<', '>':
-			b := bytes.NewBuffer(nil)
-			_ = xml.EscapeText(b, []byte(s))
-			return b.String()
-		}
-	}
-	return s
+	b := bytes.NewBuffer(nil)
+	_ = xml.EscapeText(b, []byte(s))
+	return b.String()
 }
