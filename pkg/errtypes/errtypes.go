@@ -23,6 +23,8 @@
 package errtypes
 
 import (
+	"strings"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 )
 
@@ -49,6 +51,27 @@ func (e PermissionDenied) Error() string { return "error: permission denied: " +
 
 // IsPermissionDenied implements the IsPermissionDenied interface.
 func (e PermissionDenied) IsPermissionDenied() {}
+
+// Locked is the error to use when a resource cannot be modified because of a lock.
+type Locked string
+
+func (e Locked) Error() string { return "error: locked by " + string(e) }
+
+// LockID returns the lock ID that caused this error
+func (e Locked) LockID() string {
+	return string(e)
+}
+
+// IsLocked implements the IsLocked interface.
+func (e Locked) IsLocked() {}
+
+// PreconditionFailed is the error to use when a request fails because a requested etag or lock ID mismatches.
+type PreconditionFailed string
+
+func (e PreconditionFailed) Error() string { return "error: precondition failed: " + string(e) }
+
+// IsPreconditionFailed implements the IsPreconditionFailed interface.
+func (e PreconditionFailed) IsPreconditionFailed() {}
 
 // AlreadyExists is the error to use when a resource something is not found.
 type AlreadyExists string
@@ -168,6 +191,18 @@ type IsPermissionDenied interface {
 	IsPermissionDenied()
 }
 
+// IsLocked is the interface to implement
+// to specify that an resource is locked.
+type IsLocked interface {
+	IsLocked()
+}
+
+// IsPreconditionFailed is the interface to implement
+// to specify that a precondition failed.
+type IsPreconditionFailed interface {
+	IsPreconditionFailed()
+}
+
 // IsPartialContent is the interface to implement
 // to specify that the client request has partial data.
 type IsPartialContent interface {
@@ -208,14 +243,20 @@ func NewErrtypeFromStatus(status *rpc.Status) error {
 	case rpc.Code_CODE_UNIMPLEMENTED:
 		return NotSupported(status.Message)
 	case rpc.Code_CODE_PERMISSION_DENIED:
+		// FIXME add locked status!
+		if strings.HasPrefix(status.Message, "set lock: error: locked by ") {
+			return Locked(strings.TrimPrefix(status.Message, "set lock: error: locked by "))
+		}
 		return PermissionDenied(status.Message)
-		// case rpc.Code_CODE_DATA_LOSS: ?
-		//	IsPartialContent
-		// case rpc.Code_CODE_FAILED_PRECONDITION: ?
-		//	IsChecksumMismatch
+	// case rpc.Code_CODE_LOCKED:
+	//	return Locked(status.Message)
+	// case rpc.Code_CODE_DATA_LOSS: ?
+	//	IsPartialContent
+	case rpc.Code_CODE_FAILED_PRECONDITION:
+		return PreconditionFailed(status.Message)
 	case rpc.Code_CODE_INSUFFICIENT_STORAGE:
 		return InsufficientStorage(status.Message)
-	case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_FAILED_PRECONDITION, rpc.Code_CODE_OUT_OF_RANGE:
+	case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_OUT_OF_RANGE:
 		return BadRequest(status.Message)
 	default:
 		return InternalError(status.Message)

@@ -16,13 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdav
+package ctx
 
 import (
-	"net/http"
+	"context"
 )
 
-// TODO(jfd): implement unlock
-func (s *svc) handleUnlock(w http.ResponseWriter, r *http.Request, ns string) {
-	w.WriteHeader(http.StatusNotImplemented)
+// ContextGetLockID returns the lock id if set in the given context.
+func ContextGetLockID(ctx context.Context) (string, bool) {
+	u, ok := ctx.Value(lockIDKey).(string)
+	return u, ok
+}
+
+// ContextSetLockID stores the lock id in the context.
+func ContextSetLockID(ctx context.Context, t string) context.Context {
+	return context.WithValue(ctx, lockIDKey, t)
 }

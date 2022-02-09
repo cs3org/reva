@@ -62,6 +62,11 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
+	// check lock
+	if err := node.CheckLock(ctx); err != nil {
+		return err
+	}
+
 	np := fs.lu.InternalPath(node.ID)
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
@@ -140,6 +145,11 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		return errtypes.InternalError(err.Error())
 	case !ok:
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
+	// check lock
+	if err := node.CheckLock(ctx); err != nil {
+		return err
 	}
 
 	var attr string

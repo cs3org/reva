@@ -229,6 +229,11 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
+	// check lock
+	if err := n.CheckLock(ctx); err != nil {
+		return nil, err
+	}
+
 	info.ID = uuid.New().String()
 
 	binPath, err := fs.getUploadPath(ctx, info.ID)
@@ -461,6 +466,11 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		upload.fs.lu,
 	)
 	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
+
+	// check lock
+	if err := n.CheckLock(ctx); err != nil {
+		return err
+	}
 
 	_, err = node.CheckQuota(n.SpaceRoot, uint64(fi.Size()))
 	if err != nil {

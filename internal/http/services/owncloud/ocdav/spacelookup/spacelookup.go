@@ -32,8 +32,23 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 )
 
+// LookupReferenceForPath returns:
+// a reference with root and relative path
+// the status and error for the lookup
+func LookupReferenceForPath(ctx context.Context, client gateway.GatewayAPIClient, path string) (*storageProvider.Reference, *rpc.Status, error) {
+	space, cs3Status, err := LookUpStorageSpaceForPath(ctx, client, path)
+	if err != nil || cs3Status.Code != rpc.Code_CODE_OK {
+		return nil, cs3Status, err
+	}
+	spacePath := string(space.Opaque.Map["path"].Value) // FIXME error checks
+	return &storageProvider.Reference{
+		ResourceId: space.Root,
+		Path:       utils.MakeRelativePath(strings.TrimPrefix(path, spacePath)),
+	}, cs3Status, nil
+}
+
 // LookUpStorageSpaceForPath returns:
-// th storage spaces responsible for a path
+// the storage spaces responsible for a path
 // the status and error for the lookup
 func LookUpStorageSpaceForPath(ctx context.Context, client gateway.GatewayAPIClient, path string) (*storageProvider.StorageSpace, *rpc.Status, error) {
 	// TODO add filter to only fetch spaces changed in the last 30 sec?

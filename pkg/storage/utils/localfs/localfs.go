@@ -731,7 +731,7 @@ func (fs *localfs) RefreshLock(ctx context.Context, ref *provider.Reference, loc
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *localfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+func (fs *localfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 

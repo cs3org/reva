@@ -22,7 +22,9 @@ import (
 	"net/http"
 	"path"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
@@ -71,9 +73,43 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		case MethodProppatch:
 			s.handleSpacesProppatch(w, r, spaceID)
 		case MethodLock:
-			s.handleLock(w, r, spaceID)
+			log := appctx.GetLogger(r.Context())
+			// TODO initialize status with http.StatusBadRequest
+			// TODO initialize err with errors.ErrUnsupportedMethod
+			status, err := s.handleSpacesLock(w, r, spaceID)
+			if err != nil {
+				log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+			}
+			if status != 0 { // 0 would mean handleLock already sent the response
+				w.WriteHeader(status)
+				if status != http.StatusNoContent {
+					var b []byte
+					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
+						_, err = w.Write(b)
+					}
+					if err != nil {
+						log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+					}
+				}
+			}
 		case MethodUnlock:
-			s.handleUnlock(w, r, spaceID)
+			log := appctx.GetLogger(r.Context())
+			status, err := s.handleUnlock(w, r, spaceID)
+			if err != nil {
+				log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+			}
+			if status != 0 { // 0 would mean handleUnlock already sent the response
+				w.WriteHeader(status)
+				if status != http.StatusNoContent {
+					var b []byte
+					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
+						_, err = w.Write(b)
+					}
+					if err != nil {
+						log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+					}
+				}
+			}
 		case MethodMkcol:
 			s.handleSpacesMkCol(w, r, spaceID)
 		case MethodMove:

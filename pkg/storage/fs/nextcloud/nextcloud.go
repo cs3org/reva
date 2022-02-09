@@ -786,7 +786,7 @@ func (nc *StorageDriver) RefreshLock(ctx context.Context, ref *provider.Referenc
 }
 
 // Unlock removes an existing lock from the given reference
-func (nc *StorageDriver) Unlock(ctx context.Context, ref *provider.Reference) error {
+func (nc *StorageDriver) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 

@@ -32,7 +32,9 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/tests/helpers"
+	"github.com/google/uuid"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -542,6 +544,110 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
+	assertLocking := func(provider string) {
+		var (
+			subdirRef = ref(provider, subdirPath)
+			lock      = &storagep.Lock{
+				Type:   storagep.LockType_LOCK_TYPE_EXCL,
+				User:   user.Id,
+				LockId: uuid.New().String(),
+			}
+		)
+		It("locks, gets, refreshes and unlocks a lock", func() {
+			lockRes, err := serviceClient.SetLock(ctx, &storagep.SetLockRequest{
+				Ref:  subdirRef,
+				Lock: lock,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(lockRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			getRes, err := serviceClient.GetLock(ctx, &storagep.GetLockRequest{
+				Ref: subdirRef,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(getRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(getRes.Lock).To(Equal(lock))
+
+			refreshRes, err := serviceClient.RefreshLock(ctx, &storagep.RefreshLockRequest{
+				Ref:  subdirRef,
+				Lock: lock,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(refreshRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			unlockRes, err := serviceClient.Unlock(ctx, &storagep.UnlockRequest{
+				Ref:  subdirRef,
+				Lock: lock,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(unlockRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+		})
+
+		Context("with a locked file", func() {
+			JustBeforeEach(func() {
+				lockRes, err := serviceClient.SetLock(ctx, &storagep.SetLockRequest{
+					Ref:  subdirRef,
+					Lock: lock,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(lockRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			})
+
+			It("removes the lock when unlocking", func() {
+				delRes, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{
+					Ref: subdirRef,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_PERMISSION_DENIED))
+
+				unlockRes, err := serviceClient.Unlock(ctx, &storagep.UnlockRequest{
+					Ref:  subdirRef,
+					Lock: lock,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(unlockRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				delRes, err = serviceClient.Delete(ctx, &storagep.DeleteRequest{
+					Ref: subdirRef,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			})
+
+			Context("with the owner holding the lock", func() {
+				It("can initiate an upload", func() {
+					ulRes, err := serviceClient.InitiateFileUpload(ctx, &storagep.InitiateFileUploadRequest{
+						Opaque: utils.AppendPlainToOpaque(nil, "lockid", lock.LockId),
+						Ref:    subdirRef,
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(ulRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				})
+
+				It("can delete the file", func() {
+					delRes, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{
+						Opaque: utils.AppendPlainToOpaque(nil, "lockid", lock.LockId),
+						Ref:    subdirRef,
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				})
+			})
+			Context("with the owner not holding the lock", func() {
+				It("can only delete after unlocking the file", func() {
+					delRes, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{
+						Ref: subdirRef,
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_PERMISSION_DENIED))
+				})
+			})
+
+		})
+	}
+
 	suite := func(provider string, deps map[string]string) {
 		Describe(provider, func() {
 			BeforeEach(func() {
@@ -579,6 +685,11 @@ var _ = Describe("storage providers", func() {
 				assertRecycle(provider)
 				assertReferences(provider)
 				assertMetadata(provider)
+				if provider == "ocis" {
+					assertLocking(provider)
+				} else {
+					PIt("Locking implementation still pending for provider " + provider)
+				}
 			})
 
 			Context("with an existing file /versioned_file", func() {

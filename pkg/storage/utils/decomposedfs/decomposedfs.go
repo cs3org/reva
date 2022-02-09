@@ -311,6 +311,11 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
+	// check lock
+	if err := n.CheckLock(ctx); err != nil {
+		return err
+	}
+
 	// verify child does not exist, yet
 	if n, err = n.Child(ctx, name); err != nil {
 		return
@@ -433,6 +438,11 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return
 	}
 
+	// check lock on target
+	if err := newNode.CheckLock(ctx); err != nil {
+		return err
+	}
+
 	return fs.tp.Move(ctx, oldNode, newNode)
 }
 
@@ -521,6 +531,10 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
+	if err := node.CheckLock(ctx); err != nil {
+		return err
+	}
+
 	return fs.tp.Delete(ctx, node)
 }
 
@@ -555,20 +569,104 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 
 // GetLock returns an existing lock on the given reference
 func (fs *Decomposedfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
-	return nil, errtypes.NotSupported("unimplemented")
+	node, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: error resolving ref")
+	}
+
+	if !node.Exists {
+		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+		return nil, err
+	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileDownload
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+	return node.ReadLock(ctx)
 }
 
 // SetLock puts a lock on the given reference
 func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+	node, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: error resolving ref")
+	}
+
+	if !node.Exists {
+		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
+	return node.SetLock(ctx, lock)
 }
 
 // RefreshLock refreshes an existing lock on the given reference
 func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+	if lock.LockId == "" {
+		return errtypes.BadRequest("missing lockid")
+	}
+
+	node, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: error resolving ref")
+	}
+
+	if !node.Exists {
+		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
+	return node.RefreshLock(ctx, lock)
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference) error {
-	return errtypes.NotSupported("unimplemented")
+func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	if lock.LockId == "" {
+		return errtypes.BadRequest("missing lockid")
+	}
+
+	node, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: error resolving ref")
+	}
+
+	if !node.Exists {
+		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileUpload // TODO do we need a dedicated permission?
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
+	return node.Unlock(ctx, lock)
 }

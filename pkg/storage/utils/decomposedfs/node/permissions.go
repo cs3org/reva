@@ -99,14 +99,14 @@ func NewPermissions(lu PathLookup) *Permissions {
 func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap provider.ResourcePermissions, err error) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
-		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
+		appctx.GetLogger(ctx).Debug().Interface("node", n.ID).Msg("no user in context, returning default permissions")
 		return NoPermissions(), nil
 	}
 	// check if the current user is the owner
 	o, err := n.Owner()
 	if err != nil {
 		// TODO check if a parent folder has the owner set?
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n.ID).Msg("could not determine owner, returning default permissions")
 		return NoPermissions(), err
 	}
 	if o.OpaqueId == "" {
@@ -119,7 +119,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		if err == nil && lp == n.lu.ShareFolder() {
 			return ShareFolderPermissions(), nil
 		}
-		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
+		appctx.GetLogger(ctx).Debug().Interface("node", n.ID).Msg("user is owner, returning owner permissions")
 		return OwnerPermissions(), nil
 	}
 	// determine root
@@ -144,7 +144,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
 			AddPermissions(&ap, &np)
 		} else {
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error reading permissions")
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Msg("error reading permissions")
 			// continue with next segment
 		}
 		if cn, err = cn.Parent(); err != nil {
@@ -152,7 +152,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		}
 	}
 
-	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Interface("node", n).Interface("user", u).Msg("returning agregated permissions")
+	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Interface("node", n.ID).Interface("user", u).Msg("returning agregated permissions")
 	return ap, nil
 }
 
@@ -221,7 +221,7 @@ func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool,
 	var grantees []string
 	var err error
 	if grantees, err = cn.ListGrantees(ctx); err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error listing grantees")
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Msg("error listing grantees")
 		return false
 	}
 
@@ -248,14 +248,14 @@ func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool,
 
 		switch {
 		case err == nil:
-			appctx.GetLogger(ctx).Debug().Interface("node", cn).Str("grant", grantees[i]).Interface("permissions", g.GetPermissions()).Msg("checking permissions")
+			appctx.GetLogger(ctx).Debug().Interface("node", cn.ID).Str("grant", grantees[i]).Interface("permissions", g.GetPermissions()).Msg("checking permissions")
 			if check(g.GetPermissions()) {
 				return true
 			}
 		case isAttrUnset(err):
-			appctx.GetLogger(ctx).Error().Interface("node", cn).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
+			appctx.GetLogger(ctx).Error().Interface("node", cn.ID).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 		default:
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Str("grant", grantees[i]).Msg("error reading permissions")
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Str("grant", grantees[i]).Msg("error reading permissions")
 			return false
 		}
 	}
@@ -266,14 +266,14 @@ func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool,
 func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*userv1beta1.User, *provider.ResourcePermissions) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
-		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
+		appctx.GetLogger(ctx).Debug().Interface("node", n.ID).Msg("no user in context, returning default permissions")
 		perms := NoPermissions()
 		return nil, &perms
 	}
 	// check if the current user is the owner
 	o, err := n.Owner()
 	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n.ID).Msg("could not determine owner, returning default permissions")
 		perms := NoPermissions()
 		return nil, &perms
 	}
@@ -284,7 +284,7 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 		return nil, &perms
 	}
 	if utils.UserEqual(u.Id, o) {
-		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
+		appctx.GetLogger(ctx).Debug().Interface("node", n.ID).Msg("user is owner, returning owner permissions")
 		perms := OwnerPermissions()
 		return u, &perms
 	}

@@ -146,6 +146,15 @@ func LaterTS(t1 *types.Timestamp, t2 *types.Timestamp) *types.Timestamp {
 	return t2
 }
 
+// TSNow returns the current UTC timestamp
+func TSNow() *types.Timestamp {
+	t := time.Now().UTC()
+	return &types.Timestamp{
+		Seconds: uint64(t.Unix()),
+		Nanos:   uint32(t.Nanosecond()),
+	}
+}
+
 // ExtractGranteeID returns the ID, user or group, set in the GranteeId object
 func ExtractGranteeID(grantee *provider.Grantee) (*userpb.UserId, *grouppb.GroupId) {
 	switch t := grantee.Id.(type) {
@@ -360,4 +369,30 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 	default:
 		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
+}
+
+// AppendPlainToOpaque adds a new key value pair as a plain string on the given opaque and returns it
+func AppendPlainToOpaque(o *types.Opaque, key, value string) *types.Opaque {
+	if o == nil {
+		o = &types.Opaque{}
+	}
+	if o.Map == nil {
+		o.Map = map[string]*types.OpaqueEntry{}
+	}
+	o.Map[key] = &types.OpaqueEntry{
+		Decoder: "plain",
+		Value:   []byte(value),
+	}
+	return o
+}
+
+// ReadPlainFromOpaque reads a plain string from the given opaque map
+func ReadPlainFromOpaque(o *types.Opaque, key string) string {
+	if o == nil || o.Map == nil {
+		return ""
+	}
+	if e, ok := o.Map[key]; ok && e.Decoder == "plain" {
+		return string(e.Value)
+	}
+	return ""
 }

@@ -114,6 +114,8 @@ type svc struct {
 	davHandler       *DavHandler
 	favoritesManager favorite.Manager
 	client           *http.Client
+	// LockSystem is the lock management system.
+	LockSystem LockSystem
 }
 
 func (s *svc) Config() *Config {
@@ -125,6 +127,14 @@ func getFavoritesManager(c *Config) (favorite.Manager, error) {
 		return f(c.FavoriteStorageDrivers[c.FavoriteStorageDriver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.FavoriteStorageDriver)
+}
+func getLockSystem(c *Config) (LockSystem, error) {
+	// TODO in memory implementation
+	client, err := pool.GetGatewayServiceClient(c.GatewaySvc)
+	if err != nil {
+		return nil, err
+	}
+	return NewCS3LS(client), nil
 }
 
 // New returns a new ocdav
@@ -140,6 +150,10 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	if err != nil {
 		return nil, err
 	}
+	ls, err := getLockSystem(conf)
+	if err != nil {
+		return nil, err
+	}
 
 	s := &svc{
 		c:             conf,
@@ -150,6 +164,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			rhttp.Insecure(conf.Insecure),
 		),
 		favoritesManager: fm,
+		LockSystem:       ls,
 	}
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
@@ -182,7 +197,7 @@ func (s *svc) Handler() http.Handler {
 
 		// TODO(jfd): do we need this?
 		// fake litmus testing for empty namespace: see https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/litmus_test_server.go#L58-L89
-		if r.Header.Get("X-Litmus") == "props: 3 (propfind_invalid2)" {
+		if r.Header.Get(net.HeaderLitmus) == "props: 3 (propfind_invalid2)" {
 			http.Error(w, "400 Bad Request", http.StatusBadRequest)
 			return
 		}
