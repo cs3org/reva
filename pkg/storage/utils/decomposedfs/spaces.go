@@ -542,6 +542,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	var sname string
 	if sname, err = n.GetMetadata(xattrs.SpaceNameAttr); err != nil {
 		// FIXME: Is that a severe problem?
+		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a name attribute")
 	}
 
 	if err := n.FindStorageSpaceRoot(); err != nil {

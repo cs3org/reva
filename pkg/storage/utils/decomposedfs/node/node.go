@@ -330,7 +330,7 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	attr, err = xattrs.Get(nodePath, xattrs.OwnerIDPAttr)
 	switch {
 	case err == nil:
-		owner.Idp = string(attr)
+		owner.Idp = attr
 	case isAttrUnset(err), isNotFound(err):
 		fallthrough
 	default:
@@ -589,7 +589,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 					sublog.Debug().
 						Str("favorite", fa).
 						Msg("found favorite flag")
-					favorite = string(val)
+					favorite = val
 				}
 			} else {
 				sublog.Error().Err(errtypes.UserRequired("userrequired")).Msg("user has no id")
@@ -937,7 +937,7 @@ func ReadBlobSizeAttr(path string) (int64, error) {
 	if err != nil {
 		return 0, errors.Wrapf(err, "error reading blobsize xattr")
 	}
-	blobSize, err := strconv.ParseInt(string(attr), 10, 64)
+	blobSize, err := strconv.ParseInt(attr, 10, 64)
 	if err != nil {
 		return 0, errors.Wrapf(err, "invalid blobsize xattr format")
 	}
