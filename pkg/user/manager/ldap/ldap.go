@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-ldap/ldap/v3"
+	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -64,6 +65,9 @@ type attributes struct {
 	DN string `mapstructure:"dn"`
 	// UID is an immutable user id, see https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
 	UID string `mapstructure:"uid"`
+	// UIDIsOctetString set this to true if the values of the UID attribute are returned as OCTET STRING values (binary byte sequences)
+	// by the Directory Service. This is e.g. the case for the 'objectGUID' and	'ms-DS-ConsistencyGuid' Attributes in AD
+	UIDIsOctetString bool `mapstructure:"uidIsOctetString"`
 	// CN is the username, typically `cn`, `uid` or `samaccountname`
 	CN string `mapstructure:"cn"`
 	// Mail is the email address of a user
@@ -80,14 +84,15 @@ type attributes struct {
 
 // Default attributes (Active Directory)
 var ldapDefaults = attributes{
-	DN:          "dn",
-	UID:         "ms-DS-ConsistencyGuid", // you can fall back to objectguid or even samaccountname but you will run into trouble when user names change. You have been warned.
-	CN:          "cn",
-	Mail:        "mail",
-	DisplayName: "displayName",
-	UIDNumber:   "uidNumber",
-	GIDNumber:   "gidNumber",
-	GID:         "cn",
+	DN:               "dn",
+	UID:              "ms-DS-ConsistencyGuid", // you can fall back to objectguid or even samaccountname but you will run into trouble when user names change. You have been warned.
+	UIDIsOctetString: false,
+	CN:               "cn",
+	Mail:             "mail",
+	DisplayName:      "displayName",
+	UIDNumber:        "uidNumber",
+	GIDNumber:        "gidNumber",
+	GID:              "cn",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -157,10 +162,9 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 
 	log.Debug().Interface("entry", userEntry).Msg("entries")
 
-	id := &userpb.UserId{
-		Idp:      m.c.Idp,
-		OpaqueId: userEntry.GetEqualFoldAttributeValue(m.c.Schema.UID),
-		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	id, err := m.ldapEntryToUserID(userEntry)
+	if err != nil {
+		return nil, err
 	}
 
 	groups, err := m.getLDAPUserGroups(ctx, l, userEntry)
@@ -241,10 +245,9 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
-	id := &userpb.UserId{
-		Idp:      m.c.Idp,
-		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
-		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	id, err := m.ldapEntryToUserID(sr.Entries[0])
+	if err != nil {
+		return nil, err
 	}
 	groups, err := m.getLDAPUserGroups(ctx, l, sr.Entries[0])
 	if err != nil {
@@ -304,10 +307,9 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	users := []*userpb.User{}
 
 	for _, entry := range sr.Entries {
-		id := &userpb.UserId{
-			Idp:      m.c.Idp,
-			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.UID),
-			Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		id, err := m.ldapEntryToUserID(entry)
+		if err != nil {
+			return nil, err
 		}
 		groups, err := m.getLDAPUserGroups(ctx, l, entry)
 		if err != nil {
@@ -356,6 +358,26 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		return []string{}, err
 	}
 	return m.getLDAPUserGroups(ctx, l, userEntry)
+}
+
+func (m *manager) ldapEntryToUserID(entry *ldap.Entry) (*userpb.UserId, error) {
+	var uid string
+	if m.c.Schema.UIDIsOctetString {
+		rawValue := entry.GetEqualFoldRawAttributeValue(m.c.Schema.UID)
+		if value, err := uuid.FromBytes(rawValue); err == nil {
+			uid = value.String()
+		} else {
+			return nil, err
+		}
+	} else {
+		uid = entry.GetEqualFoldAttributeValue(m.c.Schema.UID)
+	}
+
+	return &userpb.UserId{
+		Idp:      m.c.Idp,
+		OpaqueId: uid,
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	}, nil
 }
 
 func (m *manager) getLDAPUserByID(ctx context.Context, conn *ldap.Conn, uid *userpb.UserId) (*ldap.Entry, error) {
@@ -414,12 +436,32 @@ func (m *manager) getLDAPUserGroups(ctx context.Context, conn *ldap.Conn, userEn
 }
 
 func (m *manager) getUserFilter(uid *userpb.UserId) string {
+	uidTmp := uid
+	if m.c.Schema.UIDIsOctetString {
+		uuid, err := uuid.Parse(uid.OpaqueId)
+		if err != nil {
+			err := errors.Wrap(err, fmt.Sprintf("error parsing OpaqueID '%s' as UUID", uid.OpaqueId))
+			panic(err)
+		}
+		escapedUID := *uid
+		escapedUID.OpaqueId = filterEscapeBinaryUUID(uuid)
+		uidTmp = &escapedUID
+	}
+
 	b := bytes.Buffer{}
-	if err := m.userfilter.Execute(&b, uid); err != nil {
+	if err := m.userfilter.Execute(&b, uidTmp); err != nil {
 		err := errors.Wrap(err, fmt.Sprintf("error executing user template: userid:%+v", uid))
 		panic(err)
 	}
 	return b.String()
+}
+
+func filterEscapeBinaryUUID(value uuid.UUID) string {
+	filtered := ""
+	for _, b := range value {
+		filtered = fmt.Sprintf("%s\\%02x", filtered, b)
+	}
+	return filtered
 }
 
 func (m *manager) getAttributeFilter(attribute, value string) string {
