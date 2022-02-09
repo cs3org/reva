@@ -83,7 +83,10 @@ const (
 	QuotaAttr string = OcisPrefix + "quota"
 
 	// the name given to a storage space. It should not contain any semantics as its only purpose is to be read.
-	SpaceNameAttr string = OcisPrefix + "space.name"
+	SpaceNameAttr        string = OcisPrefix + "space.name"
+	SpaceDescriptionAttr string = OcisPrefix + "space.description"
+	SpaceReadmeAttr      string = OcisPrefix + "space.readme"
+	SpaceImageAttr       string = OcisPrefix + "space.image"
 
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"

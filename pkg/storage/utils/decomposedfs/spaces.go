@@ -387,16 +387,32 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 	space.Owner = u
 
+	space.SpaceType = filepath.Base(filepath.Dir(matches[0]))
+
+	metadata := make(map[string]string)
 	if space.Name != "" {
-		if err := node.SetMetadata(xattrs.SpaceNameAttr, space.Name); err != nil {
-			return nil, err
-		}
+		metadata[xattrs.SpaceNameAttr] = space.Name
 	}
 
 	if space.Quota != nil {
-		if err := node.SetMetadata(xattrs.QuotaAttr, strconv.FormatUint(space.Quota.QuotaMaxBytes, 10)); err != nil {
-			return nil, err
+		metadata[xattrs.QuotaAttr] = strconv.FormatUint(space.Quota.QuotaMaxBytes, 10)
+	}
+
+	if space.Opaque != nil {
+		if description, ok := space.Opaque.Map["description"]; ok {
+			metadata[xattrs.SpaceDescriptionAttr] = string(description.Value)
 		}
+		if image, ok := space.Opaque.Map["image"]; ok {
+			metadata[xattrs.SpaceImageAttr] = string(image.Value)
+		}
+		if readme, ok := space.Opaque.Map["readme"]; ok {
+			metadata[xattrs.SpaceReadmeAttr] = string(readme.Value)
+		}
+	}
+
+	err = xattrs.SetMultiple(node.InternalPath(), metadata)
+	if err != nil {
+		return nil, err
 	}
 
 	return &provider.UpdateStorageSpaceResponse{
@@ -634,15 +650,16 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		}
 	}
 
+	spaceAttributes, err := xattrs.All(nodePath)
 	// quota
-	v, err := xattrs.Get(nodePath, xattrs.QuotaAttr)
-	if err == nil {
+	quotaAttr, ok := spaceAttributes[xattrs.QuotaAttr]
+	if ok {
 		// make sure we have a proper signed int
 		// we use the same magic numbers to indicate:
 		// -1 = uncalculated
 		// -2 = unknown
 		// -3 = unlimited
-		if quota, err := strconv.ParseUint(v, 10, 64); err == nil {
+		if quota, err := strconv.ParseUint(quotaAttr, 10, 64); err == nil {
 			space.Quota = &provider.Quota{
 				QuotaMaxBytes: quota,
 				QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
@@ -651,6 +668,26 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			return nil, err
 		}
 	}
-
+	spaceImage, ok := spaceAttributes[xattrs.SpaceImageAttr]
+	if ok {
+		space.Opaque.Map["image"] = &types.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte(spaceImage),
+		}
+	}
+	spaceDescription, ok := spaceAttributes[xattrs.SpaceDescriptionAttr]
+	if ok {
+		space.Opaque.Map["description"] = &types.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte(spaceDescription),
+		}
+	}
+	spaceReadme, ok := spaceAttributes[xattrs.SpaceReadmeAttr]
+	if ok {
+		space.Opaque.Map["readme"] = &types.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte(spaceReadme),
+		}
+	}
 	return space, nil
 }
