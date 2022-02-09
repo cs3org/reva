@@ -319,7 +319,7 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	attr, err = xattrs.Get(nodePath, xattrs.OwnerIDAttr)
 	switch {
 	case err == nil:
-		owner.OpaqueId = string(attr)
+		owner.OpaqueId = attr
 	case isAttrUnset(err), isNotFound(err):
 		fallthrough
 	default:
@@ -722,7 +722,7 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 		// -1 = uncalculated
 		// -2 = unknown
 		// -3 = unlimited
-		if _, err := strconv.ParseInt(string(v), 10, 64); err == nil {
+		if _, err := strconv.ParseInt(v, 10, 64); err == nil {
 			if ri.Opaque == nil {
 				ri.Opaque = &types.Opaque{
 					Map: map[string]*types.OpaqueEntry{},
@@ -733,7 +733,7 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 				Value:   []byte(v),
 			}
 		} else {
-			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("quota", string(v)).Msg("malformed quota")
+			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("quota", v).Msg("malformed quota")
 		}
 	case isAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Msg("quota not set")
