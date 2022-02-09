@@ -201,7 +201,7 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	}
 	// lookup blobID in extended attributes
 	if attr, err = xattrs.Get(nodePath, xattrs.BlobIDAttr); err == nil {
-		n.BlobID = string(attr)
+		n.BlobID = attr
 	} else {
 		return
 	}
@@ -341,7 +341,7 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	attr, err = xattrs.Get(nodePath, xattrs.OwnerTypeAttr)
 	switch {
 	case err == nil:
-		owner.Type = utils.UserTypeMap(string(attr))
+		owner.Type = utils.UserTypeMap(attr)
 	case isAttrUnset(err), isNotFound(err):
 		fallthrough
 	default:
@@ -553,7 +553,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	// use temporary etag if it is set
 	if b, err := xattrs.Get(nodePath, xattrs.TmpEtagAttr); err == nil {
-		ri.Etag = fmt.Sprintf(`"%x"`, string(b)) // TODO why do we convert string(b)? is the temporary etag stored as string? -> should we use bytes? use hex.EncodeToString?
+		ri.Etag = fmt.Sprintf(`"%x"`, b) // TODO why do we convert string(b)? is the temporary etag stored as string? -> should we use bytes? use hex.EncodeToString?
 	} else if ri.Etag, err = calculateEtag(n.ID, tmTime); err != nil {
 		sublog.Debug().Err(err).Msg("could not calculate etag")
 	}
@@ -1012,7 +1012,7 @@ var CheckQuota = func(spaceRoot *Node, fileSize uint64) (quotaSufficient bool, e
 		// if quota is not set, it means unlimited
 		return true, nil
 	}
-	total, _ = strconv.ParseUint(string(quotaByte), 10, 64)
+	total, _ = strconv.ParseUint(quotaByte, 10, 64)
 	// if total is smaller than used, total-used could overflow and be bigger than fileSize
 	if fileSize > total-used || total < used {
 		return false, errtypes.InsufficientStorage("quota exceeded")

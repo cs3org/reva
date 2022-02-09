@@ -156,7 +156,7 @@ func Get(filePath, key string) (string, error) {
 
 	v, err := xattr.Get(filePath, key)
 	if err != nil {
-		return "", errors.Wrap(err, "xattrs: Can not read value")
+		return "", errors.Wrap(err, "xattrs: Can not read xattr")
 	}
 	val := string(v)
 	return val, nil
