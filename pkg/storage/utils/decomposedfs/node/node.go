@@ -525,7 +525,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		Type:          nodeType,
 		MimeType:      mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, fn),
 		Size:          uint64(n.Blobsize),
-		Target:        string(target),
+		Target:        target,
 		PermissionSet: rp,
 	}
 

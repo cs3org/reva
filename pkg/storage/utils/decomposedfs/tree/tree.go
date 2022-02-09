@@ -207,7 +207,7 @@ func (t *Tree) linkSpace(spaceType, spaceID, nodeID string) {
 
 func isRootNode(nodePath string) bool {
 	attr, err := xattrs.Get(nodePath, xattrs.ParentidAttr)
-	return err == nil && string(attr) == "root"
+	return err == nil && attr == "root"
 }
 func isSharedNode(nodePath string) bool {
 	if attrs, err := xattr.List(nodePath); err == nil {
@@ -816,7 +816,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 	}
 	// lookup ownerType in extended attributes
 	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.OwnerTypeAttr); err == nil {
-		owner.Type = utils.UserTypeMap(string(attrStr))
+		owner.Type = utils.UserTypeMap(attrStr)
 	} else {
 		return
 	}
@@ -872,7 +872,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 	}
 	// lookup origin path in extended attributes
 	if attrStr, err = xattrs.Get(deletedNodeRootPath, xattrs.TrashOriginAttr); err == nil {
-		origin = filepath.Join(string(attrStr), path)
+		origin = filepath.Join(attrStr, path)
 	} else {
 		log.Error().Err(err).Str("trashItem", trashItem).Str("link", link).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
 	}
