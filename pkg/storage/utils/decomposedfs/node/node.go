@@ -803,7 +803,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 	o, err := n.Owner()
 	if err != nil {
 		// TODO check if a parent folder has the owner set?
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
+		appctx.GetLogger(ctx).Error().Err(err).Str("node", n.ID).Msg("could not determine owner, returning default permissions")
 		return NoPermissions(), err
 	}
 	if o.OpaqueId == "" {
@@ -812,7 +812,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 		return NoOwnerPermissions(), nil
 	}
 	if utils.UserEqual(u.Id, o) {
-		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
+		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
 		return OwnerPermissions(), nil
 	}
 

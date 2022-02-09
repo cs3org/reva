@@ -117,7 +117,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		if err == nil && lp == n.lu.ShareFolder() {
 			return ShareFolderPermissions(), nil
 		}
-		appctx.GetLogger(ctx).Debug().Interface("node", n.ID).Msg("user is owner, returning owner permissions")
+		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
 		return OwnerPermissions(), nil
 	}
 	// determine root
@@ -282,7 +282,7 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 		return nil, &perms
 	}
 	if utils.UserEqual(u.Id, o) {
-		appctx.GetLogger(ctx).Debug().Interface("node", n.ID).Msg("user is owner, returning owner permissions")
+		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
 		perms := OwnerPermissions()
 		return u, &perms
 	}

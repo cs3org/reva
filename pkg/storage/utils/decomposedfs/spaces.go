@@ -109,7 +109,12 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
 	}
 
-	if err := n.ChangeOwner(u.Id); err != nil {
+	ownerID := u.Id
+	if req.Type == "project" {
+		ownerID = &userv1beta1.UserId{}
+	}
+
+	if err := n.ChangeOwner(ownerID); err != nil {
 		return nil, err
 	}
 
@@ -659,8 +664,10 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		}
 	}
 
-	space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
-		Id: owner,
+	if spaceType != "project" && owner.OpaqueId != "" {
+		space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
+			Id: owner,
+		}
 	}
 
 	// we set the space mtime to the root item mtime
