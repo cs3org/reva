@@ -652,7 +652,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 			k := attrs[i][len(xattrs.MetadataPrefix):]
 			if _, ok := mdKeysMap[k]; returnAllKeys || ok {
 				if val, err := xattrs.Get(nodePath, attrs[i]); err == nil {
-					metadata[k] = string(val)
+					metadata[k] = val
 				} else {
 					sublog.Error().Err(err).
 						Str("entry", attrs[i]).
@@ -747,7 +747,7 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 // HasPropagation checks if the propagation attribute exists and is set to "1"
 func (n *Node) HasPropagation() (propagation bool) {
 	if b, err := xattrs.Get(n.lu.InternalPath(n.ID), xattrs.PropagationAttr); err == nil {
-		return string(b) == "1"
+		return b == "1"
 	}
 	return false
 }
@@ -772,7 +772,7 @@ func (n *Node) GetTreeSize() (treesize uint64, err error) {
 	if b, err = xattrs.Get(n.InternalPath(), xattrs.TreesizeAttr); err != nil {
 		return
 	}
-	return strconv.ParseUint(string(b), 10, 64)
+	return strconv.ParseUint(b, 10, 64)
 }
 
 // SetTreeSize writes the treesize to the extended attributes
