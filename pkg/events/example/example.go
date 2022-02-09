@@ -45,13 +45,11 @@ func main() {
 
 	// publish an event
 	sc := events.ShareCreated{
-		SharerID: "userA",
-		Sharee:   "userB",
-		ItemID: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: "storageA",
-				OpaqueId:  "opaqueB",
-			},
+		//Sharer: "userA",
+		//Sharee:   "userB",
+		ItemID: &provider.ResourceId{
+			StorageId: "storageA",
+			OpaqueId:  "opaqueB",
 		},
 	}
 	if err := events.Publish(sc, s); err != nil {
@@ -60,13 +58,11 @@ func main() {
 
 	// publish another event
 	sc = events.ShareCreated{
-		SharerID: "user34",
-		Sharee:   "user12732",
-		ItemID: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: "storage44",
-				OpaqueId:  "opaque231",
-			},
+		//SharerID: "user34",
+		//Sharee:   "user12732",
+		ItemID: &provider.ResourceId{
+			StorageId: "storage44",
+			OpaqueId:  "opaque231",
 		},
 	}
 	if err := events.Publish(sc, s); err != nil {
@@ -80,7 +76,7 @@ func main() {
 
 // Consumer consumes from queue
 func Consumer(s microevents.Stream, group string, wg *sync.WaitGroup) {
-	c, err := events.Consume(group, s)
+	c, err := events.Consume(s, group, events.ShareCreated{})
 	if err != nil {
 		wg.Done()
 		fmt.Println("consumer", group, "can't consume", err)
@@ -97,7 +93,7 @@ func Consumer(s microevents.Stream, group string, wg *sync.WaitGroup) {
 		case events.ShareCreated:
 			fmt.Printf("%s) Share created: %+v\n", group, v)
 		default:
-			fmt.Printf("%s) Unregistered event: %+v\n", group, v)
+			fmt.Printf("%s) Unregistered event: %T, %+v\n", group, v, v)
 		}
 	}
 }
