@@ -807,9 +807,11 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 		return NoPermissions(), err
 	}
 	if o.OpaqueId == "" {
-		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
-		// TODO what if no owner is set but grants are present?
-		return NoOwnerPermissions(), nil
+		// this happens for root nodes and project spaces in the storage. the extended attributes are set to emptystring to indicate: no owner
+		// for project spaces we need to go over the grants and check the granted permissions
+		if n.ID == "root" {
+			return NoOwnerPermissions(), nil
+		}
 	}
 	if utils.UserEqual(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")

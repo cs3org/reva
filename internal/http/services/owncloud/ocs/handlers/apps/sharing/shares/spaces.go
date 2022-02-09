@@ -158,6 +158,17 @@ func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spac
 		return
 	}
 
+	lgRes, err := providerClient.ListGrants(ctx, &provider.ListGrantsRequest{Ref: &ref})
+	if err != nil || lgRes.Status.Code != rpc.Code_CODE_OK {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error listing space grants", err)
+		return
+	}
+
+	if len(lgRes.Grants) == 1 || !isSpaceManagerRemaining(lgRes.Grants, grantee) {
+		response.WriteOCSError(w, r, http.StatusForbidden, "can't remove the last manager", nil)
+		return
+	}
+
 	removeGrantRes, err := providerClient.RemoveGrant(ctx, &provider.RemoveGrantRequest{
 		Ref: &ref,
 		Grant: &provider.Grant{
@@ -232,4 +243,36 @@ func (h *Handler) findProvider(ctx context.Context, ref *provider.Reference) (*r
 	}
 
 	return res.Providers[0], nil
+}
+
+func isSpaceManagerRemaining(grants []*provider.Grant, grantee provider.Grantee) bool {
+	for _, g := range grants {
+		// AddGrant is currently the way to check for the manager role
+		// If it is not set than the current grant is not for a manager and
+		// we can just continue with the next one.
+		if g.Permissions.AddGrant && !isEqualGrantee(*g.Grantee, grantee) {
+			return true
+		}
+	}
+	return false
+}
+
+func isEqualGrantee(a, b provider.Grantee) bool {
+	// Ideally we would want to use utils.GranteeEqual()
+	// but the grants stored in the decomposedfs aren't complete (missing usertype and idp)
+	// because of that the check would fail so we can only check the ... for now.
+	if a.Type != b.Type {
+		return false
+	}
+
+	var aID, bID string
+	switch a.Type {
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		aID = a.GetGroupId().OpaqueId
+		bID = b.GetGroupId().OpaqueId
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		aID = a.GetUserId().OpaqueId
+		bID = b.GetUserId().OpaqueId
+	}
+	return aID == bID
 }
