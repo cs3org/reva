@@ -97,7 +97,7 @@ var _ = Describe("Node", func() {
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			}
 
-			err = n.WriteMetadata(owner)
+			err = n.WriteAllNodeMetadata(owner)
 			Expect(err).ToNot(HaveOccurred())
 			n2, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
