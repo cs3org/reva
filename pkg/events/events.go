@@ -18,22 +18,51 @@ var (
 	MetadatakeyEventType = "eventtype"
 )
 
-// Consume returns a channel that will get all events emitted by the system
+// Unmarshaller is the interface events need to fullfill
+type Unmarshaller interface {
+	Unmarshal([]byte) (interface{}, error)
+}
+
+// helper so we don't need to reflect too much on runtime
+type eventInfo struct {
+	Type  reflect.Type
+	Value reflect.Value
+	Raw   interface{}
+}
+
+func (e *eventInfo) New() interface{} {
+	r := reflect.New(reflect.PtrTo(e.Type)).Elem()
+	r.Set(e.Value)
+	return r.Interface()
+}
+
+// Consume returns a channel that will get all events that match the given evs
 // group defines the service type: One group will get exactly one copy of a event that is emitted
 // NOTE: uses reflect on initialization
-func Consume(group string, s events.Stream) (<-chan interface{}, error) {
+func Consume(s events.Stream, group string, evs ...Unmarshaller) (<-chan interface{}, error) {
 	c, err := s.Consume(MainQueueName, events.WithGroup(group))
 	if err != nil {
 		return nil, err
+	}
+
+	registeredEvents := map[string]Unmarshaller{}
+	for _, e := range evs {
+		typ := reflect.TypeOf(e)
+		registeredEvents[typ.String()] = e
 	}
 
 	outchan := make(chan interface{})
 	go func() {
 		for {
 			e := <-c
-
 			et := e.Metadata[MetadatakeyEventType]
-			event, err := UnmarshalEvent(et, e.Payload)
+			ev, ok := registeredEvents[et]
+			if !ok {
+				log.Printf("not registered: %s", et)
+				continue
+			}
+
+			event, err := ev.Unmarshal(e.Payload)
 			if err != nil {
 				log.Printf("can't unmarshal event %v", err)
 				continue
