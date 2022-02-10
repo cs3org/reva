@@ -50,7 +50,6 @@ import (
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 	"go.opentelemetry.io/otel/codes"
 )
 
@@ -217,20 +216,30 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 		}
 		return nil
 	})
+
+	// make sure to delete the created directory if things go wrong
+	defer func() {
+		if err != nil {
+			// do not catch the error to not shadow the original error
+			if tmpErr := fs.tp.Delete(ctx, n); tmpErr != nil {
+				appctx.GetLogger(ctx).Error().Err(tmpErr).Msg("Can not revert file system change after error")
+			}
+		}
+	}()
+
 	if err != nil {
 		return
 	}
 
 	// update the owner
 	u := ctxpkg.ContextMustGetUser(ctx)
-	if err = h.WriteMetadata(u.Id); err != nil {
+	if err = h.WriteAllNodeMetadata(u.Id); err != nil {
 		return
 	}
 
 	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
-		homePath := h.InternalPath()
 		// mark the home node as the end of propagation
-		if err = xattr.Set(homePath, xattrs.PropagationAttr, []byte("1")); err != nil {
+		if err = h.SetMetadata(xattrs.PropagationAttr, "1"); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", h).Msg("could not mark home as propagation root")
 			return
 		}
@@ -311,6 +320,11 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
+	// check lock
+	if err := n.CheckLock(ctx); err != nil {
+		return err
+	}
+
 	// verify child does not exist, yet
 	if n, err = n.Child(ctx, name); err != nil {
 		return
@@ -324,10 +338,12 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	}
 
 	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
-		nodePath := n.InternalPath()
 		// mark the home node as the end of propagation
-		if err = xattr.Set(nodePath, xattrs.PropagationAttr, []byte("1")); err != nil {
+		if err = n.SetMetadata(xattrs.PropagationAttr, "1"); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
+
+			// FIXME: This does not return an error at all, but results in a severe situation that the
+			// part tree is not marked for propagation
 			return
 		}
 	}
@@ -340,9 +356,10 @@ func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) 
 }
 
 // CreateReference creates a reference as a node folder with the target stored in extended attributes
-// There is no difference between the /Shares folder and normal nodes because the storage is not supposed to be accessible without the storage provider.
-// In effect everything is a shadow namespace.
+// There is no difference between the /Shares folder and normal nodes because the storage is not supposed to be accessible
+// without the storage provider. In effect everything is a shadow namespace.
 // To mimic the eos and owncloud driver we only allow references as children of the "/Shares" folder
+// FIXME: This comment should explain briefly what a reference is in this context.
 func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) (err error) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "CreateReference")
 	defer span.End()
@@ -363,39 +380,61 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 	}
 
 	// create Shares folder if it does not exist
-	var n *node.Node
-	if n, err = fs.lu.NodeFromResource(ctx, &provider.Reference{Path: fs.o.ShareFolder}); err != nil {
+	var parentNode *node.Node
+	var parentCreated, childCreated bool // defaults to false
+	if parentNode, err = fs.lu.NodeFromResource(ctx, &provider.Reference{Path: fs.o.ShareFolder}); err != nil {
 		err := errtypes.InternalError(err.Error())
 		span.SetStatus(codes.Error, err.Error())
 		return err
-	} else if !n.Exists {
-		if err = fs.tp.CreateDir(ctx, n); err != nil {
+	} else if !parentNode.Exists {
+		if err = fs.tp.CreateDir(ctx, parentNode); err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
+		parentCreated = true
 	}
 
-	if n, err = n.Child(ctx, parts[1]); err != nil {
+	var childNode *node.Node
+	// clean up directories created here on error
+	defer func() {
+		if err != nil {
+			// do not catch the error to not shadow the original error
+			if childCreated && childNode != nil {
+				if tmpErr := fs.tp.Delete(ctx, childNode); tmpErr != nil {
+					appctx.GetLogger(ctx).Error().Err(tmpErr).Str("node_id", childNode.ID).Msg("Can not clean up child node after error")
+				}
+			}
+			if parentCreated && parentNode != nil {
+				if tmpErr := fs.tp.Delete(ctx, parentNode); tmpErr != nil {
+					appctx.GetLogger(ctx).Error().Err(tmpErr).Str("node_id", parentNode.ID).Msg("Can not clean up parent node after error")
+				}
+
+			}
+		}
+	}()
+
+	if childNode, err = parentNode.Child(ctx, parts[1]); err != nil {
 		return errtypes.InternalError(err.Error())
 	}
 
-	if n.Exists {
+	if childNode.Exists {
 		// TODO append increasing number to mountpoint name
 		err := errtypes.AlreadyExists(p)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
-	if err := fs.tp.CreateDir(ctx, n); err != nil {
+	if err := fs.tp.CreateDir(ctx, childNode); err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
+	childCreated = true
 
-	internal := n.InternalPath()
-	if err := xattr.Set(internal, xattrs.ReferenceAttr, []byte(targetURI.String())); err != nil {
+	if err := childNode.SetMetadata(xattrs.ReferenceAttr, targetURI.String()); err != nil {
+		// the reference could not be set - that would result in an lost reference?
 		err := errors.Wrapf(err, "Decomposedfs: error setting the target %s on the reference file %s",
 			targetURI.String(),
-			internal,
+			childNode.InternalPath(),
 		)
 		span.SetStatus(codes.Error, err.Error())
 		return err
@@ -431,6 +470,11 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 	if newNode.Exists {
 		err = errtypes.AlreadyExists(filepath.Join(newNode.ParentID, newNode.Name))
 		return
+	}
+
+	// check lock on target
+	if err := newNode.CheckLock(ctx); err != nil {
+		return err
 	}
 
 	return fs.tp.Move(ctx, oldNode, newNode)
@@ -521,6 +565,10 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
+	if err := node.CheckLock(ctx); err != nil {
+		return err
+	}
+
 	return fs.tp.Delete(ctx, node)
 }
 
@@ -555,20 +603,104 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 
 // GetLock returns an existing lock on the given reference
 func (fs *Decomposedfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
-	return nil, errtypes.NotSupported("unimplemented")
+	node, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: error resolving ref")
+	}
+
+	if !node.Exists {
+		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+		return nil, err
+	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileDownload
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+	return node.ReadLock(ctx)
 }
 
 // SetLock puts a lock on the given reference
 func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+	node, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: error resolving ref")
+	}
+
+	if !node.Exists {
+		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
+	return node.SetLock(ctx, lock)
 }
 
 // RefreshLock refreshes an existing lock on the given reference
 func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+	if lock.LockId == "" {
+		return errtypes.BadRequest("missing lockid")
+	}
+
+	node, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: error resolving ref")
+	}
+
+	if !node.Exists {
+		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
+	return node.RefreshLock(ctx, lock)
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference) error {
-	return errtypes.NotSupported("unimplemented")
+func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	if lock.LockId == "" {
+		return errtypes.BadRequest("missing lockid")
+	}
+
+	node, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: error resolving ref")
+	}
+
+	if !node.Exists {
+		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileUpload // TODO do we need a dedicated permission?
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
+	return node.Unlock(ctx, lock)
 }

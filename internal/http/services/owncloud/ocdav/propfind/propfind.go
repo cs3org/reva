@@ -19,7 +19,6 @@
 package propfind
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -57,7 +56,102 @@ import (
 
 //go:generate mockery -name GatewayClient
 
-// GatewayClient is the interface that's being uses to interact with the gateway
+type countingReader struct {
+	n int
+	r io.Reader
+}
+
+// Props represents properties related to a resource
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for propfind)
+type Props []xml.Name
+
+// XML holds the xml representation of a propfind
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propfind
+type XML struct {
+	XMLName  xml.Name  `xml:"DAV: propfind"`
+	Allprop  *struct{} `xml:"DAV: allprop"`
+	Propname *struct{} `xml:"DAV: propname"`
+	Prop     Props     `xml:"DAV: prop"`
+	Include  Props     `xml:"DAV: include"`
+}
+
+// PropstatXML holds the xml representation of a propfind response
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propstat
+type PropstatXML struct {
+	// Prop requires DAV: to be the default namespace in the enclosing
+	// XML. This is due to the standard encoding/xml package currently
+	// not honoring namespace declarations inside a xmltag with a
+	// parent element for anonymous slice elements.
+	// Use of multistatusWriter takes care of this.
+	Prop                []*props.PropertyXML `xml:"d:prop>_ignored_"`
+	Status              string               `xml:"d:status"`
+	Error               *errors.ErrorXML     `xml:"d:error"`
+	ResponseDescription string               `xml:"d:responsedescription,omitempty"`
+}
+
+// ResponseXML holds the xml representation of a propfind response
+type ResponseXML struct {
+	XMLName             xml.Name         `xml:"d:response"`
+	Href                string           `xml:"d:href"`
+	Propstat            []PropstatXML    `xml:"d:propstat"`
+	Status              string           `xml:"d:status,omitempty"`
+	Error               *errors.ErrorXML `xml:"d:error"`
+	ResponseDescription string           `xml:"d:responsedescription,omitempty"`
+}
+
+// MultiStatusResponseXML holds the xml representation of a multistatus propfind response
+type MultiStatusResponseXML struct {
+	XMLName xml.Name `xml:"d:multistatus"`
+	XmlnsS  string   `xml:"xmlns:s,attr,omitempty"`
+	XmlnsD  string   `xml:"xmlns:d,attr,omitempty"`
+	XmlnsOC string   `xml:"xmlns:oc,attr,omitempty"`
+
+	Responses []*ResponseXML `xml:"d:response"`
+}
+
+// ResponseUnmarshalXML is a workaround for https://github.com/golang/go/issues/13400
+type ResponseUnmarshalXML struct {
+	XMLName             xml.Name               `xml:"response"`
+	Href                string                 `xml:"href"`
+	Propstat            []PropstatUnmarshalXML `xml:"propstat"`
+	Status              string                 `xml:"status,omitempty"`
+	Error               *errors.ErrorXML       `xml:"d:error"`
+	ResponseDescription string                 `xml:"responsedescription,omitempty"`
+}
+
+// MultiStatusResponseUnmarshalXML is a workaround for https://github.com/golang/go/issues/13400
+type MultiStatusResponseUnmarshalXML struct {
+	XMLName xml.Name `xml:"multistatus"`
+	XmlnsS  string   `xml:"xmlns:s,attr,omitempty"`
+	XmlnsD  string   `xml:"xmlns:d,attr,omitempty"`
+	XmlnsOC string   `xml:"xmlns:oc,attr,omitempty"`
+
+	Responses []*ResponseUnmarshalXML `xml:"response"`
+}
+
+// PropstatUnmarshalXML is a workaround for https://github.com/golang/go/issues/13400
+type PropstatUnmarshalXML struct {
+	// Prop requires DAV: to be the default namespace in the enclosing
+	// XML. This is due to the standard encoding/xml package currently
+	// not honoring namespace declarations inside a xmltag with a
+	// parent element for anonymous slice elements.
+	// Use of multistatusWriter takes care of this.
+	Prop                []*props.PropertyXML `xml:"prop"`
+	Status              string               `xml:"status"`
+	Error               *errors.ErrorXML     `xml:"d:error"`
+	ResponseDescription string               `xml:"responsedescription,omitempty"`
+}
+
+// NewMultiStatusResponseXML returns a preconfigured instance of MultiStatusResponseXML
+func NewMultiStatusResponseXML() *MultiStatusResponseXML {
+	return &MultiStatusResponseXML{
+		XmlnsD:  "DAV:",
+		XmlnsS:  "http://sabredav.org/ns",
+		XmlnsOC: "http://owncloud.org/ns",
+	}
+}
+
+// GatewayClient is the interface that's being used to interact with the gateway
 type GatewayClient interface {
 	gateway.GatewayAPIClient
 }
@@ -106,7 +200,7 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 		return
 	}
 
-	spaces, rpcStatus, err := spacelookup.LookUpStorageSpacesForPathWithChildren(ctx, client.(gateway.GatewayAPIClient), fn)
+	spaces, rpcStatus, err := spacelookup.LookUpStorageSpacesForPathWithChildren(ctx, client, fn)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -147,7 +241,7 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 	}
 
 	// retrieve a specific storage space
-	space, rpcStatus, err := spacelookup.LookUpStorageSpaceByID(ctx, client.(gateway.GatewayAPIClient), spaceID)
+	space, rpcStatus, err := spacelookup.LookUpStorageSpaceByID(ctx, client, spaceID)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error looking up the space by id")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -244,7 +338,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		log.Debug().Str("depth", dh).Msg(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Invalid Depth header value: %v", dh)
-		b, err := errors.Marshal(errors.SabredavBadRequest, m, "")
+		b, err := errors.Marshal(http.StatusBadRequest, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
 		return nil, false, false
 	}
@@ -288,7 +382,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		// TODO separate stats to the path or to the children, after statting all children update the mtime/etag
 		// TODO get mtime, and size from space as well, so we no longer have to stat here?
 		spaceRef := spacelookup.MakeRelativeReference(space, requestPath, spacesPropfind)
-		info, status, err := p.statSpace(ctx, client.(gateway.GatewayAPIClient), space, spaceRef, metadataKeys)
+		info, status, err := p.statSpace(ctx, client, space, spaceRef, metadataKeys)
 		if err != nil || status.Code != rpc.Code_CODE_OK {
 			continue
 		}
@@ -303,13 +397,9 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 
 		spaceMap[info] = spaceRef
 		spaceInfos = append(spaceInfos, info)
-
-		if rootInfo == nil && requestPath == info.Path || spacesPropfind && requestPath == path.Join("/", info.Path) {
+		if rootInfo == nil && (requestPath == info.Path || (spacesPropfind && requestPath == path.Join("/", info.Path))) {
 			rootInfo = info
-		}
-
-		// Check if the space is a child of the requested path
-		if requestPath != spacePath && strings.HasPrefix(spacePath, requestPath) {
+		} else if requestPath != spacePath && strings.HasPrefix(spacePath, requestPath) { // Check if the space is a child of the requested path
 			// aggregate child metadata
 			aggregatedChildSize += info.Size
 			if mostRecentChildInfo == nil {
@@ -326,7 +416,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		// TODO if we have children invent node on the fly
 		w.WriteHeader(http.StatusNotFound)
 		m := fmt.Sprintf("Resource %v not found", requestPath)
-		b, err := errors.Marshal(errors.SabredavNotFound, m, "")
+		b, err := errors.Marshal(http.StatusNotFound, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
 		return nil, false, false
 	}
@@ -348,30 +438,45 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	resourceInfos := []*provider.ResourceInfo{
 		rootInfo, // PROPFIND always includes the root resource
 	}
-	childInfos := map[string]*provider.ResourceInfo{}
+	if rootInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		// no need to stat any other spaces, we got our file stat already
+		return resourceInfos, true, true
+	}
 
+	childInfos := map[string]*provider.ResourceInfo{}
+	addChild := func(spaceInfo *provider.ResourceInfo) {
+		if spaceInfo == rootInfo {
+			return // already accounted for
+		}
+
+		childPath := strings.TrimPrefix(spaceInfo.Path, requestPath)
+		childName, tail := router.ShiftPath(childPath)
+		if tail != "/" {
+			spaceInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+			spaceInfo.Checksum = nil
+			// TODO unset opaque checksum
+		}
+		spaceInfo.Path = path.Join(requestPath, childName)
+		if existingChild, ok := childInfos[childName]; ok {
+			// use most recent child
+			if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
+				childInfos[childName].Mtime = spaceInfo.Mtime
+				childInfos[childName].Etag = spaceInfo.Etag
+				childInfos[childName].Size += spaceInfo.Size
+			}
+			// only update fileid if the resource is a direct child
+			if tail == "/" {
+				childInfos[childName].Id = spaceInfo.Id
+			}
+		} else {
+			childInfos[childName] = spaceInfo
+		}
+	}
 	// then add children
 	for _, spaceInfo := range spaceInfos {
 		switch {
 		case !spacesPropfind && spaceInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != net.DepthInfinity:
-			// The propfind is requested for a file that exists
-
-			childPath := strings.TrimPrefix(spaceInfo.Path, requestPath)
-			childName, tail := router.ShiftPath(childPath)
-			if tail != "/" {
-				spaceInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-				spaceInfo.Checksum = nil
-				// TODO unset opaque checksum
-			}
-			spaceInfo.Path = path.Join(requestPath, childName)
-			if existingChild, ok := childInfos[childName]; ok {
-				// use most recent child
-				if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
-					childInfos[childName] = spaceInfo
-				}
-			} else {
-				childInfos[childName] = spaceInfo
-			}
+			addChild(spaceInfo)
 
 		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == net.DepthOne:
 			switch {
@@ -396,27 +501,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 				}
 				resourceInfos = append(resourceInfos, res.Infos...)
 			case strings.HasPrefix(spaceInfo.Path, requestPath): // space is a deep child of the requested path
-				childPath := strings.TrimPrefix(spaceInfo.Path, requestPath)
-				childName, tail := router.ShiftPath(childPath)
-				if tail != "/" {
-					spaceInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-					spaceInfo.Checksum = nil
-					// TODO unset opaque checksum
-				}
-				if existingChild, ok := childInfos[childName]; ok {
-					// use most recent child
-					if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
-						childInfos[childName].Mtime = spaceInfo.Mtime
-						childInfos[childName].Etag = spaceInfo.Etag
-					}
-					// only update fileid if the resource is a direct child
-					if tail == "/" {
-						childInfos[childName].Id = spaceInfo.Id
-					}
-				} else {
-					childInfos[childName] = spaceInfo
-				}
-				spaceInfo.Path = path.Join(requestPath, childName)
+				addChild(spaceInfo)
 			default:
 				log.Debug().Msg("unhandled")
 			}
@@ -431,6 +516,9 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 				info := stack[0]
 				stack = stack[1:]
 
+				if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+					continue
+				}
 				req := &provider.ListContainerRequest{
 					Ref: &provider.Reference{
 						ResourceId: spaceInfo.Id,
@@ -524,19 +612,19 @@ func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 				// http://www.webdav.org/specs/rfc4918.html#METHOD_PROPFIND
 				return XML{Allprop: new(struct{})}, 0, nil
 			}
-			err = errors.ErrorInvalidPropfind
+			err = errors.ErrInvalidPropfind
 		}
 		return XML{}, http.StatusBadRequest, err
 	}
 
 	if pf.Allprop == nil && pf.Include != nil {
-		return XML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
+		return XML{}, http.StatusBadRequest, errors.ErrInvalidPropfind
 	}
 	if pf.Allprop != nil && (pf.Prop != nil || pf.Propname != nil) {
-		return XML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
+		return XML{}, http.StatusBadRequest, errors.ErrInvalidPropfind
 	}
 	if pf.Prop != nil && pf.Propname != nil {
-		return XML{}, http.StatusBadRequest, errors.ErrorInvalidPropfind
+		return XML{}, http.StatusBadRequest, errors.ErrInvalidPropfind
 	}
 	if pf.Propname == nil && pf.Allprop == nil && pf.Prop == nil {
 		// jfd: I think <d:prop></d:prop> is perfectly valid ... treat it as allprop
@@ -555,17 +643,14 @@ func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceI
 		}
 		responses = append(responses, res)
 	}
-	responsesXML, err := xml.Marshal(&responses)
+
+	msr := NewMultiStatusResponseXML()
+	msr.Responses = responses
+	msg, err := xml.Marshal(msr)
 	if err != nil {
 		return nil, err
 	}
-
-	var buf bytes.Buffer
-	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `)
-	buf.WriteString(`xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`)
-	buf.Write(responsesXML)
-	buf.WriteString(`</d:multistatus>`)
-	return buf.Bytes(), nil
+	return msg, nil
 }
 
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
@@ -594,6 +679,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	// -3 indicates unlimited
 	quota := net.PropQuotaUnknown
 	size := strconv.FormatUint(md.Size, 10)
+	var lock *provider.Lock
 	// TODO refactor helper functions: GetOpaqueJSONEncoded(opaque, key string, *struct) err, GetOpaquePlainEncoded(opaque, key) value, err
 	// or use ok like pattern and return bool?
 	if md.Opaque != nil && md.Opaque.Map != nil {
@@ -606,6 +692,13 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		}
 		if md.Opaque.Map["quota"] != nil && md.Opaque.Map["quota"].Decoder == "plain" {
 			quota = string(md.Opaque.Map["quota"].Value)
+		}
+		if md.Opaque.Map["lock"] != nil && md.Opaque.Map["lock"].Decoder == "json" {
+			lock = &provider.Lock{}
+			err := json.Unmarshal(md.Opaque.Map["lock"].Value, lock)
+			if err != nil {
+				sublog.Error().Err(err).Msg("could not unmarshal locks json")
+			}
 		}
 	}
 
@@ -724,6 +817,10 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			} else {
 				propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:favorite", "0"))
 			}
+		}
+
+		if lock != nil {
+			propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("d:lockdiscovery", activeLocks(&sublog, lock)))
 		}
 		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
@@ -1026,6 +1123,12 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:quota-available-bytes", ""))
 					}
+				case "lockdiscovery": // http://www.webdav.org/specs/rfc2518.html#PROPERTY_lockdiscovery
+					if lock == nil {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:lockdiscovery", ""))
+					} else {
+						propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("d:lockdiscovery", activeLocks(&sublog, lock)))
+					}
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:"+pf.Prop[i].Local, ""))
 				}
@@ -1076,17 +1179,84 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	return &response, nil
 }
 
+func activeLocks(log *zerolog.Logger, lock *provider.Lock) string {
+	if lock == nil || lock.Type == provider.LockType_LOCK_TYPE_INVALID {
+		return ""
+	}
+	expiration := "Infinity"
+	if lock.Expiration != nil {
+		now := uint64(time.Now().Unix())
+		// Should we hide expired locks here? No.
+		//
+		// If the timeout expires, then the lock SHOULD be removed.  In this
+		// case the server SHOULD act as if an UNLOCK method was executed by the
+		// server on the resource using the lock token of the timed-out lock,
+		// performed with its override authority.
+		//
+		// see https://datatracker.ietf.org/doc/html/rfc4918#section-6.6
+		if lock.Expiration.Seconds >= now {
+			expiration = "Second-" + strconv.FormatUint(lock.Expiration.Seconds-now, 10)
+		} else {
+			expiration = "Second-0"
+		}
+	}
+
+	// xml.Encode cannot render emptytags like <d:write/>, see https://github.com/golang/go/issues/21399
+	var activelocks strings.Builder
+	activelocks.WriteString("<d:activelock>")
+	// webdav locktype write | transaction
+	switch lock.Type {
+	case provider.LockType_LOCK_TYPE_EXCL:
+		fallthrough
+	case provider.LockType_LOCK_TYPE_WRITE:
+		activelocks.WriteString("<d:locktype><d:write/></d:locktype>")
+	}
+	// webdav lockscope exclusive, shared, or local
+	switch lock.Type {
+	case provider.LockType_LOCK_TYPE_EXCL:
+		fallthrough
+	case provider.LockType_LOCK_TYPE_WRITE:
+		activelocks.WriteString("<d:lockscope><d:exclusive/></d:lockscope>")
+	case provider.LockType_LOCK_TYPE_SHARED:
+		activelocks.WriteString("<d:lockscope><d:shared/></d:lockscope>")
+	}
+	// we currently only support depth infinity
+	activelocks.WriteString("<d:depth>Infinity</d:depth>")
+
+	if lock.User != nil || lock.AppName != "" {
+		activelocks.WriteString("<d:owner>")
+
+		if lock.User != nil {
+			// TODO oc10 uses displayname and email, needs a user lookup
+			activelocks.WriteString(props.Escape(lock.User.OpaqueId + "@" + lock.User.Idp))
+		}
+		if lock.AppName != "" {
+			if lock.User != nil {
+				activelocks.WriteString(" via ")
+			}
+			activelocks.WriteString(props.Escape(lock.AppName))
+		}
+		activelocks.WriteString("</d:owner>")
+	}
+	activelocks.WriteString("<d:timeout>")
+	activelocks.WriteString(expiration)
+	activelocks.WriteString("</d:timeout>")
+	if lock.LockId != "" {
+		activelocks.WriteString("<d:locktoken><d:href>")
+		activelocks.WriteString(props.Escape(lock.LockId))
+		activelocks.WriteString("</d:href></d:locktoken>")
+	}
+	// lockroot is only used when setting the lock
+	activelocks.WriteString("</d:activelock>")
+	return activelocks.String()
+}
+
 // be defensive about wrong encoded etags
 func quoteEtag(etag string) string {
 	if strings.HasPrefix(etag, "W/") {
 		return `W/"` + strings.Trim(etag[2:], `"`) + `"`
 	}
 	return `"` + strings.Trim(etag, `"`) + `"`
-}
-
-type countingReader struct {
-	n int
-	r io.Reader
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {
@@ -1103,10 +1273,6 @@ func metadataKeyOf(n *xml.Name) string {
 		return fmt.Sprintf("%s/%s", n.Space, n.Local)
 	}
 }
-
-// Props represents properties related to a resource
-// http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for propfind)
-type Props []xml.Name
 
 // UnmarshalXML appends the property names enclosed within start to pn.
 //
@@ -1138,38 +1304,4 @@ func (pn *Props) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 			*pn = append(*pn, e.Name)
 		}
 	}
-}
-
-// XML holds the xml representation of a propfind
-// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propfind
-type XML struct {
-	XMLName  xml.Name  `xml:"DAV: propfind"`
-	Allprop  *struct{} `xml:"DAV: allprop"`
-	Propname *struct{} `xml:"DAV: propname"`
-	Prop     Props     `xml:"DAV: prop"`
-	Include  Props     `xml:"DAV: include"`
-}
-
-// ResponseXML holds the xml representation of a propfind response
-type ResponseXML struct {
-	XMLName             xml.Name         `xml:"d:response"`
-	Href                string           `xml:"d:href"`
-	Propstat            []PropstatXML    `xml:"d:propstat"`
-	Status              string           `xml:"d:status,omitempty"`
-	Error               *errors.ErrorXML `xml:"d:error"`
-	ResponseDescription string           `xml:"d:responsedescription,omitempty"`
-}
-
-// PropstatXML holds the xml representation of a propfind response
-// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propstat
-type PropstatXML struct {
-	// Prop requires DAV: to be the default namespace in the enclosing
-	// XML. This is due to the standard encoding/xml package currently
-	// not honoring namespace declarations inside a xmltag with a
-	// parent element for anonymous slice elements.
-	// Use of multistatusWriter takes care of this.
-	Prop                []*props.PropertyXML `xml:"d:prop>_ignored_"`
-	Status              string               `xml:"d:status"`
-	Error               *errors.ErrorXML     `xml:"d:error"`
-	ResponseDescription string               `xml:"d:responsedescription,omitempty"`
 }

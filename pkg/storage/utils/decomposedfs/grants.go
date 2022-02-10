@@ -62,10 +62,14 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	np := fs.lu.InternalPath(node.ID)
+	// check lock
+	if err := node.CheckLock(ctx); err != nil {
+		return err
+	}
+
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
-	if err := xattr.Set(np, xattrs.GrantPrefix+principal, value); err != nil {
+	if err := node.SetMetadata(xattrs.GrantPrefix+principal, string(value)); err != nil {
 		return err
 	}
 
@@ -142,6 +146,11 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
+	// check lock
+	if err := node.CheckLock(ctx); err != nil {
+		return err
+	}
+
 	var attr string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		attr = xattrs.GrantGroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
@@ -169,15 +178,15 @@ func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (ent
 	entries = []*ace.ACE{}
 	for i := range attrs {
 		if strings.HasPrefix(attrs[i], xattrs.GrantPrefix) {
-			var value []byte
+			var value string
 			var err error
-			if value, err = xattr.Get(fsfn, attrs[i]); err != nil {
+			if value, err = xattrs.Get(fsfn, attrs[i]); err != nil {
 				log.Error().Err(err).Str("attr", attrs[i]).Msg("could not read attribute")
 				continue
 			}
 			var e *ace.ACE
 			principal := attrs[i][len(xattrs.GrantPrefix):]
-			if e, err = ace.Unmarshal(principal, value); err != nil {
+			if e, err = ace.Unmarshal(principal, []byte(value)); err != nil {
 				log.Error().Err(err).Str("principal", principal).Str("attr", attrs[i]).Msg("could not unmarshal ace")
 				continue
 			}

@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
-	"github.com/pkg/xattr"
 )
 
 const (
@@ -92,14 +91,9 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	}
 
 	// always enable propagation on the storage space root
-	nodePath := n.InternalPath()
 	// mark the space root node as the end of propagation
-	if err = xattr.Set(nodePath, xattrs.PropagationAttr, []byte("1")); err != nil {
+	if err = n.SetMetadata(xattrs.PropagationAttr, "1"); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
-		return nil, err
-	}
-
-	if err := fs.createHiddenSpaceFolder(ctx, n); err != nil {
 		return nil, err
 	}
 
@@ -498,19 +492,6 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	return os.Symlink(trashPath, np)
 }
 
-// createHiddenSpaceFolder bootstraps a storage space root with a hidden ".space" folder used to store space related
-// metadata such as a description or an image.
-// Internally createHiddenSpaceFolder leverages the use of node.Child() to create a new node under the space root.
-// createHiddenSpaceFolder is just a contextual alias for node.Child() for ".spaces".
-func (fs *Decomposedfs) createHiddenSpaceFolder(ctx context.Context, r *node.Node) error {
-	hiddenSpace, err := r.Child(ctx, ".space")
-	if err != nil {
-		return err
-	}
-
-	return fs.tp.CreateDir(ctx, hiddenSpace)
-}
-
 func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, spaceID string) error {
 	// create space type dir
 	if err := os.MkdirAll(filepath.Join(fs.o.Root, "spaces", spaceType), 0700); err != nil {
@@ -522,13 +503,15 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, space
 	if err != nil {
 		if isAlreadyExists(err) {
 			appctx.GetLogger(ctx).Debug().Err(err).Str("space", spaceID).Str("spacetype", spaceType).Msg("symlink already exists")
+			// FIXME: is it ok to wipe this err if the symlink already exists?
+			err = nil
 		} else {
 			// TODO how should we handle error cases here?
 			appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("spacetype", spaceType).Msg("could not create symlink")
 		}
 	}
 
-	return nil
+	return err
 }
 
 func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, spaceType, nodePath string, canListAllSpaces bool) (*provider.StorageSpace, error) {
@@ -558,10 +541,10 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	// TODO apply more filters
-
-	sname := ""
-	if bytes, err := xattr.Get(n.InternalPath(), xattrs.SpaceNameAttr); err == nil {
-		sname = string(bytes)
+	var sname string
+	if sname, err = n.GetMetadata(xattrs.SpaceNameAttr); err != nil {
+		// FIXME: Is that a severe problem?
+		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a name attribute")
 	}
 
 	if err := n.FindStorageSpaceRoot(); err != nil {
@@ -652,14 +635,14 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	// quota
-	v, err := xattr.Get(nodePath, xattrs.QuotaAttr)
+	v, err := xattrs.Get(nodePath, xattrs.QuotaAttr)
 	if err == nil {
 		// make sure we have a proper signed int
 		// we use the same magic numbers to indicate:
 		// -1 = uncalculated
 		// -2 = unknown
 		// -3 = unlimited
-		if quota, err := strconv.ParseUint(string(v), 10, 64); err == nil {
+		if quota, err := strconv.ParseUint(v, 10, 64); err == nil {
 			space.Quota = &provider.Quota{
 				QuotaMaxBytes: quota,
 				QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?

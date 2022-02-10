@@ -50,8 +50,8 @@ require (
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/nats-io/nats-server/v2 v2.7.2
 	github.com/nats-io/nats-streaming-server v0.24.1
-	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.18.0
+	github.com/onsi/ginkgo/v2 v2.0.0
+	github.com/onsi/gomega v1.18.1
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.4
 	github.com/pquerna/cachecontrol v0.1.0 // indirect

@@ -743,6 +743,7 @@ func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provi
 		return nil, errors.Wrap(err, "gateway: error calling SetLock")
 	}
 
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -783,6 +784,7 @@ func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest)
 		return nil, errors.Wrap(err, "gateway: error calling RefreshLock")
 	}
 
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -803,6 +805,7 @@ func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provide
 		return nil, errors.Wrap(err, "gateway: error calling Unlock")
 	}
 
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
 	return res, nil
 }
 

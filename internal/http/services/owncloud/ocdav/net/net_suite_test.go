@@ -16,36 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdav
+package net_test
 
 import (
-	"net/http"
+	"testing"
 
-	"github.com/cs3org/reva/pkg/appctx"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-// TODO(jfd) implement lock
-func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) {
-	log := appctx.GetLogger(r.Context())
-	xml := `<?xml version="1.0" encoding="utf-8"?>
-	<prop xmlns="DAV:">
-		<lockdiscovery>
-			<activelock>
-				<allprop/>
-				<timeout>Second-604800</timeout>
-				<depth>Infinity</depth>
-				<locktoken>
-				<href>opaquelocktoken:00000000-0000-0000-0000-000000000000</href>
-				</locktoken>
-			</activelock>
-		</lockdiscovery>
-	</prop>`
-
-	w.Header().Set("Content-Type", "text/xml; charset=\"utf-8\"")
-	w.Header().Set("Lock-Token",
-		"opaquelocktoken:00000000-0000-0000-0000-000000000000")
-	_, err := w.Write([]byte(xml))
-	if err != nil {
-		log.Err(err).Msg("error writing response")
-	}
+func TestNet(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Net Suite")
 }

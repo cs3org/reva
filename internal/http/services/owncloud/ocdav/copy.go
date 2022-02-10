@@ -128,7 +128,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 			if createRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 				w.WriteHeader(http.StatusForbidden)
 				m := fmt.Sprintf("Permission denied to create %v", createReq.Ref.Path)
-				b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+				b, err := errors.Marshal(http.StatusForbidden, m, "")
 				errors.HandleWebdavError(log, w, b, err)
 			}
 			return nil
@@ -218,7 +218,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 			if uRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 				w.WriteHeader(http.StatusForbidden)
 				m := fmt.Sprintf("Permissions denied to create %v", uReq.Ref.Path)
-				b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+				b, err := errors.Marshal(http.StatusForbidden, m, "")
 				errors.HandleWebdavError(log, w, b, err)
 				return nil
 			}
@@ -350,7 +350,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 				w.WriteHeader(http.StatusForbidden)
 				// TODO path could be empty or relative...
 				m := fmt.Sprintf("Permission denied to create %v", createReq.Ref.Path)
-				b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+				b, err := errors.Marshal(http.StatusForbidden, m, "")
 				errors.HandleWebdavError(log, w, b, err)
 			}
 			return nil
@@ -426,7 +426,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 				w.WriteHeader(http.StatusForbidden)
 				// TODO path can be empty or relative
 				m := fmt.Sprintf("Permissions denied to create %v", uReq.Ref.Path)
-				b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+				b, err := errors.Marshal(http.StatusForbidden, m, "")
 				errors.HandleWebdavError(log, w, b, err)
 				return nil
 			}
@@ -484,7 +484,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Overwrite header is set to incorrect value %v", overwrite)
-		b, err := errors.Marshal(errors.SabredavBadRequest, m, "")
+		b, err := errors.Marshal(http.StatusBadRequest, m, "")
 		errors.HandleWebdavError(log, w, b, err)
 		return nil
 	}
@@ -494,7 +494,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Depth header is set to incorrect value %v", dh)
-		b, err := errors.Marshal(errors.SabredavBadRequest, m, "")
+		b, err := errors.Marshal(http.StatusBadRequest, m, "")
 		errors.HandleWebdavError(log, w, b, err)
 		return nil
 	}
@@ -525,7 +525,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
-			b, err := errors.Marshal(errors.SabredavNotFound, m, "")
+			b, err := errors.Marshal(http.StatusNotFound, m, "")
 			errors.HandleWebdavError(log, w, b, err)
 		}
 		errors.HandleErrorStatus(log, w, srcStatRes.Status)
@@ -552,7 +552,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 			log.Warn().Str("overwrite", overwrite).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed)
 			m := fmt.Sprintf("Could not overwrite Resource %v", dstRef.Path)
-			b, err := errors.Marshal(errors.SabredavPreconditionFailed, m, "")
+			b, err := errors.Marshal(http.StatusPreconditionFailed, m, "")
 			errors.HandleWebdavError(log, w, b, err) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 			return nil
 		}

@@ -110,9 +110,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				r.URL.Path = path.Join(r.URL.Path, contextUser.Username)
 			}
 
-			if r.Header.Get("Depth") == "" {
+			if r.Header.Get(net.HeaderDepth) == "" {
 				w.WriteHeader(http.StatusMethodNotAllowed)
-				b, err := errors.Marshal(errors.SabredavMethodNotAllowed, "Listing members of this collection is disabled", "")
+				b, err := errors.Marshal(http.StatusMethodNotAllowed, "Listing members of this collection is disabled", "")
 				if err != nil {
 					log.Error().Msgf("error marshaling xml response: %s", b)
 					w.WriteHeader(http.StatusInternalServerError)
@@ -208,11 +208,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
 				if hasValidBasicAuthHeader {
-					b, err := errors.Marshal(errors.SabredavNotAuthenticated, "Username or password was incorrect", "")
+					b, err := errors.Marshal(http.StatusUnauthorized, "Username or password was incorrect", "")
 					errors.HandleWebdavError(log, w, b, err)
 					return
 				}
-				b, err := errors.Marshal(errors.SabredavNotAuthenticated, "No 'Authorization: Basic' header found", "")
+				b, err := errors.Marshal(http.StatusUnauthorized, "No 'Authorization: Basic' header found", "")
 				errors.HandleWebdavError(log, w, b, err)
 				return
 			case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
@@ -263,7 +263,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 		default:
 			w.WriteHeader(http.StatusNotFound)
-			b, err := errors.Marshal(errors.SabredavNotFound, "File not found in root", "")
+			b, err := errors.Marshal(http.StatusNotFound, "File not found in root", "")
 			errors.HandleWebdavError(log, w, b, err)
 		}
 	})

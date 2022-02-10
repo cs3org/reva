@@ -54,7 +54,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		sublog.Debug().Err(err).Msg("error reading proppatch")
 		w.WriteHeader(status)
 		m := fmt.Sprintf("Error reading proppatch: %v", err)
-		b, err := errors.Marshal(errors.SabredavBadRequest, m, "")
+		b, err := errors.Marshal(status, m, "")
 		errors.HandleWebdavError(&sublog, w, b, err)
 		return
 	}
@@ -89,7 +89,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			m := fmt.Sprintf("Resource %v not found", fn)
-			b, err := errors.Marshal(errors.SabredavNotFound, m, "")
+			b, err := errors.Marshal(http.StatusNotFound, m, "")
 			errors.HandleWebdavError(&sublog, w, b, err)
 		}
 		errors.HandleErrorStatus(&sublog, w, statRes.Status)
@@ -232,7 +232,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 						w.WriteHeader(http.StatusForbidden)
 						m := fmt.Sprintf("Permission denied to remove properties on resource %v", ref.Path)
-						b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+						b, err := errors.Marshal(http.StatusForbidden, m, "")
 						errors.HandleWebdavError(&log, w, b, err)
 						return nil, nil, false
 					}
@@ -266,7 +266,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 						w.WriteHeader(http.StatusForbidden)
 						m := fmt.Sprintf("Permission denied to set properties on resource %v", ref.Path)
-						b, err := errors.Marshal(errors.SabredavPermissionDenied, m, "")
+						b, err := errors.Marshal(http.StatusForbidden, m, "")
 						errors.HandleWebdavError(&log, w, b, err)
 						return nil, nil, false
 					}

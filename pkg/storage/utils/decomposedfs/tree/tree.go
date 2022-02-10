@@ -118,11 +118,11 @@ func (t *Tree) Setup(owner *userpb.UserId, propagateToRoot bool) error {
 	}
 
 	// set propagation flag
-	v := []byte("0")
+	v := "0"
 	if propagateToRoot {
-		v = []byte("1")
+		v = "1"
 	}
-	if err = xattr.Set(n.InternalPath(), xattrs.PropagationAttr, v); err != nil {
+	if err = n.SetMetadata(xattrs.PropagationAttr, v); err != nil {
 		return err
 	}
 
@@ -206,8 +206,8 @@ func (t *Tree) linkSpace(spaceType, spaceID, nodeID string) {
 }
 
 func isRootNode(nodePath string) bool {
-	attrBytes, err := xattr.Get(nodePath, xattrs.ParentidAttr)
-	return err == nil && string(attrBytes) == "root"
+	attr, err := xattrs.Get(nodePath, xattrs.ParentidAttr)
+	return err == nil && attr == "root"
 }
 func isSharedNode(nodePath string) bool {
 	if attrs, err := xattr.List(nodePath); err == nil {
@@ -310,7 +310,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 
 		// update name attribute
-		if err := xattr.Set(tgtPath, xattrs.NameAttr, []byte(newNode.Name)); err != nil {
+		if err := xattrs.Set(tgtPath, xattrs.NameAttr, newNode.Name); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
@@ -330,10 +330,10 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	}
 
 	// update target parentid and name
-	if err := xattr.Set(tgtPath, xattrs.ParentidAttr, []byte(newNode.ParentID)); err != nil {
+	if err := xattrs.Set(tgtPath, xattrs.ParentidAttr, newNode.ParentID); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not set parentid attribute")
 	}
-	if err := xattr.Set(tgtPath, xattrs.NameAttr, []byte(newNode.Name)); err != nil {
+	if err := xattrs.Set(tgtPath, xattrs.NameAttr, newNode.Name); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 	}
 
@@ -411,7 +411,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	// set origin location in metadata
 	nodePath := n.InternalPath()
-	if err := xattr.Set(nodePath, xattrs.TrashOriginAttr, []byte(origin)); err != nil {
+	if err := n.SetMetadata(xattrs.TrashOriginAttr, origin); err != nil {
 		return err
 	}
 
@@ -438,6 +438,9 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		// TODO unset trashOriginAttr
 		return
 	}
+
+	// Remove lock file if it exists
+	_ = os.Remove(n.LockFilePath())
 
 	// finally remove the entry from the parent dir
 	src := filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name)
@@ -470,6 +473,10 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 		if err != nil {
 			return nil, nil, nil, err
 		}
+	}
+
+	if err := targetNode.CheckLock(ctx); err != nil {
+		return nil, nil, nil, err
 	}
 
 	parent, err := targetNode.Parent()
@@ -516,13 +523,13 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 
 		targetNode.Exists = true
 		// update name attribute
-		if err := xattr.Set(nodePath, xattrs.NameAttr, []byte(targetNode.Name)); err != nil {
+		if err := recycleNode.SetMetadata(xattrs.NameAttr, targetNode.Name); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
 		// set ParentidAttr to restorePath's node parent id
 		if trashPath != "" {
-			if err := xattr.Set(nodePath, xattrs.ParentidAttr, []byte(targetNode.ParentID)); err != nil {
+			if err := recycleNode.SetMetadata(xattrs.ParentidAttr, targetNode.ParentID); err != nil {
 				return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 			}
 		}
@@ -727,13 +734,13 @@ func calculateTreeSize(ctx context.Context, nodePath string) (uint64, error) {
 			size += uint64(blobSize)
 		} else {
 			// read from attr
-			var b []byte
-			// xattr.Get will follow the symlink
-			if b, err = xattr.Get(cPath, xattrs.TreesizeAttr); err != nil {
+			var b string
+			// xattrs.Get will follow the symlink
+			if b, err = xattrs.Get(cPath, xattrs.TreesizeAttr); err != nil {
 				// TODO recursively descend and recalculate treesize
 				continue // continue after an error
 			}
-			csize, err := strconv.ParseUint(string(b), 10, 64)
+			csize, err := strconv.ParseUint(b, 10, 64)
 			if err != nil {
 				// TODO recursively descend and recalculate treesize
 				continue // continue after an error
@@ -772,7 +779,7 @@ func (t *Tree) createNode(n *node.Node, owner *userpb.UserId) (err error) {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
-	return n.WriteMetadata(owner)
+	return n.WriteAllNodeMetadata(owner)
 }
 
 // TODO refactor the returned params into Node properties? would make all the path transformations go away...
@@ -790,48 +797,48 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 		return
 	}
 
-	var attrBytes []byte
+	var attrStr string
 	trashNodeID := filepath.Base(link)
 	deletedNodePath = t.lookup.InternalPath(trashNodeID)
 
 	owner := &userpb.UserId{}
 	// lookup ownerId in extended attributes
-	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.OwnerIDAttr); err == nil {
-		owner.OpaqueId = string(attrBytes)
+	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.OwnerIDAttr); err == nil {
+		owner.OpaqueId = attrStr
 	} else {
 		return
 	}
 	// lookup ownerIdp in extended attributes
-	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.OwnerIDPAttr); err == nil {
-		owner.Idp = string(attrBytes)
+	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.OwnerIDPAttr); err == nil {
+		owner.Idp = attrStr
 	} else {
 		return
 	}
 	// lookup ownerType in extended attributes
-	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.OwnerTypeAttr); err == nil {
-		owner.Type = utils.UserTypeMap(string(attrBytes))
+	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.OwnerTypeAttr); err == nil {
+		owner.Type = utils.UserTypeMap(attrStr)
 	} else {
 		return
 	}
 
 	recycleNode = node.New(trashNodeID, "", "", 0, "", owner, t.lookup)
 	// lookup blobID in extended attributes
-	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.BlobIDAttr); err == nil {
-		recycleNode.BlobID = string(attrBytes)
+	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.BlobIDAttr); err == nil {
+		recycleNode.BlobID = attrStr
 	} else {
 		return
 	}
 
 	// lookup parent id in extended attributes
-	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.ParentidAttr); err == nil {
-		recycleNode.ParentID = string(attrBytes)
+	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.ParentidAttr); err == nil {
+		recycleNode.ParentID = attrStr
 	} else {
 		return
 	}
 
 	// lookup name in extended attributes
-	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.NameAttr); err == nil {
-		recycleNode.Name = string(attrBytes)
+	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.NameAttr); err == nil {
+		recycleNode.Name = attrStr
 	} else {
 		return
 	}
@@ -864,8 +871,8 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceid, key, path string) (
 		deletedNodeRootPath = t.lookup.InternalPath(filepath.Base(rootLink))
 	}
 	// lookup origin path in extended attributes
-	if attrBytes, err = xattr.Get(deletedNodeRootPath, xattrs.TrashOriginAttr); err == nil {
-		origin = filepath.Join(string(attrBytes), path)
+	if attrStr, err = xattrs.Get(deletedNodeRootPath, xattrs.TrashOriginAttr); err == nil {
+		origin = filepath.Join(attrStr, path)
 	} else {
 		log.Error().Err(err).Str("trashItem", trashItem).Str("link", link).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
 	}

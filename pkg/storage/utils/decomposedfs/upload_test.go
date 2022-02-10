@@ -42,7 +42,7 @@ import (
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -189,8 +189,7 @@ var _ = Describe("File uploads", func() {
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(1)) // .space folder
-				Expect(resources[0].Path).To(Equal("/.space"))
+				Expect(len(resources)).To(Equal(0))
 			})
 		})
 
@@ -206,8 +205,7 @@ var _ = Describe("File uploads", func() {
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(1)) // .space folder
-				Expect(resources[0].Path).To(Equal("/.space"))
+				Expect(len(resources)).To(Equal(0))
 			})
 		})
 
@@ -244,9 +242,8 @@ var _ = Describe("File uploads", func() {
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(2)) // .space folder & uploaded resource
-				Expect(resources[0].Path).To(Or(Equal(ref.Path), Equal("/.space")))
-				Expect(resources[1].Path).To(Or(Equal(ref.Path), Equal("/.space")))
+				Expect(len(resources)).To(Equal(1))
+				Expect(resources[0].Path).To(Equal(ref.Path))
 			})
 		})
 
@@ -283,9 +280,8 @@ var _ = Describe("File uploads", func() {
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(2)) // .space folder & uploaded file
-				Expect(resources[0].Path).To(Or(Equal(ref.Path), Equal("/.space")))
-				Expect(resources[1].Path).To(Or(Equal(ref.Path), Equal("/.space")))
+				Expect(len(resources)).To(Equal(1))
+				Expect(resources[0].Path).To(Equal(ref.Path))
 			})
 		})
 
@@ -303,8 +299,7 @@ var _ = Describe("File uploads", func() {
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(1)) // .space folder
-				Expect(resources[0].Path).To(Equal("/.space"))
+				Expect(len(resources)).To(Equal(0))
 			})
 		})
 

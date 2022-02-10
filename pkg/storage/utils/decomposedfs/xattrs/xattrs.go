@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
@@ -126,4 +127,56 @@ func CopyMetadata(s, t string, filter func(attributeName string) bool) error {
 		}
 	}
 	return nil
+}
+
+// Set an extended attribute key to the given value
+func Set(filePath string, key string, val string) error {
+
+	if err := xattr.Set(filePath, key, []byte(val)); err != nil {
+		return errors.Wrap(err, "xattrs: Could not write xtended attribute")
+	}
+	return nil
+}
+
+// SetMultiple allows setting multiple key value pairs at once
+// TODO the changes are protected with an flock
+func SetMultiple(filePath string, attribs map[string]string) error {
+
+	// FIXME: Lock here
+	for key, val := range attribs {
+		if err := Set(filePath, key, val); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Get an extended attribute value for the given key
+func Get(filePath, key string) (string, error) {
+
+	v, err := xattr.Get(filePath, key)
+	if err != nil {
+		return "", errors.Wrap(err, "xattrs: Can not read xattr")
+	}
+	val := string(v)
+	return val, nil
+}
+
+// All reads all extended attributes for a node
+func All(filePath string) (map[string]string, error) {
+	attrNames, err := xattr.List(filePath)
+	if err != nil {
+		return nil, errors.Wrap(err, "xattrs: Can not list extended attributes")
+	}
+
+	attribs := make(map[string]string, len(attrNames))
+	for _, name := range attrNames {
+		val, err := xattr.Get(filePath, name)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to read extended attrib")
+		}
+		attribs[name] = string(val)
+	}
+
+	return attribs, nil
 }

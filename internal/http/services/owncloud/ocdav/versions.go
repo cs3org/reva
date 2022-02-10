@@ -113,7 +113,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED || res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
-			b, err := errors.Marshal(errors.SabredavNotFound, "Resource not found", "")
+			b, err := errors.Marshal(http.StatusNotFound, "Resource not found", "")
 			errors.HandleWebdavError(&sublog, w, b, err)
 			return
 		}

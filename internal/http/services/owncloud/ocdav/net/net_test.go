@@ -16,40 +16,78 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package net
+package net_test
 
-import "testing"
+import (
+	"time"
 
-func TestParseDepth(t *testing.T) {
-	tests := map[string]Depth{
-		"":         DepthOne,
-		"0":        DepthZero,
-		"1":        DepthOne,
-		"infinity": DepthInfinity,
-	}
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
 
-	for input, expected := range tests {
-		parsed, err := ParseDepth(input)
-		if err != nil {
-			t.Errorf("failed to parse depth %s", input)
-		}
-		if parsed != expected {
-			t.Errorf("parseDepth returned %s expected %s", parsed.String(), expected.String())
-		}
-	}
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gmeasure"
+)
 
-	_, err := ParseDepth("invalid")
-	if err == nil {
-		t.Error("parse depth didn't return an error for invalid depth: invalid")
-	}
-}
+var _ = Describe("Net", func() {
+	DescribeTable("TestParseDepth",
+		func(v string, expectSuccess bool, expectedValue net.Depth) {
+			parsed, err := net.ParseDepth(v)
+			Expect(err == nil).To(Equal(expectSuccess))
+			Expect(parsed).To(Equal(expectedValue))
+		},
+		Entry("default", "", true, net.DepthOne),
+		Entry("0", "0", true, net.DepthZero),
+		Entry("1", "1", true, net.DepthOne),
+		Entry("infinity", "infinity", true, net.DepthInfinity),
+		Entry("invalid", "invalid", false, net.Depth("")))
 
-var result Depth
+	Describe("ParseDepth", func() {
+		It("is reasonably fast", func() {
+			experiment := NewExperiment("Parsing depth headers")
+			AddReportEntry(experiment.Name, experiment)
 
-func BenchmarkParseDepth(b *testing.B) {
-	inputs := []string{"", "0", "1", "infinity", "INFINITY"}
-	size := len(inputs)
-	for i := 0; i < b.N; i++ {
-		result, _ = ParseDepth(inputs[i%size])
-	}
-}
+			inputs := []string{"", "0", "1", "infinity", "INFINITY"}
+			size := len(inputs)
+			experiment.Sample(func(i int) {
+				experiment.MeasureDuration("parsing", func() {
+					_, _ = net.ParseDepth(inputs[i%size])
+				})
+			}, SamplingConfig{Duration: time.Second})
+
+			encodingStats := experiment.GetStats("parsing")
+			medianDuration := encodingStats.DurationFor(StatMedian)
+
+			Expect(medianDuration).To(BeNumerically("<", 3*time.Millisecond))
+		})
+	})
+
+	Describe("EncodePath", func() {
+		It("encodes paths", func() {
+			Expect(net.EncodePath("foo")).To(Equal("foo"))
+			Expect(net.EncodePath("/some/path/Folder %^*(#1)")).To(Equal("/some/path/Folder%20%25%5e%2a(%231)"))
+		})
+
+		/*
+			The encodePath method as it is implemented currently is terribly inefficient.
+			As soon as there are a few special characters which need to be escaped the allocation count rises and the time spent too.
+			Adding more special characters increases the allocations and the time spent can rise up to a few milliseconds.
+			Granted this is not a lot on it's own but when a user has tens or hundreds of paths which need to be escaped and contain a few special characters
+			then this method alone will cost a huge amount of time.
+		*/
+		It("is reasonably fast", func() {
+			experiment := NewExperiment("Encoding paths")
+			AddReportEntry(experiment.Name, experiment)
+
+			experiment.Sample(func(idx int) {
+				experiment.MeasureDuration("encoding", func() {
+					_ = net.EncodePath("/some/path/Folder %^*(#1)")
+				})
+			}, SamplingConfig{Duration: time.Second})
+
+			encodingStats := experiment.GetStats("encoding")
+			medianDuration := encodingStats.DurationFor(StatMedian)
+
+			Expect(medianDuration).To(BeNumerically("<", 10*time.Millisecond))
+		})
+	})
+})

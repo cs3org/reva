@@ -27,10 +27,11 @@ import (
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/google/uuid"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -70,36 +71,61 @@ var _ = Describe("Tree", func() {
 		})
 
 		Describe("Delete", func() {
-			JustBeforeEach(func() {
-				_, err := os.Stat(n.InternalPath())
-				Expect(err).ToNot(HaveOccurred())
+			Context("when the file was locked", func() {
+				JustBeforeEach(func() {
+					_, err := os.Stat(n.InternalPath())
+					Expect(err).ToNot(HaveOccurred())
 
-				Expect(t.Delete(env.Ctx, n)).To(Succeed())
+					lock := &provider.Lock{
+						Type:   provider.LockType_LOCK_TYPE_EXCL,
+						User:   env.Owner.Id,
+						LockId: uuid.New().String(),
+					}
+					Expect(n.SetLock(env.Ctx, lock)).To(Succeed())
+					Expect(t.Delete(env.Ctx, n)).To(Succeed())
 
-				_, err = os.Stat(n.InternalPath())
-				Expect(err).To(HaveOccurred())
+					_, err = os.Stat(n.InternalPath())
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("also removes the lock file", func() {
+					_, err := os.Stat(n.LockFilePath())
+					Expect(err).To(HaveOccurred())
+				})
 			})
 
-			It("moves the file to the trash", func() {
-				trashPath := path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
-				_, err := os.Stat(trashPath)
-				Expect(err).ToNot(HaveOccurred())
-			})
+			Context("when the file was not locked", func() {
+				JustBeforeEach(func() {
+					_, err := os.Stat(n.InternalPath())
+					Expect(err).ToNot(HaveOccurred())
 
-			It("removes the file from its original location", func() {
-				_, err := os.Stat(n.InternalPath())
-				Expect(err).To(HaveOccurred())
-			})
+					Expect(t.Delete(env.Ctx, n)).To(Succeed())
 
-			It("sets the trash origin xattr", func() {
-				trashPath := path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
-				attr, err := xattr.Get(trashPath, xattrs.TrashOriginAttr)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(string(attr)).To(Equal("/dir1/file1"))
-			})
+					_, err = os.Stat(n.InternalPath())
+					Expect(err).To(HaveOccurred())
+				})
 
-			It("does not delete the blob from the blobstore", func() {
-				env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
+				It("moves the file to the trash", func() {
+					trashPath := path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
+					_, err := os.Stat(trashPath)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("removes the file from its original location", func() {
+					_, err := os.Stat(n.InternalPath())
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("sets the trash origin xattr", func() {
+					trashPath := path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
+					attr, err := xattr.Get(trashPath, xattrs.TrashOriginAttr)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(string(attr)).To(Equal("/dir1/file1"))
+				})
+
+				It("does not delete the blob from the blobstore", func() {
+					env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
+				})
 			})
 		})
 

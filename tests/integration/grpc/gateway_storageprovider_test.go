@@ -39,7 +39,7 @@ import (
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/tests/helpers"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -334,12 +334,12 @@ var _ = Describe("gateway", func() {
 				listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: &storagep.Reference{ResourceId: shard1Space.Root, Path: "."}})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-				Expect(len(listRes.Infos)).To(Equal(2))
+				Expect(len(listRes.Infos)).To(Equal(1))
 				paths := []string{}
 				for _, i := range listRes.Infos {
 					paths = append(paths, i.Path)
 				}
-				Expect(paths).To(ConsistOf([]string{"file.txt", ".space"}))
+				Expect(paths).To(ConsistOf([]string{"file.txt"}))
 			})
 
 		})
@@ -429,7 +429,7 @@ var _ = Describe("gateway", func() {
 				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: homeRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-				Expect(len(listRes.Infos)).To(Equal(2))
+				Expect(len(listRes.Infos)).To(Equal(1))
 
 				var fileInfo *storagep.ResourceInfo
 				// var embeddedInfo *storagep.ResourceInfo

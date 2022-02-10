@@ -19,6 +19,7 @@
 package node_test
 
 import (
+	"encoding/json"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -26,7 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -96,7 +97,7 @@ var _ = Describe("Node", func() {
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			}
 
-			err = n.WriteMetadata(owner)
+			err = n.WriteAllNodeMetadata(owner)
 			Expect(err).ToNot(HaveOccurred())
 			n2, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
@@ -207,6 +208,27 @@ var _ = Describe("Node", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				Expect(ri.Etag).ToNot(Equal(before))
+			})
+
+			It("includes the lock in the Opaque", func() {
+				lock := &provider.Lock{
+					Type:   provider.LockType_LOCK_TYPE_EXCL,
+					User:   env.Owner.Id,
+					LockId: "foo",
+				}
+				err := n.SetLock(env.Ctx, lock)
+				Expect(err).ToNot(HaveOccurred())
+
+				perms := node.OwnerPermissions()
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ri.Opaque).ToNot(BeNil())
+				Expect(ri.Opaque.Map["lock"]).ToNot(BeNil())
+
+				storedLock := &provider.Lock{}
+				err = json.Unmarshal(ri.Opaque.Map["lock"].Value, storedLock)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(storedLock).To(Equal(lock))
 			})
 		})
 	})

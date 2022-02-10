@@ -229,6 +229,11 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
+	// check lock
+	if err := n.CheckLock(ctx); err != nil {
+		return nil, err
+	}
+
 	info.ID = uuid.New().String()
 
 	binPath, err := fs.getUploadPath(ctx, info.ID)
@@ -462,6 +467,11 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	)
 	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
 
+	// check lock
+	if err := n.CheckLock(ctx); err != nil {
+		return err
+	}
+
 	_, err = node.CheckQuota(n.SpaceRoot, uint64(fi.Size()))
 	if err != nil {
 		return err
@@ -592,7 +602,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	tryWritingChecksum(&sublog, n, "adler32", adler32h)
 
 	// who will become the owner?  the owner of the parent actually ... not the currently logged in user
-	err = n.WriteMetadata(&userpb.UserId{
+	err = n.WriteAllNodeMetadata(&userpb.UserId{
 		Idp:      upload.info.Storage["OwnerIdp"],
 		OpaqueId: upload.info.Storage["OwnerId"],
 	})
