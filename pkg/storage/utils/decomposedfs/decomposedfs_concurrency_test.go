@@ -29,7 +29,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/cs3org/reva/tests/helpers"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

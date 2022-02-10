@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,45 +16,44 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package options_test
+package net_test
 
 import (
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
+	"context"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Options", func() {
+var _ = Describe("Net", func() {
 	var (
-		o      *options.Options
-		config map[string]interface{}
+		alice = &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "alice",
+			},
+			Username: "alice",
+		}
+		bob = &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "bob",
+			},
+			Username: "bob",
+		}
+		aliceCtx = ctxpkg.ContextSetUser(context.Background(), alice)
+		bobCtx   = ctxpkg.ContextSetUser(context.Background(), bob)
 	)
 
-	BeforeEach(func() {
-		config = map[string]interface{}{}
-	})
-
-	Describe("New", func() {
-		JustBeforeEach(func() {
-			var err error
-			o, err = options.New(config)
-			Expect(err).ToNot(HaveOccurred())
+	Describe("IsCurrentUserOwner", func() {
+		It("returns true", func() {
+			Expect(net.IsCurrentUserOwner(aliceCtx, alice.Id)).To(BeTrue())
 		})
 
-		It("sets defaults", func() {
-			Expect(len(o.ShareFolder) > 0).To(BeTrue())
-			Expect(len(o.UserLayout) > 0).To(BeTrue())
-		})
-
-		Context("with unclean root path configuration", func() {
-			BeforeEach(func() {
-				config["root"] = "foo/"
-			})
-
-			It("sanitizes the root path", func() {
-				Expect(o.Root).To(Equal("foo"))
-			})
+		It("returns false", func() {
+			Expect(net.IsCurrentUserOwner(bobCtx, alice.Id)).To(BeFalse())
 		})
 	})
 })

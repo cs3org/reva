@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package accounts_test
+package net_test
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestAccounts(t *testing.T) {
+func TestNet(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Accounts Suite")
+	RunSpecs(t, "Net Suite")
 }

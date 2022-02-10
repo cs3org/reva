@@ -37,7 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

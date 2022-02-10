@@ -29,7 +29,7 @@ import (
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"google.golang.org/grpc/metadata"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
