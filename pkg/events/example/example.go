@@ -4,6 +4,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/asim/go-micro/plugins/events/nats/v4"
 	"github.com/cs3org/reva/pkg/events"
 	"github.com/cs3org/reva/pkg/events/example/consumer"
 	"github.com/cs3org/reva/pkg/events/example/publisher"
@@ -42,7 +43,7 @@ func Server() {
 
 // Client builds a nats client
 func Client() events.Stream {
-	c, err := server.NewNatsStream()
+	c, err := server.NewNatsStream(nats.Address("127.0.0.1:4222"), nats.ClusterID("test-cluster"))
 	if err != nil {
 		log.Fatal(err)
 	}

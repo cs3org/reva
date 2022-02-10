@@ -9,8 +9,8 @@ import (
 func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
 	e := events.ShareCreated{
 		Sharer:         r.Share.Creator,
-		GranteeUserId:  r.Share.GetGrantee().GetUserId(),
-		GranteeGroupId: r.Share.GetGrantee().GetGroupId(),
+		GranteeUserID:  r.Share.GetGrantee().GetUserId(),
+		GranteeGroupID: r.Share.GetGrantee().GetGroupId(),
 		ItemID:         r.Share.ResourceId,
 		CTime:          r.Share.Ctime,
 	}

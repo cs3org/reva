@@ -2,10 +2,12 @@ package eventsmiddleware
 
 import (
 	"context"
+	"fmt"
 
 	"go-micro.dev/v4/util/log"
 	"google.golang.org/grpc"
 
+	"github.com/asim/go-micro/plugins/events/nats/v4"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/cs3org/reva/pkg/events"
 	"github.com/cs3org/reva/pkg/events/server"
@@ -22,8 +24,7 @@ func init() {
 
 // NewUnary returns a new unary interceptor that emits events when needed
 func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
-	// TODO: Make configurable which implementation of `publisher` should be used
-	publisher, err := server.NewNatsStream()
+	publisher, err := publisherFromConfig(m)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -41,7 +42,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		}
 
 		if ev != nil {
-			if err := events.Publish(ev, publisher); err != nil {
+			if err := events.Publish(publisher, ev); err != nil {
 				log.Error(err)
 			}
 		}
@@ -59,4 +60,16 @@ func NewStream() grpc.StreamServerInterceptor {
 		return handler(srv, ss)
 	}
 	return interceptor
+}
+
+func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {
+	typ := m["type"].(string)
+	switch typ {
+	default:
+		return nil, fmt.Errorf("stream type '%s' not supported", typ)
+	case "nats":
+		address := m["address"].(string)
+		cid := m["clusterID"].(string)
+		return server.NewNatsStream(nats.Address(address), nats.ClusterID(cid))
+	}
 }
