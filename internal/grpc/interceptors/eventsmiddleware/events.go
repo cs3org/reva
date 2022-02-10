@@ -22,6 +22,7 @@ func init() {
 
 // NewUnary returns a new unary interceptor that emits events when needed
 func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
+	// TODO: Make configurable which implementation of `publisher` should be used
 	publisher, err := server.NewNatsStream()
 	if err != nil {
 		return nil, 0, err
@@ -41,7 +42,6 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 
 		if ev != nil {
 			if err := events.Publish(ev, publisher); err != nil {
-				// TODO: should we error here? log? panic?
 				log.Error(err)
 			}
 		}
@@ -55,7 +55,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 // that creates the application context.
 func NewStream() grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		// TODO: How to create events when streaming?
+		// TODO: Use ss.RecvMsg() and ss.SendMsg() to send events from a stream
 		return handler(srv, ss)
 	}
 	return interceptor

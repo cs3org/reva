@@ -12,9 +12,9 @@ import (
 // ShareCreated is emitted when a share is created
 type ShareCreated struct { // TODO: Rename to ShareCreatedEvent?
 	Sharer *user.UserId
-	// split the protobuf Grastee oneof so we can use stdlib encoding/json
-	GranteeUserId  *user.UserId
-	GranteeGroupId *group.GroupId
+	// split the protobuf Grantee oneof so we can use stdlib encoding/json
+	GranteeUserID  *user.UserId
+	GranteeGroupID *group.GroupId
 	Sharee         *provider.Grantee
 	ItemID         *provider.ResourceId
 	CTime          *types.Timestamp
