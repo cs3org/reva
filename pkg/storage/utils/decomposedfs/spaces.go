@@ -505,13 +505,15 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, space
 	if err != nil {
 		if isAlreadyExists(err) {
 			appctx.GetLogger(ctx).Debug().Err(err).Str("space", spaceID).Str("spacetype", spaceType).Msg("symlink already exists")
+			// FIXME: is it ok to wipe this err if the symlink already exists?
+			err = nil
 		} else {
 			// TODO how should we handle error cases here?
 			appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("spacetype", spaceType).Msg("could not create symlink")
 		}
 	}
 
-	return nil
+	return err
 }
 
 func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, spaceType, nodePath string, canListAllSpaces bool) (*provider.StorageSpace, error) {
