@@ -148,7 +148,7 @@ func (n *Node) WriteAllNodeMetadata(owner *userpb.UserId) (err error) {
 	attribs[xattrs.ParentidAttr] = n.ParentID
 	attribs[xattrs.NameAttr] = n.Name
 	attribs[xattrs.BlobIDAttr] = n.BlobID
-	attribs[xattrs.BlobsizeAttr] = fmt.Sprintf("%d", n.Blobsize)
+	attribs[xattrs.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
 
 	nodePath := n.InternalPath()
 	attribs[xattrs.OwnerIDAttr] = ""
