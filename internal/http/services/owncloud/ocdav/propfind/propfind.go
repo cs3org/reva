@@ -19,7 +19,6 @@
 package propfind
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -57,7 +56,101 @@ import (
 
 //go:generate mockery -name GatewayClient
 
-// GatewayClient is the interface that's being uses to interact with the gateway
+type countingReader struct {
+	n int
+	r io.Reader
+}
+
+// Props represents properties related to a resource
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for propfind)
+type Props []xml.Name
+
+// XML holds the xml representation of a propfind
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propfind
+type XML struct {
+	XMLName  xml.Name  `xml:"DAV: propfind"`
+	Allprop  *struct{} `xml:"DAV: allprop"`
+	Propname *struct{} `xml:"DAV: propname"`
+	Prop     Props     `xml:"DAV: prop"`
+	Include  Props     `xml:"DAV: include"`
+}
+
+// PropstatXML holds the xml representation of a propfind response
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propstat
+type PropstatXML struct {
+	// Prop requires DAV: to be the default namespace in the enclosing
+	// XML. This is due to the standard encoding/xml package currently
+	// not honoring namespace declarations inside a xmltag with a
+	// parent element for anonymous slice elements.
+	// Use of multistatusWriter takes care of this.
+	Prop                []*props.PropertyXML `xml:"d:prop>_ignored_"`
+	Status              string               `xml:"d:status"`
+	Error               *errors.ErrorXML     `xml:"d:error"`
+	ResponseDescription string               `xml:"d:responsedescription,omitempty"`
+}
+
+// ResponseXML holds the xml representation of a propfind response
+type ResponseXML struct {
+	XMLName             xml.Name         `xml:"d:response"`
+	Href                string           `xml:"d:href"`
+	Propstat            []PropstatXML    `xml:"d:propstat"`
+	Status              string           `xml:"d:status,omitempty"`
+	Error               *errors.ErrorXML `xml:"d:error"`
+	ResponseDescription string           `xml:"d:responsedescription,omitempty"`
+}
+
+// MultiStatusResponseXML holds the xml representation of a multistatus propfind response
+type MultiStatusResponseXML struct {
+	XMLName xml.Name `xml:"d:multistatus"`
+	XmlnsS  string   `xml:"xmlns:s,attr,omitempty"`
+	XmlnsD  string   `xml:"xmlns:d,attr,omitempty"`
+	XmlnsOC string   `xml:"xmlns:oc,attr,omitempty"`
+
+	Responses []*ResponseXML `xml:"d:response"`
+}
+
+// ResponseUnmarshalXML is a workaround for https://github.com/golang/go/issues/13400
+type ResponseUnmarshalXML struct {
+	XMLName             xml.Name               `xml:"response"`
+	Href                string                 `xml:"href"`
+	Propstat            []PropstatUnmarshalXML `xml:"propstat"`
+	Status              string                 `xml:"status,omitempty"`
+	Error               *errors.ErrorXML       `xml:"d:error"`
+	ResponseDescription string                 `xml:"responsedescription,omitempty"`
+}
+
+// MultiStatusResponseUnmarshalXML is a workaround for https://github.com/golang/go/issues/13400
+type MultiStatusResponseUnmarshalXML struct {
+	XMLName xml.Name `xml:"multistatus"`
+	XmlnsS  string   `xml:"xmlns:s,attr,omitempty"`
+	XmlnsD  string   `xml:"xmlns:d,attr,omitempty"`
+	XmlnsOC string   `xml:"xmlns:oc,attr,omitempty"`
+
+	Responses []*ResponseUnmarshalXML `xml:"response"`
+}
+
+// PropstatUnmarshalXML is a workaround for https://github.com/golang/go/issues/13400
+type PropstatUnmarshalXML struct {
+	// Prop requires DAV: to be the default namespace in the enclosing
+	// XML. This is due to the standard encoding/xml package currently
+	// not honoring namespace declarations inside a xmltag with a
+	// parent element for anonymous slice elements.
+	// Use of multistatusWriter takes care of this.
+	Prop                []*props.PropertyXML `xml:"prop"`
+	Status              string               `xml:"status"`
+	Error               *errors.ErrorXML     `xml:"d:error"`
+	ResponseDescription string               `xml:"responsedescription,omitempty"`
+}
+
+func NewMultiStatusResponseXML() *MultiStatusResponseXML {
+	return &MultiStatusResponseXML{
+		XmlnsD:  "DAV:",
+		XmlnsS:  "http://sabredav.org/ns",
+		XmlnsOC: "http://owncloud.org/ns",
+	}
+}
+
+// GatewayClient is the interface that's being used to interact with the gateway
 type GatewayClient interface {
 	gateway.GatewayAPIClient
 }
@@ -560,17 +653,14 @@ func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceI
 		}
 		responses = append(responses, res)
 	}
-	responsesXML, err := xml.Marshal(&responses)
+
+	msr := NewMultiStatusResponseXML()
+	msr.Responses = responses
+	msg, err := xml.Marshal(msr)
 	if err != nil {
 		return nil, err
 	}
-
-	var buf bytes.Buffer
-	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `)
-	buf.WriteString(`xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`)
-	buf.Write(responsesXML)
-	buf.WriteString(`</d:multistatus>`)
-	return buf.Bytes(), nil
+	return msg, nil
 }
 
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
@@ -1179,11 +1269,6 @@ func quoteEtag(etag string) string {
 	return `"` + strings.Trim(etag, `"`) + `"`
 }
 
-type countingReader struct {
-	n int
-	r io.Reader
-}
-
 func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	c.n += n
@@ -1198,10 +1283,6 @@ func metadataKeyOf(n *xml.Name) string {
 		return fmt.Sprintf("%s/%s", n.Space, n.Local)
 	}
 }
-
-// Props represents properties related to a resource
-// http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for propfind)
-type Props []xml.Name
 
 // UnmarshalXML appends the property names enclosed within start to pn.
 //
@@ -1233,38 +1314,4 @@ func (pn *Props) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 			*pn = append(*pn, e.Name)
 		}
 	}
-}
-
-// XML holds the xml representation of a propfind
-// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propfind
-type XML struct {
-	XMLName  xml.Name  `xml:"DAV: propfind"`
-	Allprop  *struct{} `xml:"DAV: allprop"`
-	Propname *struct{} `xml:"DAV: propname"`
-	Prop     Props     `xml:"DAV: prop"`
-	Include  Props     `xml:"DAV: include"`
-}
-
-// ResponseXML holds the xml representation of a propfind response
-type ResponseXML struct {
-	XMLName             xml.Name         `xml:"d:response"`
-	Href                string           `xml:"d:href"`
-	Propstat            []PropstatXML    `xml:"d:propstat"`
-	Status              string           `xml:"d:status,omitempty"`
-	Error               *errors.ErrorXML `xml:"d:error"`
-	ResponseDescription string           `xml:"d:responsedescription,omitempty"`
-}
-
-// PropstatXML holds the xml representation of a propfind response
-// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propstat
-type PropstatXML struct {
-	// Prop requires DAV: to be the default namespace in the enclosing
-	// XML. This is due to the standard encoding/xml package currently
-	// not honoring namespace declarations inside a xmltag with a
-	// parent element for anonymous slice elements.
-	// Use of multistatusWriter takes care of this.
-	Prop                []*props.PropertyXML `xml:"d:prop>_ignored_"`
-	Status              string               `xml:"d:status"`
-	Error               *errors.ErrorXML     `xml:"d:error"`
-	ResponseDescription string               `xml:"d:responsedescription,omitempty"`
 }
