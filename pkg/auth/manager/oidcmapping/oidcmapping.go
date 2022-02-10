@@ -233,7 +233,6 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		UidNumber:    uid,
 		GidNumber:    gid,
 	}
-	log.Debug().Msgf("returning user: %v", u)
 
 	var scopes map[string]*authpb.Scope
 	if userID != nil && userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
@@ -275,11 +274,10 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	}
 
 	// Initialize a provider by specifying the issuer URL.
-	// Once initialized is a singleton that is reused if further requests.
+	// Once initialized this is a singleton that is reused for further requests.
 	// The provider is responsible to verify the token sent by the client
 	// against the security keys oftentimes available in the .well-known endpoint.
 	provider, err := oidc.NewProvider(ctx, am.c.Issuer)
-
 	if err != nil {
 		log.Error().Err(err).Msg("oidc: error creating a new oidc provider")
 		return nil, fmt.Errorf("oidc: error creating a new oidc provider: %+v", err)
@@ -342,7 +340,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 		if am.c.GIDClaim != "" {
 			claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
 		}
-		appctx.GetLogger(ctx).Debug().Msgf("resolveUser: claims '%+v' overridden from mapped user '%v'", claims, username)
+		appctx.GetLogger(ctx).Debug().Str("username", username).Interface("claims", claims).Msg("resolveUser: claims overridden from mapped user")
 	}
 	return nil
 }
