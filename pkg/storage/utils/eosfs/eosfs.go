@@ -564,7 +564,7 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 
 	// the cs3apis require to have the read permission on the resource
 	// to get the eventual lock.
-	has, err := fs.userHasReadAccess(ctx, user, path)
+	has, err := fs.userHasReadAccess(ctx, user, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error checking read access to resource")
 	}
@@ -574,10 +574,7 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 
 	attr, err := fs.c.GetAttr(ctx, auth, "user."+LockKeyAttr, path)
 	if err != nil {
-		if err == eosclient.AttrNotExistsError {
-			return nil, errtypes.NotFound("eosfs: lock not found")
-		}
-		return nil, errors.Wrap(err, "eosfs: error getting lock value")
+		return nil, err
 	}
 
 	lock, err := decodeLock(attr.Val)
@@ -613,23 +610,23 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 	// to set a lock. because in eos we can set attrs even if the user does
 	// not have the write permission, we need to check if the user that made
 	// the request has it
-	has, err := fs.userHasWriteAccess(ctx, user, path)
+	has, err := fs.userHasWriteAccess(ctx, user, ref)
 	if err != nil {
-		return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
+		return errors.Wrap(err, fmt.Sprintf("eosfs: cannot check if user %s has write access on resource", user.Username))
 	}
 	if !has {
-		return errtypes.BadRequest("user has not write access on resource")
+		return errtypes.PermissionDenied(fmt.Sprintf("user %s has not write access on resource", user.Username))
 	}
 
 	// the user in the lock could differ from the user in the context
 	// in that case, also the user in the lock MUST have the write permission
 	if l.User != nil && !utils.UserEqual(user.Id, l.User) {
-		has, err := fs.userIDHasWriteAccess(ctx, l.User, path)
+		has, err := fs.userIDHasWriteAccess(ctx, l.User, ref)
 		if err != nil {
 			return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
 		}
 		if !has {
-			return errtypes.BadRequest("user has not write access on resource")
+			return errtypes.PermissionDenied(fmt.Sprintf("user %s has not write access on resource", user.Username))
 		}
 	}
 
@@ -697,14 +694,6 @@ func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, ref *
 	return resInfo.PermissionSet.InitiateFileDownload, nil
 }
 
-func (fs *eosfs) userIDHasReadAccess(ctx context.Context, userID *userpb.UserId, ref *provider.Reference) (bool, error) {
-	user, err := fs.getUserFromID(ctx, userID)
-	if err != nil {
-		return false, err
-	}
-	return fs.userHasReadAccess(ctx, user, ref)
-}
-
 func encodeLock(l *provider.Lock) (string, error) {
 	data, err := json.Marshal(l)
 	if err != nil {
@@ -763,12 +752,12 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 
 	// the cs3apis require to have the write permission on the resource
 	// to set a lock
-	has, err := fs.userHasWriteAccess(ctx, user, path)
+	has, err := fs.userHasWriteAccess(ctx, user, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
 	}
 	if !has {
-		return errtypes.BadRequest("user has not write access on resource")
+		return errtypes.PermissionDenied(fmt.Sprintf("user %s has not write access on resource", user.Username))
 	}
 
 	// set the xattr with the new value
@@ -828,16 +817,26 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 		return errtypes.BadRequest("caller does not hold the lock")
 	}
 
+	user, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error getting user")
+	}
+
+	// the cs3apis require to have the write permission on the resource
+	// to remove the lock
+	has, err := fs.userHasWriteAccess(ctx, user, ref)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
+	}
+	if !has {
+		return errtypes.PermissionDenied(fmt.Sprintf("user %s has not write access on resource", user.Username))
+	}
+
 	path, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
 	path = fs.wrap(ctx, path)
-
-	user, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
 
 	auth, err := fs.getUserAuth(ctx, user, path)
 	if err != nil {

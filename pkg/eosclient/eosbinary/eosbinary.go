@@ -548,10 +548,6 @@ func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key,
 	args := []string{"attr", "get", key, path}
 	attrOut, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
-		var exErr *exec.ExitError
-		if errors.As(err, &exErr) && exErr.ExitCode() == 61 {
-			return nil, eosclient.AttrNotExistsError
-		}
 		return nil, err
 	}
 	attr, err := deserializeAttribute(attrOut)
