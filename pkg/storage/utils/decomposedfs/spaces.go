@@ -387,9 +387,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 	space.Owner = u
 
-	space.SpaceType = filepath.Base(filepath.Dir(matches[0]))
-
-	metadata := make(map[string]string)
+	metadata := make(map[string]string, 5)
 	if space.Name != "" {
 		metadata[xattrs.SpaceNameAttr] = space.Name
 	}
@@ -398,6 +396,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		metadata[xattrs.QuotaAttr] = strconv.FormatUint(space.Quota.QuotaMaxBytes, 10)
 	}
 
+	// TODO also return values which are not in the request
 	if space.Opaque != nil {
 		if description, ok := space.Opaque.Map["description"]; ok {
 			metadata[xattrs.SpaceDescriptionAttr] = string(description.Value)
@@ -415,9 +414,12 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		return nil, err
 	}
 
+	// send back the updated data from the storage
+	updatedSpace, err := fs.storageSpaceFromNode(ctx, node, "*", node.InternalPath(), false)
+
 	return &provider.UpdateStorageSpaceResponse{
 		Status:       &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
-		StorageSpace: space,
+		StorageSpace: updatedSpace,
 	}, nil
 }
 
