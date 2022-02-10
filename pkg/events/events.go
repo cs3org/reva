@@ -18,28 +18,25 @@ var (
 	MetadatakeyEventType = "eventtype"
 )
 
-// Unmarshaller is the interface events need to fullfill
+// Unmarshaller is the interface events need to fulfill
 type Unmarshaller interface {
 	Unmarshal([]byte) (interface{}, error)
 }
 
-// helper so we don't need to reflect too much on runtime
-type eventInfo struct {
-	Type  reflect.Type
-	Value reflect.Value
-	Raw   interface{}
+// Publisher is the interface publishers need to fulfill
+type Publisher interface {
+	Publish(string, interface{}, ...events.PublishOption) error
 }
 
-func (e *eventInfo) New() interface{} {
-	r := reflect.New(reflect.PtrTo(e.Type)).Elem()
-	r.Set(e.Value)
-	return r.Interface()
+// Consumer is the interface consumer need to fulfill
+type Consumer interface {
+	Consume(string, ...events.ConsumeOption) (<-chan events.Event, error)
 }
 
 // Consume returns a channel that will get all events that match the given evs
 // group defines the service type: One group will get exactly one copy of a event that is emitted
 // NOTE: uses reflect on initialization
-func Consume(s events.Stream, group string, evs ...Unmarshaller) (<-chan interface{}, error) {
+func Consume(s Consumer, group string, evs ...Unmarshaller) (<-chan interface{}, error) {
 	c, err := s.Consume(MainQueueName, events.WithGroup(group))
 	if err != nil {
 		return nil, err
@@ -76,7 +73,7 @@ func Consume(s events.Stream, group string, evs ...Unmarshaller) (<-chan interfa
 
 // Publish publishes the ev to the MainQueue from where it is distributed to all subscribers
 // NOTE: needs to use reflect on runtime
-func Publish(ev interface{}, s events.Stream) error {
+func Publish(ev interface{}, s Publisher) error {
 	evName := reflect.TypeOf(ev).String()
 	return s.Publish(MainQueueName, ev, events.WithMetadata(map[string]string{
 		MetadatakeyEventType: evName,

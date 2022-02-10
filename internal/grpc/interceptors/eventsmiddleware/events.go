@@ -22,7 +22,7 @@ func init() {
 
 // NewUnary returns a new unary interceptor that emits events when needed
 func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
-	stream, err := server.NewNatsStream()
+	publisher, err := server.NewNatsStream()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -40,7 +40,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		}
 
 		if ev != nil {
-			if err := events.Publish(ev, stream); err != nil {
+			if err := events.Publish(ev, publisher); err != nil {
 				// TODO: should we error here? log? panic?
 				log.Error(err)
 			}
