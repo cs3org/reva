@@ -164,15 +164,13 @@ func Get(filePath, key string) (string, error) {
 
 // All reads all extended attributes for a node
 func All(filePath string) (map[string]string, error) {
-	var attribs = make(map[string]string)
-	var attrNames []string
-	var err error
-	if attrNames, err = xattr.List(filePath); err != nil {
-		return attribs, errors.Wrap(err, "xattrs: Can not list extended attributes")
+	attrNames, err := xattr.List(filePath)
+	if err != nil {
+		return nil, errors.Wrap(err, "xattrs: Can not list extended attributes")
 	}
 
-	for i := range attrNames {
-		name := attrNames[i]
+       attribs := make(map[string]string, len(attrNames))
+	for _, name := range attrNames {
 		val, err := xattr.Get(filePath, name)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to read extended attrib")
