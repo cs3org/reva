@@ -169,7 +169,7 @@ func All(filePath string) (map[string]string, error) {
 		return nil, errors.Wrap(err, "xattrs: Can not list extended attributes")
 	}
 
-       attribs := make(map[string]string, len(attrNames))
+	attribs := make(map[string]string, len(attrNames))
 	for _, name := range attrNames {
 		val, err := xattr.Get(filePath, name)
 		if err != nil {
