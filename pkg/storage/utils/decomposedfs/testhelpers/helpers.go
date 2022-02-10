@@ -151,7 +151,7 @@ func (t *TestEnv) CreateTestFile(name, blobID string, blobSize int64, parentID s
 	if err != nil {
 		return nil, err
 	}
-	err = file.WriteMetadata(t.Owner.Id)
+	err = file.WriteAllNodeMetadata(t.Owner.Id)
 	if err != nil {
 		return nil, err
 	}

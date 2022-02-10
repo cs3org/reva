@@ -50,7 +50,6 @@ import (
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 	"go.opentelemetry.io/otel/codes"
 )
 
@@ -234,14 +233,13 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 
 	// update the owner
 	u := ctxpkg.ContextMustGetUser(ctx)
-	if err = h.WriteMetadata(u.Id); err != nil {
+	if err = h.WriteAllNodeMetadata(u.Id); err != nil {
 		return
 	}
 
 	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
-		homePath := h.InternalPath()
 		// mark the home node as the end of propagation
-		if err = xattr.Set(homePath, xattrs.PropagationAttr, []byte("1")); err != nil {
+		if err = h.SetMetadata(xattrs.PropagationAttr, "1"); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", h).Msg("could not mark home as propagation root")
 			return
 		}
@@ -340,9 +338,8 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	}
 
 	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
-		nodePath := n.InternalPath()
 		// mark the home node as the end of propagation
-		if err = xattr.Set(nodePath, xattrs.PropagationAttr, []byte("1")); err != nil {
+		if err = n.SetMetadata(xattrs.PropagationAttr, "1"); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
 
 			// FIXME: This does not return an error at all, but results in a severe situation that the
@@ -433,12 +430,11 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 	}
 	childCreated = true
 
-	internalPath := childNode.InternalPath()
-	if err := xattr.Set(internalPath, xattrs.ReferenceAttr, []byte(targetURI.String())); err != nil {
+	if err := childNode.SetMetadata(xattrs.ReferenceAttr, targetURI.String()); err != nil {
 		// the reference could not be set - that would result in an lost reference?
 		err := errors.Wrapf(err, "Decomposedfs: error setting the target %s on the reference file %s",
 			targetURI.String(),
-			internalPath,
+			childNode.InternalPath(),
 		)
 		span.SetStatus(codes.Error, err.Error())
 		return err
