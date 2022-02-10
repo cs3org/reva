@@ -433,6 +433,9 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 				info := stack[0]
 				stack = stack[1:]
 
+				if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+					continue
+				}
 				req := &provider.ListContainerRequest{
 					Ref: &provider.Reference{
 						ResourceId: spaceInfo.Id,
