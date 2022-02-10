@@ -430,11 +430,11 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 	}
 	childCreated = true
 
-	if err := n.SetMetadata(xattrs.ReferenceAttr, targetURI.String()); err != nil {
+	if err := childNode.SetMetadata(xattrs.ReferenceAttr, targetURI.String()); err != nil {
 		// the reference could not be set - that would result in an lost reference?
 		err := errors.Wrapf(err, "Decomposedfs: error setting the target %s on the reference file %s",
 			targetURI.String(),
-			n.InternalPath(),
+			childNode.InternalPath(),
 		)
 		span.SetStatus(codes.Error, err.Error())
 		return err
