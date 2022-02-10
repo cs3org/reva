@@ -281,7 +281,7 @@ func (n *Node) Parent() (p *Node, err error) {
 
 	// lookup parent id in extended attributes
 	if p.ParentID, err = xattrs.Get(parentPath, xattrs.ParentidAttr); err != nil {
-		p.ParentID = string("")
+		p.ParentID = ""
 		return
 	}
 	// lookup name in extended attributes
