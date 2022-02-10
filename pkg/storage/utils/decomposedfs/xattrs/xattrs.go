@@ -19,11 +19,13 @@
 package xattrs
 
 import (
+	"os"
 	"strconv"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/pkg/xattr"
+	"golang.org/x/sys/unix"
 )
 
 // Declare a list of xattr keys
@@ -142,12 +144,24 @@ func Set(filePath string, key string, val string) error {
 }
 
 // SetMultiple allows setting multiple key value pairs at once
-// TODO the changes are protected with an flock
+// the changes are protected with an flock
 func SetMultiple(filePath string, attribs map[string]string) error {
 
-	// FIXME: Lock here
+	// h, err := lockedfile.OpenFile(filePath, os.O_WRONLY, 0) // 0? Open File only workn for files ... but we want to lock dirs ... or symlinks
+	// or we append .lock to the file and use https://github.com/gofrs/flock
+	h, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer h.Close()
+	err = unix.Flock(int(h.Fd()), unix.LOCK_EX)
+	if err != nil {
+		return err
+	}
+	defer unix.Flock(int(h.Fd()), unix.LOCK_UN)
+
 	for key, val := range attribs {
-		if err := Set(filePath, key, val); err != nil {
+		if err := xattr.FSet(h, key, []byte(val)); err != nil {
 			return err
 		}
 	}
