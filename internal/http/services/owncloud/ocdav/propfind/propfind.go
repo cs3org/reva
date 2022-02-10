@@ -142,6 +142,7 @@ type PropstatUnmarshalXML struct {
 	ResponseDescription string               `xml:"responsedescription,omitempty"`
 }
 
+// NewMultiStatusResponseXML returns a preconfigured instance of MultiStatusResponseXML
 func NewMultiStatusResponseXML() *MultiStatusResponseXML {
 	return &MultiStatusResponseXML{
 		XmlnsD:  "DAV:",
