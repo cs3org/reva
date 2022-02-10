@@ -291,7 +291,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 
 	var userData map[string]interface{}
 	if strings.HasPrefix(value, "guest:") {
-		// Lightweight accounts need to be fetched by email, regardless the demanded claim
+		// Lightweight accounts need to be fetched by email, regardless of the demanded claim
 		if userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(value, "guest:")); err != nil {
 			return nil, err
 		}

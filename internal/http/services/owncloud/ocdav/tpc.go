@@ -34,8 +34,8 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -161,7 +161,6 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	w.WriteHeader(http.StatusAccepted)
 	err = s.performHTTPPull(ctx, client, r, w, ns)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error performing TPC Pull")
@@ -175,6 +174,36 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	dst := path.Join(ns, r.URL.Path)
 	sublog := appctx.GetLogger(ctx)
 	sublog.Debug().Str("src", src).Str("dst", dst).Msg("Performing HTTP Pull")
+
+	// get http client for remote
+	httpClient := &http.Client{}
+
+	req, err := http.NewRequest("GET", src, nil)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return err
+	}
+
+	// add authentication header
+	bearerHeader := r.Header.Get(HeaderTransferAuth)
+	req.Header.Add("Authorization", bearerHeader)
+
+	// do download
+	httpDownloadRes, err := httpClient.Do(req) // lgtm[go/request-forgery]
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return err
+	}
+	defer httpDownloadRes.Body.Close()
+
+	if httpDownloadRes.StatusCode == http.StatusNotImplemented {
+		w.WriteHeader(http.StatusBadRequest)
+		return errtypes.NotSupported("Third-Party copy not supported, source might be a folder")
+	}
+	if httpDownloadRes.StatusCode != http.StatusOK {
+		w.WriteHeader(httpDownloadRes.StatusCode)
+		return errtypes.InternalError(fmt.Sprintf("Remote GET returned status code %d", httpDownloadRes.StatusCode))
+	}
 
 	// get upload url
 	uReq := &provider.InitiateFileUploadRequest{
@@ -205,39 +234,8 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 		}
 	}
 
-	// get http client for remote
-	httpClient := &http.Client{}
-
-	req, err := http.NewRequest("GET", src, nil)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return err
-	}
-
-	// add authentication header
-	bearerHeader := r.Header.Get(HeaderTransferAuth)
-	req.Header.Add("Authorization", bearerHeader)
-
-	// do download
-	httpDownloadRes, err := httpClient.Do(req) // lgtm[go/request-forgery]
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return err
-	}
-	defer httpDownloadRes.Body.Close()
-
-	if httpDownloadRes.StatusCode == http.StatusNotImplemented {
-		// source is a folder, fail
-		w.WriteHeader(http.StatusBadRequest)
-		return errors.New("Third-Party copy of a folder is not supported")
-	}
-	if httpDownloadRes.StatusCode != http.StatusOK {
-		w.WriteHeader(http.StatusInternalServerError)
-		return fmt.Errorf("Remote GET returned status code %d", httpDownloadRes.StatusCode)
-	}
-
-	// send performance markers periodically every PerfMarkerResponseTime (5 seconds unless configured).
-	// seconds as transfer progresses
+	// send performance markers periodically every PerfMarkerResponseTime (5 seconds unless configured)
+	w.WriteHeader(http.StatusAccepted)
 	wc := WriteCounter{0, time.Now(), w}
 	tempReader := io.TeeReader(httpDownloadRes.Body, &wc)
 
@@ -325,7 +323,6 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	w.WriteHeader(http.StatusAccepted)
 	err = s.performHTTPPush(ctx, client, r, w, srcStatRes.Info, ns)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error performing TPC Push")
@@ -383,8 +380,8 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 		return fmt.Errorf("Remote PUT returned status code %d", httpDownloadRes.StatusCode)
 	}
 
-	// send performance markers periodically ever $PerfMarkerResponseTime
-	// seconds as transfer progreses
+	// send performance markers periodically every PerfMarkerResponseTime (5 seconds unless configured)
+	w.WriteHeader(http.StatusAccepted)
 	wc := WriteCounter{0, time.Now(), w}
 	tempReader := io.TeeReader(httpDownloadRes.Body, &wc)
 

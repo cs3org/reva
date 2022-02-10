@@ -52,14 +52,16 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "copy")
 	defer span.End()
 
-	if r.Header.Get("Source") != "" && s.c.EnableHTTPTpc {
-		// HTTP Third-Party Copy Pull mode
-		s.handleTPCPull(ctx, w, r, ns)
-		return
-	} else if r.Header.Get("Destination") != "" && s.c.EnableHTTPTpc {
-		// HTTP Third-Party Copy Push mode
-		s.handleTPCPush(ctx, w, r, ns)
-		return
+	if s.c.EnableHTTPTpc {
+		if r.Header.Get("Source") != "" {
+			// HTTP Third-Party Copy Pull mode
+			s.handleTPCPull(ctx, w, r, ns)
+			return
+		} else if r.Header.Get("Destination") != "" {
+			// HTTP Third-Party Copy Push mode
+			s.handleTPCPush(ctx, w, r, ns)
+			return
+		}
 	}
 
 	// Local copy: in this case Destination is mandatory
