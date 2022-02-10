@@ -462,7 +462,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 			if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
 				childInfos[childName].Mtime = spaceInfo.Mtime
 				childInfos[childName].Etag = spaceInfo.Etag
-				childInfos[childName].Size = childInfos[childName].Size + spaceInfo.Size
+				childInfos[childName].Size += spaceInfo.Size
 			}
 			// only update fileid if the resource is a direct child
 			if tail == "/" {
