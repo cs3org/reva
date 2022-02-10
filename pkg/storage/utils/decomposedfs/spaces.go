@@ -651,6 +651,10 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	spaceAttributes, err := xattrs.All(nodePath)
+	if err != nil {
+		return nil, err
+	}
+
 	// quota
 	quotaAttr, ok := spaceAttributes[xattrs.QuotaAttr]
 	if ok {
