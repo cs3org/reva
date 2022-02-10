@@ -7,10 +7,13 @@ import (
 
 // ShareCreated converts response to event
 func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
-	return events.ShareCreated{
-		Sharer: r.Share.Creator,
-		//Sharee: r.Share.Grantee, // TODO: unmarshaling fails -> find out why
-		ItemID: r.Share.ResourceId,
-		CTime:  r.Share.Ctime,
+	e := events.ShareCreated{
+		Sharer:         r.Share.Creator,
+		GranteeUserId:  r.Share.GetGrantee().GetUserId(),
+		GranteeGroupId: r.Share.GetGrantee().GetGroupId(),
+		ItemID:         r.Share.ResourceId,
+		CTime:          r.Share.Ctime,
 	}
+
+	return e
 }

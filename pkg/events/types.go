@@ -3,6 +3,7 @@ package events
 import (
 	"encoding/json"
 
+	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -11,9 +12,12 @@ import (
 // ShareCreated is emitted when a share is created
 type ShareCreated struct { // TODO: Rename to ShareCreatedEvent?
 	Sharer *user.UserId
-	Sharee *provider.Grantee
-	ItemID *provider.ResourceId
-	CTime  *types.Timestamp
+	// split the protobuf Grastee oneof so we can use stdlib encoding/json
+	GranteeUserId  *user.UserId
+	GranteeGroupId *group.GroupId
+	Sharee         *provider.Grantee
+	ItemID         *provider.ResourceId
+	CTime          *types.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface
