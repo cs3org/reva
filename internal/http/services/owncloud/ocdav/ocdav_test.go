@@ -29,19 +29,6 @@ import (
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
-/*
-The encodePath method as it is implemented currently is terribly inefficient.
-As soon as there are a few special characters which need to be escaped the allocation count rises and the time spent too.
-Adding more special characters increases the allocations and the time spent can rise up to a few milliseconds.
-Granted this is not a lot on it's own but when a user has tens or hundreds of paths which need to be escaped and contain a few special characters
-then this method alone will cost a huge amount of time.
-*/
-func BenchmarkEncodePath(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_ = net.EncodePath("/some/path/Folder %^*(#1)")
-	}
-}
-
 func TestWrapResourceID(t *testing.T) {
 	expected := "c3RvcmFnZWlkOm9wYXF1ZWlk"
 	wrapped := resourceid.OwnCloudResourceIDWrap(&providerv1beta1.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"})

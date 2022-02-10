@@ -199,7 +199,7 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 		return
 	}
 
-	spaces, rpcStatus, err := spacelookup.LookUpStorageSpacesForPathWithChildren(ctx, client.(gateway.GatewayAPIClient), fn)
+	spaces, rpcStatus, err := spacelookup.LookUpStorageSpacesForPathWithChildren(ctx, client, fn)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -240,7 +240,7 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 	}
 
 	// retrieve a specific storage space
-	space, rpcStatus, err := spacelookup.LookUpStorageSpaceByID(ctx, client.(gateway.GatewayAPIClient), spaceID)
+	space, rpcStatus, err := spacelookup.LookUpStorageSpaceByID(ctx, client, spaceID)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error looking up the space by id")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -381,7 +381,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		// TODO separate stats to the path or to the children, after statting all children update the mtime/etag
 		// TODO get mtime, and size from space as well, so we no longer have to stat here?
 		spaceRef := spacelookup.MakeRelativeReference(space, requestPath, spacesPropfind)
-		info, status, err := p.statSpace(ctx, client.(gateway.GatewayAPIClient), space, spaceRef, metadataKeys)
+		info, status, err := p.statSpace(ctx, client, space, spaceRef, metadataKeys)
 		if err != nil || status.Code != rpc.Code_CODE_OK {
 			continue
 		}
