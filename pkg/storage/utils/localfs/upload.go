@@ -329,7 +329,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		}
 	}
 
-	//err := os.Rename(upload.binPath, np)
 	//
 	//os.Rename is replaced by the code below to allow for the DataDirectory
 	//and Uploads directory to be on diferent file systems.
@@ -345,8 +344,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	inputFile.Close()
-	outputFile.Close()
+	defer inputFile.Close()
+	defer outputFile.Close()
 
 	// only delete the upload if it was successfully written to the fs
 	if err := os.Remove(upload.infoPath); err != nil {
