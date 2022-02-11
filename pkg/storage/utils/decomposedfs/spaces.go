@@ -397,9 +397,11 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	// TODO also return values which are not in the request
+	hasDescription := false
 	if space.Opaque != nil {
 		if description, ok := space.Opaque.Map["description"]; ok {
 			metadata[xattrs.SpaceDescriptionAttr] = string(description.Value)
+			hasDescription = true
 		}
 		if image, ok := space.Opaque.Map["image"]; ok {
 			metadata[xattrs.SpaceImageAttr] = string(image.Value)
@@ -409,6 +411,24 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}
 	}
 
+	// TODO change the permission handling
+	// these two attributes need manager permissions
+	if space.Name != "" || hasDescription {
+		err = fs.checkManagerPermission(ctx, node)
+	}
+	if err != nil {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
+		}, nil
+	}
+	// all other attributes need editor permissions
+	err = fs.checkEditorPermission(ctx, node)
+	if err != nil {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
+		}, nil
+	}
+
 	err = xattrs.SetMultiple(node.InternalPath(), metadata)
 	if err != nil {
 		return nil, err
@@ -416,6 +436,9 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 
 	// send back the updated data from the storage
 	updatedSpace, err := fs.storageSpaceFromNode(ctx, node, "*", node.InternalPath(), false)
+	if err != nil {
+		return nil, err
+	}
 
 	return &provider.UpdateStorageSpaceResponse{
 		Status:       &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
@@ -696,4 +719,35 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		}
 	}
 	return space, nil
+}
+
+func (fs *Decomposedfs) checkManagerPermission(ctx context.Context, n *node.Node) error {
+	// to update the space name or short description we need the manager role
+	// current workaround: check if AddGrant Permission exists
+	managerPerm, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+		return rp.AddGrant
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !managerPerm:
+		msg := fmt.Sprintf("not enough permissions to change attributes on %s", filepath.Join(n.ParentID, n.Name))
+		return errtypes.PermissionDenied(msg)
+	}
+	return nil
+}
+
+func (fs *Decomposedfs) checkEditorPermission(ctx context.Context, n *node.Node) error {
+	// current workaround: check if InitiateFileUpload Permission exists
+	editorPerm, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !editorPerm:
+		msg := fmt.Sprintf("not enough permissions to change attributes on %s", filepath.Join(n.ParentID, n.Name))
+		return errtypes.PermissionDenied(msg)
+	}
+	return nil
 }
