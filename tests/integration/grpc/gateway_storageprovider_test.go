@@ -495,7 +495,6 @@ var _ = Describe("gateway", func() {
 				info := statRes.Info
 				Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
 				Expect(info.Path).To(Equal(embeddedSpaceID))
-				Expect(info.Owner.OpaqueId).To(Equal(user.Id.OpaqueId))
 				Expect(info.Size).To(Equal(uint64(2)))
 			})
 

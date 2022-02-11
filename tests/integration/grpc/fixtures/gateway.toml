@@ -27,7 +27,7 @@ home_template = "/users/{{.Id.OpaqueId}}"
 "personal" = { "mount_point" = "/users", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}" }
 
 [grpc.services.storageregistry.drivers.spaces.providers."{{storage2_address}}".spaces]
-"project" = { "mount_point" = "/users/[^/]+/Projects", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}/Projects/{{.Space.Name}}" }
+"project" = { "mount_point" = "/users/[^/]+/Projects", "path_template" = "/users/{{.CurrentUser.Id.OpaqueId}}/Projects/{{.Space.Name}}" }
 
 [http]
 address = "{{grpc_address+1}}"
