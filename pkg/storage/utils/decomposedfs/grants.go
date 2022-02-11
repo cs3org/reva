@@ -23,13 +23,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
-	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
@@ -55,41 +51,31 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return
 	}
 
-	client, err := pool.GetGatewayServiceClient(fs.o.GatewayAddr)
+	grantees, err := node.ListGrantees(ctx)
 	if err != nil {
 		return err
 	}
 
-	// TODO(c0rby): find different solution
-	// It shouldn't check for the "create-space" permission. Instead when we just created
-	// a new project space it should be allowed to set a grant.
-	user := ctxpkg.ContextMustGetUser(ctx)
-	checkRes, err := client.CheckPermission(ctx, &permissionsv1beta1.CheckPermissionRequest{
-		Permission: "create-space",
-		SubjectRef: &permissionsv1beta1.SubjectReference{
-			Spec: &permissionsv1beta1.SubjectReference_UserId{
-				UserId: user.Id,
-			},
-		},
-	})
+	owner, err := node.Owner()
 	if err != nil {
 		return err
 	}
 
-	canCreateSpace := false
-	if checkRes.Status.Code == v1beta11.Code_CODE_OK {
-		canCreateSpace = true
-	}
-
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
-		return rp.AddGrant || rp.UpdateGrant
-	})
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !ok && !canCreateSpace:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	// If the owner is empty and there are no grantees then we are dealing with a just created project space.
+	// In this case we don't need to check for permissions and just add the grant since this will be the project
+	// manager.
+	// When the owner is empty but grants are set then we do want to check the grants.
+	if !(len(grantees) == 0 && owner.OpaqueId == "") {
+		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+			// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
+			return rp.AddGrant || rp.UpdateGrant
+		})
+		switch {
+		case err != nil:
+			return errtypes.InternalError(err.Error())
+		case !ok:
+			return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+		}
 	}
 
 	// check lock
