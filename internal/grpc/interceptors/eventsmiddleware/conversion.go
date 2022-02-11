@@ -16,11 +16,22 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package eventsmiddleware
 
 import (
-	// Load core GRPC services
-	_ "github.com/cs3org/reva/internal/grpc/interceptors/eventsmiddleware"
-	_ "github.com/cs3org/reva/internal/grpc/interceptors/readonly"
-	// Add your own service here
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	"github.com/cs3org/reva/pkg/events"
 )
+
+// ShareCreated converts response to event
+func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
+	e := events.ShareCreated{
+		Sharer:         r.Share.Creator,
+		GranteeUserID:  r.Share.GetGrantee().GetUserId(),
+		GranteeGroupID: r.Share.GetGrantee().GetGroupId(),
+		ItemID:         r.Share.ResourceId,
+		CTime:          r.Share.Ctime,
+	}
+
+	return e
+}

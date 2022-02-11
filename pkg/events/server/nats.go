@@ -16,11 +16,28 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package server
 
 import (
-	// Load core GRPC services
-	_ "github.com/cs3org/reva/internal/grpc/interceptors/eventsmiddleware"
-	_ "github.com/cs3org/reva/internal/grpc/interceptors/readonly"
-	// Add your own service here
+	"github.com/asim/go-micro/plugins/events/nats/v4"
+	"go-micro.dev/v4/events"
+
+	stanServer "github.com/nats-io/nats-streaming-server/server"
 )
+
+// RunNatsServer runs the nats streaming server
+func RunNatsServer(opts ...Option) error {
+	natsOpts := stanServer.DefaultNatsServerOptions
+	stanOpts := stanServer.GetDefaultOptions()
+
+	for _, o := range opts {
+		o(&natsOpts, stanOpts)
+	}
+	_, err := stanServer.RunServerWithOpts(stanOpts, &natsOpts)
+	return err
+}
+
+// NewNatsStream returns a streaming client used by `Consume` and `Publish` methods
+func NewNatsStream(opts ...nats.Option) (events.Stream, error) {
+	return nats.NewStream(opts...)
+}
