@@ -64,6 +64,9 @@ const (
 
 	// TrashIDDelimiter represents the characters used to separate the nodeid and the deletion time.
 	TrashIDDelimiter = ".T."
+
+	// RootID defines the root node's ID
+	RootID = "root"
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
@@ -809,7 +812,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 	if o.OpaqueId == "" {
 		// this happens for root nodes and project spaces in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// for project spaces we need to go over the grants and check the granted permissions
-		if n.ID == "root" {
+		if n.ID == RootID {
 			return NoOwnerPermissions(), nil
 		}
 	}

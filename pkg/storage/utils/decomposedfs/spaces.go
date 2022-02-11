@@ -47,8 +47,11 @@ import (
 )
 
 const (
-	spaceTypeAny = "*"
-	spaceIDAny   = "*"
+	spaceTypePersonal = "personal"
+	spaceTypeProject  = "project"
+	spaceTypeShare    = "share"
+	spaceTypeAny      = "*"
+	spaceIDAny        = "*"
 )
 
 // CreateStorageSpace creates a storage space
@@ -76,7 +79,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	}
 	// TODO enforce a uuid?
 	// TODO clarify if we want to enforce a single personal storage space or if we want to allow sending the spaceid
-	if req.Type == "personal" {
+	if req.Type == spaceTypePersonal {
 		spaceID = req.Owner.Id.OpaqueId
 	}
 
@@ -110,7 +113,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	}
 
 	ownerID := u.Id
-	if req.Type == "project" {
+	if req.Type == spaceTypeProject {
 		ownerID = &userv1beta1.UserId{}
 	}
 
@@ -283,7 +286,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		spaceType := filepath.Base(filepath.Dir(matches[i]))
 
 		// FIXME type share evolved to grant on the edge branch ... make it configurable if the driver should support them or not for now ... ignore type share
-		if spaceType == "share" {
+		if spaceType == spaceTypeShare {
 			numShares++
 			// do not list shares as spaces for the owner
 			continue
@@ -512,7 +515,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 			return err
 		}
 
-		matches, err = filepath.Glob(filepath.Join(fs.o.Root, "nodes", "root", req.Id.OpaqueId+node.TrashIDDelimiter+"*"))
+		matches, err = filepath.Glob(filepath.Join(fs.o.Root, "nodes", node.RootID, req.Id.OpaqueId+node.TrashIDDelimiter+"*"))
 		if err != nil {
 			return err
 		}
@@ -664,7 +667,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		}
 	}
 
-	if spaceType != "project" && owner.OpaqueId != "" {
+	if spaceType != spaceTypeProject && owner.OpaqueId != "" {
 		space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object
 			Id: owner,
 		}

@@ -110,7 +110,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 	if o.OpaqueId == "" {
 		// this happens for root nodes and project spaces in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// for project spaces we need to go over the grants and check the granted permissions
-		if n.ID == "root" {
+		if n.ID == RootID {
 			return NoOwnerPermissions(), nil
 		}
 	}
@@ -280,7 +280,7 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 	if o.OpaqueId == "" {
 		// this happens for root nodes and project spaces in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// for project spaces we need to go over the grants and check the granted permissions
-		if n.ID != "root" {
+		if n.ID != RootID {
 			return u, nil
 		}
 		perms := NoOwnerPermissions()

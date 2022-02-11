@@ -111,7 +111,7 @@ func (t *Tree) Setup(owner *userpb.UserId, propagateToRoot bool) error {
 
 	// the root node has an empty name
 	// the root node has no parent
-	n := node.New("root", "", "", 0, "", nil, t.lookup)
+	n := node.New(node.RootID, "", "", 0, "", nil, t.lookup)
 	err := t.createNode(n, owner)
 	if err != nil {
 		return err
@@ -207,7 +207,7 @@ func (t *Tree) linkSpace(spaceType, spaceID, nodeID string) {
 
 func isRootNode(nodePath string) bool {
 	attr, err := xattrs.Get(nodePath, xattrs.ParentidAttr)
-	return err == nil && attr == "root"
+	return err == nil && attr == node.RootID
 }
 func isSharedNode(nodePath string) bool {
 	if attrs, err := xattr.List(nodePath); err == nil {
