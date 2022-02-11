@@ -233,7 +233,7 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	u, err := m.fetchCachedUserDetails(uid)
 	if err != nil {
 		var (
@@ -252,19 +252,21 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		u = m.parseAndCacheUser(ctx, userData)
 	}
 
-	userGroups, err := m.GetUserGroups(ctx, uid)
-	if err != nil {
-		return nil, err
+	if !skipFetchingGroups {
+		userGroups, err := m.GetUserGroups(ctx, uid)
+		if err != nil {
+			return nil, err
+		}
+		u.Groups = userGroups
 	}
-	u.Groups = userGroups
 
 	return u, nil
 }
 
-func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	opaqueID, err := m.fetchCachedParam(claim, value)
 	if err == nil {
-		return m.GetUser(ctx, &userpb.UserId{OpaqueId: opaqueID})
+		return m.GetUser(ctx, &userpb.UserId{OpaqueId: opaqueID}, skipFetchingGroups)
 	}
 
 	switch claim {
@@ -289,17 +291,19 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	}
 	u := m.parseAndCacheUser(ctx, userData)
 
-	userGroups, err := m.GetUserGroups(ctx, u.Id)
-	if err != nil {
-		return nil, err
+	if !skipFetchingGroups {
+		userGroups, err := m.GetUserGroups(ctx, u.Id)
+		if err != nil {
+			return nil, err
+		}
+		u.Groups = userGroups
 	}
-	u.Groups = userGroups
 
 	return u, nil
 
 }
 
-func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[string]*userpb.User) error {
+func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[string]*userpb.User, skipFetchingGroups bool) error {
 
 	userData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
@@ -329,6 +333,14 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 			Idp:      m.conf.IDProvider,
 			Type:     userType,
 		}
+		var userGroups []string
+		if !skipFetchingGroups {
+			userGroups, err = m.GetUserGroups(ctx, uid)
+			if err != nil {
+				return err
+			}
+		}
+
 		users[uid.OpaqueId] = &userpb.User{
 			Id:          uid,
 			Username:    upn,
@@ -336,13 +348,14 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 			DisplayName: name,
 			UidNumber:   int64(uidNumber),
 			GidNumber:   int64(gidNumber),
+			Groups:      userGroups,
 		}
 	}
 
 	return nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 
 	// Look at namespaces filters. If the query starts with:
 	// "a" => look into primary/secondary/service accounts
@@ -372,7 +385,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	for _, f := range filters {
 		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
 			m.conf.APIBaseURL, f, url.QueryEscape(query))
-		err := m.findUsersByFilter(ctx, url, users)
+		err := m.findUsersByFilter(ctx, url, users, skipFetchingGroups)
 		if err != nil {
 			return nil, err
 		}

@@ -1950,7 +1950,7 @@ func (fs *owncloudsqlfs) HashFile(path string) (string, string, string, error) {
 	}
 }
 
-func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, _ map[string]struct{}) ([]*provider.StorageSpace, error) {
+func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	// TODO(corby): Implement
 	return nil, errtypes.NotSupported("list storage spaces")
 }

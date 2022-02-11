@@ -145,7 +145,7 @@ func (um *Manager) Configure(ml map[string]interface{}) error {
 }
 
 // GetUser method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	bodyStr, err := json.Marshal(uid)
 	if err != nil {
 		return nil, err
@@ -164,7 +164,7 @@ func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.Use
 }
 
 // GetUserByClaim method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	type paramsObj struct {
 		Claim string `json:"claim"`
 		Value string `json:"value"`
@@ -205,7 +205,7 @@ func (um *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]str
 }
 
 // FindUsers method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (um *Manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+func (um *Manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 	_, respBody, err := um.do(ctx, Action{"FindUsers", query})
 	if err != nil {
 		return nil, err

@@ -20,7 +20,6 @@ package storageprovider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -579,19 +578,7 @@ func hasNodeID(s *provider.StorageSpace) bool {
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	log := appctx.GetLogger(ctx)
 
-	// This is just a quick hack to get the users permission into reva.
-	// Replace this as soon as we have a proper system to check the users permissions.
-	opaque := req.Opaque
-	var permissions map[string]struct{}
-	if opaque != nil {
-		entry := opaque.Map["permissions"]
-		err := json.Unmarshal(entry.Value, &permissions)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters, permissions)
+	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -1170,6 +1157,15 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 		}, nil
 	}
 
+	prefixMountpoint := utils.IsAbsoluteReference(req.Ref)
+	for _, md := range items {
+		if err := s.wrapReference(ctx, md.Ref, prefixMountpoint); err != nil {
+			return &provider.ListRecycleResponse{
+				Status: status.NewInternal(ctx, err, "error wrapping path"),
+			}, nil
+		}
+	}
+
 	res := &provider.ListRecycleResponse{
 		Status:       status.NewOK(ctx),
 		RecycleItems: items,
@@ -1547,6 +1543,18 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMou
 	if prefixMountpoint {
 		// TODO move mount path prefixing to the gateway
 		ri.Path = path.Join(s.mountPath, ri.Path)
+	}
+	return nil
+}
+
+func (s *service) wrapReference(ctx context.Context, ref *provider.Reference, prefixMountpoint bool) error {
+	if ref.ResourceId != nil && ref.ResourceId.StorageId == "" {
+		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
+		ref.ResourceId.StorageId = s.mountID
+	}
+	if prefixMountpoint {
+		// TODO move mount path prefixing to the gateway
+		ref.Path = path.Join(s.mountPath, ref.Path)
 	}
 	return nil
 }

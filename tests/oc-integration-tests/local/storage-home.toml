@@ -30,6 +30,7 @@ root = "/var/tmp/reva/data"
 enable_home = true
 treetime_accounting = true
 treesize_accounting = true
+gateway_addr = "0.0.0.0:19000"
 #user_layout = 
 # do we need owner for users?
 #owner = 95cb8724-03b2-11eb-a0a6-c33ef8ef53ad 

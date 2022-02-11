@@ -30,7 +30,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share/cache"
-	"github.com/cs3org/reva/pkg/share/cache/registry"
+	"github.com/cs3org/reva/pkg/share/cache/warmup/registry"
 	"github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -69,7 +69,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New returns a new implementation of the storage.FS interface that connects to EOS.
+// New returns an implementation of cache warmup that connects to the cbox share db and stats resources on EOS
 func New(m map[string]interface{}) (cache.Warmup, error) {
 	c, err := parseConfig(m)
 	if err != nil {

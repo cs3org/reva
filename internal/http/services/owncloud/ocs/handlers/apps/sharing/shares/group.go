@@ -47,8 +47,9 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 	}
 
 	groupRes, err := c.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
-		Claim: "group_name",
-		Value: shareWith,
+		Claim:               "group_name",
+		Value:               shareWith,
+		SkipFetchingMembers: true,
 	})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)

@@ -101,7 +101,7 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) GetGroup(ctx context.Context, req *grouppb.GetGroupRequest) (*grouppb.GetGroupResponse, error) {
-	group, err := s.groupmgr.GetGroup(ctx, req.GroupId)
+	group, err := s.groupmgr.GetGroup(ctx, req.GroupId, req.SkipFetchingMembers)
 	if err != nil {
 		res := &grouppb.GetGroupResponse{}
 		if _, ok := err.(errtypes.NotFound); ok {
@@ -120,7 +120,7 @@ func (s *service) GetGroup(ctx context.Context, req *grouppb.GetGroupRequest) (*
 }
 
 func (s *service) GetGroupByClaim(ctx context.Context, req *grouppb.GetGroupByClaimRequest) (*grouppb.GetGroupByClaimResponse, error) {
-	group, err := s.groupmgr.GetGroupByClaim(ctx, req.Claim, req.Value)
+	group, err := s.groupmgr.GetGroupByClaim(ctx, req.Claim, req.Value, req.SkipFetchingMembers)
 	if err != nil {
 		res := &grouppb.GetGroupByClaimResponse{}
 		if _, ok := err.(errtypes.NotFound); ok {
@@ -139,7 +139,7 @@ func (s *service) GetGroupByClaim(ctx context.Context, req *grouppb.GetGroupByCl
 }
 
 func (s *service) FindGroups(ctx context.Context, req *grouppb.FindGroupsRequest) (*grouppb.FindGroupsResponse, error) {
-	groups, err := s.groupmgr.FindGroups(ctx, req.Filter)
+	groups, err := s.groupmgr.FindGroups(ctx, req.Filter, req.SkipFetchingMembers)
 	if err != nil {
 		err = errors.Wrap(err, "groupprovidersvc: error finding groups")
 		return &grouppb.FindGroupsResponse{

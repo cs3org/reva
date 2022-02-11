@@ -81,20 +81,28 @@ func (m *Manager) Configure(ml map[string]interface{}) error {
 }
 
 // GetUser returns the user based on the uid.
-func (m *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (m *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	for _, u := range m.users {
 		if (u.Id.GetOpaqueId() == uid.OpaqueId || u.Username == uid.OpaqueId) && (uid.Idp == "" || uid.Idp == u.Id.GetIdp()) {
-			return u, nil
+			user := *u
+			if skipFetchingGroups {
+				user.Groups = nil
+			}
+			return &user, nil
 		}
 	}
 	return nil, nil
 }
 
 // GetUserByClaim returns user based on the claim
-func (m *Manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (m *Manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	for _, u := range m.users {
 		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
-			return u, nil
+			user := *u
+			if skipFetchingGroups {
+				user.Groups = nil
+			}
+			return &user, nil
 		}
 	}
 	return nil, errtypes.NotFound(value)
@@ -126,11 +134,15 @@ func userContains(u *userpb.User, query string) bool {
 }
 
 // FindUsers returns the user based on the query
-func (m *Manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+func (m *Manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 	users := []*userpb.User{}
 	for _, u := range m.users {
 		if userContains(u, query) {
-			users = append(users, u)
+			user := *u
+			if skipFetchingGroups {
+				user.Groups = nil
+			}
+			users = append(users, &user)
 		}
 	}
 	return users, nil
@@ -138,7 +150,7 @@ func (m *Manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 
 // GetUserGroups returns the user groups
 func (m *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
-	user, err := m.GetUser(ctx, uid)
+	user, err := m.GetUser(ctx, uid, false)
 	if err != nil {
 		return nil, err
 	}
