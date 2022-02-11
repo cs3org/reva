@@ -153,7 +153,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 
 		if hasUploaderRole(user) {
 			ref.Path = utils.AppendNowToPath(ref.Path)
-			log.Debug().Msgf("user %s has uploader role, changed file destination to %s", user.Username, ref.Path)
+			log.Debug().Str("user", user.Username).Str("path", ref.Path).Msg("user has uploader role, changed file name")
 		}
 	}
 
