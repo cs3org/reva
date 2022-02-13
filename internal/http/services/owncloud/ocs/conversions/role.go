@@ -284,12 +284,12 @@ func NewManagerRole() *Role {
 	}
 }
 
-// RoleFromOCSPermissions tries to map ocs permissions to a role
+// RoleFromOCSPermissions  tries to map ocs permissions to a role
 func RoleFromOCSPermissions(p Permissions) *Role {
 	if p.Contain(PermissionRead) {
 		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) {
 			if p.Contain(PermissionShare) {
-				return NewCoownerRole()
+				return NewManagerRole()
 			}
 			return NewEditorRole()
 		}
