@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
@@ -137,7 +136,7 @@ func CopyMetadata(s, t string, filter func(attributeName string) bool) error {
 func Set(filePath string, key string, val string) error {
 
 	if err := xattr.Set(filePath, key, []byte(val)); err != nil {
-		return errors.Wrap(err, "xattrs: Could not write xtended attribute")
+		return err
 	}
 	return nil
 }
@@ -160,7 +159,7 @@ func Get(filePath, key string) (string, error) {
 
 	v, err := xattr.Get(filePath, key)
 	if err != nil {
-		return "", errors.Wrap(err, "xattrs: Can not read xattr")
+		return "", err
 	}
 	val := string(v)
 	return val, nil
@@ -174,7 +173,7 @@ func GetInt64(filePath, key string) (int64, error) {
 	}
 	v, err := strconv.ParseInt(attr, 10, 64)
 	if err != nil {
-		return 0, errors.Wrapf(err, "invalid xattr format")
+		return 0, err
 	}
 	return v, nil
 }
@@ -183,14 +182,14 @@ func GetInt64(filePath, key string) (int64, error) {
 func All(filePath string) (map[string]string, error) {
 	attrNames, err := xattr.List(filePath)
 	if err != nil {
-		return nil, errors.Wrap(err, "xattrs: Can not list extended attributes")
+		return nil, err
 	}
 
 	attribs := make(map[string]string, len(attrNames))
 	for _, name := range attrNames {
 		val, err := xattr.Get(filePath, name)
 		if err != nil {
-			return nil, errors.Wrap(err, "Failed to read extended attrib")
+			return nil, err
 		}
 		attribs[name] = string(val)
 	}
