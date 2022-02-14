@@ -145,7 +145,7 @@ func TestPermissions2Role(t *testing.T) {
 	table := map[Permissions]string{
 		PermissionRead: RoleViewer,
 		PermissionRead | PermissionWrite | PermissionCreate | PermissionDelete: RoleEditor,
-		PermissionAll:                     RoleCoowner,
+		PermissionAll:                     RoleManager,
 		PermissionWrite:                   RoleLegacy,
 		PermissionShare:                   RoleLegacy,
 		PermissionWrite | PermissionShare: RoleLegacy,
