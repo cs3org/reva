@@ -1,4 +1,4 @@
-package disk
+package index_test
 
 import (
 	"io/ioutil"
@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
-	//. "github.com/cs3org/reva/pkg/storage/utils/indexer/test"
+	"github.com/owncloud/ocis/ocis-pkg/indexer/option"
+	//. "github.com/owncloud/ocis/ocis-pkg/indexer/test"
 	accountsmsg "github.com/owncloud/ocis/protogen/gen/ocis/messages/accounts/v0"
 	"github.com/stretchr/testify/assert"
 )

@@ -10,19 +10,16 @@ import (
 	"github.com/CiscoM31/godata"
 	"github.com/iancoleman/strcase"
 
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/config"
 	"github.com/cs3org/reva/pkg/storage/utils/indexer/errors"
 	"github.com/cs3org/reva/pkg/storage/utils/indexer/index"
-	_ "github.com/cs3org/reva/pkg/storage/utils/indexer/index/cs3"  // to populate index
-	_ "github.com/cs3org/reva/pkg/storage/utils/indexer/index/disk" // to populate index
 	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/registry"
+	"github.com/cs3org/reva/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/pkg/storage/utils/sync"
 )
 
 // Indexer is a facade to configure and query over multiple indices.
 type Indexer struct {
-	config  *config.Config
+	s       metadata.Storage
 	indices typeMap
 	mu      sync.NamedRWMutex
 }
@@ -33,9 +30,9 @@ type IdxAddResult struct {
 }
 
 // CreateIndexer creates a new Indexer.
-func CreateIndexer(cfg *config.Config) *Indexer {
+func CreateIndexer(s metadata.Storage) *Indexer {
 	return &Indexer{
-		config:  cfg,
+		s:       s,
 		indices: typeMap{},
 		mu:      sync.NewNamedRWMutex(),
 	}
@@ -60,32 +57,24 @@ func (i *Indexer) Reset() error {
 
 // AddIndex adds a new index to the indexer receiver.
 func (i *Indexer) AddIndex(t interface{}, indexBy, pkName, entityDirName, indexType string, bound *option.Bound, caseInsensitive bool) error {
-	f := registry.IndexConstructorRegistry[i.config.Repo.Backend][indexType]
 	var idx index.Index
 
-	if i.config.Repo.Backend == "cs3" {
-		idx = f(
-			option.CaseInsensitive(caseInsensitive),
-			option.WithEntity(t),
-			option.WithBounds(bound),
-			option.WithTypeName(getTypeFQN(t)),
-			option.WithIndexBy(indexBy),
-			option.WithDataURL(i.config.Repo.CS3.DataURL),
-			option.WithDataPrefix(i.config.Repo.CS3.DataPrefix),
-			option.WithProviderAddr(i.config.Repo.CS3.ProviderAddr),
-			option.WithServiceUser(i.config.ServiceUser),
-		)
-	} else {
-		idx = f(
-			option.CaseInsensitive(caseInsensitive),
-			option.WithEntity(t),
-			option.WithBounds(bound),
-			option.WithTypeName(getTypeFQN(t)),
-			option.WithIndexBy(indexBy),
-			option.WithFilesDir(path.Join(i.config.Repo.Disk.Path, entityDirName)),
-			option.WithDataDir(i.config.Repo.Disk.Path),
-		)
+	var f func(o ...option.Option) index.Index
+	switch indexType {
+	case "unique":
+		f = index.NewUniqueIndexWithOptions
+	case "non_unique":
+		f = index.NewNonUniqueIndexWithOptions
+	case "autoincrement":
+		f = index.NewAutoincrementIndex
+	default:
+		return fmt.Errorf("invalid index type: %s", indexType)
 	}
+	idx = f(
+		option.CaseInsensitive(caseInsensitive),
+		option.WithBounds(bound),
+		option.WithIndexBy(indexBy),
+	)
 
 	i.indices.addIndex(getTypeFQN(t), pkName, idx)
 	return idx.Init()

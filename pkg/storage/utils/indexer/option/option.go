@@ -1,7 +1,7 @@
 package option
 
 import (
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/storage/utils/metadata"
 )
 
 // Option defines a single option function.
@@ -19,21 +19,12 @@ type Options struct {
 	CaseInsensitive bool
 	Bound           *Bound
 
-	// Disk Options
-	TypeName      string
-	IndexBy       string
-	FilesDir      string
-	IndexBaseDir  string
-	DataDir       string
-	EntityDirName string
-	Entity        interface{}
+	TypeName string
+	IndexBy  string
+	FilesDir string
+	Prefix   string
 
-	// CS3 options
-	DataURL      string
-	DataPrefix   string
-	JWTSecret    string
-	ProviderAddr string
-	ServiceUser  *user.User
+	Storage metadata.Storage
 }
 
 // CaseInsensitive sets the CaseInsensitive field.
@@ -47,48 +38,6 @@ func CaseInsensitive(val bool) Option {
 func WithBounds(val *Bound) Option {
 	return func(o *Options) {
 		o.Bound = val
-	}
-}
-
-// WithEntity sets the Entity field.
-func WithEntity(val interface{}) Option {
-	return func(o *Options) {
-		o.Entity = val
-	}
-}
-
-// WithJWTSecret sets the JWTSecret field.
-func WithJWTSecret(val string) Option {
-	return func(o *Options) {
-		o.JWTSecret = val
-	}
-}
-
-// WithDataURL sets the DataURl field.
-func WithDataURL(val string) Option {
-	return func(o *Options) {
-		o.DataURL = val
-	}
-}
-
-// WithDataPrefix sets the DataPrefix field.
-func WithDataPrefix(val string) Option {
-	return func(o *Options) {
-		o.DataPrefix = val
-	}
-}
-
-// WithEntityDirName sets the EntityDirName field.
-func WithEntityDirName(val string) Option {
-	return func(o *Options) {
-		o.EntityDirName = val
-	}
-}
-
-// WithDataDir sets the DataDir option.
-func WithDataDir(val string) Option {
-	return func(o *Options) {
-		o.DataDir = val
 	}
 }
 
@@ -110,19 +59,5 @@ func WithIndexBy(val string) Option {
 func WithFilesDir(val string) Option {
 	return func(o *Options) {
 		o.FilesDir = val
-	}
-}
-
-// WithProviderAddr sets the option ProviderAddr.
-func WithProviderAddr(val string) Option {
-	return func(o *Options) {
-		o.ProviderAddr = val
-	}
-}
-
-// WithServiceUser sets the option ServiceUser.
-func WithServiceUser(val *user.User) Option {
-	return func(o *Options) {
-		o.ServiceUser = val
 	}
 }

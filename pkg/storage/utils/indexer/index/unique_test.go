@@ -1,15 +1,15 @@
-package disk
+package index_test
 
 import (
 	"os"
 	"path"
 	"testing"
 
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/errors"
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/index"
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
-	. "github.com/cs3org/reva/pkg/storage/utils/indexer/test"
 	"github.com/owncloud/ocis/accounts/pkg/config"
+	"github.com/owncloud/ocis/ocis-pkg/indexer/errors"
+	"github.com/owncloud/ocis/ocis-pkg/indexer/index"
+	"github.com/owncloud/ocis/ocis-pkg/indexer/option"
+	. "github.com/owncloud/ocis/ocis-pkg/indexer/test"
 	"github.com/stretchr/testify/assert"
 )
 

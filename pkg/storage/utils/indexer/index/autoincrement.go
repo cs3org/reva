@@ -1,8 +1,7 @@
-package cs3
+package index
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path"
 	"path/filepath"
@@ -10,15 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
 	idxerrs "github.com/cs3org/reva/pkg/storage/utils/indexer/errors"
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/index"
 	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/registry"
 	metadata "github.com/cs3org/reva/pkg/storage/utils/metadata"
-	"github.com/cs3org/reva/pkg/utils"
 )
 
 // Autoincrement are fields for an index of type autoincrement.
@@ -29,18 +22,12 @@ type Autoincrement struct {
 	indexBaseDir string
 	indexRootDir string
 
-	metadata *metadata.Storage
-
-	cs3conf *Config
 	bound   *option.Bound
-}
-
-func init() {
-	registry.IndexConstructorRegistry["cs3"]["autoincrement"] = NewAutoincrementIndex
+	storage metadata.Storage
 }
 
 // NewAutoincrementIndex instantiates a new AutoincrementIndex instance.
-func NewAutoincrementIndex(o ...option.Option) index.Index {
+func NewAutoincrementIndex(o ...option.Option) Index {
 	opts := &option.Options{}
 	for _, opt := range o {
 		opt(opts)
@@ -51,13 +38,8 @@ func NewAutoincrementIndex(o ...option.Option) index.Index {
 		typeName:     opts.TypeName,
 		filesDir:     opts.FilesDir,
 		bound:        opts.Bound,
-		indexBaseDir: path.Join(opts.DataDir, "index.cs3"),
-		indexRootDir: path.Join(path.Join(opts.DataDir, "index.cs3"), strings.Join([]string{"autoincrement", opts.TypeName, opts.IndexBy}, ".")),
-		cs3conf: &Config{
-			ProviderAddr: opts.ProviderAddr,
-			JWTSecret:    opts.JWTSecret,
-			ServiceUser:  opts.ServiceUser,
-		},
+		indexBaseDir: path.Join(opts.Prefix, "index.cs3"),
+		indexRootDir: path.Join(opts.Prefix, "index.cs3", strings.Join([]string{"autoincrement", opts.TypeName, opts.IndexBy}, ".")),
 	}
 
 	return u
@@ -65,11 +47,11 @@ func NewAutoincrementIndex(o ...option.Option) index.Index {
 
 // Init initializes an autoincrement index.
 func (idx *Autoincrement) Init() error {
-	if err := idx.makeDirIfNotExists(idx.indexBaseDir); err != nil {
+	if err := idx.storage.MakeDirIfNotExist(context.Background(), idx.indexBaseDir); err != nil {
 		return err
 	}
 
-	if err := idx.makeDirIfNotExists(idx.indexRootDir); err != nil {
+	if err := idx.storage.MakeDirIfNotExist(context.Background(), idx.indexRootDir); err != nil {
 		return err
 	}
 
@@ -79,7 +61,7 @@ func (idx *Autoincrement) Init() error {
 // Lookup exact lookup by value.
 func (idx *Autoincrement) Lookup(v string) ([]string, error) {
 	searchPath := path.Join(idx.indexRootDir, v)
-	oldname, err := idx.resolveSymlink(searchPath)
+	oldname, err := idx.storage.ResolveSymlink(context.Background(), searchPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, Key: idx.indexBy, Value: v}
@@ -103,7 +85,7 @@ func (idx *Autoincrement) Add(id, v string) (string, error) {
 	} else {
 		newName = path.Join(idx.indexRootDir, v)
 	}
-	if err := idx.createSymlink(id, newName); err != nil {
+	if err := idx.storage.CreateSymlink(context.Background(), id, newName); err != nil {
 		if os.IsExist(err) {
 			return "", &idxerrs.AlreadyExistsErr{TypeName: idx.typeName, Key: idx.indexBy, Value: v}
 		}
@@ -120,7 +102,7 @@ func (idx *Autoincrement) Remove(id string, v string) error {
 		return nil
 	}
 	searchPath := path.Join(idx.indexRootDir, v)
-	_, err := idx.resolveSymlink(searchPath)
+	_, err := idx.storage.ResolveSymlink(context.Background(), searchPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, Key: idx.indexBy, Value: v}
@@ -130,26 +112,7 @@ func (idx *Autoincrement) Remove(id string, v string) error {
 	}
 
 	deletePath := path.Join("/", idx.indexRootDir, v)
-	resp, err := idx.storageProvider.Delete(context.Background(), &provider.DeleteRequest{
-		Ref: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: idx.cs3conf.ServiceUser.Id.OpaqueId,
-				OpaqueId:  idx.cs3conf.ServiceUser.Id.OpaqueId,
-			},
-			Path: utils.MakeRelativePath(deletePath),
-		},
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// TODO Handle other error codes?
-	if resp.Status.Code == v1beta11.Code_CODE_NOT_FOUND {
-		return &idxerrs.NotFoundErr{}
-	}
-
-	return err
+	return idx.storage.Delete(context.Background(), deletePath)
 }
 
 // Update index from <oldV> to <newV>.
@@ -167,29 +130,20 @@ func (idx *Autoincrement) Update(id, oldV, newV string) error {
 
 // Search allows for glob search on the index.
 func (idx *Autoincrement) Search(pattern string) ([]string, error) {
-	res, err := idx.storageProvider.ListContainer(context.Background(), &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: idx.cs3conf.ServiceUser.Id.OpaqueId,
-				OpaqueId:  idx.cs3conf.ServiceUser.Id.OpaqueId,
-			},
-			Path: utils.MakeRelativePath(idx.indexRootDir),
-		},
-	})
-
+	infos, err := idx.storage.ListContainer(context.Background(), idx.indexRootDir)
 	if err != nil {
 		return nil, err
 	}
 
 	searchPath := idx.indexRootDir
 	matches := make([]string, 0)
-	for _, i := range res.GetInfos() {
+	for _, i := range infos {
 		if found, err := filepath.Match(pattern, path.Base(i.Path)); found {
 			if err != nil {
 				return nil, err
 			}
 
-			oldPath, err := idx.resolveSymlink(path.Join(searchPath, path.Base(i.Path)))
+			oldPath, err := idx.storage.ResolveSymlink(context.Background(), path.Join(searchPath, path.Base(i.Path)))
 			if err != nil {
 				return nil, err
 			}
@@ -220,57 +174,17 @@ func (idx *Autoincrement) FilesDir() string {
 	return idx.filesDir
 }
 
-func (idx *Autoincrement) createSymlink(oldname, newname string) error {
-	if _, err := idx.resolveSymlink(newname); err == nil {
-		return os.ErrExist
-	}
-
-	err := idx.metadata.SimpleUpload(context.Background(), newname, []byte(oldname))
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (idx *Autoincrement) resolveSymlink(name string) (string, error) {
-	b, err := idx.metadata.SimpleDownload(context.Background(), name)
-	if err != nil {
-		if errors.Is(err, errtypes.NotFound("")) {
-			return "", os.ErrNotExist
-		}
-		return "", err
-	}
-
-	return string(b), err
-}
-
-func (idx *Autoincrement) makeDirIfNotExists(folder string) error {
-	return idx.metadata.MakeDirIfNotExist(context.Background(), &provider.ResourceId{
-		StorageId: idx.cs3conf.ServiceUser.Id.OpaqueId,
-		OpaqueId:  idx.cs3conf.ServiceUser.Id.OpaqueId,
-	}, folder)
-}
-
 func (idx *Autoincrement) next() (int, error) {
-	res, err := idx.storageProvider.ListContainer(context.Background(), &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: idx.cs3conf.ServiceUser.Id.OpaqueId,
-				OpaqueId:  idx.cs3conf.ServiceUser.Id.OpaqueId,
-			},
-			Path: utils.MakeRelativePath(idx.indexRootDir),
-		},
-	})
+	infos, err := idx.storage.ListContainer(context.Background(), idx.indexRootDir)
 
 	if err != nil {
 		return -1, err
 	}
 
-	if len(res.GetInfos()) == 0 {
+	if len(infos) == 0 {
 		return 0, nil
 	}
 
-	infos := res.GetInfos()
 	sort.Slice(infos, func(i, j int) bool {
 		a, _ := strconv.Atoi(path.Base(infos[i].Path))
 		b, _ := strconv.Atoi(path.Base(infos[j].Path))
@@ -291,5 +205,5 @@ func (idx *Autoincrement) next() (int, error) {
 
 // Delete deletes the index folder from its storage.
 func (idx *Autoincrement) Delete() error {
-	return deleteIndexRoot(context.Background(), idx.storageProvider, idx.cs3conf.ServiceUser.Id.OpaqueId, idx.indexRootDir)
+	return idx.storage.Delete(context.Background(), idx.indexRootDir)
 }
