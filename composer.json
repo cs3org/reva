@@ -2,8 +2,9 @@
   "name": "cs3org/reva",
   "config" : {
     "platform": {
-      "php": "7.4"
-    }
+      "php": "7.2"
+    },
+    "vendor-dir": "./vendor-php"
   },
   "require": {
   },
