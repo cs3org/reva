@@ -19,13 +19,13 @@
 package xattrs
 
 import (
-	"os"
 	"strconv"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/gofrs/flock"
+	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
-	"golang.org/x/sys/unix"
 )
 
 // Declare a list of xattr keys
@@ -112,29 +112,97 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 	}, nil
 }
 
+// flockFile returns the flock filename for a given file name
+// it returns an empty string if the input is empty
+func flockFile(file string) string {
+	var n string
+	if len(file) > 0 {
+		n = file + ".flock"
+	}
+	return n
+}
+
+// acquireWriteLog acquires a lock on a file or directory.
+// if the parameter write is true, it gets an exclusive write lock, otherwise a shared read lock.
+// The function returns a Flock object, unlocking has to be done in the calling function.
+func acquireLock(file string, write bool) (*flock.Flock, error) {
+	var err error
+
+	// Create the a file to carry the log
+	n := flockFile(file)
+	if len(n) == 0 {
+		return nil, errors.New("Path empty")
+	}
+	// Acquire the write log on the target node first.
+	lock := flock.New(n)
+
+	if write {
+		_, err = lock.TryLock()
+	} else {
+		_, err = lock.TryRLock()
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return lock, nil
+}
+
 // CopyMetadata copies all extended attributes from source to target.
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
-func CopyMetadata(s, t string, filter func(attributeName string) bool) error {
-	var attrs []string
+// For the source file, a shared lock is acquired. For the target, an exclusive
+// write lock is acquired.
+func CopyMetadata(src, target string, filter func(attributeName string) bool) error {
 	var err error
-	if attrs, err = xattr.List(s); err != nil {
-		return err
+	var writeLock, readLock *flock.Flock
+
+	// Acquire the write log on the target node first.
+	writeLock, err = acquireLock(target, true)
+
+	if err != nil {
+		return errors.Wrap(err, "xattrs: Unable to lock target to write")
 	}
-	for i := range attrs {
-		if filter == nil || filter(attrs[i]) {
-			b, err := xattr.Get(s, attrs[i])
-			if err != nil {
-				return err
+	defer func() {
+		err = writeLock.Unlock()
+	}()
+
+	// now try to get a shared lock on the source
+	readLock, err = acquireLock(src, false)
+
+	if err != nil {
+		return errors.Wrap(err, "xattrs: Unable to lock file for read")
+	}
+	defer func() {
+		err = readLock.Unlock()
+	}()
+
+	// both locks are established. Copy.
+	var attrNameList []string
+	if attrNameList, err = xattr.List(src); err != nil {
+		return errors.Wrap(err, "Can not get xattr listing on src")
+	}
+
+	// FIXME: this loop assumes that all reads and writes work. The case that one val
+	// is copied, but any others not is not handled properly.
+	for idx := range attrNameList {
+		attrName := attrNameList[idx]
+		if filter == nil || filter(attrName) {
+			var attrVal []byte
+			if attrVal, err = xattr.Get(src, attrName); err != nil {
+				return errors.Wrapf(err, "Can not read src attribute named %s", attrName)
 			}
-			if err := xattr.Set(t, attrs[i], b); err != nil {
-				return err
+			if err = xattr.Set(target, attrName, attrVal); err != nil {
+				return errors.Wrapf(err, "Can not write target attribute named %s", attrName)
 			}
 		}
 	}
+
 	return nil
 }
 
 // Set an extended attribute key to the given value
+// No file locking is involved here as writing a single xattr is
+// considered to be atomic.
 func Set(filePath string, key string, val string) error {
 
 	if err := xattr.Set(filePath, key, []byte(val)); err != nil {
@@ -144,24 +212,24 @@ func Set(filePath string, key string, val string) error {
 }
 
 // SetMultiple allows setting multiple key value pairs at once
-// the changes are protected with an flock
+// the changes are protected with an file lock
+// If the file lock can not be acquired the function returns a
+// lock error.
 func SetMultiple(filePath string, attribs map[string]string) error {
 
 	// h, err := lockedfile.OpenFile(filePath, os.O_WRONLY, 0) // 0? Open File only workn for files ... but we want to lock dirs ... or symlinks
 	// or we append .lock to the file and use https://github.com/gofrs/flock
-	h, err := os.Open(filePath)
+	fileLock, err := acquireLock(filePath, true)
+
 	if err != nil {
-		return err
+		return errors.Wrap(err, "xattrs: Can not acquired write log")
 	}
-	defer h.Close()
-	err = unix.Flock(int(h.Fd()), unix.LOCK_EX)
-	if err != nil {
-		return err
-	}
-	defer unix.Flock(int(h.Fd()), unix.LOCK_UN)
+	defer func() {
+		err = fileLock.Unlock()
+	}()
 
 	for key, val := range attribs {
-		if err := xattr.FSet(h, key, []byte(val)); err != nil {
+		if err := xattr.Set(filePath, key, []byte(val)); err != nil {
 			return err
 		}
 	}
@@ -169,8 +237,9 @@ func SetMultiple(filePath string, attribs map[string]string) error {
 }
 
 // Get an extended attribute value for the given key
+// No file locking is involved here as reading a single xattr is
+// considered to be atomic.
 func Get(filePath, key string) (string, error) {
-
 	v, err := xattr.Get(filePath, key)
 	if err != nil {
 		return "", err
@@ -192,8 +261,18 @@ func GetInt64(filePath, key string) (int64, error) {
 	return v, nil
 }
 
-// All reads all extended attributes for a node
+// All reads all extended attributes for a node, protected by a
+// shared file lock
 func All(filePath string) (map[string]string, error) {
+	fileLock, err := acquireLock(filePath, false)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "xattrs: Unable to lock file for read")
+	}
+	defer func() {
+		err = fileLock.Unlock()
+	}()
+
 	attrNames, err := xattr.List(filePath)
 	if err != nil {
 		return nil, err
