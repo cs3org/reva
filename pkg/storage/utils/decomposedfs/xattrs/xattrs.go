@@ -19,6 +19,7 @@
 package xattrs
 
 import (
+	"strconv"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -163,6 +164,19 @@ func Get(filePath, key string) (string, error) {
 	}
 	val := string(v)
 	return val, nil
+}
+
+// GetInt64 reads a string as int64 from the xattrs
+func GetInt64(filePath, key string) (int64, error) {
+	attr, err := Get(filePath, key)
+	if err != nil {
+		return 0, err
+	}
+	v, err := strconv.ParseInt(attr, 10, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "invalid xattr format")
+	}
+	return v, nil
 }
 
 // All reads all extended attributes for a node
