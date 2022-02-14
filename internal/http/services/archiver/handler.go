@@ -20,16 +20,16 @@ package archiver
 
 import (
 	"context"
-	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
+	"regexp"
 
 	"github.com/cs3org/reva/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -39,10 +39,10 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
@@ -52,17 +52,20 @@ type svc struct {
 	log        *zerolog.Logger
 	walker     walker.Walker
 	downloader downloader.Downloader
+
+	allowedFolders []*regexp.Regexp
 }
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix      string `mapstructure:"prefix"`
-	GatewaySvc  string `mapstructure:"gatewaysvc"`
-	Timeout     int64  `mapstructure:"timeout"`
-	Insecure    bool   `mapstructure:"insecure"`
-	Name        string `mapstructure:"name"`
-	MaxNumFiles int64  `mapstructure:"max_num_files"`
-	MaxSize     int64  `mapstructure:"max_size"`
+	Prefix         string   `mapstructure:"prefix"`
+	GatewaySvc     string   `mapstructure:"gatewaysvc"`
+	Timeout        int64    `mapstructure:"timeout"`
+	Insecure       bool     `mapstructure:"insecure"`
+	Name           string   `mapstructure:"name"`
+	MaxNumFiles    int64    `mapstructure:"max_num_files"`
+	MaxSize        int64    `mapstructure:"max_size"`
+	AllowedFolders []string `mapstructure:"allowed_folders"`
 }
 
 func init() {
@@ -84,12 +87,23 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 		return nil, err
 	}
 
+	// compile all the regex for filtering folders
+	allowedFolderRegex := make([]*regexp.Regexp, 0, len(c.AllowedFolders))
+	for _, s := range c.AllowedFolders {
+		regex, err := regexp.Compile(s)
+		if err != nil {
+			return nil, err
+		}
+		allowedFolderRegex = append(allowedFolderRegex, regex)
+	}
+
 	return &svc{
-		config:     c,
-		gtwClient:  gtw,
-		downloader: downloader.NewDownloader(gtw, rhttp.Insecure(c.Insecure), rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second)))),
-		walker:     walker.NewWalker(gtw),
-		log:        log,
+		config:         c,
+		gtwClient:      gtw,
+		downloader:     downloader.NewDownloader(gtw, rhttp.Insecure(c.Insecure), rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second)))),
+		walker:         walker.NewWalker(gtw),
+		log:            log,
+		allowedFolders: allowedFolderRegex,
 	}, nil
 }
 
@@ -110,22 +124,19 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 		return nil, errtypes.BadRequest("file and id lists are both empty")
 	}
 
-	f := []string{}
+	f := make([]string, 0, len(files)+len(ids))
 
 	for _, id := range ids {
 		// id is base64 encoded and after decoding has the form <storage_id>:<resource_id>
 
-		storageID, opaqueID, err := decodeResourceID(id)
-		if err != nil {
-			return nil, err
+		ref := resourceid.OwnCloudResourceIDUnwrap(id)
+		if ref == nil {
+			return nil, errors.New("could not unwrap given file id")
 		}
 
 		resp, err := s.gtwClient.Stat(ctx, &provider.StatRequest{
 			Ref: &provider.Reference{
-				ResourceId: &provider.ResourceId{
-					StorageId: storageID,
-					OpaqueId:  opaqueID,
-				},
+				ResourceId: ref,
 			},
 		})
 
@@ -142,7 +153,56 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 
 	}
 
-	return append(f, files...), nil
+	f = append(f, files...)
+
+	// check if all the folders are allowed to be archived
+	err := s.allAllowed(f)
+	if err != nil {
+		return nil, err
+	}
+
+	return f, nil
+}
+
+// return true if path match with at least with one allowed folder regex
+func (s *svc) isPathAllowed(path string) bool {
+	for _, reg := range s.allowedFolders {
+		if reg.MatchString(path) {
+			return true
+		}
+	}
+	return false
+}
+
+// return nil if all the paths in the slide match with at least one allowed folder regex
+func (s *svc) allAllowed(paths []string) error {
+	if len(s.allowedFolders) == 0 {
+		return nil
+	}
+
+	for _, f := range paths {
+		if !s.isPathAllowed(f) {
+			return errtypes.BadRequest(fmt.Sprintf("resource at %s not allowed to be archived", f))
+		}
+	}
+	return nil
+}
+
+func (s *svc) writeHTTPError(rw http.ResponseWriter, err error) {
+	s.log.Error().Msg(err.Error())
+
+	switch err.(type) {
+	case errtypes.NotFound:
+		rw.WriteHeader(http.StatusNotFound)
+	case manager.ErrMaxSize, manager.ErrMaxFileCount:
+		rw.WriteHeader(http.StatusRequestEntityTooLarge)
+	case errtypes.BadRequest:
+		rw.WriteHeader(http.StatusBadRequest)
+	default:
+		rw.WriteHeader(http.StatusInternalServerError)
+	}
+
+	_, _ = rw.Write([]byte(err.Error()))
 }
 
 func (s *svc) Handler() http.Handler {
@@ -162,8 +222,7 @@ func (s *svc) Handler() http.Handler {
 
 		files, err := s.getFiles(ctx, paths, ids)
 		if err != nil {
-			s.log.Error().Msg(err.Error())
-			rw.WriteHeader(http.StatusBadRequest)
+			s.writeHTTPError(rw, err)
 			return
 		}
 
@@ -172,8 +231,7 @@ func (s *svc) Handler() http.Handler {
 			MaxSize:     s.config.MaxSize,
 		})
 		if err != nil {
-			s.log.Error().Msg(err.Error())
-			rw.WriteHeader(http.StatusInternalServerError)
+			s.writeHTTPError(rw, err)
 			return
 		}
 
@@ -198,14 +256,8 @@ func (s *svc) Handler() http.Handler {
 			err = arch.CreateTar(ctx, rw)
 		}
 
-		if err == manager.ErrMaxFileCount || err == manager.ErrMaxSize {
-			s.log.Error().Msg(err.Error())
-			rw.WriteHeader(http.StatusRequestEntityTooLarge)
-			return
-		}
 		if err != nil {
-			s.log.Error().Msg(err.Error())
-			rw.WriteHeader(http.StatusInternalServerError)
+			s.writeHTTPError(rw, err)
 			return
 		}
 
@@ -222,20 +274,4 @@ func (s *svc) Close() error {
 
 func (s *svc) Unprotected() []string {
 	return nil
-}
-
-func decodeResourceID(encodedID string) (string, string, error) {
-	decodedID, err := base64.URLEncoding.DecodeString(encodedID)
-	if err != nil {
-		return "", "", errors.Wrap(err, "resource ID does not follow the required format")
-	}
-
-	parts := strings.Split(string(decodedID), ":")
-	if len(parts) != 2 {
-		return "", "", errtypes.BadRequest("resource ID does not follow the required format")
-	}
-	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
-		return "", "", errtypes.BadRequest("resourceID contains illegal characters")
-	}
-	return parts[0], parts[1], nil
 }

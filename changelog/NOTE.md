@@ -1,170 +1,135 @@
-Changelog for reva 1.15.0 (2021-10-26)
+Changelog for reva 1.18.0 (2022-02-11)
 =======================================
 
-The following sections list the changes in reva 1.15.0 relevant to
+The following sections list the changes in reva 1.18.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Fix #2168: Override provider if was previously registered
- * Fix #2173: Fix archiver max size reached error
- * Fix #2167: Handle nil quota in decomposedfs
- * Fix #2153: Restrict EOS project spaces sharing permissions to admins and writers
- * Fix #2179: Fix the returned permissions for webdav uploads
- * Fix #2177: Retrieve the full path of a share when setting as
- * Chg #2479: Make apps able to work with public shares
- * Enh #2203: Add alerting webhook to SiteAcc service
- * Enh #2190: Update CODEOWNERS
- * Enh #2174: Inherit ACLs for files from parent directories
- * Enh #2152: Add a reference parameter to the getQuota request
- * Enh #2171: Add optional claim parameter to machine auth
- * Enh #2163: Nextcloud-based share manager for pkg/ocm/share
- * Enh #2135: Nextcloud test improvements
- * Enh #2180: Remove OCDAV options namespace parameter
- * Enh #2117: Add ocs cache warmup strategy for first request from the user
- * Enh #2170: Handle propfind requests for existing files
- * Enh #2165: Allow access to recycle bin for arbitrary paths outside homes
- * Enh #2193: Filter root paths according to user agent
- * Enh #2162: Implement the UpdateStorageSpace method
- * Enh #2189: Add user setting capability
+ * Fix #2370: Fixes for apps in public shares, project spaces for EOS driver
+ * Fix #2374: Fix webdav copy of zero byte files
+ * Fix #2478: Use ocs permission objects in the reva GRPC client
+ * Fix #2368: Return wrapped paths for recycled items in storage provider
+ * Chg #2354: Return not found when updating non existent space
+ * Enh #1209: Reva CephFS module v0.2.1
+ * Enh #2341: Use CS3 permissions API
+ * Enh #2350: Add file locking methods to the storage and filesystem interfaces
+ * Enh #2379: Add new file url of the app provider to the ocs capabilities
+ * Enh #2369: Implement TouchFile from the CS3apis
+ * Enh #2385: Allow to create new files with the app provider on public links
+ * Enh #2397: Product field in OCS version
+ * Enh #2393: Update tus/tusd to version 1.8.0
+ * Enh #2205: Modify group and user managers to skip fetching specified metadata
+ * Enh #2232: Make ocs resource info cache interoperable across drivers
+ * Enh #2233: Populate owner data in the ocs and ocdav services
+ * Enh #2278: OIDC driver changes for lightweight users
 
 Details
 -------
 
- * Bugfix #2168: Override provider if was previously registered
+ * Bugfix #2370: Fixes for apps in public shares, project spaces for EOS driver
 
-   Previously if an AppProvider registered himself two times, for example after a failure, the
-   mime types supported by the provider contained multiple times the same provider. Now this has
-   been fixed, overriding the previous one.
+   https://github.com/cs3org/reva/pull/2370
 
-   https://github.com/cs3org/reva/pull/2168
+ * Bugfix #2374: Fix webdav copy of zero byte files
 
- * Bugfix #2173: Fix archiver max size reached error
+   We've fixed the webdav copy action of zero byte files, which was not performed because the
+   webdav api assumed, that zero byte uploads are created when initiating the upload, which was
+   recently removed from all storage drivers. Therefore the webdav api also uploads zero byte
+   files after initiating the upload.
 
-   Previously in the total size count of the files being archived, the folders were taken into
-   account, and this could cause a false max size reached error because the size of a directory is
-   recursive-computed, causing the archive to be truncated. Now in the size count, the
-   directories are skipped.
+   https://github.com/cs3org/reva/pull/2374
+   https://github.com/cs3org/reva/pull/2309
 
-   https://github.com/cs3org/reva/pull/2173
+ * Bugfix #2478: Use ocs permission objects in the reva GRPC client
 
- * Bugfix #2167: Handle nil quota in decomposedfs
+   There was a bug introduced by differing CS3APIs permission definitions for the same role
+   across services. This is a first step in making all services use consistent definitions.
 
-   Do not nil pointer derefenrence when sending nil quota to decomposedfs
+   https://github.com/cs3org/reva/pull/2478
 
-   https://github.com/cs3org/reva/issues/2167
+ * Bugfix #2368: Return wrapped paths for recycled items in storage provider
 
- * Bugfix #2153: Restrict EOS project spaces sharing permissions to admins and writers
+   https://github.com/cs3org/reva/pull/2368
 
-   https://github.com/cs3org/reva/pull/2153
+ * Change #2354: Return not found when updating non existent space
 
- * Bugfix #2179: Fix the returned permissions for webdav uploads
+   If a spaceid of a space which is updated doesn't exist, handle it as a not found error.
 
-   We've fixed the returned permissions for webdav uploads. It did not consider shares and public
-   links for the permission calculation, but does so now.
+   https://github.com/cs3org/reva/pull/2354
 
-   https://github.com/cs3org/reva/pull/2179
-   https://github.com/cs3org/reva/pull/2151
+ * Enhancement #1209: Reva CephFS module v0.2.1
 
- * Bugfix #2177: Retrieve the full path of a share when setting as
+   https://github.com/cs3org/reva/pull/1209
 
-   Accepted or on shared by me
+ * Enhancement #2341: Use CS3 permissions API
 
-   https://github.com/cs3org/reva/pull/2177
+   Added calls to the CS3 permissions API to the decomposedfs in order to check the user
+   permissions.
 
- * Change #2479: Make apps able to work with public shares
+   https://github.com/cs3org/reva/pull/2341
 
-   Public share receivers were not possible to use apps in public shares because the apps couldn't
-   load the files in the public shares. This has now been made possible by changing the scope checks
-   for public shares.
+ * Enhancement #2350: Add file locking methods to the storage and filesystem interfaces
 
-   https://github.com/owncloud/ocis/issues/2479
-   https://github.com/cs3org/reva/pull/2143
+   We've added the file locking methods from the CS3apis to the storage and filesystem
+   interfaces. As of now they are dummy implementations and will only return "unimplemented"
+   errors.
 
- * Enhancement #2203: Add alerting webhook to SiteAcc service
+   https://github.com/cs3org/reva/pull/2350
+   https://github.com/cs3org/cs3apis/pull/160
 
-   To integrate email alerting with the monitoring pipeline, a Prometheus webhook has been added
-   to the SiteAcc service. Furthermore account settings have been extended/modified
-   accordingly.
+ * Enhancement #2379: Add new file url of the app provider to the ocs capabilities
 
-   https://github.com/cs3org/reva/pull/2203
+   We've added the new file capability of the app provider to the ocs capabilities, so that clients
+   can discover this url analogous to the app list and file open urls.
 
- * Enhancement #2190: Update CODEOWNERS
+   https://github.com/cs3org/reva/pull/2379
+   https://github.com/owncloud/ocis/pull/2884
+   https://github.com/owncloud/web/pull/5890#issuecomment-993905242
 
-   https://github.com/cs3org/reva/pull/2190
+ * Enhancement #2369: Implement TouchFile from the CS3apis
 
- * Enhancement #2174: Inherit ACLs for files from parent directories
+   We've updated the CS3apis and implemented the TouchFile method.
 
-   https://github.com/cs3org/reva/pull/2174
+   https://github.com/cs3org/reva/pull/2369
+   https://github.com/cs3org/cs3apis/pull/154
 
- * Enhancement #2152: Add a reference parameter to the getQuota request
+ * Enhancement #2385: Allow to create new files with the app provider on public links
 
-   Implementation of [cs3org/cs3apis#147](https://github.com/cs3org/cs3apis/pull/147)
+   We've added the option to create files with the app provider on public links.
 
-   Make the cs3apis accept a Reference in the getQuota Request to limit the call to a specific
-   storage space.
+   https://github.com/cs3org/reva/pull/2385
 
-   https://github.com/cs3org/reva/pull/2152
-   https://github.com/cs3org/reva/pull/2178
-   https://github.com/cs3org/reva/pull/2187
+ * Enhancement #2397: Product field in OCS version
 
- * Enhancement #2171: Add optional claim parameter to machine auth
+   We've added a new field to the OCS Version, which is supposed to announce the product name. The
+   web ui as a client will make use of it to make the backend product and version available (e.g. for
+   easier bug reports).
 
-   https://github.com/cs3org/reva/issues/2171
-   https://github.com/cs3org/reva/pull/2176
+   https://github.com/cs3org/reva/pull/2397
 
- * Enhancement #2163: Nextcloud-based share manager for pkg/ocm/share
+ * Enhancement #2393: Update tus/tusd to version 1.8.0
 
-   Note that pkg/ocm/share is very similar to pkg/share, but it deals with cs3/sharing/ocm
-   whereas pkg/share deals with cs3/sharing/collaboration
+   We've update tus/tusd to version 1.8.0.
 
-   https://github.com/cs3org/reva/pull/2163
+   https://github.com/cs3org/reva/issues/2393
+   https://github.com/cs3org/reva/pull/2224
 
- * Enhancement #2135: Nextcloud test improvements
+ * Enhancement #2205: Modify group and user managers to skip fetching specified metadata
 
-   https://github.com/cs3org/reva/pull/2135
+   https://github.com/cs3org/reva/pull/2205
 
- * Enhancement #2180: Remove OCDAV options namespace parameter
+ * Enhancement #2232: Make ocs resource info cache interoperable across drivers
 
-   We dropped the namespace parameter, as it is not used in the options handler.
+   https://github.com/cs3org/reva/pull/2232
 
-   https://github.com/cs3org/reva/pull/2180
+ * Enhancement #2233: Populate owner data in the ocs and ocdav services
 
- * Enhancement #2117: Add ocs cache warmup strategy for first request from the user
+   https://github.com/cs3org/reva/pull/2233
 
-   https://github.com/cs3org/reva/pull/2117
+ * Enhancement #2278: OIDC driver changes for lightweight users
 
- * Enhancement #2170: Handle propfind requests for existing files
-
-   https://github.com/cs3org/reva/pull/2170
-
- * Enhancement #2165: Allow access to recycle bin for arbitrary paths outside homes
-
-   https://github.com/cs3org/reva/pull/2165
-   https://github.com/cs3org/reva/pull/2188
-
- * Enhancement #2193: Filter root paths according to user agent
-
-   Adds a new rule setting in the storage registry ("allowed_user_agents"), that allows a user to
-   specify which storage provider shows according to the user agent that made the request.
-
-   https://github.com/cs3org/reva/pull/2193
-
- * Enhancement #2162: Implement the UpdateStorageSpace method
-
-   Added the UpdateStorageSpace method to the decomposedfs.
-
-   https://github.com/cs3org/reva/pull/2162
-   https://github.com/cs3org/reva/pull/2195
-   https://github.com/cs3org/reva/pull/2196
-
- * Enhancement #2189: Add user setting capability
-
-   We've added a capability to communicate the existance of a user settings service to clients.
-
-   https://github.com/owncloud/web/issues/5926
-   https://github.com/cs3org/reva/pull/2189
-   https://github.com/owncloud/ocis/pull/2655
+   https://github.com/cs3org/reva/pull/2278
 
 

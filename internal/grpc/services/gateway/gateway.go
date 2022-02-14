@@ -57,6 +57,7 @@ type config struct {
 	GroupProviderEndpoint         string `mapstructure:"groupprovidersvc"`
 	DataTxEndpoint                string `mapstructure:"datatx"`
 	DataGatewayEndpoint           string `mapstructure:"datagateway"`
+	PermissionsEndpoint           string `mapstructure:"permissionssvc"`
 	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
 	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
 	DisableHomeCreationOnLogin    bool   `mapstructure:"disable_home_creation_on_login"`
@@ -69,6 +70,8 @@ type config struct {
 	HomeMapping         string                            `mapstructure:"home_mapping"`
 	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
 	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
+	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
+	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
 }
 
 // sets defaults
@@ -116,10 +119,11 @@ func (c *config) init() {
 }
 
 type svc struct {
-	c              *config
-	dataGatewayURL url.URL
-	tokenmgr       token.Manager
-	etagCache      *ttlcache.Cache `mapstructure:"etag_cache"`
+	c               *config
+	dataGatewayURL  url.URL
+	tokenmgr        token.Manager
+	etagCache       *ttlcache.Cache `mapstructure:"etag_cache"`
+	createHomeCache *ttlcache.Cache `mapstructure:"create_home_cache"`
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -148,11 +152,16 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	_ = etagCache.SetTTL(time.Duration(c.EtagCacheTTL) * time.Second)
 	etagCache.SkipTTLExtensionOnHit(true)
 
+	createHomeCache := ttlcache.NewCache()
+	_ = createHomeCache.SetTTL(time.Duration(c.CreateHomeCacheTTL) * time.Second)
+	createHomeCache.SkipTTLExtensionOnHit(true)
+
 	s := &svc{
-		c:              c,
-		dataGatewayURL: *u,
-		tokenmgr:       tokenManager,
-		etagCache:      etagCache,
+		c:               c,
+		dataGatewayURL:  *u,
+		tokenmgr:        tokenManager,
+		etagCache:       etagCache,
+		createHomeCache: createHomeCache,
 	}
 
 	return s, nil

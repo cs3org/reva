@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/pkg/mentix/utils"
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -200,6 +201,7 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 			endpoints = append(endpoints, &meshdata.ServiceEndpoint{
 				Type:        connector.findServiceType(meshData, endpoint.Type),
 				Name:        endpoint.Name,
+				RawURL:      endpoint.URL,
 				URL:         getServiceURLString(service, endpoint, host),
 				IsMonitored: strings.EqualFold(endpoint.IsMonitored, "Y"),
 				Properties:  connector.extensionsToMap(&endpoint.Extensions),
@@ -210,7 +212,8 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 		site.Services = append(site.Services, &meshdata.Service{
 			ServiceEndpoint: &meshdata.ServiceEndpoint{
 				Type:        connector.findServiceType(meshData, service.Type),
-				Name:        fmt.Sprintf("%v - %v", service.Host, service.Type),
+				Name:        service.Type,
+				RawURL:      service.URL,
 				URL:         getServiceURLString(service, nil, host),
 				IsMonitored: strings.EqualFold(service.IsMonitored, "Y"),
 				Properties:  connector.extensionsToMap(&service.Extensions),
@@ -239,10 +242,8 @@ func (connector *GOCDBConnector) queryDowntimes(meshData *meshdata.MeshData, sit
 		services := make([]string, 0, len(dt.AffectedServices.Services))
 		for _, service := range dt.AffectedServices.Services {
 			// Only add critical services to the list of affected services
-			for _, svcType := range connector.conf.Services.CriticalTypes {
-				if strings.EqualFold(svcType, service.Type) {
-					services = append(services, service.Type)
-				}
+			if utils.FindInStringArray(service.Type, connector.conf.Services.CriticalTypes, false) != -1 {
+				services = append(services, service.Type)
 			}
 		}
 

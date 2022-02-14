@@ -32,6 +32,7 @@ type FS interface {
 	GetHome(ctx context.Context) (string, error)
 	CreateHome(ctx context.Context) error
 	CreateDir(ctx context.Context, ref *provider.Reference) error
+	TouchFile(ctx context.Context, ref *provider.Reference) error
 	Delete(ctx context.Context, ref *provider.Reference) error
 	Move(ctx context.Context, oldRef, newRef *provider.Reference) error
 	GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
@@ -57,6 +58,10 @@ type FS interface {
 	Shutdown(ctx context.Context) error
 	SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
 	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
+	SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
+	GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error)
+	RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
+	Unlock(ctx context.Context, ref *provider.Reference) error
 	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)

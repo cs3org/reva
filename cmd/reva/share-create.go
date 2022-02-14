@@ -28,6 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
@@ -158,48 +159,11 @@ func getGrantType(t string) provider.GranteeType {
 func getSharePerm(p string) (*provider.ResourcePermissions, error) {
 	switch p {
 	case viewerPermission:
-		return &provider.ResourcePermissions{
-			GetPath:       true,
-			ListContainer: true,
-			Stat:          true,
-		}, nil
-	case readerPermission:
-		return &provider.ResourcePermissions{
-			GetPath:              true,
-			InitiateFileDownload: true,
-			ListFileVersions:     true,
-			ListContainer:        true,
-			Stat:                 true,
-		}, nil
+		return conversions.NewViewerRole().CS3ResourcePermissions(), nil
 	case editorPermission:
-		return &provider.ResourcePermissions{
-			GetPath:              true,
-			InitiateFileDownload: true,
-			ListFileVersions:     true,
-			ListContainer:        true,
-			Stat:                 true,
-			CreateContainer:      true,
-			Delete:               true,
-			InitiateFileUpload:   true,
-			RestoreFileVersion:   true,
-			Move:                 true,
-		}, nil
+		return conversions.NewEditorRole().CS3ResourcePermissions(), nil
 	case collabPermission:
-		return &provider.ResourcePermissions{
-			GetPath:              true,
-			InitiateFileDownload: true,
-			ListFileVersions:     true,
-			ListContainer:        true,
-			Stat:                 true,
-			CreateContainer:      true,
-			Delete:               true,
-			InitiateFileUpload:   true,
-			RestoreFileVersion:   true,
-			Move:                 true,
-			AddGrant:             true,
-			UpdateGrant:          true,
-			RemoveGrant:          true,
-		}, nil
+		return conversions.NewCoownerRole().CS3ResourcePermissions(), nil
 	case denyPermission:
 		return &provider.ResourcePermissions{}, nil
 	default:

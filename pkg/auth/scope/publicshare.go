@@ -23,8 +23,10 @@ import (
 	"fmt"
 	"strings"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -52,22 +54,27 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.InitiateFileDownloadRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *appprovider.OpenInAppRequest:
+		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.ResourceInfo.Id}), nil
+	case *gateway.OpenInAppRequest:
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
 
-		// Editor role
-		// TODO(ishank011): Add role checks,
-		// need to return appropriate status codes in the ocs/ocdav layers.
+	// Editor role
+	// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
-		return checkStorageRef(ctx, &share, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.TouchFileRequest:
+		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.DeleteRequest:
-		return checkStorageRef(ctx, &share, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.MoveRequest:
-		return checkStorageRef(ctx, &share, v.GetSource()) && checkStorageRef(ctx, &share, v.GetDestination()), nil
+		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetSource()) && checkStorageRef(ctx, &share, v.GetDestination()), nil
 	case *provider.InitiateFileUploadRequest:
-		return checkStorageRef(ctx, &share, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.SetArbitraryMetadataRequest:
-		return checkStorageRef(ctx, &share, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.UnsetArbitraryMetadataRequest:
-		return checkStorageRef(ctx, &share, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkStorageRef(ctx, &share, v.GetRef()), nil
 
 	// App provider requests
 	case *appregistry.GetDefaultAppProviderForMimeTypeRequest:
@@ -88,9 +95,11 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 }
 
 func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Reference) bool {
-	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> path:$path > >
+	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> >
+	// OR
+	// r: <resource_id:<storage_id:$public-storage-mount-ID opaque_id:$token/$relative-path> >
 	if r.ResourceId != nil && r.Path == "" { // path must be empty
-		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId())
+		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) || strings.HasPrefix(r.ResourceId.OpaqueId, s.Token)
 	}
 
 	// r: <path:"/public/$token" >

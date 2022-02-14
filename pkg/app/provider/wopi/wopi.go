@@ -36,6 +36,7 @@ import (
 	"github.com/beevik/etree"
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
@@ -136,10 +137,24 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("fileid", resource.GetId().OpaqueId)
 	q.Add("endpoint", resource.GetId().StorageId)
 	q.Add("viewmode", viewMode.String())
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if ok { // else defaults to "Guest xyz"
-		q.Add("username", u.Username)
-		q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
+		if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+			q.Add("userid", resource.Owner.OpaqueId+"@"+resource.Owner.Idp)
+		} else {
+			q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
+		}
+		var isPublicShare bool
+		if u.Opaque != nil {
+			if _, ok := u.Opaque.Map["public-share-role"]; ok {
+				isPublicShare = true
+			}
+		}
+
+		if !isPublicShare {
+			q.Add("username", u.Username)
+		}
 	}
 
 	q.Add("appname", p.conf.AppName)

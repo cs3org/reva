@@ -27,7 +27,6 @@ import (
 	"github.com/Masterminds/sprig"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
@@ -154,7 +153,9 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 		// Extract project name from the path resembling /c/cernbox or /c/cernbox/minutes/..
 		parts := strings.SplitN(r.Path, "/", 4)
 		if len(parts) != 4 && len(parts) != 3 {
-			return errtypes.BadRequest("eoswrapper: path does not follow the allowed format")
+			// The request might be for / or /$letter
+			// Nothing to do in that case
+			return nil
 		}
 		adminGroup := projectSpaceGroupsPrefix + parts[2] + projectSpaceAdminGroupsSuffix
 		user := ctxpkg.ContextMustGetUser(ctx)
@@ -165,6 +166,7 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 				r.PermissionSet.RemoveGrant = true
 				r.PermissionSet.UpdateGrant = true
 				r.PermissionSet.ListGrants = true
+				r.PermissionSet.GetQuota = true
 				return nil
 			}
 		}

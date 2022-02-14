@@ -20,7 +20,6 @@ package ocdav
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -28,19 +27,20 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf8"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/favorite"
+	"github.com/cs3org/reva/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -51,8 +51,6 @@ type ctxKey int
 
 const (
 	ctxKeyBaseURI ctxKey = iota
-
-	idDelimiter string = ":"
 )
 
 var (
@@ -98,24 +96,38 @@ type Config struct {
 	// Example: if WebdavNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
-	WebdavNamespace string `mapstructure:"webdav_namespace"`
-	GatewaySvc      string `mapstructure:"gatewaysvc"`
-	Timeout         int64  `mapstructure:"timeout"`
-	Insecure        bool   `mapstructure:"insecure"`
-	PublicURL       string `mapstructure:"public_url"`
+	WebdavNamespace        string                            `mapstructure:"webdav_namespace"`
+	GatewaySvc             string                            `mapstructure:"gatewaysvc"`
+	Timeout                int64                             `mapstructure:"timeout"`
+	Insecure               bool                              `mapstructure:"insecure"`
+	PublicURL              string                            `mapstructure:"public_url"`
+	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
+	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
 }
 
 func (c *Config) init() {
 	// note: default c.Prefix is an empty string
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
+	if c.FavoriteStorageDriver == "" {
+		c.FavoriteStorageDriver = "memory"
+	}
 }
 
 type svc struct {
-	c                *Config
-	webDavHandler    *WebDavHandler
-	davHandler       *DavHandler
-	favoritesManager favorite.Manager
-	client           *http.Client
+	c                   *Config
+	webDavHandler       *WebDavHandler
+	davHandler          *DavHandler
+	favoritesManager    favorite.Manager
+	client              *http.Client
+	userIdentifierCache *ttlcache.Cache
+}
+
+func getFavoritesManager(c *Config) (favorite.Manager, error) {
+	if f, ok := registry.NewFuncs[c.FavoriteStorageDriver]; ok {
+		return f(c.FavoriteStorageDrivers[c.FavoriteStorageDriver])
+	}
+	return nil, errtypes.NotFound("driver not found: " + c.FavoriteStorageDriver)
 }
 
 // New returns a new ocdav
@@ -127,6 +139,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 	conf.init()
 
+	fm, err := getFavoritesManager(conf)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &svc{
 		c:             conf,
 		webDavHandler: new(WebDavHandler),
@@ -135,8 +152,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
-		favoritesManager: favorite.NewInMemoryManager(),
+		favoritesManager:    fm,
+		userIdentifierCache: ttlcache.NewCache(),
 	}
+	_ = s.userIdentifierCache.SetTTL(60 * time.Second)
+
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
 		return nil, err
@@ -249,39 +269,6 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 		}
 	}
 	return templates.WithUser(u, ns)
-}
-
-func wrapResourceID(r *provider.ResourceId) string {
-	return wrap(r.StorageId, r.OpaqueId)
-}
-
-// The fileID must be encoded
-// - XML safe, because it is going to be used in the propfind result
-// - url safe, because the id might be used in a url, eg. the /dav/meta nodes
-// which is why we base64 encode it
-func wrap(sid string, oid string) string {
-	return base64.URLEncoding.EncodeToString([]byte(sid + idDelimiter + oid))
-}
-
-func unwrap(rid string) *provider.ResourceId {
-	decodedID, err := base64.URLEncoding.DecodeString(rid)
-	if err != nil {
-		return nil
-	}
-
-	parts := strings.SplitN(string(decodedID), idDelimiter, 2)
-	if len(parts) != 2 {
-		return nil
-	}
-
-	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
-		return nil
-	}
-
-	return &provider.ResourceId{
-		StorageId: parts[0],
-		OpaqueId:  parts[1],
-	}
 }
 
 func addAccessHeaders(w http.ResponseWriter, r *http.Request) {

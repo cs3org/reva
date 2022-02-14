@@ -57,12 +57,13 @@ type APIError struct {
 }
 
 // WriteError handles writing error responses
-func WriteError(w http.ResponseWriter, r *http.Request, code APIErrorCode, message string, err error) {
-	if err != nil {
-		appctx.GetLogger(r.Context()).Error().Err(err).Msg(message)
+func WriteError(w http.ResponseWriter, r *http.Request, code APIErrorCode, message string, e error) {
+	if e != nil {
+		appctx.GetLogger(r.Context()).Error().Err(e).Msg(message)
 	}
 
 	var encoded []byte
+	var err error
 	w.Header().Set("Content-Type", "application/json")
 	encoded, err = json.MarshalIndent(APIError{Code: code, Message: message}, "", "  ")
 

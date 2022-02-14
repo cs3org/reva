@@ -207,7 +207,7 @@ func TestCreateTar(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxFileCount,
+			err:      ErrMaxFileCount{},
 		},
 		{
 			name: "one file - error max size reached",
@@ -222,7 +222,7 @@ func TestCreateTar(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxSize,
+			err:      ErrMaxSize{},
 		},
 		{
 			name: "one folder empty",
@@ -250,7 +250,7 @@ func TestCreateTar(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxFileCount,
+			err:      ErrMaxFileCount{},
 		},
 		{
 			name: "one folder - one file in",
@@ -655,7 +655,7 @@ func TestCreateZip(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxFileCount,
+			err:      ErrMaxFileCount{},
 		},
 		{
 			name: "one file - error max size reached",
@@ -670,7 +670,7 @@ func TestCreateZip(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxSize,
+			err:      ErrMaxSize{},
 		},
 		{
 			name: "one folder empty",
@@ -698,7 +698,7 @@ func TestCreateZip(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxFileCount,
+			err:      ErrMaxFileCount{},
 		},
 		{
 			name: "one folder - one file in",

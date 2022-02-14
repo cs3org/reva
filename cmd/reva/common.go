@@ -31,7 +31,6 @@ import (
 
 const (
 	viewerPermission string = "viewer"
-	readerPermission string = "reader"
 	editorPermission string = "editor"
 	collabPermission string = "collab"
 	denyPermission   string = "denied"

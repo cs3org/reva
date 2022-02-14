@@ -55,7 +55,6 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			r.URL.Path = path.Base(r.URL.Path)
 			switch r.Method {
 			case MethodPropfind:
 				s.handlePropfindOnToken(w, r, h.namespace, false)
@@ -121,9 +120,6 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 		return false
 	}
 
-	// adjust path in request URL to point at the parent
-	r.URL.Path = path.Dir(r.URL.Path)
-
 	return true
 }
 
@@ -181,12 +177,9 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	// adjust path
-	tokenStatInfo.Path = path.Join("/", tokenStatInfo.Path, path.Base(pathRes.Path))
-
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
 
-	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns)
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

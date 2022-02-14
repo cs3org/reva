@@ -39,12 +39,13 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
 	versionPrefix  = ".sys.v#."
 	lwShareAttrKey = "reva.lwshare"
+	userACLEvalKey = "eval.useracl"
 )
 
 const (
@@ -248,8 +249,8 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 
 	cmd.Args = append(cmd.Args, cmdArgs...)
 
-	trace := trace.FromContext(ctx).SpanContext().TraceID.String()
-	cmd.Args = append(cmd.Args, "--comment", trace)
+	span := trace.SpanFromContext(ctx)
+	cmd.Args = append(cmd.Args, "--comment", span.SpanContext().TraceID().String())
 
 	err := cmd.Run()
 
@@ -296,7 +297,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 
 	if a.Type == acl.TypeLightweight {
 		sysACL := ""
-		aclStr, ok := finfo.Attrs[lwShareAttrKey]
+		aclStr, ok := finfo.Attrs["sys."+lwShareAttrKey]
 		if ok {
 			acls, err := acl.Parse(aclStr, acl.ShortTextForm)
 			if err != nil {
@@ -330,7 +331,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 		args = append(args, "--user")
 		userACLAttr := &eosclient.Attribute{
 			Type: SystemAttr,
-			Key:  "eval.useracl",
+			Key:  userACLEvalKey,
 			Val:  "1",
 		}
 		if err = c.SetAttr(ctx, auth, userACLAttr, false, path); err != nil {
@@ -360,7 +361,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 
 	if a.Type == acl.TypeLightweight {
 		sysACL := ""
-		aclStr, ok := finfo.Attrs[lwShareAttrKey]
+		aclStr, ok := finfo.Attrs["sys."+lwShareAttrKey]
 		if ok {
 			acls, err := acl.Parse(aclStr, acl.ShortTextForm)
 			if err != nil {
@@ -534,12 +535,16 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 }
 
 // UnsetAttr unsets an extended attribute on a path.
-func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, path string) error {
+func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
-
-	args := []string{"attr", "-r", "rm", fmt.Sprintf("%d.%s", attr.Type, attr.Key), path}
+	var args []string
+	if recursive {
+		args = []string{"attr", "-r", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
+	} else {
+		args = []string{"attr", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
+	}
 	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return err
@@ -631,8 +636,12 @@ func (c *Client) CreateDir(ctx context.Context, auth eosclient.Authorization, pa
 }
 
 // Remove removes the resource at the given path
-func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path string) error {
-	args := []string{"rm", "-r", path}
+func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path string, noRecycle bool) error {
+	args := []string{"rm", "-r"}
+	if noRecycle {
+		args = append(args, "--no-recycle-bin") // do not put the file in the recycle bin
+	}
+	args = append(args, path)
 	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
@@ -651,7 +660,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path st
 	if err != nil {
 		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
 	}
-	return c.parseFind(path, stdout)
+	return c.parseFind(ctx, auth, path, stdout)
 }
 
 // Read reads a file from the mgm
@@ -870,8 +879,9 @@ func getMap(partsBySpace []string) map[string]string {
 	return kv
 }
 
-func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
+func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, dirPath, raw string) ([]*eosclient.FileInfo, error) {
 	finfos := []*eosclient.FileInfo{}
+	versionFolders := map[string]*eosclient.FileInfo{}
 	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
 		return c == '\n'
 	})
@@ -893,13 +903,30 @@ func (c *Client) parseFind(dirPath, raw string) ([]*eosclient.FileInfo, error) {
 			continue
 		}
 
+		// If it's a version folder, store it in a map, so that for the corresponding file,
+		// we can return its inode instead
+		if isVersionFolder(fi.File) {
+			versionFolders[fi.File] = fi
+		}
+
 		finfos = append(finfos, fi)
 	}
 
 	for _, fi := range finfos {
 		// For files, inherit ACLs from the parent
-		if !fi.IsDir && parent != nil {
-			fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+		// And set the inode to that of their version folder
+		if !fi.IsDir && !isVersionFolder(dirPath) {
+			if parent != nil {
+				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+			}
+			versionFolderPath := getVersionFolder(fi.File)
+			if vf, ok := versionFolders[versionFolderPath]; ok {
+				fi.Inode = vf.Inode
+			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil {
+				if md, err := c.GetFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
+					fi.Inode = md.Inode
+				}
+			}
 		}
 	}
 
@@ -974,12 +1001,15 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 	})
 	var previousXAttr = ""
 	for _, p := range partsBySpace {
-		partsByEqual := strings.Split(p, "=") // we have kv pairs like [size 14]
+		partsByEqual := strings.SplitN(p, "=", 2) // we have kv pairs like [size 14]
 		if len(partsByEqual) == 2 {
 			// handle xattrn and xattrv special cases
 			switch {
 			case partsByEqual[0] == "xattrn":
-				previousXAttr = strings.Replace(partsByEqual[1], "user.", "", 1)
+				previousXAttr = partsByEqual[1]
+				if previousXAttr != "user.acl" {
+					previousXAttr = strings.Replace(previousXAttr, "user.", "", 1)
+				}
 			case partsByEqual[0] == "xattrv":
 				attrs[previousXAttr] = partsByEqual[1]
 				previousXAttr = ""
@@ -1090,8 +1120,25 @@ func (c *Client) mapToFileInfo(kv, attrs map[string]string) (*eosclient.FileInfo
 	if err != nil {
 		return nil, err
 	}
-	lwACLStr, ok := attrs[lwShareAttrKey]
-	if ok {
+
+	// Read user ACLs if sys.eval.useracl is set
+	if userACLEval, ok := attrs["sys."+userACLEvalKey]; ok && userACLEval == "1" {
+		if userACL, ok := attrs["user.acl"]; ok {
+			userAcls, err := acl.Parse(userACL, acl.ShortTextForm)
+			if err != nil {
+				return nil, err
+			}
+			for _, e := range userAcls.Entries {
+				err = sysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	// Read lightweight ACLs recognized by the sys.reva.lwshare attr
+	if lwACLStr, ok := attrs["sys."+lwShareAttrKey]; ok {
 		lwAcls, err := acl.Parse(lwACLStr, acl.ShortTextForm)
 		if err != nil {
 			return nil, err

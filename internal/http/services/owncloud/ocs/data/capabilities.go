@@ -117,6 +117,7 @@ type CapabilitiesAppProvider struct {
 	Version string `json:"version" xml:"version" mapstructure:"version"`
 	AppsURL string `json:"apps_url" xml:"apps_url" mapstructure:"apps_url"`
 	OpenURL string `json:"open_url" xml:"open_url" mapstructure:"open_url"`
+	NewURL  string `json:"new_url" xml:"new_url" mapstructure:"new_url"`
 }
 
 // CapabilitiesFiles TODO this is storage specific, not global. What effect do these options have on the clients?
@@ -223,4 +224,5 @@ type Version struct {
 	Micro   int    `json:"micro" xml:"micro"` // = patch level
 	String  string `json:"string" xml:"string"`
 	Edition string `json:"edition" xml:"edition"`
+	Product string `json:"product" xml:"product"`
 }

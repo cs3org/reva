@@ -100,8 +100,7 @@ func (siteData *siteRegistrationData) ToMeshDataSite(siteID key.SiteIdentifier, 
 		revaURL = URL.String()
 	}
 
-	properties := make(map[string]string, 1)
-	meshdata.SetPropertyValue(&properties, meshdata.PropertyMetricsPath, siteData.Reva.MetricsPath)
+	properties := make(map[string]string)
 
 	revaService := &meshdata.Service{
 		ServiceEndpoint: &meshdata.ServiceEndpoint{

@@ -497,7 +497,7 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 		} else if grantSplit[0] == acl.TypeGroup {
 			grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: parts[0], Idp: parts[1]}}
 		}
-		permissions := grants.GetGrantPermissionSet(role, true)
+		permissions := grants.GetGrantPermissionSet(role)
 
 		grantList = append(grantList, &provider.Grant{
 			Grantee:     grantee,
@@ -711,6 +711,26 @@ func (fs *localfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 	return fs.propagate(ctx, np)
 }
 
+// GetLock returns an existing lock on the given reference
+func (fs *localfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+// SetLock puts a lock on the given reference
+func (fs *localfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (fs *localfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// Unlock removes an existing lock from the given reference
+func (fs *localfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
 func (fs *localfs) GetHome(ctx context.Context) (string, error) {
 	if fs.conf.DisableHome {
 		return "", errtypes.NotSupported("local: get home not supported")
@@ -778,7 +798,13 @@ func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 		}
 		return errors.Wrap(err, "localfs: error creating dir "+fn)
 	}
-	return nil
+
+	return fs.propagate(ctx, path.Dir(fn))
+}
+
+// TouchFile as defined in the storage.FS interface
+func (fs *localfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
 }
 
 func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {

@@ -104,12 +104,7 @@ func ResolvePath(path string) (string, error) {
 		path = filepath.Join(homeDir, path[2:])
 	}
 
-	path, err = filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-
-	return path, nil
+	return filepath.Abs(path)
 }
 
 // RandString is a helper to create tokens.
@@ -132,6 +127,14 @@ func TSToUnixNano(ts *types.Timestamp) uint64 {
 // TSToTime converts a protobuf Timestamp to Go's time.Time.
 func TSToTime(ts *types.Timestamp) time.Time {
 	return time.Unix(int64(ts.Seconds), int64(ts.Nanos))
+}
+
+// LaterTS returns the timestamp which occurs later.
+func LaterTS(t1 *types.Timestamp, t2 *types.Timestamp) *types.Timestamp {
+	if TSToUnixNano(t1) > TSToUnixNano(t2) {
+		return t1
+	}
+	return t2
 }
 
 // ExtractGranteeID returns the ID, user or group, set in the GranteeId object
@@ -310,6 +313,30 @@ func SplitStorageSpaceID(ssid string) (storageid, nodeid string, err error) {
 		return "", "", fmt.Errorf("storage space id must be separated by '!'")
 	}
 	return parts[0], parts[1], nil
+}
+
+// ParseStorageSpaceReference parses a string into a spaces reference.
+// The expected format is `<storageid>!<nodeid>/<path>`.
+func ParseStorageSpaceReference(sRef string) (provider.Reference, error) {
+	parts := strings.SplitN(sRef, "/", 2)
+
+	storageid, nodeid, err := SplitStorageSpaceID(parts[0])
+	if err != nil {
+		return provider.Reference{}, err
+	}
+
+	var relPath string
+	if len(parts) == 2 {
+		relPath = parts[1]
+	}
+
+	return provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: storageid,
+			OpaqueId:  nodeid,
+		},
+		Path: MakeRelativePath(relPath),
+	}, nil
 }
 
 // GetViewMode converts a human-readable string to a view mode for opening a resource in an app.

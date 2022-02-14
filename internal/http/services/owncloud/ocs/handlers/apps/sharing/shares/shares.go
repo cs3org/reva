@@ -21,7 +21,6 @@ package shares
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"mime"
@@ -43,7 +42,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/ReneKroon/ttlcache/v2"
-	"github.com/bluele/gcache"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -53,8 +51,10 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/cache"
-	"github.com/cs3org/reva/pkg/share/cache/registry"
+	cachereg "github.com/cs3org/reva/pkg/share/cache/registry"
+	warmupreg "github.com/cs3org/reva/pkg/share/cache/warmup/registry"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/pkg/errors"
 )
 
@@ -65,12 +65,13 @@ const (
 // Handler implements the shares part of the ownCloud sharing API
 type Handler struct {
 	gatewayAddr            string
+	storageRegistryAddr    string
 	publicURL              string
 	sharePrefix            string
 	homeNamespace          string
 	additionalInfoTemplate *template.Template
 	userIdentifierCache    *ttlcache.Cache
-	resourceInfoCache      gcache.Cache
+	resourceInfoCache      cache.ResourceInfoCache
 	resourceInfoCacheTTL   time.Duration
 }
 
@@ -82,25 +83,37 @@ type userIdentifiers struct {
 }
 
 func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
-	if f, ok := registry.NewFuncs[c.CacheWarmupDriver]; ok {
+	if f, ok := warmupreg.NewFuncs[c.CacheWarmupDriver]; ok {
 		return f(c.CacheWarmupDrivers[c.CacheWarmupDriver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.CacheWarmupDriver)
 }
 
+func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
+	if f, ok := cachereg.NewFuncs[c.ResourceInfoCacheDriver]; ok {
+		return f(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
+	}
+	return nil, fmt.Errorf("driver not found: %s", c.ResourceInfoCacheDriver)
+}
+
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
+	h.storageRegistryAddr = c.StorageregistrySvc
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
-	h.resourceInfoCache = gcache.New(c.ResourceInfoCacheSize).LFU().Build()
-	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
+	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))
+
+	cache, err := getCacheManager(c)
+	if err == nil {
+		h.resourceInfoCache = cache
+	}
 
 	if h.resourceInfoCacheTTL > 0 {
 		cwm, err := getCacheWarmupManager(c)
@@ -117,9 +130,23 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 		return
 	}
 	for _, r := range infos {
-		key := wrapResourceID(r.Id)
+		key := resourceid.OwnCloudResourceIDWrap(r.Id)
 		_ = h.resourceInfoCache.SetWithExpire(key, r, h.resourceInfoCacheTTL)
 	}
+}
+
+func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) {
+	var ref provider.Reference
+	if p := r.FormValue("path"); p != "" {
+		ref = provider.Reference{Path: path.Join(h.homeNamespace, p)}
+	} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
+		var err error
+		ref, err = utils.ParseStorageSpaceReference(spaceRef)
+		if err != nil {
+			return provider.Reference{}, err
+		}
+	}
+	return ref, nil
 }
 
 // CreateShare handles POST requests on /apps/files_sharing/api/v1/shares
@@ -138,14 +165,17 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// prefix the path with the owners home, because ocs share requests are relative to the home dir
-	fn := path.Join(h.homeNamespace, r.FormValue("path"))
-
-	statReq := provider.StatRequest{
-		Ref: &provider.Reference{Path: fn},
+	ref, err := h.extractReference(r)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "could not parse the reference", fmt.Errorf("could not parse the reference"))
+		return
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	statReq := provider.StatRequest{
+		Ref: &ref,
+	}
+
+	sublog := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
 
 	statRes, err := client.Stat(ctx, &statReq)
 	if err != nil {
@@ -185,6 +215,16 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		// federated shares default to read only
 		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
 			h.createFederatedCloudShare(w, r, statRes.Info, role, val)
+		}
+	case int(conversions.ShareTypeSpaceMembership):
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+			switch role.Name {
+			case conversions.RoleManager, conversions.RoleEditor, conversions.RoleViewer:
+				h.addSpaceMember(w, r, statRes.Info, role, val)
+			default:
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid role for space member", nil)
+				return
+			}
 		}
 	default:
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "unknown share type", nil)
@@ -478,11 +518,15 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 // RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid)
 func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
-	if h.isPublicShare(r, shareID) {
+	switch {
+	case h.isPublicShare(r, shareID):
 		h.removePublicShare(w, r, shareID)
-		return
+	case h.isUserShare(r, shareID):
+		h.removeUserShare(w, r, shareID)
+	default:
+		// The request is a remove space member request.
+		h.removeSpaceMember(w, r, shareID)
 	}
-	h.removeUserShare(w, r, shareID)
 }
 
 // ListShares handles GET requests on /apps/files_sharing/api/v1/shares
@@ -823,18 +867,6 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 	return collaborationFilters, linkFilters, nil
 }
 
-func wrapResourceID(r *provider.ResourceId) string {
-	return wrap(r.StorageId, r.OpaqueId)
-}
-
-// The fileID must be encoded
-// - XML safe, because it is going to be used in the propfind result
-// - url safe, because the id might be used in a url, eg. the /dav/meta nodes
-// which is why we base64 encode it
-func wrap(sid string, oid string) string {
-	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
-}
-
 func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) error {
 	log := appctx.GetLogger(ctx)
 	if info != nil {
@@ -847,7 +879,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		// TODO Storage: int
-		s.ItemSource = wrapResourceID(info.Id)
+		s.ItemSource = resourceid.OwnCloudResourceIDWrap(info.Id)
 		s.FileSource = s.ItemSource
 		switch {
 		case h.sharePrefix == "/":
@@ -897,6 +929,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 			GroupId: &grouppb.GroupId{
 				OpaqueId: id,
 			},
+			SkipFetchingMembers: true,
 		})
 		if err != nil {
 			sublog.Err(err).Msg("could not look up group")
@@ -926,6 +959,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 			UserId: &userpb.UserId{
 				OpaqueId: id,
 			},
+			SkipFetchingUserGroups: true,
 		})
 		if err != nil {
 			sublog.Err(err).Msg("could not look up user")
@@ -1008,7 +1042,7 @@ func (h *Handler) getResourceInfoByPath(ctx context.Context, client gateway.Gate
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, wrapResourceID(id), &provider.Reference{ResourceId: id})
+	return h.getResourceInfo(ctx, client, resourceid.OwnCloudResourceIDWrap(id), &provider.Reference{ResourceId: id})
 }
 
 // getResourceInfo retrieves the resource info to a target.
@@ -1018,11 +1052,16 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 
 	var pinfo *provider.ResourceInfo
 	var status *rpc.Status
-	if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
-		logger.Debug().Msgf("cache hit for resource %+v", key)
-		pinfo = infoIf.(*provider.ResourceInfo)
-		status = &rpc.Status{Code: rpc.Code_CODE_OK}
-	} else {
+	var err error
+	var foundInCache bool
+	if h.resourceInfoCacheTTL > 0 && h.resourceInfoCache != nil {
+		if pinfo, err = h.resourceInfoCache.Get(key); err == nil {
+			logger.Debug().Msgf("cache hit for resource %+v", key)
+			status = &rpc.Status{Code: rpc.Code_CODE_OK}
+			foundInCache = true
+		}
+	}
+	if !foundInCache {
 		logger.Debug().Msgf("cache miss for resource %+v, statting", key)
 		statReq := &provider.StatRequest{
 			Ref: ref,

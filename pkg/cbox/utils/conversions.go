@@ -37,6 +37,7 @@ type DBShare struct {
 	UIDInitiator string
 	Prefix       string
 	ItemSource   string
+	ItemType     string
 	ShareWith    string
 	Token        string
 	Expiration   string
@@ -45,7 +46,6 @@ type DBShare struct {
 	ShareName    string
 	STime        int
 	FileTarget   string
-	RejectedBy   string
 	State        int
 }
 
@@ -82,7 +82,7 @@ func ExtractGrantee(t int, g string) *provider.Grantee {
 	return &grantee
 }
 
-// ResourceTypeToItem maps a resource type to an integer
+// ResourceTypeToItem maps a resource type to a string
 func ResourceTypeToItem(r provider.ResourceType) string {
 	switch r {
 	case provider.ResourceType_RESOURCE_TYPE_FILE:
@@ -98,12 +98,27 @@ func ResourceTypeToItem(r provider.ResourceType) string {
 	}
 }
 
+// ResourceTypeToItemInt maps a resource type to an integer
+func ResourceTypeToItemInt(r provider.ResourceType) int {
+	switch r {
+	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		return 0
+	case provider.ResourceType_RESOURCE_TYPE_FILE:
+		return 1
+	default:
+		return -1
+	}
+}
+
 // SharePermToInt maps read/write permissions to an integer
 func SharePermToInt(p *provider.ResourcePermissions) int {
 	var perm int
-	if p.CreateContainer {
+	switch {
+	case p.InitiateFileUpload && !p.InitiateFileDownload:
+		perm = 4
+	case p.InitiateFileUpload:
 		perm = 15
-	} else if p.ListContainer {
+	case p.InitiateFileDownload:
 		perm = 1
 	}
 	// TODO map denials and resharing; currently, denials are mapped to 0
@@ -111,7 +126,7 @@ func SharePermToInt(p *provider.ResourcePermissions) int {
 }
 
 // IntTosharePerm retrieves read/write permissions from an integer
-func IntTosharePerm(p int) *provider.ResourcePermissions {
+func IntTosharePerm(p int, itemType string) *provider.ResourcePermissions {
 	switch p {
 	case 1:
 		return &provider.ResourcePermissions{
@@ -125,7 +140,7 @@ func IntTosharePerm(p int) *provider.ResourcePermissions {
 			InitiateFileDownload: true,
 		}
 	case 15:
-		return &provider.ResourcePermissions{
+		perm := &provider.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -135,13 +150,24 @@ func IntTosharePerm(p int) *provider.ResourcePermissions {
 			GetQuota:             true,
 			InitiateFileDownload: true,
 
-			Move:               true,
 			InitiateFileUpload: true,
 			RestoreFileVersion: true,
 			RestoreRecycleItem: true,
+		}
+		if itemType == "folder" {
+			perm.CreateContainer = true
+			perm.Delete = true
+			perm.Move = true
+			perm.PurgeRecycle = true
+		}
+		return perm
+	case 4:
+		return &provider.ResourcePermissions{
+			Stat:               true,
+			ListContainer:      true,
+			GetPath:            true,
 			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
+			InitiateFileUpload: true,
 		}
 	default:
 		// TODO we may have other options, for now this is a denial
@@ -156,6 +182,8 @@ func IntToShareState(g int) collaboration.ShareState {
 		return collaboration.ShareState_SHARE_STATE_PENDING
 	case 1:
 		return collaboration.ShareState_SHARE_STATE_ACCEPTED
+	case -1:
+		return collaboration.ShareState_SHARE_STATE_REJECTED
 	default:
 		return collaboration.ShareState_SHARE_STATE_INVALID
 	}
@@ -199,7 +227,7 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 			StorageId: s.Prefix,
 			OpaqueId:  s.ItemSource,
 		},
-		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions)},
+		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
 		Grantee:     ExtractGrantee(s.ShareType, s.ShareWith),
 		Owner:       ExtractUserID(s.UIDOwner),
 		Creator:     ExtractUserID(s.UIDInitiator),
@@ -210,16 +238,9 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 
 // ConvertToCS3ReceivedShare converts a DBShare to a CS3API collaboration received share
 func ConvertToCS3ReceivedShare(s DBShare) *collaboration.ReceivedShare {
-	share := ConvertToCS3Share(s)
-	var state collaboration.ShareState
-	if s.RejectedBy != "" {
-		state = collaboration.ShareState_SHARE_STATE_REJECTED
-	} else {
-		state = IntToShareState(s.State)
-	}
 	return &collaboration.ReceivedShare{
-		Share: share,
-		State: state,
+		Share: ConvertToCS3Share(s),
+		State: IntToShareState(s.State),
 	}
 }
 
@@ -249,7 +270,7 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 			StorageId: s.Prefix,
 			OpaqueId:  s.ItemSource,
 		},
-		Permissions:       &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions)},
+		Permissions:       &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
 		Owner:             ExtractUserID(s.UIDOwner),
 		Creator:           ExtractUserID(s.UIDInitiator),
 		Token:             s.Token,

@@ -19,8 +19,10 @@
 package static
 
 import (
+	"container/heap"
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -37,6 +39,8 @@ func init() {
 	registry.Register("static", New)
 }
 
+const defaultPriority = 0
+
 type mimeTypeConfig struct {
 	MimeType      string `mapstructure:"mime_type"`
 	Extension     string `mapstructure:"extension"`
@@ -45,9 +49,7 @@ type mimeTypeConfig struct {
 	Icon          string `mapstructure:"icon"`
 	DefaultApp    string `mapstructure:"default_app"`
 	AllowCreation bool   `mapstructure:"allow_creation"`
-	// apps keeps the Providers able to open this mime type.
-	// the list will always keep the default AppProvider at the head
-	apps []*registrypb.ProviderInfo
+	apps          providerHeap
 }
 
 type config struct {
@@ -122,7 +124,7 @@ func New(m map[string]interface{}) (app.Registry, error) {
 func unregisterProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
 	if index, in := getIndex(mime.apps, p); in {
 		// remove the provider from the list
-		mime.apps = append(mime.apps[:index], mime.apps[index+1:]...)
+		heap.Remove(&mime.apps, index)
 	}
 }
 
@@ -131,11 +133,21 @@ func registerProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
 	// so we will remove it
 	unregisterProvider(p, mime)
 
-	if providerIsDefaultForMimeType(p, mime) {
-		mime.apps = prependProvider(p, mime.apps)
-	} else {
-		mime.apps = append(mime.apps, p)
+	heap.Push(&mime.apps, providerWithPriority{
+		provider: p,
+		priority: getPriority(p),
+	})
+}
+
+func getPriority(p *registrypb.ProviderInfo) uint64 {
+	if p.Opaque != nil && len(p.Opaque.Map) != 0 {
+		if priority, ok := p.Opaque.Map["priority"]; ok {
+			if pr, err := strconv.ParseUint(string(priority.GetValue()), 10, 64); err == nil {
+				return pr
+			}
+		}
 	}
+	return defaultPriority
 }
 
 func (m *manager) FindProviders(ctx context.Context, mimeType string) ([]*registrypb.ProviderInfo, error) {
@@ -160,13 +172,9 @@ func (m *manager) FindProviders(ctx context.Context, mimeType string) ([]*regist
 	mimeMatch := mimeInterface.(*mimeTypeConfig)
 	var providers = make([]*registrypb.ProviderInfo, 0, len(mimeMatch.apps))
 	for _, p := range mimeMatch.apps {
-		providers = append(providers, m.providers[p.Address])
+		providers = append(providers, m.providers[p.provider.Address])
 	}
 	return providers, nil
-}
-
-func providerIsDefaultForMimeType(p *registrypb.ProviderInfo, mime *mimeTypeConfig) bool {
-	return p.Address == mime.DefaultApp || p.Name == mime.DefaultApp
 }
 
 func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error {
@@ -227,13 +235,14 @@ func (m *manager) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.Mim
 		mime := pair.Value.(*mimeTypeConfig)
 
 		res = append(res, &registrypb.MimeTypeInfo{
-			MimeType:      mime.MimeType,
-			Ext:           mime.Extension,
-			Name:          mime.Name,
-			Description:   mime.Description,
-			Icon:          mime.Icon,
-			AppProviders:  mime.apps,
-			AllowCreation: mime.AllowCreation,
+			MimeType:           mime.MimeType,
+			Ext:                mime.Extension,
+			Name:               mime.Name,
+			Description:        mime.Description,
+			Icon:               mime.Icon,
+			AppProviders:       mime.apps.getOrderedProviderByPriority(),
+			AllowCreation:      mime.AllowCreation,
+			DefaultApplication: mime.DefaultApp,
 		})
 
 	}
@@ -241,17 +250,17 @@ func (m *manager) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.Mim
 	return res, nil
 }
 
-// prepend an AppProvider obj to the list
-func prependProvider(n *registrypb.ProviderInfo, lst []*registrypb.ProviderInfo) []*registrypb.ProviderInfo {
-	lst = append(lst, &registrypb.ProviderInfo{})
-	copy(lst[1:], lst)
-	lst[0] = n
-	return lst
+func (h providerHeap) getOrderedProviderByPriority() []*registrypb.ProviderInfo {
+	providers := make([]*registrypb.ProviderInfo, 0, h.Len())
+	for _, pp := range h {
+		providers = append(providers, pp.provider)
+	}
+	return providers
 }
 
-func getIndex(lst []*registrypb.ProviderInfo, s *registrypb.ProviderInfo) (int, bool) {
-	for i, e := range lst {
-		if equalsProviderInfo(e, s) {
+func getIndex(h providerHeap, s *registrypb.ProviderInfo) (int, bool) {
+	for i, e := range h {
+		if equalsProviderInfo(e.provider, s) {
 			return i, true
 		}
 	}
@@ -267,15 +276,7 @@ func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType st
 		mime := mimeInterface.(*mimeTypeConfig)
 		mime.DefaultApp = p.Address
 
-		if index, in := getIndex(mime.apps, p); in {
-			// the element is in the list, we will remove it
-			// TODO (gdelmont): not the best way to remove an element from a slice
-			// but maybe we want to keep the order?
-			mime.apps = append(mime.apps[:index], mime.apps[index+1:]...)
-		}
-		// prepend it to the front of the list
-		mime.apps = prependProvider(p, mime.apps)
-
+		registerProvider(p, mime)
 	} else {
 		// the mime type should be already registered as config in the AppRegistry
 		// we will create a new entry fot the mimetype, but leaving a warning for
@@ -287,9 +288,17 @@ func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType st
 }
 
 func dummyMimeType(m string, apps []*registrypb.ProviderInfo) *mimeTypeConfig {
+	appsHeap := providerHeap{}
+	for _, p := range apps {
+		heap.Push(&appsHeap, providerWithPriority{
+			provider: p,
+			priority: getPriority(p),
+		})
+	}
+
 	return &mimeTypeConfig{
 		MimeType: m,
-		apps:     apps,
+		apps:     appsHeap,
 		//Extension: "", // there is no meaningful general extension, so omit it
 		//Name:        "", // there is no meaningful general name, so omit it
 		//Description: "", // there is no meaningful general description, so omit it
@@ -300,10 +309,19 @@ func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType st
 	m.RLock()
 	defer m.RUnlock()
 
-	mime, ok := m.mimetypes.Get(mimeType)
+	mimeInterface, ok := m.mimetypes.Get(mimeType)
 	if ok {
-		if p, ok := m.providers[mime.(*mimeTypeConfig).DefaultApp]; ok {
+		mime := mimeInterface.(*mimeTypeConfig)
+		// default by provider address
+		if p, ok := m.providers[mime.DefaultApp]; ok {
 			return p, nil
+		}
+
+		// default by provider name
+		for _, p := range m.providers {
+			if p.Name == mime.DefaultApp {
+				return p, nil
+			}
 		}
 	}
 
@@ -326,4 +344,34 @@ func providersEquals(l1, l2 []*registrypb.ProviderInfo) bool {
 		}
 	}
 	return true
+}
+
+type providerWithPriority struct {
+	provider *registrypb.ProviderInfo
+	priority uint64
+}
+
+type providerHeap []providerWithPriority
+
+func (h providerHeap) Len() int {
+	return len(h)
+}
+
+func (h providerHeap) Less(i, j int) bool {
+	return h[i].priority > h[j].priority
+}
+
+func (h providerHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
+
+func (h *providerHeap) Push(x interface{}) {
+	*h = append(*h, x.(providerWithPriority))
+}
+
+func (h *providerHeap) Pop() interface{} {
+	last := len(*h) - 1
+	x := (*h)[last]
+	*h = (*h)[:last]
+	return x
 }

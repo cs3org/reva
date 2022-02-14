@@ -19,9 +19,7 @@
 package grpc_test
 
 import (
-	"bytes"
 	"context"
-	"io/ioutil"
 	"os"
 
 	"google.golang.org/grpc/metadata"
@@ -35,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -507,16 +506,16 @@ var _ = Describe("storage providers", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
-				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+				content1 := []byte("1")
+				content2 := []byte("22")
 
 				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content1)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content1)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content2)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content2)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -565,16 +564,16 @@ var _ = Describe("storage providers", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
-				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+				content1 := []byte("1")
+				content2 := []byte("22")
 
 				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content1)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content1)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content2)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content2)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -633,16 +632,16 @@ var _ = Describe("storage providers", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
-				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+				content1 := []byte("1")
+				content2 := []byte("22")
 
 				ctx := ctxpkg.ContextSetUser(context.Background(), user)
 
 				err = fs.CreateHome(ctx)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content1)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content1)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.Upload(ctx, versionedFileRef, content2)
+				err = helpers.Upload(ctx, fs, versionedFileRef, content2)
 				Expect(err).ToNot(HaveOccurred())
 			})
 

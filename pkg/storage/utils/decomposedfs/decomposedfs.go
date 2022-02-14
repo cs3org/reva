@@ -23,6 +23,7 @@ package decomposedfs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -32,11 +33,13 @@ import (
 	"strings"
 	"syscall"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
@@ -58,7 +61,7 @@ type PermissionsChecker interface {
 
 // Tree is used to manage a tree hierarchy
 type Tree interface {
-	Setup(owner string) error
+	Setup(owner *userpb.UserId, propagateToRoot bool) error
 
 	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
 	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
@@ -99,13 +102,24 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 	lu.Options = o
 
 	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
+
+	o.GatewayAddr = sharedconf.GetGatewaySVC(o.GatewayAddr)
 	return New(o, lu, p, tp)
+}
+
+// when enable home is false we want propagation to root if tree size or mtime accounting is enabled
+func enablePropagationForRoot(o *options.Options) bool {
+	return (!o.EnableHome && (o.TreeSizeAccounting || o.TreeTimeAccounting))
 }
 
 // New returns an implementation of the storage.FS interface that talks to
 // a local filesystem.
 func New(o *options.Options, lu *Lookup, p PermissionsChecker, tp Tree) (storage.FS, error) {
-	err := tp.Setup(o.Owner)
+	err := tp.Setup(&userpb.UserId{
+		OpaqueId: o.Owner,
+		Idp:      o.OwnerIDP,
+		Type:     userpb.UserType(userpb.UserType_value[o.OwnerType]),
+	}, enablePropagationForRoot(o))
 	if err != nil {
 		logger.New().Error().Err(err).
 			Msg("could not setup tree")
@@ -310,6 +324,11 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	return
 }
 
+// TouchFile as defined in the storage.FS interface
+func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
+}
+
 // CreateReference creates a reference as a node folder with the target stored in extended attributes
 // There is no difference between the /Shares folder and normal nodes because the storage is not supposed to be accessible without the storage provider.
 // In effect everything is a shadow namespace.
@@ -508,21 +527,22 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 	return reader, nil
 }
 
-func (fs *Decomposedfs) copyMD(s string, t string) (err error) {
-	var attrs []string
-	if attrs, err = xattr.List(s); err != nil {
-		return err
-	}
-	for i := range attrs {
-		if strings.HasPrefix(attrs[i], xattrs.OcisPrefix) {
-			var d []byte
-			if d, err = xattr.Get(s, attrs[i]); err != nil {
-				return err
-			}
-			if err = xattr.Set(t, attrs[i], d); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+// GetLock returns an existing lock on the given reference
+func (fs *Decomposedfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+// SetLock puts a lock on the given reference
+func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// Unlock removes an existing lock from the given reference
+func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
 }

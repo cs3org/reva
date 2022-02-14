@@ -105,7 +105,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{OpaqueId: shareWith},
+		UserId: &userpb.UserId{OpaqueId: shareWith}, SkipFetchingUserGroups: true,
 	})
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error searching recipient", err)

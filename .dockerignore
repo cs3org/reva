@@ -1,7 +1,6 @@
 .github
 changelog
 docs
-examples
 grpc-tests
 tests
 tools

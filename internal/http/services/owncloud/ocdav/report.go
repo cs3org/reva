@@ -107,19 +107,22 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 				continue
 			}
 
-			// The paths we receive have the format /user/<username>/<filepath>
-			// We only want the `<filepath>` part. Thus we remove the /user/<username>/ part.
-			parts := strings.SplitN(statRes.Info.Path, "/", 4)
-			if len(parts) != 4 {
-				log.Error().Str("path", statRes.Info.Path).Msg("path doesn't have the expected format")
-				continue
+			// If global URLs are not supported, return only the file path
+			if s.c.WebdavNamespace != "" {
+				// The paths we receive have the format /user/<username>/<filepath>
+				// We only want the `<filepath>` part. Thus we remove the /user/<username>/ part.
+				parts := strings.SplitN(statRes.Info.Path, "/", 4)
+				if len(parts) != 4 {
+					log.Error().Str("path", statRes.Info.Path).Msg("path doesn't have the expected format")
+					continue
+				}
+				statRes.Info.Path = parts[3]
 			}
-			statRes.Info.Path = parts[3]
 
 			infos = append(infos, statRes.Info)
 		}
 
-		responsesXML, err := s.multistatusResponse(ctx, &propfindXML{Prop: ff.Prop}, infos, namespace)
+		responsesXML, err := s.multistatusResponse(ctx, &propfindXML{Prop: ff.Prop}, infos, namespace, nil)
 		if err != nil {
 			log.Error().Err(err).Msg("error formatting propfind")
 			w.WriteHeader(http.StatusInternalServerError)

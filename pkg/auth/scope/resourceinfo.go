@@ -23,7 +23,9 @@ import (
 	"fmt"
 	"strings"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/rs/zerolog"
@@ -50,22 +52,27 @@ func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interfac
 		return checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.InitiateFileDownloadRequest:
 		return checkResourceInfo(&r, v.GetRef()), nil
+	case *appprovider.OpenInAppRequest:
+		return checkResourceInfo(&r, &provider.Reference{ResourceId: v.ResourceInfo.Id}), nil
+	case *gateway.OpenInAppRequest:
+		return checkResourceInfo(&r, v.GetRef()), nil
 
-		// Editor role
-		// TODO(ishank011): Add role checks,
-		// need to return appropriate status codes in the ocs/ocdav layers.
+	// Editor role
+	// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
-		return checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
+	case *provider.TouchFileRequest:
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.DeleteRequest:
-		return checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.MoveRequest:
-		return checkResourceInfo(&r, v.GetSource()) && checkResourceInfo(&r, v.GetDestination()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetSource()) && checkResourceInfo(&r, v.GetDestination()), nil
 	case *provider.InitiateFileUploadRequest:
-		return checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.SetArbitraryMetadataRequest:
-		return checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.UnsetArbitraryMetadataRequest:
-		return checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
 
 	case string:
 		return checkResourcePath(v), nil
@@ -101,6 +108,7 @@ func checkResourcePath(path string) bool {
 		"/dataprovider",
 		"/data",
 		"/app/open",
+		"/app/new",
 		"/archiver",
 		"/ocs/v2.php/cloud/capabilities",
 		"/ocs/v1.php/cloud/capabilities",

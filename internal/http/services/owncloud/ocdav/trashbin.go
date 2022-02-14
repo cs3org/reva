@@ -30,6 +30,7 @@ import (
 	"time"
 
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -181,7 +182,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	if depth == "0" {
-		propRes, err := h.formatTrashPropfind(ctx, s, u, nil, nil)
+		propRes, err := h.formatTrashPropfind(ctx, s, u, nil, nil, basePath)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error formatting propfind")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -269,7 +270,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		}
 	}
 
-	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, items)
+	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, items, basePath)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -285,7 +286,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, items []*provider.RecycleItem) (string, error) {
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, items []*provider.RecycleItem, basePath string) (string, error) {
 	responses := make([]*responseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &responseXML{
@@ -310,7 +311,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 	})
 
 	for i := range items {
-		res, err := h.itemToPropResponse(ctx, s, u, pf, items[i])
+		res, err := h.itemToPropResponse(ctx, s, u, pf, items[i], basePath)
 		if err != nil {
 			return "", err
 		}
@@ -330,7 +331,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 // itemToPropResponse needs to create a listing that contains a key and destination
 // the key is the name of an entry in the trash listing
 // for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id
-func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, item *provider.RecycleItem) (*responseXML, error) {
+func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, item *provider.RecycleItem, basePath string) (*responseXML, error) {
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	ref := path.Join(baseURI, u.Username, item.Key)
@@ -347,6 +348,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 
 	t := utils.TSToTime(item.DeletionTime).UTC()
 	dTime := t.Format(time.RFC1123Z)
+	restorePath := strings.TrimPrefix(strings.TrimPrefix(item.Ref.Path, basePath), "/")
 
 	// when allprops has been requested
 	if pf.Allprop != nil {
@@ -357,7 +359,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 		})
 		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", restorePath))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
 		if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -396,7 +398,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
 				case "trashbin-original-location":
 					// TODO (jfd) double check and clarify the cs3 spec what the Key is about and if Path is only the folder that contains the file or if it includes the filename
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", restorePath))
 				case "trashbin-delete-datetime":
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
 				case "trashbin-delete-timestamp":
@@ -580,7 +582,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	info := dstStatRes.Info
 	w.Header().Set(HeaderContentType, info.MimeType)
 	w.Header().Set(HeaderETag, info.Etag)
-	w.Header().Set(HeaderOCFileID, wrapResourceID(info.Id))
+	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
 	w.Header().Set(HeaderOCETag, info.Etag)
 
 	w.WriteHeader(successCode)

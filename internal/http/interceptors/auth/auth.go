@@ -21,6 +21,7 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/bluele/gcache"
@@ -281,6 +282,8 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			ctx = ctxpkg.ContextSetToken(ctx, tkn)
 			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
+			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, r.UserAgent())
+
 			r = r.WithContext(ctx)
 			h.ServeHTTP(w, r)
 		})
@@ -295,14 +298,16 @@ func getCredsForUserAgent(ua string, uam map[string]string, creds []string) []st
 		return creds
 	}
 
-	cred, ok := uam[ua]
-	if ok {
-		for _, v := range creds {
-			if v == cred {
-				return []string{cred}
+	for u, cred := range uam {
+		if strings.Contains(ua, u) {
+			for _, v := range creds {
+				if v == cred {
+					return []string{cred}
+				}
 			}
+			return creds
+
 		}
-		return creds
 	}
 
 	return creds

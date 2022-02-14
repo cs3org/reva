@@ -253,6 +253,11 @@ func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference)
 	return err
 }
 
+// TouchFile as defined in the storage.FS interface
+func (nc *StorageDriver) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
+}
+
 // Delete as defined in the storage.FS interface
 func (nc *StorageDriver) Delete(ctx context.Context, ref *provider.Reference) error {
 	bodyStr, err := json.Marshal(ref)
@@ -755,6 +760,26 @@ func (nc *StorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provid
 
 	_, _, err := nc.do(ctx, Action{"UnsetArbitraryMetadata", string(bodyStr)})
 	return err
+}
+
+// GetLock returns an existing lock on the given reference
+func (nc *StorageDriver) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+// SetLock puts a lock on the given reference
+func (nc *StorageDriver) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (nc *StorageDriver) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// Unlock removes an existing lock from the given reference
+func (nc *StorageDriver) Unlock(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
 }
 
 // ListStorageSpaces as defined in the storage.FS interface

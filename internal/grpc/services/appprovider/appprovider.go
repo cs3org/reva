@@ -22,11 +22,13 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"time"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -35,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/juliangruber/go-intersect"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
@@ -53,6 +56,8 @@ type config struct {
 	Drivers        map[string]map[string]interface{} `mapstructure:"drivers"`
 	AppProviderURL string                            `mapstructure:"app_provider_url"`
 	GatewaySvc     string                            `mapstructure:"gatewaysvc"`
+	MimeTypes      []string                          `mapstructure:"mime_types"`
+	Priority       uint64                            `mapstructure:"priority"`
 }
 
 func (c *config) init() {
@@ -106,12 +111,34 @@ func (s *service) registerProvider() {
 	}
 	pInfo.Address = s.conf.AppProviderURL
 
+	if len(s.conf.MimeTypes) != 0 {
+		mimeTypesIf := intersect.Simple(pInfo.MimeTypes, s.conf.MimeTypes)
+		var mimeTypes []string
+		for _, m := range mimeTypesIf {
+			mimeTypes = append(mimeTypes, m.(string))
+		}
+		pInfo.MimeTypes = mimeTypes
+	}
+
 	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: could not get gateway client")
 		return
 	}
-	res, err := client.AddAppProvider(ctx, &registrypb.AddAppProviderRequest{Provider: pInfo})
+	req := &registrypb.AddAppProviderRequest{Provider: pInfo}
+
+	if s.conf.Priority != 0 {
+		req.Opaque = &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"priority": {
+					Decoder: "plain",
+					Value:   []byte(strconv.FormatUint(s.conf.Priority, 10)),
+				},
+			},
+		}
+	}
+
+	res, err := client.AddAppProvider(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: error calling add app provider")
 		return

@@ -141,7 +141,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
 	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
@@ -174,10 +174,15 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
 		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
-	groups, err := m.GetUserGroups(ctx, id)
-	if err != nil {
-		return nil, err
+
+	groups := []string{}
+	if !skipFetchingGroups {
+		groups, err = m.GetUserGroups(ctx, id)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	gidNumber := m.c.Nobody
 	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
 	if gidValue != "" {
@@ -207,7 +212,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	return u, nil
 }
 
-func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	// TODO align supported claims with rest driver and the others, maybe refactor into common mapping
 	switch claim {
 	case "mail":
@@ -256,10 +261,15 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
 		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
-	groups, err := m.GetUserGroups(ctx, id)
-	if err != nil {
-		return nil, err
+
+	groups := []string{}
+	if !skipFetchingGroups {
+		groups, err = m.GetUserGroups(ctx, id)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	gidNumber := m.c.Nobody
 	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
 	if gidValue != "" {
@@ -290,7 +300,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return nil, err
@@ -319,10 +329,15 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.UID),
 			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		}
-		groups, err := m.GetUserGroups(ctx, id)
-		if err != nil {
-			return nil, err
+
+		groups := []string{}
+		if !skipFetchingGroups {
+			groups, err = m.GetUserGroups(ctx, id)
+			if err != nil {
+				return nil, err
+			}
 		}
+
 		gidNumber := m.c.Nobody
 		gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
 		if gidValue != "" {

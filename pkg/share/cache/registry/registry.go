@@ -20,14 +20,14 @@ package registry
 
 import "github.com/cs3org/reva/pkg/share/cache"
 
-// NewFunc is the function that cache warmup implementations
+// NewFunc is the function that cache implementations
 // should register at init time.
-type NewFunc func(map[string]interface{}) (cache.Warmup, error)
+type NewFunc func(map[string]interface{}) (cache.ResourceInfoCache, error)
 
-// NewFuncs is a map containing all the registered cache warmup implementations.
+// NewFuncs is a map containing all the registered cache implementations.
 var NewFuncs = map[string]NewFunc{}
 
-// Register registers a new cache warmup function.
+// Register registers a new cache function.
 // Not safe for concurrent use. Safe for use from package init.
 func Register(name string, f NewFunc) {
 	NewFuncs[name] = f

@@ -333,7 +333,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		}
 
 		if ref.GetId().GetOpaqueId() == ps.Id.OpaqueId {
-			if !notExpired(&ps) {
+			if publicshare.IsExpired(&ps) {
 				if err := m.revokeExpiredPublicShare(ctx, &ps, u); err != nil {
 					return nil, err
 				}
@@ -383,32 +383,19 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 		if len(filters) == 0 {
 			shares = append(shares, &local.PublicShare)
-		} else {
-			for i := range filters {
-				if filters[i].Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
-					if utils.ResourceIDEqual(local.ResourceId, filters[i].GetResourceId()) {
-						if notExpired(&local.PublicShare) {
-							shares = append(shares, &local.PublicShare)
-						} else if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {
-							return nil, err
-						}
-					}
+			continue
+		}
 
-				}
+		if publicshare.MatchesFilters(&local.PublicShare, filters) {
+			if !publicshare.IsExpired(&local.PublicShare) {
+				shares = append(shares, &local.PublicShare)
+			} else if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {
+				return nil, err
 			}
 		}
 	}
 
 	return shares, nil
-}
-
-// notExpired tests whether a public share is expired
-func notExpired(s *link.PublicShare) bool {
-	t := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos()))
-	if (s.Expiration != nil && t.After(time.Now())) || s.Expiration == nil {
-		return true
-	}
-	return false
 }
 
 func (m *manager) cleanupExpiredShares() {
@@ -423,7 +410,7 @@ func (m *manager) cleanupExpiredShares() {
 		var ps link.PublicShare
 		_ = utils.UnmarshalJSONToProtoV1([]byte(d.(string)), &ps)
 
-		if !notExpired(&ps) {
+		if publicshare.IsExpired(&ps) {
 			_ = m.revokeExpiredPublicShare(context.Background(), &ps, nil)
 		}
 	}
@@ -525,7 +512,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 		}
 
 		if local.Token == token {
-			if !notExpired(&local) {
+			if publicshare.IsExpired(&local) {
 				// TODO user is not needed at all in this API.
 				if err := m.revokeExpiredPublicShare(ctx, &local, nil); err != nil {
 					return nil, err

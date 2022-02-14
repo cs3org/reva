@@ -766,6 +766,11 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 	return fs.propagate(ctx, filepath.Dir(ip))
 }
 
+// TouchFile as defined in the storage.FS interface
+func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
+}
+
 func (fs *owncloudsqlfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
 	return errtypes.NotSupported("owncloudsql: operation not supported")
 }
@@ -1017,6 +1022,26 @@ func (fs *owncloudsqlfs) UnsetArbitraryMetadata(ctx context.Context, ref *provid
 		// TODO how to return multiple errors?
 		return errors.New("multiple errors occurred, see log for details")
 	}
+}
+
+// GetLock returns an existing lock on the given reference
+func (fs *owncloudsqlfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+// SetLock puts a lock on the given reference
+func (fs *owncloudsqlfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (fs *owncloudsqlfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// Unlock removes an existing lock from the given reference
+func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
 }
 
 // Delete is actually only a move to trash

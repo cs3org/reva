@@ -28,6 +28,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -48,7 +49,22 @@ func (h *Handler) Init(c *config.Config) {
 // GetGroups handles GET requests on /cloud/users/groups
 // TODO: implement
 func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request) {
-	response.WriteOCSSuccess(w, r, &Groups{})
+	ctx := r.Context()
+
+	user := chi.URLParam(r, "userid")
+	// FIXME use ldap to fetch user info
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
+		return
+	}
+	if user != u.Username {
+		// FIXME allow fetching other users info? only for admins
+		response.WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to access %s user info endpoint", u.Id.OpaqueId, user))
+		return
+	}
+
+	response.WriteOCSSuccess(w, r, &Groups{Groups: u.Groups})
 }
 
 // Quota holds quota information
@@ -65,6 +81,7 @@ type Users struct {
 	Quota       *Quota `json:"quota" xml:"quota"`
 	Email       string `json:"email" xml:"email"`
 	DisplayName string `json:"displayname" xml:"displayname"`
+	UserType    string `json:"user-type" xml:"user-type"`
 	// FIXME home should never be exposed ... even in oc 10
 	// home
 	TwoFactorAuthEnabled bool `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
@@ -145,5 +162,6 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		},
 		DisplayName: u.DisplayName,
 		Email:       u.Mail,
+		UserType:    conversions.UserTypeString(u.Id.Type),
 	})
 }

@@ -28,12 +28,14 @@ import (
 	"strings"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ocsconv "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
@@ -200,6 +202,28 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return spaces, nil
 	}
 
+	client, err := pool.GetGatewayServiceClient(fs.o.GatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	checkRes, err := client.CheckPermission(ctx, &permissionsv1beta1.CheckPermissionRequest{
+		Permission: "list-all-spaces",
+		SubjectRef: &permissionsv1beta1.SubjectReference{
+			Spec: &permissionsv1beta1.SubjectReference_UserId{
+				UserId: u.Id,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	canListAllSpaces := false
+	if checkRes.Status.Code == v1beta11.Code_CODE_OK {
+		canListAllSpaces = true
+	}
+
 	for i := range matches {
 		// always read link in case storage space id != node id
 		if target, err := os.Readlink(matches[i]); err != nil {
@@ -226,7 +250,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			}
 
 			// TODO apply more filters
-			space, err := fs.storageSpaceFromNode(ctx, n, matches[i], spaceType)
+			space, err := fs.storageSpaceFromNode(ctx, n, matches[i], spaceType, canListAllSpaces)
 			if err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
 				continue
@@ -254,7 +278,12 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	if len(matches) != 1 {
-		return nil, fmt.Errorf("update space failed: found %d matching spaces", len(matches))
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{
+				Code:    v1beta11.Code_CODE_NOT_FOUND,
+				Message: fmt.Sprintf("update space failed: found %d matching spaces", len(matches)),
+			},
+		}, nil
 	}
 
 	target, err := os.Readlink(matches[0])
@@ -266,6 +295,12 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	if err != nil {
 		return nil, err
 	}
+
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
+	}
+	space.Owner = u
 
 	if space.Name != "" {
 		if err := node.SetMetadata(xattrs.SpaceNameAttr, space.Name); err != nil {
@@ -318,7 +353,7 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeI
 	return nil
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Node, nodePath, spaceType string) (*provider.StorageSpace, error) {
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Node, nodePath, spaceType string, canListAllSpaces bool) (*provider.StorageSpace, error) {
 	owner, err := node.Owner()
 	if err != nil {
 		return nil, err
@@ -346,12 +381,14 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 	user := ctxpkg.ContextMustGetUser(ctx)
 
 	// filter out spaces user cannot access (currently based on stat permission)
-	p, err := node.ReadUserPermissions(ctx, user)
-	if err != nil {
-		return nil, err
-	}
-	if !p.Stat {
-		return nil, errors.New("user is not allowed to Stat the space")
+	if !canListAllSpaces {
+		p, err := node.ReadUserPermissions(ctx, user)
+		if err != nil {
+			return nil, err
+		}
+		if !p.Stat {
+			return nil, errors.New("user is not allowed to Stat the space")
+		}
 	}
 
 	space.Owner = &userv1beta1.User{ // FIXME only return a UserID, not a full blown user object

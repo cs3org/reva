@@ -102,26 +102,26 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	// search via the user_id
 	a, err := m.db.GetAccountByClaim(ctx, "userid", uid.OpaqueId)
 	if err == sql.ErrNoRows {
 		return nil, errtypes.NotFound(uid.OpaqueId)
 	}
-	return m.convertToCS3User(ctx, a)
+	return m.convertToCS3User(ctx, a, skipFetchingGroups)
 }
 
-func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	a, err := m.db.GetAccountByClaim(ctx, claim, value)
 	if err == sql.ErrNoRows {
 		return nil, errtypes.NotFound(claim + "=" + value)
 	} else if err != nil {
 		return nil, err
 	}
-	return m.convertToCS3User(ctx, a)
+	return m.convertToCS3User(ctx, a, skipFetchingGroups)
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 
 	accounts, err := m.db.FindAccounts(ctx, query)
 	if err == sql.ErrNoRows {
@@ -132,7 +132,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 
 	users := make([]*userpb.User, 0, len(accounts))
 	for i := range accounts {
-		u, err := m.convertToCS3User(ctx, &accounts[i])
+		u, err := m.convertToCS3User(ctx, &accounts[i], skipFetchingGroups)
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("account", accounts[i]).Msg("could not convert account, skipping")
 			continue
@@ -153,7 +153,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	return groups, nil
 }
 
-func (m *manager) convertToCS3User(ctx context.Context, a *accounts.Account) (*userpb.User, error) {
+func (m *manager) convertToCS3User(ctx context.Context, a *accounts.Account, skipFetchingGroups bool) (*userpb.User, error) {
 	u := &userpb.User{
 		Id: &userpb.UserId{
 			Idp:      m.c.Idp,
@@ -172,9 +172,12 @@ func (m *manager) convertToCS3User(ctx context.Context, a *accounts.Account) (*u
 	if u.DisplayName == "" {
 		u.DisplayName = u.Id.OpaqueId
 	}
-	var err error
-	if u.Groups, err = m.GetUserGroups(ctx, u.Id); err != nil {
-		return nil, err
+
+	if !skipFetchingGroups {
+		var err error
+		if u.Groups, err = m.GetUserGroups(ctx, u.Id); err != nil {
+			return nil, err
+		}
 	}
 	return u, nil
 }

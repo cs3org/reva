@@ -172,3 +172,38 @@ func TestMakeRelativePath(t *testing.T) {
 		}
 	}
 }
+
+func TestParseStorageSpaceReference(t *testing.T) {
+	tests := []struct {
+		sRef      string
+		storageID string
+		nodeID    string
+		relPath   string
+	}{
+		{
+			"1234!abcd/f1/f2",
+			"1234",
+			"abcd",
+			"./f1/f2",
+		},
+		{
+			"1234!abcd",
+			"1234",
+			"abcd",
+			".",
+		},
+	}
+	for _, tt := range tests {
+		ref, _ := ParseStorageSpaceReference(tt.sRef)
+
+		if ref.ResourceId.StorageId != tt.storageID {
+			t.Errorf("Expected storageId %s got %s", tt.storageID, ref.ResourceId.StorageId)
+		}
+		if ref.ResourceId.OpaqueId != tt.nodeID {
+			t.Errorf("Expected OpaqueId %s got %s", tt.nodeID, ref.ResourceId.OpaqueId)
+		}
+		if ref.Path != tt.relPath {
+			t.Errorf("Expected path %s got %s", tt.relPath, ref.Path)
+		}
+	}
+}

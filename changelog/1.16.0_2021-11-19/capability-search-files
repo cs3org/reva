@@ -1,0 +1,5 @@
+Bugfix: Don't announce search-files capability
+
+The `dav.reports` capability contained  a `search-files` report which is currently not implemented. We removed it from the defaults.
+
+https://github.com/cs3org/reva/pull/2245

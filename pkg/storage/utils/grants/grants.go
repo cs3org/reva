@@ -66,7 +66,7 @@ func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 // TODO(labkode): add more fine grained controls.
 // EOS acls are a mix of ACLs and POSIX permissions. More details can be found in
 // https://github.com/cern-eos/eos/blob/master/doc/configuration/permission.rst
-func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermissions {
+func GetGrantPermissionSet(perm string) *provider.ResourcePermissions {
 	var rp provider.ResourcePermissions // default to 0 == all denied
 
 	if strings.Contains(perm, "r") && !strings.Contains(perm, "!r") {
@@ -82,17 +82,13 @@ func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermission
 		rp.InitiateFileUpload = true
 		rp.RestoreFileVersion = true
 		rp.RestoreRecycleItem = true
-		if isDir {
-			rp.CreateContainer = true
-		}
+		rp.CreateContainer = true
 	}
 
 	if strings.Contains(perm, "x") && !strings.Contains(perm, "!x") {
 		rp.ListFileVersions = true
 		rp.ListRecycle = true
-		if isDir {
-			rp.ListContainer = true
-		}
+		rp.ListContainer = true
 	}
 
 	if strings.Contains(perm, "!d") {

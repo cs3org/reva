@@ -48,6 +48,8 @@ import (
 
 const (
 	versionPrefix = ".sys.v#."
+	// lwShareAttrKey = "reva.lwshare"
+	userACLEvalKey = "eval.useracl"
 )
 
 const (
@@ -485,10 +487,37 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	}
 
 	log.Debug().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Msg("")
-	return c.mergeParentACLsForFiles(ctx, auth, info), nil
+	return c.fixupACLs(ctx, auth, info), nil
 }
 
-func (c *Client) mergeParentACLsForFiles(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
+func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
+
+	// Append the ACLs that are described by the xattr sys.acl entry
+	a, err := acl.Parse(info.Attrs["sys.acl"], acl.ShortTextForm)
+	if err == nil {
+		if info.SysACL != nil {
+			info.SysACL.Entries = append(info.SysACL.Entries, a.Entries...)
+		} else {
+			info.SysACL = a
+		}
+	}
+
+	// Read user ACLs if sys.eval.useracl is set
+	if userACLEval, ok := info.Attrs["sys."+userACLEvalKey]; ok && userACLEval == "1" {
+		if userACL, ok := info.Attrs["user.acl"]; ok {
+			userAcls, err := acl.Parse(userACL, acl.ShortTextForm)
+			if err != nil {
+				return nil
+			}
+			for _, e := range userAcls.Entries {
+				err = info.SysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
+				if err != nil {
+					return nil
+				}
+			}
+		}
+	}
+
 	// We need to inherit the ACLs for the parent directory as these are not available for files
 	if !info.IsDir {
 		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
@@ -543,7 +572,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 }
 
 // UnsetAttr unsets an extended attribute on a path.
-func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, path string) error {
+func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "UnsetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -557,6 +586,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 
 	var ktd = []string{attr.Key}
 	msg.Keystodelete = ktd
+	msg.Recursive = recursive
 
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
@@ -640,7 +670,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 		info.Inode = inode
 	}
 
-	return c.mergeParentACLsForFiles(ctx, auth, info), nil
+	return c.fixupACLs(ctx, auth, info), nil
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal
@@ -952,7 +982,7 @@ func (c *Client) CreateDir(ctx context.Context, auth eosclient.Authorization, pa
 
 }
 
-func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path string) error {
+func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path string, noRecycle bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "rm").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -966,6 +996,7 @@ func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path stri
 
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
+	msg.Norecycle = noRecycle
 
 	rq.Command = &erpc.NSRequest_Unlink{Unlink: msg}
 
@@ -987,7 +1018,7 @@ func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path stri
 
 }
 
-func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path string) error {
+func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path string, noRecycle bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "rmdir").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -1002,7 +1033,7 @@ func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path s
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 	msg.Recursive = true
-	msg.Norecycle = false
+	msg.Norecycle = noRecycle
 
 	rq.Command = &erpc.NSRequest_Rm{Rm: msg}
 
@@ -1024,7 +1055,7 @@ func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path s
 }
 
 // Remove removes the resource at the given path
-func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path string) error {
+func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path string, noRecycle bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Remove").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -1035,10 +1066,10 @@ func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path 
 	}
 
 	if nfo.IsDir {
-		return c.rmdir(ctx, auth, path)
+		return c.rmdir(ctx, auth, path, noRecycle)
 	}
 
-	return c.rm(ctx, auth, path)
+	return c.rm(ctx, auth, path, noRecycle)
 }
 
 // Rename renames the resource referenced by oldPath to newPath
@@ -1157,9 +1188,17 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 		mylst = append(mylst, myitem)
 	}
 
-	for _, info := range mylst {
-		if !info.IsDir && parent != nil {
-			info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+	if parent.SysACL != nil {
+
+		for _, info := range mylst {
+			if !info.IsDir && parent != nil {
+				if info.SysACL == nil {
+					log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
+					info.SysACL.Entries = parent.SysACL.Entries
+				} else {
+					info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+				}
+			}
 		}
 	}
 

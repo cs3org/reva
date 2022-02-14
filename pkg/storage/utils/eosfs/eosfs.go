@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/bluele/gcache"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -44,6 +45,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient/eosgrpc"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
@@ -139,7 +141,7 @@ type eosfs struct {
 	conf           *Config
 	chunkHandler   *chunking.ChunkHandler
 	singleUserAuth eosclient.Authorization
-	userIDCache    gcache.Cache
+	userIDCache    *ttlcache.Cache
 	tokenCache     gcache.Cache
 }
 
@@ -177,6 +179,10 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 			MaxConnsPerHost:     c.MaxConnsPerHost,
 			MaxIdleConnsPerHost: c.MaxIdleConnsPerHost,
 			IdleConnTimeout:     c.IdleConnTimeout,
+			ClientCertFile:      c.ClientCertFile,
+			ClientKeyFile:       c.ClientKeyFile,
+			ClientCADirs:        c.ClientCADirs,
+			ClientCAFiles:       c.ClientCAFiles,
 		}
 		eosClient, err = eosgrpc.New(eosClientOpts, eosHTTPOpts)
 	} else {
@@ -204,9 +210,18 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 		c:            eosClient,
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
-		userIDCache:  gcache.New(c.UserIDCacheSize).LFU().Build(),
+		userIDCache:  ttlcache.NewCache(),
 		tokenCache:   gcache.New(c.UserIDCacheSize).LFU().Build(),
 	}
+
+	eosfs.userIDCache.SetCacheSizeLimit(c.UserIDCacheSize)
+	eosfs.userIDCache.SetExpirationReasonCallback(func(key string, reason ttlcache.EvictionReason, value interface{}) {
+		// We only set those keys with TTL which we weren't able to retrieve the last time
+		// For those keys, try to contact the userprovider service again when they expire
+		if reason == ttlcache.Expired {
+			_, _ = eosfs.getUserIDGateway(context.Background(), key)
+		}
+	})
 
 	go eosfs.userIDcacheWarmup()
 
@@ -215,6 +230,7 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 
 func (fs *eosfs) userIDcacheWarmup() {
 	if !fs.conf.EnableHome {
+		time.Sleep(2 * time.Second)
 		ctx := context.Background()
 		paths := []string{fs.wrap(ctx, "/")}
 		auth, _ := fs.getRootAuth(ctx)
@@ -510,13 +526,33 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 			Key:  k,
 		}
 
-		err := fs.c.UnsetAttr(ctx, auth, attr, fn)
+		err := fs.c.UnsetAttr(ctx, auth, attr, false, fn)
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error unsetting xattr in eos driver")
 		}
 
 	}
 	return nil
+}
+
+// GetLock returns an existing lock on the given reference
+func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+// SetLock puts a lock on the given reference
+func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// Unlock removes an existing lock from the given reference
+func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
 }
 
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -760,7 +796,7 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 
 		grantList = append(grantList, &provider.Grant{
 			Grantee:     grantee,
-			Permissions: grants.GetGrantPermissionSet(a.Permissions, true),
+			Permissions: grants.GetGrantPermissionSet(a.Permissions),
 		})
 	}
 
@@ -771,10 +807,40 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
-	p, err := fs.resolve(ctx, ref)
+	u, err := getUser(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error resolving reference")
+		return nil, err
 	}
+
+	fn := ""
+	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		p, err := fs.resolve(ctx, ref)
+		if err != nil {
+			return nil, errors.Wrap(err, "eosfs: error resolving reference")
+		}
+
+		fn = fs.wrap(ctx, p)
+	}
+
+	auth, err := fs.getUserAuth(ctx, u, fn)
+	if err != nil {
+		return nil, err
+	}
+
+	if ref.ResourceId != nil {
+		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("error converting string to int for eos fileid: %s", ref.ResourceId.OpaqueId)
+		}
+
+		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
+		if err != nil {
+			return nil, err
+		}
+		return fs.convertToResourceInfo(ctx, eosFileInfo)
+	}
+
+	p := ref.Path
 
 	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
@@ -783,17 +849,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		}
 	}
 
-	fn := fs.wrap(ctx, p)
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
-	if err != nil {
-		return nil, err
-	}
-
+	fn = fs.wrap(ctx, p)
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
 	if err != nil {
 		return nil, err
@@ -1189,6 +1245,29 @@ func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	return fs.c.CreateDir(ctx, auth, fn)
 }
 
+// TouchFile as defined in the storage.FS interface
+func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	log := appctx.GetLogger(ctx)
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+	p, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil
+	}
+
+	auth, err := fs.getUserAuth(ctx, u, p)
+	if err != nil {
+		return err
+	}
+
+	log.Info().Msgf("eosfs: touch file: path=%s", p)
+
+	fn := fs.wrap(ctx, p)
+	return fs.c.Touch(ctx, auth, fn)
+}
+
 func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
 	// TODO(labkode): for the time being we only allow creating references
 	// in the virtual share folder to not pollute the nominal user tree.
@@ -1258,7 +1337,7 @@ func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
 		return err
 	}
 
-	return fs.c.Remove(ctx, auth, fn)
+	return fs.c.Remove(ctx, auth, fn, false)
 }
 
 func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
@@ -1267,19 +1346,17 @@ func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
 	}
 
 	if fs.isShareFolderChild(ctx, p) {
-		u, err := getUser(ctx)
-		if err != nil {
-			return errors.Wrap(err, "eosfs: no user in ctx")
-		}
-
 		fn := fs.wrapShadow(ctx, p)
 
-		auth, err := fs.getUserAuth(ctx, u, "")
+		// in order to remove the folder or the file without
+		// moving it to the recycle bin, we should take
+		// the privileges of the root
+		auth, err := fs.getRootAuth(ctx)
 		if err != nil {
 			return err
 		}
 
-		return fs.c.Remove(ctx, auth, fn)
+		return fs.c.Remove(ctx, auth, fn, true)
 	}
 
 	return errors.New("eosfs: shadow delete of share folder that is neither root nor child. path=" + p)
@@ -1604,7 +1681,7 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 		return nil, err
 	}
 	info.Type = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-	val, ok := eosFileInfo.Attrs["user.reva.target"]
+	val, ok := eosFileInfo.Attrs["reva.target"]
 	if !ok || val == "" {
 		return nil, errtypes.InternalError("eosfs: reference does not contain target: target=" + val + " file=" + eosFileInfo.File)
 	}
@@ -1622,6 +1699,43 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	}
 
 	if owner != nil && u.Id.OpaqueId == owner.OpaqueId && u.Id.Idp == owner.Idp {
+		// The logged-in user is the owner but we may be impersonating them
+		// on behalf of a public share accessor.
+
+		if u.Opaque != nil {
+			if publicShare, ok := u.Opaque.Map["public-share-role"]; ok {
+				if string(publicShare.Value) == "editor" {
+					return &provider.ResourcePermissions{
+						CreateContainer:      true,
+						Delete:               true,
+						GetPath:              true,
+						GetQuota:             true,
+						InitiateFileDownload: true,
+						InitiateFileUpload:   true,
+						ListContainer:        true,
+						ListFileVersions:     true,
+						ListGrants:           true,
+						ListRecycle:          true,
+						Move:                 true,
+						PurgeRecycle:         true,
+						RestoreFileVersion:   true,
+						RestoreRecycleItem:   true,
+						Stat:                 true,
+					}
+				}
+				return &provider.ResourcePermissions{
+					GetPath:              true,
+					GetQuota:             true,
+					InitiateFileDownload: true,
+					ListContainer:        true,
+					ListFileVersions:     true,
+					ListRecycle:          true,
+					ListGrants:           true,
+					Stat:                 true,
+				}
+			}
+		}
+
 		return &provider.ResourcePermissions{
 			// owner has all permissions
 			AddGrant:             true,
@@ -1653,7 +1767,13 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		}
 	}
 
+	if eosFileInfo.SysACL == nil {
+		return &provider.ResourcePermissions{
+			// no permissions
+		}
+	}
 	var perm provider.ResourcePermissions
+
 	for _, e := range eosFileInfo.SysACL.Entries {
 		var userInGroup bool
 		if e.Type == acl.TypeGroup {
@@ -1666,7 +1786,7 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		}
 
 		if (e.Type == acl.TypeUser && e.Qualifier == auth.Role.UID) || (e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId) || userInGroup {
-			mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions, eosFileInfo.IsDir))
+			mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions))
 		}
 	}
 
@@ -1740,6 +1860,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		Size:          size,
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
 		Checksum:      &xs,
+		Type:          getResourceType(eosFileInfo.IsDir),
 		Mtime: &types.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,
 			Nanos:   eosFileInfo.MTimeNanos,
@@ -1764,7 +1885,6 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		}
 	}
 
-	info.Type = getResourceType(eosFileInfo.IsDir)
 	return info, nil
 }
 
@@ -1786,19 +1906,30 @@ func (fs *eosfs) extractUIDAndGID(u *userpb.User) (eosclient.Authorization, erro
 }
 
 func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient.Authorization, error) {
+	log := appctx.GetLogger(ctx)
+	if userIDInterface, err := fs.userIDCache.Get(u.OpaqueId); err == nil {
+		log.Debug().Msg("eosfs: found cached user " + u.OpaqueId)
+		return fs.extractUIDAndGID(userIDInterface.(*userpb.User))
+	}
+
 	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
 	if err != nil {
 		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting gateway grpc client")
 	}
 	getUserResp, err := client.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: u,
+		UserId:                 u,
+		SkipFetchingUserGroups: true,
 	})
 	if err != nil {
+		_ = fs.userIDCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
 		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting user")
 	}
 	if getUserResp.Status.Code != rpc.Code_CODE_OK {
-		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: grpc get user failed")
+		_ = fs.userIDCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
+		return eosclient.Authorization{}, status.NewErrorFromCode(getUserResp.Status.Code, "eosfs")
 	}
+
+	_ = fs.userIDCache.Set(u.OpaqueId, getUserResp.User)
 	return fs.extractUIDAndGID(getUserResp.User)
 }
 
@@ -1820,14 +1951,21 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 		return nil, errors.Wrap(err, "eosfs: error getting gateway grpc client")
 	}
 	getUserResp, err := client.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-		Claim: "uid",
-		Value: uid,
+		Claim:                  "uid",
+		Value:                  uid,
+		SkipFetchingUserGroups: true,
 	})
 	if err != nil {
+		// Insert an empty object in the cache so that we don't make another call
+		// for a specific amount of time
+		_ = fs.userIDCache.SetWithTTL(uid, &userpb.UserId{}, 12*time.Hour)
 		return nil, errors.Wrap(err, "eosfs: error getting user")
 	}
 	if getUserResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, errors.Wrap(err, "eosfs: grpc get user failed")
+		// Insert an empty object in the cache so that we don't make another call
+		// for a specific amount of time
+		_ = fs.userIDCache.SetWithTTL(uid, &userpb.UserId{}, 12*time.Hour)
+		return nil, status.NewErrorFromCode(getUserResp.Status.Code, "eosfs")
 	}
 
 	_ = fs.userIDCache.Set(uid, getUserResp.User.Id)
