@@ -21,7 +21,6 @@ package node
 import (
 	"context"
 	"strings"
-	"syscall"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -30,7 +29,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 )
 
 // NoPermissions represents an empty set of permissions
@@ -252,7 +250,7 @@ func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool,
 			if check(g.GetPermissions()) {
 				return true
 			}
-		case isAttrUnset(err):
+		case xattrs.IsAttrUnset(err):
 			appctx.GetLogger(ctx).Error().Interface("node", cn.ID).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 		default:
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Str("grant", grantees[i]).Msg("error reading permissions")
@@ -289,15 +287,4 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 		return u, &perms
 	}
 	return u, nil
-}
-
-// The os not exists error is buried inside the xattr error,
-// so we cannot just use os.IsNotExists().
-func isNotFound(err error) bool {
-	if xerr, ok := err.(*xattr.Error); ok {
-		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.ENOENT
-		}
-	}
-	return false
 }

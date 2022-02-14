@@ -181,9 +181,9 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	switch {
 	case err == nil:
 		n.ParentID = attr
-	case isAttrUnset(err):
+	case xattrs.IsAttrUnset(err):
 		return nil, errtypes.InternalError(err.Error())
-	case isNotFound(err):
+	case xattrs.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
 	default:
 		return nil, errtypes.InternalError(err.Error())
@@ -216,7 +216,7 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	// Check if parent exists. Otherwise this node is part of a deleted subtree
 	_, err = os.Stat(lu.InternalPath(n.ParentID))
 	if err != nil {
-		if isNotFound(err) {
+		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(err.Error())
 		}
 		return nil, err
@@ -320,7 +320,7 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.OpaqueId = attr
-	case isAttrUnset(err), isNotFound(err):
+	case xattrs.IsAttrUnset(err), xattrs.IsNotExist(err):
 		fallthrough
 	default:
 		return nil, err
@@ -331,7 +331,7 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.Idp = attr
-	case isAttrUnset(err), isNotFound(err):
+	case xattrs.IsAttrUnset(err), xattrs.IsNotExist(err):
 		fallthrough
 	default:
 		return nil, err
@@ -342,7 +342,7 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.Type = utils.UserTypeMap(attr)
-	case isAttrUnset(err), isNotFound(err):
+	case xattrs.IsAttrUnset(err), xattrs.IsNotExist(err):
 		fallthrough
 	default:
 		// TODO the user type defaults to invalid, which is the case
@@ -681,9 +681,9 @@ func readChecksumIntoResourceChecksum(ctx context.Context, nodePath, algo string
 			Type: storageprovider.PKG2GRPCXS(algo),
 			Sum:  hex.EncodeToString([]byte(v)),
 		}
-	case isAttrUnset(err):
+	case xattrs.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("checksum not set")
-	case isNotFound(err):
+	case xattrs.IsNotExist(err):
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("file not fount")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("could not read checksum")
@@ -703,9 +703,9 @@ func readChecksumIntoOpaque(ctx context.Context, nodePath, algo string, ri *prov
 			Decoder: "plain",
 			Value:   []byte(hex.EncodeToString([]byte(v))),
 		}
-	case isAttrUnset(err):
+	case xattrs.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("checksum not set")
-	case isNotFound(err):
+	case xattrs.IsNotExist(err):
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("file not fount")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("could not read checksum")
@@ -735,9 +735,9 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 		} else {
 			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("quota", v).Msg("malformed quota")
 		}
-	case isAttrUnset(err):
+	case xattrs.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Msg("quota not set")
-	case isNotFound(err):
+	case xattrs.IsNotExist(err):
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("file not found when reading quota")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not read quota")
@@ -862,7 +862,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 		switch {
 		case err == nil:
 			AddPermissions(&ap, g.GetPermissions())
-		case isAttrUnset(err):
+		case xattrs.IsAttrUnset(err):
 			err = nil
 			appctx.GetLogger(ctx).Error().Interface("node", n).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 			// continue with next segment
