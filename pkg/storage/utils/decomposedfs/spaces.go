@@ -67,6 +67,13 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 			spaceID = string(e.Value)
 		}
 	}
+	// allow sending a space description
+	var description string
+	if req.Opaque != nil && req.Opaque.Map != nil {
+		if e, ok := req.Opaque.Map["description"]; ok && e.Decoder == "plain" {
+			description = string(e.Value)
+		}
+	}
 	// TODO enforce a uuid?
 	// TODO clarify if we want to enforce a single personal storage space or if we want to allow sending the spaceid
 	if req.Type == "personal" {
@@ -111,40 +118,27 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	}
 
+	metadata := make(map[string]string, 3)
 	if q := req.GetQuota(); q != nil {
 		// set default space quota
-		if err := n.SetMetadata(xattrs.QuotaAttr, strconv.FormatUint(q.QuotaMaxBytes, 10)); err != nil {
-			return nil, err
-		}
+		metadata[xattrs.QuotaAttr] = strconv.FormatUint(q.QuotaMaxBytes, 10)
 	}
 
-	if err := n.SetMetadata(xattrs.SpaceNameAttr, req.Name); err != nil {
+	metadata[xattrs.SpaceNameAttr] = req.Name
+	if description != "" {
+		metadata[xattrs.SpaceDescriptionAttr] = description
+	}
+	if err := xattrs.SetMultiple(n.InternalPath(), metadata); err != nil {
 		return nil, err
-	}
-
-	resp := &provider.CreateStorageSpaceResponse{
-		Status: &v1beta11.Status{
-			Code: v1beta11.Code_CODE_OK,
-		},
-		StorageSpace: &provider.StorageSpace{
-			Owner: u,
-			Id: &provider.StorageSpaceId{
-				OpaqueId: spaceID,
-			},
-			Root: &provider.ResourceId{
-				StorageId: spaceID,
-				OpaqueId:  spaceID,
-			},
-			Name:      req.GetName(),
-			Quota:     req.GetQuota(),
-			SpaceType: req.GetType(),
-		},
 	}
 
 	ctx = context.WithValue(ctx, utils.SpaceGrant, struct{}{})
 
 	if err := fs.AddGrant(ctx, &provider.Reference{
-		ResourceId: resp.StorageSpace.Root,
+		ResourceId: &provider.ResourceId{
+			StorageId: spaceID,
+			OpaqueId:  spaceID,
+		},
 	}, &provider.Grant{
 		Grantee: &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
@@ -157,6 +151,17 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	}
 
+	space, err := fs.storageSpaceFromNode(ctx, n, "*", n.InternalPath(), false)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &provider.CreateStorageSpaceResponse{
+		Status: &v1beta11.Status{
+			Code: v1beta11.Code_CODE_OK,
+		},
+		StorageSpace: space,
+	}
 	return resp, nil
 }
 
