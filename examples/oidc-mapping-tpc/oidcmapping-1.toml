@@ -12,12 +12,18 @@ auth_manager = "oidcmapping"
 [grpc.services.authprovider.auth_managers.json]
 users = "users.json"
 [grpc.services.authprovider.auth_managers.oidcmapping]
-issuer = "http://iam-login-service:8080/"
-userprovidersvc = "0.0.0.0:13000"
+gatewaysvc = "localhost:19000"
+issuer = "https://iam-escape.cloud.cnaf.infn.it/"
+# ESCAPE adopted the WLCG groups as group claims
+group_claim = "wlcg.groups"
 # The OIDC users mapping file path
-usersmapping = "/go/src/github/cs3org/reva/examples/oidc-mapping/users-oidcmapping.json"
+users_mapping = "users-oidcmapping-1.demo.json"
+# If your local identity provider service configuration includes further claims,
+# please configure them also here
+#uid_claim = ""
+#gid_claim = ""
 
 [grpc.services.userprovider]
 driver = "json"
 [grpc.services.userprovider.drivers.json]
-users = "users.json"
+users = "users.demo.json"
