@@ -28,9 +28,10 @@ ocmcoresvc = "localhost:19000"
 ocmshareprovidersvc = "localhost:19000"
 ocminvitemanagersvc = "localhost:19000"
 ocmproviderauthorizersvc = "localhost:19000"
-commit_share_to_storage_grant = false
 datagateway = "http://localhost:19001/data"
 transfer_expires = 6 # give it a moment
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
 
 [grpc.services.authregistry]
 driver = "static"
@@ -83,12 +84,6 @@ driver = "static"
 driver = "demo"
 app_provider_url = "localhost:19000"
 
-[grpc.services.appprovider.drivers.wopi]
-iop_secret = "hello"
-wopi_url = "http://0.0.0.0:8880/"
-app_name = "Collabora"
-app_url = "https://your-collabora-server.org:9980"
-
 [grpc.services.storageprovider]
 driver = "localhome"
 mount_path = "/home"
@@ -96,9 +91,6 @@ mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://localhost:19001/data"
 enable_home_creation = true
-
-[grpc.services.storageprovider.mimetypes]
-".zmd" = "application/compressed-markdown"
 
 [grpc.services.storageprovider.drivers.localhome]
 user_layout = "{{.Username}}"

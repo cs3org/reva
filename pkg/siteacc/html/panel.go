@@ -164,7 +164,7 @@ func (panel *Panel) getFullTemplateName(name string) string {
 func NewPanel(name string, provider PanelProvider, conf *config.Configuration, log *zerolog.Logger) (*Panel, error) {
 	panel := &Panel{}
 	if err := panel.initialize(name, provider, conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the panel")
+		return nil, errors.Wrap(err, "unable to initialize the panel")
 	}
 	return panel, nil
 }

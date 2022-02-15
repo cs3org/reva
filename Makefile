@@ -70,7 +70,7 @@ litmus-test-new: build
 	pkill revad
 lint:
 	go run tools/check-license/check-license.go
-	`go env GOPATH`/bin/golangci-lint run --timeout 2m0s
+	`go env GOPATH`/bin/golangci-lint run --timeout 3m0s
 
 contrib:
 	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
@@ -81,7 +81,7 @@ test-go-version:
 # for manual building only
 deps:
 	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.42.1' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
-	cd /tmp && go get golang.org/x/tools/cmd/goimports
+	cd /tmp && go install golang.org/x/tools/cmd/goimports@latest
 
 build-ci: off
 	go build -ldflags ${CI_BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad

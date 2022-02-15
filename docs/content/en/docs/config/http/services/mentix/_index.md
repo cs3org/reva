@@ -43,17 +43,13 @@ _Supported connectors:_
 
 - **gocdb** 
 The [GOCDB](https://wiki.egi.eu/wiki/GOCDB/Documentation_Index) is a database specifically designed to organize the topology of a mesh of distributed sites and services. In order to use GOCDB with Mentix, its instance address has to be configured (see [here](gocdb)).
-
-- **localfile**
-The [localfile](localfile) connector reads sites from a local JSON file. The file must contain an array of sites adhering to the `meshdata.Site` structure.
  
 ## Importers
 Mentix can import mesh data from various sources and write it to one or more targets through the corresponding connectors.
 
 __Supported importers:__
 
-- **sitereg**
-Mentix can import new sites via an HTTP endpoint using the `sitereg` importer. Data can be sent to the configured relative endpoint (see [here](sitereg)).
+- **None**
 
 ## Exporters
 Mentix exposes its gathered data by using one or more _exporters_. Such exporters can, for example, write the data to a file in a specific format, or offer the data via an HTTP endpoint.

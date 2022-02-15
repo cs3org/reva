@@ -20,7 +20,6 @@ package nextcloud_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"google.golang.org/grpc/metadata"
@@ -41,7 +40,6 @@ func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
 	var conf *nextcloud.UserManagerConfig
 
 	ncHost := os.Getenv("NEXTCLOUD")
-	fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
 	if len(ncHost) == 0 {
 		conf = &nextcloud.UserManagerConfig{
 			EndPoint: "http://mock.com/apps/sciencemesh/",
@@ -133,7 +131,8 @@ var _ = Describe("Nextcloud", func() {
 				Idp:      "some-idp",
 				OpaqueId: "some-opaque-user-id",
 				Type:     1,
-			})
+			},
+				false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(user).To(Equal(&userpb.User{
 				Id: &userpb.UserId{
@@ -150,7 +149,7 @@ var _ = Describe("Nextcloud", func() {
 				UidNumber:    0,
 				GidNumber:    0,
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`)
+			checkCalled(called, `POST /apps/sciencemesh/~unauthenticated/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`)
 		})
 	})
 
@@ -160,7 +159,7 @@ var _ = Describe("Nextcloud", func() {
 			um, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			user, err := um.GetUserByClaim(ctx, "claim-string", "value-string")
+			user, err := um.GetUserByClaim(ctx, "claim-string", "value-string", false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(user).To(Equal(&userpb.User{
 				Id: &userpb.UserId{
@@ -204,7 +203,7 @@ var _ = Describe("Nextcloud", func() {
 			um, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			users, err := um.FindUsers(ctx, "some-query")
+			users, err := um.FindUsers(ctx, "some-query", false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(users)).To(Equal(1))
 			Expect(*users[0]).To(Equal(userpb.User{

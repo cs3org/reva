@@ -1,121 +1,135 @@
-Changelog for reva 1.17.0 (2021-12-09)
+Changelog for reva 1.18.0 (2022-02-11)
 =======================================
 
-The following sections list the changes in reva 1.17.0 relevant to
+The following sections list the changes in reva 1.18.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Fix #2305: Make sure /app/new takes `target` as absolute path
- * Fix #2303: Fix content disposition header for public links files
- * Fix #2316: Fix the share types in propfinds
- * Fix #2803: Fix app provider for editor public links
- * Fix #2298: Remove share refs from trashbin
- * Fix #2309: Remove early finish for zero byte file uploads
- * Fix #1941: Fix TUS uploads with transfer token only
- * Chg #2210: Fix app provider new file creation and improved error codes
- * Enh #2217: OIDC auth driver for ESCAPE IAM
- * Enh #2256: Return user type in the response of the ocs GET user call
- * Enh #2315: Add new attributes to public link propfinds
- * Enh #2740: Implement space membership endpoints
- * Enh #2252: Add the xattr sys.acl to SysACL (eosgrpc)
- * Enh #2314: OIDC: fallback if IDP doesn't provide "preferred_username" claim
+ * Fix #2370: Fixes for apps in public shares, project spaces for EOS driver
+ * Fix #2374: Fix webdav copy of zero byte files
+ * Fix #2478: Use ocs permission objects in the reva GRPC client
+ * Fix #2368: Return wrapped paths for recycled items in storage provider
+ * Chg #2354: Return not found when updating non existent space
+ * Enh #1209: Reva CephFS module v0.2.1
+ * Enh #2341: Use CS3 permissions API
+ * Enh #2350: Add file locking methods to the storage and filesystem interfaces
+ * Enh #2379: Add new file url of the app provider to the ocs capabilities
+ * Enh #2369: Implement TouchFile from the CS3apis
+ * Enh #2385: Allow to create new files with the app provider on public links
+ * Enh #2397: Product field in OCS version
+ * Enh #2393: Update tus/tusd to version 1.8.0
+ * Enh #2205: Modify group and user managers to skip fetching specified metadata
+ * Enh #2232: Make ocs resource info cache interoperable across drivers
+ * Enh #2233: Populate owner data in the ocs and ocdav services
+ * Enh #2278: OIDC driver changes for lightweight users
 
 Details
 -------
 
- * Bugfix #2305: Make sure /app/new takes `target` as absolute path
+ * Bugfix #2370: Fixes for apps in public shares, project spaces for EOS driver
 
-   A mini-PR to make the `target` parameter absolute (by prepending `/` if missing).
+   https://github.com/cs3org/reva/pull/2370
 
-   https://github.com/cs3org/reva/pull/2305
+ * Bugfix #2374: Fix webdav copy of zero byte files
 
- * Bugfix #2303: Fix content disposition header for public links files
+   We've fixed the webdav copy action of zero byte files, which was not performed because the
+   webdav api assumed, that zero byte uploads are created when initiating the upload, which was
+   recently removed from all storage drivers. Therefore the webdav api also uploads zero byte
+   files after initiating the upload.
 
-   https://github.com/cs3org/reva/pull/2303
-   https://github.com/cs3org/reva/pull/2297
-   https://github.com/cs3org/reva/pull/2332
-   https://github.com/cs3org/reva/pull/2346
+   https://github.com/cs3org/reva/pull/2374
+   https://github.com/cs3org/reva/pull/2309
 
- * Bugfix #2316: Fix the share types in propfinds
+ * Bugfix #2478: Use ocs permission objects in the reva GRPC client
 
-   The share types for public links were not correctly added to propfinds.
+   There was a bug introduced by differing CS3APIs permission definitions for the same role
+   across services. This is a first step in making all services use consistent definitions.
 
-   https://github.com/cs3org/reva/pull/2316
+   https://github.com/cs3org/reva/pull/2478
 
- * Bugfix #2803: Fix app provider for editor public links
+ * Bugfix #2368: Return wrapped paths for recycled items in storage provider
 
-   Fixed opening the app provider in public links with the editor permission. The app provider
-   failed to open the file in read write mode.
+   https://github.com/cs3org/reva/pull/2368
 
-   https://github.com/owncloud/ocis/issues/2803
-   https://github.com/cs3org/reva/pull/2310
+ * Change #2354: Return not found when updating non existent space
 
- * Bugfix #2298: Remove share refs from trashbin
+   If a spaceid of a space which is updated doesn't exist, handle it as a not found error.
 
-   https://github.com/cs3org/reva/pull/2298
+   https://github.com/cs3org/reva/pull/2354
 
- * Bugfix #2309: Remove early finish for zero byte file uploads
+ * Enhancement #1209: Reva CephFS module v0.2.1
 
-   We've fixed the upload of zero byte files by removing the early upload finishing mechanism.
+   https://github.com/cs3org/reva/pull/1209
 
-   https://github.com/cs3org/reva/issues/2309
-   https://github.com/owncloud/ocis/issues/2609
+ * Enhancement #2341: Use CS3 permissions API
 
- * Bugfix #1941: Fix TUS uploads with transfer token only
+   Added calls to the CS3 permissions API to the decomposedfs in order to check the user
+   permissions.
 
-   TUS uploads had been stopped when the user JWT token expired, even if only the transfer token
-   should be validated. Now uploads will continue as intended.
+   https://github.com/cs3org/reva/pull/2341
 
-   https://github.com/cs3org/reva/pull/1941
+ * Enhancement #2350: Add file locking methods to the storage and filesystem interfaces
 
- * Change #2210: Fix app provider new file creation and improved error codes
+   We've added the file locking methods from the CS3apis to the storage and filesystem
+   interfaces. As of now they are dummy implementations and will only return "unimplemented"
+   errors.
 
-   We've fixed the behavior for the app provider when creating new files. Previously the app
-   provider would overwrite already existing files when creating a new file, this is now handled
-   and prevented. The new file endpoint accepted a path to a file, but this does not work for spaces.
-   Therefore we now use the resource id of the folder where the file should be created and a filename
-   to create the new file. Also the app provider returns more useful error codes in a lot of cases.
+   https://github.com/cs3org/reva/pull/2350
+   https://github.com/cs3org/cs3apis/pull/160
 
-   https://github.com/cs3org/reva/pull/2210
+ * Enhancement #2379: Add new file url of the app provider to the ocs capabilities
 
- * Enhancement #2217: OIDC auth driver for ESCAPE IAM
+   We've added the new file capability of the app provider to the ocs capabilities, so that clients
+   can discover this url analogous to the app list and file open urls.
 
-   This enhancement allows for oidc token authentication via the ESCAPE IAM service.
-   Authentication relies on mappings of ESCAPE IAM groups to REVA users. For a valid token, if at
-   the most one group from the groups claim is mapped to one REVA user, authentication can take
-   place.
+   https://github.com/cs3org/reva/pull/2379
+   https://github.com/owncloud/ocis/pull/2884
+   https://github.com/owncloud/web/pull/5890#issuecomment-993905242
 
-   https://github.com/cs3org/reva/pull/2217
+ * Enhancement #2369: Implement TouchFile from the CS3apis
 
- * Enhancement #2256: Return user type in the response of the ocs GET user call
+   We've updated the CS3apis and implemented the TouchFile method.
 
-   https://github.com/cs3org/reva/pull/2256
+   https://github.com/cs3org/reva/pull/2369
+   https://github.com/cs3org/cs3apis/pull/154
 
- * Enhancement #2315: Add new attributes to public link propfinds
+ * Enhancement #2385: Allow to create new files with the app provider on public links
 
-   Added a new property "oc:signature-auth" to public link propfinds. This is a necessary change
-   to be able to support archive downloads in password protected public links.
+   We've added the option to create files with the app provider on public links.
 
-   https://github.com/cs3org/reva/pull/2315
+   https://github.com/cs3org/reva/pull/2385
 
- * Enhancement #2740: Implement space membership endpoints
+ * Enhancement #2397: Product field in OCS version
 
-   Implemented endpoints to add and remove members to spaces.
+   We've added a new field to the OCS Version, which is supposed to announce the product name. The
+   web ui as a client will make use of it to make the backend product and version available (e.g. for
+   easier bug reports).
 
-   https://github.com/owncloud/ocis/issues/2740
-   https://github.com/cs3org/reva/pull/2250
+   https://github.com/cs3org/reva/pull/2397
 
- * Enhancement #2252: Add the xattr sys.acl to SysACL (eosgrpc)
+ * Enhancement #2393: Update tus/tusd to version 1.8.0
 
-   https://github.com/cs3org/reva/pull/2252
+   We've update tus/tusd to version 1.8.0.
 
- * Enhancement #2314: OIDC: fallback if IDP doesn't provide "preferred_username" claim
+   https://github.com/cs3org/reva/issues/2393
+   https://github.com/cs3org/reva/pull/2224
 
-   Some IDPs don't support the "preferred_username" claim. Fallback to the "email" claim in that
-   case.
+ * Enhancement #2205: Modify group and user managers to skip fetching specified metadata
 
-   https://github.com/cs3org/reva/pull/2314
+   https://github.com/cs3org/reva/pull/2205
+
+ * Enhancement #2232: Make ocs resource info cache interoperable across drivers
+
+   https://github.com/cs3org/reva/pull/2232
+
+ * Enhancement #2233: Populate owner data in the ocs and ocdav services
+
+   https://github.com/cs3org/reva/pull/2233
+
+ * Enhancement #2278: OIDC driver changes for lightweight users
+
+   https://github.com/cs3org/reva/pull/2278
 
 

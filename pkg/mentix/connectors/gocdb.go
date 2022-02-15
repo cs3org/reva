@@ -135,16 +135,13 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 	for _, site := range sites.Sites {
 		properties := connector.extensionsToMap(&site.Extensions)
 
-		siteID := meshdata.GetPropertyValue(properties, meshdata.PropertySiteID, "")
-		if len(siteID) == 0 {
-			return fmt.Errorf("site ID missing for site '%v'", site.ShortName)
-		}
+		// The site ID can be set through a property; by default, the site short name will be used
+		siteID := meshdata.GetPropertyValue(properties, meshdata.PropertySiteID, site.ShortName)
 
 		// See if an organization has been defined using properties; otherwise, use the official name
 		organization := meshdata.GetPropertyValue(properties, meshdata.PropertyOrganization, site.OfficialName)
 
 		meshsite := &meshdata.Site{
-			Type:         meshdata.SiteTypeScienceMesh, // All sites stored in the GOCDB are part of the mesh
 			ID:           siteID,
 			Name:         site.ShortName,
 			FullName:     site.OfficialName,
@@ -295,6 +292,9 @@ func (connector *GOCDBConnector) getServiceURL(service *gocdb.Service, endpoint 
 				svcURL.Path = endpoint.URL
 			} else {
 				svcURL.Path = path.Join(svcURL.Path, endpoint.URL)
+				if strings.HasSuffix(endpoint.URL, "/") { // Restore trailing slash if necessary
+					svcURL.Path += "/"
+				}
 			}
 		}
 	}

@@ -49,7 +49,22 @@ func (h *Handler) Init(c *config.Config) {
 // GetGroups handles GET requests on /cloud/users/groups
 // TODO: implement
 func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request) {
-	response.WriteOCSSuccess(w, r, &Groups{})
+	ctx := r.Context()
+
+	user := chi.URLParam(r, "userid")
+	// FIXME use ldap to fetch user info
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
+		return
+	}
+	if user != u.Username {
+		// FIXME allow fetching other users info? only for admins
+		response.WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to access %s user info endpoint", u.Id.OpaqueId, user))
+		return
+	}
+
+	response.WriteOCSSuccess(w, r, &Groups{Groups: u.Groups})
 }
 
 // Quota holds quota information
@@ -116,8 +131,8 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	var total, used uint64
 	var relative float32
-	// lightweight accounts don't have access to their storage space
-	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+	// lightweight and federated accounts don't have access to their storage space
+	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT && u.Id.Type != userpb.UserType_USER_TYPE_FEDERATED {
 		getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
 		if err != nil {
 			sublog.Error().Err(err).Msg("error calling GetQuota")

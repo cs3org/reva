@@ -21,6 +21,7 @@ package auth
 import (
 	"context"
 	"strings"
+	"time"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -40,120 +41,73 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"google.golang.org/grpc/metadata"
 )
 
-func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, gatewayAddr string, mgr token.Manager) error {
+const (
+	scopeDelimiter       = "#"
+	scopeCacheExpiration = 3600
+)
+
+func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, user *userpb.User, gatewayAddr string, mgr token.Manager) error {
 	log := appctx.GetLogger(ctx)
 	client, err := pool.GetGatewayServiceClient(gatewayAddr)
 	if err != nil {
 		return err
 	}
 
-	hasEditorRole := false
-	for _, v := range tokenScope {
-		if v.Role == authpb.Role_ROLE_EDITOR {
-			hasEditorRole = true
-		}
-	}
+	if ref, ok := extractRef(req, tokenScope); ok {
+		// The request is for a storage reference. This can be the case for multiple scenarios:
+		// - If the path is not empty, the request might be coming from a share where the accessor is
+		//   trying to impersonate the owner, since the share manager doesn't know the
+		//   share path.
+		// - If the ID not empty, the request might be coming from
+		//   - a resource present inside a shared folder, or
+		//   - a share created for a lightweight account after the token was minted.
+		log.Info().Msgf("resolving storage reference to check token scope %s", ref.String())
+		for k := range tokenScope {
+			switch {
+			case strings.HasPrefix(k, "publicshare"):
+				if err = resolvePublicShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
+					return nil
+				}
 
-	if ref, ok := extractRef(req, hasEditorRole); ok {
-		// Check if req is of type *provider.Reference_Path
-		// If yes, the request might be coming from a share where the accessor is
-		// trying to impersonate the owner, since the share manager doesn't know the
-		// share path.
-		if ref.GetPath() != "" {
-			log.Info().Msgf("resolving path reference to ID to check token scope %+v", ref.GetPath())
-			for k := range tokenScope {
-				switch {
-				case strings.HasPrefix(k, "publicshare"):
-					var share link.PublicShare
-					err := utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
-					if err != nil {
-						continue
-					}
-					if ok, err := checkIfNestedResource(ctx, ref, share.ResourceId, client, mgr); err == nil && ok {
-						return nil
-					}
+			case strings.HasPrefix(k, "share"):
+				if err = resolveUserShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
+					return nil
+				}
 
-				case strings.HasPrefix(k, "share"):
-					var share collaboration.Share
-					err := utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
-					if err != nil {
-						continue
-					}
-					if ok, err := checkIfNestedResource(ctx, ref, share.ResourceId, client, mgr); err == nil && ok {
-						return nil
-					}
-				case strings.HasPrefix(k, "lightweight"):
-					shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-					if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
-						log.Warn().Err(err).Msg("error listing received shares")
-						continue
-					}
-					for _, share := range shares.Shares {
-						if ok, err := checkIfNestedResource(ctx, ref, share.Share.ResourceId, client, mgr); err == nil && ok {
-							return nil
-						}
-					}
+			case strings.HasPrefix(k, "lightweight"):
+				if err = resolveLightweightScope(ctx, ref, tokenScope[k], user, client, mgr); err == nil {
+					return nil
 				}
 			}
-		} else {
-			// ref has ID present
-			// The request might be coming from
-			// - a resource present inside a shared folder, or
-			// - a share created for a lightweight account after the token was minted.
-
-			client, err := pool.GetGatewayServiceClient(gatewayAddr)
-			if err != nil {
-				return err
-			}
-			for k := range tokenScope {
-				if strings.HasPrefix(k, "lightweight") {
-					log.Info().Msgf("resolving ID reference against received shares to verify token scope %+v", ref.GetResourceId())
-					shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-					if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
-						log.Warn().Err(err).Msg("error listing received shares")
-						continue
-					}
-					for _, share := range shares.Shares {
-						if utils.ResourceIDEqual(share.Share.ResourceId, ref.GetResourceId()) {
-							return nil
-						}
-						if ok, err := checkIfNestedResource(ctx, ref, share.Share.ResourceId, client, mgr); err == nil && ok {
-							return nil
-						}
-					}
-				} else if strings.HasPrefix(k, "publicshare") {
-					var share link.PublicShare
-					err := utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
-					if err != nil {
-						continue
-					}
-					if ok, err := checkIfNestedResource(ctx, ref, share.ResourceId, client, mgr); err == nil && ok {
-						return nil
-					}
-				}
-			}
+			log.Err(err).Msgf("error resolving reference %s under scope %+v", ref.String(), k)
 		}
 
 	} else if ref, ok := extractShareRef(req); ok {
 		// It's a share ref
 		// The request might be coming from a share created for a lightweight account
 		// after the token was minted.
-		log.Info().Msgf("resolving share reference against received shares to verify token scope %+v", ref)
-		client, err := pool.GetGatewayServiceClient(gatewayAddr)
-		if err != nil {
-			return err
-		}
+		log.Info().Msgf("resolving share reference against received shares to verify token scope %+v", ref.String())
 		for k := range tokenScope {
 			if strings.HasPrefix(k, "lightweight") {
+				// Check if this ID is cached
+				key := "lw:" + user.Id.OpaqueId + scopeDelimiter + ref.GetId().OpaqueId
+				if _, err := scopeExpansionCache.Get(key); err == nil {
+					return nil
+				}
+
 				shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 				if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
 					log.Warn().Err(err).Msg("error listing received shares")
 					continue
 				}
 				for _, s := range shares.Shares {
+					shareKey := "lw:" + user.Id.OpaqueId + scopeDelimiter + s.Share.Id.OpaqueId
+					_ = scopeExpansionCache.SetWithExpire(shareKey, nil, scopeCacheExpiration*time.Second)
+
 					if ref.GetId() != nil && ref.GetId().OpaqueId == s.Share.Id.OpaqueId {
 						return nil
 					}
@@ -167,6 +121,69 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 	}
 
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
+}
+
+func resolveLightweightScope(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, user *userpb.User, client gateway.GatewayAPIClient, mgr token.Manager) error {
+	// Check if this ref is cached
+	key := "lw:" + user.Id.OpaqueId + scopeDelimiter + getRefKey(ref)
+	if _, err := scopeExpansionCache.Get(key); err == nil {
+		return nil
+	}
+
+	shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+	if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
+		return errtypes.InternalError("error listing received shares")
+	}
+
+	for _, share := range shares.Shares {
+		shareKey := "lw:" + user.Id.OpaqueId + scopeDelimiter + resourceid.OwnCloudResourceIDWrap(share.Share.ResourceId)
+		_ = scopeExpansionCache.SetWithExpire(shareKey, nil, scopeCacheExpiration*time.Second)
+
+		if ref.ResourceId != nil && utils.ResourceIDEqual(share.Share.ResourceId, ref.ResourceId) {
+			return nil
+		}
+		if ok, err := checkIfNestedResource(ctx, ref, share.Share.ResourceId, client, mgr); err == nil && ok {
+			_ = scopeExpansionCache.SetWithExpire(key, nil, scopeCacheExpiration*time.Second)
+			return nil
+		}
+	}
+
+	return errtypes.PermissionDenied("request is not for a nested resource")
+}
+
+func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+	var share link.PublicShare
+	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
+	if err != nil {
+		return err
+	}
+
+	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
+}
+
+func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+	var share collaboration.Share
+	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
+	if err != nil {
+		return err
+	}
+
+	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
+}
+
+func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, resource *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) error {
+	// Check if this ref is cached
+	key := resourceid.OwnCloudResourceIDWrap(resource) + scopeDelimiter + getRefKey(ref)
+	if _, err := scopeExpansionCache.Get(key); err == nil {
+		return nil
+	}
+
+	if ok, err := checkIfNestedResource(ctx, ref, resource, client, mgr); err == nil && ok {
+		_ = scopeExpansionCache.SetWithExpire(key, nil, scopeCacheExpiration*time.Second)
+		return nil
+	}
+
+	return errtypes.PermissionDenied("request is not for a nested resource")
 }
 
 func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) (bool, error) {
@@ -186,7 +203,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 		// We mint a token as the owner of the public share and try to stat the reference
 		// TODO(ishank011): We need to find a better alternative to this
 
-		userResp, err := client.GetUser(ctx, &userpb.GetUserRequest{UserId: statResponse.Info.Owner})
+		userResp, err := client.GetUser(ctx, &userpb.GetUserRequest{UserId: statResponse.Info.Owner, SkipFetchingUserGroups: true})
 		if err != nil || userResp.Status.Code != rpc.Code_CODE_OK {
 			return false, err
 		}
@@ -215,7 +232,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 
 }
 
-func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool) {
+func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
 	switch v := req.(type) {
 	// Read requests
 	case *registry.GetStorageProvidersRequest:
@@ -231,33 +248,84 @@ func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool)
 	case *gateway.OpenInAppRequest:
 		return v.GetRef(), true
 
-		// App provider requests
+	// App provider requests
 	case *appregistry.GetAppProvidersRequest:
 		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	}
 
-	if !hasEditorRole {
-		return nil, false
-	}
+	return nil, false
 
+}
+
+func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
 	switch v := req.(type) {
 	// Write Requests
+	case *registry.GetStorageProvidersRequest:
+		return v.GetRef(), true
+	case *provider.StatRequest:
+		return v.GetRef(), true
 	case *provider.CreateContainerRequest:
 		return v.GetRef(), true
 	case *provider.TouchFileRequest:
 		return v.GetRef(), true
+	case *provider.InitiateFileUploadRequest:
+		return v.GetRef(), true
+	}
+
+	return nil, false
+
+}
+
+func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
+	switch v := req.(type) {
+	// Remaining edit Requests
 	case *provider.DeleteRequest:
 		return v.GetRef(), true
 	case *provider.MoveRequest:
 		return v.GetSource(), true
-	case *provider.InitiateFileUploadRequest:
-		return v.GetRef(), true
 	case *provider.SetArbitraryMetadataRequest:
 		return v.GetRef(), true
 	case *provider.UnsetArbitraryMetadataRequest:
 		return v.GetRef(), true
-
 	}
+
+	return nil, false
+
+}
+
+func extractRef(req interface{}, tokenScope map[string]*authpb.Scope) (*provider.Reference, bool) {
+	var readPerm, uploadPerm, editPerm bool
+	for _, v := range tokenScope {
+		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR || v.Role == authpb.Role_ROLE_VIEWER {
+			readPerm = true
+		}
+		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR || v.Role == authpb.Role_ROLE_UPLOADER {
+			uploadPerm = true
+		}
+		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR {
+			editPerm = true
+		}
+	}
+
+	if readPerm {
+		ref, ok := extractRefForReaderRole(req)
+		if ok {
+			return ref, true
+		}
+	}
+	if uploadPerm {
+		ref, ok := extractRefForUploaderRole(req)
+		if ok {
+			return ref, true
+		}
+	}
+	if editPerm {
+		ref, ok := extractRefForEditorRole(req)
+		if ok {
+			return ref, true
+		}
+	}
+
 	return nil, false
 }
 
@@ -269,4 +337,11 @@ func extractShareRef(req interface{}) (*collaboration.ShareReference, bool) {
 		return &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: v.GetShare().GetShare().GetId()}}, true
 	}
 	return nil, false
+}
+
+func getRefKey(ref *provider.Reference) string {
+	if ref.Path != "" {
+		return ref.Path
+	}
+	return resourceid.OwnCloudResourceIDWrap(ref.ResourceId)
 }

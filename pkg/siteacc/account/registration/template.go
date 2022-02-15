@@ -117,7 +117,7 @@ html * {
 
 const tplBody = `
 <div>
-	<p>Fill out the form below to register for a ScienceMesh account. A confirmation email will be sent to you shortly after registration.</p>	
+	<p>Fill out the form below to register for a ScienceMesh Site Administrator account. A confirmation email will be sent to you shortly after registration.</p>	
 </div>
 <div>&nbsp;</div>
 <div>

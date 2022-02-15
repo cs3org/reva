@@ -42,7 +42,7 @@ func BenchmarkEncodePath(b *testing.B) {
 }
 
 func TestWrapResourceID(t *testing.T) {
-	expected := "c3RvcmFnZWlkOm9wYXF1ZWlk"
+	expected := "storageid" + "!" + "opaqueid"
 	wrapped := resourceid.OwnCloudResourceIDWrap(&providerv1beta1.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"})
 
 	if wrapped != expected {

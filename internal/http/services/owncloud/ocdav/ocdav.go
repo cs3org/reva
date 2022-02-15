@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -95,10 +96,12 @@ type Config struct {
 	// Example: if WebdavNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
-	WebdavNamespace        string                            `mapstructure:"webdav_namespace"`
-	GatewaySvc             string                            `mapstructure:"gatewaysvc"`
-	Timeout                int64                             `mapstructure:"timeout"`
-	Insecure               bool                              `mapstructure:"insecure"`
+	WebdavNamespace string `mapstructure:"webdav_namespace"`
+	GatewaySvc      string `mapstructure:"gatewaysvc"`
+	Timeout         int64  `mapstructure:"timeout"`
+	Insecure        bool   `mapstructure:"insecure"`
+	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
+	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
@@ -114,11 +117,12 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	c                *Config
-	webDavHandler    *WebDavHandler
-	davHandler       *DavHandler
-	favoritesManager favorite.Manager
-	client           *http.Client
+	c                   *Config
+	webDavHandler       *WebDavHandler
+	davHandler          *DavHandler
+	favoritesManager    favorite.Manager
+	client              *http.Client
+	userIdentifierCache *ttlcache.Cache
 }
 
 func getFavoritesManager(c *Config) (favorite.Manager, error) {
@@ -150,8 +154,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
-		favoritesManager: fm,
+		favoritesManager:    fm,
+		userIdentifierCache: ttlcache.NewCache(),
 	}
+	_ = s.userIdentifierCache.SetTTL(60 * time.Second)
+
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
 		return nil, err
@@ -215,8 +222,9 @@ func (s *svc) Handler() http.Handler {
 			head, r.URL.Path = router.ShiftPath(r.URL.Path)
 			if head == "s" {
 				token := r.URL.Path
-				url := s.c.PublicURL + path.Join("#", head, token)
-				http.Redirect(w, r, url, http.StatusMovedPermanently)
+				rURL := s.c.PublicURL + path.Join(head, token)
+
+				http.Redirect(w, r, rURL, http.StatusMovedPermanently)
 				return
 			}
 		}

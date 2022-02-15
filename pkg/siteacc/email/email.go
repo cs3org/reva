@@ -52,17 +52,12 @@ func getEmailData(account *data.Account, conf config.Configuration, params map[s
 
 // SendAccountCreated sends an email about account creation.
 func SendAccountCreated(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
-	return send(recipients, "ScienceMesh: Site account created", accountCreatedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
+	return send(recipients, "ScienceMesh: Site Administrator Account created", accountCreatedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
 }
 
-// SendAPIKeyAssigned sends an email about API key assignment.
-func SendAPIKeyAssigned(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
-	return send(recipients, "ScienceMesh: Your API key", apiKeyAssignedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
-}
-
-// SendAccountAuthorized sends an email about account authorization.
-func SendAccountAuthorized(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
-	return send(recipients, "ScienceMesh: Site registration authorized", accountAuthorizedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
+// SendSiteAccessGranted sends an email about granted Site access.
+func SendSiteAccessGranted(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
+	return send(recipients, "ScienceMesh: Site access granted", siteAccessGrantedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
 }
 
 // SendGOCDBAccessGranted sends an email about granted GOCDB access.

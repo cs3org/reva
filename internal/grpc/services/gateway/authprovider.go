@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -51,7 +50,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
-	authProviderReq := &provider.AuthenticateRequest{
+	authProviderReq := &authpb.AuthenticateRequest{
 		ClientId:     req.ClientId,
 		ClientSecret: req.ClientSecret,
 	}
@@ -118,8 +117,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token)
 
 	// Commenting out as the token size can get too big
-	// For now, we'll try to resolve all resources on every request
-	// TODO(ishank011): Add a cache for these
+	// For now, we'll try to resolve all resources on every request and cache those
 	/* scope, err := s.expandScopes(ctx, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error expanding token scope")
@@ -208,14 +206,14 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 	return res, nil
 }
 
-func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.ProviderAPIClient, error) {
+func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.ProviderAPIClient, error) {
 	c, err := pool.GetAuthRegistryServiceClient(s.c.AuthRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return nil, err
 	}
 
-	res, err := c.GetAuthProvider(ctx, &registry.GetAuthProviderRequest{
+	res, err := c.GetAuthProviders(ctx, &registry.GetAuthProvidersRequest{
 		Type: authType,
 	})
 
@@ -224,9 +222,9 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.P
 		return nil, err
 	}
 
-	if res.Status.Code == rpc.Code_CODE_OK && res.Provider != nil {
+	if res.Status.Code == rpc.Code_CODE_OK && res.Providers != nil && len(res.Providers) > 0 {
 		// TODO(labkode): check for capabilities here
-		c, err := pool.GetAuthProviderServiceClient(res.Provider.Address)
+		c, err := pool.GetAuthProviderServiceClient(res.Providers[0].Address)
 		if err != nil {
 			err = errors.Wrap(err, "gateway: error getting an auth provider client")
 			return nil, err

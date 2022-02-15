@@ -76,7 +76,7 @@ func (c *Config) init() {
 	}
 
 	if c.DataTransfersFolder == "" {
-		c.DataTransfersFolder = "/Data-Transfers"
+		c.DataTransfersFolder = "/DataTransfers"
 	}
 
 	// ensure share folder always starts with slash

@@ -82,6 +82,8 @@ var (
 		transferCreateCommand(),
 		transferGetStatusCommand(),
 		transferCancelCommand(),
+		transferListCommand(),
+		transferRetryCommand(),
 		appTokensListCommand(),
 		appTokensRemoveCommand(),
 		appTokensCreateCommand(),

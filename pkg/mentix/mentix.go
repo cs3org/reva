@@ -52,7 +52,7 @@ type Mentix struct {
 }
 
 const (
-	runLoopSleeptime = time.Millisecond * 500
+	runLoopSleeptime = time.Millisecond * 1000
 )
 
 func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) error {

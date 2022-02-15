@@ -137,11 +137,6 @@ func applyDefaultConfig(conf *config.Configuration) {
 		conf.Connectors.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
 	}
 
-	// Importers
-	if conf.Importers.SiteRegistration.Endpoint == "" {
-		conf.Importers.SiteRegistration.Endpoint = "/sitereg"
-	}
-
 	// Exporters
 	addDefaultConnector := func(enabledList *[]string) {
 		if len(*enabledList) == 0 {

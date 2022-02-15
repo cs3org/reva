@@ -67,11 +67,28 @@ func (dispatcher *Dispatcher) DispatchAlerts(alerts *template.Data, accounts dat
 
 		// Dispatch the alert to all accounts configured to receive it
 		for _, account := range accounts {
-			if strings.EqualFold(account.Site, siteID) && account.Settings.ReceiveAlerts {
+			if strings.EqualFold(account.Site, siteID) /* && account.Settings.ReceiveAlerts */ { // TODO: Uncomment if alert notifications aren't mandatory anymore
 				if err := dispatcher.dispatchAlert(alert, account); err != nil {
 					// Log errors only
 					dispatcher.log.Err(err).Str("id", alert.Fingerprint).Str("recipient", account.Email).Msg("unable to dispatch alert to user")
 				}
+			}
+		}
+
+		// Dispatch the alert to the global receiver (if set)
+		if dispatcher.conf.Email.NotificationsMail != "" {
+			globalAccount := data.Account{ // On-the-fly account representing the "global alerts receiver"
+				Email:     dispatcher.conf.Email.NotificationsMail,
+				FirstName: "ScienceMesh",
+				LastName:  "Global Alerts receiver",
+				Site:      "Global",
+				Role:      "Alerts receiver",
+				Settings: data.AccountSettings{
+					ReceiveAlerts: true,
+				},
+			}
+			if err := dispatcher.dispatchAlert(alert, &globalAccount); err != nil {
+				dispatcher.log.Err(err).Str("id", alert.Fingerprint).Str("recipient", globalAccount.Email).Msg("unable to dispatch alert to global alerts receiver")
 			}
 		}
 	}
@@ -86,6 +103,7 @@ func (dispatcher *Dispatcher) dispatchAlert(alert template.Alert, account *data.
 		"Fingerprint": alert.Fingerprint,
 
 		"Name":     alert.Labels["alertname"],
+		"Service":  alert.Labels["service_type"],
 		"Instance": alert.Labels["instance"],
 		"Job":      alert.Labels["job"],
 		"Severity": alert.Labels["severity"],
@@ -96,14 +114,14 @@ func (dispatcher *Dispatcher) dispatchAlert(alert template.Alert, account *data.
 		"Summary":     alert.Annotations["summary"],
 	}
 
-	return email.SendAlertNotification(account, []string{account.Email, dispatcher.conf.Email.NotificationsMail}, alertValues, *dispatcher.conf)
+	return email.SendAlertNotification(account, []string{account.Email}, alertValues, *dispatcher.conf)
 }
 
 // NewDispatcher creates a new dispatcher instance.
 func NewDispatcher(conf *config.Configuration, log *zerolog.Logger) (*Dispatcher, error) {
 	dispatcher := &Dispatcher{}
 	if err := dispatcher.initialize(conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the alerts dispatcher")
+		return nil, errors.Wrap(err, "unable to initialize the alerts dispatcher")
 	}
 	return dispatcher, nil
 }

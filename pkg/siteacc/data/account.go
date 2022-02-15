@@ -22,10 +22,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/pkg/siteacc/password"
+	"github.com/cs3org/reva/pkg/siteacc/credentials"
 	"github.com/pkg/errors"
 
-	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -39,7 +38,7 @@ type Account struct {
 	Role        string `json:"role"`
 	PhoneNumber string `json:"phoneNumber"`
 
-	Password password.Password `json:"password"`
+	Password credentials.Password `json:"password"`
 
 	DateCreated  time.Time `json:"dateCreated"`
 	DateModified time.Time `json:"dateModified"`
@@ -50,9 +49,8 @@ type Account struct {
 
 // AccountData holds additional data for a site account.
 type AccountData struct {
-	APIKey      key.APIKey `json:"apiKey"`
-	GOCDBAccess bool       `json:"gocdbAccess"`
-	Authorized  bool       `json:"authorized"`
+	GOCDBAccess bool `json:"gocdbAccess"`
+	SiteAccess  bool `json:"siteAccess"`
 }
 
 // AccountSettings holds additional settings for a site account.
@@ -62,15 +60,6 @@ type AccountSettings struct {
 
 // Accounts holds an array of site accounts.
 type Accounts = []*Account
-
-// GetSiteID returns the site ID (generated from the API key) for the given account.
-func (acc *Account) GetSiteID() key.SiteIdentifier {
-	if id, err := key.CalculateSiteID(acc.Data.APIKey, key.SaltFromEmail(acc.Email)); err == nil {
-		return id
-	}
-
-	return ""
-}
 
 // Update copies the data of the given account to this account.
 func (acc *Account) Update(other *Account, setPassword bool, copyData bool) error {
@@ -136,6 +125,9 @@ func (acc *Account) CheckScopeAccess(scope string) bool {
 
 	case ScopeGOCDB:
 		hasAccess = acc.Data.GOCDBAccess
+
+	case ScopeSite:
+		hasAccess = acc.Data.SiteAccess
 	}
 
 	return hasAccess
@@ -209,12 +201,11 @@ func NewAccount(email string, title, firstName, lastName string, site, role stri
 		DateCreated:  t,
 		DateModified: t,
 		Data: AccountData{
-			APIKey:      "",
 			GOCDBAccess: false,
-			Authorized:  false,
+			SiteAccess:  false,
 		},
 		Settings: AccountSettings{
-			ReceiveAlerts: false,
+			ReceiveAlerts: true,
 		},
 	}
 

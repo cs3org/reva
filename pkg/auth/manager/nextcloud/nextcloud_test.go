@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -43,7 +42,6 @@ func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
 	var conf *nextcloud.AuthManagerConfig
 
 	ncHost := os.Getenv("NEXTCLOUD")
-	fmt.Printf(`NEXTCLOUD env var: "%s"`, ncHost)
 	if len(ncHost) == 0 {
 		conf = &nextcloud.AuthManagerConfig{
 			EndPoint: "http://mock.com/apps/sciencemesh/",
@@ -89,13 +87,10 @@ var _ = Describe("Nextcloud", func() {
 
 	BeforeEach(func() {
 		var err error
-		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
-		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{
-			"root":         tmpRoot,
-			"enable_home":  true,
-			"share_folder": "/Shares",
+			"endpoint":  "http://mock.com/apps/sciencemesh/",
+			"mock_http": true,
 		}
 
 		ctx = context.Background()
@@ -120,6 +115,7 @@ var _ = Describe("Nextcloud", func() {
 
 	Describe("New", func() {
 		It("returns a new instance", func() {
+			fmt.Println(options)
 			_, err := nextcloud.New(options)
 			Expect(err).ToNot(HaveOccurred())
 		})

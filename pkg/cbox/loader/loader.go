@@ -22,6 +22,7 @@ import (
 	// Load cbox specific drivers.
 	_ "github.com/cs3org/reva/pkg/cbox/favorite/sql"
 	_ "github.com/cs3org/reva/pkg/cbox/group/rest"
+	_ "github.com/cs3org/reva/pkg/cbox/preferences/sql"
 	_ "github.com/cs3org/reva/pkg/cbox/publicshare/sql"
 	_ "github.com/cs3org/reva/pkg/cbox/share/sql"
 	_ "github.com/cs3org/reva/pkg/cbox/storage/eoshomewrapper"

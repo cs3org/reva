@@ -180,7 +180,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 		}
 	}
 	if ocmHost == "" {
-		return errors.Wrap(err, "json: ocm host not specified for mesh provider")
+		return errtypes.InternalError("mentix: ocm host not specified for mesh provider")
 	}
 
 	providerAuthorized = false

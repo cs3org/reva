@@ -200,10 +200,12 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error {
 
 	contextUser := ctxpkg.ContextMustGetUser(ctx)
+	recipientProvider := contextUser.GetId().GetIdp()
+
 	requestBody := url.Values{
 		"token":             {invite.GetToken()},
 		"userID":            {contextUser.GetId().GetOpaqueId()},
-		"recipientProvider": {contextUser.GetId().GetIdp()},
+		"recipientProvider": {recipientProvider},
 		"email":             {contextUser.GetMail()},
 		"name":              {contextUser.GetDisplayName()},
 	}

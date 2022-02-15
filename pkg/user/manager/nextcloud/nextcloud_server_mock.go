@@ -43,10 +43,10 @@ const serverStateHome = "HOME"
 var serverState = serverStateEmpty
 
 var responses = map[string]Response{
-	`POST /apps/sciencemesh/~tester/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`:       {200, `{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}`, serverStateHome},
-	`POST /apps/sciencemesh/~tester/api/user/GetUserByClaim {"claim":"claim-string","value":"value-string"}`:              {200, `{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}`, serverStateHome},
-	`POST /apps/sciencemesh/~tester/api/user/GetUserGroups {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`: {200, `["wine-lovers"]`, serverStateHome},
-	`POST /apps/sciencemesh/~tester/api/user/FindUsers some-query`:                                                        {200, `[{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}]`, serverStateHome},
+	`POST /apps/sciencemesh/~unauthenticated/api/user/GetUser {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`: {200, `{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}`, serverStateHome},
+	`POST /apps/sciencemesh/~tester/api/user/GetUserByClaim {"claim":"claim-string","value":"value-string"}`:                 {200, `{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}`, serverStateHome},
+	`POST /apps/sciencemesh/~tester/api/user/GetUserGroups {"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}`:    {200, `["wine-lovers"]`, serverStateHome},
+	`POST /apps/sciencemesh/~tester/api/user/FindUsers some-query`:                                                           {200, `[{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}}]`, serverStateHome},
 }
 
 // GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server
@@ -58,23 +58,16 @@ func GetNextcloudServerMock(called *[]string) http.Handler {
 			panic("Error reading response into buffer")
 		}
 		var key = fmt.Sprintf("%s %s %s", r.Method, r.URL, buf.String())
-		fmt.Printf("Nextcloud Server Mock key components %s %d %s %d %s %d\n", r.Method, len(r.Method), r.URL.String(), len(r.URL.String()), buf.String(), len(buf.String()))
-		fmt.Printf("Nextcloud Server Mock key %s\n", key)
 		*called = append(*called, key)
 		response := responses[key]
 		if (response == Response{}) {
 			key = fmt.Sprintf("%s %s %s %s", r.Method, r.URL, buf.String(), serverState)
-			fmt.Printf("Nextcloud Server Mock key with State %s\n", key)
 			// *called = append(*called, key)
 			response = responses[key]
 		}
 		if (response == Response{}) {
-			fmt.Println("ERROR!!")
-			fmt.Println("ERROR!!")
-			fmt.Printf("Nextcloud Server Mock key not found! %s\n", key)
-			fmt.Println("ERROR!!")
-			fmt.Println("ERROR!!")
-			response = Response{200, fmt.Sprintf("response not defined! %s", key), serverStateEmpty}
+			fmt.Printf("%s %s %s %s", r.Method, r.URL, buf.String(), serverState)
+			response = Response{500, fmt.Sprintf("response not defined! %s", key), serverStateEmpty}
 		}
 		serverState = responses[key].newServerState
 		if serverState == `` {

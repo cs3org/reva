@@ -24,7 +24,9 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/mentix/utils"
 	"github.com/rs/zerolog"
@@ -50,10 +52,10 @@ type PrometheusSDExporter struct {
 
 const (
 	labelSiteName    = "__meta_mentix_site"
-	labelSiteType    = "__meta_mentix_site_type"
 	labelSiteID      = "__meta_mentix_site_id"
 	labelSiteCountry = "__meta_mentix_site_country"
 	labelType        = "__meta_mentix_type"
+	labelURL         = "__meta_mentix_url"
 	labelScheme      = "__meta_mentix_scheme"
 	labelHost        = "__meta_mentix_host"
 	labelPort        = "__meta_mentix_port"
@@ -74,10 +76,10 @@ func getScrapeTargetLabels(site *meshdata.Site, service *meshdata.Service, endpo
 	endpointURL, _ := url.Parse(endpoint.URL)
 	labels := map[string]string{
 		labelSiteName:    site.Name,
-		labelSiteType:    meshdata.GetSiteTypeName(site.Type),
 		labelSiteID:      site.ID,
 		labelSiteCountry: site.CountryCode,
 		labelType:        endpoint.Type.Name,
+		labelURL:         endpoint.URL,
 		labelScheme:      endpointURL.Scheme,
 		labelHost:        endpointURL.Hostname(),
 		labelPort:        endpointURL.Port(),
@@ -110,12 +112,13 @@ func (exporter *PrometheusSDExporter) registerScrapeCreators(conf *config.Config
 	}
 
 	// Register all scrape creators
-	if err := registerCreator("metrics", conf.Exporters.PrometheusSD.MetricsOutputFile, createGenericScrapeConfig, []string{meshdata.EndpointMetrics}); err != nil {
-		return fmt.Errorf("unable to register the 'metrics' scrape config creator: %v", err)
-	}
+	for _, endpoint := range meshdata.GetServiceEndpoints() {
+		epName := strings.ToLower(endpoint)
+		filename := path.Join(conf.Exporters.PrometheusSD.OutputPath, "svc_"+epName+".json")
 
-	if err := registerCreator("blackbox", conf.Exporters.PrometheusSD.BlackboxOutputFile, createGenericScrapeConfig, []string{meshdata.EndpointGateway}); err != nil {
-		return fmt.Errorf("unable to register the 'blackbox' scrape config creator: %v", err)
+		if err := registerCreator(epName, filename, createGenericScrapeConfig, []string{endpoint}); err != nil {
+			return fmt.Errorf("unable to register the '%v' scrape config creator: %v", epName, err)
+		}
 	}
 
 	return nil
@@ -197,6 +200,10 @@ func (exporter *PrometheusSDExporter) createScrapeConfigs(creatorCallback promet
 				}
 			}
 		}
+	}
+
+	if scrapes == nil {
+		scrapes = []*prometheus.ScrapeConfig{}
 	}
 
 	return scrapes

@@ -41,7 +41,6 @@ type Metrics struct {
 const (
 	keySiteID      = "site_id"
 	keySiteName    = "site"
-	keySiteType    = "site_type"
 	keyServiceType = "service_type"
 )
 
@@ -70,7 +69,7 @@ func (m *Metrics) registerMetrics() error {
 		Name:        m.isScheduledStats.Name(),
 		Description: m.isScheduledStats.Description(),
 		Measure:     m.isScheduledStats,
-		TagKeys:     []tag.Key{tag.MustNewKey(keySiteID), tag.MustNewKey(keySiteName), tag.MustNewKey(keySiteType), tag.MustNewKey(keyServiceType)},
+		TagKeys:     []tag.Key{tag.MustNewKey(keySiteID), tag.MustNewKey(keySiteName), tag.MustNewKey(keyServiceType)},
 		Aggregation: view.LastValue(),
 	}
 
@@ -96,7 +95,6 @@ func (m *Metrics) exportSiteMetrics(site *meshdata.Site) error {
 	mutators := make([]tag.Mutator, 0)
 	mutators = append(mutators, tag.Insert(tag.MustNewKey(keySiteID), site.ID))
 	mutators = append(mutators, tag.Insert(tag.MustNewKey(keySiteName), site.Name))
-	mutators = append(mutators, tag.Insert(tag.MustNewKey(keySiteType), meshdata.GetSiteTypeName(site.Type)))
 	mutators = append(mutators, tag.Insert(tag.MustNewKey(keyServiceType), "SCIENCEMESH_HCHECK"))
 
 	// Create a new context to serve the metrics

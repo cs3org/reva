@@ -116,17 +116,17 @@ func (s *service) ListAuthProviders(ctx context.Context, req *registrypb.ListAut
 	return res, nil
 }
 
-func (s *service) GetAuthProvider(ctx context.Context, req *registrypb.GetAuthProviderRequest) (*registrypb.GetAuthProviderResponse, error) {
+func (s *service) GetAuthProviders(ctx context.Context, req *registrypb.GetAuthProvidersRequest) (*registrypb.GetAuthProvidersResponse, error) {
 	pinfo, err := s.reg.GetProvider(ctx, req.Type)
 	if err != nil {
-		return &registrypb.GetAuthProviderResponse{
+		return &registrypb.GetAuthProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider for type: "+req.Type),
 		}, nil
 	}
 
-	res := &registrypb.GetAuthProviderResponse{
-		Status:   status.NewOK(ctx),
-		Provider: pinfo,
+	res := &registrypb.GetAuthProvidersResponse{
+		Status:    status.NewOK(ctx),
+		Providers: []*registrypb.ProviderInfo{pinfo},
 	}
 	return res, nil
 }

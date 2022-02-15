@@ -137,10 +137,14 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 	share := publicShareResponse.GetShare()
 	role := authpb.Role_ROLE_VIEWER
 	roleStr := "viewer"
-	if share.Permissions.Permissions.InitiateFileUpload {
+	if share.Permissions.Permissions.InitiateFileUpload && !share.Permissions.Permissions.InitiateFileDownload {
+		role = authpb.Role_ROLE_UPLOADER
+		roleStr = "uploader"
+	} else if share.Permissions.Permissions.InitiateFileUpload {
 		role = authpb.Role_ROLE_EDITOR
 		roleStr = "editor"
 	}
+
 	scope, err := scope.AddPublicShareScope(share, role, nil)
 	if err != nil {
 		return nil, nil, err
