@@ -1,5 +1,5 @@
-Enhancement: Add API key to Mentix GOCDB connector
+Fix: Site accounts contact form
 
-The PI (programmatic interface) of the GOCDB will soon require an API key; this PR adds the ability to configure this key in Mentix.
+This PR fixes a minor bug in the site accounts service that prevented the contact form from working.
  
-https://github.com/cs3org/reva/pull/1834
+https://github.com/cs3org/reva/pull/2546
