@@ -1,0 +1,67 @@
+[grpc]
+address = "0.0.0.0:19000"
+
+[shared]
+jwt_secret = "jwt_secret"
+gatewaysvc = "localhost:19000"
+
+# services to enable
+[grpc.services.gateway]
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
+
+[grpc.services.authprovider]
+[grpc.services.authprovider.auth_managers.json]
+users = "users.demo.json"
+
+[grpc.services.userprovider.drivers.json]
+users = "users.demo.json"
+
+[grpc.services.authregistry]
+[grpc.services.authregistry.drivers.static.rules]
+bearer = "localhost:13000"
+
+[grpc.services.storageregistry]
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = {"address" = "localhost:19000"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:19000"}
+
+[grpc.services.storageprovider]
+driver = "localhome"
+mount_path = "/home"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+expose_data_server = true
+data_server_url = "http://localhost:19001/data"
+enable_home_creation = true
+
+[grpc.services.usershareprovider]
+[grpc.services.groupprovider]
+[grpc.services.publicshareprovider]
+[grpc.services.ocmcore]
+
+[grpc.services.ocmshareprovider]
+gateway_addr = "0.0.0.0:19000"
+
+[grpc.services.ocminvitemanager]
+[grpc.services.ocmproviderauthorizer]
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "providers.demo.json"
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "providers.demo.json"
+
+[http]
+address = "0.0.0.0:19001"
+
+[http.services.dataprovider]
+driver = "localhome"
+
+[http.services.datagateway]
+[http.services.prometheus]
+[http.services.ocmd]
+[http.services.ocs]
+[http.services.ocdav]
+enable_http_tpc = true
