@@ -700,35 +700,6 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiShareOperationsToShares1/changingFilesShare.feature:143](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L143)
 -   [apiShareOperationsToShares1/changingFilesShare.feature:148](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L148)
 
-Scenario Outline: Moving a file into a shared folder as the sharee and as the sharer
--   [apiWebdavMove2/moveFile.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L99)
--   [apiWebdavMove2/moveFile.feature:100](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L100)
--   [apiWebdavMove2/moveFile.feature:101](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L101)
--   [apiWebdavMove2/moveFile.feature:102](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L102)
-Scenario Outline: Moving a file out of a shared folder as the sharee and as the sharer
--   [apiWebdavMove2/moveFile.feature:122](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L122)
--   [apiWebdavMove2/moveFile.feature:123](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L123)
-Scenario Outline: Moving a folder into a shared folder as the sharee and as the sharer
--   [apiWebdavMove2/moveFile.feature:146](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L146)
--   [apiWebdavMove2/moveFile.feature:147](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L147)
--   [apiWebdavMove2/moveFile.feature:148](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L148)
--   [apiWebdavMove2/moveFile.feature:149](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L149)
-Scenario Outline: Moving a folder out of a shared folder as the sharee and as the sharer
--   [apiWebdavMove2/moveFile.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L170)
--   [apiWebdavMove2/moveFile.feature:171](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L171)
-Scenario Outline: Moving a file to a shared folder with no permissions
--   [apiWebdavMove2/moveFile.feature:192](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L192)
--   [apiWebdavMove2/moveFile.feature:193](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L193)
-Scenario Outline: Moving a file to overwrite a file in a shared folder with no permissions
--   [apiWebdavMove2/moveFile.feature:213](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L213)
--   [apiWebdavMove2/moveFile.feature:214](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L214)
-Scenario Outline: Checking file id after a move between received shares
--   [apiWebdavMove2/moveFile.feature:272](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L272)
--   [apiWebdavMove2/moveFile.feature:273](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L273)
-Scenario Outline: Renaming a file to a path with extension .part should not be possible
--   [apiWebdavMove2/moveFile.feature:290](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L290)
--   [apiWebdavMove2/moveFile.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L291)
-
 #### [restoring an older version of a shared file deletes the share](https://github.com/owncloud/ocis/issues/765)
 -   [apiShareManagementToShares/acceptShares.feature:587](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L587)
 
@@ -736,6 +707,25 @@ Scenario Outline: Renaming a file to a path with extension .part should not be p
 
 -   [apiVersions/fileVersionsSharingToShares.feature:219](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L219)
 -   [apiVersions/fileVersionsSharingToShares.feature:220](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L220)
+-   [apiWebdavMove2/moveShareOnOcis.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L30)
+-   [apiWebdavMove2/moveShareOnOcis.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L31)
+-   [apiWebdavMove2/moveShareOnOcis.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L38)
+-   [apiWebdavMove2/moveShareOnOcis.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L39)
+-   [apiWebdavMove2/moveShareOnOcis.feature:60](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L60)
+-   [apiWebdavMove2/moveShareOnOcis.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L61)
+-   [apiWebdavMove2/moveShareOnOcis.feature:68](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L68)
+-   [apiWebdavMove2/moveShareOnOcis.feature:91](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L91)
+-   [apiWebdavMove2/moveShareOnOcis.feature:92](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L92)
+-   [apiWebdavMove2/moveShareOnOcis.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L99)
+-   [apiWebdavMove2/moveShareOnOcis.feature:100](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L100)
+-   [apiWebdavMove2/moveShareOnOcis.feature:122](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L122)
+-   [apiWebdavMove2/moveShareOnOcis.feature:123](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L123)
+-   [apiWebdavMove2/moveShareOnOcis.feature:130](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L130)
+-   [apiWebdavMove2/moveShareOnOcis.feature:151](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L151)
+-   [apiWebdavMove2/moveShareOnOcis.feature:152](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L152)
+-   [apiWebdavMove2/moveShareOnOcis.feature:157](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L157)
+-   [apiWebdavMove2/moveShareOnOcis.feature:184](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L184)
+-   [apiWebdavMove2/moveShareOnOcis.feature:216](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L216)
 
 #### [Expiration date for shares is not implemented](https://github.com/owncloud/ocis/issues/1250)
 #### Expiration date of user shares
@@ -1340,6 +1330,9 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 -   [apiWebdavUpload2/uploadFileToExcludedDirectoryUsingOldChunking.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileToExcludedDirectoryUsingOldChunking.feature#L38)
 -   [apiWebdavUpload2/uploadFileToExcludedDirectoryUsingOldChunking.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileToExcludedDirectoryUsingOldChunking.feature#L39)
 -   [apiWebdavUpload2/uploadFileToExcludedDirectoryUsingOldChunking.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileToExcludedDirectoryUsingOldChunking.feature#L40)
+-   [apiWebdavMove2/moveFile.feature:286](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L286)
+-   [apiWebdavMove2/moveFile.feature:287](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L287)
+-   [apiWebdavMove2/moveFile.feature:292](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L292)
 
 #### [cannot set blacklisted file names](https://github.com/owncloud/product/issues/260)
 -   [apiWebdavMove1/moveFolderToBlacklistedName.feature:21](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolderToBlacklistedName.feature#L21)
@@ -1351,6 +1344,8 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 -   [apiWebdavMove1/moveFolderToBlacklistedName.feature:81](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolderToBlacklistedName.feature#L81)
 -   [apiWebdavMove1/moveFolderToBlacklistedName.feature:82](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolderToBlacklistedName.feature#L82)
 -   [apiWebdavMove1/moveFolderToBlacklistedName.feature:87](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolderToBlacklistedName.feature#L87)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:19](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L19)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:20](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L20)
 
 #### [cannot set excluded directories](https://github.com/owncloud/product/issues/261)
 -   [apiWebdavMove1/moveFolderToExcludedDirectory.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolderToExcludedDirectory.feature#L22)
@@ -1362,22 +1357,12 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 -   [apiWebdavMove1/moveFolderToExcludedDirectory.feature:84](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolderToExcludedDirectory.feature#L84)
 -   [apiWebdavMove1/moveFolderToExcludedDirectory.feature:85](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolderToExcludedDirectory.feature#L85)
 -   [apiWebdavMove1/moveFolderToExcludedDirectory.feature:90](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolderToExcludedDirectory.feature#L90)
-
-#### [cannot set blacklisted file names](https://github.com/owncloud/product/issues/260)
--   [apiWebdavMove2/moveFileToBlacklistedName.feature:19](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L19)
--   [apiWebdavMove2/moveFileToBlacklistedName.feature:20](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L20)
--   [apiWebdavMove2/moveFileToBlacklistedName.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L30)
--   [apiWebdavMove2/moveFileToBlacklistedName.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L31)
--   [apiWebdavMove2/moveFileToBlacklistedName.feature:64](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L64)
--   [apiWebdavMove2/moveFileToBlacklistedName.feature:65](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L65)
-
-#### [cannot set excluded directories](https://github.com/owncloud/product/issues/261)
--   [apiWebdavMove2/moveFileToExcludedDirectory.feature:19](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L19)
 -   [apiWebdavMove2/moveFileToExcludedDirectory.feature:20](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L20)
--   [apiWebdavMove2/moveFileToExcludedDirectory.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L30)
--   [apiWebdavMove2/moveFileToExcludedDirectory.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L31)
--   [apiWebdavMove2/moveFileToExcludedDirectory.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L66)
--   [apiWebdavMove2/moveFileToExcludedDirectory.feature:67](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L67)
+-   [apiWebdavMove2/moveFileToExcludedDirectory.feature:21](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L21)
+-   [apiWebdavMove2/moveFileToExcludedDirectory.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L37)
+-   [apiWebdavMove2/moveFileToExcludedDirectory.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L38)
+-   [apiWebdavMove2/moveFileToExcludedDirectory.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L78)
+-   [apiWebdavMove2/moveFileToExcludedDirectory.feature:79](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L79)
 
 #### [system configuration options missing](https://github.com/owncloud/ocis/issues/1323)
 -   [apiWebdavUpload1/uploadFileToBlacklistedName.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L31)
@@ -1580,6 +1565,14 @@ _ocs: api compatibility, return correct status code_
 -   [apiWebdavMove1/moveFolder.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolder.feature#L27)
 -   [apiWebdavMove1/moveFolder.feature:45](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolder.feature#L45)
 -   [apiWebdavMove1/moveFolder.feature:63](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolder.feature#L63)
+-   [apiWebdavMove2/moveFile.feature:225](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFile.feature#L225)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:25](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L25)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L35)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L36)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:41](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L41)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:74](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L74)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:75](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L75)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:80](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L80)
 
 #### [REPORT method on spaces returns an incorrect d:href response](https://github.com/owncloud/ocis/issues/3111)
 -   [apiFavorites/favorites.feature:117](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L117)
@@ -1599,6 +1592,11 @@ _ocs: api compatibility, return correct status code_
 -   [apiWebdavLocks2/resharedSharesToShares.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocks2/resharedSharesToShares.feature#L42)
 -   [apiWebdavLocks2/resharedSharesToShares.feature:73](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocks2/resharedSharesToShares.feature#L73)
 -   [apiWebdavLocks2/resharedSharesToShares.feature:74](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocks2/resharedSharesToShares.feature#L74)
+
+#### [Renaming resource to excluded directory name is allowed in spaces webdav](https://github.com/owncloud/ocis/issues/3102)
+-   [apiWebdavMove2/moveFileToExcludedDirectory.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L26)
+-   [apiWebdavMove2/moveFileToExcludedDirectory.feature:43](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L43)
+-   [apiWebdavMove2/moveFileToExcludedDirectory.feature:84](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L84)
 
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
