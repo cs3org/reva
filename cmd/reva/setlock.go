@@ -84,17 +84,17 @@ func setlockCommand() *command {
 }
 
 func createLock(ctx context.Context, client gateway.GatewayAPIClient, t, id, u, app, exp string) (*provider.Lock, error) {
-	type_, err := getType(t)
+	lockType, err := getType(t)
 	if err != nil {
 		return nil, err
 	}
-	var uId *user.UserId
+	var uID *user.UserId
 	if u != "" {
 		u, err := getUser(ctx, client, u)
 		if err != nil {
 			return nil, err
 		}
-		uId = u.GetId()
+		uID = u.GetId()
 	}
 	var expiration *types.Timestamp
 	if exp != "" {
@@ -106,8 +106,8 @@ func createLock(ctx context.Context, client gateway.GatewayAPIClient, t, id, u, 
 
 	lock := provider.Lock{
 		LockId:     id,
-		Type:       type_,
-		User:       uId,
+		Type:       lockType,
+		User:       uID,
 		AppName:    app,
 		Expiration: expiration,
 	}
