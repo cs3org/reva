@@ -134,10 +134,10 @@ func getUser(ctx context.Context, client gateway.GatewayAPIClient, u string) (*u
 		Value: u,
 	})
 	switch {
-	case res.Status.Code != rpc.Code_CODE_OK:
-		return nil, errors.New(res.Status.Message)
 	case err != nil:
 		return nil, err
+	case res.Status.Code != rpc.Code_CODE_OK:
+		return nil, errors.New(res.Status.Message)
 	}
 	return res.User, nil
 }
