@@ -291,6 +291,29 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}, nil
 	}
 
+	if ifMatch := req.GetIfMatch(); ifMatch != "" {
+		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: req.Ref})
+		if err != nil {
+			return nil, err
+		}
+
+		switch sRes.Status.Code {
+		case rpc.Code_CODE_OK:
+			if sRes.Info.Etag != req.GetIfMatch() {
+				return &provider.InitiateFileUploadResponse{
+					Status: status.NewFailedPrecondition(ctx, errors.New("etag doesn't match"), "etag doesn't match"),
+				}, nil
+			}
+		case rpc.Code_CODE_NOT_FOUND:
+			// Just continue with a normal upload
+		default:
+			return &provider.InitiateFileUploadResponse{
+				Status: sRes.Status,
+			}, nil
+		}
+
+	}
+
 	// FIXME these should be part of the InitiateFileUploadRequest object
 	if req.Opaque != nil {
 		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
