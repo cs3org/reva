@@ -74,6 +74,7 @@ const (
 	HeaderUploadOffset         = "Upload-Offset"
 	HeaderOCMtime              = "X-OC-Mtime"
 	HeaderExpectedEntityLength = "X-Expected-Entity-Length"
+	HeaderTransferAuth         = "TransferHeaderAuthorization"
 )
 
 // WebDavHandler implements a dav endpoint

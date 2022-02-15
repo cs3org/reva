@@ -67,7 +67,7 @@ func (dispatcher *Dispatcher) DispatchAlerts(alerts *template.Data, accounts dat
 
 		// Dispatch the alert to all accounts configured to receive it
 		for _, account := range accounts {
-			if strings.EqualFold(account.Site, siteID) && account.Settings.ReceiveAlerts {
+			if strings.EqualFold(account.Site, siteID) /* && account.Settings.ReceiveAlerts */ { // TODO: Uncomment if alert notifications aren't mandatory anymore
 				if err := dispatcher.dispatchAlert(alert, account); err != nil {
 					// Log errors only
 					dispatcher.log.Err(err).Str("id", alert.Fingerprint).Str("recipient", account.Email).Msg("unable to dispatch alert to user")
