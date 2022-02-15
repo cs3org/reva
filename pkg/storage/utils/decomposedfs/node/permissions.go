@@ -108,16 +108,18 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		return NoPermissions(), err
 	}
 	if o.OpaqueId == "" {
-		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
-		// TODO what if no owner is set but grants are present?
-		return NoOwnerPermissions(), nil
+		// this happens for root nodes and project spaces in the storage. the extended attributes are set to emptystring to indicate: no owner
+		// for project spaces we need to go over the grants and check the granted permissions
+		if n.ID == RootID {
+			return NoOwnerPermissions(), nil
+		}
 	}
 	if utils.UserEqual(u.Id, o) {
 		lp, err := n.lu.Path(ctx, n)
 		if err == nil && lp == n.lu.ShareFolder() {
 			return ShareFolderPermissions(), nil
 		}
-		appctx.GetLogger(ctx).Debug().Interface("node", n.ID).Msg("user is owner, returning owner permissions")
+		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
 		return OwnerPermissions(), nil
 	}
 	// determine root
@@ -276,13 +278,16 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 		return nil, &perms
 	}
 	if o.OpaqueId == "" {
-		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
-		// TODO what if no owner is set but grants are present?
+		// this happens for root nodes and project spaces in the storage. the extended attributes are set to emptystring to indicate: no owner
+		// for project spaces we need to go over the grants and check the granted permissions
+		if n.ID != RootID {
+			return u, nil
+		}
 		perms := NoOwnerPermissions()
 		return nil, &perms
 	}
 	if utils.UserEqual(u.Id, o) {
-		appctx.GetLogger(ctx).Debug().Interface("node", n.ID).Msg("user is owner, returning owner permissions")
+		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
 		perms := OwnerPermissions()
 		return u, &perms
 	}

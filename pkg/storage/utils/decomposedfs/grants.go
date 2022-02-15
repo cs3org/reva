@@ -51,15 +51,31 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
-		return rp.AddGrant || rp.UpdateGrant
-	})
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	grantees, err := node.ListGrantees(ctx)
+	if err != nil {
+		return err
+	}
+
+	owner, err := node.Owner()
+	if err != nil {
+		return err
+	}
+
+	// If the owner is empty and there are no grantees then we are dealing with a just created project space.
+	// In this case we don't need to check for permissions and just add the grant since this will be the project
+	// manager.
+	// When the owner is empty but grants are set then we do want to check the grants.
+	if !(len(grantees) == 0 && owner.OpaqueId == "") {
+		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+			// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
+			return rp.AddGrant || rp.UpdateGrant
+		})
+		switch {
+		case err != nil:
+			return errtypes.InternalError(err.Error())
+		case !ok:
+			return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+		}
 	}
 
 	// check lock
@@ -75,7 +91,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 
 	// when a grant is added to a space, do not add a new space under "shares"
 	if spaceGrant := ctx.Value(utils.SpaceGrant); spaceGrant == nil {
-		err := fs.createStorageSpace(ctx, "share", node.ID)
+		err := fs.createStorageSpace(ctx, spaceTypeShare, node.ID)
 		if err != nil {
 			return err
 		}

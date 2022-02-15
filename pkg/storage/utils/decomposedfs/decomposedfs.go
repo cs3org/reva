@@ -250,7 +250,7 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	}
 
 	// add storage space
-	if err := fs.createStorageSpace(ctx, "personal", h.ID); err != nil {
+	if err := fs.createStorageSpace(ctx, spaceTypePersonal, h.ID); err != nil {
 		return err
 	}
 

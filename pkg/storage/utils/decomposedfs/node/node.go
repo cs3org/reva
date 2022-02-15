@@ -64,6 +64,9 @@ const (
 
 	// TrashIDDelimiter represents the characters used to separate the nodeid and the deletion time.
 	TrashIDDelimiter = ".T."
+
+	// RootID defines the root node's ID
+	RootID = "root"
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
@@ -803,16 +806,18 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 	o, err := n.Owner()
 	if err != nil {
 		// TODO check if a parent folder has the owner set?
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
+		appctx.GetLogger(ctx).Error().Err(err).Str("node", n.ID).Msg("could not determine owner, returning default permissions")
 		return NoPermissions(), err
 	}
 	if o.OpaqueId == "" {
-		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
-		// TODO what if no owner is set but grants are present?
-		return NoOwnerPermissions(), nil
+		// this happens for root nodes and project spaces in the storage. the extended attributes are set to emptystring to indicate: no owner
+		// for project spaces we need to go over the grants and check the granted permissions
+		if n.ID == RootID {
+			return NoOwnerPermissions(), nil
+		}
 	}
 	if utils.UserEqual(u.Id, o) {
-		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
+		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
 		return OwnerPermissions(), nil
 	}
 

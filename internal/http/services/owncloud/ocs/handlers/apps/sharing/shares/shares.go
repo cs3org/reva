@@ -247,8 +247,8 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	switch shareType {
 	case int(conversions.ShareTypeUser), int(conversions.ShareTypeGroup):
-		// user collaborations default to coowner
-		role, val, ocsErr := h.extractPermissions(w, r, statRes.Info, conversions.NewCoownerRole())
+		// user collaborations default to Manager (=all permissions)
+		role, val, ocsErr := h.extractPermissions(w, r, statRes.Info, conversions.NewManagerRole())
 		if ocsErr != nil {
 			response.WriteOCSError(w, r, ocsErr.Code, ocsErr.Message, ocsErr.Error)
 			return
