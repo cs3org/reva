@@ -166,6 +166,18 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
 On every commit on the master branch (including merged Pull Requests) a new release will be created and 
 available at [daily releases](https://reva-releases.web.cern.ch/reva-releases).
 
+## Major versions
+
+There are currently two major versions in active development.
+
+### 1.x versions
+
+The ``master`` branch is the stable development branch. Releases from master are tagged as 1.x.x versions following [semver](https://semver.org/).
+
+### 2.x versions
+
+The ``edge`` branch is used to develop the next version of this project. The edge branch implements the CS3Apis differently and is not compatible to master. Releases from edge are tagged as 2.x.x versions following [semver](https://semver.org/).
+
 ## Run it using Docker
 
 See [https://hub.docker.com/r/cs3org/reva](https://hub.docker.com/r/cs3org/reva).
