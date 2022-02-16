@@ -19,7 +19,7 @@ import (
 
 // Indexer is a facade to configure and query over multiple indices.
 type Indexer struct {
-	s       metadata.Storage
+	storage metadata.Storage
 	indices typeMap
 	mu      sync.NamedRWMutex
 }
@@ -30,9 +30,9 @@ type IdxAddResult struct {
 }
 
 // CreateIndexer creates a new Indexer.
-func CreateIndexer(s metadata.Storage) *Indexer {
+func CreateIndexer(storage metadata.Storage) *Indexer {
 	return &Indexer{
-		s:       s,
+		storage: storage,
 		indices: typeMap{},
 		mu:      sync.NewNamedRWMutex(),
 	}
@@ -59,7 +59,7 @@ func (i *Indexer) Reset() error {
 func (i *Indexer) AddIndex(t interface{}, indexBy, pkName, entityDirName, indexType string, bound *option.Bound, caseInsensitive bool) error {
 	var idx index.Index
 
-	var f func(o ...option.Option) index.Index
+	var f func(metadata.Storage, ...option.Option) index.Index
 	switch indexType {
 	case "unique":
 		f = index.NewUniqueIndexWithOptions
@@ -71,6 +71,7 @@ func (i *Indexer) AddIndex(t interface{}, indexBy, pkName, entityDirName, indexT
 		return fmt.Errorf("invalid index type: %s", indexType)
 	}
 	idx = f(
+		i.storage,
 		option.CaseInsensitive(caseInsensitive),
 		option.WithBounds(bound),
 		option.WithIndexBy(indexBy),

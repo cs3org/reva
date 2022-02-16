@@ -5,11 +5,11 @@ import (
 	"path"
 	"testing"
 
-	"github.com/owncloud/ocis/accounts/pkg/config"
-	"github.com/owncloud/ocis/ocis-pkg/indexer/errors"
-	"github.com/owncloud/ocis/ocis-pkg/indexer/index"
-	"github.com/owncloud/ocis/ocis-pkg/indexer/option"
-	. "github.com/owncloud/ocis/ocis-pkg/indexer/test"
+	"github.com/cs3org/reva/pkg/storage/utils/indexer/errors"
+	"github.com/cs3org/reva/pkg/storage/utils/indexer/index"
+	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
+	. "github.com/cs3org/reva/pkg/storage/utils/indexer/test"
+	"github.com/cs3org/reva/pkg/storage/utils/metadata"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -63,11 +63,6 @@ func TestUniqueUpdate(t *testing.T) {
 	err := uniq.Update("", "mikey@example.com", "mikey2@example.com")
 	assert.NoError(t, err)
 
-	t.Log("failed update because already exists")
-	err = uniq.Update("", "mikey2@example.com", "mikey2@example.com")
-	assert.Error(t, err)
-	assert.IsType(t, &errors.AlreadyExistsErr{}, err)
-
 	t.Log("failed update because not found")
 	err = uniq.Update("", "nonexisting@example.com", "something2@example.com")
 	assert.Error(t, err)
@@ -101,22 +96,18 @@ func TestErrors(t *testing.T) {
 
 func getUniqueIdxSut(t *testing.T, indexBy string, entityType interface{}) (index.Index, string) {
 	dataPath, _ := WriteIndexTestData(Data, "ID", "")
-	cfg := config.Config{
-		Repo: config.Repo{
-			Backend: "disk",
-			Disk: config.Disk{
-				Path: dataPath,
-			},
-		},
+	storage, err := metadata.NewDiskStorage(dataPath)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	sut := NewUniqueIndexWithOptions(
+	sut := index.NewUniqueIndexWithOptions(
+		storage,
 		option.WithTypeName(GetTypeFQN(entityType)),
 		option.WithIndexBy(indexBy),
-		option.WithFilesDir(path.Join(cfg.Repo.Disk.Path, "users")),
-		option.WithDataDir(cfg.Repo.Disk.Path),
+		option.WithFilesDir(path.Join(dataPath, "users")),
 	)
-	err := sut.Init()
+	err = sut.Init()
 	if err != nil {
 		t.Fatal(err)
 	}

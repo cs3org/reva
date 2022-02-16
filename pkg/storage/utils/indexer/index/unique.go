@@ -26,20 +26,20 @@ type Unique struct {
 
 // NewUniqueIndexWithOptions instantiates a new UniqueIndex instance. Init() should be
 // called afterward to ensure correct on-disk structure.
-func NewUniqueIndexWithOptions(o ...option.Option) Index {
+func NewUniqueIndexWithOptions(storage metadata.Storage, o ...option.Option) Index {
 	opts := &option.Options{}
 	for _, opt := range o {
 		opt(opts)
 	}
 
 	u := &Unique{
+		storage:         storage,
 		caseInsensitive: opts.CaseInsensitive,
 		indexBy:         opts.IndexBy,
 		typeName:        opts.TypeName,
 		filesDir:        opts.FilesDir,
-		indexBaseDir:    path.Join(opts.Prefix, "index.cs3"),
-		indexRootDir:    path.Join(opts.Prefix, "index.cs3", strings.Join([]string{"unique", opts.TypeName, opts.IndexBy}, ".")),
-		storage:         opts.Storage,
+		indexBaseDir:    path.Join(opts.Prefix, "index."+storage.Backend()),
+		indexRootDir:    path.Join(opts.Prefix, "index."+storage.Backend(), strings.Join([]string{"unique", opts.TypeName, opts.IndexBy}, ".")),
 	}
 
 	return u
@@ -84,8 +84,9 @@ func (idx *Unique) Add(id, v string) (string, error) {
 	if idx.caseInsensitive {
 		v = strings.ToLower(v)
 	}
+	target := path.Join(idx.filesDir, id)
 	newName := path.Join(idx.indexRootDir, v)
-	if err := idx.storage.CreateSymlink(context.Background(), id, newName); err != nil {
+	if err := idx.storage.CreateSymlink(context.Background(), target, newName); err != nil {
 		if os.IsExist(err) {
 			return "", &idxerrs.AlreadyExistsErr{TypeName: idx.typeName, Key: idx.indexBy, Value: v}
 		}
@@ -97,7 +98,7 @@ func (idx *Unique) Add(id, v string) (string, error) {
 }
 
 // Remove a value v from an index.
-func (idx *Unique) Remove(id string, v string) error {
+func (idx *Unique) Remove(_ string, v string) error {
 	if v == "" {
 		return nil
 	}
@@ -142,25 +143,29 @@ func (idx *Unique) Search(pattern string) ([]string, error) {
 		pattern = strings.ToLower(pattern)
 	}
 
-	infos, err := idx.storage.ListContainer(context.Background(), idx.indexRootDir)
+	paths, err := idx.storage.ReadDir(context.Background(), idx.indexRootDir)
 	if err != nil {
 		return nil, err
 	}
 
 	searchPath := idx.indexRootDir
 	matches := make([]string, 0)
-	for _, i := range infos {
-		if found, err := filepath.Match(pattern, path.Base(i.Path)); found {
+	for _, p := range paths {
+		if found, err := filepath.Match(pattern, path.Base(p)); found {
 			if err != nil {
 				return nil, err
 			}
 
-			oldPath, err := idx.storage.ResolveSymlink(context.Background(), path.Join(searchPath, path.Base(i.Path)))
+			oldPath, err := idx.storage.ResolveSymlink(context.Background(), path.Join(searchPath, path.Base(p)))
 			if err != nil {
 				return nil, err
 			}
 			matches = append(matches, oldPath)
 		}
+	}
+
+	if len(matches) == 0 {
+		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, Key: idx.indexBy, Value: pattern}
 	}
 
 	return matches, nil

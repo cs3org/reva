@@ -27,19 +27,20 @@ type Autoincrement struct {
 }
 
 // NewAutoincrementIndex instantiates a new AutoincrementIndex instance.
-func NewAutoincrementIndex(o ...option.Option) Index {
+func NewAutoincrementIndex(storage metadata.Storage, o ...option.Option) Index {
 	opts := &option.Options{}
 	for _, opt := range o {
 		opt(opts)
 	}
 
 	u := &Autoincrement{
+		storage:      storage,
 		indexBy:      opts.IndexBy,
 		typeName:     opts.TypeName,
 		filesDir:     opts.FilesDir,
 		bound:        opts.Bound,
-		indexBaseDir: path.Join(opts.Prefix, "index.cs3"),
-		indexRootDir: path.Join(opts.Prefix, "index.cs3", strings.Join([]string{"autoincrement", opts.TypeName, opts.IndexBy}, ".")),
+		indexBaseDir: path.Join(opts.Prefix, "index."+storage.Backend()),
+		indexRootDir: path.Join(opts.Prefix, "index."+storage.Backend(), strings.Join([]string{"autoincrement", opts.TypeName, opts.IndexBy}, ".")),
 	}
 
 	return u
@@ -97,7 +98,7 @@ func (idx *Autoincrement) Add(id, v string) (string, error) {
 }
 
 // Remove a value v from an index.
-func (idx *Autoincrement) Remove(id string, v string) error {
+func (idx *Autoincrement) Remove(_ string, v string) error {
 	if v == "" {
 		return nil
 	}
@@ -130,20 +131,20 @@ func (idx *Autoincrement) Update(id, oldV, newV string) error {
 
 // Search allows for glob search on the index.
 func (idx *Autoincrement) Search(pattern string) ([]string, error) {
-	infos, err := idx.storage.ListContainer(context.Background(), idx.indexRootDir)
+	paths, err := idx.storage.ReadDir(context.Background(), idx.indexRootDir)
 	if err != nil {
 		return nil, err
 	}
 
 	searchPath := idx.indexRootDir
 	matches := make([]string, 0)
-	for _, i := range infos {
-		if found, err := filepath.Match(pattern, path.Base(i.Path)); found {
+	for _, p := range paths {
+		if found, err := filepath.Match(pattern, path.Base(p)); found {
 			if err != nil {
 				return nil, err
 			}
 
-			oldPath, err := idx.storage.ResolveSymlink(context.Background(), path.Join(searchPath, path.Base(i.Path)))
+			oldPath, err := idx.storage.ResolveSymlink(context.Background(), path.Join(searchPath, path.Base(p)))
 			if err != nil {
 				return nil, err
 			}
@@ -175,23 +176,23 @@ func (idx *Autoincrement) FilesDir() string {
 }
 
 func (idx *Autoincrement) next() (int, error) {
-	infos, err := idx.storage.ListContainer(context.Background(), idx.indexRootDir)
+	paths, err := idx.storage.ReadDir(context.Background(), idx.indexRootDir)
 
 	if err != nil {
 		return -1, err
 	}
 
-	if len(infos) == 0 {
-		return 0, nil
+	if len(paths) == 0 {
+		return int(idx.bound.Lower), nil
 	}
 
-	sort.Slice(infos, func(i, j int) bool {
-		a, _ := strconv.Atoi(path.Base(infos[i].Path))
-		b, _ := strconv.Atoi(path.Base(infos[j].Path))
+	sort.Slice(paths, func(i, j int) bool {
+		a, _ := strconv.Atoi(path.Base(paths[i]))
+		b, _ := strconv.Atoi(path.Base(paths[j]))
 		return a < b
 	})
 
-	latest, err := strconv.Atoi(path.Base(infos[len(infos)-1].Path)) // would returning a string be a better interface?
+	latest, err := strconv.Atoi(path.Base(paths[len(paths)-1])) // would returning a string be a better interface?
 	if err != nil {
 		return -1, err
 	}

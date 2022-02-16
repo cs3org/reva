@@ -6,105 +6,22 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/owncloud/ocis/ocis-pkg/indexer/option"
-	//. "github.com/owncloud/ocis/ocis-pkg/indexer/test"
-	accountsmsg "github.com/owncloud/ocis/protogen/gen/ocis/messages/accounts/v0"
+	"github.com/cs3org/reva/pkg/storage/utils/indexer/index"
+	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
+	metadata "github.com/cs3org/reva/pkg/storage/utils/metadata"
 	"github.com/stretchr/testify/assert"
 )
-
-func TestIsValidKind(t *testing.T) {
-	scenarios := []struct {
-		panics  bool
-		name    string
-		indexBy string
-		entity  struct {
-			Number      int
-			Name        string
-			NumberFloat float32
-		}
-	}{
-		{
-			name:    "valid autoincrement index",
-			panics:  false,
-			indexBy: "Number",
-			entity: struct {
-				Number      int
-				Name        string
-				NumberFloat float32
-			}{
-				Name: "tesy-mc-testace",
-			},
-		},
-		{
-			name:    "create autoincrement index on a non-existing field",
-			panics:  true,
-			indexBy: "Age",
-			entity: struct {
-				Number      int
-				Name        string
-				NumberFloat float32
-			}{
-				Name: "tesy-mc-testace",
-			},
-		},
-		{
-			name:    "attempt to create an autoincrement index with no entity",
-			panics:  true,
-			indexBy: "Age",
-		},
-		{
-			name:    "create autoincrement index on a non-numeric field",
-			panics:  true,
-			indexBy: "Name",
-			entity: struct {
-				Number      int
-				Name        string
-				NumberFloat float32
-			}{
-				Name: "tesy-mc-testace",
-			},
-		},
-	}
-
-	for _, scenario := range scenarios {
-		t.Run(scenario.name, func(t *testing.T) {
-			if scenario.panics {
-				assert.Panics(t, func() {
-					_ = NewAutoincrementIndex(
-						option.WithEntity(scenario.entity),
-						option.WithIndexBy(scenario.indexBy),
-					)
-				})
-			} else {
-				assert.NotPanics(t, func() {
-					_ = NewAutoincrementIndex(
-						option.WithEntity(scenario.entity),
-						option.WithIndexBy(scenario.indexBy),
-					)
-				})
-			}
-		})
-	}
-}
 
 func TestNext(t *testing.T) {
 	scenarios := []struct {
 		name     string
 		expected int
 		indexBy  string
-		entity   interface{}
 	}{
 		{
 			name:     "get next value",
 			expected: 0,
 			indexBy:  "Number",
-			entity: struct {
-				Number      int
-				Name        string
-				NumberFloat float32
-			}{
-				Name: "tesy-mc-testace",
-			},
 		},
 	}
 
@@ -112,18 +29,21 @@ func TestNext(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			tmpDir, err := createTmpDirStr()
 			assert.NoError(t, err)
+			dataDir := filepath.Join(tmpDir, "data")
 
-			err = os.MkdirAll(filepath.Join(tmpDir, "data"), 0777)
+			err = os.MkdirAll(dataDir, 0777)
 			assert.NoError(t, err)
 
-			i := NewAutoincrementIndex(
+			storage, err := metadata.NewDiskStorage(dataDir)
+			assert.NoError(t, err)
+
+			i := index.NewAutoincrementIndex(
+				storage,
 				option.WithBounds(&option.Bound{
 					Lower: 0,
 					Upper: 0,
 				}),
-				option.WithDataDir(tmpDir),
-				option.WithFilesDir(filepath.Join(tmpDir, "data")),
-				option.WithEntity(scenario.entity),
+				option.WithFilesDir(dataDir),
 				option.WithTypeName("LambdaType"),
 				option.WithIndexBy(scenario.indexBy),
 			)
@@ -164,13 +84,6 @@ func TestLowerBound(t *testing.T) {
 			name:     "get next value with a lower bound specified",
 			expected: 0,
 			indexBy:  "Number",
-			entity: struct {
-				Number      int
-				Name        string
-				NumberFloat float32
-			}{
-				Name: "tesy-mc-testace",
-			},
 		},
 	}
 
@@ -178,17 +91,20 @@ func TestLowerBound(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			tmpDir, err := createTmpDirStr()
 			assert.NoError(t, err)
+			dataDir := filepath.Join(tmpDir, "data")
 
-			err = os.MkdirAll(filepath.Join(tmpDir, "data"), 0777)
+			err = os.MkdirAll(dataDir, 0777)
 			assert.NoError(t, err)
 
-			i := NewAutoincrementIndex(
+			storage, err := metadata.NewDiskStorage(dataDir)
+			assert.NoError(t, err)
+
+			i := index.NewAutoincrementIndex(
+				storage,
 				option.WithBounds(&option.Bound{
 					Lower: 1000,
 				}),
-				option.WithDataDir(tmpDir),
-				option.WithFilesDir(filepath.Join(tmpDir, "data")),
-				option.WithEntity(scenario.entity),
+				option.WithFilesDir(dataDir),
 				option.WithTypeName("LambdaType"),
 				option.WithIndexBy(scenario.indexBy),
 			)
@@ -221,22 +137,25 @@ func TestLowerBound(t *testing.T) {
 func TestAdd(t *testing.T) {
 	tmpDir, err := createTmpDirStr()
 	assert.NoError(t, err)
+	dataDir := filepath.Join(tmpDir, "data")
 
-	err = os.MkdirAll(filepath.Join(tmpDir, "data"), 0777)
+	err = os.MkdirAll(dataDir, 0777)
+	assert.NoError(t, err)
+
+	storage, err := metadata.NewDiskStorage(dataDir)
 	assert.NoError(t, err)
 
 	tmpFile, err := os.Create(filepath.Join(tmpDir, "data", "test-example"))
 	assert.NoError(t, err)
 	assert.NoError(t, tmpFile.Close())
 
-	i := NewAutoincrementIndex(
+	i := index.NewAutoincrementIndex(
+		storage,
 		option.WithBounds(&option.Bound{
 			Lower: 0,
 			Upper: 0,
 		}),
-		option.WithDataDir(tmpDir),
 		option.WithFilesDir(filepath.Join(tmpDir, "data")),
-		option.WithEntity(&accountsmsg.Account{}),
 		option.WithTypeName("owncloud.Account"),
 		option.WithIndexBy("UidNumber"),
 	)
@@ -253,26 +172,25 @@ func TestAdd(t *testing.T) {
 func BenchmarkAdd(b *testing.B) {
 	tmpDir, err := createTmpDirStr()
 	assert.NoError(b, err)
+	dataDir := filepath.Join(tmpDir, "data")
 
-	err = os.MkdirAll(filepath.Join(tmpDir, "data"), 0777)
+	err = os.MkdirAll(dataDir, 0777)
+	assert.NoError(b, err)
+
+	storage, err := metadata.NewDiskStorage(dataDir)
 	assert.NoError(b, err)
 
 	tmpFile, err := os.Create(filepath.Join(tmpDir, "data", "test-example"))
 	assert.NoError(b, err)
 	assert.NoError(b, tmpFile.Close())
 
-	i := NewAutoincrementIndex(
+	i := index.NewAutoincrementIndex(
+		storage,
 		option.WithBounds(&option.Bound{
 			Lower: 0,
 			Upper: 0,
 		}),
-		option.WithDataDir(tmpDir),
 		option.WithFilesDir(filepath.Join(tmpDir, "data")),
-		option.WithEntity(struct {
-			Number      int
-			Name        string
-			NumberFloat float32
-		}{}),
 		option.WithTypeName("LambdaType"),
 		option.WithIndexBy("Number"),
 	)

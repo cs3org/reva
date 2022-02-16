@@ -33,19 +33,20 @@ type NonUnique struct {
 // │    └── xadaf-189 -> /tmp/testfiles-395764020/pets/xadaf-189
 // └── White/
 //     └── wefwe-456 -> /tmp/testfiles-395764020/pets/wefwe-456
-func NewNonUniqueIndexWithOptions(o ...option.Option) Index {
+func NewNonUniqueIndexWithOptions(storage metadata.Storage, o ...option.Option) Index {
 	opts := &option.Options{}
 	for _, opt := range o {
 		opt(opts)
 	}
 
 	return &NonUnique{
+		storage:         storage,
 		caseInsensitive: opts.CaseInsensitive,
 		indexBy:         opts.IndexBy,
 		typeName:        opts.TypeName,
 		filesDir:        opts.FilesDir,
-		indexBaseDir:    path.Join(opts.Prefix, "index.cs3"),
-		indexRootDir:    path.Join(opts.Prefix, "index.cs3", strings.Join([]string{"non_unique", opts.TypeName, opts.IndexBy}, ".")),
+		indexBaseDir:    path.Join(opts.Prefix, "index."+storage.Backend()),
+		indexRootDir:    path.Join(opts.Prefix, "index."+storage.Backend(), strings.Join([]string{"non_unique", opts.TypeName, opts.IndexBy}, ".")),
 	}
 }
 
@@ -68,14 +69,14 @@ func (idx *NonUnique) Lookup(v string) ([]string, error) {
 		v = strings.ToLower(v)
 	}
 	var matches = make([]string, 0)
-	infos, err := idx.storage.ListContainer(context.Background(), path.Join("/", idx.indexRootDir, v))
+	paths, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir, v))
 
 	if err != nil {
 		return nil, err
 	}
 
-	for _, info := range infos {
-		matches = append(matches, path.Base(info.Path))
+	for _, p := range paths {
+		matches = append(matches, path.Base(p))
 	}
 
 	return matches, nil
@@ -122,7 +123,7 @@ func (idx *NonUnique) Remove(id string, v string) error {
 	}
 
 	toStat := path.Join("/", idx.indexRootDir, v)
-	infos, err := idx.storage.ListContainer(context.Background(), toStat)
+	infos, err := idx.storage.ReadDir(context.Background(), toStat)
 	if err != nil {
 		return err
 	}
@@ -164,28 +165,32 @@ func (idx *NonUnique) Search(pattern string) ([]string, error) {
 
 	foldersMatched := make([]string, 0)
 	matches := make([]string, 0)
-	infos, err := idx.storage.ListContainer(context.Background(), idx.indexRootDir)
+	paths, err := idx.storage.ReadDir(context.Background(), idx.indexRootDir)
 
 	if err != nil {
 		return nil, err
 	}
 
-	for _, i := range infos {
-		if found, err := filepath.Match(pattern, path.Base(i.Path)); found {
+	for _, p := range paths {
+		if found, err := filepath.Match(pattern, path.Base(p)); found {
 			if err != nil {
 				return nil, err
 			}
 
-			foldersMatched = append(foldersMatched, i.Path)
+			foldersMatched = append(foldersMatched, p)
 		}
 	}
 
 	for i := range foldersMatched {
-		infos, _ := idx.storage.ListContainer(context.Background(), foldersMatched[i])
+		paths, _ := idx.storage.ReadDir(context.Background(), foldersMatched[i])
 
-		for _, info := range infos {
-			matches = append(matches, path.Base(info.Path))
+		for _, p := range paths {
+			matches = append(matches, path.Base(p))
 		}
+	}
+
+	if len(matches) == 0 {
+		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, Key: idx.indexBy, Value: pattern}
 	}
 
 	return matches, nil

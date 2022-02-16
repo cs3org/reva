@@ -6,11 +6,11 @@ import (
 	"path"
 	"testing"
 
-	"github.com/owncloud/ocis/ocis-pkg/indexer/config"
-	"github.com/owncloud/ocis/ocis-pkg/indexer/errors"
-	"github.com/owncloud/ocis/ocis-pkg/indexer/index"
-	"github.com/owncloud/ocis/ocis-pkg/indexer/option"
-	. "github.com/owncloud/ocis/ocis-pkg/indexer/test"
+	"github.com/cs3org/reva/pkg/storage/utils/indexer/errors"
+	"github.com/cs3org/reva/pkg/storage/utils/indexer/index"
+	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
+	. "github.com/cs3org/reva/pkg/storage/utils/indexer/test"
+	"github.com/cs3org/reva/pkg/storage/utils/metadata"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,7 +27,7 @@ func TestNonUniqueIndexAdd(t *testing.T) {
 
 	ids, err = sut.Lookup("Cyan")
 	assert.Error(t, err)
-	assert.EqualValues(t, []string{}, ids)
+	assert.Nil(t, ids)
 
 	_ = os.RemoveAll(dataPath)
 
@@ -81,22 +81,18 @@ func TestNonUniqueIndexSearch(t *testing.T) {
 // entity: used to get the fully qualified name for the index root path.
 func getNonUniqueIdxSut(t *testing.T, entity interface{}, indexBy string) (index.Index, string) {
 	dataPath, _ := WriteIndexTestData(Data, "ID", "")
-	cfg := config.Config{
-		Repo: config.Repo{
-			Backend: "disk",
-			Disk: config.Disk{
-				Path: dataPath,
-			},
-		},
+	storage, err := metadata.NewDiskStorage(dataPath)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	sut := NewNonUniqueIndexWithOptions(
+	sut := index.NewNonUniqueIndexWithOptions(
+		storage,
 		option.WithTypeName(GetTypeFQN(entity)),
 		option.WithIndexBy(indexBy),
-		option.WithFilesDir(path.Join(cfg.Repo.Disk.Path, "pets")),
-		option.WithDataDir(cfg.Repo.Disk.Path),
+		option.WithFilesDir(path.Join(dataPath, "pets")),
 	)
-	err := sut.Init()
+	err = sut.Init()
 	if err != nil {
 		t.Fatal(err)
 	}
