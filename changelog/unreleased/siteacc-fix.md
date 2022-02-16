@@ -1,8 +1,5 @@
-Enhancement: Site accounts improvements
+Bugfix: Fix site accounts endpoints
 
-This PR improves the site accounts:
-- Removed/hid API key stuff
-- Added quick links to the main panel
-- Made alert notifications mandatory
+This PR fixes small bugs in the site accounts endpoints.
 
-https://github.com/cs3org/reva/pull/2549
+https://github.com/cs3org/reva/pull/2555
