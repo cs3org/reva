@@ -214,7 +214,7 @@ func NewAccount(email string, title, firstName, lastName string, site, role stri
 			Authorized:  false,
 		},
 		Settings: AccountSettings{
-			ReceiveAlerts: false,
+			ReceiveAlerts: true,
 		},
 	}
 
