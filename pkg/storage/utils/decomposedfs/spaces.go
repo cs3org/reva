@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/google/uuid"
 )
 
@@ -417,10 +418,12 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 			hasDescription = true
 		}
 		if image, ok := space.Opaque.Map["image"]; ok {
-			metadata[xattrs.SpaceImageAttr] = string(image.Value)
+			imageID := resourceid.OwnCloudResourceIDUnwrap(string(image.Value))
+			metadata[xattrs.SpaceImageAttr] = imageID.OpaqueId
 		}
 		if readme, ok := space.Opaque.Map["readme"]; ok {
-			metadata[xattrs.SpaceReadmeAttr] = string(readme.Value)
+			readmeID := resourceid.OwnCloudResourceIDUnwrap(string(readme.Value))
+			metadata[xattrs.SpaceReadmeAttr] = readmeID.OpaqueId
 		}
 	}
 
@@ -716,7 +719,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	if ok {
 		space.Opaque.Map["image"] = &types.OpaqueEntry{
 			Decoder: "plain",
-			Value:   []byte(spaceImage),
+			Value:   []byte(resourceid.OwnCloudResourceIDWrap(&provider.ResourceId{StorageId: space.Root.StorageId, OpaqueId: spaceImage})),
 		}
 	}
 	spaceDescription, ok := spaceAttributes[xattrs.SpaceDescriptionAttr]
@@ -730,7 +733,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	if ok {
 		space.Opaque.Map["readme"] = &types.OpaqueEntry{
 			Decoder: "plain",
-			Value:   []byte(spaceReadme),
+			Value:   []byte(resourceid.OwnCloudResourceIDWrap(&provider.ResourceId{StorageId: space.Root.StorageId, OpaqueId: spaceReadme})),
 		}
 	}
 	return space, nil
