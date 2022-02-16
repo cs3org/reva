@@ -82,8 +82,8 @@ func getEndpoints() []endpoint {
 		// Login endpoints
 		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
 		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), true},
-		{config.EndpointResetPassword, callMethodEndpoint, createMethodCallbacks(nil, handleResetPassword), false},
-		{config.EndpointContact, callMethodEndpoint, createMethodCallbacks(nil, handleContact), false},
+		{config.EndpointResetPassword, callMethodEndpoint, createMethodCallbacks(nil, handleResetPassword), true},
+		{config.EndpointContact, callMethodEndpoint, createMethodCallbacks(nil, handleContact), true},
 		// Authentication endpoints
 		{config.EndpointVerifyUserToken, callMethodEndpoint, createMethodCallbacks(handleVerifyUserToken, nil), true},
 		// Authorization endpoints
