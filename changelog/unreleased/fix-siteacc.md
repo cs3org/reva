@@ -1,4 +1,4 @@
-Fix: Site accounts contact form
+Bugfix: Site accounts contact form
 
 This PR fixes a minor bug in the site accounts service that prevented the contact form from working.
  
