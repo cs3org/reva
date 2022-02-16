@@ -419,10 +419,20 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}
 		if image, ok := space.Opaque.Map["image"]; ok {
 			imageID := resourceid.OwnCloudResourceIDUnwrap(string(image.Value))
+			if imageID == nil {
+				return &provider.UpdateStorageSpaceResponse{
+					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space image resource not found"},
+				}, nil
+			}
 			metadata[xattrs.SpaceImageAttr] = imageID.OpaqueId
 		}
 		if readme, ok := space.Opaque.Map["readme"]; ok {
 			readmeID := resourceid.OwnCloudResourceIDUnwrap(string(readme.Value))
+			if readmeID == nil {
+				return &provider.UpdateStorageSpaceResponse{
+					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space readme resource not found"},
+				}, nil
+			}
 			metadata[xattrs.SpaceReadmeAttr] = readmeID.OpaqueId
 		}
 	}
