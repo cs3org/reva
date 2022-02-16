@@ -572,7 +572,7 @@ def virtualViews():
                     "PATH_TO_CORE": "/drone/src/tmp/testrunner",
                     "TEST_SERVER_URL": "http://revad-services:20180",
                     "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                    "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/*",
+                    "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/spacetypes/*",
                     "STORAGE_DRIVER": "OCIS",
                     "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
                     "TEST_REVA": "true",
@@ -751,7 +751,7 @@ def litmusOcisSpacesDav():
                 "commands": [
                     # The spaceid is randomly generated during the first login so we need this hack to construct the correct url.
                     "curl -s -k -u einstein:relativity -I http://revad-services:20080/remote.php/dav/files/einstein",
-                    "export LITMUS_URL=http://revad-services:20080/remote.php/dav/spaces/$(ls /drone/src/tmp/reva/data/spaces/personal/)",
+                    "export LITMUS_URL=http://revad-services:20080/remote.php/dav/spaces/$(ls /drone/src/tmp/reva/data/spacetypes/personal/)",
                     "/usr/local/bin/litmus-wrapper",
                 ],
             },
@@ -813,7 +813,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
                             "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/spaces/*/*",
+                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/spacetypes/*",
                             "STORAGE_DRIVER": "OCIS",
                             "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
                             "TEST_WITH_LDAP": "true",
@@ -890,7 +890,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
                             "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/spaces/*/*",
+                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/spacetypes/*",
                             "STORAGE_DRIVER": "S3NG",
                             "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
                             "TEST_WITH_LDAP": "true",

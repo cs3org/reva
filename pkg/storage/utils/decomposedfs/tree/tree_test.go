@@ -23,6 +23,7 @@ import (
 	"path"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
@@ -106,7 +107,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("moves the file to the trash", func() {
-					trashPath := path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
+					trashPath := path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 				})
@@ -117,7 +118,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("sets the trash origin xattr", func() {
-					trashPath := path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
+					trashPath := path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 					attr, err := xattr.Get(trashPath, xattrs.TrashOriginAttr)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(string(attr)).To(Equal("/dir1/file1"))
@@ -136,7 +137,7 @@ var _ = Describe("Tree", func() {
 
 			JustBeforeEach(func() {
 				env.Blobstore.On("Delete", n.BlobID).Return(nil)
-				trashPath = path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
+				trashPath = path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 				Expect(t.Delete(env.Ctx, n)).To(Succeed())
 			})
 
@@ -238,7 +239,7 @@ var _ = Describe("Tree", func() {
 			)
 
 			JustBeforeEach(func() {
-				trashPath = path.Join(env.Root, "trash", n.SpaceRoot.ID, n.ID)
+				trashPath = path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 				Expect(t.Delete(env.Ctx, n)).To(Succeed())
 			})
 
@@ -278,7 +279,7 @@ var _ = Describe("Tree", func() {
 
 		Describe("with TreeTimeAccounting enabled", func() {
 			It("sets the tmtime of the parent", func() {
-				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				file, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
 				Expect(err).ToNot(HaveOccurred())
 
 				perms := node.OwnerPermissions()
@@ -296,7 +297,7 @@ var _ = Describe("Tree", func() {
 
 		Describe("with TreeSizeAccounting enabled", func() {
 			It("calculates the size", func() {
-				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				file, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Tree.Propagate(env.Ctx, file)
@@ -307,9 +308,9 @@ var _ = Describe("Tree", func() {
 			})
 
 			It("considers all files", func() {
-				_, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				_, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
 				Expect(err).ToNot(HaveOccurred())
-				file2, err := env.CreateTestFile("file2", "", 100, dir.ID)
+				file2, err := env.CreateTestFile("file2", "", dir.ID, dir.SpaceID, 100)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Tree.Propagate(env.Ctx, file2)
@@ -325,7 +326,7 @@ var _ = Describe("Tree", func() {
 				err = subdir.SetTreeSize(uint64(200))
 				Expect(err).ToNot(HaveOccurred())
 
-				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				file, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Tree.Propagate(env.Ctx, file)

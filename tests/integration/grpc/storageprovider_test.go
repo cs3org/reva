@@ -30,6 +30,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/pkg/utils"
@@ -59,11 +60,12 @@ func createFS(provider string, revads map[string]*Revad) (storage.FS, error) {
 	switch provider {
 	case "ocis":
 		conf["root"] = revads["storage"].StorageRoot
+		conf["permissionssvc"] = revads["permissions"].GrpcAddress
 		f = ocis.New
 	case "nextcloud":
-		conf["root"] = revads["storage"].StorageRoot
-		conf["enable_home"] = true
-		f = ocis.New
+		conf["endpoint"] = "http://localhost:8080/apps/sciencemesh/"
+		conf["mock_http"] = true
+		f = nextcloud.New
 	}
 	return f(conf)
 }
@@ -130,19 +132,19 @@ var _ = Describe("storage providers", func() {
 	assertCreateHome := func(provider string) {
 		It("creates a home directory", func() {
 			homeRef := ref(provider, homePath)
-			_, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
+			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
-			// Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
 			res, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
 				Owner: user,
 				Type:  "personal",
 				Name:  user.Id.OpaqueId,
 			})
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: ref(provider, homePath)})
+			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: ref(provider, homePath)})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -705,8 +707,6 @@ var _ = Describe("storage providers", func() {
 						vRef.ResourceId = &storagep.ResourceId{StorageId: user.Id.OpaqueId}
 					}
 
-					ctx := ctxpkg.ContextSetUser(context.Background(), user)
-
 					_, err = fs.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
 						Owner: user,
 						Type:  "personal",
@@ -729,7 +729,8 @@ var _ = Describe("storage providers", func() {
 	})
 
 	suite("ocis", map[string]string{
-		"storage": "storageprovider-ocis.toml",
+		"storage":     "storageprovider-ocis.toml",
+		"permissions": "permissions-ocis-ci.toml",
 	})
 
 })

@@ -19,6 +19,7 @@
 package decomposedfs
 
 // go:generate mockery -name PermissionsChecker
+// go:generate mockery -name CS3PermissionsClient
 // go:generate mockery -name Tree
 
 import (
@@ -33,15 +34,17 @@ import (
 	"strings"
 	"syscall"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
@@ -51,6 +54,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/codes"
+	"google.golang.org/grpc"
 )
 
 // PermissionsChecker defines an interface for checking permissions on a Node
@@ -59,9 +63,14 @@ type PermissionsChecker interface {
 	HasPermission(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
+// CS3PermissionsClient defines an interface for checking permissions against the CS3 permissions service
+type CS3PermissionsClient interface {
+	CheckPermission(ctx context.Context, in *cs3permissions.CheckPermissionRequest, opts ...grpc.CallOption) (*cs3permissions.CheckPermissionResponse, error)
+}
+
 // Tree is used to manage a tree hierarchy
 type Tree interface {
-	Setup(owner *userpb.UserId, propagateToRoot bool) error
+	Setup() error
 
 	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
 	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
@@ -82,11 +91,12 @@ type Tree interface {
 
 // Decomposedfs provides the base for decomposed filesystem implementations
 type Decomposedfs struct {
-	lu           *Lookup
-	tp           Tree
-	o            *options.Options
-	p            PermissionsChecker
-	chunkHandler *chunking.ChunkHandler
+	lu                *lookup.Lookup
+	tp                Tree
+	o                 *options.Options
+	p                 PermissionsChecker
+	chunkHandler      *chunking.ChunkHandler
+	permissionsClient CS3PermissionsClient
 }
 
 // NewDefault returns an instance with default components
@@ -96,30 +106,25 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 		return nil, err
 	}
 
-	lu := &Lookup{}
+	lu := &lookup.Lookup{}
 	p := node.NewPermissions(lu)
 
 	lu.Options = o
 
 	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
 
-	o.GatewayAddr = sharedconf.GetGatewaySVC(o.GatewayAddr)
-	return New(o, lu, p, tp)
-}
+	permissionsClient, err := pool.GetPermissionsClient(o.PermissionsSVC)
+	if err != nil {
+		return nil, err
+	}
 
-// when enable home is false we want propagation to root if tree size or mtime accounting is enabled
-func enablePropagationForRoot(o *options.Options) bool {
-	return (o.TreeSizeAccounting || o.TreeTimeAccounting)
+	return New(o, lu, p, tp, permissionsClient)
 }
 
 // New returns an implementation of the storage.FS interface that talks to
 // a local filesystem.
-func New(o *options.Options, lu *Lookup, p PermissionsChecker, tp Tree) (storage.FS, error) {
-	err := tp.Setup(&userpb.UserId{
-		OpaqueId: o.Owner,
-		Idp:      o.OwnerIDP,
-		Type:     userpb.UserType(userpb.UserType_value[o.OwnerType]),
-	}, enablePropagationForRoot(o))
+func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, permissionsClient CS3PermissionsClient) (storage.FS, error) {
+	err := tp.Setup()
 	if err != nil {
 		logger.New().Error().Err(err).
 			Msg("could not setup tree")
@@ -127,11 +132,12 @@ func New(o *options.Options, lu *Lookup, p PermissionsChecker, tp Tree) (storage
 	}
 
 	return &Decomposedfs{
-		tp:           tp,
-		lu:           lu,
-		o:            o,
-		p:            p,
-		chunkHandler: chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
+		tp:                tp,
+		lu:                lu,
+		o:                 o,
+		p:                 p,
+		chunkHandler:      chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
+		permissionsClient: permissionsClient,
 	}, nil
 }
 
@@ -144,14 +150,12 @@ func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
 // TODO Document in the cs3 should we return quota or free space?
 func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, inUse uint64, err error) {
 	var n *node.Node
-	if ref != nil {
-		if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
-			return 0, 0, err
-		}
-	} else {
-		if n, err = fs.lu.RootNode(ctx); err != nil {
-			return 0, 0, err
-		}
+	if ref == nil {
+		err = errtypes.BadRequest("no space given")
+		return 0, 0, err
+	}
+	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+		return 0, 0, err
 	}
 
 	if !n.Exists {
@@ -204,57 +208,18 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 		return errtypes.NotSupported("Decomposedfs: CreateHome() home supported disabled")
 	}
 
-	var n, h *node.Node
-	if n, err = fs.lu.RootNode(ctx); err != nil {
-		return
-	}
-	h, err = fs.lu.WalkPath(ctx, n, fs.lu.mustGetUserLayout(ctx), false, func(ctx context.Context, n *node.Node) error {
-		if !n.Exists {
-			if err := fs.tp.CreateDir(ctx, n); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-
-	// make sure to delete the created directory if things go wrong
-	defer func() {
-		if err != nil {
-			// do not catch the error to not shadow the original error
-			if tmpErr := fs.tp.Delete(ctx, n); tmpErr != nil {
-				appctx.GetLogger(ctx).Error().Err(tmpErr).Msg("Can not revert file system change after error")
-			}
-		}
-	}()
-
-	if err != nil {
-		return
-	}
-
-	// update the owner
 	u := ctxpkg.ContextMustGetUser(ctx)
-	if err = h.WriteAllNodeMetadata(u.Id); err != nil {
-		return
-	}
-
-	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
-		// mark the home node as the end of propagation
-		if err = h.SetMetadata(xattrs.PropagationAttr, "1"); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", h).Msg("could not mark home as propagation root")
-			return
-		}
-	}
-
-	if err := h.SetMetadata(xattrs.SpaceNameAttr, u.DisplayName); err != nil {
+	res, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
+		Type:  spaceTypePersonal,
+		Owner: u,
+	})
+	if err != nil {
 		return err
 	}
-
-	// add storage space
-	if err := fs.createStorageSpace(ctx, spaceTypePersonal, h.ID); err != nil {
-		return err
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return errtypes.NewErrtypeFromStatus(res.Status)
 	}
-
-	return
+	return nil
 }
 
 // The os not exists error is buried inside the xattr error,

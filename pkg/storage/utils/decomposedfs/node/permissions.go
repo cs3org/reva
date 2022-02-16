@@ -100,21 +100,9 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		appctx.GetLogger(ctx).Debug().Interface("node", n.ID).Msg("no user in context, returning default permissions")
 		return NoPermissions(), nil
 	}
+
 	// check if the current user is the owner
-	o, err := n.Owner()
-	if err != nil {
-		// TODO check if a parent folder has the owner set?
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n.ID).Msg("could not determine owner, returning default permissions")
-		return NoPermissions(), err
-	}
-	if o.OpaqueId == "" {
-		// this happens for root nodes and project spaces in the storage. the extended attributes are set to emptystring to indicate: no owner
-		// for project spaces we need to go over the grants and check the granted permissions
-		if n.ID == RootID {
-			return NoOwnerPermissions(), nil
-		}
-	}
-	if utils.UserEqual(u.Id, o) {
+	if utils.UserEqual(u.Id, n.Owner()) {
 		lp, err := n.lu.Path(ctx, n)
 		if err == nil && lp == n.lu.ShareFolder() {
 			return ShareFolderPermissions(), nil
@@ -123,10 +111,8 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		return OwnerPermissions(), nil
 	}
 	// determine root
-	var rn *Node
-	if rn, err = p.lu.RootNode(ctx); err != nil {
-		return NoPermissions(), err
-	}
+
+	rn := n.SpaceRoot
 
 	cn := n
 
@@ -189,9 +175,11 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 	}
 
 	// determine root
-	if err = n.FindStorageSpaceRoot(); err != nil {
-		return false, err
-	}
+	/*
+		if err = n.FindStorageSpaceRoot(); err != nil {
+			return false, err
+		}
+	*/
 
 	// for an efficient group lookup convert the list of groups to a map
 	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
@@ -271,22 +259,7 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 		return nil, &perms
 	}
 	// check if the current user is the owner
-	o, err := n.Owner()
-	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n.ID).Msg("could not determine owner, returning default permissions")
-		perms := NoPermissions()
-		return nil, &perms
-	}
-	if o.OpaqueId == "" {
-		// this happens for root nodes and project spaces in the storage. the extended attributes are set to emptystring to indicate: no owner
-		// for project spaces we need to go over the grants and check the granted permissions
-		if n.ID != RootID {
-			return u, nil
-		}
-		perms := NoOwnerPermissions()
-		return nil, &perms
-	}
-	if utils.UserEqual(u.Id, o) {
+	if utils.UserEqual(u.Id, n.Owner()) {
 		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
 		perms := OwnerPermissions()
 		return u, &perms

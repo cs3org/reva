@@ -47,8 +47,8 @@ var _ = Describe("Recycle", func() {
 		When("a user deletes files from the same space", func() {
 
 			BeforeEach(func() {
-				// in this scenario user "userid" has this permissions:
-				registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+				// in this scenario user "u-s-e-r-id" has this permissions:
+				registerPermissions(env.Permissions, "u-s-e-r-id", &provider.ResourcePermissions{
 					InitiateFileUpload: true,
 					Delete:             true,
 					ListRecycle:        true,
@@ -132,8 +132,8 @@ var _ = Describe("Recycle", func() {
 					Username: "anotherusername",
 				})
 
-				// in this scenario user "userid" has this permissions:
-				registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+				// in this scenario user "u-s-e-r-id" has this permissions:
+				registerPermissions(env.Permissions, "u-s-e-r-id", &provider.ResourcePermissions{
 					InitiateFileUpload: true,
 					Delete:             true,
 					ListRecycle:        true,
@@ -240,12 +240,13 @@ var _ = Describe("Recycle", func() {
 		When("a user deletes files from different spaces", func() {
 			BeforeEach(func() {
 				var err error
+				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1) // Permissions required for setup below (AddGrant)
 				projectID, err = env.CreateTestStorageSpace("project", &provider.Quota{QuotaMaxBytes: 2000})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(projectID).ToNot(BeNil())
 
-				// in this scenario user "userid" has this permissions:
-				registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+				// in this scenario user "u-s-e-r-id" has this permissions:
+				registerPermissions(env.Permissions, "u-s-e-r-id", &provider.ResourcePermissions{
 					InitiateFileUpload: true,
 					Delete:             true,
 					ListRecycle:        true,
@@ -289,7 +290,7 @@ var _ = Describe("Recycle", func() {
 				Expect(len(items)).To(Equal(1))
 
 				// use up 2000 byte quota
-				_, err = env.CreateTestFile("largefile", "largefile-blobid", 2000, projectID.OpaqueId)
+				_, err = env.CreateTestFile("largefile", "largefile-blobid", projectID.OpaqueId, projectID.StorageId, 2000)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Fs.RestoreRecycleItem(env.Ctx, &provider.Reference{ResourceId: projectID}, items[0].Key, "/", nil)
@@ -316,8 +317,8 @@ var _ = Describe("Recycle", func() {
 					Username: "readusername",
 				})
 
-				// in this scenario user "userid" has this permissions:
-				registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+				// in this scenario user "u-s-e-r-id" has this permissions:
+				registerPermissions(env.Permissions, "u-s-e-r-id", &provider.ResourcePermissions{
 					Delete:             true,
 					ListRecycle:        true,
 					PurgeRecycle:       true,
@@ -395,14 +396,14 @@ var _ = Describe("Recycle", func() {
 			ctx = ctxpkg.ContextSetUser(context.Background(), &userpb.User{
 				Id: &userpb.UserId{
 					Idp:      "maliciousidp",
-					OpaqueId: "hacker",
+					OpaqueId: "h-a-c-k-er",
 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Username: "mrhacker",
 			})
 
 			// in this scenario user "userid" has this permissions:
-			registerPermissions(env.Permissions, "userid", &provider.ResourcePermissions{
+			registerPermissions(env.Permissions, "u-s-e-r-id", &provider.ResourcePermissions{
 				Delete:             true,
 				ListRecycle:        true,
 				PurgeRecycle:       true,
@@ -410,7 +411,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			// and user "hacker" has no permissions:
-			registerPermissions(env.Permissions, "hacker", &provider.ResourcePermissions{})
+			registerPermissions(env.Permissions, "h-a-c-k-er", &provider.ResourcePermissions{})
 		})
 
 		It("cannot delete, list, purge or restore", func() {

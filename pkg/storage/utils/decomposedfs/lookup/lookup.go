@@ -16,23 +16,20 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package decomposedfs
+package lookup
 
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/storage/utils/templates"
 )
 
 // Lookup implements transformations from filepath to node and back
@@ -58,6 +55,7 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 				if err != nil {
 					return nil, err
 				}
+				n.SpaceID = ref.ResourceId.StorageId
 			}
 		}
 		return n, nil
@@ -76,32 +74,28 @@ func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *n
 		// The Resource references the root of a space
 		return lu.NodeFromSpaceID(ctx, id)
 	}
-	n, err = node.ReadNode(ctx, lu, id.OpaqueId)
-	if err != nil {
-		return nil, err
-	}
+	return node.ReadNode(ctx, lu, id.StorageId, id.OpaqueId)
+}
 
-	return n, n.FindStorageSpaceRoot()
+// Pathify segments the beginning of a string into depth segments of width length
+// Pathify("aabbccdd", 3, 1) will return "a/a/b/bccdd"
+func Pathify(id string, depth, width int) string {
+	b := strings.Builder{}
+	i := 0
+	for ; i < depth; i++ {
+		if len(id) <= i*width+width {
+			break
+		}
+		b.WriteString(id[i*width : i*width+width])
+		b.WriteRune(filepath.Separator)
+	}
+	b.WriteString(id[i*width:])
+	return b.String()
 }
 
 // NodeFromSpaceID converts a resource id without an opaque id into a Node
 func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
-	d := filepath.Join(lu.Options.Root, "spaces", spaceTypeAny, id.StorageId)
-	matches, err := filepath.Glob(d)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(matches) != 1 {
-		return nil, fmt.Errorf("can't determine node from spaceID: found %d matching spaces. Path: %s", len(matches), d)
-	}
-
-	target, err := os.Readlink(matches[0])
-	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[0]).Msg("could not read link, skipping")
-	}
-
-	node, err := node.ReadNode(ctx, lu, filepath.Base(target))
+	node, err := node.ReadNode(ctx, lu, id.StorageId, id.StorageId)
 	if err != nil {
 		return nil, err
 	}
@@ -126,13 +120,6 @@ func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) 
 	}
 	p = filepath.Join("/", p)
 	return
-}
-
-// RootNode returns the root node of the storage
-func (lu *Lookup) RootNode(ctx context.Context) (*node.Node, error) {
-	n := node.New(node.RootID, "", "", 0, "", nil, lu)
-	n.Exists = true
-	return n, nil
 }
 
 // WalkPath calls n.Child(segment) on every path segment in p starting at the node r.
@@ -182,13 +169,8 @@ func (lu *Lookup) InternalRoot() string {
 }
 
 // InternalPath returns the internal path for a given ID
-func (lu *Lookup) InternalPath(id string) string {
-	return filepath.Join(lu.Options.Root, "nodes", id)
-}
-
-func (lu *Lookup) mustGetUserLayout(ctx context.Context) string {
-	u := ctxpkg.ContextMustGetUser(ctx)
-	return templates.WithUser(u, lu.Options.UserLayout)
+func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
+	return filepath.Join(lu.Options.Root, "spaces", Pathify(spaceID, 1, 2), "nodes", Pathify(nodeID, 4, 2))
 }
 
 // ShareFolder returns the internal storage root directory

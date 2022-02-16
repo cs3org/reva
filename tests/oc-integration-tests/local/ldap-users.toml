@@ -16,7 +16,7 @@ address = "0.0.0.0:18000"
 auth_manager = "ldap"
 
 [grpc.services.authprovider.auth_managers.ldap]
-hostname="localhost"
+hostname="ldap"
 port=636
 insecure=true
 base_dn="dc=owncloud,dc=com"
@@ -34,7 +34,7 @@ cn="cn"
 driver = "ldap"
 
 [grpc.services.userprovider.drivers.ldap]
-hostname="localhost"
+hostname="ldap"
 port=636
 insecure=true
 base_dn="dc=owncloud,dc=com"
@@ -57,7 +57,7 @@ gid="entryuuid"
 driver = "ldap"
 
 [grpc.services.groupprovider.drivers.ldap]
-hostname="localhost"
+hostname="ldap"
 port=636
 insecure=true
 base_dn="dc=owncloud,dc=com"

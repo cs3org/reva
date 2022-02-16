@@ -21,7 +21,6 @@ package decomposedfs_test
 import (
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -115,7 +114,7 @@ var _ = Describe("Grants", func() {
 				err = env.Fs.AddGrant(env.Ctx, ref, grant)
 				Expect(err).ToNot(HaveOccurred())
 
-				localPath := path.Join(env.Root, "nodes", n.ID)
+				localPath := n.InternalPath()
 				attr, err := xattr.Get(localPath, xattrs.GrantUserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(attr)).To(Equal("\x00t=A:f=:p=rw"))
@@ -125,8 +124,8 @@ var _ = Describe("Grants", func() {
 				err := env.Fs.AddGrant(env.Ctx, ref, grant)
 				Expect(err).ToNot(HaveOccurred())
 
-				spacesPath := filepath.Join(env.Root, "spaces")
-				tfs.root = spacesPath
+				spaceTypesPath := filepath.Join(env.Root, "spacetypes")
+				tfs.root = spaceTypesPath
 				entries, err := fs.ReadDir(tfs, "share")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(entries)).To(BeNumerically(">=", 1))

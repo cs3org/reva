@@ -26,12 +26,14 @@ import (
 	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
@@ -55,16 +57,17 @@ var _ = Describe("File uploads", func() {
 		ctx     context.Context
 		spaceID string
 
-		o           *options.Options
-		lookup      *decomposedfs.Lookup
-		permissions *mocks.PermissionsChecker
-		bs          *treemocks.Blobstore
+		o                    *options.Options
+		lu                   *lookup.Lookup
+		permissions          *mocks.PermissionsChecker
+		cs3permissionsclient *mocks.CS3PermissionsClient
+		bs                   *treemocks.Blobstore
 	)
 
 	BeforeEach(func() {
 		ref = &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: "userid",
+				StorageId: "u-s-e-r-id",
 			},
 			Path: "/foo",
 		}
@@ -72,7 +75,7 @@ var _ = Describe("File uploads", func() {
 		user = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "idp",
-				OpaqueId: "userid",
+				OpaqueId: "u-s-e-r-id",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username: "username",
@@ -80,7 +83,7 @@ var _ = Describe("File uploads", func() {
 
 		rootRef = &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: "userid",
+				StorageId: "u-s-e-r-id",
 			},
 			Path: "/",
 		}
@@ -94,8 +97,9 @@ var _ = Describe("File uploads", func() {
 			"root": tmpRoot,
 		})
 		Expect(err).ToNot(HaveOccurred())
-		lookup = &decomposedfs.Lookup{Options: o}
+		lu = &lookup.Lookup{Options: o}
 		permissions = &mocks.PermissionsChecker{}
+		cs3permissionsclient = &mocks.CS3PermissionsClient{}
 		bs = &treemocks.Blobstore{}
 	})
 
@@ -107,10 +111,12 @@ var _ = Describe("File uploads", func() {
 	})
 
 	BeforeEach(func() {
-		permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Times(1).Return(true, nil)
+		cs3permissionsclient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{
+			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
+		}, nil)
 		var err error
-		tree := tree.New(o.Root, true, true, lookup, bs)
-		fs, err = decomposedfs.New(o, lookup, permissions, tree)
+		tree := tree.New(o.Root, true, true, lu, bs)
+		fs, err = decomposedfs.New(o, lu, permissions, tree, cs3permissionsclient)
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
@@ -141,7 +147,7 @@ var _ = Describe("File uploads", func() {
 
 		When("the user wants to initiate a file upload", func() {
 			It("fails", func() {
-				msg := "error: permission denied: userid/foo"
+				msg := "error: permission denied: u-s-e-r-id/foo"
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).To(MatchError(msg))
 			})
@@ -152,7 +158,7 @@ var _ = Describe("File uploads", func() {
 		JustBeforeEach(func() {
 			var err error
 			// the space name attribute is the stop condition in the lookup
-			h, err := lookup.RootNode(ctx)
+			h, err := lu.NodeFromResource(ctx, rootRef)
 			Expect(err).ToNot(HaveOccurred())
 			err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username"))
 			Expect(err).ToNot(HaveOccurred())
@@ -161,7 +167,7 @@ var _ = Describe("File uploads", func() {
 
 		When("the user wants to initiate a file upload", func() {
 			It("fails", func() {
-				msg := "error: permission denied: userid/foo"
+				msg := "error: permission denied: u-s-e-r-id/foo"
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).To(MatchError(msg))
 			})

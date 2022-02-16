@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
@@ -245,10 +246,6 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 	usr := ctxpkg.ContextMustGetUser(ctx)
 
-	owner, err := p.Owner()
-	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error determining owner")
-	}
 	var spaceRoot string
 	if info.Storage != nil {
 		if spaceRoot, ok = info.Storage["SpaceRoot"]; !ok {
@@ -271,9 +268,6 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		"UserId":   usr.Id.OpaqueId,
 		"UserType": utils.UserTypeToString(usr.Id.Type),
 		"UserName": usr.Username,
-
-		"OwnerIdp": owner.Idp,
-		"OwnerId":  owner.OpaqueId,
 
 		"LogLevel": log.GetLevel().String(),
 	}
@@ -459,7 +453,9 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return
 	}
 
+	spaceID := upload.info.Storage["SpaceRoot"]
 	n := node.New(
+		spaceID,
 		upload.info.Storage["NodeId"],
 		upload.info.Storage["NodeParentId"],
 		upload.info.Storage["NodeName"],
@@ -468,7 +464,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		nil,
 		upload.fs.lu,
 	)
-	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
+	n.SpaceRoot = node.New(spaceID, spaceID, "", "", 0, "", nil, upload.fs.lu)
 
 	// check lock
 	if err := n.CheckLock(ctx); err != nil {
@@ -556,7 +552,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 
 		// FIXME move versioning to blobs ... no need to copy all the metadata! well ... it does if we want to version metadata...
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath = upload.fs.lu.InternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath = upload.fs.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		// This move drops all metadata!!! We copy it below with CopyMetadata
 		// FIXME the node must remain the same. otherwise we might restore share metadata
@@ -589,9 +585,11 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			Msg("Decomposedfs: could not truncate")
 		return
 	}
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0700); err != nil {
+		sublog.Warn().Err(err).Msg("Decomposedfs: could not create node dir, trying to write file anyway")
+	}
 	if err = os.Rename(upload.binPath, targetPath); err != nil {
-		sublog.Err(err).
-			Msg("Decomposedfs: could not rename")
+		sublog.Error().Err(err).Msg("Decomposedfs: could not rename")
 		return
 	}
 	if versionsPath != "" {
@@ -618,16 +616,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	tryWritingChecksum(&sublog, n, "adler32", adler32h)
 
 	// who will become the owner?  the owner of the parent actually ... not the currently logged in user
-	err = n.WriteAllNodeMetadata(&userpb.UserId{
-		Idp:      upload.info.Storage["OwnerIdp"],
-		OpaqueId: upload.info.Storage["OwnerId"],
-	})
+	err = n.WriteAllNodeMetadata()
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(upload.fs.lu.InternalPath(n.ParentID), n.Name)
+	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
 	var link string
 	link, err = os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {
@@ -642,7 +637,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		}
 	}
 	if os.IsNotExist(err) || link != "../"+n.ID {
-		if err = os.Symlink("../"+n.ID, childNameLink); err != nil {
+		relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")
 		}
 	}

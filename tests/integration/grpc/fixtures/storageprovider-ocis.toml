@@ -9,5 +9,4 @@ root = "{{root}}/storage"
 treetime_accounting = true
 treesize_accounting = true
 enable_home = true
-userprovidersvc = "localhost:18000"
-gateway_addr = "{{gateway_address}}"
+permissionssvc = "{{permissions_address}}"

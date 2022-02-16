@@ -35,6 +35,7 @@ import (
 
 // SetLock sets a lock on the node
 func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
+	nodepath := n.LockFilePath()
 	// check existing lock
 
 	if l, _ := n.ReadLock(ctx); l != nil {
@@ -65,7 +66,7 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 	}()
 
 	// O_EXCL to make open fail when the file already exists
-	f, err := os.OpenFile(n.LockFilePath(), os.O_EXCL|os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(nodepath, os.O_EXCL|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not create lock file")
 	}

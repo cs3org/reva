@@ -26,6 +26,7 @@ data_server_url = "http://localhost:11001/data"
 root = "/var/tmp/reva/data-0-9"
 treetime_accounting = true
 treesize_accounting = true
+permissionssvc = "localhost:10000"
 
 # we have a locally running dataprovider
 [http]
@@ -39,3 +40,4 @@ temp_folder = "/var/tmp/reva/tmp"
 root = "/var/tmp/reva/data-0-9"
 treetime_accounting = true
 treesize_accounting = true
+permissionssvc = "localhost:10000"
