@@ -202,7 +202,7 @@ func SetMultiple(filePath string, attribs map[string]string) (err error) {
 	fileLock, err = filelocks.AcquireWriteLock(filePath)
 
 	if err != nil {
-		return errors.Wrap(err, "xattrs: Can not acquired write log")
+		return errors.Wrap(err, "xattrs: Can not acquire write log")
 	}
 	defer func() {
 		rerr := filelocks.ReleaseLock(fileLock)
@@ -216,16 +216,17 @@ func SetMultiple(filePath string, attribs map[string]string) (err error) {
 	// error handling: Count if there are errors while setting the attribs.
 	// if there were any, return an error.
 	var xerrs int = 0
+	var xerr error
 	for key, val := range attribs {
-		if xerr := xattr.Set(filePath, key, []byte(val)); xerr != nil {
+		if xerr = xattr.Set(filePath, key, []byte(val)); xerr != nil {
 			// log
 			xerrs++
 		}
 	}
 	if xerrs > 0 {
-		err = errors.New("Failed to set all xattrs")
+		err = errors.Wrap(xerr, "Failed to set all xattrs")
 	}
-	return err
+	return nil
 }
 
 // Get an extended attribute value for the given key
@@ -278,12 +279,13 @@ func All(filePath string) (attribs map[string]string, err error) {
 	}
 
 	var xerrs int = 0
-
+	var xerr error
 	// error handling: Count if there are errors while reading all attribs.
 	// if there were any, return an error.
 	attribs = make(map[string]string, len(attrNames))
 	for _, name := range attrNames {
-		if val, xerr := xattr.Get(filePath, name); xerr != nil {
+		var val []byte
+		if val, xerr = xattr.Get(filePath, name); xerr != nil {
 			xerrs++
 		} else {
 			attribs[name] = string(val)
@@ -291,7 +293,7 @@ func All(filePath string) (attribs map[string]string, err error) {
 	}
 
 	if xerrs > 0 {
-		err = errors.New("Failed to read all xattrs")
+		err = errors.Wrap(xerr, "Failed to read all xattrs")
 	}
 
 	return attribs, err

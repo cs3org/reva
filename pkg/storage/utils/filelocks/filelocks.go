@@ -21,6 +21,7 @@ package filelocks
 import (
 	"errors"
 	"os"
+	"time"
 
 	"github.com/gofrs/flock"
 )
@@ -41,7 +42,7 @@ func FlockFile(file string) string {
 func acquireLock(file string, write bool) (*flock.Flock, error) {
 	var err error
 
-	// Create the a file to carry the log
+	// Create a file to carry the log
 	n := FlockFile(file)
 	if len(n) == 0 {
 		return nil, errors.New("lock path is empty")
@@ -49,10 +50,23 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	// Acquire the write log on the target node first.
 	lock := flock.New(n)
 
-	if write {
-		_, err = lock.TryLock()
-	} else {
-		_, err = lock.TryRLock()
+	var ok bool
+	for i := 0; i < 10; i++ {
+		if write {
+			ok, err = lock.TryLock()
+		} else {
+			ok, err = lock.TryRLock()
+		}
+
+		if ok {
+			break
+		}
+
+		time.Sleep(time.Duration(i*3) * time.Millisecond)
+	}
+
+	if !ok {
+		err = errors.New("could not acquire lock after wait")
 	}
 
 	if err != nil {
