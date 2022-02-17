@@ -31,7 +31,7 @@ func BenchmarkWrap(b *testing.B) {
 }
 
 func TestWrap(t *testing.T) {
-	expected := "c3RvcmFnZWlkOm9wYXF1ZWlk"
+	expected := "storageid" + idDelimiter + "opaqueid"
 	wrapped := wrap("storageid", "opaqueid")
 
 	if wrapped != expected {
@@ -40,7 +40,7 @@ func TestWrap(t *testing.T) {
 }
 
 func TestWrapResourceID(t *testing.T) {
-	expected := "c3RvcmFnZWlkOm9wYXF1ZWlk"
+	expected := "storageid" + idDelimiter + "opaqueid"
 	wrapped := OwnCloudResourceIDWrap(&providerv1beta1.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"})
 
 	if wrapped != expected {
@@ -50,7 +50,7 @@ func TestWrapResourceID(t *testing.T) {
 
 func BenchmarkUnwrap(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_, _ = unwrap("c3RvcmFnZWlkOm9wYXF1ZWlk")
+		_, _ = unwrap("storageid" + idDelimiter + "opaqueid")
 	}
 }
 
@@ -60,7 +60,7 @@ func TestUnwrap(t *testing.T) {
 		expected *providerv1beta1.ResourceId
 	}{
 		{
-			"c3RvcmFnZWlkOm9wYXF1ZWlk",
+			"storageid" + idDelimiter + "opaqueid",
 			&providerv1beta1.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"},
 		},
 		{
