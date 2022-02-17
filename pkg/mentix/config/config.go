@@ -40,15 +40,6 @@ type Configuration struct {
 		CriticalTypes []string `mapstructure:"critical_types"`
 	} `mapstructure:"services"`
 
-	Importers struct {
-		SiteRegistration struct {
-			Endpoint               string   `mapstructure:"endpoint"`
-			EnabledConnectors      []string `mapstructure:"enabled_connectors"`
-			IsProtected            bool     `mapstructure:"is_protected"`
-			IgnoreScienceMeshSites bool     `mapstructure:"ignore_sm_sites"`
-		} `mapstructure:"sitereg"`
-	} `mapstructure:"importers"`
-
 	Exporters struct {
 		WebAPI struct {
 			Endpoint          string   `mapstructure:"endpoint"`
