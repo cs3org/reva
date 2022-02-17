@@ -19,11 +19,11 @@
 package xattrs
 
 import (
-	"os"
 	"strconv"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/storage/utils/filelocks"
 	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -113,53 +113,6 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 	}, nil
 }
 
-// flockFile returns the flock filename for a given file name
-// it returns an empty string if the input is empty
-func flockFile(file string) string {
-	var n string
-	if len(file) > 0 {
-		n = file + ".flock"
-	}
-	return n
-}
-
-// acquireWriteLog acquires a lock on a file or directory.
-// if the parameter write is true, it gets an exclusive write lock, otherwise a shared read lock.
-// The function returns a Flock object, unlocking has to be done in the calling function.
-func acquireLock(file string, write bool) (*flock.Flock, error) {
-	var err error
-
-	// Create the a file to carry the log
-	n := flockFile(file)
-	if len(n) == 0 {
-		return nil, errors.New("Path empty")
-	}
-	// Acquire the write log on the target node first.
-	lock := flock.New(n)
-
-	if write {
-		_, err = lock.TryLock()
-	} else {
-		_, err = lock.TryRLock()
-	}
-
-	if err != nil {
-		return nil, err
-	}
-	return lock, nil
-}
-
-func releaseLock(lock *flock.Flock) error {
-	// there is a probability that if the file can not be unlocked,
-	// we also can not remove the file. We will only try to remove if it
-	// was successfully unlocked.
-	err := lock.Unlock()
-	if err == nil {
-		err = os.Remove(lock.Path())
-	}
-	return err
-}
-
 // CopyMetadata copies all extended attributes from source to target.
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
 // For the source file, a shared lock is acquired. For the target, an exclusive
@@ -168,13 +121,13 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 	var writeLock, readLock *flock.Flock
 
 	// Acquire the write log on the target node first.
-	writeLock, err = acquireLock(target, true)
+	writeLock, err = filelocks.AcquireWriteLock(target)
 
 	if err != nil {
 		return errors.Wrap(err, "xattrs: Unable to lock target to write")
 	}
 	defer func() {
-		rerr := releaseLock(writeLock)
+		rerr := filelocks.ReleaseLock(writeLock)
 
 		// if err is non nil we do not overwrite that
 		if err == nil {
@@ -183,13 +136,13 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 	}()
 
 	// now try to get a shared lock on the source
-	readLock, err = acquireLock(src, false)
+	readLock, err = filelocks.AcquireReadLock(src)
 
 	if err != nil {
 		return errors.Wrap(err, "xattrs: Unable to lock file for read")
 	}
 	defer func() {
-		rerr := releaseLock(readLock)
+		rerr := filelocks.ReleaseLock(readLock)
 
 		// if err is non nil we do not overwrite that
 		if err == nil {
@@ -246,13 +199,13 @@ func SetMultiple(filePath string, attribs map[string]string) (err error) {
 	// h, err := lockedfile.OpenFile(filePath, os.O_WRONLY, 0) // 0? Open File only workn for files ... but we want to lock dirs ... or symlinks
 	// or we append .lock to the file and use https://github.com/gofrs/flock
 	var fileLock *flock.Flock
-	fileLock, err = acquireLock(filePath, true)
+	fileLock, err = filelocks.AcquireWriteLock(filePath)
 
 	if err != nil {
 		return errors.Wrap(err, "xattrs: Can not acquired write log")
 	}
 	defer func() {
-		rerr := releaseLock(fileLock)
+		rerr := filelocks.ReleaseLock(fileLock)
 
 		// if err is non nil we do not overwrite that
 		if err == nil {
@@ -305,13 +258,13 @@ func GetInt64(filePath, key string) (int64, error) {
 func All(filePath string) (attribs map[string]string, err error) {
 	var fileLock *flock.Flock
 
-	fileLock, err = acquireLock(filePath, false)
+	fileLock, err = filelocks.AcquireReadLock(filePath)
 
 	if err != nil {
 		return nil, errors.Wrap(err, "xattrs: Unable to lock file for read")
 	}
 	defer func() {
-		rerr := releaseLock(fileLock)
+		rerr := filelocks.ReleaseLock(fileLock)
 
 		// if err is non nil we do not overwrite that
 		if err == nil {
