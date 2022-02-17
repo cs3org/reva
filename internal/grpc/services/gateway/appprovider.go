@@ -40,6 +40,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -308,9 +309,9 @@ func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {
 	return insecure, skipVerify
 }
 
-func getConn(host string, insecure, skipverify bool) (*grpc.ClientConn, error) {
-	if insecure {
-		return grpc.Dial(host, grpc.WithInsecure())
+func getConn(host string, ins, skipverify bool) (*grpc.ClientConn, error) {
+	if ins {
+		return grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	// TODO(labkode): if in the future we want client-side certificate validation,

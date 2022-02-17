@@ -44,6 +44,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -134,7 +135,7 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("Setting up GRPC towards ", "'"+opt.GrpcURI+"'").Msg("")
 
-	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithInsecure())
+	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Warn().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
 	}
