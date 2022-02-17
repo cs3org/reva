@@ -294,5 +294,5 @@ func All(filePath string) (attribs map[string]string, err error) {
 		err = errors.New("Failed to read all xattrs")
 	}
 
-	return attribs, nil
+	return attribs, err
 }
