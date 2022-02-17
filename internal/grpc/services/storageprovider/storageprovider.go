@@ -291,7 +291,9 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}, nil
 	}
 
-	if ifMatch := req.GetIfMatch(); ifMatch != "" {
+	metadata := map[string]string{}
+	ifMatch := req.GetIfMatch()
+	if ifMatch != "" {
 		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: req.Ref})
 		if err != nil {
 			return nil, err
@@ -299,7 +301,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 
 		switch sRes.Status.Code {
 		case rpc.Code_CODE_OK:
-			if sRes.Info.Etag != req.GetIfMatch() {
+			if sRes.Info.Etag != ifMatch {
 				return &provider.InitiateFileUploadResponse{
 					Status: status.NewFailedPrecondition(ctx, errors.New("etag doesn't match"), "etag doesn't match"),
 				}, nil
@@ -311,7 +313,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 				Status: sRes.Status,
 			}, nil
 		}
-
+		metadata["if-match"] = ifMatch
 	}
 
 	// FIXME these should be part of the InitiateFileUploadRequest object
@@ -321,7 +323,6 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}
 	}
 
-	metadata := map[string]string{}
 	var uploadLength int64
 	if req.Opaque != nil && req.Opaque.Map != nil {
 		if req.Opaque.Map["Upload-Length"] != nil {

@@ -124,23 +124,26 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	if metadata != nil {
-		if metadata["mtime"] != "" {
-			info.MetaData["mtime"] = metadata["mtime"]
+		if mtime, ok := metadata["mtime"]; ok {
+			info.MetaData["mtime"] = mtime
 		}
 		if _, ok := metadata["sizedeferred"]; ok {
 			info.SizeIsDeferred = true
 		}
-		if metadata["checksum"] != "" {
-			parts := strings.SplitN(metadata["checksum"], " ", 2)
+		if checksum, ok := metadata["checksum"]; ok {
+			parts := strings.SplitN(checksum, " ", 2)
 			if len(parts) != 2 {
 				return nil, errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
 			}
 			switch parts[0] {
 			case "sha1", "md5", "adler32":
-				info.MetaData["checksum"] = metadata["checksum"]
+				info.MetaData["checksum"] = checksum
 			default:
 				return nil, errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
 			}
+		}
+		if ifMatch, ok := metadata["if-match"]; ok {
+			info.MetaData["if-match"] = ifMatch
 		}
 	}
 
@@ -538,6 +541,19 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// if target exists create new version
 	versionsPath := ""
 	if fi, err = os.Stat(targetPath); err == nil {
+		// When the if-match header was set we need to check if the
+		// etag still matches before finishing the upload.
+		if ifMatch, ok := upload.info.MetaData["if-match"]; ok {
+			var targetEtag string
+			targetEtag, err = node.CalculateEtag(n.ID, fi.ModTime())
+			if err != nil {
+				return errtypes.InternalError(err.Error())
+			}
+			if ifMatch != targetEtag {
+				return errtypes.PreconditionFailed("etag doesn't match")
+			}
+		}
+
 		// FIXME move versioning to blobs ... no need to copy all the metadata! well ... it does if we want to version metadata...
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
 		versionsPath = upload.fs.lu.InternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
