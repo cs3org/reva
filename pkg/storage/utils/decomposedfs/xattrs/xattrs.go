@@ -19,6 +19,7 @@
 package xattrs
 
 import (
+	"os"
 	"strconv"
 	"strings"
 
@@ -148,12 +149,22 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	return lock, nil
 }
 
+func releaseLock(lock *flock.Flock) error {
+	// there is a probability that if the file can not be unlocked,
+	// we also can not remove the file. We will only try to remove if it
+	// was successfully unlocked.
+	err := lock.Unlock()
+	if err == nil {
+		err = os.Remove(lock.Path())
+	}
+	return err
+}
+
 // CopyMetadata copies all extended attributes from source to target.
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
 // For the source file, a shared lock is acquired. For the target, an exclusive
 // write lock is acquired.
-func CopyMetadata(src, target string, filter func(attributeName string) bool) error {
-	var err error
+func CopyMetadata(src, target string, filter func(attributeName string) bool) (err error) {
 	var writeLock, readLock *flock.Flock
 
 	// Acquire the write log on the target node first.
@@ -163,7 +174,12 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) er
 		return errors.Wrap(err, "xattrs: Unable to lock target to write")
 	}
 	defer func() {
-		err = writeLock.Unlock()
+		rerr := releaseLock(writeLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
 	}()
 
 	// now try to get a shared lock on the source
@@ -173,7 +189,12 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) er
 		return errors.Wrap(err, "xattrs: Unable to lock file for read")
 	}
 	defer func() {
-		err = readLock.Unlock()
+		rerr := releaseLock(readLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
 	}()
 
 	// both locks are established. Copy.
@@ -182,22 +203,27 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) er
 		return errors.Wrap(err, "Can not get xattr listing on src")
 	}
 
-	// FIXME: this loop assumes that all reads and writes work. The case that one val
-	// is copied, but any others not is not handled properly.
+	// error handling: We count errors of reads or writes of xattrs.
+	// if there were any read or write errors an error is returned.
+	var xerrs int = 0
+	var xerr error
 	for idx := range attrNameList {
 		attrName := attrNameList[idx]
 		if filter == nil || filter(attrName) {
 			var attrVal []byte
-			if attrVal, err = xattr.Get(src, attrName); err != nil {
-				return errors.Wrapf(err, "Can not read src attribute named %s", attrName)
+			if attrVal, xerr = xattr.Get(src, attrName); xerr != nil {
+				xerrs++
 			}
-			if err = xattr.Set(target, attrName, attrVal); err != nil {
-				return errors.Wrapf(err, "Can not write target attribute named %s", attrName)
+			if xerr = xattr.Set(target, attrName, attrVal); xerr != nil {
+				xerrs++
 			}
 		}
 	}
+	if xerrs > 0 {
+		err = errors.Wrap(xerr, "Failed to copy all xattrs, last error returned.")
+	}
 
-	return nil
+	return err
 }
 
 // Set an extended attribute key to the given value
@@ -215,25 +241,38 @@ func Set(filePath string, key string, val string) error {
 // the changes are protected with an file lock
 // If the file lock can not be acquired the function returns a
 // lock error.
-func SetMultiple(filePath string, attribs map[string]string) error {
+func SetMultiple(filePath string, attribs map[string]string) (err error) {
 
 	// h, err := lockedfile.OpenFile(filePath, os.O_WRONLY, 0) // 0? Open File only workn for files ... but we want to lock dirs ... or symlinks
 	// or we append .lock to the file and use https://github.com/gofrs/flock
-	fileLock, err := acquireLock(filePath, true)
+	var fileLock *flock.Flock
+	fileLock, err = acquireLock(filePath, true)
 
 	if err != nil {
 		return errors.Wrap(err, "xattrs: Can not acquired write log")
 	}
 	defer func() {
-		err = fileLock.Unlock()
+		rerr := releaseLock(fileLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
 	}()
 
+	// error handling: Count if there are errors while setting the attribs.
+	// if there were any, return an error.
+	var xerrs int = 0
 	for key, val := range attribs {
-		if err := xattr.Set(filePath, key, []byte(val)); err != nil {
-			return err
+		if xerr := xattr.Set(filePath, key, []byte(val)); xerr != nil {
+			// log
+			xerrs++
 		}
 	}
-	return nil
+	if xerrs > 0 {
+		err = errors.New("Failed to set all xattrs")
+	}
+	return err
 }
 
 // Get an extended attribute value for the given key
@@ -263,14 +302,21 @@ func GetInt64(filePath, key string) (int64, error) {
 
 // All reads all extended attributes for a node, protected by a
 // shared file lock
-func All(filePath string) (map[string]string, error) {
-	fileLock, err := acquireLock(filePath, false)
+func All(filePath string) (attribs map[string]string, err error) {
+	var fileLock *flock.Flock
+
+	fileLock, err = acquireLock(filePath, false)
 
 	if err != nil {
 		return nil, errors.Wrap(err, "xattrs: Unable to lock file for read")
 	}
 	defer func() {
-		err = fileLock.Unlock()
+		rerr := releaseLock(fileLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
 	}()
 
 	attrNames, err := xattr.List(filePath)
@@ -278,13 +324,21 @@ func All(filePath string) (map[string]string, error) {
 		return nil, err
 	}
 
-	attribs := make(map[string]string, len(attrNames))
+	var xerrs int = 0
+
+	// error handling: Count if there are errors while reading all attribs.
+	// if there were any, return an error.
+	attribs = make(map[string]string, len(attrNames))
 	for _, name := range attrNames {
-		val, err := xattr.Get(filePath, name)
-		if err != nil {
-			return nil, err
+		if val, xerr := xattr.Get(filePath, name); xerr != nil {
+			xerrs++
+		} else {
+			attribs[name] = string(val)
 		}
-		attribs[name] = string(val)
+	}
+
+	if xerrs > 0 {
+		err = errors.New("Failed to read all xattrs")
 	}
 
 	return attribs, nil
