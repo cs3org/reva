@@ -25,7 +25,7 @@ import (
 	"github.com/gofrs/flock"
 )
 
-// flockFile returns the flock filename for a given file name
+// FlockFile returns the flock filename for a given file name
 // it returns an empty string if the input is empty
 func FlockFile(file string) string {
 	var n string
@@ -73,6 +73,8 @@ func AcquireWriteLock(file string) (*flock.Flock, error) {
 	return acquireLock(file, true)
 }
 
+// ReleaseLock releases a lock from a file that was previously created
+// by AcquireReadLock or AcquireWriteLock.
 func ReleaseLock(lock *flock.Flock) error {
 	// there is a probability that if the file can not be unlocked,
 	// we also can not remove the file. We will only try to remove if it
