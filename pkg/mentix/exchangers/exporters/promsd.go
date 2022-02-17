@@ -56,6 +56,7 @@ const (
 	labelSiteID      = "__meta_mentix_site_id"
 	labelSiteCountry = "__meta_mentix_site_country"
 	labelType        = "__meta_mentix_type"
+	labelURL         = "__meta_mentix_url"
 	labelScheme      = "__meta_mentix_scheme"
 	labelHost        = "__meta_mentix_host"
 	labelPort        = "__meta_mentix_port"
@@ -80,6 +81,7 @@ func getScrapeTargetLabels(site *meshdata.Site, service *meshdata.Service, endpo
 		labelSiteID:      site.ID,
 		labelSiteCountry: site.CountryCode,
 		labelType:        endpoint.Type.Name,
+		labelURL:         endpoint.URL,
 		labelScheme:      endpointURL.Scheme,
 		labelHost:        endpointURL.Hostname(),
 		labelPort:        endpointURL.Port(),

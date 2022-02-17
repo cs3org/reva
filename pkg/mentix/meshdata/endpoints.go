@@ -19,6 +19,9 @@
 package meshdata
 
 const (
+	// EndpointRevad identifies the main Reva Daemon endpoint
+	EndpointRevad = "REVAD"
+
 	// EndpointGateway identifies the Gateway endpoint
 	EndpointGateway = "GATEWAY"
 	// EndpointMetrics identifies the Metrics endpoint
@@ -34,6 +37,8 @@ const (
 // GetServiceEndpoints returns an array of all service endpoint identifiers.
 func GetServiceEndpoints() []string {
 	return []string{
+		EndpointRevad,
+
 		EndpointGateway,
 		EndpointMetrics,
 		EndpointWebdav,
