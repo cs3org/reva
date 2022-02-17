@@ -351,10 +351,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 			Key:  lwShareAttrKey,
 			Val:  sysACL,
 		}
-		if err = c.SetAttr(ctx, auth, sysACLAttr, false, finfo.IsDir, path); err != nil {
-			return err
-		}
-		return nil
+		return c.SetAttr(ctx, auth, sysACLAttr, false, finfo.IsDir, path)
 	}
 
 	sysACL := a.CitrineSerialize()

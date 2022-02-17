@@ -33,9 +33,7 @@ func getlockCommand() *command {
 	cmd.Description = func() string { return "get a lock on a resource" }
 	cmd.Usage = func() string { return "Usage: getlock <resource_path>" }
 
-	cmd.ResetFlags = func() {
-		return
-	}
+	cmd.ResetFlags = func() {}
 
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
