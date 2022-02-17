@@ -28,10 +28,6 @@ type Configuration struct {
 			Scope   string `mapstructure:"scope"`
 			APIKey  string `mapstructure:"apikey"`
 		} `mapstructure:"gocdb"`
-
-		LocalFile struct {
-			File string `mapstructure:"file"`
-		} `mapstructure:"localfile"`
 	} `mapstructure:"connectors"`
 
 	UpdateInterval string `mapstructure:"update_interval"`
