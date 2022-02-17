@@ -57,9 +57,8 @@ type Configuration struct {
 		} `mapstructure:"siteloc"`
 
 		PrometheusSD struct {
-			MetricsOutputFile  string   `mapstructure:"metrics_output_file"`
-			BlackboxOutputFile string   `mapstructure:"blackbox_output_file"`
-			EnabledConnectors  []string `mapstructure:"enabled_connectors"`
+			OutputPath        string   `mapstructure:"output_path"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"promsd"`
 
 		Metrics struct {

@@ -27,4 +27,17 @@ const (
 	EndpointWebdav = "WEBDAV"
 	// EndpointOCM identifies the OCM endpoint
 	EndpointOCM = "OCM"
+	// EndpointMeshDir identifies the Mesh Directory endpoint
+	EndpointMeshDir = "MESHDIR"
 )
+
+// GetServiceEndpoints returns an array of all service endpoint identifiers.
+func GetServiceEndpoints() []string {
+	return []string{
+		EndpointGateway,
+		EndpointMetrics,
+		EndpointWebdav,
+		EndpointOCM,
+		EndpointMeshDir,
+	}
+}
