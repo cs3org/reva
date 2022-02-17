@@ -176,7 +176,7 @@ The ``master`` branch is the stable development branch. Releases from master are
 
 ### 2.x versions
 
-The ``edge`` branch is used to develop the next version of this project. The edge branch implements the CS3Apis differently and is not compatible to master. Releases from edge are tagged as 2.x.x versions following [semver](https://semver.org/).
+The ``edge`` branch is used to develop the next version of this project. The edge branch is based on a new concept named "Spaces" and a new set of the CS3APIs are being implemented, making it **not compatible** with `master` branch. Releases from `edge` are tagged as *2.x.x* versions following [semver](https://semver.org/).
 
 ## Run it using Docker
 
