@@ -51,7 +51,7 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	lock := flock.New(n)
 
 	var ok bool
-	for i := 0; i < 10; i++ {
+	for i := 1; i <= 10; i++ {
 		if write {
 			ok, err = lock.TryLock()
 		} else {
