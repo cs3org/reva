@@ -20,6 +20,7 @@ package loader
 
 import (
 	// Load core share manager drivers.
+	_ "github.com/cs3org/reva/pkg/share/manager/cs3"
 	_ "github.com/cs3org/reva/pkg/share/manager/json"
 	_ "github.com/cs3org/reva/pkg/share/manager/memory"
 	_ "github.com/cs3org/reva/pkg/share/manager/sql"

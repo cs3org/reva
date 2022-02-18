@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -40,25 +41,28 @@ import (
 
 // CS3 represents a metadata storage with a cs3 storage backend
 type CS3 struct {
-	storageProvider   provider.ProviderAPIClient
+	providerAddr      string
+	gatewayAddr       string
 	serviceUser       *user.User
+	machineAuthAPIKey string
 	dataGatewayClient *http.Client
 	SpaceRoot         *provider.ResourceId
 }
 
 // NewCS3Storage returns a new cs3 storage instance
-func NewCS3Storage(providerAddr string, serviceUser *user.User) (s Storage, err error) {
-	p, err := pool.GetStorageProviderServiceClient(providerAddr)
-	if err != nil {
-		return nil, err
-	}
-
+func NewCS3Storage(gwAddr, providerAddr, serviceUser, machineAuthAPIKey string) (s Storage, err error) {
 	c := http.DefaultClient
 
 	return &CS3{
-		storageProvider:   p,
+		providerAddr:      providerAddr,
+		gatewayAddr:       gwAddr,
 		dataGatewayClient: c,
-		serviceUser:       serviceUser,
+		machineAuthAPIKey: machineAuthAPIKey,
+		serviceUser: &user.User{
+			Id: &user.UserId{
+				OpaqueId: serviceUser,
+			},
+		},
 	}, nil
 }
 
@@ -69,13 +73,22 @@ func (cs3 *CS3) Backend() string {
 
 // Init creates the metadata space
 func (cs3 *CS3) Init(ctx context.Context) (err error) {
+	client, err := cs3.providerClient()
+	if err != nil {
+		return err
+	}
+
+	ctx, err = cs3.getAuthContext(ctx)
+	if err != nil {
+		return err
+	}
 	// FIXME change CS3 api to allow sending a space id
-	cssr, err := cs3.storageProvider.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
+	cssr, err := client.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
 				"spaceid": {
 					Decoder: "plain",
-					Value:   []byte(cs3.serviceUser.Id.OpaqueId),
+					Value:   []byte("fooobar"),
 				},
 			},
 		},
@@ -99,6 +112,11 @@ func (cs3 *CS3) Init(ctx context.Context) (err error) {
 
 // SimpleUpload uploads a file to the metadata storage
 func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []byte) error {
+	client, err := cs3.providerClient()
+	if err != nil {
+		return err
+	}
+
 	ref := provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{
 			ResourceId: cs3.SpaceRoot,
@@ -106,7 +124,7 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 		},
 	}
 
-	res, err := cs3.storageProvider.InitiateFileUpload(ctx, &ref)
+	res, err := client.InitiateFileUpload(ctx, &ref)
 	if err != nil {
 		return err
 	}
@@ -142,6 +160,11 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 
 // SimpleUpload reads a file from the metadata storage
 func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (content []byte, err error) {
+	client, err := cs3.providerClient()
+	if err != nil {
+		return nil, err
+	}
+
 	dreq := provider.InitiateFileDownloadRequest{
 		Ref: &provider.Reference{
 			ResourceId: cs3.SpaceRoot,
@@ -149,7 +172,7 @@ func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (conten
 		},
 	}
 
-	res, err := cs3.storageProvider.InitiateFileDownload(ctx, &dreq)
+	res, err := client.InitiateFileDownload(ctx, &dreq)
 	if err != nil {
 		return []byte{}, errtypes.NotFound(dreq.Ref.Path)
 	}
@@ -196,7 +219,12 @@ func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (conten
 
 // Delete deletes a path
 func (cs3 *CS3) Delete(ctx context.Context, path string) error {
-	res, err := cs3.storageProvider.Delete(ctx, &provider.DeleteRequest{
+	client, err := cs3.providerClient()
+	if err != nil {
+		return err
+	}
+
+	res, err := client.Delete(ctx, &provider.DeleteRequest{
 		Ref: &provider.Reference{
 			ResourceId: cs3.SpaceRoot,
 			Path:       utils.MakeRelativePath(path),
@@ -214,7 +242,12 @@ func (cs3 *CS3) Delete(ctx context.Context, path string) error {
 
 // ReadDir returns the entries in a given directory
 func (cs3 *CS3) ReadDir(ctx context.Context, path string) ([]string, error) {
-	res, err := cs3.storageProvider.ListContainer(ctx, &provider.ListContainerRequest{
+	client, err := cs3.providerClient()
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.ListContainer(ctx, &provider.ListContainerRequest{
 		Ref: &provider.Reference{
 			ResourceId: cs3.SpaceRoot,
 			Path:       utils.MakeRelativePath(path),
@@ -237,12 +270,17 @@ func (cs3 *CS3) ReadDir(ctx context.Context, path string) ([]string, error) {
 
 // MakeDirIfNotExist will create a root node in the metadata storage. Requires an authenticated context.
 func (cs3 *CS3) MakeDirIfNotExist(ctx context.Context, folder string) error {
+	client, err := cs3.providerClient()
+	if err != nil {
+		return err
+	}
+
 	var rootPathRef = &provider.Reference{
 		ResourceId: cs3.SpaceRoot,
 		Path:       utils.MakeRelativePath(folder),
 	}
 
-	resp, err := cs3.storageProvider.Stat(ctx, &provider.StatRequest{
+	resp, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: rootPathRef,
 	})
 
@@ -251,7 +289,7 @@ func (cs3 *CS3) MakeDirIfNotExist(ctx context.Context, folder string) error {
 	}
 
 	if resp.Status.Code == rpc.Code_CODE_NOT_FOUND {
-		_, err := cs3.storageProvider.CreateContainer(ctx, &provider.CreateContainerRequest{
+		_, err := client.CreateContainer(ctx, &provider.CreateContainerRequest{
 			Ref: rootPathRef,
 		})
 
@@ -287,4 +325,30 @@ func (cs3 *CS3) ResolveSymlink(ctx context.Context, name string) (string, error)
 	}
 
 	return string(b), err
+}
+
+func (cs3 *CS3) providerClient() (provider.ProviderAPIClient, error) {
+	return pool.GetStorageProviderServiceClient(cs3.providerAddr)
+}
+
+func (cs3 *CS3) getAuthContext(ctx context.Context) (context.Context, error) {
+	client, err := pool.GetGatewayServiceClient(cs3.gatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	authCtx := ctxpkg.ContextSetUser(context.Background(), cs3.serviceUser)
+	authRes, err := client.Authenticate(authCtx, &gateway.AuthenticateRequest{
+		Type:         "machine",
+		ClientId:     "userid:" + cs3.serviceUser.Id.OpaqueId,
+		ClientSecret: cs3.machineAuthAPIKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if authRes.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		return nil, errtypes.NewErrtypeFromStatus(authRes.GetStatus())
+	}
+	authCtx = metadata.AppendToOutgoingContext(authCtx, ctxpkg.TokenHeader, authRes.Token)
+	return authCtx, nil
 }
