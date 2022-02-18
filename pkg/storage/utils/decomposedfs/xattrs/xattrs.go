@@ -226,7 +226,7 @@ func SetMultiple(filePath string, attribs map[string]string) (err error) {
 	if xerrs > 0 {
 		err = errors.Wrap(xerr, "Failed to set all xattrs")
 	}
-	return nil
+	return err
 }
 
 // Get an extended attribute value for the given key
