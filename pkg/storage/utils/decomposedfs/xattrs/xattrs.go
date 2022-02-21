@@ -130,7 +130,7 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 		rerr := filelocks.ReleaseLock(writeLock)
 
 		// if err is non nil we do not overwrite that
-		if err == nil {
+		if err == nil && !isNotFoundError(rerr) {
 			err = rerr
 		}
 	}()
@@ -145,7 +145,7 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 		rerr := filelocks.ReleaseLock(readLock)
 
 		// if err is non nil we do not overwrite that
-		if err == nil {
+		if err == nil && !isNotFoundError(rerr) {
 			err = rerr
 		}
 	}()
@@ -208,7 +208,7 @@ func SetMultiple(filePath string, attribs map[string]string) (err error) {
 		rerr := filelocks.ReleaseLock(fileLock)
 
 		// if err is non nil we do not overwrite that
-		if err == nil {
+		if err == nil && !isNotFoundError(rerr) {
 			err = rerr
 		}
 	}()
@@ -268,7 +268,7 @@ func All(filePath string) (attribs map[string]string, err error) {
 		rerr := filelocks.ReleaseLock(fileLock)
 
 		// if err is non nil we do not overwrite that
-		if err == nil {
+		if err == nil && !isNotFoundError(rerr) {
 			err = rerr
 		}
 	}()
@@ -297,4 +297,12 @@ func All(filePath string) (attribs map[string]string, err error) {
 	}
 
 	return attribs, err
+}
+
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return strings.Contains(err.Error(), "no such file or directory")
 }
