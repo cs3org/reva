@@ -28,14 +28,27 @@ func getTypeFQN(t interface{}) string {
 }
 
 func valueOf(v interface{}, field string) string {
-	r := reflect.ValueOf(v)
-	f := reflect.Indirect(r).FieldByName(field)
+	parts := strings.Split(field, ".")
+	for i, part := range parts {
+		r := reflect.ValueOf(v)
+		if r.Kind() == reflect.Ptr {
+			r = r.Elem()
+		}
+		f := reflect.Indirect(r).FieldByName(part)
+		if f.Kind() == reflect.Ptr {
+			f = f.Elem()
+		}
 
-	if f.Kind() == reflect.String {
-		return f.String()
+		switch {
+		case f.Kind() == reflect.Struct && i != len(parts)-1:
+			v = f.Interface()
+		case f.Kind() == reflect.String:
+			return f.String()
+		case f.IsZero():
+			return ""
+		default:
+			return strconv.Itoa(int(f.Int()))
+		}
 	}
-	if f.IsZero() {
-		return ""
-	}
-	return strconv.Itoa(int(f.Int()))
+	return ""
 }
