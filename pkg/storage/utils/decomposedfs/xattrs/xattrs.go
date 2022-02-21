@@ -130,7 +130,7 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 		rerr := filelocks.ReleaseLock(writeLock)
 
 		// if err is non nil we do not overwrite that
-		if err == nil && !isNotFoundError(rerr) {
+		if err == nil && !errors.Is(rerr, fs.ErrNotExist) {
 			err = rerr
 		}
 	}()
