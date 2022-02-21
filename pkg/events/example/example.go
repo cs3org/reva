@@ -22,7 +22,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/asim/go-micro/plugins/events/nats/v4"
+	"github.com/asim/go-micro/plugins/events/natsjs/v4"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/example/consumer"
 	"github.com/cs3org/reva/v2/pkg/events/example/publisher"
@@ -32,7 +32,9 @@ import (
 // Simple example of an event workflow
 func main() {
 	// start a server
-	Server()
+	go Server()
+
+	time.Sleep(5 * time.Second)
 
 	// obtain a client
 	c := Client()
@@ -53,7 +55,11 @@ func main() {
 
 // Server generates a nats server
 func Server() {
-	err := server.RunNatsServer()
+	err := server.RunNatsServer(
+		server.ClusterID("test-cluster"),
+		server.Host("127.0.0.1"),
+		server.Port(4222),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -61,7 +67,10 @@ func Server() {
 
 // Client builds a nats client
 func Client() events.Stream {
-	c, err := server.NewNatsStream(nats.Address("127.0.0.1:9233"), nats.ClusterID("test-cluster"))
+	c, err := server.NewNatsStream(
+		natsjs.Address("127.0.0.1:4222"),
+		natsjs.ClusterID("test-cluster"),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
