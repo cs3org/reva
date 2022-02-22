@@ -25,7 +25,7 @@ import (
 type Storage interface {
 	Backend() string
 
-	Init(ctx context.Context) (err error)
+	Init(name string, ctx context.Context) (err error)
 	SimpleUpload(ctx context.Context, uploadpath string, content []byte) error
 	SimpleDownload(ctx context.Context, path string) ([]byte, error)
 	Delete(ctx context.Context, path string) error

@@ -72,7 +72,7 @@ func (cs3 *CS3) Backend() string {
 }
 
 // Init creates the metadata space
-func (cs3 *CS3) Init(ctx context.Context) (err error) {
+func (cs3 *CS3) Init(spaceid string, ctx context.Context) (err error) {
 	client, err := cs3.providerClient()
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func (cs3 *CS3) Init(ctx context.Context) (err error) {
 			Map: map[string]*types.OpaqueEntry{
 				"spaceid": {
 					Decoder: "plain",
-					Value:   []byte("fooobar"),
+					Value:   []byte(spaceid),
 				},
 			},
 		},

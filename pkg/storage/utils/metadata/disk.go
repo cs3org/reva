@@ -38,7 +38,7 @@ func NewDiskStorage(dataDir string) (s Storage, err error) {
 }
 
 // Init creates the metadata space
-func (disk *Disk) Init(_ context.Context) (err error) {
+func (disk *Disk) Init(_ string, _ context.Context) (err error) {
 	return os.MkdirAll(disk.dataDir, 0777)
 }
 
