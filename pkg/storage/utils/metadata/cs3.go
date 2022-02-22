@@ -116,6 +116,10 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 	if err != nil {
 		return err
 	}
+	ctx, err = cs3.getAuthContext(ctx)
+	if err != nil {
+		return err
+	}
 
 	ref := provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{
@@ -161,6 +165,10 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 // SimpleUpload reads a file from the metadata storage
 func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (content []byte, err error) {
 	client, err := cs3.providerClient()
+	if err != nil {
+		return nil, err
+	}
+	ctx, err = cs3.getAuthContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -223,6 +231,10 @@ func (cs3 *CS3) Delete(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
+	ctx, err = cs3.getAuthContext(ctx)
+	if err != nil {
+		return err
+	}
 
 	res, err := client.Delete(ctx, &provider.DeleteRequest{
 		Ref: &provider.Reference{
@@ -243,6 +255,10 @@ func (cs3 *CS3) Delete(ctx context.Context, path string) error {
 // ReadDir returns the entries in a given directory
 func (cs3 *CS3) ReadDir(ctx context.Context, path string) ([]string, error) {
 	client, err := cs3.providerClient()
+	if err != nil {
+		return nil, err
+	}
+	ctx, err = cs3.getAuthContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -271,6 +287,10 @@ func (cs3 *CS3) ReadDir(ctx context.Context, path string) ([]string, error) {
 // MakeDirIfNotExist will create a root node in the metadata storage. Requires an authenticated context.
 func (cs3 *CS3) MakeDirIfNotExist(ctx context.Context, folder string) error {
 	client, err := cs3.providerClient()
+	if err != nil {
+		return err
+	}
+	ctx, err = cs3.getAuthContext(ctx)
 	if err != nil {
 		return err
 	}
