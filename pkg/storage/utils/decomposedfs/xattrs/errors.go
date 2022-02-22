@@ -21,13 +21,14 @@ package xattrs
 import (
 	"syscall"
 
+	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
 // IsNotExist checks if there is a os not exists error buried inside the xattr error,
 // as we cannot just use os.IsNotExist().
 func IsNotExist(err error) bool {
-	if xerr, ok := err.(*xattr.Error); ok {
+	if xerr, ok := errors.Cause(err).(*xattr.Error); ok {
 		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
 			return serr == syscall.ENOENT
 		}
@@ -38,7 +39,7 @@ func IsNotExist(err error) bool {
 // IsAttrUnset checks the xattr.ENOATTR from the xattr package which redifines it as ENODATA on platforms that do not natively support it (eg. linux)
 // see https://github.com/pkg/xattr/blob/8725d4ccc0fcef59c8d9f0eaf606b3c6f962467a/xattr_linux.go#L19-L22
 func IsAttrUnset(err error) bool {
-	if xerr, ok := err.(*xattr.Error); ok {
+	if xerr, ok := errors.Cause(err).(*xattr.Error); ok {
 		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
 			return serr == xattr.ENOATTR
 		}
