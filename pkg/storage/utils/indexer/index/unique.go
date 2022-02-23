@@ -15,7 +15,7 @@ import (
 // Unique are fields for an index of type non_unique.
 type Unique struct {
 	caseInsensitive bool
-	indexBy         string
+	indexBy         option.IndexBy
 	typeName        string
 	filesDir        string
 	indexBaseDir    string
@@ -39,7 +39,7 @@ func NewUniqueIndexWithOptions(storage metadata.Storage, o ...option.Option) Ind
 		typeName:        opts.TypeName,
 		filesDir:        opts.FilesDir,
 		indexBaseDir:    path.Join(opts.Prefix, "index."+storage.Backend()),
-		indexRootDir:    path.Join(opts.Prefix, "index."+storage.Backend(), strings.Join([]string{"unique", opts.TypeName, opts.IndexBy}, ".")),
+		indexRootDir:    path.Join(opts.Prefix, "index."+storage.Backend(), strings.Join([]string{"unique", opts.TypeName, opts.IndexBy.String()}, ".")),
 	}
 
 	return u
@@ -67,7 +67,7 @@ func (idx *Unique) Lookup(v string) ([]string, error) {
 	oldname, err := idx.storage.ResolveSymlink(context.Background(), searchPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, Key: idx.indexBy, Value: v}
+			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
 		}
 
 		return nil, err
@@ -88,7 +88,7 @@ func (idx *Unique) Add(id, v string) (string, error) {
 	newName := path.Join(idx.indexRootDir, v)
 	if err := idx.storage.CreateSymlink(context.Background(), target, newName); err != nil {
 		if os.IsExist(err) {
-			return "", &idxerrs.AlreadyExistsErr{TypeName: idx.typeName, Key: idx.indexBy, Value: v}
+			return "", &idxerrs.AlreadyExistsErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
 		}
 
 		return "", err
@@ -109,7 +109,7 @@ func (idx *Unique) Remove(_ string, v string) error {
 	_, err := idx.storage.ResolveSymlink(context.Background(), searchPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, Key: idx.indexBy, Value: v}
+			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
 		}
 
 		return err
@@ -165,7 +165,7 @@ func (idx *Unique) Search(pattern string) ([]string, error) {
 	}
 
 	if len(matches) == 0 {
-		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, Key: idx.indexBy, Value: pattern}
+		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: pattern}
 	}
 
 	return matches, nil
@@ -177,7 +177,7 @@ func (idx *Unique) CaseInsensitive() bool {
 }
 
 // IndexBy undocumented.
-func (idx *Unique) IndexBy() string {
+func (idx *Unique) IndexBy() option.IndexBy {
 	return idx.indexBy
 }
 

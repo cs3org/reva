@@ -1,7 +1,10 @@
 package indexer
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
 )
 
 func Test_getTypeFQN(t *testing.T) {
@@ -29,7 +32,7 @@ func Test_getTypeFQN(t *testing.T) {
 
 func Test_valueOf(t *testing.T) {
 	type nestedDeeplyT struct {
-		val string
+		Val string
 	}
 	type nestedT struct {
 		Deeply nestedDeeplyT
@@ -39,21 +42,31 @@ func Test_valueOf(t *testing.T) {
 		Nested nestedT
 	}
 	type args struct {
-		v     interface{}
-		field string
+		v       interface{}
+		indexBy option.IndexBy
 	}
 	tests := []struct {
 		name string
 		args args
 		want string
 	}{
-		{name: "ByValue", args: args{v: someT{val: "hello"}, field: "val"}, want: "hello"},
-		{name: "ByRef", args: args{v: &someT{val: "hello"}, field: "val"}, want: "hello"},
-		{name: "nested", args: args{v: &someT{Nested: nestedT{Deeply: nestedDeeplyT{val: "nestedHello"}}}, field: "Nested.Deeply.val"}, want: "nestedHello"},
+		{name: "ByValue", args: args{v: someT{val: "hello"}, indexBy: option.IndexByField("val")}, want: "hello"},
+		{name: "ByRef", args: args{v: &someT{val: "hello"}, indexBy: option.IndexByField("val")}, want: "hello"},
+		{name: "nested", args: args{v: &someT{Nested: nestedT{Deeply: nestedDeeplyT{Val: "nestedHello"}}}, indexBy: option.IndexByField("Nested.Deeply.Val")}, want: "nestedHello"},
+		{name: "using a indexFunc", args: args{v: &someT{Nested: nestedT{Deeply: nestedDeeplyT{Val: "nestedHello"}}}, indexBy: option.IndexByFunc{
+			Name: "neestedDeeplyVal",
+			Func: func(i interface{}) (string, error) {
+				t, ok := i.(*someT)
+				if !ok {
+					return "", fmt.Errorf("booo")
+				}
+				return t.Nested.Deeply.Val, nil
+			},
+		}}, want: "nestedHello"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := valueOf(tt.args.v, tt.args.field); got != tt.want {
+			if got, err := valueOf(tt.args.v, tt.args.indexBy); got != tt.want || err != nil {
 				t.Errorf("valueOf() = %v, want %v", got, tt.want)
 			}
 		})

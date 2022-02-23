@@ -267,10 +267,11 @@ func (cs3 *CS3) ReadDir(ctx context.Context, path string) ([]string, error) {
 		return nil, err
 	}
 
+	relPath := utils.MakeRelativePath(path)
 	res, err := client.ListContainer(ctx, &provider.ListContainerRequest{
 		Ref: &provider.Reference{
 			ResourceId: cs3.SpaceRoot,
-			Path:       utils.MakeRelativePath(path),
+			Path:       relPath,
 		},
 	})
 

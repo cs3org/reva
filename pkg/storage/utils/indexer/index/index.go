@@ -1,5 +1,7 @@
 package index
 
+import "github.com/cs3org/reva/pkg/storage/utils/indexer/option"
+
 // Index can be implemented to create new indexer-strategies. See Unique for example.
 // Each indexer implementation is bound to one data-column (IndexBy) and a data-type (TypeName)
 type Index interface {
@@ -10,7 +12,7 @@ type Index interface {
 	Update(id, oldV, newV string) error
 	Search(pattern string) ([]string, error)
 	CaseInsensitive() bool
-	IndexBy() string
+	IndexBy() option.IndexBy
 	TypeName() string
 	FilesDir() string
 	Delete() error // Delete deletes the index folder from its storage.

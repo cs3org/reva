@@ -16,7 +16,7 @@ import (
 
 // Autoincrement are fields for an index of type autoincrement.
 type Autoincrement struct {
-	indexBy      string
+	indexBy      option.IndexBy
 	typeName     string
 	filesDir     string
 	indexBaseDir string
@@ -40,7 +40,7 @@ func NewAutoincrementIndex(storage metadata.Storage, o ...option.Option) Index {
 		filesDir:     opts.FilesDir,
 		bound:        opts.Bound,
 		indexBaseDir: path.Join(opts.Prefix, "index."+storage.Backend()),
-		indexRootDir: path.Join(opts.Prefix, "index."+storage.Backend(), strings.Join([]string{"autoincrement", opts.TypeName, opts.IndexBy}, ".")),
+		indexRootDir: path.Join(opts.Prefix, "index."+storage.Backend(), strings.Join([]string{"autoincrement", opts.TypeName, opts.IndexBy.String()}, ".")),
 	}
 
 	return u
@@ -55,7 +55,6 @@ func (idx *Autoincrement) Init() error {
 	if err := idx.storage.MakeDirIfNotExist(context.Background(), idx.indexRootDir); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -65,7 +64,7 @@ func (idx *Autoincrement) Lookup(v string) ([]string, error) {
 	oldname, err := idx.storage.ResolveSymlink(context.Background(), searchPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, Key: idx.indexBy, Value: v}
+			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
 		}
 
 		return nil, err
@@ -88,7 +87,7 @@ func (idx *Autoincrement) Add(id, v string) (string, error) {
 	}
 	if err := idx.storage.CreateSymlink(context.Background(), id, newName); err != nil {
 		if os.IsExist(err) {
-			return "", &idxerrs.AlreadyExistsErr{TypeName: idx.typeName, Key: idx.indexBy, Value: v}
+			return "", &idxerrs.AlreadyExistsErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
 		}
 
 		return "", err
@@ -106,7 +105,7 @@ func (idx *Autoincrement) Remove(_ string, v string) error {
 	_, err := idx.storage.ResolveSymlink(context.Background(), searchPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, Key: idx.indexBy, Value: v}
+			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
 		}
 
 		return err
@@ -161,7 +160,7 @@ func (idx *Autoincrement) CaseInsensitive() bool {
 }
 
 // IndexBy undocumented.
-func (idx *Autoincrement) IndexBy() string {
+func (idx *Autoincrement) IndexBy() option.IndexBy {
 	return idx.indexBy
 }
 

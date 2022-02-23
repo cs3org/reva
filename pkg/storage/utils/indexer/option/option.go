@@ -7,6 +7,25 @@ import (
 // Option defines a single option function.
 type Option func(o *Options)
 
+type IndexBy interface {
+	String() string
+}
+
+type IndexByField string
+
+func (ibf IndexByField) String() string {
+	return string(ibf)
+}
+
+type IndexByFunc struct {
+	Name string
+	Func func(v interface{}) (string, error)
+}
+
+func (ibf IndexByFunc) String() string {
+	return ibf.Name
+}
+
 // Bound represents a lower and upper bound range for an index.
 // todo: if we would like to provide an upper bound then we would need to deal with ranges, in which case this is why the
 // upper bound attribute is here.
@@ -20,7 +39,7 @@ type Options struct {
 	Bound           *Bound
 
 	TypeName string
-	IndexBy  string
+	IndexBy  IndexBy
 	FilesDir string
 	Prefix   string
 
@@ -49,7 +68,7 @@ func WithTypeName(val string) Option {
 }
 
 // WithIndexBy sets the option IndexBy.
-func WithIndexBy(val string) Option {
+func WithIndexBy(val IndexBy) Option {
 	return func(o *Options) {
 		o.IndexBy = val
 	}

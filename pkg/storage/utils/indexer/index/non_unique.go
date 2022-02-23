@@ -15,7 +15,7 @@ import (
 // NonUnique are fields for an index of type non_unique.
 type NonUnique struct {
 	caseInsensitive bool
-	indexBy         string
+	indexBy         option.IndexBy
 	typeName        string
 	filesDir        string
 	indexBaseDir    string
@@ -46,7 +46,7 @@ func NewNonUniqueIndexWithOptions(storage metadata.Storage, o ...option.Option) 
 		typeName:        opts.TypeName,
 		filesDir:        opts.FilesDir,
 		indexBaseDir:    path.Join(opts.Prefix, "index."+storage.Backend()),
-		indexRootDir:    path.Join(opts.Prefix, "index."+storage.Backend(), strings.Join([]string{"non_unique", opts.TypeName, opts.IndexBy}, ".")),
+		indexRootDir:    path.Join(opts.Prefix, "index."+storage.Backend(), strings.Join([]string{"non_unique", opts.TypeName, opts.IndexBy.String()}, ".")),
 	}
 }
 
@@ -98,7 +98,7 @@ func (idx *NonUnique) Add(id, v string) (string, error) {
 
 	if err := idx.storage.CreateSymlink(context.Background(), id, path.Join(newName, id)); err != nil {
 		if os.IsExist(err) {
-			return "", &idxerrs.AlreadyExistsErr{TypeName: idx.typeName, Key: idx.indexBy, Value: v}
+			return "", &idxerrs.AlreadyExistsErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
 		}
 
 		return "", err
@@ -190,7 +190,7 @@ func (idx *NonUnique) Search(pattern string) ([]string, error) {
 	}
 
 	if len(matches) == 0 {
-		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, Key: idx.indexBy, Value: pattern}
+		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: pattern}
 	}
 
 	return matches, nil
@@ -202,7 +202,7 @@ func (idx *NonUnique) CaseInsensitive() bool {
 }
 
 // IndexBy undocumented.
-func (idx *NonUnique) IndexBy() string {
+func (idx *NonUnique) IndexBy() option.IndexBy {
 	return idx.indexBy
 }
 

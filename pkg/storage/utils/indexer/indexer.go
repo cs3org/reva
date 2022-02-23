@@ -56,7 +56,7 @@ func (i *Indexer) Reset() error {
 }
 
 // AddIndex adds a new index to the indexer receiver.
-func (i *Indexer) AddIndex(t interface{}, indexBy, pkName, entityDirName, indexType string, bound *option.Bound, caseInsensitive bool) error {
+func (i *Indexer) AddIndex(t interface{}, indexBy option.IndexBy, pkName, entityDirName, indexType string, bound *option.Bound, caseInsensitive bool) error {
 	var idx index.Index
 
 	var f func(metadata.Storage, ...option.Option) index.Index
@@ -75,6 +75,7 @@ func (i *Indexer) AddIndex(t interface{}, indexBy, pkName, entityDirName, indexT
 		option.CaseInsensitive(caseInsensitive),
 		option.WithBounds(bound),
 		option.WithIndexBy(indexBy),
+		option.WithTypeName(getTypeFQN(t)),
 	)
 
 	i.indices.addIndex(getTypeFQN(t), pkName, idx)
@@ -92,8 +93,14 @@ func (i *Indexer) Add(t interface{}) ([]IdxAddResult, error) {
 	if fields, ok := i.indices[typeName]; ok {
 		for _, indices := range fields.IndicesByField {
 			for _, idx := range indices {
-				pkVal := valueOf(t, fields.PKFieldName)
-				idxByVal := valueOf(t, idx.IndexBy())
+				pkVal, err := valueOf(t, option.IndexByField(fields.PKFieldName))
+				if err != nil {
+					return []IdxAddResult{}, err
+				}
+				idxByVal, err := valueOf(t, idx.IndexBy())
+				if err != nil {
+					return []IdxAddResult{}, err
+				}
 				value, err := idx.Add(pkVal, idxByVal)
 				if err != nil {
 					return []IdxAddResult{}, err
@@ -101,7 +108,7 @@ func (i *Indexer) Add(t interface{}) ([]IdxAddResult, error) {
 				if value == "" {
 					continue
 				}
-				results = append(results, IdxAddResult{Field: idx.IndexBy(), Value: value})
+				results = append(results, IdxAddResult{Field: idx.IndexBy().String(), Value: value})
 			}
 		}
 	}
@@ -110,7 +117,7 @@ func (i *Indexer) Add(t interface{}) ([]IdxAddResult, error) {
 }
 
 // FindBy finds a value on an index by field and value.
-func (i *Indexer) FindBy(t interface{}, field string, val string) ([]string, error) {
+func (i *Indexer) FindBy(t interface{}, findBy, val string) ([]string, error) {
 	typeName := getTypeFQN(t)
 
 	i.mu.RLock(typeName)
@@ -118,7 +125,7 @@ func (i *Indexer) FindBy(t interface{}, field string, val string) ([]string, err
 
 	resultPaths := make([]string, 0)
 	if fields, ok := i.indices[typeName]; ok {
-		for _, idx := range fields.IndicesByField[strcase.ToCamel(field)] {
+		for _, idx := range fields.IndicesByField[strcase.ToCamel(findBy)] {
 			idxVal := val
 			res, err := idx.Lookup(idxVal)
 			if err != nil {
@@ -154,8 +161,14 @@ func (i *Indexer) Delete(t interface{}) error {
 	if fields, ok := i.indices[typeName]; ok {
 		for _, indices := range fields.IndicesByField {
 			for _, idx := range indices {
-				pkVal := valueOf(t, fields.PKFieldName)
-				idxByVal := valueOf(t, idx.IndexBy())
+				pkVal, err := valueOf(t, option.IndexByField(fields.PKFieldName))
+				if err != nil {
+					return err
+				}
+				idxByVal, err := valueOf(t, idx.IndexBy())
+				if err != nil {
+					return err
+				}
 				if err := idx.Remove(pkVal, idxByVal); err != nil {
 					return err
 				}
@@ -214,9 +227,18 @@ func (i *Indexer) Update(from, to interface{}) error {
 
 	if fields, ok := i.indices[typeNameFrom]; ok {
 		for fName, indices := range fields.IndicesByField {
-			oldV := valueOf(from, fName)
-			newV := valueOf(to, fName)
-			pkVal := valueOf(from, fields.PKFieldName)
+			oldV, err := valueOf(from, option.IndexByField(fName))
+			if err != nil {
+				return err
+			}
+			newV, err := valueOf(to, option.IndexByField(fName))
+			if err != nil {
+				return err
+			}
+			pkVal, err := valueOf(from, option.IndexByField(fields.PKFieldName))
+			if err != nil {
+				return err
+			}
 			for _, idx := range indices {
 				if oldV == newV {
 					continue

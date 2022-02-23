@@ -6,12 +6,10 @@ import (
 	"path"
 	"testing"
 
-	"github.com/owncloud/ocis/ocis-pkg/indexer/option"
-
-	"github.com/owncloud/ocis/ocis-pkg/indexer/config"
-	_ "github.com/owncloud/ocis/ocis-pkg/indexer/index/cs3"
-	_ "github.com/owncloud/ocis/ocis-pkg/indexer/index/disk"
-	. "github.com/owncloud/ocis/ocis-pkg/indexer/test"
+	_ "github.com/cs3org/reva/pkg/storage/utils/indexer/index"
+	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
+	. "github.com/cs3org/reva/pkg/storage/utils/indexer/test"
+	"github.com/cs3org/reva/pkg/storage/utils/metadata"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -52,7 +50,7 @@ func TestIndexer_Disk_FindByWithUniqueIndex(t *testing.T) {
 	assert.NoError(t, err)
 	indexer := createDiskIndexer(dataDir)
 
-	err = indexer.AddIndex(&User{}, "UserName", "ID", "users", "unique", nil, false)
+	err = indexer.AddIndex(&User{}, option.IndexByField("UserName"), "ID", "users", "unique", nil, false)
 	assert.NoError(t, err)
 
 	u := &User{ID: "abcdefg-123", UserName: "mikey", Email: "mikey@example.com"}
@@ -71,7 +69,7 @@ func TestIndexer_Disk_AddWithUniqueIndex(t *testing.T) {
 	assert.NoError(t, err)
 	indexer := createDiskIndexer(dataDir)
 
-	err = indexer.AddIndex(&User{}, "UserName", "ID", "users", "unique", nil, false)
+	err = indexer.AddIndex(&User{}, option.IndexByField("UserName"), "ID", "users", "unique", nil, false)
 	assert.NoError(t, err)
 
 	u := &User{ID: "abcdefg-123", UserName: "mikey", Email: "mikey@example.com"}
@@ -86,7 +84,7 @@ func TestIndexer_Disk_AddWithNonUniqueIndex(t *testing.T) {
 	assert.NoError(t, err)
 	indexer := createDiskIndexer(dataDir)
 
-	err = indexer.AddIndex(&Pet{}, "Kind", "ID", "pets", "non_unique", nil, false)
+	err = indexer.AddIndex(&Pet{}, option.IndexByField("Kind"), "ID", "pets", "non_unique", nil, false)
 	assert.NoError(t, err)
 
 	pet1 := Pet{ID: "goefe-789", Kind: "Hog", Color: "Green", Name: "Dicky"}
@@ -111,7 +109,7 @@ func TestIndexer_Disk_AddWithAutoincrementIndex(t *testing.T) {
 	assert.NoError(t, err)
 	indexer := createDiskIndexer(dataDir)
 
-	err = indexer.AddIndex(&User{}, "UID", "ID", "users", "autoincrement", &option.Bound{Lower: 5}, false)
+	err = indexer.AddIndex(&User{}, option.IndexByField("UID"), "ID", "users", "autoincrement", &option.Bound{Lower: 5}, false)
 	assert.NoError(t, err)
 
 	res1, err := indexer.Add(Data["users"][0])
@@ -137,7 +135,7 @@ func TestIndexer_Disk_DeleteWithNonUniqueIndex(t *testing.T) {
 	assert.NoError(t, err)
 	indexer := createDiskIndexer(dataDir)
 
-	err = indexer.AddIndex(&Pet{}, "Kind", "ID", "pets", "non_unique", nil, false)
+	err = indexer.AddIndex(&Pet{}, option.IndexByField("Kind"), "ID", "pets", "non_unique", nil, false)
 	assert.NoError(t, err)
 
 	pet1 := Pet{ID: "goefe-789", Kind: "Hog", Color: "Green", Name: "Dicky"}
@@ -160,7 +158,7 @@ func TestIndexer_Disk_SearchWithNonUniqueIndex(t *testing.T) {
 	assert.NoError(t, err)
 	indexer := createDiskIndexer(dataDir)
 
-	err = indexer.AddIndex(&Pet{}, "Name", "ID", "pets", "non_unique", nil, false)
+	err = indexer.AddIndex(&Pet{}, option.IndexByField("Name"), "ID", "pets", "non_unique", nil, false)
 	assert.NoError(t, err)
 
 	pet1 := Pet{ID: "goefe-789", Kind: "Hog", Color: "Green", Name: "Dicky"}
@@ -184,10 +182,10 @@ func TestIndexer_Disk_UpdateWithUniqueIndex(t *testing.T) {
 	assert.NoError(t, err)
 	indexer := createDiskIndexer(dataDir)
 
-	err = indexer.AddIndex(&User{}, "UserName", "ID", "users", "unique", nil, false)
+	err = indexer.AddIndex(&User{}, option.IndexByField("UserName"), "ID", "users", "unique", nil, false)
 	assert.NoError(t, err)
 
-	err = indexer.AddIndex(&User{}, "Email", "ID", "users", "unique", nil, false)
+	err = indexer.AddIndex(&User{}, option.IndexByField("Email"), "ID", "users", "unique", nil, false)
 	assert.NoError(t, err)
 
 	user1 := &User{ID: "abcdefg-123", UserName: "mikey", Email: "mikey@example.com"}
@@ -237,7 +235,7 @@ func TestIndexer_Disk_UpdateWithNonUniqueIndex(t *testing.T) {
 	assert.NoError(t, err)
 	indexer := createDiskIndexer(dataDir)
 
-	err = indexer.AddIndex(&Pet{}, "Name", "ID", "pets", "non_unique", nil, false)
+	err = indexer.AddIndex(&Pet{}, option.IndexByField("Name"), "ID", "pets", "non_unique", nil, false)
 	assert.NoError(t, err)
 
 	pet1 := Pet{ID: "goefe-789", Kind: "Hog", Color: "Green", Name: "Dicky"}
@@ -258,13 +256,13 @@ func TestQueryDiskImpl(t *testing.T) {
 	indexer := createDiskIndexer(dataDir)
 	ctx := context.Background()
 
-	err = indexer.AddIndex(&Account{}, "OnPremisesSamAccountName", "ID", "accounts", "non_unique", nil, false)
+	err = indexer.AddIndex(&Account{}, option.IndexByField("OnPremisesSamAccountName"), "ID", "accounts", "non_unique", nil, false)
 	assert.NoError(t, err)
 
-	err = indexer.AddIndex(&Account{}, "Mail", "ID", "accounts", "non_unique", nil, false)
+	err = indexer.AddIndex(&Account{}, option.IndexByField("Mail"), "ID", "accounts", "non_unique", nil, false)
 	assert.NoError(t, err)
 
-	err = indexer.AddIndex(&Account{}, "ID", "ID", "accounts", "non_unique", nil, false)
+	err = indexer.AddIndex(&Account{}, option.IndexByField("ID"), "ID", "accounts", "non_unique", nil, false)
 	assert.NoError(t, err)
 
 	acc := Account{
@@ -300,12 +298,10 @@ func TestQueryDiskImpl(t *testing.T) {
 }
 
 func createDiskIndexer(dataDir string) *Indexer {
-	return CreateIndexer(&config.Config{
-		Repo: config.Repo{
-			Backend: "disk",
-			Disk: config.Disk{
-				Path: dataDir,
-			},
-		},
-	})
+	storage, err := metadata.NewDiskStorage(dataDir)
+	if err != nil {
+		return nil
+	}
+
+	return CreateIndexer(storage)
 }
