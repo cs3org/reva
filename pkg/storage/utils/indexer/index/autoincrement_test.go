@@ -34,12 +34,12 @@ func TestNext(t *testing.T) {
 	scenarios := []struct {
 		name     string
 		expected int
-		indexBy  string
+		indexBy  option.IndexBy
 	}{
 		{
 			name:     "get next value",
 			expected: 0,
-			indexBy:  "Number",
+			indexBy:  option.IndexByField("Number"),
 		},
 	}
 
@@ -95,13 +95,13 @@ func TestLowerBound(t *testing.T) {
 	scenarios := []struct {
 		name     string
 		expected int
-		indexBy  string
+		indexBy  option.IndexBy
 		entity   interface{}
 	}{
 		{
 			name:     "get next value with a lower bound specified",
 			expected: 0,
-			indexBy:  "Number",
+			indexBy:  option.IndexByField("Number"),
 		},
 	}
 
@@ -175,7 +175,7 @@ func TestAdd(t *testing.T) {
 		}),
 		option.WithFilesDir(filepath.Join(tmpDir, "data")),
 		option.WithTypeName("owncloud.Account"),
-		option.WithIndexBy("UidNumber"),
+		option.WithIndexBy(option.IndexByField("UidNumber")),
 	)
 
 	err = i.Init()
@@ -210,7 +210,7 @@ func BenchmarkAdd(b *testing.B) {
 		}),
 		option.WithFilesDir(filepath.Join(tmpDir, "data")),
 		option.WithTypeName("LambdaType"),
-		option.WithIndexBy("Number"),
+		option.WithIndexBy(option.IndexByField("Number")),
 	)
 
 	err = i.Init()

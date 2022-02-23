@@ -32,7 +32,7 @@ import (
 )
 
 func TestUniqueLookupSingleEntry(t *testing.T) {
-	uniq, dataDir := getUniqueIdxSut(t, "Email", User{})
+	uniq, dataDir := getUniqueIdxSut(t, option.IndexByField("Email"), User{})
 	filesDir := path.Join(dataDir, "users")
 
 	t.Log("existing lookup")
@@ -52,7 +52,7 @@ func TestUniqueLookupSingleEntry(t *testing.T) {
 }
 
 func TestUniqueUniqueConstraint(t *testing.T) {
-	uniq, dataDir := getUniqueIdxSut(t, "Email", User{})
+	uniq, dataDir := getUniqueIdxSut(t, option.IndexByField("Email"), User{})
 
 	_, err := uniq.Add("abcdefg-123", "mikey@example.com")
 	assert.Error(t, err)
@@ -62,7 +62,7 @@ func TestUniqueUniqueConstraint(t *testing.T) {
 }
 
 func TestUniqueRemove(t *testing.T) {
-	uniq, dataDir := getUniqueIdxSut(t, "Email", User{})
+	uniq, dataDir := getUniqueIdxSut(t, option.IndexByField("Email"), User{})
 
 	err := uniq.Remove("", "mikey@example.com")
 	assert.NoError(t, err)
@@ -75,7 +75,7 @@ func TestUniqueRemove(t *testing.T) {
 }
 
 func TestUniqueUpdate(t *testing.T) {
-	uniq, dataDir := getUniqueIdxSut(t, "Email", User{})
+	uniq, dataDir := getUniqueIdxSut(t, option.IndexByField("Email"), User{})
 
 	t.Log("successful update")
 	err := uniq.Update("", "mikey@example.com", "mikey2@example.com")
@@ -90,7 +90,7 @@ func TestUniqueUpdate(t *testing.T) {
 }
 
 func TestUniqueIndexSearch(t *testing.T) {
-	sut, dataDir := getUniqueIdxSut(t, "Email", User{})
+	sut, dataDir := getUniqueIdxSut(t, option.IndexByField("Email"), User{})
 
 	res, err := sut.Search("j*@example.com")
 
@@ -112,7 +112,7 @@ func TestErrors(t *testing.T) {
 	assert.True(t, errors.IsNotFoundErr(&errors.NotFoundErr{}))
 }
 
-func getUniqueIdxSut(t *testing.T, indexBy string, entityType interface{}) (index.Index, string) {
+func getUniqueIdxSut(t *testing.T, indexBy option.IndexBy, entityType interface{}) (index.Index, string) {
 	dataPath, _ := WriteIndexTestData(Data, "ID", "")
 	storage, err := metadata.NewDiskStorage(dataPath)
 	if err != nil {
