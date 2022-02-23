@@ -139,6 +139,11 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
+
+	if uid.Idp != "" && uid.Idp != m.c.Idp {
+		return nil, errtypes.NotFound("idp mismatch")
+	}
+
 	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return nil, err

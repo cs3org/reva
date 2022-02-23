@@ -131,6 +131,9 @@ func New(m map[string]interface{}) (group.Manager, error) {
 
 func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error) {
 	log := appctx.GetLogger(ctx)
+	if gid.Idp != "" && gid.Idp != m.c.Idp {
+		return nil, errtypes.NotFound("idp mismatch")
+	}
 	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return nil, err
