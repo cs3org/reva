@@ -20,6 +20,7 @@ package grpc_test
 
 import (
 	"context"
+	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -260,6 +261,23 @@ var _ = Describe("user providers", func() {
 				"users": "userprovider-demo.toml",
 			}
 			existingIdp = "http://localhost:9998"
+		})
+
+		assertGetUserResponses()
+		assertFindUsersResponses()
+		assertGetUserByClaimResponses()
+	})
+
+	Describe("the ldap userprovider", func() {
+		runldap := os.Getenv("RUN_LDAP_TESTS")
+		BeforeEach(func() {
+			if runldap == "" {
+				Skip("Skipping LDAP tests")
+			}
+			dependencies = map[string]string{
+				"users": "userprovider-ldap.toml",
+			}
+			existingIdp = "http://localhost:20080"
 		})
 
 		assertGetUserResponses()
