@@ -21,19 +21,64 @@ package filelocks
 import (
 	"errors"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gofrs/flock"
 )
 
-// FlockFile returns the flock filename for a given file name
-// it returns an empty string if the input is empty
-func FlockFile(file string) string {
-	var n string
-	if len(file) > 0 {
-		n = file + ".flock"
+// Locks stores the local Flock structs in a map by their file names.
+// That is needed because each of the struct contains a mutex that the
+// gofrs/flock module is using. Thus, there must only be one Flock struct
+// per file.
+type Locks struct {
+	mu sync.Mutex
+	//
+	_locks map[string]*flock.Flock
+}
+
+var localLocks Locks
+
+func init() {
+	localLocks._locks = make(map[string]*flock.Flock)
+}
+
+// getMutexedFlock returns a new Flock struct for the given file.
+// If there is already one in the local store, it returns nil.
+// The caller has to wait until it can get a new one out of this
+// mehtod.
+func getMutexedFlock(file string) *flock.Flock {
+	// the local data structure to keep the lock structs is mutex protected so that
+	// only one routine can access it.
+	localLocks.mu.Lock()
+	defer localLocks.mu.Unlock()
+
+	// Is there lock already?
+	if _, ok := localLocks._locks[file]; ok {
+		// There is already a lock for this file, another can not be acquired
+		return nil
 	}
-	return n
+
+	// Acquire the write log on the target node first.
+	localLocks._locks[file] = flock.New(file)
+	return localLocks._locks[file]
+
+}
+
+// releaseMutexedFlock releases a Flock object that was acquired
+// before by the getMutexedFlock function.
+func releaseMutexedFlock(file string) {
+	if len(file) == 0 {
+		return
+	}
+
+	localLocks.mu.Lock()
+	defer localLocks.mu.Unlock()
+
+	_, ok := localLocks._locks[file]
+	if ok {
+		delete(localLocks._locks, file)
+	}
 }
 
 // acquireWriteLog acquires a lock on a file or directory.
@@ -47,15 +92,27 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	if len(n) == 0 {
 		return nil, errors.New("lock path is empty")
 	}
-	// Acquire the write log on the target node first.
-	lock := flock.New(n)
+
+	var flock *flock.Flock
+	for i := 1; i <= 10; i++ {
+		if flock = getMutexedFlock(n); flock != nil {
+			break
+		}
+		w := time.Duration(i*3) * time.Millisecond
+		// fmt.Printf("Waiting for lock to release %d\n", w)
+
+		time.Sleep(w)
+	}
+	if flock == nil {
+		return nil, errors.New("unable to acquire a lock on the file")
+	}
 
 	var ok bool
 	for i := 1; i <= 10; i++ {
 		if write {
-			ok, err = lock.TryLock()
+			ok, err = flock.TryLock()
 		} else {
-			ok, err = lock.TryRLock()
+			ok, err = flock.TryRLock()
 		}
 
 		if ok {
@@ -72,7 +129,18 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	if err != nil {
 		return nil, err
 	}
-	return lock, nil
+	// fmt.Printf("Returning flock for %s\n", flock.Path())
+	return flock, nil
+}
+
+// FlockFile returns the flock filename for a given file name
+// it returns an empty string if the input is empty
+func FlockFile(file string) string {
+	var n string
+	if len(file) > 0 {
+		n = file + ".flock"
+	}
+	return n
 }
 
 // AcquireReadLock tries to acquire a shared lock to read from the
@@ -93,9 +161,17 @@ func ReleaseLock(lock *flock.Flock) error {
 	// there is a probability that if the file can not be unlocked,
 	// we also can not remove the file. We will only try to remove if it
 	// was successfully unlocked.
-	err := lock.Unlock()
+	var err error
+	n := lock.Path()
+	// There is already a lock for this file
+
+	err = lock.Unlock()
 	if err == nil {
-		err = os.Remove(lock.Path())
+		err = os.Remove(n)
+		// fmt.Printf("Removing flock for %s\n", n)
+
 	}
+	releaseMutexedFlock(n)
+
 	return err
 }
