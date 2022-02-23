@@ -255,7 +255,7 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 	}
 	var expires *typespb.Timestamp
 	if s.Expiration != "" {
-		t, err := time.Parse("2006-01-02 03:04:05", s.Expiration)
+		t, err := time.Parse("2006-01-02 15:04:05", s.Expiration)
 		if err == nil {
 			expires = &typespb.Timestamp{
 				Seconds: uint64(t.Unix()),
