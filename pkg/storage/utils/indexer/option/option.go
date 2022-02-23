@@ -7,21 +7,26 @@ import (
 // Option defines a single option function.
 type Option func(o *Options)
 
+// IndexBy defines how the data is being indexed
 type IndexBy interface {
 	String() string
 }
 
+// IndexByField represents the field that's being used to index the data by
 type IndexByField string
 
+// String returns a string representation
 func (ibf IndexByField) String() string {
 	return string(ibf)
 }
 
+// IndexByFunc represents a function that's being used to index the data by
 type IndexByFunc struct {
 	Name string
 	Func func(v interface{}) (string, error)
 }
 
+// String returns a string representation
 func (ibf IndexByFunc) String() string {
 	return ibf.Name
 }

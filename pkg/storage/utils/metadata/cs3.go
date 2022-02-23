@@ -73,7 +73,7 @@ func (cs3 *CS3) Backend() string {
 }
 
 // Init creates the metadata space
-func (cs3 *CS3) Init(spaceid string, ctx context.Context) (err error) {
+func (cs3 *CS3) Init(ctx context.Context, spaceid string) (err error) {
 	client, err := cs3.providerClient()
 	if err != nil {
 		return err
@@ -166,7 +166,7 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 	return nil
 }
 
-// SimpleUpload reads a file from the metadata storage
+// SimpleDownload reads a file from the metadata storage
 func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (content []byte, err error) {
 	client, err := cs3.providerClient()
 	if err != nil {

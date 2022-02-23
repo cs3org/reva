@@ -22,10 +22,11 @@ import (
 	"context"
 )
 
+// Storage is the interface to maintain metadata in a storage
 type Storage interface {
 	Backend() string
 
-	Init(name string, ctx context.Context) (err error)
+	Init(ctx context.Context, name string) (err error)
 	SimpleUpload(ctx context.Context, uploadpath string, content []byte) error
 	SimpleDownload(ctx context.Context, path string) ([]byte, error)
 	Delete(ctx context.Context, path string) error

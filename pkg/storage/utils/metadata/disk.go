@@ -38,7 +38,7 @@ func NewDiskStorage(dataDir string) (s Storage, err error) {
 }
 
 // Init creates the metadata space
-func (disk *Disk) Init(_ string, _ context.Context) (err error) {
+func (disk *Disk) Init(_ context.Context, _ string) (err error) {
 	return os.MkdirAll(disk.dataDir, 0777)
 }
 
@@ -62,7 +62,7 @@ func (disk *Disk) Delete(_ context.Context, path string) error {
 	return os.Remove(disk.targetPath(path))
 }
 
-// ReadDirp returns the resource infos in a given directory
+// ReadDir returns the resource infos in a given directory
 func (disk *Disk) ReadDir(_ context.Context, p string) ([]string, error) {
 	infos, err := ioutil.ReadDir(disk.targetPath(p))
 	if err != nil {
