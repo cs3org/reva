@@ -70,7 +70,7 @@ litmus-test-new: build
 	pkill revad
 lint:
 	go run tools/check-license/check-license.go
-	`go env GOPATH`/bin/golangci-lint run --timeout 2m0s
+	`go env GOPATH`/bin/golangci-lint run --timeout 3m0s
 
 contrib:
 	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
