@@ -123,7 +123,7 @@ var _ = Describe("storage providers", func() {
 
 	AfterEach(func() {
 		for _, r := range revads {
-			Expect(r.Cleanup(CurrentGinkgoTestDescription().Failed)).To(Succeed())
+			Expect(r.Cleanup(CurrentSpecReport().Failed())).To(Succeed())
 		}
 	})
 

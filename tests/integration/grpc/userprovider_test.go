@@ -75,7 +75,7 @@ var _ = Describe("user providers", func() {
 
 	AfterEach(func() {
 		for _, r := range revads {
-			Expect(r.Cleanup(CurrentGinkgoTestDescription().Failed))
+			Expect(r.Cleanup(CurrentSpecReport().Failed())).To(Succeed())
 		}
 	})
 
