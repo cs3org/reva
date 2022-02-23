@@ -34,6 +34,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/utils"
 	"google.golang.org/grpc/metadata"
@@ -103,7 +104,7 @@ func (cs3 *CS3) Init(spaceid string, ctx context.Context) (err error) {
 		cs3.SpaceRoot = cssr.StorageSpace.Root
 	case cssr.Status.Code == rpc.Code_CODE_ALREADY_EXISTS:
 		// TODO make CreateStorageSpace return existing space?
-		cs3.SpaceRoot = &provider.ResourceId{StorageId: cs3.serviceUser.Id.OpaqueId, OpaqueId: cs3.serviceUser.Id.OpaqueId}
+		cs3.SpaceRoot = &provider.ResourceId{StorageId: spaceid, OpaqueId: spaceid}
 	default:
 		return errtypes.NewErrtypeFromStatus(cssr.Status)
 	}
@@ -131,6 +132,9 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 	res, err := client.InitiateFileUpload(ctx, &ref)
 	if err != nil {
 		return err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return status.NewErrorFromCode(res.Status.Code, "cs3 metadata SimpleUpload")
 	}
 
 	var endpoint string
