@@ -1064,12 +1064,11 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 					s.Path = strings.TrimPrefix(s.Path, h.getHomeNamespace(u))
 				}
 			}
-
-		case s.ShareType == conversions.ShareTypePublicLink:
-			s.FileTarget = path.Join("/", path.Base(info.Path))
-			s.Path = path.Join("/", path.Base(info.Path))
 		default:
 			s.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
+			if s.ShareType == conversions.ShareTypePublicLink {
+				s.FileTarget = path.Join("/", path.Base(info.Path))
+			}
 			s.Path = info.Path
 			client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 			if err == nil {
