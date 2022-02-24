@@ -49,7 +49,7 @@ var _ = Describe("Helper", func() {
 
 			repaginationStats := experiment.GetStats("repagination")
 			medianDuration := repaginationStats.DurationFor(gmeasure.StatMedian)
-			Expect(medianDuration).To(BeNumerically("~", 100*time.Microsecond, 200*time.Microsecond))
+			Expect(medianDuration).To(BeNumerically("<", 1200*time.Microsecond))
 		})
 	})
 })
