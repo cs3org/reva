@@ -196,7 +196,8 @@ var _ = Describe("Node", func() {
 				Expect(len(ri.Etag)).To(Equal(34))
 				before := ri.Etag
 
-				Expect(n.SetTMTime(time.Now().UTC())).To(Succeed())
+				tmtime := time.Now()
+				Expect(n.SetTMTime(&tmtime)).To(Succeed())
 
 				ri, err = n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())

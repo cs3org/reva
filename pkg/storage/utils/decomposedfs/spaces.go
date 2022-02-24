@@ -104,28 +104,31 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		}
 	}
 
-	// always enable propagation on the storage space root
-	// mark the space root node as the end of propagation
-	if err = root.SetMetadata(xattrs.PropagationAttr, "1"); err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", root).Msg("could not mark space root node to propagate")
-		return nil, err
-	}
-
 	err = fs.linkStorageSpaceType(ctx, req.Type, root.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	metadata := make(map[string]string, 3)
+
+	// always enable propagation on the storage space root
+	// mark the space root node as the end of propagation
+	metadata[xattrs.PropagationAttr] = "1"
+	metadata[xattrs.SpaceNameAttr] = req.Name
+
+	if req.Type != "" {
+		metadata[xattrs.SpaceTypeAttr] = req.Type
+	}
+
 	if q := req.GetQuota(); q != nil {
 		// set default space quota
 		metadata[xattrs.QuotaAttr] = strconv.FormatUint(q.QuotaMaxBytes, 10)
 	}
 
-	metadata[xattrs.SpaceNameAttr] = req.Name
 	if description != "" {
 		metadata[xattrs.SpaceDescriptionAttr] = description
 	}
+
 	if err := xattrs.SetMultiple(root.InternalPath(), metadata); err != nil {
 		return nil, err
 	}
@@ -152,7 +155,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		}
 	}
 
-	space, err := fs.storageSpaceFromNode(ctx, root, req.Type, root.InternalPath(), false)
+	space, err := fs.storageSpaceFromNode(ctx, root, root.InternalPath(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +216,7 @@ func readSpaceAndNodeFromSpaceTypeLink(path string) (string, string, error) {
 		return "", "", err
 	}
 	// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51
+	// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z
 	// TODO use filepath.Separator to support windows
 	link = strings.ReplaceAll(link, "/", "")
 	// ....spaces4c510ada-c86b-4815-8820-42cdf82c3d51nodes4c510ada-c86b-4815-8820-42cdf82c3d51
@@ -285,7 +289,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			// return empty list
 			return spaces, nil
 		}
-		space, err := fs.storageSpaceFromNode(ctx, n, spaceTypeAny, n.InternalPath(), canListAllSpaces)
+		space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), canListAllSpaces)
 		if err != nil {
 			return nil, err
 		}
@@ -347,7 +351,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 
 		// TODO apply more filters
-		space, err := fs.storageSpaceFromNode(ctx, n, spaceType, matches[i], canListAllSpaces)
+		space, err := fs.storageSpaceFromNode(ctx, n, matches[i], canListAllSpaces)
 		if err != nil {
 			if _, ok := err.(errtypes.IsPermissionDenied); !ok {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
@@ -365,7 +369,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			return nil, err
 		}
 		if n.Exists {
-			space, err := fs.storageSpaceFromNode(ctx, n, "*", n.InternalPath(), canListAllSpaces)
+			space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), canListAllSpaces)
 			if err != nil {
 				return nil, err
 			}
@@ -385,48 +389,17 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	space := req.StorageSpace
-	spaceID, nodeID, _ := utils.SplitStorageSpaceID(space.Id.OpaqueId)
-
-	if restore {
-		matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spacetypes", spaceTypeAny, nodeID))
-		if err != nil {
-			return nil, err
-		}
-
-		if len(matches) != 1 {
-			return &provider.UpdateStorageSpaceResponse{
-				Status: &v1beta11.Status{
-					Code:    v1beta11.Code_CODE_NOT_FOUND,
-					Message: fmt.Sprintf("restoring space failed: found %d matching spaces", len(matches)),
-				},
-			}, nil
-
-		}
-
-		target, err := os.Readlink(matches[0])
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[0]).Msg("could not read link, skipping")
-		}
-		nodeID := strings.TrimLeft(target, "/.")
-		nodeID = strings.ReplaceAll(nodeID, "/", "")
-		n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID)
-		if err != nil {
-			return nil, err
-		}
-
-		newnode := *n
-		newnode.Name = strings.Split(n.Name, node.TrashIDDelimiter)[0]
-		newnode.Exists = false
-
-		err = fs.tp.Move(ctx, n, &newnode)
-		if err != nil {
-			return nil, err
-		}
-	}
+	spaceID, _, _ := utils.SplitStorageSpaceID(space.Id.OpaqueId)
 
 	node, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID)
 	if err != nil {
 		return nil, err
+	}
+
+	if restore {
+		if err := node.SetDTime(nil); err != nil {
+			return nil, err
+		}
 	}
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
@@ -495,7 +468,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	// send back the updated data from the storage
-	updatedSpace, err := fs.storageSpaceFromNode(ctx, node, "*", node.InternalPath(), false)
+	updatedSpace, err := fs.storageSpaceFromNode(ctx, node, node.InternalPath(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -522,69 +495,33 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	}
 
 	if purge {
-		if !strings.Contains(n.Name, node.TrashIDDelimiter) {
+		if !n.IsDisabled() {
 			return errtypes.NewErrtypeFromStatus(status.NewInvalidArg(ctx, "can't purge enabled space"))
 		}
-		ip := n.InternalPath()
-		matches, err := filepath.Glob(ip)
+
+		spaceType, err := n.GetMetadata(xattrs.SpaceTypeAttr)
 		if err != nil {
 			return err
 		}
-
-		// TODO: remove blobs
-		if err := os.RemoveAll(matches[0]); err != nil {
+		// remove type index
+		spaceTypePath := filepath.Join(fs.o.Root, "spacetypes", spaceType, spaceID)
+		if err := os.Remove(spaceTypePath); err != nil {
 			return err
 		}
 
-		matches, err = filepath.Glob(filepath.Join(fs.o.Root, "spacetypes", spaceTypeAny, req.Id.OpaqueId))
-		if err != nil {
-			return err
-		}
-		if len(matches) != 1 {
-			return fmt.Errorf("delete space failed: found %d matching spaces", len(matches))
-		}
-
-		if err := os.RemoveAll(matches[0]); err != nil {
+		// remove space metadata
+		if err := os.RemoveAll(filepath.Join(fs.o.Root, "spaces", lookup.Pathify(spaceID, 1, 2))); err != nil {
 			return err
 		}
 
-		matches, err = filepath.Glob(filepath.Join(fs.o.Root, "spaces", spaceID, "nodes", node.RootID, req.Id.OpaqueId+node.TrashIDDelimiter+"*"))
-		if err != nil {
-			return err
-		}
+		// FIXME remove space blobs
 
-		if len(matches) != 1 {
-			return fmt.Errorf("delete root node failed: found %d matching root nodes", len(matches))
-		}
-		return os.RemoveAll(matches[0])
+		return nil
 	}
 
-	// don't delete - just rename
-	dn := *n
-	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
-	dn.Name = n.Name + node.TrashIDDelimiter + deletionTime
-	dn.Exists = false
-	err = fs.tp.Move(ctx, n, &dn)
-	if err != nil {
-		return err
-	}
-	matches, err := filepath.Glob(filepath.Join(fs.o.Root, "spacetypes", spaceTypeAny, spaceID))
-	if err != nil {
-		return err
-	}
-
-	if len(matches) != 1 {
-		return fmt.Errorf("delete space failed: found %d matching spaces", len(matches))
-	}
-
-	err = os.RemoveAll(matches[0])
-	if err != nil {
-		return err
-	}
-
-	trashPath := dn.InternalPath()
-	np := filepath.Join(filepath.Dir(matches[0]), filepath.Base(trashPath))
-	return os.Symlink(trashPath, np)
+	// mark as disabled by writing a dtime attribute
+	dtime := time.Now()
+	return n.SetDTime(&dtime)
 }
 
 func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType string, spaceID string) error {
@@ -609,7 +546,7 @@ func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType stri
 	return err
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, spaceType, nodePath string, canListAllSpaces bool) (*provider.StorageSpace, error) {
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, nodePath string, canListAllSpaces bool) (*provider.StorageSpace, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if !canListAllSpaces {
 		ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
@@ -619,7 +556,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %s", user.Username, n.ID))
 		}
 
-		if strings.Contains(n.Name, node.TrashIDDelimiter) {
+		if n.IsDisabled() {
 			ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
 				// TODO: Which permission do I need to see the space?
 				return p.AddGrant
@@ -641,18 +578,6 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	if err := n.FindStorageSpaceRoot(); err != nil {
 		return nil, err
 	}
-
-	glob := filepath.Join(fs.o.Root, "spacetypes", spaceType, n.SpaceRoot.ID)
-	matches, err := filepath.Glob(glob)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(matches) != 1 {
-		return nil, errtypes.InternalError("expected only one match for " + glob)
-	}
-
-	spaceType = filepath.Base(filepath.Dir(matches[0]))
 
 	grants, err := n.ListGrants(ctx)
 	if err != nil {
@@ -687,17 +612,21 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 				},
 			},
 		},
-		Id: &provider.StorageSpaceId{OpaqueId: n.SpaceRoot.ID},
+		Id: &provider.StorageSpaceId{OpaqueId: n.SpaceRoot.SpaceID},
 		Root: &provider.ResourceId{
-			StorageId: n.SpaceRoot.ID,
+			StorageId: n.SpaceRoot.SpaceID,
 			OpaqueId:  n.SpaceRoot.ID,
 		},
-		Name:      sname,
-		SpaceType: spaceType,
+		Name: sname,
+		// SpaceType is read from xattr below
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
 
-	if strings.Contains(n.Name, node.TrashIDDelimiter) {
+	if space.SpaceType, err = n.GetMetadata(xattrs.SpaceTypeAttr); err != nil {
+		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a type attribute")
+	}
+
+	if n.IsDisabled() {
 		space.Opaque.Map["trashed"] = &types.OpaqueEntry{
 			Decoder: "plain",
 			Value:   []byte("trashed"),

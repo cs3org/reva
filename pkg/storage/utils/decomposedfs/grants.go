@@ -170,7 +170,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		attr = xattrs.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
 	}
 
-	if err = xattr.Remove(node.InternalPath(), attr); err != nil {
+	if err = xattrs.Remove(node.InternalPath(), attr); err != nil {
 		return
 	}
 

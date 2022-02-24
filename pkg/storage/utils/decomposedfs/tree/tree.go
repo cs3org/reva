@@ -146,7 +146,7 @@ func (t *Tree) moveNode(spaceID, nodeID string) error {
 	}
 	for _, child := range children {
 		old := filepath.Join(t.root, "nodes", child.Name())
-		new := filepath.Join(t.root, "spaces", spaceID, "nodes", child.Name())
+		new := filepath.Join(t.root, "spaces", lookup.Pathify(spaceID, 1, 2), "nodes", lookup.Pathify(child.Name(), 4, 2))
 		if err := os.Rename(old, new); err != nil {
 			logger.New().Error().Err(err).
 				Str("space", spaceID).
@@ -624,7 +624,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 
 			if updateSyncTime {
 				// update the tree time of the parent node
-				if err = n.SetTMTime(sTime); err != nil {
+				if err = n.SetTMTime(&sTime); err != nil {
 					sublog.Error().Err(err).Time("tmtime", sTime).Msg("could not update tmtime of parent node")
 				} else {
 					sublog.Debug().Time("tmtime", sTime).Msg("updated tmtime of parent node")

@@ -76,6 +76,11 @@ const (
 	// stored as a readable time.RFC3339Nano
 	TreeMTimeAttr string = OcisPrefix + "tmtime"
 
+	// the deletion/disabled time of a space or node
+	// used to mark space roots as disabled
+	// stored as a readable time.RFC3339Nano
+	DTimeAttr string = OcisPrefix + "dtime"
+
 	// the size of the tree below this node,
 	// propagated when treesize_accounting is true and
 	// user.ocis.propagation=1 is set
@@ -87,6 +92,7 @@ const (
 
 	// the name given to a storage space. It should not contain any semantics as its only purpose is to be read.
 	SpaceNameAttr        string = OcisPrefix + "space.name"
+	SpaceTypeAttr        string = OcisPrefix + "space.type"
 	SpaceDescriptionAttr string = OcisPrefix + "space.description"
 	SpaceReadmeAttr      string = OcisPrefix + "space.readme"
 	SpaceImageAttr       string = OcisPrefix + "space.image"
@@ -185,11 +191,17 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 // No file locking is involved here as writing a single xattr is
 // considered to be atomic.
 func Set(filePath string, key string, val string) error {
-
 	if err := xattr.Set(filePath, key, []byte(val)); err != nil {
 		return err
 	}
 	return nil
+}
+
+// Remove an extended attribute key
+// No file locking is involved here as writing a single xattr is
+// considered to be atomic.
+func Remove(filePath string, key string) error {
+	return xattr.Remove(filePath, key)
 }
 
 // SetMultiple allows setting multiple key value pairs at once

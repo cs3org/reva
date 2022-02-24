@@ -138,7 +138,7 @@ func (n *Node) SetMetadata(key string, val string) (err error) {
 
 // RemoveMetadata removes a given key
 func (n *Node) RemoveMetadata(key string) (err error) {
-	if err = xattr.Remove(n.InternalPath(), key); err != nil {
+	if err = xattrs.Remove(n.InternalPath(), key); err != nil {
 		if e, ok := err.(*xattr.Error); ok && (e.Err.Error() == "no data available" ||
 			// darwin
 			e.Err.Error() == "attribute not found") {
@@ -187,6 +187,7 @@ func (n *Node) WriteOwner(owner *userpb.UserId) error {
 }
 
 // ReadNode creates a new instance from an id and checks if it exists
+// FIXME check if user is allowed to access disabled spaces
 func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string) (n *Node, err error) {
 
 	// read space root
@@ -279,6 +280,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string) (n *No
 	//     - no need to write an additional trash entry
 	//     - can be made more robust with a journal
 	//     - same recursion mechanism can be used to purge items? sth we still need to do
+	//   - flag the two above options with dtime
 	_, err = os.Stat(n.ParentInternalPath())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -835,9 +837,47 @@ func (n *Node) GetTMTime() (tmTime time.Time, err error) {
 	return time.Parse(time.RFC3339Nano, b)
 }
 
-// SetTMTime writes the tmtime to the extended attributes
-func (n *Node) SetTMTime(t time.Time) (err error) {
+// SetTMTime writes the UTC tmtime to the extended attributes or removes the attribute if nil is passed
+func (n *Node) SetTMTime(t *time.Time) (err error) {
+	if t == nil {
+		err = xattrs.Remove(n.InternalPath(), xattrs.TreeMTimeAttr)
+		if xattrs.IsAttrUnset(err) {
+			return nil
+		}
+		return err
+	}
 	return xattrs.Set(n.InternalPath(), xattrs.TreeMTimeAttr, t.UTC().Format(time.RFC3339Nano))
+}
+
+// GetDTime reads the dtime from the extended attributes
+func (n *Node) GetDTime() (tmTime time.Time, err error) {
+	var b string
+	if b, err = xattrs.Get(n.InternalPath(), xattrs.DTimeAttr); err != nil {
+		return
+	}
+	return time.Parse(time.RFC3339Nano, b)
+}
+
+// SetDTime writes the UTC dtime to the extended attributes or removes the attribute if nil is passed
+func (n *Node) SetDTime(t *time.Time) (err error) {
+	if t == nil {
+		err = xattrs.Remove(n.InternalPath(), xattrs.DTimeAttr)
+		if xattrs.IsAttrUnset(err) {
+			return nil
+		}
+		return err
+	}
+	return xattrs.Set(n.InternalPath(), xattrs.DTimeAttr, t.UTC().Format(time.RFC3339Nano))
+}
+
+// IsDisabled returns true when the node has a dmtime attribute set
+// only used to check if a space is disabled
+// FIXME confusing with the trash logic
+func (n *Node) IsDisabled() bool {
+	if _, err := n.GetDTime(); err == nil {
+		return true
+	}
+	return false
 }
 
 // GetTreeSize reads the treesize from the extended attributes
@@ -861,12 +901,9 @@ func (n *Node) SetChecksum(csType string, h hash.Hash) (err error) {
 
 // UnsetTempEtag removes the temporary etag attribute
 func (n *Node) UnsetTempEtag() (err error) {
-	if err = xattr.Remove(n.InternalPath(), xattrs.TmpEtagAttr); err != nil {
-		if e, ok := err.(*xattr.Error); ok && (e.Err.Error() == "no data available" ||
-			// darwin
-			e.Err.Error() == "attribute not found") {
-			return nil
-		}
+	err = xattrs.Remove(n.InternalPath(), xattrs.TmpEtagAttr)
+	if xattrs.IsAttrUnset(err) {
+		return nil
 	}
 	return err
 }
