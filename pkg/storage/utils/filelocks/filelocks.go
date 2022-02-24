@@ -27,20 +27,10 @@ import (
 	"github.com/gofrs/flock"
 )
 
-// Locks stores the local Flock structs in a map by their file names.
-// That is needed because each of the struct contains a mutex that the
-// gofrs/flock module is using. Thus, there must only be one Flock struct
-// per file.
-type Locks struct {
-	mu sync.Mutex
-	//
-	_locks map[string]*flock.Flock
-}
-
-var localLocks Locks
+var _localLocks sync.Map
 
 func init() {
-	localLocks._locks = make(map[string]*flock.Flock)
+
 }
 
 // getMutexedFlock returns a new Flock struct for the given file.
@@ -48,36 +38,25 @@ func init() {
 // The caller has to wait until it can get a new one out of this
 // mehtod.
 func getMutexedFlock(file string) *flock.Flock {
-	// the local data structure to keep the lock structs is mutex protected so that
-	// only one routine can access it.
-	localLocks.mu.Lock()
-	defer localLocks.mu.Unlock()
 
 	// Is there lock already?
-	if _, ok := localLocks._locks[file]; ok {
+	if _, ok := _localLocks.Load(file); ok {
 		// There is already a lock for this file, another can not be acquired
 		return nil
 	}
 
 	// Acquire the write log on the target node first.
-	localLocks._locks[file] = flock.New(file)
-	return localLocks._locks[file]
+	l := flock.New(file)
+	_localLocks.Store(file, l)
+	return l
 
 }
 
 // releaseMutexedFlock releases a Flock object that was acquired
 // before by the getMutexedFlock function.
 func releaseMutexedFlock(file string) {
-	if len(file) == 0 {
-		return
-	}
-
-	localLocks.mu.Lock()
-	defer localLocks.mu.Unlock()
-
-	_, ok := localLocks._locks[file]
-	if ok {
-		delete(localLocks._locks, file)
+	if len(file) > 0 {
+		_localLocks.Delete(file)
 	}
 }
 
@@ -99,7 +78,6 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 			break
 		}
 		w := time.Duration(i*3) * time.Millisecond
-		// fmt.Printf("Waiting for lock to release %d\n", w)
 
 		time.Sleep(w)
 	}
@@ -129,7 +107,6 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	if err != nil {
 		return nil, err
 	}
-	// fmt.Printf("Returning flock for %s\n", flock.Path())
 	return flock, nil
 }
 
@@ -168,8 +145,6 @@ func ReleaseLock(lock *flock.Flock) error {
 	err = lock.Unlock()
 	if err == nil {
 		err = os.Remove(n)
-		// fmt.Printf("Removing flock for %s\n", n)
-
 	}
 	releaseMutexedFlock(n)
 
