@@ -21,19 +21,39 @@ package filelocks
 import (
 	"errors"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gofrs/flock"
 )
 
-// FlockFile returns the flock filename for a given file name
-// it returns an empty string if the input is empty
-func FlockFile(file string) string {
-	var n string
-	if len(file) > 0 {
-		n = file + ".flock"
+var _localLocks sync.Map
+
+// getMutexedFlock returns a new Flock struct for the given file.
+// If there is already one in the local store, it returns nil.
+// The caller has to wait until it can get a new one out of this
+// mehtod.
+func getMutexedFlock(file string) *flock.Flock {
+
+	// Is there lock already?
+	if _, ok := _localLocks.Load(file); ok {
+		// There is already a lock for this file, another can not be acquired
+		return nil
 	}
-	return n
+
+	// Acquire the write log on the target node first.
+	l := flock.New(file)
+	_localLocks.Store(file, l)
+	return l
+
+}
+
+// releaseMutexedFlock releases a Flock object that was acquired
+// before by the getMutexedFlock function.
+func releaseMutexedFlock(file string) {
+	if len(file) > 0 {
+		_localLocks.Delete(file)
+	}
 }
 
 // acquireWriteLog acquires a lock on a file or directory.
@@ -47,15 +67,26 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	if len(n) == 0 {
 		return nil, errors.New("lock path is empty")
 	}
-	// Acquire the write log on the target node first.
-	lock := flock.New(n)
+
+	var flock *flock.Flock
+	for i := 1; i <= 10; i++ {
+		if flock = getMutexedFlock(n); flock != nil {
+			break
+		}
+		w := time.Duration(i*3) * time.Millisecond
+
+		time.Sleep(w)
+	}
+	if flock == nil {
+		return nil, errors.New("unable to acquire a lock on the file")
+	}
 
 	var ok bool
 	for i := 1; i <= 10; i++ {
 		if write {
-			ok, err = lock.TryLock()
+			ok, err = flock.TryLock()
 		} else {
-			ok, err = lock.TryRLock()
+			ok, err = flock.TryRLock()
 		}
 
 		if ok {
@@ -72,7 +103,17 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	if err != nil {
 		return nil, err
 	}
-	return lock, nil
+	return flock, nil
+}
+
+// FlockFile returns the flock filename for a given file name
+// it returns an empty string if the input is empty
+func FlockFile(file string) string {
+	var n string
+	if len(file) > 0 {
+		n = file + ".flock"
+	}
+	return n
 }
 
 // AcquireReadLock tries to acquire a shared lock to read from the
@@ -93,9 +134,15 @@ func ReleaseLock(lock *flock.Flock) error {
 	// there is a probability that if the file can not be unlocked,
 	// we also can not remove the file. We will only try to remove if it
 	// was successfully unlocked.
-	err := lock.Unlock()
+	var err error
+	n := lock.Path()
+	// There is already a lock for this file
+
+	err = lock.Unlock()
 	if err == nil {
-		err = os.Remove(lock.Path())
+		err = os.Remove(n)
 	}
+	releaseMutexedFlock(n)
+
 	return err
 }
