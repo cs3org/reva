@@ -441,10 +441,6 @@ The first two tests work against ocis. There must be something wrong in the CI s
 -   [apiSharePublicLink2/copyFromPublicLink.feature:182](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/copyFromPublicLink.feature#L182)
 -   [apiSharePublicLink2/updatePublicLinkShare.feature:45](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L45)
 -   [apiSharePublicLink2/updatePublicLinkShare.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L46)
--   [apiSharePublicLink2/updatePublicLinkShare.feature:118](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L118)
--   [apiSharePublicLink2/updatePublicLinkShare.feature:119](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L119)
--   [apiSharePublicLink2/updatePublicLinkShare.feature:120](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L120)
--   [apiSharePublicLink2/updatePublicLinkShare.feature:121](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L121)
 
 #### [OCIS share permissions not enforced](https://github.com/owncloud/product/issues/270)
 
