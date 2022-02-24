@@ -29,10 +29,6 @@ import (
 
 var _localLocks sync.Map
 
-func init() {
-
-}
-
 // getMutexedFlock returns a new Flock struct for the given file.
 // If there is already one in the local store, it returns nil.
 // The caller has to wait until it can get a new one out of this
