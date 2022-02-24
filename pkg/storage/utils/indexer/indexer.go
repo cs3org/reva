@@ -21,6 +21,7 @@ package indexer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -28,7 +29,7 @@ import (
 	"github.com/CiscoM31/godata"
 	"github.com/iancoleman/strcase"
 
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/errors"
+	errorspkg "github.com/cs3org/reva/pkg/storage/utils/indexer/errors"
 	"github.com/cs3org/reva/pkg/storage/utils/indexer/index"
 	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
 	"github.com/cs3org/reva/pkg/storage/utils/metadata"
@@ -147,7 +148,7 @@ func (i *Indexer) FindBy(t interface{}, findBy, val string) ([]string, error) {
 			idxVal := val
 			res, err := idx.Lookup(idxVal)
 			if err != nil {
-				if errors.IsNotFoundErr(err) {
+				if errorspkg.IsNotFoundErr(err) {
 					continue
 				}
 
@@ -209,7 +210,7 @@ func (i *Indexer) FindByPartial(t interface{}, field string, pattern string) ([]
 		for _, idx := range fields.IndicesByField[strcase.ToCamel(field)] {
 			res, err := idx.Search(pattern)
 			if err != nil {
-				if errors.IsNotFoundErr(err) {
+				if errorspkg.IsNotFoundErr(err) {
 					continue
 				}
 
@@ -309,7 +310,7 @@ func (i *Indexer) Query(ctx context.Context, t interface{}, q string) ([]string,
 // TODO implement logic for `and` operators.
 func (i *Indexer) resolveTree(t interface{}, tree *queryTree, partials *[]string) error {
 	if partials == nil {
-		return fmt.Errorf("return value cannot be nil: partials")
+		return errors.New("return value cannot be nil: partials")
 	}
 
 	if tree.left != nil {
@@ -397,7 +398,7 @@ func buildTreeFromOdataQuery(root *godata.ParseNode, tree *queryTree) error {
 
 			tree.insert(&token)
 		default:
-			return fmt.Errorf("operation not supported")
+			return errors.New("operation not supported")
 		}
 	}
 
@@ -425,7 +426,7 @@ func buildTreeFromOdataQuery(root *godata.ParseNode, tree *queryTree) error {
 				}
 			}
 		default:
-			return fmt.Errorf("operator not supported")
+			return errors.New("operator not supported")
 		}
 	}
 	return nil

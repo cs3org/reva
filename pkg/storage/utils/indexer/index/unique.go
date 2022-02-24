@@ -30,7 +30,7 @@ import (
 	metadata "github.com/cs3org/reva/pkg/storage/utils/metadata"
 )
 
-// Unique are fields for an index of type non_unique.
+// Unique are fields for an index of type unique.
 type Unique struct {
 	caseInsensitive bool
 	indexBy         option.IndexBy
@@ -69,11 +69,7 @@ func (idx *Unique) Init() error {
 		return err
 	}
 
-	if err := idx.storage.MakeDirIfNotExist(context.Background(), idx.indexRootDir); err != nil {
-		return err
-	}
-
-	return nil
+	return idx.storage.MakeDirIfNotExist(context.Background(), idx.indexRootDir)
 }
 
 // Lookup exact lookup by value.

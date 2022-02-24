@@ -70,10 +70,7 @@ func (idx *Autoincrement) Init() error {
 		return err
 	}
 
-	if err := idx.storage.MakeDirIfNotExist(context.Background(), idx.indexRootDir); err != nil {
-		return err
-	}
-	return nil
+	return idx.storage.MakeDirIfNotExist(context.Background(), idx.indexRootDir)
 }
 
 // Lookup exact lookup by value.
@@ -139,11 +136,8 @@ func (idx *Autoincrement) Update(id, oldV, newV string) error {
 		return err
 	}
 
-	if _, err := idx.Add(id, newV); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := idx.Add(id, newV)
+	return err
 }
 
 // Search allows for glob search on the index.

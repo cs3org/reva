@@ -74,11 +74,7 @@ func (idx *NonUnique) Init() error {
 		return err
 	}
 
-	if err := idx.storage.MakeDirIfNotExist(context.Background(), idx.indexRootDir); err != nil {
-		return err
-	}
-
-	return nil
+	return idx.storage.MakeDirIfNotExist(context.Background(), idx.indexRootDir)
 }
 
 // Lookup exact lookup by value.
@@ -86,13 +82,12 @@ func (idx *NonUnique) Lookup(v string) ([]string, error) {
 	if idx.caseInsensitive {
 		v = strings.ToLower(v)
 	}
-	var matches = make([]string, 0)
 	paths, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir, v))
-
 	if err != nil {
 		return nil, err
 	}
 
+	var matches = make([]string, 0)
 	for _, p := range paths {
 		matches = append(matches, path.Base(p))
 	}

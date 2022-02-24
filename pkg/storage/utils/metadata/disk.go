@@ -69,7 +69,7 @@ func (disk *Disk) ReadDir(_ context.Context, p string) ([]string, error) {
 		return nil, err
 	}
 
-	entries := []string{}
+	entries := make([]string, 0, len(infos))
 	for _, entry := range infos {
 		entries = append(entries, path.Join(p, entry.Name()))
 	}

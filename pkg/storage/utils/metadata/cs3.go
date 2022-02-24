@@ -160,10 +160,7 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 	if err != nil {
 		return err
 	}
-	if err = resp.Body.Close(); err != nil {
-		return err
-	}
-	return nil
+	return resp.Body.Close()
 }
 
 // SimpleDownload reads a file from the metadata storage
@@ -332,11 +329,7 @@ func (cs3 *CS3) CreateSymlink(ctx context.Context, oldname, newname string) erro
 		return os.ErrExist
 	}
 
-	err := cs3.SimpleUpload(ctx, newname, []byte(oldname))
-	if err != nil {
-		return err
-	}
-	return nil
+	return cs3.SimpleUpload(ctx, newname, []byte(oldname))
 }
 
 // ResolveSymlink resolves a symlink
