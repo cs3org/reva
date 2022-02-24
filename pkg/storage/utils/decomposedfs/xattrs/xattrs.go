@@ -158,8 +158,10 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 
 	// error handling: We count errors of reads or writes of xattrs.
 	// if there were any read or write errors an error is returned.
-	var xerrs int = 0
-	var xerr error
+	var (
+		xerrs = 0
+		xerr  error
+	)
 	for idx := range attrNameList {
 		attrName := attrNameList[idx]
 		if filter == nil || filter(attrName) {
@@ -173,7 +175,7 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 		}
 	}
 	if xerrs > 0 {
-		err = errors.Wrap(xerr, "Failed to copy all xattrs, last error returned.")
+		err = errors.Wrap(xerr, "failed to copy all xattrs, last error returned")
 	}
 
 	return err
@@ -215,8 +217,10 @@ func SetMultiple(filePath string, attribs map[string]string) (err error) {
 
 	// error handling: Count if there are errors while setting the attribs.
 	// if there were any, return an error.
-	var xerrs int = 0
-	var xerr error
+	var (
+		xerrs = 0
+		xerr  error
+	)
 	for key, val := range attribs {
 		if xerr = xattr.Set(filePath, key, []byte(val)); xerr != nil {
 			// log
@@ -278,8 +282,10 @@ func All(filePath string) (attribs map[string]string, err error) {
 		return nil, err
 	}
 
-	var xerrs int = 0
-	var xerr error
+	var (
+		xerrs = 0
+		xerr  error
+	)
 	// error handling: Count if there are errors while reading all attribs.
 	// if there were any, return an error.
 	attribs = make(map[string]string, len(attrNames))
