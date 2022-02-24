@@ -172,7 +172,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		// token = protocol FIXME!
 	}
 
-	var sharedSecret string = ""
+	var sharedSecret string
 	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions, nil, sharedSecret, sharetype)
 
 	if err != nil {
