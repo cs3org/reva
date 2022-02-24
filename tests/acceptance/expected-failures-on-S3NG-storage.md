@@ -28,19 +28,24 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiVersions/fileVersionAuthor.feature:220](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L220)
 
 #### [Getting information about a folder overwritten by a file gives 500 error instead of 404](https://github.com/owncloud/ocis/issues/1239)
+-   [apiWebdavProperties1/copyFile.feature:286](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L286)
 -   [apiWebdavProperties1/copyFile.feature:287](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L287)
--   [apiWebdavProperties1/copyFile.feature:288](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L288)
+-   [apiWebdavProperties1/copyFile.feature:309](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L309)
 -   [apiWebdavProperties1/copyFile.feature:310](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L310)
--   [apiWebdavProperties1/copyFile.feature:311](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L311)
+-   [apiWebdavProperties1/copyFile.feature:337](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L337)
 -   [apiWebdavProperties1/copyFile.feature:338](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L338)
--   [apiWebdavProperties1/copyFile.feature:339](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L339)
+-   [apiWebdavProperties1/copyFile.feature:367](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L367)
 -   [apiWebdavProperties1/copyFile.feature:368](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L368)
--   [apiWebdavProperties1/copyFile.feature:369](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L369)
+-   [apiWebdavProperties1/copyFile.feature:396](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L396)
 -   [apiWebdavProperties1/copyFile.feature:397](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L397)
--   [apiWebdavProperties1/copyFile.feature:398](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L398)
+-   [apiWebdavProperties1/copyFile.feature:425](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L425)
 -   [apiWebdavProperties1/copyFile.feature:426](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L426)
--   [apiWebdavProperties1/copyFile.feature:427](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L427)
-
+-   [apiWebdavProperties1/copyFile.feature:509](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L509)
+-   [apiWebdavProperties1/copyFile.feature:542](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L542)
+-   [apiWebdavProperties1/copyFile.feature:543](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L543)
+-   [apiWebdavProperties1/copyFile.feature:574](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L574)
+-   [apiWebdavProperties1/copyFile.feature:575](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L575)
+-   [apiWebdavProperties1/copyFile.feature:606](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L606)
 
 #### [Custom dav properties with namespaces are rendered incorrectly](https://github.com/owncloud/ocis/issues/2140)
 _ocdav: double check the webdav property parsing when custom namespaces are used_
@@ -50,10 +55,11 @@ _ocdav: double check the webdav property parsing when custom namespaces are used
 -   [apiWebdavProperties1/setFileProperties.feature:79](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/setFileProperties.feature#L79)
 
 #### [Cannot set custom webDav properties](https://github.com/owncloud/product/issues/264)
--   [apiWebdavProperties2/getFileProperties.feature:348](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L348)
--   [apiWebdavProperties2/getFileProperties.feature:353](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L353)
--   [apiWebdavProperties2/getFileProperties.feature:389](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L389)
--   [apiWebdavProperties2/getFileProperties.feature:394](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L394)
+-   [apiWebdavProperties2/getFileProperties.feature:360](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L360)
+-   [apiWebdavProperties2/getFileProperties.feature:365](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L365)
+-   [apiWebdavProperties2/getFileProperties.feature:401](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L401)
+-   [apiWebdavProperties2/getFileProperties.feature:406](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L406)
+
 ### Sync
 Synchronization features like etag propagation, setting mtime and locking files
 
@@ -457,10 +463,10 @@ File and sync features in a shared scenario
 
 #### [Adding public upload to a read only shared folder as a receipient is allowed ](https://github.com/owncloud/ocis/issues/2164)
 
--   [apiSharePublicLink2/updatePublicLinkShare.feature:342](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L342)
--   [apiSharePublicLink2/updatePublicLinkShare.feature:343](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L343)
--   [apiSharePublicLink2/updatePublicLinkShare.feature:402](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L402)
--   [apiSharePublicLink2/updatePublicLinkShare.feature:403](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L403)
+-   [apiSharePublicLink2/updatePublicLinkShare.feature:338](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L338)
+-   [apiSharePublicLink2/updatePublicLinkShare.feature:339](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L339)
+-   [apiSharePublicLink2/updatePublicLinkShare.feature:398](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L398)
+-   [apiSharePublicLink2/updatePublicLinkShare.feature:399](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/updatePublicLinkShare.feature#L399)
 
 #### [Upload-only shares must not overwrite but create a separate file](https://github.com/owncloud/ocis/issues/1267)
 
@@ -541,9 +547,7 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 
 #### [Folder overwrite on shared files doesn't works correctly on copying file](https://github.com/owncloud/ocis/issues/2183)
 -   [apiWebdavProperties1/copyFile.feature:510](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L510)
--   [apiWebdavProperties1/copyFile.feature:511](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L511)
 -   [apiWebdavProperties1/copyFile.feature:607](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L607)
--   [apiWebdavProperties1/copyFile.feature:608](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L608)
 
 #### [changing user quota gives ocs status 103 / cannot set user quota using the ocs endpoint](https://github.com/owncloud/product/issues/247)
 _getting and setting quota_
@@ -566,31 +570,29 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiMain/quota.feature:269](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature#L269)
 -   [apiMain/quota.feature:283](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature#L283)
 -   [apiMain/quota.feature:289](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature#L289)
-
-Scenario Outline: Retrieving folder quota of shared folder with quota when no quota is set for recipient
--   [apiWebdavProperties1/getQuota.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L58)
--   [apiWebdavProperties1/getQuota.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L59)
-Scenario Outline: Retrieving folder quota when quota is set and a file was uploaded
--   [apiWebdavProperties1/getQuota.feature:77](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L77)
--   [apiWebdavProperties1/getQuota.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L78)
-Scenario Outline: Retrieving folder quota when quota is set and a file was received
--   [apiWebdavProperties1/getQuota.feature:98](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L98)
--   [apiWebdavProperties1/getQuota.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L99)
     Scenario Outline: Retrieving folder quota when no quota is set
--   [apiWebdavProperties1/getQuota.feature:17](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L17)
 -   [apiWebdavProperties1/getQuota.feature:18](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L18)
-    Scenario Outline: Retrieving folder quota when quota is set
--   [apiWebdavProperties1/getQuota.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L32)
--   [apiWebdavProperties1/getQuota.feature:33](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L33)
+-   [apiWebdavProperties1/getQuota.feature:19](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L19)
+-   [apiWebdavProperties1/getQuota.feature:34](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L34)
+-   [apiWebdavProperties1/getQuota.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L35)
+Scenario Outline: Retrieving folder quota of shared folder with quota when no quota is set for recipient
+-   [apiWebdavProperties1/getQuota.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L61)
+-   [apiWebdavProperties1/getQuota.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L62)
+    Scenario Outline: Retrieving folder quota when quota is set and a file was uploaded
+-   [apiWebdavProperties1/getQuota.feature:81](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L81)
+-   [apiWebdavProperties1/getQuota.feature:82](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L82)
+    Scenario Outline: Retrieving folder quota when no quota is set
+-   [apiWebdavProperties1/getQuota.feature:103](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L103)
+-   [apiWebdavProperties1/getQuota.feature:104](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L104)
 
 #### [cannot get share-types webdav property](https://github.com/owncloud/ocis/issues/567)
--   [apiWebdavProperties2/getFileProperties.feature:229](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L229)
--   [apiWebdavProperties2/getFileProperties.feature:230](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L230)
+-   [apiWebdavProperties2/getFileProperties.feature:238](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L238)
+-   [apiWebdavProperties2/getFileProperties.feature:239](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L239)
 
 #### [Private link support](https://github.com/owncloud/product/issues/201)
 #### [oc:privatelink property not returned in webdav responses](https://github.com/owncloud/product/issues/262)
--   [apiWebdavProperties2/getFileProperties.feature:295](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L295)
--   [apiWebdavProperties2/getFileProperties.feature:296](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L296)
+-   [apiWebdavProperties2/getFileProperties.feature:306](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L306)
+-   [apiWebdavProperties2/getFileProperties.feature:307](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L307)
 
 #### [changing user quota gives ocs status 103 / Cannot set quota](https://github.com/owncloud/product/issues/247)
 _requires a [CS3 user provisioning api that can update the quota for a user](https://github.com/cs3org/cs3apis/pull/95#issuecomment-772780683)_
@@ -945,20 +947,24 @@ _ocdav: api compatibility, return correct status code_
 -   [apiWebdavOperations/search.feature:265](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/search.feature#L265)
 
 And other missing implementation of favorites
--   [apiFavorites/favorites.feature:158](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L158)
--   [apiFavorites/favorites.feature:159](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L159)
--   [apiFavorites/favorites.feature:183](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L183)
--   [apiFavorites/favorites.feature:184](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L184)
--   [apiFavorites/favorites.feature:216](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L216)
--   [apiFavorites/favorites.feature:217](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L217)
--   [apiFavorites/favoritesSharingToShares.feature:21](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L21)
+-   [apiFavorites/favorites.feature:162](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L162)
+-   [apiFavorites/favorites.feature:163](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L163)
+-   [apiFavorites/favorites.feature:187](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L187)
+-   [apiFavorites/favorites.feature:188](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L188)
+-   [apiFavorites/favorites.feature:220](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L220)
+-   [apiFavorites/favorites.feature:221](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L221)
+-   [apiFavorites/favoritesSharingToShares.feature:82](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L82)
+-   [apiFavorites/favoritesSharingToShares.feature:83](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L83)
+
+#### [resource inside Shares dir is not found using the spaces WebDAV API](https://github.com/owncloud/ocis/issues/2968)
 -   [apiFavorites/favoritesSharingToShares.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L22)
--   [apiFavorites/favoritesSharingToShares.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L40)
--   [apiFavorites/favoritesSharingToShares.feature:41](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L41)
--   [apiFavorites/favoritesSharingToShares.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L58)
--   [apiFavorites/favoritesSharingToShares.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L59)
--   [apiFavorites/favoritesSharingToShares.feature:77](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L77)
--   [apiFavorites/favoritesSharingToShares.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L78)
+-   [apiFavorites/favoritesSharingToShares.feature:23](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L23)
+-   [apiFavorites/favoritesSharingToShares.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L42)
+-   [apiFavorites/favoritesSharingToShares.feature:43](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L43)
+-   [apiFavorites/favoritesSharingToShares.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L61)
+-   [apiFavorites/favoritesSharingToShares.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L62)
+-   [apiFavorites/favoritesSharingToShares.feature:102](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L102)
+-   [apiFavorites/favoritesSharingToShares.feature:103](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L103)
 
 #### [WWW-Authenticate header for unauthenticated requests is not clear](https://github.com/owncloud/ocis/issues/2285)
 -   [apiWebdavOperations/refuseAccess.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/refuseAccess.feature#L22)
@@ -1149,10 +1155,10 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 -   [apiWebdavUpload1/uploadFileToExcludedDirectory.feature:82](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToExcludedDirectory.feature#L82)
 
 #### [Blacklist files extensions](https://github.com/owncloud/ocis/issues/2177)
+-   [apiWebdavProperties1/copyFile.feature:132](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L132)
 -   [apiWebdavProperties1/copyFile.feature:133](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L133)
--   [apiWebdavProperties1/copyFile.feature:134](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L134)
--   [apiWebdavProperties1/createFolder.feature:92](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L92)
--   [apiWebdavProperties1/createFolder.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L93)
+-   [apiWebdavProperties1/createFolder.feature:95](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L95)
+-   [apiWebdavProperties1/createFolder.feature:96](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L96)
 -   [apiWebdavUpload1/uploadFile.feature:181](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L181)
 -   [apiWebdavUpload1/uploadFile.feature:182](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L182)
 -   [apiWebdavUpload2/uploadFileToBlacklistedNameUsingOldChunking.feature:19](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileToBlacklistedNameUsingOldChunking.feature#L19)
@@ -1276,12 +1282,12 @@ _ocs: api compatibility, return correct status code_
 -   [apiShareOperationsToShares2/shareAccessByID.feature:163](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/shareAccessByID.feature#L163)
 
 #### [[OC-storage] share-types field empty for shared file folder in webdav response](https://github.com/owncloud/ocis/issues/2144)
--   [apiWebdavProperties2/getFileProperties.feature:207](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L207)
--   [apiWebdavProperties2/getFileProperties.feature:208](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L208)
+-   [apiWebdavProperties2/getFileProperties.feature:215](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L215)
+-   [apiWebdavProperties2/getFileProperties.feature:216](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L216)
 
 #### [Creating a public link with all permissions(31) fails](https://github.com/owncloud/ocis/issues/2145)
--   [apiWebdavProperties2/getFileProperties.feature:265](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L265)
--   [apiWebdavProperties2/getFileProperties.feature:266](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L266)
+-   [apiWebdavProperties2/getFileProperties.feature:275](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L275)
+-   [apiWebdavProperties2/getFileProperties.feature:276](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L276)
 
 #### [Cannot move folder/file from one received share to another](https://github.com/owncloud/ocis/issues/2442)
 -   [apiShareUpdateToShares/updateShare.feature:241](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L241)
@@ -1294,14 +1300,12 @@ _ocs: api compatibility, return correct status code_
 -   [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:455](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L455)
 
 #### [Trying to copy a file into a readonly share gives HTTP 500 error](https://github.com/owncloud/ocis/issues/2166)
+-   [apiWebdavProperties1/copyFile.feature:452](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L452)
 -   [apiWebdavProperties1/copyFile.feature:453](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L453)
--   [apiWebdavProperties1/copyFile.feature:454](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L454)
+-   [apiWebdavProperties1/copyFile.feature:478](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L478)
 -   [apiWebdavProperties1/copyFile.feature:479](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L479)
--   [apiWebdavProperties1/copyFile.feature:480](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L480)
 -   [apiWebdavProperties1/copyFile.feature:543](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L543)
--   [apiWebdavProperties1/copyFile.feature:544](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L544)
 -   [apiWebdavProperties1/copyFile.feature:575](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L575)
--   [apiWebdavProperties1/copyFile.feature:576](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L576)
 
 ### [Allow public link sharing only for certain groups feature not implemented]
 -   [apiSharePublicLink2/allowGroupToCreatePublicLinks.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/allowGroupToCreatePublicLinks.feature#L35)
@@ -1337,6 +1341,12 @@ _ocs: api compatibility, return correct status code_
 -   [apiShareManagementToShares/moveShareInsideAnotherShare.feature:25](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveShareInsideAnotherShare.feature#L25)
 -   [apiShareManagementToShares/moveShareInsideAnotherShare.feature:86](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveShareInsideAnotherShare.feature#L86)
 -   [apiShareManagementToShares/moveShareInsideAnotherShare.feature:100](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveShareInsideAnotherShare.feature#L100)
+
+#### [Renaming resource to banned name is allowed in spaces webdav](https://github.com/owncloud/ocis/issues/3099)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L35)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L36)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:74](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L74)
+-   [apiWebdavMove2/moveFileToBlacklistedName.feature:75](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L75)
 
 #### [could not create system tag](https://github.com/owncloud/ocis/issues/3092)
 -   [apiWebdavOperations/search.feature:273](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/search.feature#L273)
