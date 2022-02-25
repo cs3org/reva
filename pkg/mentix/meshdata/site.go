@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/mentix/accservice"
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
 
@@ -40,8 +39,7 @@ type SiteType int
 // Site represents a single site managed by Mentix.
 type Site struct {
 	// Internal settings
-	Type         SiteType `json:"-"`
-	IsAuthorized bool     `json:"-"`
+	Type SiteType `json:"-"`
 
 	ID           string
 	Name         string
@@ -120,8 +118,6 @@ func (site *Site) Verify() error {
 // InferMissingData infers missing data from other data where possible.
 func (site *Site) InferMissingData() {
 	// Infer missing data
-	site.IsAuthorized = site.getAuthorizationStatus()
-
 	if site.Homepage == "" {
 		site.Homepage = fmt.Sprintf("http://www.%v", site.Domain)
 	} else if site.Domain == "" {
@@ -134,23 +130,6 @@ func (site *Site) InferMissingData() {
 	for _, service := range site.Services {
 		service.InferMissingData()
 	}
-}
-
-func (site *Site) getAuthorizationStatus() bool {
-	// ScienceMesh sites are always authorized
-	if site.Type == SiteTypeScienceMesh {
-		return true
-	}
-
-	// Use the accounts service to find out whether the site is authorized
-	resp, err := accservice.Query("is-authorized", network.URLParams{"by": "siteid", "value": site.ID})
-	if err == nil && resp.Success {
-		if authorized, ok := resp.Data.(bool); ok {
-			return authorized
-		}
-	}
-
-	return false
 }
 
 // GetSiteTypeName returns the readable name of the given site type.
