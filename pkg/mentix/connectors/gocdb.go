@@ -135,10 +135,8 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 	for _, site := range sites.Sites {
 		properties := connector.extensionsToMap(&site.Extensions)
 
-		siteID := meshdata.GetPropertyValue(properties, meshdata.PropertySiteID, "")
-		if len(siteID) == 0 {
-			return fmt.Errorf("site ID missing for site '%v'", site.ShortName)
-		}
+		// The site ID can be set through a property; by default, the site short name will be used
+		siteID := meshdata.GetPropertyValue(properties, meshdata.PropertySiteID, site.ShortName)
 
 		// See if an organization has been defined using properties; otherwise, use the official name
 		organization := meshdata.GetPropertyValue(properties, meshdata.PropertyOrganization, site.OfficialName)
