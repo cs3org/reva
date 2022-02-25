@@ -32,20 +32,6 @@ Kind regards,
 The ScienceMesh Team
 `
 
-const apiKeyAssignedTemplate = `
-Dear {{.Account.FirstName}} {{.Account.LastName}},
-
-An API key has been created for your account!
-
-To view your new API key, log in to your user account panel:
-{{.AccountsAddress}}
-
-Your key will appear on the front page once logged in.
-
-Kind regards,
-The ScienceMesh Team
-`
-
 const gocdbAccessGrantedTemplate = `
 Dear {{.Account.FirstName}} {{.Account.LastName}},
 

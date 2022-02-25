@@ -26,18 +26,15 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
-	"github.com/cs3org/reva/pkg/siteacc/manager"
 	"github.com/pkg/errors"
 	"github.com/prometheus/alertmanager/template"
 )
 
 const (
-	invokerDefault = ""
-	invokerUser    = "user"
+	invokerUser = "user"
 )
 
 type methodCallback = func(*SiteAccounts, url.Values, []byte, *html.Session) (interface{}, error)
@@ -68,10 +65,6 @@ func getEndpoints() []endpoint {
 		// Form/panel endpoints
 		{config.EndpointAdministration, callAdministrationEndpoint, nil, false},
 		{config.EndpointAccount, callAccountEndpoint, nil, true},
-		// API key endpoints
-		{config.EndpointGenerateAPIKey, callMethodEndpoint, createMethodCallbacks(handleGenerateAPIKey, nil), false},
-		{config.EndpointVerifyAPIKey, callMethodEndpoint, createMethodCallbacks(handleVerifyAPIKey, nil), false},
-		{config.EndpointAssignAPIKey, callMethodEndpoint, createMethodCallbacks(nil, handleAssignAPIKey), false},
 		// General account endpoints
 		{config.EndpointList, callMethodEndpoint, createMethodCallbacks(handleList, nil), false},
 		{config.EndpointFind, callMethodEndpoint, createMethodCallbacks(handleFind, nil), false},
@@ -90,8 +83,6 @@ func getEndpoints() []endpoint {
 		{config.EndpointGrantGOCDBAccess, callMethodEndpoint, createMethodCallbacks(nil, handleGrantGOCDBAccess), false},
 		// Alerting endpoints
 		{config.EndpointDispatchAlert, callMethodEndpoint, createMethodCallbacks(nil, handleDispatchAlert), false},
-		// Account site endpoints
-		{config.EndpointUnregisterSite, callMethodEndpoint, createMethodCallbacks(nil, handleUnregisterSite), false},
 	}
 
 	return endpoints
@@ -155,63 +146,6 @@ func callMethodEndpoint(siteacc *SiteAccounts, ep endpoint, w http.ResponseWrite
 
 	jsonData, _ := json.MarshalIndent(&resp, "", "\t")
 	_, _ = w.Write(jsonData)
-}
-
-func handleGenerateAPIKey(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
-	email := values.Get("email")
-	flags := key.FlagDefault
-
-	if strings.EqualFold(values.Get("isScienceMesh"), "true") {
-		flags |= key.FlagScienceMesh
-	}
-
-	if len(email) == 0 {
-		return nil, errors.Errorf("no email provided")
-	}
-
-	apiKey, err := key.GenerateAPIKey(key.SaltFromEmail(email), flags)
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to generate API key")
-	}
-	return map[string]string{"apiKey": apiKey}, nil
-}
-
-func handleVerifyAPIKey(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
-	apiKey := values.Get("apiKey")
-	email := values.Get("email")
-
-	if len(apiKey) == 0 {
-		return nil, errors.Errorf("no API key provided")
-	}
-
-	if len(email) == 0 {
-		return nil, errors.Errorf("no email provided")
-	}
-
-	err := key.VerifyAPIKey(apiKey, key.SaltFromEmail(email))
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid API key")
-	}
-	return nil, nil
-}
-
-func handleAssignAPIKey(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
-	account, err := unmarshalRequestData(body)
-	if err != nil {
-		return nil, err
-	}
-
-	flags := key.FlagDefault
-	if _, ok := values["isScienceMesh"]; ok {
-		flags |= key.FlagScienceMesh
-	}
-
-	// Assign a new API key to the account through the accounts manager
-	if err := siteacc.AccountsManager().AssignAPIKeyToAccount(account, flags); err != nil {
-		return nil, errors.Wrap(err, "unable to assign API key")
-	}
-
-	return nil, nil
 }
 
 func handleList(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
@@ -289,20 +223,6 @@ func handleRemove(siteacc *SiteAccounts, values url.Values, body []byte, session
 	// Remove the account through the accounts manager
 	if err := siteacc.AccountsManager().RemoveAccount(account); err != nil {
 		return nil, errors.Wrap(err, "unable to remove account")
-	}
-
-	return nil, nil
-}
-
-func handleUnregisterSite(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
-	account, err := unmarshalRequestData(body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Unregister the account's site through the accounts manager
-	if err := siteacc.AccountsManager().UnregisterAccountSite(account); err != nil {
-		return nil, errors.Wrap(err, "unable to unregister the site of the given account")
 	}
 
 	return nil, nil
@@ -453,20 +373,6 @@ func processInvoker(siteacc *SiteAccounts, values url.Values, session *html.Sess
 	var invokedByUser bool
 
 	switch strings.ToLower(values.Get("invoker")) {
-	case invokerDefault:
-		// If the endpoint was called through the API, an API key must be provided identifying the account
-		apiKey := values.Get("apikey")
-		if apiKey == "" {
-			return "", false, errors.Errorf("no API key provided")
-		}
-
-		accountFound, err := findAccount(siteacc, manager.FindByAPIKey, apiKey)
-		if err != nil {
-			return "", false, errors.Wrap(err, "no account for the specified API key found")
-		}
-		email = accountFound.Email
-		invokedByUser = false
-
 	case invokerUser:
 		// If this endpoint was called by the user, set the account email from the stored session
 		if session.LoggedInUser == nil {

@@ -24,13 +24,6 @@ const (
 	// EndpointAccount is the endpoint path of the web interface account panel.
 	EndpointAccount = "/account"
 
-	// EndpointGenerateAPIKey is the endpoint path of the API key generator.
-	EndpointGenerateAPIKey = "/generate-api-key"
-	// EndpointVerifyAPIKey is the endpoint path for API key verification.
-	EndpointVerifyAPIKey = "/verify-api-key"
-	// EndpointAssignAPIKey is the endpoint path used for assigning an API key to an account.
-	EndpointAssignAPIKey = "/assign-api-key"
-
 	// EndpointList is the endpoint path for listing all stored accounts.
 	EndpointList = "/list"
 	// EndpointFind is the endpoint path for finding accounts.
@@ -59,9 +52,6 @@ const (
 
 	// EndpointGrantGOCDBAccess is the endpoint path for granting or revoking GOCDB access.
 	EndpointGrantGOCDBAccess = "/grant-gocdb-access"
-
-	// EndpointUnregisterSite is the endpoint path for site unregistration.
-	EndpointUnregisterSite = "/unregister-site"
 
 	// EndpointDispatchAlert is the endpoint path for dispatching alerts from Prometheus.
 	EndpointDispatchAlert = "/dispatch-alert"
