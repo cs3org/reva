@@ -200,8 +200,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string) (n *No
 	r.owner, err = r.readOwner()
 	switch {
 	case xattrs.IsNotExist(err):
-		// this returns tr
-		return r, nil
+		return r, nil // swallow not found, the node defaults to exists = false
 	case err != nil:
 		return nil, err
 	}
@@ -222,40 +221,43 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string) (n *No
 
 	nodePath := n.InternalPath()
 
-	var attr string
 	// lookup name in extended attributes
-	if attr, err = xattrs.Get(nodePath, xattrs.NameAttr); err == nil {
-		n.Name = attr
-	} else {
-		return
+	n.Name, err = xattrs.Get(nodePath, xattrs.NameAttr)
+	switch {
+	case xattrs.IsNotExist(err):
+		return n, nil // swallow not found, the node defaults to exists = false
+	case err != nil:
+		return nil, err
 	}
 
 	n.Exists = true
 
 	// lookup blobID in extended attributes
-	if attr, err = xattrs.Get(nodePath, xattrs.BlobIDAttr); err == nil {
-		n.BlobID = attr
-	} else {
-		return
+	n.BlobID, err = xattrs.Get(nodePath, xattrs.BlobIDAttr)
+	switch {
+	case xattrs.IsNotExist(err):
+		return n, nil // swallow not found, the node defaults to exists = false
+	case err != nil:
+		return nil, err
 	}
+
 	// Lookup blobsize
-	var blobSize int64
-	if blobSize, err = ReadBlobSizeAttr(nodePath); err == nil {
-		n.Blobsize = blobSize
-	} else {
-		return
+	n.Blobsize, err = ReadBlobSizeAttr(nodePath)
+	switch {
+	case xattrs.IsNotExist(err):
+		return n, nil // swallow not found, the node defaults to exists = false
+	case err != nil:
+		return nil, err
 	}
 
 	// lookup parent id in extended attributes
-	attr, err = xattrs.Get(nodePath, xattrs.ParentidAttr)
+	n.ParentID, err = xattrs.Get(nodePath, xattrs.ParentidAttr)
 	switch {
-	case err == nil:
-		n.ParentID = attr
 	case xattrs.IsAttrUnset(err):
 		return nil, errtypes.InternalError(err.Error())
 	case xattrs.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
-	default:
+	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
 	}
 

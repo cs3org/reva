@@ -341,6 +341,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			continue
 		}
 
+		if !n.Exists {
+			continue
+		}
+
 		spaceType := filepath.Base(filepath.Dir(matches[i]))
 
 		// FIXME type share evolved to grant on the edge branch ... make it configurable if the driver should support them or not for now ... ignore type share
@@ -556,7 +560,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %s", user.Username, n.ID))
 		}
 
-		if n.IsDisabled() {
+		if n.SpaceRoot.IsDisabled() {
 			ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
 				// TODO: Which permission do I need to see the space?
 				return p.AddGrant
@@ -570,15 +574,18 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	var err error
 	// TODO apply more filters
 	var sname string
-	if sname, err = n.GetMetadata(xattrs.SpaceNameAttr); err != nil {
+	if sname, err = n.SpaceRoot.GetMetadata(xattrs.SpaceNameAttr); err != nil {
 		// FIXME: Is that a severe problem?
 		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a name attribute")
 	}
 
-	if err := n.FindStorageSpaceRoot(); err != nil {
-		return nil, err
-	}
+	/*
+		if err := n.FindStorageSpaceRoot(); err != nil {
+			return nil, err
+		}
+	*/
 
+	// read the grants from the current node, not the root
 	grants, err := n.ListGrants(ctx)
 	if err != nil {
 		return nil, err
@@ -622,11 +629,11 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
 
-	if space.SpaceType, err = n.GetMetadata(xattrs.SpaceTypeAttr); err != nil {
+	if space.SpaceType, err = n.SpaceRoot.GetMetadata(xattrs.SpaceTypeAttr); err != nil {
 		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a type attribute")
 	}
 
-	if n.IsDisabled() {
+	if n.SpaceRoot.IsDisabled() {
 		space.Opaque.Map["trashed"] = &types.OpaqueEntry{
 			Decoder: "plain",
 			Value:   []byte("trashed"),
