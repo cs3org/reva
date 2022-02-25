@@ -267,7 +267,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 	}
 	if len(spaceTypes) == 0 {
-		spaceTypes = []string{"*"}
+		spaceTypes = []string{spaceTypeAny}
 	}
 
 	canListAllSpaces := fs.canListAllSpaces(ctx)
@@ -295,7 +295,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 		// filter space types
 		for _, spaceType := range spaceTypes {
-			if spaceType == "*" || spaceType == space.SpaceType {
+			if spaceType == spaceTypeAny || spaceType == space.SpaceType {
 				spaces = append(spaces, space)
 			}
 		}
