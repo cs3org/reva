@@ -138,6 +138,13 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		}
 	}
 
+	// for the root node
+	if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
+		AddPermissions(&ap, &np)
+	} else {
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Msg("error reading root node permissions")
+	}
+
 	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Interface("node", n.ID).Interface("user", u).Msg("returning agregated permissions")
 	return ap, nil
 }
