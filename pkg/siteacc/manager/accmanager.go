@@ -266,31 +266,6 @@ func (mngr *AccountsManager) FindAccountEx(by string, value string, cloneAccount
 	return account, nil
 }
 
-// AuthorizeAccount sets the authorization status of the account identified by the account email; if no such account exists, an error is returned.
-func (mngr *AccountsManager) AuthorizeAccount(accountData *data.Account, authorized bool) error {
-	mngr.mutex.Lock()
-	defer mngr.mutex.Unlock()
-
-	account, err := mngr.findAccount(FindByEmail, accountData.Email)
-	if err != nil {
-		return errors.Wrap(err, "no account with the specified email exists")
-	}
-
-	authorizedOld := account.Data.Authorized
-	account.Data.Authorized = authorized
-
-	mngr.storage.AccountUpdated(account)
-	mngr.writeAllAccounts()
-
-	if account.Data.Authorized && account.Data.Authorized != authorizedOld {
-		mngr.sendEmail(account, nil, email.SendAccountAuthorized)
-	}
-
-	mngr.callListeners(account, AccountsListener.AccountUpdated)
-
-	return nil
-}
-
 // GrantGOCDBAccess sets the GOCDB access status of the account identified by the account email; if no such account exists, an error is returned.
 func (mngr *AccountsManager) GrantGOCDBAccess(accountData *data.Account, grantAccess bool) error {
 	mngr.mutex.Lock()

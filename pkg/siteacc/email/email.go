@@ -60,11 +60,6 @@ func SendAPIKeyAssigned(account *data.Account, recipients []string, params map[s
 	return send(recipients, "ScienceMesh: Your API key", apiKeyAssignedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
 }
 
-// SendAccountAuthorized sends an email about account authorization.
-func SendAccountAuthorized(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
-	return send(recipients, "ScienceMesh: Site registration authorized", accountAuthorizedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
-}
-
 // SendGOCDBAccessGranted sends an email about granted GOCDB access.
 func SendGOCDBAccessGranted(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
 	return send(recipients, "ScienceMesh: GOCDB access granted", gocdbAccessGrantedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)

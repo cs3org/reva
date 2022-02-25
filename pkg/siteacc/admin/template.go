@@ -71,9 +71,7 @@ const tplBody = `
 			<!--
 				<strong>API Key:</strong> {{if .Data.APIKey}}{{.Data.APIKey}}{{else}}<em>Not assigned</em>{{end}}
 				<br>
-				<strong>Site ID:</strong> {{.GetSiteID}}
-				<br><br>
-				<strong>Authorized:</strong> <em>{{if .Data.Authorized}}Yes{{else}}No{{end}}</em>
+				<strong>Site ID:</strong> {{.GetSiteID}}	
 				<br>
 			-->
 				<strong>GOCDB access:</strong> <em>{{if .Data.GOCDBAccess}}Granted{{else}}Not granted{{end}}</em>
@@ -92,14 +90,6 @@ const tplBody = `
 					<button type="button" onClick="handleAction('grant-gocdb-access?status=true', '{{.Email}}');">Grant GOCDB access</button>
 				{{end}}
 	
-				<!--
-				{{if .Data.Authorized}}
-					<button type="button" onClick="handleAction('authorize?status=false', '{{.Email}}');" {{if not .Data.APIKey}}disabled{{end}}>Unauthorize</button>
-				{{else}}
-					<button type="button" onClick="handleAction('authorize?status=true', '{{.Email}}');" {{if not .Data.APIKey}}disabled{{end}}>Authorize</button>
-				{{end}}
-				-->
-
 				<!--
 					<span style="width: 25px;">&nbsp;</span>
 					<button type="button" onClick="handleAction('unregister-site', '{{.Email}}');" {{if not .Data.APIKey}}disabled{{end}}>Unregister site</button>

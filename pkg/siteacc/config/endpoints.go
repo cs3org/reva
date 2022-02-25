@@ -57,11 +57,6 @@ const (
 	// EndpointVerifyUserToken is the endpoint path for user token validation.
 	EndpointVerifyUserToken = "/verify-user-token"
 
-	// EndpointAuthorize is the endpoint path for account authorization.
-	EndpointAuthorize = "/authorize"
-	// EndpointIsAuthorized is the endpoint path used to check the authorization status of an account.
-	EndpointIsAuthorized = "/is-authorized"
-
 	// EndpointGrantGOCDBAccess is the endpoint path for granting or revoking GOCDB access.
 	EndpointGrantGOCDBAccess = "/grant-gocdb-access"
 

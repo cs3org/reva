@@ -86,9 +86,6 @@ func getEndpoints() []endpoint {
 		{config.EndpointContact, callMethodEndpoint, createMethodCallbacks(nil, handleContact), true},
 		// Authentication endpoints
 		{config.EndpointVerifyUserToken, callMethodEndpoint, createMethodCallbacks(handleVerifyUserToken, nil), true},
-		// Authorization endpoints
-		{config.EndpointAuthorize, callMethodEndpoint, createMethodCallbacks(nil, handleAuthorize), false},
-		{config.EndpointIsAuthorized, callMethodEndpoint, createMethodCallbacks(handleIsAuthorized, nil), false},
 		// Access management endpoints
 		{config.EndpointGrantGOCDBAccess, callMethodEndpoint, createMethodCallbacks(nil, handleGrantGOCDBAccess), false},
 		// Alerting endpoints
@@ -297,14 +294,6 @@ func handleRemove(siteacc *SiteAccounts, values url.Values, body []byte, session
 	return nil, nil
 }
 
-func handleIsAuthorized(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
-	account, err := findAccount(siteacc, values.Get("by"), values.Get("value"))
-	if err != nil {
-		return nil, err
-	}
-	return account.Data.Authorized, nil
-}
-
 func handleUnregisterSite(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
@@ -391,36 +380,6 @@ func handleVerifyUserToken(siteacc *SiteAccounts, values url.Values, body []byte
 	}
 
 	return newToken, nil
-}
-
-func handleAuthorize(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
-	account, err := unmarshalRequestData(body)
-	if err != nil {
-		return nil, err
-	}
-
-	if val := values.Get("status"); len(val) > 0 {
-		var authorize bool
-		switch strings.ToLower(val) {
-		case "true":
-			authorize = true
-
-		case "false":
-			authorize = false
-
-		default:
-			return nil, errors.Errorf("unsupported authorization status %v", val[0])
-		}
-
-		// Authorize the account through the accounts manager
-		if err := siteacc.AccountsManager().AuthorizeAccount(account, authorize); err != nil {
-			return nil, errors.Wrap(err, "unable to (un)authorize account")
-		}
-	} else {
-		return nil, errors.Errorf("no authorization status provided")
-	}
-
-	return nil, nil
 }
 
 func handleDispatchAlert(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {

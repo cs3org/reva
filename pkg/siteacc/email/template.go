@@ -46,15 +46,6 @@ Kind regards,
 The ScienceMesh Team
 `
 
-const accountAuthorizedTemplate = `
-Dear {{.Account.FirstName}} {{.Account.LastName}},
-
-Congratulations - your site registration has been authorized!
-
-Kind regards,
-The ScienceMesh Team
-`
-
 const gocdbAccessGrantedTemplate = `
 Dear {{.Account.FirstName}} {{.Account.LastName}},
 

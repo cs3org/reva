@@ -52,7 +52,6 @@ type Account struct {
 type AccountData struct {
 	APIKey      key.APIKey `json:"apiKey"`
 	GOCDBAccess bool       `json:"gocdbAccess"`
-	Authorized  bool       `json:"authorized"`
 }
 
 // AccountSettings holds additional settings for a site account.
@@ -211,7 +210,6 @@ func NewAccount(email string, title, firstName, lastName string, site, role stri
 		Data: AccountData{
 			APIKey:      "",
 			GOCDBAccess: false,
-			Authorized:  false,
 		},
 		Settings: AccountSettings{
 			ReceiveAlerts: true,
