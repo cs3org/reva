@@ -26,21 +26,9 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
 
-const (
-	// SiteTypeScienceMesh flags a site as being part of the mesh.
-	SiteTypeScienceMesh SiteType = iota
-	// SiteTypeCommunity flags a site as being a community site.
-	SiteTypeCommunity
-)
-
-// SiteType holds the type of a site.
-type SiteType int
-
 // Site represents a single site managed by Mentix.
 type Site struct {
 	// Internal settings
-	Type SiteType `json:"-"`
-
 	ID           string
 	Name         string
 	FullName     string
@@ -129,19 +117,5 @@ func (site *Site) InferMissingData() {
 	// Infer missing for services
 	for _, service := range site.Services {
 		service.InferMissingData()
-	}
-}
-
-// GetSiteTypeName returns the readable name of the given site type.
-func GetSiteTypeName(siteType SiteType) string {
-	switch siteType {
-	case SiteTypeScienceMesh:
-		return "sciencemesh"
-
-	case SiteTypeCommunity:
-		return "community"
-
-	default:
-		return "unknown"
 	}
 }
