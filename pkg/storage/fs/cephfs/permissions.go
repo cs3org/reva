@@ -44,16 +44,13 @@ var perms = map[rune][]string{
 		"ListGrants",
 	},
 	'w': {
-		"AddGrant",
 		"CreateContainer",
 		"Delete",
 		"InitiateFileUpload",
 		"Move",
-		"RemoveGrant",
 		"PurgeRecycle",
 		"RestoreFileVersion",
 		"RestoreRecycleItem",
-		"UpdateGrant",
 	},
 	'x': {
 		"ListRecycle",
@@ -289,29 +286,21 @@ func updatePerms(rp *provider.ResourcePermissions, acl string, unset bool) {
 		rp.ListGrants = false
 	}
 	if strings.ContainsRune(acl, 'w') {
-		rp.AddGrant = true
-		rp.DenyGrant = true
 		rp.CreateContainer = true
 		rp.Delete = true
 		rp.InitiateFileUpload = true
 		rp.Move = true
-		rp.RemoveGrant = true
 		rp.PurgeRecycle = true
 		rp.RestoreFileVersion = true
 		rp.RestoreRecycleItem = true
-		rp.UpdateGrant = true
 	} else if unset {
-		rp.AddGrant = false
-		rp.DenyGrant = false
 		rp.CreateContainer = false
 		rp.Delete = false
 		rp.InitiateFileUpload = false
 		rp.Move = false
-		rp.RemoveGrant = false
 		rp.PurgeRecycle = false
 		rp.RestoreFileVersion = false
 		rp.RestoreRecycleItem = false
-		rp.UpdateGrant = false
 	}
 	if strings.ContainsRune(acl, 'x') {
 		rp.ListRecycle = true
