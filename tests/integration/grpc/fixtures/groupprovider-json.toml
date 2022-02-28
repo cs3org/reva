@@ -1,0 +1,11 @@
+[log]
+level = "debug"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.groupprovider]
+driver = "json"
+
+[grpc.services.groupprovider.drivers.json]
+groups = "fixtures/groups.demo.json"
