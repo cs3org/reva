@@ -89,7 +89,7 @@ func New(m map[string]interface{}) (group.Manager, error) {
 
 func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error) {
 	for _, g := range m.groups {
-		if g.Id.GetOpaqueId() == gid.OpaqueId || g.GroupName == gid.OpaqueId {
+		if (g.Id.GetOpaqueId() == gid.OpaqueId || g.GroupName == gid.OpaqueId) && (gid.Idp == "" || gid.Idp == g.Id.GetIdp()) {
 			return g, nil
 		}
 	}
