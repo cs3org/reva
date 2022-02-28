@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -195,6 +196,7 @@ func (t *Tree) linkSpace(spaceType, spaceID string) {
 	}
 }
 
+// isRootNode checks if a node is a space root
 func isRootNode(nodePath string) bool {
 	attr, err := xattrs.Get(nodePath, xattrs.ParentidAttr)
 	return err == nil && attr == node.RootID
@@ -217,7 +219,7 @@ func isSharedNode(nodePath string) bool {
 func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 	md, err := os.Stat(n.InternalPath())
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, errtypes.NotFound(n.ID)
 		}
 		return nil, errors.Wrap(err, "tree: error stating "+n.ID)
@@ -350,7 +352,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	dir := n.InternalPath()
 	f, err := os.Open(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, errtypes.NotFound(dir)
 		}
 		return nil, errors.Wrap(err, "tree: error listing "+dir)

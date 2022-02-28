@@ -138,12 +138,8 @@ func (n *Node) SetMetadata(key string, val string) (err error) {
 
 // RemoveMetadata removes a given key
 func (n *Node) RemoveMetadata(key string) (err error) {
-	if err = xattrs.Remove(n.InternalPath(), key); err != nil {
-		if e, ok := err.(*xattr.Error); ok && (e.Err.Error() == "no data available" ||
-			// darwin
-			e.Err.Error() == "attribute not found") {
-			return nil
-		}
+	if err = xattrs.Remove(n.InternalPath(), key); err == nil || xattrs.IsAttrUnset(err) {
+		return nil
 	}
 	return err
 }
@@ -285,7 +281,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string) (n *No
 	//   - flag the two above options with dtime
 	_, err = os.Stat(n.ParentInternalPath())
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, errtypes.NotFound(err.Error())
 		}
 		return nil, err
@@ -324,7 +320,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	}
 	nodeID, err := readChildNodeFromLink(filepath.Join(n.InternalPath(), name))
 	if err != nil {
-		if os.IsNotExist(err) || isNotDir(err) {
+		if errors.Is(err, fs.ErrNotExist) || isNotDir(err) {
 
 			c := &Node{
 				SpaceID:   spaceID,

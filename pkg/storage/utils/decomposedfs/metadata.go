@@ -182,8 +182,6 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 			fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
 			if err := xattrs.Remove(nodePath, fa); err != nil {
 				if xattrs.IsAttrUnset(err) {
-					// TODO align with default case: is there a difference between darwin and linux?
-					// refactor this properly into a function in the "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs" package
 					continue // already gone, ignore
 				}
 				sublog.Error().Err(err).
@@ -194,16 +192,13 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 			}
 		default:
 			if err = xattrs.Remove(nodePath, xattrs.MetadataPrefix+k); err != nil {
-				// a non-existing attribute will return an error, which we can ignore
-				// (using string compare because the error type is syscall.Errno and not wrapped/recognizable)
-				if e, ok := err.(*xattr.Error); !ok || !(e.Err.Error() == "no data available" ||
-					// darwin
-					e.Err.Error() == "attribute not found") {
-					sublog.Error().Err(err).
-						Str("key", k).
-						Msg("could not unset metadata")
-					errs = append(errs, errors.Wrap(err, "could not unset metadata"))
+				if xattrs.IsAttrUnset(err) {
+					continue // already gone, ignore
 				}
+				sublog.Error().Err(err).
+					Str("key", k).
+					Msg("could not unset metadata")
+				errs = append(errs, errors.Wrap(err, "could not unset metadata"))
 			}
 		}
 	}

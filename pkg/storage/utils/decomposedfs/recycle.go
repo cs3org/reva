@@ -20,7 +20,7 @@ package decomposedfs
 
 import (
 	"context"
-	"io/fs"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,7 +109,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 
 	f, err := os.Open(trashItemPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, iofs.ErrNotExist) {
 			return items, nil
 		}
 		return nil, errors.Wrapf(err, "recycle: error opening trashItemPath %s", trashItemPath)
@@ -152,7 +152,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	return items, nil
 }
 
-func (fs *Decomposedfs) createTrashItem(ctx context.Context, md fs.FileInfo, key string, deletionTime *types.Timestamp) (*provider.RecycleItem, error) {
+func (fs *Decomposedfs) createTrashItem(ctx context.Context, md iofs.FileInfo, key string, deletionTime *types.Timestamp) (*provider.RecycleItem, error) {
 
 	item := &provider.RecycleItem{
 		Type:         getResourceType(md.IsDir()),

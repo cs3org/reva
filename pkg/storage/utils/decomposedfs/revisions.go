@@ -21,6 +21,7 @@ package decomposedfs
 import (
 	"context"
 	"io"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,7 +133,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 
 	r, err := os.Open(contentPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, iofs.ErrNotExist) {
 			return nil, errtypes.NotFound(contentPath)
 		}
 		return nil, errors.Wrap(err, "Decomposedfs: error opening revision "+revisionKey)

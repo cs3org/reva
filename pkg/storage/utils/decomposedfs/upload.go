@@ -28,6 +28,7 @@ import (
 	"hash"
 	"hash/adler32"
 	"io"
+	iofs "io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -307,7 +308,7 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 	info := tusd.FileInfo{}
 	data, err := ioutil.ReadFile(infoPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, iofs.ErrNotExist) {
 			// Interpret os.ErrNotExist as 404 Not Found
 			err = tusd.ErrNotFound
 		}
@@ -636,7 +637,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			return errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
 		}
 	}
-	if os.IsNotExist(err) || link != "../"+n.ID {
+	if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
 		relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
 		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")
@@ -645,7 +646,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 
 	// only delete the upload if it was successfully written to the storage
 	if err = os.Remove(upload.infoPath); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, iofs.ErrNotExist) {
 			sublog.Err(err).Msg("Decomposedfs: could not delete upload info")
 			return
 		}
@@ -683,13 +684,13 @@ func tryWritingChecksum(log *zerolog.Logger, n *node.Node, algo string, h hash.H
 
 func (upload *fileUpload) discardChunk() {
 	if err := os.Remove(upload.binPath); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, iofs.ErrNotExist) {
 			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("binPath", upload.binPath).Interface("info", upload.info).Msg("Decomposedfs: could not discard chunk")
 			return
 		}
 	}
 	if err := os.Remove(upload.infoPath); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, iofs.ErrNotExist) {
 			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("infoPath", upload.infoPath).Interface("info", upload.info).Msg("Decomposedfs: could not discard chunk info")
 			return
 		}
@@ -708,12 +709,12 @@ func (fs *Decomposedfs) AsTerminatableUpload(upload tusd.Upload) tusd.Terminatab
 // Terminate terminates the upload
 func (upload *fileUpload) Terminate(ctx context.Context) error {
 	if err := os.Remove(upload.infoPath); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, iofs.ErrNotExist) {
 			return err
 		}
 	}
 	if err := os.Remove(upload.binPath); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, iofs.ErrNotExist) {
 			return err
 		}
 	}

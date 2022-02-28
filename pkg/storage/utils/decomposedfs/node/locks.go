@@ -21,6 +21,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"os"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -99,7 +100,7 @@ func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
 
 	f, err := os.Open(n.LockFilePath())
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, errtypes.NotFound("no lock found")
 		}
 		return nil, errors.Wrap(err, "Decomposedfs: could not open lock file")
@@ -134,7 +135,7 @@ func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
 
 	f, err := os.OpenFile(n.LockFilePath(), os.O_RDWR, os.ModeExclusive)
 	switch {
-	case os.IsNotExist(err):
+	case errors.Is(err, fs.ErrNotExist):
 		return errtypes.PreconditionFailed("lock does not exist")
 	case err != nil:
 		return errors.Wrap(err, "Decomposedfs: could not open lock file")
@@ -187,7 +188,7 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 
 	f, err := os.OpenFile(n.LockFilePath(), os.O_RDONLY, os.ModeExclusive)
 	switch {
-	case os.IsNotExist(err):
+	case errors.Is(err, fs.ErrNotExist):
 		return errtypes.PreconditionFailed("lock does not exist")
 	case err != nil:
 		return errors.Wrap(err, "Decomposedfs: could not open lock file")
