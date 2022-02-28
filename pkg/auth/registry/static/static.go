@@ -60,16 +60,20 @@ func (r *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 	return providers, nil
 }
 
-func (r *reg) GetProvider(ctx context.Context, authType string) (*registrypb.ProviderInfo, error) {
+func (r *reg) GetProviders(ctx context.Context, authType string) ([]*registrypb.ProviderInfo, error) {
+	providers := []*registrypb.ProviderInfo{}
 	for k, v := range r.rules {
 		if k == authType {
-			return &registrypb.ProviderInfo{
+			providers = append(providers, &registrypb.ProviderInfo{
 				ProviderType: k,
 				Address:      v,
-			}, nil
+			})
 		}
 	}
-	return nil, errtypes.NotFound("static: auth type not found: " + authType)
+	if len(providers) == 0 {
+		return nil, errtypes.NotFound("static: auth type not found: " + authType)
+	}
+	return providers, nil
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
