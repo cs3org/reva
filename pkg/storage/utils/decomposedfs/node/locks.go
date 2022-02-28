@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -35,16 +36,33 @@ import (
 // SetLock sets a lock on the node
 func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 	// check existing lock
+
 	if l, _ := n.ReadLock(ctx); l != nil {
 		lockID, _ := ctxpkg.ContextGetLockID(ctx)
 		if l.LockId != lockID {
 			return errtypes.Locked(l.LockId)
 		}
+
 		err := os.Remove(n.LockFilePath())
 		if err != nil {
 			return err
 		}
 	}
+
+	fileLock, err := filelocks.AcquireWriteLock(n.LockFilePath())
+
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		rerr := filelocks.ReleaseLock(fileLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
 
 	// O_EXCL to make open fail when the file already exists
 	f, err := os.OpenFile(n.LockFilePath(), os.O_EXCL|os.O_CREATE|os.O_WRONLY, 0600)
@@ -57,11 +75,27 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 		return errors.Wrap(err, "Decomposedfs: could not write lock file")
 	}
 
-	return nil
+	return err
 }
 
 // ReadLock reads the lock id for a node
 func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
+
+	fileLock, err := filelocks.AcquireReadLock(n.LockFilePath())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		rerr := filelocks.ReleaseLock(fileLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
+
 	f, err := os.Open(n.LockFilePath())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -76,11 +110,27 @@ func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not decode lock file, ignoring")
 		return nil, errors.Wrap(err, "Decomposedfs: could not read lock file")
 	}
-	return lock, nil
+	return lock, err
 }
 
 // RefreshLock refreshes the node's lock
 func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
+
+	fileLock, err := filelocks.AcquireWriteLock(n.LockFilePath())
+
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		rerr := filelocks.ReleaseLock(fileLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
+
 	f, err := os.OpenFile(n.LockFilePath(), os.O_RDWR, os.ModeExclusive)
 	switch {
 	case os.IsNotExist(err):
@@ -113,11 +163,27 @@ func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
 		return errors.Wrap(err, "Decomposedfs: could not write lock file")
 	}
 
-	return nil
+	return err
 }
 
 // Unlock unlocks the node
 func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
+
+	fileLock, err := filelocks.AcquireWriteLock(n.LockFilePath())
+
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		rerr := filelocks.ReleaseLock(fileLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
+
 	f, err := os.OpenFile(n.LockFilePath(), os.O_RDONLY, os.ModeExclusive)
 	switch {
 	case os.IsNotExist(err):
@@ -142,7 +208,10 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 		return errtypes.PermissionDenied("mismatching holder")
 	}
 
-	return os.Remove(f.Name())
+	if err = os.Remove(f.Name()); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not remove lock file")
+	}
+	return err
 }
 
 // CheckLock compares the context lock with the node lock
@@ -165,11 +234,26 @@ func (n *Node) CheckLock(ctx context.Context) error {
 	return nil // ok
 }
 
-func readLocksIntoOpaque(ctx context.Context, lockPath string, ri *provider.ResourceInfo) {
+func readLocksIntoOpaque(ctx context.Context, lockPath string, ri *provider.ResourceInfo) error {
+	fileLock, err := filelocks.AcquireReadLock(lockPath)
+
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		rerr := filelocks.ReleaseLock(fileLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
+
 	f, err := os.Open(lockPath)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not open lock file")
-		return
+		return err
 	}
 	defer f.Close()
 
@@ -192,10 +276,9 @@ func readLocksIntoOpaque(ctx context.Context, lockPath string, ri *provider.Reso
 		Decoder: "json",
 		Value:   b,
 	}
-	// TODO support advisory locks?
+	return err
 }
 
-// TODO only exclusive locks for WOPI? or advisory locks?
 func (n *Node) hasLocks(ctx context.Context) bool {
 	_, err := os.Stat(n.LockFilePath()) // FIXME better error checking
 	return err == nil
