@@ -22,20 +22,21 @@ import (
 	"context"
 
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
-func (s *svc) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
+func (s *svc) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest) (*datatx.PullTransferResponse, error) {
 	c, err := pool.GetDataTxClient(s.c.DataTxEndpoint)
 	if err != nil {
-		return &datatx.CreateTransferResponse{
+		return &datatx.PullTransferResponse{
 			Status: status.NewInternal(ctx, "error getting data transfer client"),
 		}, nil
 	}
 
-	res, err := c.CreateTransfer(ctx, req)
+	res, err := c.PullTransfer(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling CreateTransfer")
 	}
@@ -73,4 +74,16 @@ func (s *svc) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequ
 	}
 
 	return res, nil
+}
+
+func (s *svc) ListTransfers(ctx context.Context, req *datatx.ListTransfersRequest) (*datatx.ListTransfersResponse, error) {
+	return &datatx.ListTransfersResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CancelTransfer not implemented"), "ListTransfers not implemented"),
+	}, nil
+}
+
+func (s *svc) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRequest) (*datatx.RetryTransferResponse, error) {
+	return &datatx.RetryTransferResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CancelTransfer not implemented"), "RetryTransfer not implemented"),
+	}, nil
 }

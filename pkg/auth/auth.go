@@ -62,5 +62,5 @@ type TokenWriter interface {
 // for discovering auth providers
 type Registry interface {
 	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
-	GetProvider(ctx context.Context, authType string) (*registry.ProviderInfo, error)
+	GetProviders(ctx context.Context, authType string) ([]*registry.ProviderInfo, error)
 }

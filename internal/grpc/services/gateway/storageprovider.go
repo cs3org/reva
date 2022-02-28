@@ -457,6 +457,66 @@ func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provide
 	}, nil
 }
 
+func (s *svc) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
+	ref := &provider.Reference{ResourceId: req.Ref.ResourceId}
+	c, _, err := s.find(ctx, ref)
+	if err != nil {
+		return &provider.AddGrantResponse{
+			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find reference %+v", ref), err),
+		}, nil
+	}
+
+	res, err := c.AddGrant(ctx, req)
+	if err != nil {
+		return &provider.AddGrantResponse{
+			Status: status.NewStatusFromErrType(ctx, "gateway could not call UpdateStorageSpace", err),
+		}, nil
+	}
+
+	if res.Status.Code == rpc.Code_CODE_OK {
+		id := req.Ref.ResourceId
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), id)
+		s.cache.RemoveListStorageProviders(id)
+	}
+	return res, nil
+}
+
+func (s *svc) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequest) (*provider.RemoveGrantResponse, error) {
+	ref := &provider.Reference{ResourceId: req.Ref.ResourceId}
+	c, _, err := s.find(ctx, ref)
+	if err != nil {
+		return &provider.RemoveGrantResponse{
+			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find reference %+v", ref), err),
+		}, nil
+	}
+
+	res, err := c.RemoveGrant(ctx, req)
+	if err != nil {
+		return &provider.RemoveGrantResponse{
+			Status: status.NewStatusFromErrType(ctx, "gateway could not call UpdateStorageSpace", err),
+		}, nil
+	}
+
+	if res.Status.Code == rpc.Code_CODE_OK {
+		id := req.Ref.ResourceId
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), id)
+		s.cache.RemoveListStorageProviders(id)
+	}
+	return res, nil
+}
+
+func (s *svc) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
+	return &provider.DenyGrantResponse{Status: status.NewUnimplemented(ctx, nil, "not implemented")}, nil
+}
+
+func (s *svc) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
+	return &provider.ListGrantsResponse{Status: status.NewUnimplemented(ctx, nil, "not implemented")}, nil
+}
+
+func (s *svc) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequest) (*provider.UpdateGrantResponse, error) {
+	return &provider.UpdateGrantResponse{Status: status.NewUnimplemented(ctx, nil, "not implemented")}, nil
+}
+
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
 	// TODO(ishank011): enable downloading references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient

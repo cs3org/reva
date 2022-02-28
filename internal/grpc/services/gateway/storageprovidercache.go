@@ -232,7 +232,7 @@ func statKey(user *userpb.User, ref *provider.Reference, metaDataKeys []string) 
 		return ""
 	}
 
-	key := "uid" + user.Id.OpaqueId + "!sid:" + ref.ResourceId.StorageId + "!oid:" + ref.ResourceId.OpaqueId + "!path:" + ref.Path
+	key := "uid:" + user.Id.OpaqueId + "!sid:" + ref.ResourceId.StorageId + "!oid:" + ref.ResourceId.OpaqueId + "!path:" + ref.Path
 	for _, k := range metaDataKeys {
 		key += "!mdk:" + k
 	}
