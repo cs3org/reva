@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -36,7 +37,7 @@ import (
 
 // SetLock sets a lock on the node
 func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
-	nodepath := n.LockFilePath()
+	lockFilePath := n.LockFilePath()
 	// check existing lock
 
 	if l, _ := n.ReadLock(ctx); l != nil {
@@ -45,13 +46,17 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 			return errtypes.Locked(l.LockId)
 		}
 
-		err := os.Remove(n.LockFilePath())
+		err := os.Remove(lockFilePath)
 		if err != nil {
 			return err
 		}
 	}
 
-	fileLock, err := filelocks.AcquireWriteLock(n.LockFilePath())
+	// ensure parent path exists
+	if err := os.MkdirAll(filepath.Dir(lockFilePath), 0700); err != nil {
+		return errors.Wrap(err, "Decomposedfs: error creating parent folder for lock")
+	}
+	fileLock, err := filelocks.AcquireWriteLock(n.InternalPath())
 
 	if err != nil {
 		return err
@@ -67,7 +72,7 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 	}()
 
 	// O_EXCL to make open fail when the file already exists
-	f, err := os.OpenFile(nodepath, os.O_EXCL|os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(lockFilePath, os.O_EXCL|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not create lock file")
 	}
@@ -83,7 +88,11 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 // ReadLock reads the lock id for a node
 func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
 
-	fileLock, err := filelocks.AcquireReadLock(n.LockFilePath())
+	// ensure parent path exists
+	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: error creating parent folder for lock")
+	}
+	fileLock, err := filelocks.AcquireReadLock(n.InternalPath())
 
 	if err != nil {
 		return nil, err
@@ -118,7 +127,11 @@ func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
 // RefreshLock refreshes the node's lock
 func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
 
-	fileLock, err := filelocks.AcquireWriteLock(n.LockFilePath())
+	// ensure parent path exists
+	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
+		return errors.Wrap(err, "Decomposedfs: error creating parent folder for lock")
+	}
+	fileLock, err := filelocks.AcquireWriteLock(n.InternalPath())
 
 	if err != nil {
 		return err
@@ -171,7 +184,11 @@ func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
 // Unlock unlocks the node
 func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 
-	fileLock, err := filelocks.AcquireWriteLock(n.LockFilePath())
+	// ensure parent path exists
+	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
+		return errors.Wrap(err, "Decomposedfs: error creating parent folder for lock")
+	}
+	fileLock, err := filelocks.AcquireWriteLock(n.InternalPath())
 
 	if err != nil {
 		return err
@@ -236,8 +253,13 @@ func (n *Node) CheckLock(ctx context.Context) error {
 	return nil // ok
 }
 
-func readLocksIntoOpaque(ctx context.Context, lockPath string, ri *provider.ResourceInfo) error {
-	fileLock, err := filelocks.AcquireReadLock(lockPath)
+func readLocksIntoOpaque(ctx context.Context, n *Node, ri *provider.ResourceInfo) error {
+
+	// ensure parent path exists
+	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
+		return errors.Wrap(err, "Decomposedfs: error creating parent folder for lock")
+	}
+	fileLock, err := filelocks.AcquireReadLock(n.InternalPath())
 
 	if err != nil {
 		return err
@@ -252,7 +274,7 @@ func readLocksIntoOpaque(ctx context.Context, lockPath string, ri *provider.Reso
 		}
 	}()
 
-	f, err := os.Open(lockPath)
+	f, err := os.Open(n.LockFilePath())
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not open lock file")
 		return err

@@ -684,7 +684,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// read locks
 	if _, ok := mdKeysMap[LockdiscoveryKey]; returnAllKeys || ok {
 		if n.hasLocks(ctx) {
-			err = readLocksIntoOpaque(ctx, n.LockFilePath(), ri)
+			err = readLocksIntoOpaque(ctx, n, ri)
 			if err != nil {
 				sublog.Debug().Err(errtypes.InternalError("lockfail"))
 			}
