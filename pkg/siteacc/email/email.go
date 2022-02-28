@@ -52,7 +52,7 @@ func getEmailData(account *data.Account, conf config.Configuration, params map[s
 
 // SendAccountCreated sends an email about account creation.
 func SendAccountCreated(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
-	return send(recipients, "ScienceMesh: Site account created", accountCreatedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
+	return send(recipients, "ScienceMesh: Site Administrator Account created", accountCreatedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
 }
 
 // SendGOCDBAccessGranted sends an email about granted GOCDB access.

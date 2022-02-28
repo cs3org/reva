@@ -27,12 +27,12 @@ type PanelTemplate struct {
 
 // GetTitle returns the title of the panel.
 func (template *PanelTemplate) GetTitle() string {
-	return "ScienceMesh Account Login"
+	return "ScienceMesh Site Administrator Account Login"
 }
 
 // GetCaption returns the caption which is displayed on the panel.
 func (template *PanelTemplate) GetCaption() string {
-	return "Login to your ScienceMesh Account!"
+	return "Login to your ScienceMesh Site Administrator Account!"
 }
 
 // GetContentJavaScript delivers additional JavaScript code.
