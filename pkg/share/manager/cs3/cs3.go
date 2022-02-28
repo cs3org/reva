@@ -144,26 +144,6 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		Nanos:   uint32(now % 1000000000),
 	}
 
-	//// do not allow share to myself or the owner if share is for a user
-	//// TODO(labkode): should not this be caught already at the gw level?
-	//if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-	//	(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
-	//	return nil, errors.New("json: owner/creator and grantee are the same")
-	//}
-	//
-	//// check if share already exists.
-	//key := &collaboration.ShareKey{
-	//	Owner:      md.Owner,
-	//	ResourceId: md.Id,
-	//	Grantee:    g.Grantee,
-	//}
-	//_, err := m.getByKey(ctx, key)
-	//
-	//// share already exists
-	//if err == nil {
-	//	return nil, errtypes.AlreadyExists(key.String())
-	//}
-
 	share := &collaboration.Share{
 		Id: &collaboration.ShareId{
 			OpaqueId: uuid.NewString(),
@@ -280,7 +260,7 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		return nil, errtypes.UserRequired("error getting user from context")
 	}
 
-	allShareIds, err := m.indexer.FindBy(&collaboration.Share{}, "OwnerId", url.QueryEscape(user.GetId().Idp+":"+user.GetId().OpaqueId))
+	allShareIds, err := m.indexer.FindBy(&collaboration.Share{}, "OwnerId", userIdToIndex(user.GetId()))
 	if err != nil {
 		return nil, err
 	}
