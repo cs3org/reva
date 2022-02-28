@@ -55,13 +55,13 @@ func (_m *Storage) Delete(ctx context.Context, path string) error {
 	return r0
 }
 
-// Init provides a mock function with given fields: name, ctx
-func (_m *Storage) Init(name string, ctx context.Context) error {
-	ret := _m.Called(name, ctx)
+// Init provides a mock function with given fields: ctx, name
+func (_m *Storage) Init(ctx context.Context, name string) error {
+	ret := _m.Called(ctx, name)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, context.Context) error); ok {
-		r0 = rf(name, ctx)
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, name)
 	} else {
 		r0 = ret.Error(0)
 	}

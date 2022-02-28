@@ -26,6 +26,7 @@ import (
 	"path"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -36,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/indexer"
 	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
 	"github.com/cs3org/reva/pkg/storage/utils/metadata"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -74,28 +76,6 @@ type config struct {
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 
-func indexOwnerFunc(v interface{}) (string, error) {
-	share, ok := v.(*collaboration.Share)
-	if !ok {
-		return "", fmt.Errorf("given entity is not a share")
-	}
-	return url.QueryEscape(share.Owner.Idp + ":" + share.Owner.OpaqueId), nil
-}
-
-func indexGranteeFunc(v interface{}) (string, error) {
-	share, ok := v.(*collaboration.Share)
-	if !ok {
-		return "", fmt.Errorf("given entity is not a share")
-	}
-	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
-		return "user:" + share.Grantee.GetUserId().Idp + ":" + share.Grantee.GetUserId().OpaqueId, nil
-	} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		return "group:" + share.Grantee.GetGroupId().Idp + ":" + share.Grantee.GetGroupId().OpaqueId, nil
-	} else {
-		return "", fmt.Errorf("unknown grantee type")
-	}
-}
-
 // NewDefault returns a new manager instance with default dependencies
 func NewDefault(m map[string]interface{}) (share.Manager, error) {
 	c := &config{}
@@ -127,7 +107,7 @@ func (m *Manager) initialize() error {
 		return nil
 	}
 
-	err := m.storage.Init("cs3-share-manager-metadata", context.Background())
+	err := m.storage.Init(context.Background(), "cs3-share-manager-metadata")
 	if err != nil {
 		return err
 	}
@@ -221,13 +201,52 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}
-	fn := path.Join("shares", ref.GetId().OpaqueId)
+
+	switch {
+	case ref.GetId() != nil:
+		return m.getShareById(ctx, ref.GetId().OpaqueId)
+	case ref.GetKey() != nil:
+		return m.getShareByKey(ctx, ref.GetKey())
+	default:
+		return nil, errtypes.BadRequest("neither share id nor key was given")
+	}
+
+}
+
+func (m *Manager) getShareById(ctx context.Context, id string) (*collaboration.Share, error) {
+	fn := path.Join("shares", id)
 	data, err := m.storage.SimpleDownload(ctx, fn)
 	if err != nil {
 		return nil, err
 	}
-
 	return unmarshalShareData(data)
+}
+
+func (m *Manager) getShareByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
+	ownerIds, err := m.indexer.FindBy(&collaboration.Share{}, "OwnerId", userIdToIndex(key.Owner))
+	if err != nil {
+		return nil, err
+	}
+	granteeIndex, err := granteeToIndex(key.Grantee)
+	if err != nil {
+		return nil, err
+	}
+	granteeIds, err := m.indexer.FindBy(&collaboration.Share{}, "GranteeId", granteeIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := intersectSlices(ownerIds, granteeIds)
+	for _, id := range ids {
+		share, err := m.getShareById(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if utils.ResourceIDEqual(share.ResourceId, key.ResourceId) {
+			return share, nil
+		}
+	}
+	return nil, errtypes.NotFound("share not found")
 }
 
 // Unshare deletes the share pointed by ref.
@@ -331,4 +350,49 @@ func unmarshalShareData(data []byte) (*collaboration.Share, error) {
 		return groupShare, nil
 	}
 	return nil, errtypes.InternalError("failed to unmarshal share data")
+}
+
+func indexOwnerFunc(v interface{}) (string, error) {
+	share, ok := v.(*collaboration.Share)
+	if !ok {
+		return "", fmt.Errorf("given entity is not a share")
+	}
+	return userIdToIndex(share.Owner), nil
+}
+
+func userIdToIndex(id *userpb.UserId) string {
+	return url.QueryEscape(id.Idp + ":" + id.OpaqueId)
+}
+
+func indexGranteeFunc(v interface{}) (string, error) {
+	share, ok := v.(*collaboration.Share)
+	if !ok {
+		return "", fmt.Errorf("given entity is not a share")
+	}
+	return granteeToIndex(share.Grantee)
+}
+
+func granteeToIndex(grantee *provider.Grantee) (string, error) {
+	switch {
+	case grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER:
+		return url.QueryEscape("user:" + grantee.GetUserId().Idp + ":" + grantee.GetUserId().OpaqueId), nil
+	case grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP:
+		return url.QueryEscape("group:" + grantee.GetGroupId().Idp + ":" + grantee.GetGroupId().OpaqueId), nil
+	default:
+		return "", fmt.Errorf("unknown grantee type")
+	}
+}
+
+func intersectSlices(a, b []string) []string {
+	aMap := map[string]bool{}
+	for _, s := range a {
+		aMap[s] = true
+	}
+	result := []string{}
+	for _, s := range b {
+		if _, ok := aMap[s]; ok {
+			result = append(result, s)
+		}
+	}
+	return result
 }

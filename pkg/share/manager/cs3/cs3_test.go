@@ -21,6 +21,7 @@ package cs3_test
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"path"
 
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -62,11 +63,13 @@ var _ = Describe("Manager", func() {
 
 		user = &userpb.User{
 			Id: &userpb.UserId{
+				Idp:      "localhost:1111",
 				OpaqueId: "1",
 			},
 		}
 		grantee = &userpb.User{
 			Id: &userpb.UserId{
+				Idp:      "localhost:1111",
 				OpaqueId: "2",
 			},
 		}
@@ -217,6 +220,69 @@ var _ = Describe("Manager", func() {
 					Expect(returnedShare.Owner).To(Equal(share.Owner))
 					Expect(returnedShare.Grantee).To(Equal(share.Grantee))
 					Expect(returnedShare.Permissions).To(Equal(share.Permissions))
+				})
+
+				It("gets the share by key", func() {
+					indexer.On("FindBy", mock.Anything, "OwnerId", url.QueryEscape(share.Owner.Idp+":"+share.Owner.OpaqueId)).
+						Return([]string{share.Id.OpaqueId, share2.Id.OpaqueId}, nil)
+					indexer.On("FindBy", mock.Anything, "GranteeId", url.QueryEscape("user:"+grantee.Id.Idp+":"+grantee.Id.OpaqueId)).
+						Return([]string{share2.Id.OpaqueId}, nil)
+					returnedShare, err := m.GetShare(ctx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Key{
+							Key: &collaboration.ShareKey{
+								Owner:      share2.Owner,
+								ResourceId: share2.ResourceId,
+								Grantee:    share2.Grantee,
+							},
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(returnedShare).ToNot(BeNil())
+					Expect(returnedShare.Id.OpaqueId).To(Equal(share2.Id.OpaqueId))
+					Expect(returnedShare.Owner).To(Equal(share2.Owner))
+					Expect(returnedShare.Grantee).To(Equal(share2.Grantee))
+					Expect(returnedShare.Permissions).To(Equal(share2.Permissions))
+				})
+
+				Context("when requesting the share by key", func() {
+					It("returns NotFound", func() {
+						indexer.On("FindBy", mock.Anything, "OwnerId", url.QueryEscape(share.Owner.Idp+":"+share.Owner.OpaqueId)).
+							Return([]string{share.Id.OpaqueId, share2.Id.OpaqueId}, nil)
+						indexer.On("FindBy", mock.Anything, "GranteeId", url.QueryEscape("user:"+grantee.Id.Idp+":"+grantee.Id.OpaqueId)).
+							Return([]string{}, nil)
+						returnedShare, err := m.GetShare(ctx, &collaboration.ShareReference{
+							Spec: &collaboration.ShareReference_Key{
+								Key: &collaboration.ShareKey{
+									Owner:      share2.Owner,
+									ResourceId: share2.ResourceId,
+									Grantee:    share2.Grantee,
+								},
+							},
+						})
+						Expect(err).To(HaveOccurred())
+						Expect(returnedShare).To(BeNil())
+					})
+					It("gets the share", func() {
+						indexer.On("FindBy", mock.Anything, "OwnerId", url.QueryEscape(share.Owner.Idp+":"+share.Owner.OpaqueId)).
+							Return([]string{share.Id.OpaqueId, share2.Id.OpaqueId}, nil)
+						indexer.On("FindBy", mock.Anything, "GranteeId", url.QueryEscape("user:"+grantee.Id.Idp+":"+grantee.Id.OpaqueId)).
+							Return([]string{share2.Id.OpaqueId}, nil)
+						returnedShare, err := m.GetShare(ctx, &collaboration.ShareReference{
+							Spec: &collaboration.ShareReference_Key{
+								Key: &collaboration.ShareKey{
+									Owner:      share2.Owner,
+									ResourceId: share2.ResourceId,
+									Grantee:    share2.Grantee,
+								},
+							},
+						})
+						Expect(err).ToNot(HaveOccurred())
+						Expect(returnedShare).ToNot(BeNil())
+						Expect(returnedShare.Id.OpaqueId).To(Equal(share2.Id.OpaqueId))
+						Expect(returnedShare.Owner).To(Equal(share2.Owner))
+						Expect(returnedShare.Grantee).To(Equal(share2.Grantee))
+						Expect(returnedShare.Permissions).To(Equal(share2.Permissions))
+					})
 				})
 			})
 
