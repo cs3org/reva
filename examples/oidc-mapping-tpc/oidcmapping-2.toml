@@ -8,16 +8,16 @@ jwt_secret = "Pive-Fumkiu4"
 address = "0.0.0.0:14000"
 
 [grpc.services.authprovider]
-auth_manager = "oidcmapping"
+auth_manager = "oidc"
 [grpc.services.authprovider.auth_managers.json]
 users = "users.json"
-[grpc.services.authprovider.auth_managers.oidcmapping]
+[grpc.services.authprovider.auth_managers.oidc]
 gatewaysvc = "localhost:17000"
 issuer = "https://iam-escape.cloud.cnaf.infn.it/"
 # ESCAPE adopted the WLCG groups as group claims
 group_claim = "wlcg.groups"
 # The OIDC users mapping file path
-users_mapping = "users-oidcmapping-2.demo.json"
+users_mapping = "users-oidc-2.demo.json"
 # If your local identity provider service configuration includes further claims,
 # please configure them also here
 #uid_claim = ""
