@@ -1,0 +1,27 @@
+[log]
+level = "debug"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.groupprovider]
+driver = "ldap"
+
+[grpc.services.groupprovider.drivers.ldap]
+hostname="ocisldap"
+port=636
+insecure=true
+base_dn="dc=owncloud,dc=com"
+groupfilter="(&(objectclass=posixGroup)(ownclouduuid={{.OpaqueId}}))"
+memberfilter="(&(objectclass=posixGroup)(ownclouduuid={{.OpaqueId}}))"
+findfilter="(&(objectclass=posixGroup)(|(cn={{query}}*)(displayname={{query}}*)(mail={{query}}*)(ownclouduuid={{query}})))"
+attributefilter="(&(objectclass=posixGroup)({{attr}}={{value}}))"
+bind_username="cn=admin,dc=owncloud,dc=com"
+bind_password="admin"
+idp="http://localhost:20080"
+
+[grpc.services.groupprovider.drivers.ldap.schema]
+gid="ownclouduuid"
+displayName="description"
+dn="dn"
+cn="cn"

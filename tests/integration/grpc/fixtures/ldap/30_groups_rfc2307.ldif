@@ -2,12 +2,12 @@ dn: ou=groups,dc=owncloud,dc=com
 objectClass: organizationalUnit
 ou: groups
 
-dn: cn=sailing-lovers,ou=groups,dc=owncloud,dc=com
+dn: cn=Sailing Lovers,ou=groups,dc=owncloud,dc=com
 objectClass: posixGroup
 objectClass: ownCloud
 objectClass: top
 cn: sailing-lovers
-description: Sailing lovers
+description: Sailing Lovers
 gidNumber: 30001
 ownCloudUUID:: NjA0MGFhMTctOWM2NC00ZmVmLTliZDAtNzcyMzRkNzFiYWQw
 memberUid: einstein
@@ -17,7 +17,7 @@ objectClass: posixGroup
 objectClass: ownCloud
 objectClass: top
 cn: violin-haters
-description: Violin haters
+description: Violin Haters
 gidNumber: 30002
 ownCloudUUID:: ZGQ1OGU1ZWMtODQyZS00OThiLTg4MDAtNjFmMmVjNmY5MTFm
 memberUid: einstein
@@ -27,7 +27,7 @@ objectClass: posixGroup
 objectClass: ownCloud
 objectClass: top
 cn: radium-lovers
-description: Radium lovers
+description: Radium Lovers
 gidNumber: 30003
 ownCloudUUID:: N2I4N2ZkNDktMjg2ZS00YTVmLWJhZmQtYzUzNWQ1ZGQ5OTdh
 memberUid: marie
@@ -37,7 +37,7 @@ objectClass: posixGroup
 objectClass: ownCloud
 objectClass: top
 cn: polonium-lovers
-description: Polonium lovers
+description: Polonium Lovers
 gidNumber: 30004
 ownCloudUUID:: Y2VkYzIxYWEtNDA3Mi00NjE0LTg2NzYtZmE5MTY1ZjU5OGZm
 memberUid: marie
@@ -47,7 +47,7 @@ objectClass: posixGroup
 objectClass: ownCloud
 objectClass: top
 cn: quantum-lovers
-description: Quantum lovers
+description: Quantum Lovers
 gidNumber: 30005
 ownCloudUUID:: YTE3MjYxMDgtMDFmOC00YzMwLTg4ZGYtMmIxYTlkMWNiYTFh
 memberUid: richard
@@ -57,7 +57,7 @@ objectClass: posixGroup
 objectClass: ownCloud
 objectClass: top
 cn: philosophy-haters
-description: Philosophy haters
+description: Philosophy Haters
 gidNumber: 30006
 ownCloudUUID:: MTY3Y2JlZTItMDUxOC00NTVhLWJmYjItMDMxZmUwNjIxZTVk
 memberUid: richard
@@ -67,7 +67,7 @@ objectClass: posixGroup
 objectClass: ownCloud
 objectClass: top
 cn: physics-lovers
-description: Physics lovers
+description: Physics Lovers
 gidNumber: 30007
 ownCloudUUID:: MjYyOTgyYzEtMjM2Mi00YWZhLWJmZGYtOGNiZmVmNjRhMDZl
 memberUid: einstein
