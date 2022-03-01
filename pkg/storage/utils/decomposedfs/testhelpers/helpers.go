@@ -23,12 +23,15 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/google/uuid"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
+	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage"
@@ -43,15 +46,16 @@ import (
 
 // TestEnv represents a test environment for unit tests
 type TestEnv struct {
-	Root         string
-	Fs           storage.FS
-	Tree         *tree.Tree
-	Permissions  *mocks.PermissionsChecker
-	Blobstore    *treemocks.Blobstore
-	Owner        *userpb.User
-	Lookup       *decomposedfs.Lookup
-	Ctx          context.Context
-	SpaceRootRes *providerv1beta1.ResourceId
+	Root              string
+	Fs                storage.FS
+	Tree              *tree.Tree
+	Permissions       *mocks.PermissionsChecker
+	Blobstore         *treemocks.Blobstore
+	Owner             *userpb.User
+	Lookup            *lookup.Lookup
+	Ctx               context.Context
+	SpaceRootRes      *providerv1beta1.ResourceId
+	PermissionsClient *mocks.CS3PermissionsClient
 }
 
 // NewTestEnv prepares a test environment on disk
@@ -81,30 +85,32 @@ func NewTestEnv() (*TestEnv, error) {
 	owner := &userpb.User{
 		Id: &userpb.UserId{
 			Idp:      "idp",
-			OpaqueId: "userid",
+			OpaqueId: "u-s-e-r-id",
 			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		},
 		Username: "username",
 	}
-	lookup := &decomposedfs.Lookup{Options: o}
+	lookup := &lookup.Lookup{Options: o}
 	permissions := &mocks.PermissionsChecker{}
+	cs3permissionsclient := &mocks.CS3PermissionsClient{}
 	bs := &treemocks.Blobstore{}
 	tree := tree.New(o.Root, true, true, lookup, bs)
-	fs, err := decomposedfs.New(o, lookup, permissions, tree)
+	fs, err := decomposedfs.New(o, lookup, permissions, tree, cs3permissionsclient)
 	if err != nil {
 		return nil, err
 	}
 	ctx := ruser.ContextSetUser(context.Background(), owner)
 
 	env := &TestEnv{
-		Root:        tmpRoot,
-		Fs:          fs,
-		Tree:        tree,
-		Lookup:      lookup,
-		Permissions: permissions,
-		Blobstore:   bs,
-		Owner:       owner,
-		Ctx:         ctx,
+		Root:              tmpRoot,
+		Fs:                fs,
+		Tree:              tree,
+		Lookup:            lookup,
+		Permissions:       permissions,
+		Blobstore:         bs,
+		Owner:             owner,
+		Ctx:               ctx,
+		PermissionsClient: cs3permissionsclient,
 	}
 
 	env.SpaceRootRes, err = env.CreateTestStorageSpace("personal", nil)
@@ -136,9 +142,10 @@ func (t *TestEnv) CreateTestDir(name string, parentRef *providerv1beta1.Referenc
 }
 
 // CreateTestFile creates a new file and its metadata and returns a corresponding Node
-func (t *TestEnv) CreateTestFile(name, blobID string, blobSize int64, parentID string) (*node.Node, error) {
-	// Create file in dir1
-	file := node.New(
+func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSize int64) (*node.Node, error) {
+	// Create n in dir1
+	n := node.New(
+		spaceID,
 		uuid.New().String(),
 		parentID,
 		name,
@@ -147,22 +154,26 @@ func (t *TestEnv) CreateTestFile(name, blobID string, blobSize int64, parentID s
 		nil,
 		t.Lookup,
 	)
-	_, err := os.OpenFile(file.InternalPath(), os.O_CREATE, 0700)
+	nodePath := n.InternalPath()
+	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
+		return nil, err
+	}
+	_, err := os.OpenFile(nodePath, os.O_CREATE, 0700)
 	if err != nil {
 		return nil, err
 	}
-	err = file.WriteAllNodeMetadata(t.Owner.Id)
+	err = n.WriteAllNodeMetadata()
 	if err != nil {
 		return nil, err
 	}
 	// Link in parent
-	childNameLink := filepath.Join(t.Lookup.InternalPath(file.ParentID), file.Name)
-	err = os.Symlink("../"+file.ID, childNameLink)
+	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
+	err = os.Symlink("../../../../../"+lookup.Pathify(n.ID, 4, 2), childNameLink)
 	if err != nil {
 		return nil, err
 	}
 
-	return file, err
+	return n, n.FindStorageSpaceRoot()
 }
 
 // CreateTestStorageSpace will create a storage space with some directories and files
@@ -172,7 +183,9 @@ func (t *TestEnv) CreateTestFile(name, blobID string, blobSize int64, parentID s
 // /dir1/file1
 // /dir1/subdir1
 func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quota) (*providerv1beta1.ResourceId, error) {
-	t.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1) // Permissions required for setup below
+	t.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Times(1).Return(&cs3permissions.CheckPermissionResponse{
+		Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
+	}, nil)
 	space, err := t.Fs.CreateStorageSpace(t.Ctx, &providerv1beta1.CreateStorageSpaceRequest{
 		Owner: t.Owner,
 		Type:  typ,
@@ -185,7 +198,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	ref := buildRef(space.StorageSpace.Id.OpaqueId, "")
 
 	// the space name attribute is the stop condition in the lookup
-	h, err := node.ReadNode(t.Ctx, t.Lookup, space.StorageSpace.Id.OpaqueId)
+	h, err := node.ReadNode(t.Ctx, t.Lookup, space.StorageSpace.Id.OpaqueId, space.StorageSpace.Id.OpaqueId)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +214,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	}
 
 	// Create file1 in dir1
-	_, err = t.CreateTestFile("file1", "file1-blobid", 1234, dir1.ID)
+	_, err = t.CreateTestFile("file1", "file1-blobid", dir1.ID, dir1.SpaceID, 1234)
 	if err != nil {
 		return nil, err
 	}

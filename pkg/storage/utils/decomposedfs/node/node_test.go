@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"time"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
@@ -56,8 +55,8 @@ var _ = Describe("Node", func() {
 
 	Describe("New", func() {
 		It("generates unique blob ids if none are given", func() {
-			n1 := node.New(id, "", name, 10, "", env.Owner.Id, env.Lookup)
-			n2 := node.New(id, "", name, 10, "", env.Owner.Id, env.Lookup)
+			n1 := node.New(env.SpaceRootRes.StorageId, id, "", name, 10, "", env.Owner.Id, env.Lookup)
+			n2 := node.New(env.SpaceRootRes.StorageId, id, "", name, 10, "", env.Owner.Id, env.Lookup)
 
 			Expect(len(n1.BlobID)).To(Equal(36))
 			Expect(n1.BlobID).ToNot(Equal(n2.BlobID))
@@ -72,7 +71,7 @@ var _ = Describe("Node", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 
-			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.ID)
+			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.SpaceID, lookupNode.ID)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.BlobID).To(Equal("file1-blobid"))
 		})
@@ -91,13 +90,8 @@ var _ = Describe("Node", func() {
 			n.Name = "TestName"
 			n.BlobID = "TestBlobID"
 			n.Blobsize = int64(blobsize)
-			owner := &userpb.UserId{
-				Idp:      "testidp",
-				OpaqueId: "testuserid",
-				Type:     userpb.UserType_USER_TYPE_PRIMARY,
-			}
 
-			err = n.WriteAllNodeMetadata(owner)
+			err = n.WriteAllNodeMetadata()
 			Expect(err).ToNot(HaveOccurred())
 			n2, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
@@ -202,7 +196,8 @@ var _ = Describe("Node", func() {
 				Expect(len(ri.Etag)).To(Equal(34))
 				before := ri.Etag
 
-				Expect(n.SetTMTime(time.Now().UTC())).To(Succeed())
+				tmtime := time.Now()
+				Expect(n.SetTMTime(&tmtime)).To(Succeed())
 
 				ri, err = n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())

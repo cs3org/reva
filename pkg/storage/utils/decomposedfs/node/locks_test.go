@@ -45,7 +45,7 @@ var _ = Describe("Node locks", func() {
 		otherUser = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "idp",
-				OpaqueId: "foo",
+				OpaqueId: "otheruserid",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username: "foo",
@@ -68,8 +68,8 @@ var _ = Describe("Node locks", func() {
 			User:   env.Owner.Id,
 			LockId: uuid.New().String(),
 		}
-		n = node.New("tobelockedid", "", "tobelocked", 10, "", env.Owner.Id, env.Lookup)
-		n2 = node.New("neverlockedid", "", "neverlocked", 10, "", env.Owner.Id, env.Lookup)
+		n = node.New("u-s-e-r-id", "tobelockedid", "", "tobelocked", 10, "", env.Owner.Id, env.Lookup)
+		n2 = node.New("u-s-e-r-id", "neverlockedid", "", "neverlocked", 10, "", env.Owner.Id, env.Lookup)
 	})
 
 	AfterEach(func() {

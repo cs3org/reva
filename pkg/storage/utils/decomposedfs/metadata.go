@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"syscall"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -181,10 +180,8 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				continue
 			}
 			fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
-			if err := xattr.Remove(nodePath, fa); err != nil {
-				if isNoData(err) {
-					// TODO align with default case: is there a difference between darwin and linux?
-					// refactor this properly into a function in the "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs" package
+			if err := xattrs.Remove(nodePath, fa); err != nil {
+				if xattrs.IsAttrUnset(err) {
 					continue // already gone, ignore
 				}
 				sublog.Error().Err(err).
@@ -194,17 +191,14 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
 			}
 		default:
-			if err = xattr.Remove(nodePath, xattrs.MetadataPrefix+k); err != nil {
-				// a non-existing attribute will return an error, which we can ignore
-				// (using string compare because the error type is syscall.Errno and not wrapped/recognizable)
-				if e, ok := err.(*xattr.Error); !ok || !(e.Err.Error() == "no data available" ||
-					// darwin
-					e.Err.Error() == "attribute not found") {
-					sublog.Error().Err(err).
-						Str("key", k).
-						Msg("could not unset metadata")
-					errs = append(errs, errors.Wrap(err, "could not unset metadata"))
+			if err = xattrs.Remove(nodePath, xattrs.MetadataPrefix+k); err != nil {
+				if xattrs.IsAttrUnset(err) {
+					continue // already gone, ignore
 				}
+				sublog.Error().Err(err).
+					Str("key", k).
+					Msg("could not unset metadata")
+				errs = append(errs, errors.Wrap(err, "could not unset metadata"))
 			}
 		}
 	}
@@ -219,15 +213,4 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 		// TODO how to return multiple errors?
 		return errors.New("multiple errors occurred, see log for details")
 	}
-}
-
-// The os ENODATA error is buried inside the xattr error,
-// so we cannot just use os.IsNotExists().
-func isNoData(err error) bool {
-	if xerr, ok := err.(*xattr.Error); ok {
-		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.ENODATA
-		}
-	}
-	return false
 }

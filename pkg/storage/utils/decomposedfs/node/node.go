@@ -63,7 +63,8 @@ const (
 	QuotaUnlimited    = "-3"
 
 	// TrashIDDelimiter represents the characters used to separate the nodeid and the deletion time.
-	TrashIDDelimiter = ".T."
+	TrashIDDelimiter    = ".T."
+	RevisionIDDelimiter = ".REV."
 
 	// RootID defines the root node's ID
 	RootID = "root"
@@ -71,6 +72,7 @@ const (
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
 type Node struct {
+	SpaceID   string
 	ParentID  string
 	ID        string
 	Name      string
@@ -85,20 +87,19 @@ type Node struct {
 
 // PathLookup defines the interface for the lookup component
 type PathLookup interface {
-	RootNode(ctx context.Context) (node *Node, err error)
-
 	InternalRoot() string
-	InternalPath(ID string) string
+	InternalPath(spaceID, nodeID string) string
 	Path(ctx context.Context, n *Node) (path string, err error)
 	ShareFolder() string
 }
 
 // New returns a new instance of Node
-func New(id, parentID, name string, blobsize int64, blobID string, owner *userpb.UserId, lu PathLookup) *Node {
+func New(spaceID, id, parentID, name string, blobsize int64, blobID string, owner *userpb.UserId, lu PathLookup) *Node {
 	if blobID == "" {
 		blobID = uuid.New().String()
 	}
 	return &Node{
+		SpaceID:  spaceID,
 		ID:       id,
 		ParentID: parentID,
 		Name:     name,
@@ -111,14 +112,14 @@ func New(id, parentID, name string, blobsize int64, blobID string, owner *userpb
 
 // ChangeOwner sets the owner of n to newOwner
 func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
-	nodePath := n.InternalPath()
-	n.owner = new
+	rootNodePath := n.SpaceRoot.InternalPath()
+	n.SpaceRoot.owner = new
 
 	var attribs = map[string]string{xattrs.OwnerIDAttr: new.OpaqueId,
 		xattrs.OwnerIDPAttr:  new.Idp,
 		xattrs.OwnerTypeAttr: utils.UserTypeToString(new.Type)}
 
-	if err := xattrs.SetMultiple(nodePath, attribs); err != nil {
+	if err := xattrs.SetMultiple(rootNodePath, attribs); err != nil {
 		return err
 	}
 
@@ -135,6 +136,14 @@ func (n *Node) SetMetadata(key string, val string) (err error) {
 	return nil
 }
 
+// RemoveMetadata removes a given key
+func (n *Node) RemoveMetadata(key string) (err error) {
+	if err = xattrs.Remove(n.InternalPath(), key); err == nil || xattrs.IsAttrUnset(err) {
+		return nil
+	}
+	return err
+}
+
 // GetMetadata reads the metadata for the given key
 func (n *Node) GetMetadata(key string) (val string, err error) {
 	nodePath := n.InternalPath()
@@ -145,7 +154,7 @@ func (n *Node) GetMetadata(key string) (val string, err error) {
 }
 
 // WriteAllNodeMetadata writes the Node metadata to disk
-func (n *Node) WriteAllNodeMetadata(owner *userpb.UserId) (err error) {
+func (n *Node) WriteAllNodeMetadata() (err error) {
 	attribs := make(map[string]string)
 
 	attribs[xattrs.ParentidAttr] = n.ParentID
@@ -154,77 +163,130 @@ func (n *Node) WriteAllNodeMetadata(owner *userpb.UserId) (err error) {
 	attribs[xattrs.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
 
 	nodePath := n.InternalPath()
-	attribs[xattrs.OwnerIDAttr] = ""
-	attribs[xattrs.OwnerIDPAttr] = ""
-	attribs[xattrs.OwnerTypeAttr] = ""
+	return xattrs.SetMultiple(nodePath, attribs)
+}
 
-	if owner != nil {
-		attribs[xattrs.OwnerIDAttr] = owner.OpaqueId
-		attribs[xattrs.OwnerIDPAttr] = owner.Idp
-		attribs[xattrs.OwnerTypeAttr] = utils.UserTypeToString(owner.Type)
+// WriteOwner writes the space owner
+func (n *Node) WriteOwner(owner *userpb.UserId) error {
+	n.SpaceRoot.owner = owner
+	attribs := map[string]string{
+		xattrs.OwnerIDAttr:   owner.OpaqueId,
+		xattrs.OwnerIDPAttr:  owner.Idp,
+		xattrs.OwnerTypeAttr: utils.UserTypeToString(owner.Type),
 	}
-	if err := xattrs.SetMultiple(nodePath, attribs); err != nil {
+	nodeRootPath := n.SpaceRoot.InternalPath()
+	if err := xattrs.SetMultiple(nodeRootPath, attribs); err != nil {
 		return err
 	}
-	return
+	n.SpaceRoot.owner = owner
+	return nil
 }
 
 // ReadNode creates a new instance from an id and checks if it exists
-func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error) {
+// FIXME check if user is allowed to access disabled spaces
+func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string) (n *Node, err error) {
+
+	// read space root
+	r := &Node{
+		SpaceID: spaceID,
+		lu:      lu,
+		ID:      spaceID,
+	}
+	r.SpaceRoot = r
+	r.owner, err = r.readOwner()
+	switch {
+	case xattrs.IsNotExist(err):
+		return r, nil // swallow not found, the node defaults to exists = false
+	case err != nil:
+		return nil, err
+	}
+	r.Exists = true
+
+	// check if this is a space root
+	if spaceID == nodeID {
+		return r, nil
+	}
+
+	// read node
 	n = &Node{
-		lu: lu,
-		ID: id,
+		SpaceID:   spaceID,
+		lu:        lu,
+		ID:        nodeID,
+		SpaceRoot: r,
 	}
 
 	nodePath := n.InternalPath()
 
-	// lookup parent id in extended attributes
-	var attr string
-	attr, err = xattrs.Get(nodePath, xattrs.ParentidAttr)
+	// lookup name in extended attributes
+	n.Name, err = xattrs.Get(nodePath, xattrs.NameAttr)
 	switch {
-	case err == nil:
-		n.ParentID = attr
+	case xattrs.IsNotExist(err):
+		return n, nil // swallow not found, the node defaults to exists = false
+	case err != nil:
+		return nil, err
+	}
+
+	n.Exists = true
+
+	// lookup blobID in extended attributes
+	n.BlobID, err = xattrs.Get(nodePath, xattrs.BlobIDAttr)
+	switch {
+	case xattrs.IsNotExist(err):
+		return n, nil // swallow not found, the node defaults to exists = false
+	case err != nil:
+		return nil, err
+	}
+
+	// Lookup blobsize
+	n.Blobsize, err = ReadBlobSizeAttr(nodePath)
+	switch {
+	case xattrs.IsNotExist(err):
+		return n, nil // swallow not found, the node defaults to exists = false
+	case err != nil:
+		return nil, err
+	}
+
+	// lookup parent id in extended attributes
+	n.ParentID, err = xattrs.Get(nodePath, xattrs.ParentidAttr)
+	switch {
 	case xattrs.IsAttrUnset(err):
 		return nil, errtypes.InternalError(err.Error())
 	case xattrs.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
-	default:
+	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
 	}
 
-	// check if this is a space root
-	if _, err = xattrs.Get(nodePath, xattrs.SpaceNameAttr); err == nil {
-		n.SpaceRoot = n
-	}
-	// lookup name in extended attributes
-	if attr, err = xattrs.Get(nodePath, xattrs.NameAttr); err == nil {
-		n.Name = attr
-	} else {
-		return
-	}
-	// lookup blobID in extended attributes
-	if attr, err = xattrs.Get(nodePath, xattrs.BlobIDAttr); err == nil {
-		n.BlobID = attr
-	} else {
-		return
-	}
-	// Lookup blobsize
-	var blobSize int64
-	if blobSize, err = ReadBlobSizeAttr(nodePath); err == nil {
-		n.Blobsize = blobSize
-	} else {
-		return
-	}
-
-	// Check if parent exists. Otherwise this node is part of a deleted subtree
-	_, err = os.Stat(lu.InternalPath(n.ParentID))
+	// TODO why do we stat the parent? to determine if the current node is in the trash we would need to traverse all parents...
+	// we need to traverse all parents for permissions anyway ...
+	// - we can compare to space root owner with the current user
+	// - we can compare the share permissions on the root for spaces, which would work for managers
+	// - for non managers / owners we need to traverse all path segments because an intermediate node might have been shared
+	// - if we want to support negative acls we need to traverse the path for all users (but the owner)
+	// for trashed items we need to check all parents
+	// - one of them might have the trash suffix ...
+	// - options:
+	//   - move deleted nodes in a trash folder that is still part of the tree (aka freedesktop org trash spec)
+	//     - shares should still be removed, which requires traversing all trashed children ... and it should be undoable ...
+	//     - what if a trashed file is restored? will child items be accessible by a share?
+	//   - compare paths of trash root items and the trashed file?
+	//     - to determine the relative path of a file we would need to traverse all intermediate nodes anyway
+	//   - recursively mark all children as trashed ... async ... it is ok when that is not synchronous
+	//     - how do we pick up if an error occurs? write a journal somewhere? activity log / delta?
+	//     - stat requests will not pick up trashed items at all
+	//   - recursively move all children into the trash folder?
+	//     - no need to write an additional trash entry
+	//     - can be made more robust with a journal
+	//     - same recursion mechanism can be used to purge items? sth we still need to do
+	//   - flag the two above options with dtime
+	_, err = os.Stat(n.ParentInternalPath())
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, errtypes.NotFound(err.Error())
 		}
 		return nil, err
 	}
-	n.Exists = true
+
 	return
 }
 
@@ -238,12 +300,30 @@ func isNotDir(err error) bool {
 	return false
 }
 
+func readChildNodeFromLink(path string) (string, error) {
+	link, err := os.Readlink(path)
+	if err != nil {
+		return "", err
+	}
+	nodeID := strings.TrimLeft(link, "/.")
+	nodeID = strings.ReplaceAll(nodeID, "/", "")
+	return nodeID, nil
+}
+
 // Child returns the child node with the given name
 func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
-	link, err := os.Readlink(filepath.Join(n.InternalPath(), filepath.Join("/", name)))
+	spaceID := n.SpaceID
+	if spaceID == "" && n.ParentID == "root" {
+		spaceID = n.ID
+	} else if n.SpaceRoot != nil {
+		spaceID = n.SpaceRoot.ID
+	}
+	nodeID, err := readChildNodeFromLink(filepath.Join(n.InternalPath(), name))
 	if err != nil {
-		if os.IsNotExist(err) || isNotDir(err) {
+		if errors.Is(err, fs.ErrNotExist) || isNotDir(err) {
+
 			c := &Node{
+				SpaceID:   spaceID,
 				lu:        n.lu,
 				ParentID:  n.ID,
 				Name:      name,
@@ -256,15 +336,11 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	}
 
 	var c *Node
-	if strings.HasPrefix(link, "../") {
-		c, err = ReadNode(ctx, n.lu, filepath.Base(link))
-		if err != nil {
-			return nil, errors.Wrap(err, "could not read child node")
-		}
-		c.SpaceRoot = n.SpaceRoot
-	} else {
-		return nil, fmt.Errorf("decomposedfs: expected '../ prefix, got' %+v", link)
+	c, err = ReadNode(ctx, n.lu, spaceID, nodeID)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not read child node")
 	}
+	c.SpaceRoot = n.SpaceRoot
 
 	return c, nil
 }
@@ -275,12 +351,14 @@ func (n *Node) Parent() (p *Node, err error) {
 		return nil, fmt.Errorf("decomposedfs: root has no parent")
 	}
 	p = &Node{
+		SpaceID:   n.SpaceID,
 		lu:        n.lu,
 		ID:        n.ParentID,
 		SpaceRoot: n.SpaceRoot,
 	}
 
-	parentPath := n.lu.InternalPath(n.ParentID)
+	// parentPath := n.lu.InternalPath(spaceID, n.ParentID)
+	parentPath := p.InternalPath()
 
 	// lookup parent id in extended attributes
 	if p.ParentID, err = xattrs.Get(parentPath, xattrs.ParentidAttr); err != nil {
@@ -301,59 +379,59 @@ func (n *Node) Parent() (p *Node, err error) {
 	return
 }
 
-// Owner returns the cached owner id or reads it from the extended attributes
-// TODO can be private as only the AsResourceInfo uses it
-func (n *Node) Owner() (*userpb.UserId, error) {
-	if n.owner != nil {
-		return n.owner, nil
-	}
+// Owner returns the space owner
+func (n *Node) Owner() *userpb.UserId {
+	return n.SpaceRoot.owner
+}
+
+// readOwner reads the owner from the extended attributes of the space root
+// in case either owner id or owner idp are unset we return an error and an empty owner object
+func (n *Node) readOwner() (*userpb.UserId, error) {
 
 	owner := &userpb.UserId{}
 
-	// FIXME ... do we return the owner of the reference or the owner of the target?
-	// we don't really know the owner of the target ... and as the reference may point anywhere we cannot really find out
-	// but what are the permissions? all? none? the gateway has to fill in?
-	// TODO what if this is a reference?
-	nodePath := n.InternalPath()
+	rootNodePath := n.SpaceRoot.InternalPath()
 	// lookup parent id in extended attributes
 	var attr string
 	var err error
 	// lookup ID in extended attributes
-	attr, err = xattrs.Get(nodePath, xattrs.OwnerIDAttr)
+	attr, err = xattrs.Get(rootNodePath, xattrs.OwnerIDAttr)
 	switch {
 	case err == nil:
 		owner.OpaqueId = attr
-	case xattrs.IsAttrUnset(err), xattrs.IsNotExist(err):
-		fallthrough
+	case xattrs.IsAttrUnset(err):
+		// ignore
 	default:
 		return nil, err
 	}
 
 	// lookup IDP in extended attributes
-	attr, err = xattrs.Get(nodePath, xattrs.OwnerIDPAttr)
+	attr, err = xattrs.Get(rootNodePath, xattrs.OwnerIDPAttr)
 	switch {
 	case err == nil:
 		owner.Idp = attr
-	case xattrs.IsAttrUnset(err), xattrs.IsNotExist(err):
-		fallthrough
+	case xattrs.IsAttrUnset(err):
+		// ignore
 	default:
 		return nil, err
 	}
 
 	// lookup type in extended attributes
-	attr, err = xattrs.Get(nodePath, xattrs.OwnerTypeAttr)
+	attr, err = xattrs.Get(rootNodePath, xattrs.OwnerTypeAttr)
 	switch {
 	case err == nil:
 		owner.Type = utils.UserTypeMap(attr)
-	case xattrs.IsAttrUnset(err), xattrs.IsNotExist(err):
-		fallthrough
+	case xattrs.IsAttrUnset(err):
+		// ignore
 	default:
-		// TODO the user type defaults to invalid, which is the case
-		err = nil
+		return nil, err
 	}
 
-	n.owner = owner
-	return n.owner, err
+	// owner is an optional property
+	if owner.Idp == "" && owner.OpaqueId == "" {
+		return nil, nil
+	}
+	return owner, nil
 }
 
 // PermissionSet returns the permission set for the current user
@@ -364,7 +442,7 @@ func (n *Node) PermissionSet(ctx context.Context) provider.ResourcePermissions {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
 		return NoPermissions()
 	}
-	if o, _ := n.Owner(); utils.UserEqual(u.Id, o) {
+	if utils.UserEqual(u.Id, n.SpaceRoot.Owner()) {
 		return OwnerPermissions()
 	}
 	// read the permissions for the current user from the acls of the current node
@@ -376,12 +454,17 @@ func (n *Node) PermissionSet(ctx context.Context) provider.ResourcePermissions {
 
 // InternalPath returns the internal path of the Node
 func (n *Node) InternalPath() string {
-	return n.lu.InternalPath(n.ID)
+	return n.lu.InternalPath(n.SpaceID, n.ID)
+}
+
+// ParentInternalPath returns the internal path of the parent of the current node
+func (n *Node) ParentInternalPath() string {
+	return n.lu.InternalPath(n.SpaceID, n.ParentID)
 }
 
 // LockFilePath returns the internal path of the lock file of the node
 func (n *Node) LockFilePath() string {
-	return n.lu.InternalPath(n.ID) + ".lock"
+	return n.InternalPath() + ".lock"
 }
 
 // CalculateEtag returns a hash of fileid + tmtime (or mtime)
@@ -409,7 +492,7 @@ func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
 func (n *Node) SetMtime(ctx context.Context, mtime string) error {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 	if mt, err := parseMTime(mtime); err == nil {
-		nodePath := n.lu.InternalPath(n.ID)
+		nodePath := n.InternalPath()
 		// updating mtime also updates atime
 		if err := os.Chtimes(nodePath, mt, mt); err != nil {
 			sublog.Error().Err(err).
@@ -429,7 +512,7 @@ func (n *Node) SetMtime(ctx context.Context, mtime string) error {
 // SetEtag sets the temporary etag of a node if it differs from the current etag
 func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
-	nodePath := n.lu.InternalPath(n.ID)
+	nodePath := n.InternalPath()
 	var tmTime time.Time
 	if tmTime, err = n.GetTMTime(); err != nil {
 		// no tmtime, use mtime
@@ -474,7 +557,7 @@ func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 // obviously this only is secure when the u/s/g/a namespaces are not accessible by users in the filesystem
 // public tags can be mapped to extended attributes
 func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
-	nodePath := n.lu.InternalPath(n.ID)
+	nodePath := n.InternalPath()
 	// the favorite flag is specific to the user, so we need to incorporate the userid
 	fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
 	return xattrs.Set(nodePath, fa, val)
@@ -485,7 +568,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n.ID).Logger()
 
 	var fn string
-	nodePath := n.lu.InternalPath(n.ID)
+	nodePath := n.InternalPath()
 
 	var fi os.FileInfo
 
@@ -510,8 +593,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	}
 
-	// TODO ensure we always have a space root
-	id := &provider.ResourceId{StorageId: n.SpaceRoot.Name, OpaqueId: n.ID}
+	id := &provider.ResourceId{StorageId: n.SpaceID, OpaqueId: n.ID}
 
 	if returnBasename {
 		fn = n.Name
@@ -530,6 +612,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		Size:          uint64(n.Blobsize),
 		Target:        target,
 		PermissionSet: rp,
+		Owner:         n.Owner(),
 	}
 
 	if nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -540,10 +623,6 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 			ri.Size = 0 // make dirs always return 0 if it is unknown
 			sublog.Debug().Err(err).Msg("could not read treesize")
 		}
-	}
-
-	if ri.Owner, err = n.Owner(); err != nil {
-		sublog.Debug().Err(err).Msg("could not determine owner")
 	}
 
 	// TODO make etag of files use fileid and checksum
@@ -605,7 +684,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// read locks
 	if _, ok := mdKeysMap[LockdiscoveryKey]; returnAllKeys || ok {
 		if n.hasLocks(ctx) {
-			err = readLocksIntoOpaque(ctx, n.LockFilePath(), ri)
+			err = readLocksIntoOpaque(ctx, n, ri)
 			if err != nil {
 				sublog.Debug().Err(errtypes.InternalError("lockfail"))
 			}
@@ -628,19 +707,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 	// quota
 	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
-		var quotaPath string
-		if n.SpaceRoot == nil {
-			root, err := n.lu.RootNode(ctx)
-			if err == nil {
-				quotaPath = root.InternalPath()
-			} else {
-				sublog.Debug().Err(err).Msg("error determining the space root node for quota")
-			}
-		} else {
-			quotaPath = n.SpaceRoot.InternalPath()
-		}
-		if quotaPath != "" {
-			readQuotaIntoOpaque(ctx, quotaPath, ri)
+		if n.SpaceRoot != nil && n.SpaceRoot.InternalPath() != "" {
+			readQuotaIntoOpaque(ctx, n.SpaceRoot.InternalPath(), ri)
 		}
 	}
 
@@ -752,7 +820,7 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 
 // HasPropagation checks if the propagation attribute exists and is set to "1"
 func (n *Node) HasPropagation() (propagation bool) {
-	if b, err := xattrs.Get(n.lu.InternalPath(n.ID), xattrs.PropagationAttr); err == nil {
+	if b, err := xattrs.Get(n.InternalPath(), xattrs.PropagationAttr); err == nil {
 		return b == "1"
 	}
 	return false
@@ -761,15 +829,53 @@ func (n *Node) HasPropagation() (propagation bool) {
 // GetTMTime reads the tmtime from the extended attributes
 func (n *Node) GetTMTime() (tmTime time.Time, err error) {
 	var b string
-	if b, err = xattrs.Get(n.lu.InternalPath(n.ID), xattrs.TreeMTimeAttr); err != nil {
+	if b, err = xattrs.Get(n.InternalPath(), xattrs.TreeMTimeAttr); err != nil {
 		return
 	}
 	return time.Parse(time.RFC3339Nano, b)
 }
 
-// SetTMTime writes the tmtime to the extended attributes
-func (n *Node) SetTMTime(t time.Time) (err error) {
-	return xattrs.Set(n.lu.InternalPath(n.ID), xattrs.TreeMTimeAttr, t.UTC().Format(time.RFC3339Nano))
+// SetTMTime writes the UTC tmtime to the extended attributes or removes the attribute if nil is passed
+func (n *Node) SetTMTime(t *time.Time) (err error) {
+	if t == nil {
+		err = xattrs.Remove(n.InternalPath(), xattrs.TreeMTimeAttr)
+		if xattrs.IsAttrUnset(err) {
+			return nil
+		}
+		return err
+	}
+	return xattrs.Set(n.InternalPath(), xattrs.TreeMTimeAttr, t.UTC().Format(time.RFC3339Nano))
+}
+
+// GetDTime reads the dtime from the extended attributes
+func (n *Node) GetDTime() (tmTime time.Time, err error) {
+	var b string
+	if b, err = xattrs.Get(n.InternalPath(), xattrs.DTimeAttr); err != nil {
+		return
+	}
+	return time.Parse(time.RFC3339Nano, b)
+}
+
+// SetDTime writes the UTC dtime to the extended attributes or removes the attribute if nil is passed
+func (n *Node) SetDTime(t *time.Time) (err error) {
+	if t == nil {
+		err = xattrs.Remove(n.InternalPath(), xattrs.DTimeAttr)
+		if xattrs.IsAttrUnset(err) {
+			return nil
+		}
+		return err
+	}
+	return xattrs.Set(n.InternalPath(), xattrs.DTimeAttr, t.UTC().Format(time.RFC3339Nano))
+}
+
+// IsDisabled returns true when the node has a dmtime attribute set
+// only used to check if a space is disabled
+// FIXME confusing with the trash logic
+func (n *Node) IsDisabled() bool {
+	if _, err := n.GetDTime(); err == nil {
+		return true
+	}
+	return false
 }
 
 // GetTreeSize reads the treesize from the extended attributes
@@ -793,12 +899,9 @@ func (n *Node) SetChecksum(csType string, h hash.Hash) (err error) {
 
 // UnsetTempEtag removes the temporary etag attribute
 func (n *Node) UnsetTempEtag() (err error) {
-	if err = xattr.Remove(n.lu.InternalPath(n.ID), xattrs.TmpEtagAttr); err != nil {
-		if e, ok := err.(*xattr.Error); ok && (e.Err.Error() == "no data available" ||
-			// darwin
-			e.Err.Error() == "attribute not found") {
-			return nil
-		}
+	err = xattrs.Remove(n.InternalPath(), xattrs.TmpEtagAttr)
+	if xattrs.IsAttrUnset(err) {
+		return nil
 	}
 	return err
 }
@@ -806,20 +909,7 @@ func (n *Node) UnsetTempEtag() (err error) {
 // ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
 func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap provider.ResourcePermissions, err error) {
 	// check if the current user is the owner
-	o, err := n.Owner()
-	if err != nil {
-		// TODO check if a parent folder has the owner set?
-		appctx.GetLogger(ctx).Error().Err(err).Str("node", n.ID).Msg("could not determine owner, returning default permissions")
-		return NoPermissions(), err
-	}
-	if o.OpaqueId == "" {
-		// this happens for root nodes and project spaces in the storage. the extended attributes are set to emptystring to indicate: no owner
-		// for project spaces we need to go over the grants and check the granted permissions
-		if n.ID == RootID {
-			return NoOwnerPermissions(), nil
-		}
-	}
-	if utils.UserEqual(u.Id, o) {
+	if utils.UserEqual(u.Id, n.Owner()) {
 		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
 		return OwnerPermissions(), nil
 	}

@@ -58,7 +58,7 @@ type Revad struct {
 	Cleanup     cleanupFunc // Function to kill the process and cleanup the temp. root. If the given parameter is true the files will be kept to make debugging failures easier.
 }
 
-// stardRevads takes a list of revad configuration files plus a map of
+// startRevads takes a list of revad configuration files plus a map of
 // variables that need to be substituted in them and starts them.
 //
 // A unique port is assigned to each spawned instance.
@@ -152,7 +152,7 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		}
 
 		// even the port is open the service might not be available yet
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 
 		revad := &Revad{
 			TmpRoot:     tmpRoot,

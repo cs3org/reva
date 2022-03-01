@@ -30,13 +30,13 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -177,6 +177,7 @@ var _ = Describe("gateway", func() {
 			shard1Fs, err = ocis.New(map[string]interface{}{
 				"root":                revads["storage"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
+				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"enable_home":         true,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
@@ -201,6 +202,7 @@ var _ = Describe("gateway", func() {
 			shard2Fs, err = ocis.New(map[string]interface{}{
 				"root":                revads["storage"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
+				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"enable_home":         true,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
@@ -285,14 +287,6 @@ var _ = Describe("gateway", func() {
 
 			It("places new spaces in the correct shard", func() {
 				createRes, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"path": {
-								Decoder: "plain",
-								Value:   []byte("/projects"),
-							},
-						},
-					},
 					Owner: user,
 					Type:  "project",
 					Name:  "o - project",
@@ -310,9 +304,9 @@ var _ = Describe("gateway", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-				_, err = os.Stat(path.Join(revads["storage"].StorageRoot, "/spaces/project", space.Id.OpaqueId))
+				_, err = os.Stat(path.Join(revads["storage"].StorageRoot, "/spacetypes/project", space.Id.OpaqueId))
 				Expect(err).To(HaveOccurred())
-				_, err = os.Stat(path.Join(revads["storage2"].StorageRoot, "/spaces/project", space.Id.OpaqueId))
+				_, err = os.Stat(path.Join(revads["storage2"].StorageRoot, "/spacetypes/project", space.Id.OpaqueId))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -347,12 +341,11 @@ var _ = Describe("gateway", func() {
 
 	Context("with a basic user storage", func() {
 		var (
-			fs              storage.FS
-			embeddedFs      storage.FS
-			homeSpace       *storagep.StorageSpace
-			embeddedSpace   *storagep.StorageSpace
-			embeddedSpaceID string
-			embeddedRef     *storagep.Reference
+			fs            storage.FS
+			embeddedFs    storage.FS
+			homeSpace     *storagep.StorageSpace
+			embeddedSpace *storagep.StorageSpace
+			embeddedRef   *storagep.Reference
 		)
 
 		BeforeEach(func() {
@@ -369,8 +362,7 @@ var _ = Describe("gateway", func() {
 			var err error
 			fs, err = ocis.New(map[string]interface{}{
 				"root":                revads["storage"].StorageRoot,
-				"userprovidersvc":     revads["users"].GrpcAddress,
-				"gateway_addr":        revads["gateway"].GrpcAddress,
+				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"enable_home":         true,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
@@ -395,6 +387,7 @@ var _ = Describe("gateway", func() {
 			embeddedFs, err = ocis.New(map[string]interface{}{
 				"root":                revads["storage2"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
+				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"enable_home":         true,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
@@ -421,7 +414,6 @@ var _ = Describe("gateway", func() {
 				[]byte("22"),
 			)
 			Expect(err).ToNot(HaveOccurred())
-			embeddedSpaceID = embeddedSpace.Id.OpaqueId
 		})
 
 		Describe("ListContainer", func() {
@@ -480,21 +472,23 @@ var _ = Describe("gateway", func() {
 
 				info := statRes.Info
 				Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(info.Path).To(Equal(user.Id.OpaqueId))
+				Expect(utils.ResourceIDEqual(info.Id, homeRef.ResourceId)).To(BeTrue())
+				Expect(info.Path).To(Equal("")) // path of a root node of a space is always ""
 				Expect(info.Owner.OpaqueId).To(Equal(user.Id.OpaqueId))
 
 				// TODO: size aggregating is done by the client now - so no chance testing that here
 				// Expect(info.Size).To(Equal(uint64(3))) // home: 1, embedded: 2
 			})
 
-			It("stats the embedded space", func() {
+			It("stats the root of embedded space", func() {
 				statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: embeddedRef})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 				info := statRes.Info
 				Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(info.Path).To(Equal(embeddedSpaceID))
+				Expect(utils.ResourceIDEqual(info.Id, embeddedRef.ResourceId)).To(BeTrue())
+				Expect(info.Path).To(Equal("")) // path of a root node of a space is always ""
 				Expect(info.Size).To(Equal(uint64(2)))
 			})
 

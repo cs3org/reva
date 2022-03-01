@@ -56,16 +56,12 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return err
 	}
 
-	owner, err := node.Owner()
-	if err != nil {
-		return err
-	}
-
+	owner := node.Owner()
 	// If the owner is empty and there are no grantees then we are dealing with a just created project space.
 	// In this case we don't need to check for permissions and just add the grant since this will be the project
 	// manager.
 	// When the owner is empty but grants are set then we do want to check the grants.
-	if !(len(grantees) == 0 && owner.OpaqueId == "") {
+	if !(len(grantees) == 0 && (owner == nil || owner.OpaqueId == "")) {
 		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
 			// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
 			return rp.AddGrant || rp.UpdateGrant
@@ -91,7 +87,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 
 	// when a grant is added to a space, do not add a new space under "shares"
 	if spaceGrant := ctx.Value(utils.SpaceGrant); spaceGrant == nil {
-		err := fs.createStorageSpace(ctx, spaceTypeShare, node.ID)
+		err := fs.linkStorageSpaceType(ctx, spaceTypeShare, node.ID)
 		if err != nil {
 			return err
 		}
@@ -122,7 +118,7 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 	}
 
 	log := appctx.GetLogger(ctx)
-	np := fs.lu.InternalPath(node.ID)
+	np := node.InternalPath()
 	var attrs []string
 	if attrs, err = xattr.List(np); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
@@ -174,8 +170,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		attr = xattrs.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
 	}
 
-	np := fs.lu.InternalPath(node.ID)
-	if err = xattr.Remove(np, attr); err != nil {
+	if err = xattrs.Remove(node.InternalPath(), attr); err != nil {
 		return
 	}
 
