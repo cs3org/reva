@@ -66,9 +66,10 @@ const contactFormTemplate = `
 `
 
 const alertFiringNotificationTemplate = `
-Site {{.Params.Site}} has generated an alert:
+Site '{{.Params.Site}}' has generated an alert:
 
   Type:     {{.Params.Name}}
+  Service:  {{.Params.Service}}
   Instance: {{.Params.Instance}}
   Job:      {{.Params.Job}}
   Severity: {{.Params.Severity}}
@@ -79,9 +80,10 @@ Site {{.Params.Site}} has generated an alert:
 `
 
 const alertResolvedNotificationTemplate = `
-Site {{.Params.Site}} has resolved an alert:
+Site '{{.Params.Site}}' has resolved an alert:
 
   Type:     {{.Params.Name}}
+  Service:  {{.Params.Service}}
   Instance: {{.Params.Instance}}
   Job:      {{.Params.Job}}
   Severity: {{.Params.Severity}}

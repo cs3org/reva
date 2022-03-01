@@ -103,6 +103,7 @@ func (dispatcher *Dispatcher) dispatchAlert(alert template.Alert, account *data.
 		"Fingerprint": alert.Fingerprint,
 
 		"Name":     alert.Labels["alertname"],
+		"Service":  alert.Labels["service_type"],
 		"Instance": alert.Labels["instance"],
 		"Job":      alert.Labels["job"],
 		"Severity": alert.Labels["severity"],
