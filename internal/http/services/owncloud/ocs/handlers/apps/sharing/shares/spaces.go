@@ -26,6 +26,7 @@ import (
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -88,36 +89,22 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 		return
 	}
 
-	ref := &provider.Reference{ResourceId: info.Id}
-
-	p, err := h.findProvider(ctx, ref)
+	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider", err)
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting gateway client", err)
 		return
 	}
 
-	providerClient, err := h.getStorageProviderClient(p)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider client", err)
-		return
-	}
-
-	// TODO: change CS3 APIs
-	opaque := &types.Opaque{
-		Map: map[string]*types.OpaqueEntry{
-			"spacegrant": {},
-		},
-	}
-
-	addGrantRes, err := providerClient.AddGrant(ctx, &provider.AddGrantRequest{
-		Opaque: opaque,
-		Ref:    ref,
-		Grant: &provider.Grant{
-			Grantee:     &grantee,
-			Permissions: role.CS3ResourcePermissions(),
+	createShareRes, err := client.CreateShare(ctx, &collaborationv1beta1.CreateShareRequest{
+		ResourceInfo: info,
+		Grant: &collaborationv1beta1.ShareGrant{
+			Permissions: &collaborationv1beta1.SharePermissions{
+				Permissions: role.CS3ResourcePermissions(),
+			},
+			Grantee: &grantee,
 		},
 	})
-	if err != nil || addGrantRes.Status.Code != rpc.Code_CODE_OK {
+	if err != nil || createShareRes.Status.Code != rpc.Code_CODE_OK {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not add space member", err)
 		return
 	}
@@ -169,17 +156,27 @@ func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spac
 		return
 	}
 
-	removeGrantRes, err := providerClient.RemoveGrant(ctx, &provider.RemoveGrantRequest{
-		Ref: &ref,
-		Grant: &provider.Grant{
-			Grantee: &grantee,
+	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting gateway client", err)
+		return
+	}
+
+	removeShareRes, err := gatewayClient.RemoveShare(ctx, &collaborationv1beta1.RemoveShareRequest{
+		Ref: &collaborationv1beta1.ShareReference{
+			Spec: &collaborationv1beta1.ShareReference_Key{
+				Key: &collaborationv1beta1.ShareKey{
+					ResourceId: ref.ResourceId,
+					Grantee:    &grantee,
+				},
+			},
 		},
 	})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error removing grant", err)
 		return
 	}
-	if removeGrantRes.Status.Code != rpc.Code_CODE_OK {
+	if removeShareRes.Status.Code != rpc.Code_CODE_OK {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error removing grant", err)
 		return
 	}
