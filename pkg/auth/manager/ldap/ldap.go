@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-ldap/ldap/v3"
+	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -63,7 +64,8 @@ type attributes struct {
 	// DN is the distinguished name in ldap, e.g. `cn=einstein,ou=users,dc=example,dc=org`
 	DN string `mapstructure:"dn"`
 	// UID is an immutable user id, see https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
-	UID string `mapstructure:"uid"`
+	UID              string `mapstructure:"uid"`
+	UIDIsOctetString bool   `mapstructure:"uidIsOctetString"`
 	// CN is the username, typically `cn`, `uid` or `samaccountname`
 	CN string `mapstructure:"cn"`
 	// Mail is the email address of a user
@@ -78,13 +80,14 @@ type attributes struct {
 
 // Default attributes (Active Directory)
 var ldapDefaults = attributes{
-	DN:          "dn",
-	UID:         "ms-DS-ConsistencyGuid", // you can fall back to objectguid or even samaccountname but you will run into trouble when user names change. You have been warned.
-	CN:          "cn",
-	Mail:        "mail",
-	DisplayName: "displayName",
-	UIDNumber:   "uidNumber",
-	GIDNumber:   "gidNumber",
+	DN:               "dn",
+	UID:              "ms-DS-ConsistencyGuid", // you can fall back to objectguid or even samaccountname but you will run into trouble when user names change. You have been warned.
+	UIDIsOctetString: false,
+	CN:               "cn",
+	Mail:             "mail",
+	DisplayName:      "displayName",
+	UIDNumber:        "uidNumber",
+	GIDNumber:        "gidNumber",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -166,9 +169,19 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, err
 	}
 
+	var uid string
+	if am.c.Schema.UIDIsOctetString {
+		rawValue := sr.Entries[0].GetEqualFoldRawAttributeValue(am.c.Schema.UID)
+		if value, err := uuid.FromBytes(rawValue); err == nil {
+			uid = value.String()
+		}
+	} else {
+		uid = sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID)
+	}
+
 	userID := &user.UserId{
 		Idp:      am.c.Idp,
-		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
+		OpaqueId: uid,
 		Type:     user.UserType_USER_TYPE_PRIMARY, // TODO: assign the appropriate user type
 	}
 	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
