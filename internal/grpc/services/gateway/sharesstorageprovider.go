@@ -23,6 +23,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -150,6 +152,8 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 			}
 		}
 
+		// It should be possible to delete and move share references, so expose all possible permissions
+		info.PermissionSet = conversions.NewManagerRole().CS3ResourcePermissions()
 		info.Path = lcr.Infos[i].GetPath()
 		checkedInfos = append(checkedInfos, info)
 	}
