@@ -45,7 +45,6 @@ import (
 const (
 	versionPrefix  = ".sys.v#."
 	lwShareAttrKey = "reva.lwshare"
-	userACLEvalKey = "eval.useracl"
 )
 
 const (
@@ -323,20 +322,9 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	}
 
 	sysACL := a.CitrineSerialize()
-	args := []string{"acl"}
-
+	args := []string{"acl", "--sys"}
 	if finfo.IsDir {
-		args = append(args, "--sys", "--recursive")
-	} else {
-		args = append(args, "--user")
-		userACLAttr := &eosclient.Attribute{
-			Type: SystemAttr,
-			Key:  userACLEvalKey,
-			Val:  "1",
-		}
-		if err = c.SetAttr(ctx, auth, userACLAttr, false, path); err != nil {
-			return err
-		}
+		args = append(args, "--recursive")
 	}
 
 	// set position of ACLs to add. The default is to append to the end, so no arguments will be added in this case
@@ -387,11 +375,9 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 	}
 
 	sysACL := a.CitrineSerialize()
-	args := []string{"acl"}
+	args := []string{"acl", "--sys"}
 	if finfo.IsDir {
-		args = append(args, "--sys", "--recursive")
-	} else {
-		args = append(args, "--user")
+		args = append(args, "--recursive")
 	}
 	args = append(args, sysACL, path)
 
@@ -1119,22 +1105,6 @@ func (c *Client) mapToFileInfo(kv, attrs map[string]string) (*eosclient.FileInfo
 	sysACL, err := acl.Parse(attrs["sys.acl"], acl.ShortTextForm)
 	if err != nil {
 		return nil, err
-	}
-
-	// Read user ACLs if sys.eval.useracl is set
-	if userACLEval, ok := attrs["sys."+userACLEvalKey]; ok && userACLEval == "1" {
-		if userACL, ok := attrs["user.acl"]; ok {
-			userAcls, err := acl.Parse(userACL, acl.ShortTextForm)
-			if err != nil {
-				return nil, err
-			}
-			for _, e := range userAcls.Entries {
-				err = sysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
 	}
 
 	// Read lightweight ACLs recognized by the sys.reva.lwshare attr
