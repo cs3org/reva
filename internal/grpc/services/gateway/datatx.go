@@ -78,12 +78,12 @@ func (s *svc) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequ
 
 func (s *svc) ListTransfers(ctx context.Context, req *datatx.ListTransfersRequest) (*datatx.ListTransfersResponse, error) {
 	return &datatx.ListTransfersResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CancelTransfer not implemented"), "ListTransfers not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("ListTransfers not implemented"), "ListTransfers not implemented"),
 	}, nil
 }
 
 func (s *svc) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRequest) (*datatx.RetryTransferResponse, error) {
 	return &datatx.RetryTransferResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CancelTransfer not implemented"), "RetryTransfer not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("RetryTransfer not implemented"), "RetryTransfer not implemented"),
 	}, nil
 }

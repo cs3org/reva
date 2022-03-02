@@ -101,7 +101,7 @@ func (s *service) CancelTransfer(ctx context.Context, in *datatx.CancelTransferR
 
 func (s *service) ListTransfers(ctx context.Context, req *datatx.ListTransfersRequest) (*datatx.ListTransfersResponse, error) {
 	return &datatx.ListTransfersResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CancelTransfer not implemented"), "ListTransfers not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("ListTransfers not implemented"), "ListTransfers not implemented"),
 	}, nil
 }
 
