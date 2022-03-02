@@ -83,7 +83,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{}
+	return []string{"/v1.php/cloud/capabilities", "/v2.php/cloud/capabilities"}
 }
 
 func (s *svc) routerInit() error {
