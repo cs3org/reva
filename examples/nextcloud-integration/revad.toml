@@ -90,9 +90,7 @@ expose_data_server = true
 data_server_url = "http://127.0.0.1:19001/data"
 enable_home_creation = true
 disable_tus = true
-
-[grpc.services.storageprovider.mimetypes]
-".zmd" = "application/compressed-markdown"
+custom_mime_types = "custom-mime-types-demo.json"
 
 [grpc.services.storageprovider.drivers.nextcloud]
 end_point = "http://localhost/apps/sciencemesh/"

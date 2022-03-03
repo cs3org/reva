@@ -1,0 +1,10 @@
+[
+    {
+        "file_ext": ".zmd",
+        "mime_type": "application/compressed-markdown"
+    },
+    {
+        "file_ext": ".zep",
+        "mime_type": "application/compressed-etherpad"
+    }
+]
