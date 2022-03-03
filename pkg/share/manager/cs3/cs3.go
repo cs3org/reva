@@ -26,6 +26,7 @@ import (
 	"path"
 	"time"
 
+	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -63,6 +64,11 @@ type Manager struct {
 	indexer Indexer
 
 	initialized bool
+}
+
+type ReceivedShareMetadata struct {
+	State      collaboration.ShareState `json:"state"`
+	MountPoint *provider.Reference      `json:"mountpoint"`
 }
 
 func init() {
@@ -194,8 +200,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 }
 
 func (m *Manager) getShareById(ctx context.Context, id string) (*collaboration.Share, error) {
-	fn := path.Join("shares", id)
-	data, err := m.storage.SimpleDownload(ctx, fn)
+	data, err := m.storage.SimpleDownload(ctx, shareFilename(id))
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +300,73 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}
-	return nil, nil
+
+	user, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return nil, errtypes.UserRequired("error getting user from context")
+	}
+
+	result := []*collaboration.ReceivedShare{}
+
+	ids, err := granteeToIndex(&provider.Grantee{
+		Type: provider.GranteeType_GRANTEE_TYPE_USER,
+		Id:   &provider.Grantee_UserId{UserId: user.Id},
+	})
+	if err != nil {
+		return nil, err
+	}
+	receivedIds, err := m.indexer.FindBy(&collaboration.Share{}, "GranteeId", ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, group := range user.Groups {
+		index, err := granteeToIndex(&provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+			Id:   &provider.Grantee_GroupId{GroupId: &groupv1beta1.GroupId{OpaqueId: group}},
+		})
+		if err != nil {
+			return nil, err
+		}
+		groupIds, err := m.indexer.FindBy(&collaboration.Share{}, "GranteeId", index)
+		if err != nil {
+			return nil, err
+		}
+		receivedIds = append(receivedIds, groupIds...)
+	}
+
+	for _, id := range receivedIds {
+		shareFn := shareFilename(id)
+		data, err := m.storage.SimpleDownload(ctx, shareFn)
+		if err != nil {
+			return nil, err
+		}
+
+		s, err := unmarshalShareData(data)
+		if err != nil {
+			return nil, err
+		}
+
+		metadataFn, err := metadataFilename(s, user)
+		if err != nil {
+			return nil, err
+		}
+		data, err = m.storage.SimpleDownload(ctx, metadataFn)
+		if err != nil {
+			return nil, err
+		}
+		metadata := &ReceivedShareMetadata{}
+		err = json.Unmarshal(data, metadata)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, &collaboration.ReceivedShare{
+			Share:      s,
+			State:      metadata.State,
+			MountPoint: metadata.MountPoint,
+		})
+	}
+	return result, nil
 }
 
 // GetReceivedShare returns the information for a received share.
@@ -332,6 +403,25 @@ func unmarshalShareData(data []byte) (*collaboration.Share, error) {
 	return nil, errtypes.InternalError("failed to unmarshal share data")
 }
 
+func shareFilename(id string) string {
+	return path.Join("shares", id)
+}
+
+func metadataFilename(s *collaboration.Share, g interface{}) (string, error) {
+	var granteePart string
+	switch v := g.(type) {
+	case *userpb.User:
+		granteePart = url.QueryEscape("user:" + v.Id.Idp + ":" + v.Id.OpaqueId)
+	case *provider.Grantee:
+		var err error
+		granteePart, err = granteeToIndex(v)
+		if err != nil {
+			return "", err
+		}
+	}
+	return path.Join("metadata", s.Id.OpaqueId, granteePart), nil
+}
+
 func indexOwnerFunc(v interface{}) (string, error) {
 	share, ok := v.(*collaboration.Share)
 	if !ok {
@@ -357,7 +447,7 @@ func granteeToIndex(grantee *provider.Grantee) (string, error) {
 	case grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER:
 		return url.QueryEscape("user:" + grantee.GetUserId().Idp + ":" + grantee.GetUserId().OpaqueId), nil
 	case grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP:
-		return url.QueryEscape("group:" + grantee.GetGroupId().Idp + ":" + grantee.GetGroupId().OpaqueId), nil
+		return url.QueryEscape("group:" + grantee.GetGroupId().OpaqueId), nil
 	default:
 		return "", fmt.Errorf("unknown grantee type")
 	}
