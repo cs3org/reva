@@ -27,9 +27,9 @@ import (
 
 	"github.com/asim/go-micro/plugins/events/nats/v4"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	"github.com/cs3org/reva/pkg/events"
-	"github.com/cs3org/reva/pkg/events/server"
-	"github.com/cs3org/reva/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events/server"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
 )
 
 const (

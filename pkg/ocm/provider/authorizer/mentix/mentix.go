@@ -29,12 +29,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/rhttp"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/ocm/provider"
-	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/ocm/provider"
+	"github.com/cs3org/reva/v2/pkg/ocm/provider/authorizer/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )

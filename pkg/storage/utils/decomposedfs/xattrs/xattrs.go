@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/storage/utils/filelocks"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"

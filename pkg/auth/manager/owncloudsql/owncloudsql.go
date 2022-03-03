@@ -30,12 +30,12 @@ import (
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth"
-	"github.com/cs3org/reva/pkg/auth/manager/owncloudsql/accounts"
-	"github.com/cs3org/reva/pkg/auth/manager/registry"
-	"github.com/cs3org/reva/pkg/auth/scope"
-	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/auth"
+	"github.com/cs3org/reva/v2/pkg/auth/manager/owncloudsql/accounts"
+	"github.com/cs3org/reva/v2/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/auth/scope"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 

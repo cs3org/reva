@@ -22,8 +22,8 @@ import (
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/net"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

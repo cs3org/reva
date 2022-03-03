@@ -24,3 +24,19 @@ share_folder = "/MyShares"
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="user_layout" type="string" default="{{.Username}}" %}}
+Template used for building the user's root path. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/local/local.go#L36)
+{{< highlight toml >}}
+[storage.fs.local]
+user_layout = "{{.Username}}"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="disable_home" type="bool" default=false %}}
+Enable/disable special /home handling. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/local/local.go#L37)
+{{< highlight toml >}}
+[storage.fs.local]
+disable_home = false
+{{< /highlight >}}
+{{% /dir %}}
+

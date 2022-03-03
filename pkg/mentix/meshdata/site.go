@@ -23,8 +23,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/mentix/accservice"
-	"github.com/cs3org/reva/pkg/mentix/utils/network"
+	"github.com/cs3org/reva/v2/pkg/mentix/accservice"
+	"github.com/cs3org/reva/v2/pkg/mentix/utils/network"
 )
 
 const (

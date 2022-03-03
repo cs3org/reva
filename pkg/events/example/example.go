@@ -23,10 +23,10 @@ import (
 	"time"
 
 	"github.com/asim/go-micro/plugins/events/nats/v4"
-	"github.com/cs3org/reva/pkg/events"
-	"github.com/cs3org/reva/pkg/events/example/consumer"
-	"github.com/cs3org/reva/pkg/events/example/publisher"
-	"github.com/cs3org/reva/pkg/events/server"
+	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events/example/consumer"
+	"github.com/cs3org/reva/v2/pkg/events/example/publisher"
+	"github.com/cs3org/reva/v2/pkg/events/server"
 )
 
 // Simple example of an event workflow

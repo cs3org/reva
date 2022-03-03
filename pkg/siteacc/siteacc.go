@@ -22,12 +22,12 @@ import (
 	"fmt"
 	"net/http"
 
-	accpanel "github.com/cs3org/reva/pkg/siteacc/account"
-	"github.com/cs3org/reva/pkg/siteacc/admin"
-	"github.com/cs3org/reva/pkg/siteacc/alerting"
-	"github.com/cs3org/reva/pkg/siteacc/config"
-	"github.com/cs3org/reva/pkg/siteacc/html"
-	"github.com/cs3org/reva/pkg/siteacc/manager"
+	accpanel "github.com/cs3org/reva/v2/pkg/siteacc/account"
+	"github.com/cs3org/reva/v2/pkg/siteacc/admin"
+	"github.com/cs3org/reva/v2/pkg/siteacc/alerting"
+	"github.com/cs3org/reva/v2/pkg/siteacc/config"
+	"github.com/cs3org/reva/v2/pkg/siteacc/html"
+	"github.com/cs3org/reva/v2/pkg/siteacc/manager"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

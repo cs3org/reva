@@ -29,9 +29,9 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	sdk "github.com/cs3org/reva/pkg/sdk/common"
-	"github.com/cs3org/reva/pkg/utils"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc"
 )
 

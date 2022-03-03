@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/cs3org/reva/pkg/mentix/utils/network"
+	"github.com/cs3org/reva/v2/pkg/mentix/utils/network"
 	"github.com/pkg/errors"
 )
 

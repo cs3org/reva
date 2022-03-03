@@ -24,10 +24,10 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/cs3org/reva/pkg/metrics/driver/registry"
+	"github.com/cs3org/reva/v2/pkg/metrics/driver/registry"
 
-	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/metrics/config"
+	"github.com/cs3org/reva/v2/pkg/logger"
+	"github.com/cs3org/reva/v2/pkg/metrics/config"
 	"github.com/rs/zerolog"
 )
 

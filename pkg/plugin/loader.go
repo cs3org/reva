@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 )

@@ -21,7 +21,7 @@ package action
 import (
 	"fmt"
 
-	"github.com/cs3org/reva/pkg/sdk"
+	"github.com/cs3org/reva/v2/pkg/sdk"
 )
 
 type action struct {

@@ -22,11 +22,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/pkg/siteacc/password"
+	"github.com/cs3org/reva/v2/pkg/siteacc/password"
 	"github.com/pkg/errors"
 
-	"github.com/cs3org/reva/pkg/mentix/key"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/mentix/key"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 // Account represents a single site account.

@@ -18,7 +18,7 @@
 
 package index
 
-import "github.com/cs3org/reva/pkg/storage/utils/indexer/option"
+import "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
 
 // Index can be implemented to create new indexer-strategies. See Unique for example.
 // Each indexer implementation is bound to one data-column (IndexBy) and a data-type (TypeName)

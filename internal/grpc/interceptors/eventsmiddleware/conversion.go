@@ -20,7 +20,7 @@ package eventsmiddleware
 
 import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	"github.com/cs3org/reva/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events"
 )
 
 // ShareCreated converts response to event
