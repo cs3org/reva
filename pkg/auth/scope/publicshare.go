@@ -108,6 +108,8 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 
 	case *userv1beta1.GetUserByClaimRequest:
 		return true, nil
+	case *userv1beta1.GetUserRequest:
+		return true, nil
 
 	case *provider.ListStorageSpacesRequest:
 		return checkPublicListStorageSpacesFilter(v.Filters), nil
