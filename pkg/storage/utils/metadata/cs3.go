@@ -63,7 +63,7 @@ func NewCS3Storage(gwAddr, providerAddr, serviceUser, machineAuthAPIKey string) 
 			Id: &user.UserId{
 				OpaqueId: serviceUser,
 				// TODO: how to determine the idp?
-				Idp: "https://localhost:9200",
+				Idp: os.Getenv("OCIS_URL"), //"https://host.docker.internal:9200", //"https://localhost:9200",
 			},
 		},
 	}, nil
