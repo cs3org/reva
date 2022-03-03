@@ -417,7 +417,7 @@ func TestCreateTar(t *testing.T) {
 				resources = append(resources, &provider.ResourceId{OpaqueId: path.Join(tmpdir, f)})
 			}
 
-			w := walkerMock.NewWalker()
+			w := walkerMock.NewWalker(tmpdir)
 			d := downMock.NewDownloader()
 
 			arch, err := NewArchiver(resources, w, d, tt.config)
@@ -865,7 +865,7 @@ func TestCreateZip(t *testing.T) {
 				resources = append(resources, &provider.ResourceId{OpaqueId: path.Join(tmpdir, f)})
 			}
 
-			w := walkerMock.NewWalker()
+			w := walkerMock.NewWalker(tmpdir)
 			d := downMock.NewDownloader()
 
 			arch, err := NewArchiver(resources, w, d, tt.config)
