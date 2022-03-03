@@ -41,14 +41,18 @@ import (
 
 var _ = Describe("Manager", func() {
 	var (
-		storage *mocks.Storage
-		indexer *mocks.Indexer
-		user    *userpb.User
-		grantee *userpb.User
-		share   *collaboration.Share
-		share2  *collaboration.Share
-		grant   *collaboration.ShareGrant
-		ctx     context.Context
+		storage    *mocks.Storage
+		indexer    *mocks.Indexer
+		user       *userpb.User
+		grantee    *userpb.User
+		share      *collaboration.Share
+		share2     *collaboration.Share
+		grant      *collaboration.ShareGrant
+		ctx        context.Context
+		granteeCtx context.Context
+
+		granteeFn string
+		groupFn   string
 	)
 
 	BeforeEach(func() {
@@ -67,14 +71,16 @@ var _ = Describe("Manager", func() {
 				Idp:      "localhost:1111",
 				OpaqueId: "1",
 			},
-			Groups: []string{"admins"},
 		}
 		grantee = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "localhost:1111",
 				OpaqueId: "2",
 			},
+			Groups: []string{"users"},
 		}
+		granteeFn = url.QueryEscape("user:" + grantee.Id.Idp + ":" + grantee.Id.OpaqueId)
+		groupFn = url.QueryEscape("group:users")
 
 		grant = &collaboration.ShareGrant{
 			Grantee: &provider.Grantee{
@@ -128,6 +134,7 @@ var _ = Describe("Manager", func() {
 			},
 		}
 		ctx = ctxpkg.ContextSetUser(context.Background(), user)
+		granteeCtx = ctxpkg.ContextSetUser(context.Background(), grantee)
 	})
 
 	Describe("New", func() {
@@ -160,9 +167,22 @@ var _ = Describe("Manager", func() {
 			data, err := json.Marshal(share)
 			Expect(err).ToNot(HaveOccurred())
 			storage.On("SimpleDownload", mock.Anything, path.Join("shares", share.Id.OpaqueId)).Return(data, nil)
-			data2, err := json.Marshal(share2)
+			data, err = json.Marshal(share2)
 			Expect(err).ToNot(HaveOccurred())
-			storage.On("SimpleDownload", mock.Anything, path.Join("shares", share2.Id.OpaqueId)).Return(data2, nil)
+			storage.On("SimpleDownload", mock.Anything, path.Join("shares", share2.Id.OpaqueId)).Return(data, nil)
+			data, err = json.Marshal(&cs3.ReceivedShareMetadata{
+				State: collaboration.ShareState_SHARE_STATE_PENDING,
+				MountPoint: &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						StorageId: "storageid",
+						OpaqueId:  "opaqueid",
+					},
+					Path: "path",
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			storage.On("SimpleDownload", mock.Anything, path.Join("metadata", share2.Id.OpaqueId, granteeFn)).
+				Return(data, nil)
 			storage.On("SimpleDownload", mock.Anything, mock.Anything).Return(nil, errtypes.NotFound(""))
 		})
 
@@ -331,29 +351,14 @@ var _ = Describe("Manager", func() {
 		Describe("ListReceivedShares", func() {
 			Context("with a received user share", func() {
 				BeforeEach(func() {
-					userFn := url.QueryEscape("user:" + user.Id.Idp + ":" + user.Id.OpaqueId)
-					indexer.On("FindBy", mock.Anything, "GranteeId", userFn).
+					indexer.On("FindBy", mock.Anything, "GranteeId", granteeFn).
 						Return([]string{share2.Id.OpaqueId}, nil)
 					indexer.On("FindBy", mock.Anything, "GranteeId", mock.Anything).
 						Return([]string{}, nil)
-
-					data, err := json.Marshal(&cs3.ReceivedShareMetadata{
-						State: collaboration.ShareState_SHARE_STATE_PENDING,
-						MountPoint: &provider.Reference{
-							ResourceId: &provider.ResourceId{
-								StorageId: "storageid",
-								OpaqueId:  "opaqueid",
-							},
-							Path: "path",
-						},
-					})
-					Expect(err).ToNot(HaveOccurred())
-					storage.On("SimpleDownload", mock.Anything, path.Join("metadata", share2.Id.OpaqueId, userFn)).
-						Return(data, nil)
 				})
 
 				It("list the user shares", func() {
-					rshares, err := m.ListReceivedShares(ctx, []*collaboration.Filter{})
+					rshares, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rshares).ToNot(BeNil())
 					Expect(len(rshares)).To(Equal(1))
@@ -368,30 +373,14 @@ var _ = Describe("Manager", func() {
 
 			Context("with a received group share", func() {
 				BeforeEach(func() {
-					userFn := url.QueryEscape("user:" + user.Id.Idp + ":" + user.Id.OpaqueId)
-					groupFn := url.QueryEscape("group:admins")
 					indexer.On("FindBy", mock.Anything, "GranteeId", groupFn).
 						Return([]string{share2.Id.OpaqueId}, nil)
 					indexer.On("FindBy", mock.Anything, "GranteeId", mock.Anything).
 						Return([]string{}, nil)
-
-					data, err := json.Marshal(&cs3.ReceivedShareMetadata{
-						State: collaboration.ShareState_SHARE_STATE_PENDING,
-						MountPoint: &provider.Reference{
-							ResourceId: &provider.ResourceId{
-								StorageId: "storageid",
-								OpaqueId:  "opaqueid",
-							},
-							Path: "path",
-						},
-					})
-					Expect(err).ToNot(HaveOccurred())
-					storage.On("SimpleDownload", mock.Anything, path.Join("metadata", share2.Id.OpaqueId, userFn)).
-						Return(data, nil)
 				})
 
 				It("list the group share", func() {
-					rshares, err := m.ListReceivedShares(ctx, []*collaboration.Filter{})
+					rshares, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rshares).ToNot(BeNil())
 					Expect(len(rshares)).To(Equal(1))
@@ -401,6 +390,36 @@ var _ = Describe("Manager", func() {
 					Expect(rshare.MountPoint.ResourceId.StorageId).To(Equal("storageid"))
 					Expect(rshare.MountPoint.ResourceId.OpaqueId).To(Equal("opaqueid"))
 					Expect(rshare.MountPoint.Path).To(Equal("path"))
+				})
+			})
+		})
+
+		Describe("GetReceivedShare", func() {
+			Context("when the share is a user share ", func() {
+				Context("when requesting the share by id", func() {
+					It("returns NotFound", func() {
+						rshare, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+							Spec: &collaboration.ShareReference_Id{Id: &collaboration.ShareId{OpaqueId: "1000"}},
+						})
+						Expect(err).To(HaveOccurred())
+						Expect(rshare).To(BeNil())
+					})
+
+					It("returns the share", func() {
+						rshare, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+							Spec: &collaboration.ShareReference_Id{Id: &collaboration.ShareId{OpaqueId: share2.Id.OpaqueId}},
+						})
+						Expect(err).ToNot(HaveOccurred())
+						Expect(rshare).ToNot(BeNil())
+						Expect(rshare.Share.Id.OpaqueId).To(Equal(share2.Id.OpaqueId))
+						Expect(rshare.Share.Owner).To(Equal(share2.Owner))
+						Expect(rshare.Share.Grantee).To(Equal(share2.Grantee))
+						Expect(rshare.Share.Permissions).To(Equal(share2.Permissions))
+						Expect(rshare.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+						Expect(rshare.MountPoint.ResourceId.StorageId).To(Equal("storageid"))
+						Expect(rshare.MountPoint.ResourceId.OpaqueId).To(Equal("opaqueid"))
+						Expect(rshare.MountPoint.Path).To(Equal("path"))
+					})
 				})
 			})
 		})

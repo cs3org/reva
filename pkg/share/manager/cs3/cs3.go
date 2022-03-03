@@ -271,12 +271,7 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	}
 	result := []*collaboration.Share{}
 	for _, id := range allShareIds {
-		data, err := m.storage.SimpleDownload(ctx, path.Join("shares", id))
-		if err != nil {
-			return nil, err
-		}
-
-		s, err := unmarshalShareData(data)
+		s, err := m.getShareById(ctx, id)
 		if err != nil {
 			return nil, err
 		}
@@ -335,33 +330,16 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	}
 
 	for _, id := range receivedIds {
-		shareFn := shareFilename(id)
-		data, err := m.storage.SimpleDownload(ctx, shareFn)
+		share, err := m.getShareById(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-
-		s, err := unmarshalShareData(data)
+		metadata, err := m.downloadMetadata(ctx, share)
 		if err != nil {
 			return nil, err
 		}
-
-		metadataFn, err := metadataFilename(s, user)
-		if err != nil {
-			return nil, err
-		}
-		data, err = m.storage.SimpleDownload(ctx, metadataFn)
-		if err != nil {
-			return nil, err
-		}
-		metadata := &ReceivedShareMetadata{}
-		err = json.Unmarshal(data, metadata)
-		if err != nil {
-			return nil, err
-		}
-
 		result = append(result, &collaboration.ReceivedShare{
-			Share:      s,
+			Share:      share,
 			State:      metadata.State,
 			MountPoint: metadata.MountPoint,
 		})
@@ -374,7 +352,18 @@ func (m *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.Share
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}
-	return nil, nil
+
+	share, err := m.GetShare(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	metadata, err := m.downloadMetadata(ctx, share)
+	return &collaboration.ReceivedShare{
+		Share:      share,
+		State:      metadata.State,
+		MountPoint: metadata.MountPoint,
+	}, nil
 }
 
 // UpdateReceivedShare updates the received share with share state.
@@ -383,6 +372,25 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, share *collaboration.
 		return nil, err
 	}
 	return nil, nil
+}
+
+func (m *Manager) downloadMetadata(ctx context.Context, share *collaboration.Share) (ReceivedShareMetadata, error) {
+	user, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return ReceivedShareMetadata{}, errtypes.UserRequired("error getting user from context")
+	}
+
+	metadataFn, err := metadataFilename(share, user)
+	if err != nil {
+		return ReceivedShareMetadata{}, err
+	}
+	data, err := m.storage.SimpleDownload(ctx, metadataFn)
+	if err != nil {
+		return ReceivedShareMetadata{}, err
+	}
+	metadata := ReceivedShareMetadata{}
+	err = json.Unmarshal(data, &metadata)
+	return metadata, err
 }
 
 func unmarshalShareData(data []byte) (*collaboration.Share, error) {
