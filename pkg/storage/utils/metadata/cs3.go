@@ -62,6 +62,8 @@ func NewCS3Storage(gwAddr, providerAddr, serviceUser, machineAuthAPIKey string) 
 		serviceUser: &user.User{
 			Id: &user.UserId{
 				OpaqueId: serviceUser,
+				// TODO: how to determine the idp?
+				Idp: "https://localhost:9200",
 			},
 		},
 	}, nil
