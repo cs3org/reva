@@ -204,7 +204,24 @@ func (m *Manager) getShareById(ctx context.Context, id string) (*collaboration.S
 	if err != nil {
 		return nil, err
 	}
-	return unmarshalShareData(data)
+
+	userShare := &collaboration.Share{
+		Grantee: &provider.Grantee{Id: &provider.Grantee_UserId{}},
+	}
+	err = json.Unmarshal(data, userShare)
+	if err == nil && userShare.Grantee.GetUserId() != nil {
+		return userShare, nil
+	}
+
+	groupShare := &collaboration.Share{
+		Grantee: &provider.Grantee{Id: &provider.Grantee_GroupId{}},
+	}
+	err = json.Unmarshal(data, groupShare) // try to unmarshal to a group share if the user share unmarshalling failed
+	if err == nil && groupShare.Grantee.GetGroupId() != nil {
+		return groupShare, nil
+	}
+
+	return nil, errtypes.InternalError("failed to unmarshal share data")
 }
 
 func (m *Manager) getShareByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
@@ -391,24 +408,6 @@ func (m *Manager) downloadMetadata(ctx context.Context, share *collaboration.Sha
 	metadata := ReceivedShareMetadata{}
 	err = json.Unmarshal(data, &metadata)
 	return metadata, err
-}
-
-func unmarshalShareData(data []byte) (*collaboration.Share, error) {
-	userShare := &collaboration.Share{
-		Grantee: &provider.Grantee{Id: &provider.Grantee_UserId{}},
-	}
-	groupShare := &collaboration.Share{
-		Grantee: &provider.Grantee{Id: &provider.Grantee_GroupId{}},
-	}
-	err := json.Unmarshal(data, userShare)
-	if err == nil && userShare.Grantee.GetUserId() != nil {
-		return userShare, nil
-	}
-	err = json.Unmarshal(data, groupShare) // try to unmarshal to a group share if the user share unmarshalling failed
-	if err == nil && groupShare.Grantee.GetGroupId() != nil {
-		return groupShare, nil
-	}
-	return nil, errtypes.InternalError("failed to unmarshal share data")
 }
 
 func shareFilename(id string) string {
