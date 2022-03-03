@@ -56,16 +56,8 @@ gatewaysvc = ""
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="userprovidersvc" type="string" default="" %}}
-The endpoint at which the GRPC userprovider is exposed. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L65)
-{{< highlight toml >}}
-[auth.manager.oidcmapping]
-userprovidersvc = ""
-{{< /highlight >}}
-{{% /dir %}}
-
 {{% dir name="users_mapping" type="string" default="" %}}
- The optional OIDC users mapping file path [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L66)
+ The optional OIDC users mapping file path [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L65)
 {{< highlight toml >}}
 [auth.manager.oidcmapping]
 users_mapping = ""
@@ -73,7 +65,7 @@ users_mapping = ""
 {{% /dir %}}
 
 {{% dir name="group_claim" type="string" default="" %}}
- The group claim to be looked up to map the user (default to 'groups'). [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L67)
+ The group claim to be looked up to map the user (default to 'groups'). [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L66)
 {{< highlight toml >}}
 [auth.manager.oidcmapping]
 group_claim = ""

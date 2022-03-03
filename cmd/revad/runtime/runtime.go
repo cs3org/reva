@@ -149,7 +149,7 @@ func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[strin
 }
 
 func initTracing(conf *coreConf) {
-	rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint)
+	rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint, conf.TracingServiceName)
 }
 
 func initCPUCount(conf *coreConf, log *zerolog.Logger) {
