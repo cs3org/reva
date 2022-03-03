@@ -292,6 +292,9 @@ func (connector *GOCDBConnector) getServiceURL(service *gocdb.Service, endpoint 
 				svcURL.Path = endpoint.URL
 			} else {
 				svcURL.Path = path.Join(svcURL.Path, endpoint.URL)
+				if strings.HasSuffix(endpoint.URL, "/") { // Restore trailing slash if necessary
+					svcURL.Path = svcURL.Path + "/"
+				}
 			}
 		}
 	}
