@@ -21,7 +21,7 @@ package errors
 import (
 	"fmt"
 
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
 )
 
 // AlreadyExistsErr implements the Error interface.

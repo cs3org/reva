@@ -23,8 +23,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cs3org/reva/pkg/mentix/key"
-	"github.com/cs3org/reva/pkg/mentix/utils/network"
+	"github.com/cs3org/reva/v2/pkg/mentix/key"
+	"github.com/cs3org/reva/v2/pkg/mentix/utils/network"
 )
 
 // UnregisterSite unregister a site using the given site registration endpoint.

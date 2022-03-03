@@ -29,11 +29,11 @@ import (
 	"github.com/CiscoM31/godata"
 	"github.com/iancoleman/strcase"
 
-	errorspkg "github.com/cs3org/reva/pkg/storage/utils/indexer/errors"
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/index"
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
-	"github.com/cs3org/reva/pkg/storage/utils/metadata"
-	"github.com/cs3org/reva/pkg/storage/utils/sync"
+	errorspkg "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/errors"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/index"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/sync"
 )
 
 // Indexer is a facade to configure and query over multiple indices.

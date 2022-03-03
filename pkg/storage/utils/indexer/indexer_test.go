@@ -24,10 +24,10 @@ import (
 	"path"
 	"testing"
 
-	_ "github.com/cs3org/reva/pkg/storage/utils/indexer/index"
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
-	. "github.com/cs3org/reva/pkg/storage/utils/indexer/test"
-	"github.com/cs3org/reva/pkg/storage/utils/metadata"
+	_ "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/index"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
+	. "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/test"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/stretchr/testify/assert"
 )
 

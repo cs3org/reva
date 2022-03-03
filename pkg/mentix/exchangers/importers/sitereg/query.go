@@ -27,11 +27,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/pkg/mentix/accservice"
-	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/key"
-	"github.com/cs3org/reva/pkg/mentix/meshdata"
-	"github.com/cs3org/reva/pkg/mentix/utils/network"
+	"github.com/cs3org/reva/v2/pkg/mentix/accservice"
+	"github.com/cs3org/reva/v2/pkg/mentix/config"
+	"github.com/cs3org/reva/v2/pkg/mentix/key"
+	"github.com/cs3org/reva/v2/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/v2/pkg/mentix/utils/network"
 )
 
 func decodeQueryData(data []byte) (*siteRegistrationData, error) {

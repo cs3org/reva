@@ -29,12 +29,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cs3org/reva/pkg/metrics/driver/registry"
+	"github.com/cs3org/reva/v2/pkg/metrics/driver/registry"
 
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/metrics/config"
+	"github.com/cs3org/reva/v2/pkg/logger"
+	"github.com/cs3org/reva/v2/pkg/metrics/config"
 )
 
 var log zerolog.Logger

@@ -21,11 +21,11 @@ package ocis
 import (
 	"path"
 
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/ocis/blobstore"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis/blobstore"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 )
 
 func init() {

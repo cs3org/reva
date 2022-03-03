@@ -23,10 +23,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cs3org/reva/pkg/mentix/key"
-	"github.com/cs3org/reva/pkg/mentix/meshdata"
-	"github.com/cs3org/reva/pkg/mentix/utils/countries"
-	"github.com/cs3org/reva/pkg/mentix/utils/network"
+	"github.com/cs3org/reva/v2/pkg/mentix/key"
+	"github.com/cs3org/reva/v2/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/v2/pkg/mentix/utils/countries"
+	"github.com/cs3org/reva/v2/pkg/mentix/utils/network"
 )
 
 type siteRegistrationData struct {

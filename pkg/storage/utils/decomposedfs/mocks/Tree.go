@@ -26,7 +26,7 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 
-	node "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	node "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 
 	os "os"
 

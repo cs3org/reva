@@ -22,7 +22,7 @@ import (
 	"context"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 )
 
 // IsCurrentUserOwner returns whether the context user is the given owner or not

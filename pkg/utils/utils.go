@@ -36,8 +36,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/registry"
-	"github.com/cs3org/reva/pkg/registry/memory"
+	"github.com/cs3org/reva/v2/pkg/registry"
+	"github.com/cs3org/reva/v2/pkg/registry/memory"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/encoding/protojson"
 )

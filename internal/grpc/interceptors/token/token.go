@@ -21,7 +21,7 @@ package token
 import (
 	"context"
 
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )

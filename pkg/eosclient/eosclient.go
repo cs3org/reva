@@ -22,7 +22,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/acl"
 )
 
 // EOSClient is the interface which enables access to EOS instances through various interfaces.

@@ -26,11 +26,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/mentix/key"
-	"github.com/cs3org/reva/pkg/siteacc/config"
-	"github.com/cs3org/reva/pkg/siteacc/data"
-	"github.com/cs3org/reva/pkg/siteacc/html"
-	"github.com/cs3org/reva/pkg/siteacc/manager"
+	"github.com/cs3org/reva/v2/pkg/mentix/key"
+	"github.com/cs3org/reva/v2/pkg/siteacc/config"
+	"github.com/cs3org/reva/v2/pkg/siteacc/data"
+	"github.com/cs3org/reva/v2/pkg/siteacc/html"
+	"github.com/cs3org/reva/v2/pkg/siteacc/manager"
 	"github.com/pkg/errors"
 	"github.com/prometheus/alertmanager/template"
 )

@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/app"
+import "github.com/cs3org/reva/v2/pkg/app"
 
 // NewFunc is the function that app provider implementations
 // should register to at init time.

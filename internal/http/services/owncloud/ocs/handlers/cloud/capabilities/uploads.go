@@ -21,7 +21,7 @@ package capabilities
 import (
 	"strings"
 
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/data"
 )
 
 type chunkProtocol string

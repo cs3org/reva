@@ -30,8 +30,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/cs3org/reva/pkg/sdk/common"
-	"github.com/cs3org/reva/pkg/sdk/common/net"
+	"github.com/cs3org/reva/v2/pkg/sdk/common"
+	"github.com/cs3org/reva/v2/pkg/sdk/common/net"
 )
 
 // Session stores information about a Reva session.

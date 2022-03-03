@@ -21,8 +21,8 @@ package importers
 import (
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exchangers/importers/sitereg"
+	"github.com/cs3org/reva/v2/pkg/mentix/config"
+	"github.com/cs3org/reva/v2/pkg/mentix/exchangers/importers/sitereg"
 )
 
 // SiteRegistrationImporter implements the external site registration importer.

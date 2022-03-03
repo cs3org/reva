@@ -24,9 +24,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/index"
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
-	metadata "github.com/cs3org/reva/pkg/storage/utils/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/index"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
+	metadata "github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/stretchr/testify/assert"
 )
 

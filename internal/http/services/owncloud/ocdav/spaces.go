@@ -22,11 +22,11 @@ import (
 	"net/http"
 	"path"
 
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/errors"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav/propfind"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 )
 
 // SpacesHandler handles trashbin requests

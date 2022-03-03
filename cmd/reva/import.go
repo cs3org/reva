@@ -23,7 +23,7 @@ import (
 	"log"
 	"path"
 
-	"github.com/cs3org/reva/pkg/storage/migrate"
+	"github.com/cs3org/reva/v2/pkg/storage/migrate"
 	"github.com/pkg/errors"
 )
 

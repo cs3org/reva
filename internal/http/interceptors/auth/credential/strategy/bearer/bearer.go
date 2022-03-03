@@ -23,8 +23,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
-	"github.com/cs3org/reva/pkg/auth"
+	"github.com/cs3org/reva/v2/internal/http/interceptors/auth/credential/registry"
+	"github.com/cs3org/reva/v2/pkg/auth"
 )
 
 func init() {
