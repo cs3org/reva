@@ -196,59 +196,6 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 	default:
 		return nil, errtypes.BadRequest("neither share id nor key was given")
 	}
-
-}
-
-func (m *Manager) getShareById(ctx context.Context, id string) (*collaboration.Share, error) {
-	data, err := m.storage.SimpleDownload(ctx, shareFilename(id))
-	if err != nil {
-		return nil, err
-	}
-
-	userShare := &collaboration.Share{
-		Grantee: &provider.Grantee{Id: &provider.Grantee_UserId{}},
-	}
-	err = json.Unmarshal(data, userShare)
-	if err == nil && userShare.Grantee.GetUserId() != nil {
-		return userShare, nil
-	}
-
-	groupShare := &collaboration.Share{
-		Grantee: &provider.Grantee{Id: &provider.Grantee_GroupId{}},
-	}
-	err = json.Unmarshal(data, groupShare) // try to unmarshal to a group share if the user share unmarshalling failed
-	if err == nil && groupShare.Grantee.GetGroupId() != nil {
-		return groupShare, nil
-	}
-
-	return nil, errtypes.InternalError("failed to unmarshal share data")
-}
-
-func (m *Manager) getShareByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
-	ownerIds, err := m.indexer.FindBy(&collaboration.Share{}, "OwnerId", userIdToIndex(key.Owner))
-	if err != nil {
-		return nil, err
-	}
-	granteeIndex, err := granteeToIndex(key.Grantee)
-	if err != nil {
-		return nil, err
-	}
-	granteeIds, err := m.indexer.FindBy(&collaboration.Share{}, "GranteeId", granteeIndex)
-	if err != nil {
-		return nil, err
-	}
-
-	ids := intersectSlices(ownerIds, granteeIds)
-	for _, id := range ids {
-		share, err := m.getShareById(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		if utils.ResourceIDEqual(share.ResourceId, key.ResourceId) {
-			return share, nil
-		}
-	}
-	return nil, errtypes.NotFound("share not found")
 }
 
 // Unshare deletes the share pointed by ref.
@@ -304,7 +251,24 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}
-	return nil, nil
+	share, err := m.GetShare(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	share.Permissions = p
+
+	data, err := json.Marshal(share)
+	if err != nil {
+		return nil, err
+	}
+
+	fn := path.Join("shares", share.Id.OpaqueId)
+	err = m.storage.SimpleUpload(ctx, fn, data)
+	if err != nil {
+		return nil, err
+	}
+
+	return share, nil
 }
 
 // ListReceivedShares returns the list of shares the user has access to.
@@ -376,6 +340,9 @@ func (m *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.Share
 	}
 
 	metadata, err := m.downloadMetadata(ctx, share)
+	if err != nil {
+		return nil, err
+	}
 	return &collaboration.ReceivedShare{
 		Share:      share,
 		State:      metadata.State,
@@ -384,11 +351,35 @@ func (m *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.Share
 }
 
 // UpdateReceivedShare updates the received share with share state.
-func (m *Manager) UpdateReceivedShare(ctx context.Context, share *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
+func (m *Manager) UpdateReceivedShare(ctx context.Context, rshare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}
-	return nil, nil
+
+	user, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return nil, errtypes.UserRequired("error getting user from context")
+	}
+
+	meta := ReceivedShareMetadata{
+		State:      rshare.State,
+		MountPoint: rshare.MountPoint,
+	}
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return nil, err
+	}
+
+	fn, err := metadataFilename(rshare.Share, user)
+	if err != nil {
+		return nil, err
+	}
+	err = m.storage.SimpleUpload(ctx, fn, data)
+	if err != nil {
+		return nil, err
+	}
+
+	return rshare, nil
 }
 
 func (m *Manager) downloadMetadata(ctx context.Context, share *collaboration.Share) (ReceivedShareMetadata, error) {
@@ -408,6 +399,58 @@ func (m *Manager) downloadMetadata(ctx context.Context, share *collaboration.Sha
 	metadata := ReceivedShareMetadata{}
 	err = json.Unmarshal(data, &metadata)
 	return metadata, err
+}
+
+func (m *Manager) getShareById(ctx context.Context, id string) (*collaboration.Share, error) {
+	data, err := m.storage.SimpleDownload(ctx, shareFilename(id))
+	if err != nil {
+		return nil, err
+	}
+
+	userShare := &collaboration.Share{
+		Grantee: &provider.Grantee{Id: &provider.Grantee_UserId{}},
+	}
+	err = json.Unmarshal(data, userShare)
+	if err == nil && userShare.Grantee.GetUserId() != nil {
+		return userShare, nil
+	}
+
+	groupShare := &collaboration.Share{
+		Grantee: &provider.Grantee{Id: &provider.Grantee_GroupId{}},
+	}
+	err = json.Unmarshal(data, groupShare) // try to unmarshal to a group share if the user share unmarshalling failed
+	if err == nil && groupShare.Grantee.GetGroupId() != nil {
+		return groupShare, nil
+	}
+
+	return nil, errtypes.InternalError("failed to unmarshal share data")
+}
+
+func (m *Manager) getShareByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
+	ownerIds, err := m.indexer.FindBy(&collaboration.Share{}, "OwnerId", userIdToIndex(key.Owner))
+	if err != nil {
+		return nil, err
+	}
+	granteeIndex, err := granteeToIndex(key.Grantee)
+	if err != nil {
+		return nil, err
+	}
+	granteeIds, err := m.indexer.FindBy(&collaboration.Share{}, "GranteeId", granteeIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := intersectSlices(ownerIds, granteeIds)
+	for _, id := range ids {
+		share, err := m.getShareById(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if utils.ResourceIDEqual(share.ResourceId, key.ResourceId) {
+			return share, nil
+		}
+	}
+	return nil, errtypes.NotFound("share not found")
 }
 
 func shareFilename(id string) string {

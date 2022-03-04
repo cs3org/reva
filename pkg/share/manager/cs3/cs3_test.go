@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/share/manager/cs3/mocks"
 	indexerpkg "github.com/cs3org/reva/pkg/storage/utils/indexer"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -231,6 +232,17 @@ var _ = Describe("Manager", func() {
 			})
 		})
 
+		Describe("UpdateShare", func() {
+			It("updates the share", func() {
+				Expect(share.Permissions.Permissions.AddGrant).To(BeFalse())
+				s, err := m.UpdateShare(ctx,
+					&collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Id}},
+					&collaboration.SharePermissions{Permissions: &provider.ResourcePermissions{AddGrant: true}})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(s).ToNot(BeNil())
+				Expect(s.Permissions.Permissions.AddGrant).To(BeTrue())
+			})
+		})
 		Describe("GetShare", func() {
 			Context("when the share is a user share ", func() {
 				Context("when requesting the share by id", func() {
@@ -421,6 +433,23 @@ var _ = Describe("Manager", func() {
 						Expect(rshare.MountPoint.Path).To(Equal("path"))
 					})
 				})
+			})
+		})
+
+		Describe("UpdateReceivedShare", func() {
+			It("updates the share", func() {
+				rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share2.Id}})
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+				rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+
+				rrs, err := m.UpdateReceivedShare(granteeCtx,
+					rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rrs).ToNot(BeNil())
+				Expect(rrs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, "metadata/2/"+granteeFn, mock.Anything)
 			})
 		})
 	})
