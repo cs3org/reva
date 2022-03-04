@@ -40,7 +40,12 @@ var (
 )
 
 // SetTraceProvider sets the TracerProvider at a package level.
-func SetTraceProvider(collectorEndpoint string, agentEndpoint string) {
+func SetTraceProvider(collectorEndpoint string, agentEndpoint, serviceName string) {
+	// default to 'reva' as service name if not set
+	if serviceName == "" {
+		serviceName = "reva"
+	}
+
 	var exp *jaeger.Exporter
 	var err error
 
@@ -75,7 +80,7 @@ func SetTraceProvider(collectorEndpoint string, agentEndpoint string) {
 		sdktrace.WithBatcher(exp),
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceNameKey.String("reva"),
+			semconv.ServiceNameKey.String(serviceName),
 		)),
 	)
 }
