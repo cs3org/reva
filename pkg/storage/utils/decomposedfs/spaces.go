@@ -648,7 +648,9 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 
 	// we set the space mtime to the root item mtime
 	// override the stat mtime with a tmtime if it is present
+	var tmtime time.Time
 	if tmt, err := n.GetTMTime(); err == nil {
+		tmtime = tmt
 		un := tmt.UnixNano()
 		space.Mtime = &types.Timestamp{
 			Seconds: uint64(un / 1000000000),
@@ -656,11 +658,21 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		}
 	} else if fi, err := os.Stat(nodePath); err == nil {
 		// fall back to stat mtime
+		tmtime = fi.ModTime()
 		un := fi.ModTime().UnixNano()
 		space.Mtime = &types.Timestamp{
 			Seconds: uint64(un / 1000000000),
 			Nanos:   uint32(un % 1000000000),
 		}
+	}
+
+	etag, err := node.CalculateEtag(n.ID, tmtime)
+	if err != nil {
+		return nil, err
+	}
+	space.Opaque.Map["etag"] = &types.OpaqueEntry{
+		Decoder: "plain",
+		Value:   []byte(etag),
 	}
 
 	spaceAttributes, err := xattrs.All(nodePath)
