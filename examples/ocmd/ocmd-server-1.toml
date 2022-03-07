@@ -97,9 +97,6 @@ expose_data_server = true
 data_server_url = "http://localhost:19001/data"
 enable_home_creation = true
 
-[grpc.services.storageprovider.mimetypes]
-".zmd" = "application/compressed-markdown"
-
 [grpc.services.storageprovider.drivers.localhome]
 user_layout = "{{.Username}}"
 
