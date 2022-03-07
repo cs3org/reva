@@ -53,7 +53,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.0
 	github.com/pkg/errors v0.9.1
-	github.com/pkg/xattr v0.4.5
+	github.com/pkg/xattr v0.4.6
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus/alertmanager v0.23.0
 	github.com/rs/cors v1.8.2
