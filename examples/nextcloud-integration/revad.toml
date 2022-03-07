@@ -95,19 +95,19 @@ disable_tus = true
 ".zmd" = "application/compressed-markdown"
 
 [grpc.services.storageprovider.drivers.nextcloud]
-end_point = "http://localhost/apps/sciencemesh/"
+endpoint = "http://localhost/apps/sciencemesh/"
 user_layout = "{{.Username}}"
 
 
 [grpc.services.authprovider]
 auth_manager = "nextcloud"
 [grpc.services.authprovider.drivers.nextcloud]
-end_point = "http://localhost/apps/sciencemesh/"
+endpoint = "http://localhost/apps/sciencemesh/"
 
 [grpc.services.userprovider]
 driver = "nextcloud"
 [grpc.services.userprovider.drivers.nextcloud]
-end_point = "http://localhost/apps/sciencemesh/"
+endpoint = "http://localhost/apps/sciencemesh/"
 
 [http]
 enabled_services = ["ocmd"]

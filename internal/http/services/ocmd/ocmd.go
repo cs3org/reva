@@ -47,9 +47,9 @@ type Config struct {
 func (c *Config) init() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 
-	if c.Prefix == "" {
-		c.Prefix = "ocm"
-	}
+	// if c.Prefix == "" {
+	// 	c.Prefix = "ocm"
+	// }
 }
 
 type svc struct {
@@ -58,6 +58,7 @@ type svc struct {
 	NotificationsHandler *notificationsHandler
 	ConfigHandler        *configHandler
 	InvitesHandler       *invitesHandler
+	SendHandler          *sendHandler
 }
 
 // New returns a new ocmd object
@@ -76,10 +77,14 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	s.NotificationsHandler = new(notificationsHandler)
 	s.ConfigHandler = new(configHandler)
 	s.InvitesHandler = new(invitesHandler)
+	s.SendHandler = new(sendHandler)
 	s.SharesHandler.init(s.Conf)
 	s.NotificationsHandler.init(s.Conf)
+	log.Debug().Str("initializing ConfigHandler Host", s.Conf.Host)
+
 	s.ConfigHandler.init(s.Conf)
 	s.InvitesHandler.init(s.Conf)
+	s.SendHandler.init(s.Conf)
 
 	return s, nil
 }
@@ -94,7 +99,7 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/invites/accept", "/shares", "/ocm-provider"}
+	return []string{"/invites/accept", "/shares", "/ocm-provider", "/notifications"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -120,9 +125,11 @@ func (s *svc) Handler() http.Handler {
 		case "invites":
 			s.InvitesHandler.Handler().ServeHTTP(w, r)
 			return
+		case "send":
+			s.SendHandler.Handler().ServeHTTP(w, r)
 		}
 
-		log.Warn().Msg("resource not found")
+		log.Warn().Msg("request not handled")
 		w.WriteHeader(http.StatusNotFound)
 	})
 }
