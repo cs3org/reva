@@ -96,6 +96,7 @@ const (
 	SpaceDescriptionAttr string = OcisPrefix + "space.description"
 	SpaceReadmeAttr      string = OcisPrefix + "space.readme"
 	SpaceImageAttr       string = OcisPrefix + "space.image"
+	SpaceAliasAttr       string = OcisPrefix + "space.alias"
 
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"
