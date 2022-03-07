@@ -364,7 +364,7 @@ func ParseStorageSpaceReference(sRef string) (provider.Reference, error) {
 }
 
 // FormatStorageSpaceReference will format a storage space reference into a string representation.
-// If ref or ref.ResourceId are nil an empty string will be returned.
+// If ref or ref.ResourceId are nil an error will be returned.
 // The function doesn't check if all values are set.
 // The resulting format can be:
 //
