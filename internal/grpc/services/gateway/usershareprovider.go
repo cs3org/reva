@@ -701,7 +701,16 @@ func (s *svc) removeSpaceShare(ctx context.Context, ref *provider.ResourceId, gr
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting grant to remove from storage")
 	}
-	removeGrantStatus, err := s.removeGrant(ctx, ref, grantee, listGrantRes.Grants[0].Permissions)
+	var permissions *provider.ResourcePermissions
+	for _, g := range listGrantRes.Grants {
+		if isEqualGrantee(g.Grantee, grantee) {
+			permissions = g.Permissions
+		}
+	}
+	if permissions == nil {
+		return nil, errors.New("gateway: error getting grant to remove from storage")
+	}
+	removeGrantStatus, err := s.removeGrant(ctx, ref, grantee, permissions)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error removing grant from storage")
 	}
@@ -732,4 +741,24 @@ func shareIsSpaceRoot(key *collaboration.ShareKey) bool {
 		return false
 	}
 	return refIsSpaceRoot(key.ResourceId)
+}
+
+func isEqualGrantee(a, b *provider.Grantee) bool {
+	// Ideally we would want to use utils.GranteeEqual()
+	// but the grants stored in the decomposedfs aren't complete (missing usertype and idp)
+	// because of that the check would fail so we can only check the ... for now.
+	if a.Type != b.Type {
+		return false
+	}
+
+	var aID, bID string
+	switch a.Type {
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		aID = a.GetGroupId().OpaqueId
+		bID = b.GetGroupId().OpaqueId
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		aID = a.GetUserId().OpaqueId
+		bID = b.GetUserId().OpaqueId
+	}
+	return aID == bID
 }
