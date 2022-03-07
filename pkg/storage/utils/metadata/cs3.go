@@ -51,7 +51,7 @@ type CS3 struct {
 }
 
 // NewCS3Storage returns a new cs3 storage instance
-func NewCS3Storage(gwAddr, providerAddr, serviceUser, machineAuthAPIKey string) (s Storage, err error) {
+func NewCS3Storage(gwAddr, providerAddr, serviceUserID, serviceUserIDP, machineAuthAPIKey string) (s Storage, err error) {
 	c := http.DefaultClient
 
 	return &CS3{
@@ -61,9 +61,8 @@ func NewCS3Storage(gwAddr, providerAddr, serviceUser, machineAuthAPIKey string) 
 		machineAuthAPIKey: machineAuthAPIKey,
 		serviceUser: &user.User{
 			Id: &user.UserId{
-				OpaqueId: serviceUser,
-				// TODO: how to determine the idp?
-				Idp: os.Getenv("OCIS_URL"), //"https://host.docker.internal:9200", //"https://localhost:9200",
+				OpaqueId: serviceUserID,
+				Idp:      serviceUserIDP,
 			},
 		},
 	}, nil
