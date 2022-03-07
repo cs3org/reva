@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/asim/go-micro/plugins/events/nats/v4"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/server"
@@ -58,7 +59,9 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		var ev interface{}
 		switch v := res.(type) {
 		case *collaboration.CreateShareResponse:
-			ev = ShareCreated(v)
+			if v.Status.Code == rpc.Code_CODE_OK {
+				ev = ShareCreated(v)
+			}
 		}
 
 		if ev != nil {
