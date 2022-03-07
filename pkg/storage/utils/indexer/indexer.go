@@ -29,6 +29,7 @@ import (
 	"github.com/CiscoM31/godata"
 	"github.com/iancoleman/strcase"
 
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	errorspkg "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/errors"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/index"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
@@ -148,7 +149,7 @@ func (i *Indexer) FindBy(t interface{}, findBy, val string) ([]string, error) {
 			idxVal := val
 			res, err := idx.Lookup(idxVal)
 			if err != nil {
-				if errorspkg.IsNotFoundErr(err) {
+				if _, ok := err.(errtypes.NotFound); ok {
 					continue
 				}
 

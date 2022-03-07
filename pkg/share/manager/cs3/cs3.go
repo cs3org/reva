@@ -120,6 +120,9 @@ func (m *Manager) initialize() error {
 	if err := m.storage.MakeDirIfNotExist(context.Background(), "shares"); err != nil {
 		return err
 	}
+	if err := m.storage.MakeDirIfNotExist(context.Background(), "metadata"); err != nil {
+		return err
+	}
 	err = m.indexer.AddIndex(&collaboration.Share{}, option.IndexByFunc{
 		Name: "OwnerId",
 		Func: indexOwnerFunc,
@@ -170,6 +173,12 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 	fn := path.Join("shares", share.Id.OpaqueId)
 	err = m.storage.SimpleUpload(ctx, fn, data)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataPath := path.Join("metadata", share.Id.OpaqueId)
+	err = m.storage.MakeDirIfNotExist(ctx, metadataPath)
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +326,14 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		}
 		metadata, err := m.downloadMetadata(ctx, share)
 		if err != nil {
-			return nil, err
+			if _, ok := err.(errtypes.NotFound); ok {
+				// use default values if the grantee didn't configure anything yet
+				metadata = ReceivedShareMetadata{
+					State: collaboration.ShareState_SHARE_STATE_PENDING,
+				}
+			} else {
+				return nil, err
+			}
 		}
 		result = append(result, &collaboration.ReceivedShare{
 			Share:      share,
@@ -341,7 +357,14 @@ func (m *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.Share
 
 	metadata, err := m.downloadMetadata(ctx, share)
 	if err != nil {
-		return nil, err
+		if _, ok := err.(errtypes.NotFound); ok {
+			// use default values if the grantee didn't configure anything yet
+			metadata = ReceivedShareMetadata{
+				State: collaboration.ShareState_SHARE_STATE_PENDING,
+			}
+		} else {
+			return nil, err
+		}
 	}
 	return &collaboration.ReceivedShare{
 		Share:      share,

@@ -277,7 +277,7 @@ func (cs3 *CS3) ReadDir(ctx context.Context, path string) ([]string, error) {
 		return nil, err
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, fmt.Errorf("error listing directory: %v", path)
+		return nil, errtypes.NewErrtypeFromStatus(res.Status)
 	}
 
 	entries := []string{}
