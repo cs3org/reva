@@ -212,7 +212,7 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 		Token:        share.Token,
 		Name:         share.DisplayName,
 		MailSend:     0,
-		URL:          publicURL + path.Join("/", "#/s/"+share.Token),
+		URL:          publicURL + path.Join("/", "s/"+share.Token),
 		UIDOwner:     LocalUserIDToString(share.Creator),
 		UIDFileOwner: LocalUserIDToString(share.Owner),
 	}

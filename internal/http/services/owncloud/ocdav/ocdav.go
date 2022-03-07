@@ -222,8 +222,9 @@ func (s *svc) Handler() http.Handler {
 			head, r.URL.Path = router.ShiftPath(r.URL.Path)
 			if head == "s" {
 				token := r.URL.Path
-				url := s.c.PublicURL + path.Join("#", head, token)
-				http.Redirect(w, r, url, http.StatusMovedPermanently)
+				rURL := s.c.PublicURL + path.Join(head, token)
+
+				http.Redirect(w, r, rURL, http.StatusMovedPermanently)
 				return
 			}
 		}
