@@ -150,7 +150,11 @@ func WriteOCSData(w http.ResponseWriter, r *http.Request, m Meta, d interface{},
 // WriteOCSResponse handles writing ocs responses in json and xml
 func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res Response, err error) {
 	if err != nil {
-		appctx.GetLogger(r.Context()).Error().Err(err).Msg(res.OCS.Meta.Message)
+		appctx.GetLogger(r.Context()).
+			Debug().
+			Err(err).
+			Str("ocs_msg", res.OCS.Meta.Message).
+			Msg("writing ocs error response")
 	}
 
 	version := APIVersion(r.Context())
