@@ -14,6 +14,7 @@ require (
 	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.5
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/ceph/go-ceph v0.14.0
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
