@@ -75,11 +75,11 @@ available_checksums = nil
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="custom_mimetypes" type="string" default="nil" %}}
+{{% dir name="custom_mimetypes_json" type="string" default="nil" %}}
 An optional mapping file with the list of supported custom file extensions and corresponding mime types. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L66)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
-custom_mimetypes = "nil"
+custom_mimetypes_json = "nil"
 {{< /highlight >}}
 {{% /dir %}}
 

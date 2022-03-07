@@ -55,20 +55,15 @@ func init() {
 }
 
 type config struct {
-	MountPath        string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
-	MountID          string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
-	Driver           string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
-	Drivers          map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
-	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
-	DataServerURL    string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
-	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
-	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
-	CustomMimeTypes  string                            `mapstructure:"custom_mimetypes" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
-}
-
-type mimeType struct {
-	FileExt  string `mapstructure:"file_ext" json:"file_ext"`
-	MimeType string `mapstructure:"mime_type" json:"mime_type"`
+	MountPath           string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
+	MountID             string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
+	Driver              string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
+	Drivers             map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
+	TmpFolder           string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
+	DataServerURL       string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
+	ExposeDataServer    bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
+	AvailableXS         map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+	CustomMimeTypesJSON string                            `mapstructure:"custom_mimetypes_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
 }
 
 func (c *config) init() {
@@ -148,28 +143,19 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 func registerMimeTypes(mappingFile string) error {
-	mimeTypes := map[string]string{}
-
 	if mappingFile != "" {
 		f, err := ioutil.ReadFile(mappingFile)
 		if err != nil {
 			return fmt.Errorf("storageprovider: error reading the custom mime types file: +%v", err)
 		}
-		mimes := []*mimeType{}
-		err = json.Unmarshal(f, &mimes)
+		mimeTypes := map[string]string{}
+		err = json.Unmarshal(f, &mimeTypes)
 		if err != nil {
 			return fmt.Errorf("storageprovider: error unmarshalling the custom mime types file: +%v", err)
 		}
-		for _, m := range mimes {
-			if _, found := mimeTypes[m.FileExt]; found {
-				return fmt.Errorf("storageprovider: mimetypes mapping error, file extension \"%s\" is mapped to multiple mime types", m.FileExt)
-			}
-			mimeTypes[m.FileExt] = m.MimeType
-		}
-
-		// now register all mime types that were read
-		for k, v := range mimeTypes {
-			mime.RegisterMime(k, v)
+		// register all mime types that were read
+		for e, m := range mimeTypes {
+			mime.RegisterMime(e, m)
 		}
 	}
 	return nil
@@ -214,7 +200,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	// read and register custom mime types if configured
-	err = registerMimeTypes(c.CustomMimeTypes)
+	err = registerMimeTypes(c.CustomMimeTypesJSON)
 	if err != nil {
 		return nil, err
 	}
