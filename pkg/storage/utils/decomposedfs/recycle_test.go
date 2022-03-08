@@ -48,7 +48,7 @@ var _ = Describe("Recycle", func() {
 
 			BeforeEach(func() {
 				// in this scenario user "u-s-e-r-id" has this permissions:
-				registerPermissions(env.Permissions, "u-s-e-r-id", &provider.ResourcePermissions{
+				registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 					InitiateFileUpload: true,
 					Delete:             true,
 					ListRecycle:        true,
@@ -133,7 +133,7 @@ var _ = Describe("Recycle", func() {
 				})
 
 				// in this scenario user "u-s-e-r-id" has this permissions:
-				registerPermissions(env.Permissions, "u-s-e-r-id", &provider.ResourcePermissions{
+				registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 					InitiateFileUpload: true,
 					Delete:             true,
 					ListRecycle:        true,
@@ -246,7 +246,7 @@ var _ = Describe("Recycle", func() {
 				Expect(projectID).ToNot(BeNil())
 
 				// in this scenario user "u-s-e-r-id" has this permissions:
-				registerPermissions(env.Permissions, "u-s-e-r-id", &provider.ResourcePermissions{
+				registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 					InitiateFileUpload: true,
 					Delete:             true,
 					ListRecycle:        true,
@@ -318,7 +318,7 @@ var _ = Describe("Recycle", func() {
 				})
 
 				// in this scenario user "u-s-e-r-id" has this permissions:
-				registerPermissions(env.Permissions, "u-s-e-r-id", &provider.ResourcePermissions{
+				registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 					Delete:             true,
 					ListRecycle:        true,
 					PurgeRecycle:       true,
@@ -403,7 +403,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			// in this scenario user "userid" has this permissions:
-			registerPermissions(env.Permissions, "u-s-e-r-id", &provider.ResourcePermissions{
+			registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 				Delete:             true,
 				ListRecycle:        true,
 				PurgeRecycle:       true,

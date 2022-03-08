@@ -85,7 +85,7 @@ func NewTestEnv() (*TestEnv, error) {
 	owner := &userpb.User{
 		Id: &userpb.UserId{
 			Idp:      "idp",
-			OpaqueId: "u-s-e-r-id",
+			OpaqueId: "25b69780-5f39-43be-a7ac-a9b9e9fe4230",
 			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		},
 		Username: "username",
