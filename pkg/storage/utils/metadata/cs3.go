@@ -326,7 +326,7 @@ func (cs3 *CS3) MakeDirIfNotExist(ctx context.Context, folder string) error {
 		}
 
 		if r.Status.Code != rpc.Code_CODE_OK {
-			return errtypes.NewErrtypeFromStatus(resp.Status)
+			return errtypes.NewErrtypeFromStatus(r.Status)
 		}
 	default:
 		return errtypes.NewErrtypeFromStatus(resp.Status)
