@@ -51,7 +51,7 @@ type CS3 struct {
 }
 
 // NewCS3Storage returns a new cs3 storage instance
-func NewCS3Storage(gwAddr, providerAddr, serviceUser, machineAuthAPIKey string) (s Storage, err error) {
+func NewCS3Storage(gwAddr, providerAddr, serviceUserID, serviceUserIDP, machineAuthAPIKey string) (s Storage, err error) {
 	c := http.DefaultClient
 
 	return &CS3{
@@ -61,7 +61,8 @@ func NewCS3Storage(gwAddr, providerAddr, serviceUser, machineAuthAPIKey string) 
 		machineAuthAPIKey: machineAuthAPIKey,
 		serviceUser: &user.User{
 			Id: &user.UserId{
-				OpaqueId: serviceUser,
+				OpaqueId: serviceUserID,
+				Idp:      serviceUserIDP,
 			},
 		},
 	}, nil
@@ -310,14 +311,25 @@ func (cs3 *CS3) MakeDirIfNotExist(ctx context.Context, folder string) error {
 		return err
 	}
 
-	if resp.Status.Code == rpc.Code_CODE_NOT_FOUND {
-		_, err := client.CreateContainer(ctx, &provider.CreateContainerRequest{
+	switch {
+	case err != nil:
+		return err
+	case resp.Status.Code == rpc.Code_CODE_OK:
+		// nothing to do in this case
+	case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		r, err := client.CreateContainer(ctx, &provider.CreateContainerRequest{
 			Ref: rootPathRef,
 		})
 
 		if err != nil {
 			return err
 		}
+
+		if r.Status.Code != rpc.Code_CODE_OK {
+			return errtypes.NewErrtypeFromStatus(resp.Status)
+		}
+	default:
+		return errtypes.NewErrtypeFromStatus(resp.Status)
 	}
 
 	return nil
