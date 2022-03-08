@@ -61,7 +61,7 @@ func Server() {
 
 // Client builds a nats client
 func Client() events.Stream {
-	c, err := server.NewNatsStream(nats.Address("127.0.0.1:4222"), nats.ClusterID("test-cluster"))
+	c, err := server.NewNatsStream(nats.Address("127.0.0.1:9233"), nats.ClusterID("test-cluster"))
 	if err != nil {
 		log.Fatal(err)
 	}
