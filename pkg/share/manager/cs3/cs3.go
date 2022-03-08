@@ -31,14 +31,14 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/share"
-	"github.com/cs3org/reva/pkg/share/manager/registry"
-	"github.com/cs3org/reva/pkg/storage/utils/indexer"
-	"github.com/cs3org/reva/pkg/storage/utils/indexer/option"
-	"github.com/cs3org/reva/pkg/storage/utils/metadata"
-	"github.com/cs3org/reva/pkg/utils"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/share"
+	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -79,6 +79,7 @@ type config struct {
 	GatewayAddr       string `mapstructure:"gateway_addr"`
 	ProviderAddr      string `mapstructure:"provider_addr"`
 	ServiceUserID     string `mapstructure:"service_user_id"`
+	ServiceUserIdp    string `mapstructure:"service_user_idp"`
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 
@@ -90,7 +91,7 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 		return nil, err
 	}
 
-	s, err := metadata.NewCS3Storage(c.GatewayAddr, c.ProviderAddr, c.ServiceUserID, c.MachineAuthAPIKey)
+	s, err := metadata.NewCS3Storage(c.GatewayAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey)
 	if err != nil {
 		return nil, err
 	}
