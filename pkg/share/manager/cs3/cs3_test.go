@@ -443,13 +443,44 @@ var _ = Describe("Manager", func() {
 
 				Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 				rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+				rs.MountPoint.Path = "newPath/"
 
 				rrs, err := m.UpdateReceivedShare(granteeCtx,
-					rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+					rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rrs).ToNot(BeNil())
-				Expect(rrs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
-				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, "metadata/2/"+granteeFn, mock.Anything)
+				Expect(rrs.Share.ResourceId).ToNot(BeNil())
+				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, "metadata/2/"+granteeFn, mock.MatchedBy(func(data []byte) bool {
+					meta := cs3.ReceivedShareMetadata{}
+					err := json.Unmarshal(data, &meta)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(meta.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+					Expect(meta.MountPoint.Path).To(Equal("newPath/"))
+					return true
+				}))
+			})
+
+			It("does not update fields that aren't part of the fieldmask", func() {
+				rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share2.Id}})
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+				rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+				rs.MountPoint.Path = "newPath/"
+
+				rrs, err := m.UpdateReceivedShare(granteeCtx,
+					rs, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rrs).ToNot(BeNil())
+				Expect(rrs.Share.ResourceId).ToNot(BeNil())
+				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, "metadata/2/"+granteeFn, mock.MatchedBy(func(data []byte) bool {
+					meta := cs3.ReceivedShareMetadata{}
+					err := json.Unmarshal(data, &meta)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(meta.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+					Expect(meta.MountPoint.Path).To(Equal("newPath/"))
+					return true
+				}))
 			})
 		})
 	})

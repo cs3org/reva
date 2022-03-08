@@ -385,10 +385,28 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, rshare *collaboration
 		return nil, errtypes.UserRequired("error getting user from context")
 	}
 
-	meta := ReceivedShareMetadata{
-		State:      rshare.State,
-		MountPoint: rshare.MountPoint,
+	rs, err := m.GetReceivedShare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: rshare.Share.Id}})
+	if err != nil {
+		return nil, err
 	}
+
+	meta := ReceivedShareMetadata{
+		State:      rs.State,
+		MountPoint: rs.MountPoint,
+	}
+	for i := range fieldMask.Paths {
+		switch fieldMask.Paths[i] {
+		case "state":
+			meta.State = rshare.State
+			rs.State = rshare.State
+		case "mount_point":
+			meta.MountPoint = rshare.MountPoint
+			rs.MountPoint = rshare.MountPoint
+		default:
+			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
+		}
+	}
+
 	data, err := json.Marshal(meta)
 	if err != nil {
 		return nil, err
@@ -403,7 +421,7 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, rshare *collaboration
 		return nil, err
 	}
 
-	return rshare, nil
+	return rs, nil
 }
 
 func (m *Manager) downloadMetadata(ctx context.Context, share *collaboration.Share) (ReceivedShareMetadata, error) {
