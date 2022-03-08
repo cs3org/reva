@@ -47,7 +47,7 @@ var _ = Describe("Recycle", func() {
 		When("a user deletes files from the same space", func() {
 
 			BeforeEach(func() {
-				// in this scenario user "u-s-e-r-id" has this permissions:
+				// in this scenario user "25b69780-5f39-43be-a7ac-a9b9e9fe4230" has this permissions:
 				registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 					InitiateFileUpload: true,
 					Delete:             true,
@@ -132,7 +132,7 @@ var _ = Describe("Recycle", func() {
 					Username: "anotherusername",
 				})
 
-				// in this scenario user "u-s-e-r-id" has this permissions:
+				// in this scenario user "25b69780-5f39-43be-a7ac-a9b9e9fe4230" has this permissions:
 				registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 					InitiateFileUpload: true,
 					Delete:             true,
@@ -245,7 +245,7 @@ var _ = Describe("Recycle", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(projectID).ToNot(BeNil())
 
-				// in this scenario user "u-s-e-r-id" has this permissions:
+				// in this scenario user "25b69780-5f39-43be-a7ac-a9b9e9fe4230" has this permissions:
 				registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 					InitiateFileUpload: true,
 					Delete:             true,
@@ -317,7 +317,7 @@ var _ = Describe("Recycle", func() {
 					Username: "readusername",
 				})
 
-				// in this scenario user "u-s-e-r-id" has this permissions:
+				// in this scenario user "25b69780-5f39-43be-a7ac-a9b9e9fe4230" has this permissions:
 				registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 					Delete:             true,
 					ListRecycle:        true,

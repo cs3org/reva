@@ -105,7 +105,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	}
 
-	metadata := make(map[string]string, 3)
+	metadata := make(map[string]string, 6)
 
 	// always enable propagation on the storage space root
 	// mark the space root node as the end of propagation
@@ -428,11 +428,11 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 			metadata[xattrs.SpaceDescriptionAttr] = string(description.Value)
 			hasDescription = true
 		}
-		if alias, ok := space.Opaque.Map["spaceAlias"]; ok {
-			metadata[xattrs.SpaceAliasAttr] = string(alias.Value)
+		if alias := utils.ReadPlainFromOpaque(space.Opaque, "spaceAlias"); alias != "" {
+			metadata[xattrs.SpaceAliasAttr] = alias
 		}
-		if image, ok := space.Opaque.Map["image"]; ok {
-			imageID := resourceid.OwnCloudResourceIDUnwrap(string(image.Value))
+		if image := utils.ReadPlainFromOpaque(space.Opaque, "image"); image != "" {
+			imageID := resourceid.OwnCloudResourceIDUnwrap(image)
 			if imageID == nil {
 				return &provider.UpdateStorageSpaceResponse{
 					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space image resource not found"},
@@ -440,8 +440,8 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 			}
 			metadata[xattrs.SpaceImageAttr] = imageID.OpaqueId
 		}
-		if readme, ok := space.Opaque.Map["readme"]; ok {
-			readmeID := resourceid.OwnCloudResourceIDUnwrap(string(readme.Value))
+		if readme := utils.ReadPlainFromOpaque(space.Opaque, "readme"); readme != "" {
+			readmeID := resourceid.OwnCloudResourceIDUnwrap(readme)
 			if readmeID == nil {
 				return &provider.UpdateStorageSpaceResponse{
 					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space readme resource not found"},
@@ -637,10 +637,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	if n.SpaceRoot.IsDisabled() {
-		space.Opaque.Map["trashed"] = &types.OpaqueEntry{
-			Decoder: "plain",
-			Value:   []byte("trashed"),
-		}
+		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "trashed", "trashed")
 	}
 
 	if n.Owner() != nil && n.Owner().OpaqueId != "" {
@@ -702,37 +699,23 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 	spaceImage, ok := spaceAttributes[xattrs.SpaceImageAttr]
 	if ok {
-		space.Opaque = utils.AppendPlainToOpaque(
-			space.Opaque,
-			"image",
-			resourceid.OwnCloudResourceIDWrap(
-				&provider.ResourceId{
-					StorageId: space.Root.StorageId,
-					OpaqueId:  spaceImage,
-				},
-			),
-		)
+		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "image", resourceid.OwnCloudResourceIDWrap(
+			&provider.ResourceId{StorageId: space.Root.StorageId, OpaqueId: spaceImage},
+		))
 	}
 	spaceDescription, ok := spaceAttributes[xattrs.SpaceDescriptionAttr]
 	if ok {
-		space.Opaque.Map["description"] = &types.OpaqueEntry{
-			Decoder: "plain",
-			Value:   []byte(spaceDescription),
-		}
+		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "description", spaceDescription)
 	}
 	spaceReadme, ok := spaceAttributes[xattrs.SpaceReadmeAttr]
 	if ok {
-		space.Opaque.Map["readme"] = &types.OpaqueEntry{
-			Decoder: "plain",
-			Value:   []byte(resourceid.OwnCloudResourceIDWrap(&provider.ResourceId{StorageId: space.Root.StorageId, OpaqueId: spaceReadme})),
-		}
+		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "readme", resourceid.OwnCloudResourceIDWrap(
+			&provider.ResourceId{StorageId: space.Root.StorageId, OpaqueId: spaceReadme},
+		))
 	}
 	spaceAlias, ok := spaceAttributes[xattrs.SpaceAliasAttr]
 	if ok {
-		space.Opaque.Map["spaceAlias"] = &types.OpaqueEntry{
-			Decoder: "plain",
-			Value:   []byte(spaceAlias),
-		}
+		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "spaceAlias", spaceAlias)
 	}
 	return space, nil
 }
