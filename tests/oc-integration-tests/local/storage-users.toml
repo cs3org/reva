@@ -27,6 +27,8 @@ root = "/var/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "localhost:10000"
+personalspacealias_template = "{{.SpaceType}}/{{.User.Username}}"
+generalspacealias_template = "{{.SpaceType}}/{{.SpaceName | replace \" \" \"-\" | lower}}"
 
 # we have a locally running dataprovider
 [http]

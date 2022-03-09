@@ -21,13 +21,14 @@ package decomposedfs_test
 import (
 	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 )
 
-var _ = Describe("Home is Created", func() {
+var _ = Describe("Create Spaces", func() {
 	var (
 		env *helpers.TestEnv
 	)
@@ -53,6 +54,17 @@ var _ = Describe("Home is Created", func() {
 			Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
 			Expect(resp[0].Name).To(Equal("username"))
 			Expect(resp[0].SpaceType).To(Equal("personal"))
+		})
+	})
+	Context("when creating a space", func() {
+		It("project space is created", func() {
+			resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Mars", Type: "project"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(resp.StorageSpace).ToNot(Equal(nil))
+			Expect(string(resp.StorageSpace.Opaque.Map["spaceAlias"].Value)).To(Equal("project/mission-to-mars"))
+			Expect(resp.StorageSpace.Name).To(Equal("Mission to Mars"))
+			Expect(resp.StorageSpace.SpaceType).To(Equal("project"))
 		})
 	})
 })
