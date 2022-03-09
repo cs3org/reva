@@ -24,6 +24,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -31,7 +32,6 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -121,6 +121,15 @@ func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not decode lock file, ignoring")
 		return nil, errors.Wrap(err, "Decomposedfs: could not read lock file")
 	}
+
+	// lock already expired
+	if time.Now().After(time.Unix(int64(lock.Expiration.Seconds), int64(lock.Expiration.Nanos))) {
+		if err = os.Remove(f.Name()); err != nil {
+			return nil, errors.Wrap(err, "Decomposedfs: could not remove expired lock file")
+		}
+		return nil, nil
+	}
+
 	return lock, err
 }
 
@@ -163,15 +172,6 @@ func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
 	// check lock
 	if oldLock.LockId != lock.LockId {
 		return errtypes.PreconditionFailed("mismatching lock")
-	}
-
-	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.User, u.Id) {
-		return errtypes.PermissionDenied("cannot refresh lock of another holder")
-	}
-
-	if !utils.UserEqual(oldLock.User, lock.GetUser()) {
-		return errtypes.PermissionDenied("cannot change holder when refreshing a lock")
 	}
 
 	if err := json.NewEncoder(f).Encode(lock); err != nil {
@@ -220,11 +220,6 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 	// check lock
 	if lock == nil || (oldLock.LockId != lock.LockId) {
 		return errtypes.Locked(oldLock.LockId)
-	}
-
-	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.User, u.Id) {
-		return errtypes.PermissionDenied("mismatching holder")
 	}
 
 	if err = os.Remove(f.Name()); err != nil {
