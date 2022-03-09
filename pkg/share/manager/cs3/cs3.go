@@ -47,10 +47,13 @@ import (
 
 //go:generate mockery -name Storage
 //go:generate mockery -name Indexer
+
+// Storage is the interface to the metadata storage backend
 type Storage interface {
 	metadata.Storage
 }
 
+// Indexer is the interface to the indexer being used for indexing shares
 type Indexer interface {
 	AddIndex(t interface{}, indexBy option.IndexBy, pkName, entityDirName, indexType string, bound *option.Bound, caseInsensitive bool) error
 	Add(t interface{}) ([]indexer.IdxAddResult, error)
@@ -66,6 +69,7 @@ type Manager struct {
 	initialized bool
 }
 
+// ReceivedShareMetadata hold the state information or a received share
 type ReceivedShareMetadata struct {
 	State      collaboration.ShareState `json:"state"`
 	MountPoint *provider.Reference      `json:"mountpoint"`
@@ -200,7 +204,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 
 	switch {
 	case ref.GetId() != nil:
-		return m.getShareById(ctx, ref.GetId().OpaqueId)
+		return m.getShareByID(ctx, ref.GetId().OpaqueId)
 	case ref.GetKey() != nil:
 		return m.getShareByKey(ctx, ref.GetKey())
 	default:
@@ -239,13 +243,13 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		return nil, errtypes.UserRequired("error getting user from context")
 	}
 
-	allShareIds, err := m.indexer.FindBy(&collaboration.Share{}, "OwnerId", userIdToIndex(user.GetId()))
+	allShareIds, err := m.indexer.FindBy(&collaboration.Share{}, "OwnerId", userIDToIndex(user.GetId()))
 	if err != nil {
 		return nil, err
 	}
 	result := []*collaboration.Share{}
 	for _, id := range allShareIds {
-		s, err := m.getShareById(ctx, id)
+		s, err := m.getShareByID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
@@ -321,7 +325,7 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	}
 
 	for _, id := range receivedIds {
-		share, err := m.getShareById(ctx, id)
+		share, err := m.getShareByID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
@@ -443,7 +447,7 @@ func (m *Manager) downloadMetadata(ctx context.Context, share *collaboration.Sha
 	return metadata, err
 }
 
-func (m *Manager) getShareById(ctx context.Context, id string) (*collaboration.Share, error) {
+func (m *Manager) getShareByID(ctx context.Context, id string) (*collaboration.Share, error) {
 	data, err := m.storage.SimpleDownload(ctx, shareFilename(id))
 	if err != nil {
 		return nil, err
@@ -469,7 +473,7 @@ func (m *Manager) getShareById(ctx context.Context, id string) (*collaboration.S
 }
 
 func (m *Manager) getShareByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
-	ownerIds, err := m.indexer.FindBy(&collaboration.Share{}, "OwnerId", userIdToIndex(key.Owner))
+	ownerIds, err := m.indexer.FindBy(&collaboration.Share{}, "OwnerId", userIDToIndex(key.Owner))
 	if err != nil {
 		return nil, err
 	}
@@ -484,7 +488,7 @@ func (m *Manager) getShareByKey(ctx context.Context, key *collaboration.ShareKey
 
 	ids := intersectSlices(ownerIds, granteeIds)
 	for _, id := range ids {
-		share, err := m.getShareById(ctx, id)
+		share, err := m.getShareByID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
@@ -519,10 +523,10 @@ func indexOwnerFunc(v interface{}) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("given entity is not a share")
 	}
-	return userIdToIndex(share.Owner), nil
+	return userIDToIndex(share.Owner), nil
 }
 
-func userIdToIndex(id *userpb.UserId) string {
+func userIDToIndex(id *userpb.UserId) string {
 	return url.QueryEscape(id.Idp + ":" + id.OpaqueId)
 }
 
