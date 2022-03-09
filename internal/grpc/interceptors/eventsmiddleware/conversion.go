@@ -23,7 +23,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events"
 )
 
-// ShareCreated converts response to event
+// ShareCreated converts the response to an event
 func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
 	e := events.ShareCreated{
 		Sharer:         r.Share.Creator,
@@ -31,6 +31,16 @@ func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
 		GranteeGroupID: r.Share.GetGrantee().GetGroupId(),
 		ItemID:         r.Share.ResourceId,
 		CTime:          r.Share.Ctime,
+	}
+
+	return e
+}
+
+// ShareRemoved converts the response to an event
+func ShareRemoved(r *collaboration.RemoveShareResponse, req *collaboration.RemoveShareRequest) events.ShareRemoved {
+	e := events.ShareRemoved{
+		ShareID:  req.Ref.GetId(),
+		ShareKey: req.Ref.GetKey(),
 	}
 
 	return e

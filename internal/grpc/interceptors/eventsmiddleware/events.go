@@ -27,6 +27,7 @@ import (
 
 	"github.com/asim/go-micro/plugins/events/nats/v4"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	v1beta12 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/server"
@@ -59,8 +60,12 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		var ev interface{}
 		switch v := res.(type) {
 		case *collaboration.CreateShareResponse:
-			if v.Status.Code == rpc.Code_CODE_OK {
+			if isSuccess(v) {
 				ev = ShareCreated(v)
+			}
+		case *collaboration.RemoveShareResponse:
+			if isSuccess(v) {
+				ev = ShareRemoved(v, req.(*collaboration.RemoveShareRequest))
 			}
 		}
 
@@ -83,6 +88,15 @@ func NewStream() grpc.StreamServerInterceptor {
 		return handler(srv, ss)
 	}
 	return interceptor
+}
+
+// common interface to all respones
+type su interface {
+	GetStatus() *v1beta12.Status
+}
+
+func isSuccess(res su) bool {
+	return res.GetStatus().Code == rpc.Code_CODE_OK
 }
 
 func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {

@@ -23,12 +23,13 @@ import (
 
 	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 // ShareCreated is emitted when a share is created
-type ShareCreated struct { // TODO: Rename to ShareCreatedEvent?
+type ShareCreated struct {
 	Sharer *user.UserId
 	// split the protobuf Grantee oneof so we can use stdlib encoding/json
 	GranteeUserID  *user.UserId
@@ -41,6 +42,20 @@ type ShareCreated struct { // TODO: Rename to ShareCreatedEvent?
 // Unmarshal to fulfill umarshaller interface
 func (ShareCreated) Unmarshal(v []byte) (interface{}, error) {
 	e := ShareCreated{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// ShareRemoved is emitted when a share is removed
+type ShareRemoved struct {
+	// split protobuf Spec
+	ShareID  *collaboration.ShareId
+	ShareKey *collaboration.ShareKey
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (ShareRemoved) Unmarshal(v []byte) (interface{}, error) {
+	e := ShareRemoved{}
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
