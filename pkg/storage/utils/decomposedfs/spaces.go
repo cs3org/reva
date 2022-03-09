@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/google/uuid"
@@ -69,11 +70,15 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	description := utils.ReadPlainFromOpaque(req.Opaque, "description")
 	// allow sending a spaceAlias
 	alias := utils.ReadPlainFromOpaque(req.Opaque, "spaceAlias")
+	u := ctxpkg.ContextMustGetUser(ctx)
+	if alias == "" {
+		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, fs.o.GeneralSpaceAliasTemplate)
+	}
 	// TODO enforce a uuid?
 	// TODO clarify if we want to enforce a single personal storage space or if we want to allow sending the spaceid
 	if req.Type == spaceTypePersonal {
 		spaceID = req.GetOwner().GetId().GetOpaqueId()
-		alias = spaceTypePersonal + "/" + req.GetOwner().GetUsername()
+		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, fs.o.PersonalSpaceAliasTemplate)
 	}
 
 	root, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID)
