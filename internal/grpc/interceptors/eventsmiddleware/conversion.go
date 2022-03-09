@@ -45,3 +45,25 @@ func ShareRemoved(r *collaboration.RemoveShareResponse, req *collaboration.Remov
 
 	return e
 }
+
+// ShareUpdated converts the response to an event
+func ShareUpdated(r *collaboration.UpdateShareResponse, req *collaboration.UpdateShareRequest) events.ShareUpdated {
+	updated := ""
+	if req.Field.GetPermissions() != nil {
+		updated = "permissions"
+	} else if req.Field.GetDisplayName() != "" {
+		updated = "displayname"
+	}
+	e := events.ShareUpdated{
+		ShareID:        r.Share.Id,
+		ItemID:         r.Share.ResourceId,
+		Permissions:    r.Share.Permissions,
+		GranteeUserID:  r.Share.GetGrantee().GetUserId(),
+		GranteeGroupID: r.Share.GetGrantee().GetGroupId(),
+		Sharer:         r.Share.Creator,
+		MTime:          r.Share.Mtime,
+		Updated:        updated,
+	}
+
+	return e
+}

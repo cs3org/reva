@@ -59,3 +59,24 @@ func (ShareRemoved) Unmarshal(v []byte) (interface{}, error) {
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
+
+// ShareUpdated is emitted when a share is updated
+type ShareUpdated struct {
+	ShareID        *collaboration.ShareId
+	ItemID         *provider.ResourceId
+	Permissions    *collaboration.SharePermissions
+	GranteeUserID  *user.UserId
+	GranteeGroupID *group.GroupId
+	Sharer         *user.UserId
+	MTime          *types.Timestamp
+
+	// indicates what was updated - one of "displayname", "permissions"
+	Updated string
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (ShareUpdated) Unmarshal(v []byte) (interface{}, error) {
+	e := ShareUpdated{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}

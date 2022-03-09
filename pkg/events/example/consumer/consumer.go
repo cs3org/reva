@@ -34,8 +34,9 @@ func Example(c events.Consumer) {
 
 	// Step 2 - which events does the consumer listen too?
 	evs := []events.Unmarshaller{
-		// for example created shares
 		events.ShareCreated{},
+		events.ShareUpdated{},
+		events.ShareRemoved{},
 	}
 
 	// Step 3 - create event channel
