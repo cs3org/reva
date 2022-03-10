@@ -108,6 +108,31 @@ func LinkUpdated(r *link.UpdatePublicShareResponse, req *link.UpdatePublicShareR
 	}
 }
 
+// LinkAccessed converts the response to an event
+func LinkAccessed(r *link.GetPublicShareByTokenResponse) events.LinkAccessed {
+	return events.LinkAccessed{
+		ShareID:           r.Share.Id,
+		Sharer:            r.Share.Creator,
+		ItemID:            r.Share.ResourceId,
+		Permissions:       r.Share.Permissions,
+		DisplayName:       r.Share.DisplayName,
+		Expiration:        r.Share.Expiration,
+		PasswordProtected: r.Share.PasswordProtected,
+		CTime:             r.Share.Ctime,
+		Token:             r.Share.Token,
+	}
+}
+
+// LinkAccessFailed converts the response to an event
+func LinkAccessFailed(r *link.GetPublicShareByTokenResponse, req *link.GetPublicShareByTokenRequest) events.LinkAccessFailed {
+	return events.LinkAccessFailed{
+		ShareID: r.Share.Id,
+		Token:   r.Share.Token,
+		Status:  r.Status.Code,
+		Message: r.Status.Message,
+	}
+}
+
 // LinkRemoved converts the response to an event
 func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareRequest) events.LinkRemoved {
 	return events.LinkRemoved{

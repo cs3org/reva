@@ -88,6 +88,12 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			if isSuccess(v) {
 				ev = LinkRemoved(v, req.(*link.RemovePublicShareRequest))
 			}
+		case *link.GetPublicShareByTokenResponse:
+			if isSuccess(v) {
+				ev = LinkAccessed(v)
+			} else {
+				ev = LinkAccessFailed(v, req.(*link.GetPublicShareByTokenRequest))
+			}
 		}
 
 		if ev != nil {
