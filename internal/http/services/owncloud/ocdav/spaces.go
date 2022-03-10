@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"path"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -44,7 +45,7 @@ func (h *SpacesHandler) init(c *Config) error {
 }
 
 // Handler handles requests
-func (h *SpacesHandler) Handler(s *svc) http.Handler {
+func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.Handler {
 	config := s.Config()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ctx := r.Context()
@@ -55,8 +56,15 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
+		var p string
+		p, r.URL.Path = router.ShiftPath(r.URL.Path)
+
 		var spaceID string
-		spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
+		if p == _trashbinPath {
+			h.handleSpacesTrashbin(w, r, s, trashbinHandler)
+		} else {
+			spaceID = p
+		}
 
 		if spaceID == "" {
 			// listing is disabled, no auth will change that
@@ -134,4 +142,32 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		}
 	})
+}
+
+func (h *SpacesHandler) handleSpacesTrashbin(w http.ResponseWriter, r *http.Request, s *svc, trashbinHandler *TrashbinHandler) {
+	var spaceID string
+	spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
+	if spaceID == "" {
+		// listing is disabled, no auth will change that
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ref := &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: spaceID,
+			OpaqueId:  spaceID,
+		},
+	}
+
+	var key string
+	key, r.URL.Path = router.ShiftPath(r.URL.Path)
+
+	switch r.Method {
+	case MethodPropfind:
+		trashbinHandler.listTrashbin(w, r, s, ref, path.Join(_trashbinPath, spaceID), key, r.URL.Path)
+	case http.MethodDelete:
+		// trashbinHandler.delete(w, r, s, )
+	}
+
 }
