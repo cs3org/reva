@@ -164,8 +164,6 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 				}
 			}
 		}
-	} else if _, ok := listStorageSpaces(req); ok {
-		return nil
 	}
 
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
@@ -289,17 +287,4 @@ func extractShareRef(req interface{}) (*collaboration.ShareReference, bool) {
 		return &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: v.GetShare().GetShare().GetId()}}, true
 	}
 	return nil, false
-}
-
-func listStorageSpaces(req interface{}) (*provider.ListStorageSpacesRequest, bool) {
-	switch req.(type) {
-	case *provider.ListStorageSpacesRequest:
-		// TODO: checks
-		return nil, true
-	case *registry.ListStorageProvidersRequest:
-		// TODO: checks
-		return nil, true
-	default:
-		return nil, false
-	}
 }
