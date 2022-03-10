@@ -120,22 +120,58 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 
 // SetLock puts a lock on the given reference
 func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
+		return nil, err
+	case st != nil:
+		return &provider.SetLockResponse{
+			Status: st,
+		}, nil
+	}
+	return s.gateway.SetLock(ctx, &provider.SetLockRequest{Opaque: req.Opaque, Ref: ref, Lock: req.Lock})
 }
 
 // GetLock returns an existing lock on the given reference
 func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
+		return nil, err
+	case st != nil:
+		return &provider.GetLockResponse{
+			Status: st,
+		}, nil
+	}
+	return s.gateway.GetLock(ctx, &provider.GetLockRequest{Opaque: req.Opaque, Ref: ref})
 }
 
 // RefreshLock refreshes an existing lock on the given reference
 func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
+		return nil, err
+	case st != nil:
+		return &provider.RefreshLockResponse{
+			Status: st,
+		}, nil
+	}
+	return s.gateway.RefreshLock(ctx, &provider.RefreshLockRequest{Opaque: req.Opaque, Ref: ref, Lock: req.Lock})
 }
 
 // Unlock removes an existing lock from the given reference
 func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
+		return nil, err
+	case st != nil:
+		return &provider.UnlockResponse{
+			Status: st,
+		}, nil
+	}
+	return s.gateway.Unlock(ctx, &provider.UnlockRequest{Opaque: req.Opaque, Ref: ref, Lock: req.Lock})
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {

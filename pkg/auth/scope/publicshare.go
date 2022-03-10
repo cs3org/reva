@@ -77,6 +77,18 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.GetResourceId()}), nil
 	case *provider.StatRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.GetLockRequest:
+		return true, nil
+		//return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.UnlockRequest:
+		return true, nil
+		//return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.RefreshLockRequest:
+		return true, nil
+		//return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.SetLockRequest:
+		return true, nil
+		//return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.ListContainerRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.InitiateFileDownloadRequest:
@@ -109,6 +121,8 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 	case *appregistry.GetDefaultAppProviderForMimeTypeRequest:
 		return true, nil
 
+	case *appregistry.GetAppProvidersRequest:
+		return true, nil
 	case *userv1beta1.GetUserByClaimRequest:
 		return true, nil
 	case *userv1beta1.GetUserRequest:
