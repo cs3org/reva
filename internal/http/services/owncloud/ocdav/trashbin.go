@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -38,7 +37,6 @@ import (
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -146,20 +144,16 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			// find path in url relative to trash base
 			trashBase := ctx.Value(net.CtxKeyBaseURI).(string)
 			baseURI := path.Join(path.Dir(trashBase), "files", username)
-			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, baseURI)
-			r = r.WithContext(ctx)
 
-			// TODO make request.php optional in destination header
-			dst, err := extractDestination(r)
+			dh := r.Header.Get(net.HeaderDestination)
+			dst, err := net.ParseDestination(baseURI, dh)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			dst = path.Join(basePath, dst)
 
 			log.Debug().Str("key", key).Str("dst", dst).Msg("restore")
-
-			h.restore(w, r, s, user, basePath, dst, key, r.URL.Path)
+			h.restore(w, r, s, ref, dst, key, r.URL.Path)
 		case http.MethodDelete:
 			h.delete(w, r, s, ref, key, r.URL.Path)
 		default:
@@ -444,7 +438,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, refBas
 	return &response, nil
 }
 
-func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, dst, key, itemPath string) {
+func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, ref *provider.Reference, dst, key, itemPath string) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "restore")
 	defer span.End()
 
@@ -464,22 +458,11 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, dst)
-	if err != nil {
-		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if rpcstatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcstatus)
-		return
-	}
-	dstRef := spacelookup.MakeRelativeReference(space, dst, false)
 
-	dstStatReq := &provider.StatRequest{
-		Ref: dstRef,
-	}
+	dstRef := ref
+	dstRef.Path = utils.MakeRelativePath(dst)
 
+	dstStatReq := &provider.StatRequest{Ref: dstRef}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending grpc stat request")
@@ -495,9 +478,9 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	// Restoring to a non-existent location is not supported by the WebDAV spec. The following block ensures the target
 	// restore location exists, and if it doesn't returns a conflict error code.
 	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst) {
-		parentStatReq := &provider.StatRequest{
-			Ref: spacelookup.MakeRelativeReference(space, filepath.Dir(dst), false),
-		}
+		parentRef := ref
+		parentRef.Path = utils.MakeRelativePath(path.Dir(dst))
+		parentStatReq := &provider.StatRequest{Ref: parentRef}
 
 		parentStatResponse, err := client.Stat(ctx, parentStatReq)
 		if err != nil {
@@ -543,22 +526,8 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		}
 	}
 
-	sourceSpace, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, basePath)
-	if err != nil {
-		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if rpcstatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcstatus)
-		return
-	}
 	req := &provider.RestoreRecycleItemRequest{
-		// use the target path to find the storage provider
-		// this means we can only undelete on the same storage, not to a different folder
-		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
-		// TODO currently limited to the home storage
-		Ref:        spacelookup.MakeRelativeReference(sourceSpace, basePath, false),
+		Ref:        ref,
 		Key:        path.Join(key, itemPath),
 		RestoreRef: dstRef,
 	}

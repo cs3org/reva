@@ -24,6 +24,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
@@ -56,22 +57,20 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 			return
 		}
 
-		var p string
-		p, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-		var spaceID string
-		if p == _trashbinPath {
-			h.handleSpacesTrashbin(w, r, s, trashbinHandler)
-			return
-		} else {
-			spaceID = p
-		}
-
-		if spaceID == "" {
+		var segment string
+		segment, r.URL.Path = router.ShiftPath(r.URL.Path)
+		if segment == "" {
 			// listing is disabled, no auth will change that
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
+
+		if segment == _trashbinPath {
+			h.handleSpacesTrashbin(w, r, s, trashbinHandler)
+			return
+		}
+
+		spaceID := segment
 
 		switch r.Method {
 		case MethodPropfind:
@@ -146,6 +145,9 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 }
 
 func (h *SpacesHandler) handleSpacesTrashbin(w http.ResponseWriter, r *http.Request, s *svc, trashbinHandler *TrashbinHandler) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
 	var spaceID string
 	spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
 	if spaceID == "" {
@@ -167,7 +169,27 @@ func (h *SpacesHandler) handleSpacesTrashbin(w http.ResponseWriter, r *http.Requ
 	switch r.Method {
 	case MethodPropfind:
 		trashbinHandler.listTrashbin(w, r, s, ref, path.Join(_trashbinPath, spaceID), key, r.URL.Path)
+	case MethodMove:
+		if key == "" {
+			http.Error(w, "501 Not implemented", http.StatusNotImplemented)
+			break
+		}
+		// find path in url relative to trash base
+		baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
+		baseURI = path.Join(baseURI, spaceID)
+
+		dh := r.Header.Get(net.HeaderDestination)
+		dst, err := net.ParseDestination(baseURI, dh)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		log.Debug().Str("key", key).Str("path", r.URL.Path).Str("dst", dst).Msg("spaces restore")
+		trashbinHandler.restore(w, r, s, ref, dst, key, r.URL.Path)
 	case http.MethodDelete:
 		trashbinHandler.delete(w, r, s, ref, key, r.URL.Path)
+	default:
+		http.Error(w, "501 Not implemented", http.StatusNotImplemented)
 	}
 }

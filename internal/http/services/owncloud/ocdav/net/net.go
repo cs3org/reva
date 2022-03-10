@@ -20,8 +20,16 @@ package net
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/pkg/errors"
+)
+
+var (
+	// ErrInvalidHeaderValue defines an error which can occure when trying to parse a header value.
+	ErrInvalidHeaderValue = errors.New("invalid value")
 )
 
 type ctxKey int
@@ -110,7 +118,7 @@ func ParseDepth(s string) (Depth, error) {
 	case DepthInfinity.String():
 		return DepthInfinity, nil
 	default:
-		return "", fmt.Errorf("invalid depth: %s", s)
+		return "", errors.Wrapf(ErrInvalidHeaderValue, "invalid depth: %s", s)
 	}
 }
 
@@ -122,7 +130,29 @@ func ParseOverwrite(s string) (bool, error) {
 		s = "T"
 	}
 	if s != "T" && s != "F" {
-		return false, fmt.Errorf("invalid overwrite: %s", s)
+		return false, errors.Wrapf(ErrInvalidHeaderValue, "invalid overwrite: %s", s)
 	}
 	return s == "T", nil
+}
+
+// ParseDestination parses the destination header value defined in https://datatracker.ietf.org/doc/html/rfc4918#section-10.3
+// The returned path will be relative to the given baseURI.
+func ParseDestination(baseURI, s string) (string, error) {
+	if s == "" {
+		return "", errors.Wrap(ErrInvalidHeaderValue, "destination header is empty")
+	}
+	dstURL, err := url.ParseRequestURI(s)
+	if err != nil {
+		return "", errors.Wrap(ErrInvalidHeaderValue, err.Error())
+	}
+
+	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+	// TODO make request.php optional in destination header
+	// Strip the base URI from the destination. The destination might contain redirection prefixes which need to be handled
+	urlSplit := strings.Split(dstURL.Path, baseURI)
+	if len(urlSplit) != 2 {
+		return "", errors.Wrap(ErrInvalidHeaderValue, "destination path does not contain base URI")
+	}
+
+	return urlSplit[1], nil
 }

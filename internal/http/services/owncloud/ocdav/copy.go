@@ -55,7 +55,10 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	defer span.End()
 
 	src := path.Join(ns, r.URL.Path)
-	dst, err := extractDestination(r)
+
+	dh := r.Header.Get(net.HeaderDestination)
+	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
+	dst, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -274,7 +277,9 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_copy")
 	defer span.End()
 
-	dst, err := extractDestination(r)
+	dh := r.Header.Get(net.HeaderDestination)
+	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
+	dst, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
