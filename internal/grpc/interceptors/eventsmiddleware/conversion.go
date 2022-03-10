@@ -63,6 +63,20 @@ func ShareUpdated(r *collaboration.UpdateShareResponse, req *collaboration.Updat
 	}
 }
 
+// ReceivedShareUpdated converts the response to an event
+func ReceivedShareUpdated(r *collaboration.UpdateReceivedShareResponse) events.ReceivedShareUpdated {
+	return events.ReceivedShareUpdated{
+		ShareID:        r.Share.Share.Id,
+		ItemID:         r.Share.Share.ResourceId,
+		Permissions:    r.Share.Share.Permissions,
+		GranteeUserID:  r.Share.Share.GetGrantee().GetUserId(),
+		GranteeGroupID: r.Share.Share.GetGrantee().GetGroupId(),
+		Sharer:         r.Share.Share.Creator,
+		MTime:          r.Share.Share.Mtime,
+		State:          collaboration.ShareState_name[int32(r.Share.State)],
+	}
+}
+
 // LinkCreated converts the response to an event
 func LinkCreated(r *link.CreatePublicShareResponse) events.LinkCreated {
 	return events.LinkCreated{

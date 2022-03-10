@@ -82,6 +82,26 @@ func (ShareUpdated) Unmarshal(v []byte) (interface{}, error) {
 	return e, err
 }
 
+// ReceivedShareUpdated is emitted when a received share is accepted or declined
+type ReceivedShareUpdated struct {
+	ShareID        *collaboration.ShareId
+	ItemID         *provider.ResourceId
+	Permissions    *collaboration.SharePermissions
+	GranteeUserID  *user.UserId
+	GranteeGroupID *group.GroupId
+	Sharer         *user.UserId
+	MTime          *types.Timestamp
+
+	State string
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (ReceivedShareUpdated) Unmarshal(v []byte) (interface{}, error) {
+	e := ReceivedShareUpdated{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
 // LinkCreated is emitted when a public link is created
 type LinkCreated struct {
 	ShareID           *link.PublicShareId

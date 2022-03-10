@@ -37,6 +37,7 @@ func Example(c events.Consumer) {
 		events.ShareCreated{},
 		events.ShareUpdated{},
 		events.ShareRemoved{},
+		events.ReceivedShareUpdated{},
 		events.LinkCreated{},
 		events.LinkUpdated{},
 		events.LinkRemoved{},

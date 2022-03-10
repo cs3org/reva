@@ -72,6 +72,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			if isSuccess(v) {
 				ev = ShareUpdated(v, req.(*collaboration.UpdateShareRequest))
 			}
+		case *collaboration.UpdateReceivedShareResponse:
+			if isSuccess(v) {
+				ev = ReceivedShareUpdated(v)
+			}
 		case *link.CreatePublicShareResponse:
 			if isSuccess(v) {
 				ev = LinkCreated(v)
