@@ -104,3 +104,25 @@ func (LinkCreated) Unmarshal(v []byte) (interface{}, error) {
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
+
+// LinkUpdated is emitted when a public link is updated
+type LinkUpdated struct {
+	ShareID           *link.PublicShareId
+	Sharer            *user.UserId
+	ItemID            *provider.ResourceId
+	Permissions       *link.PublicSharePermissions
+	DisplayName       string
+	Expiration        *types.Timestamp
+	PasswordProtected bool
+	CTime             *types.Timestamp
+	Token             string
+
+	FieldUpdated string
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (LinkUpdated) Unmarshal(v []byte) (interface{}, error) {
+	e := LinkUpdated{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}

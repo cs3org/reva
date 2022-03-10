@@ -76,6 +76,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			if isSuccess(v) {
 				ev = LinkCreated(v)
 			}
+		case *link.UpdatePublicShareResponse:
+			if isSuccess(v) {
+				ev = LinkUpdated(v, req.(*link.UpdatePublicShareRequest))
+			}
 		}
 
 		if ev != nil {

@@ -26,25 +26,21 @@ import (
 
 // ShareCreated converts the response to an event
 func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
-	e := events.ShareCreated{
+	return events.ShareCreated{
 		Sharer:         r.Share.Creator,
 		GranteeUserID:  r.Share.GetGrantee().GetUserId(),
 		GranteeGroupID: r.Share.GetGrantee().GetGroupId(),
 		ItemID:         r.Share.ResourceId,
 		CTime:          r.Share.Ctime,
 	}
-
-	return e
 }
 
 // ShareRemoved converts the response to an event
 func ShareRemoved(r *collaboration.RemoveShareResponse, req *collaboration.RemoveShareRequest) events.ShareRemoved {
-	e := events.ShareRemoved{
+	return events.ShareRemoved{
 		ShareID:  req.Ref.GetId(),
 		ShareKey: req.Ref.GetKey(),
 	}
-
-	return e
 }
 
 // ShareUpdated converts the response to an event
@@ -55,7 +51,7 @@ func ShareUpdated(r *collaboration.UpdateShareResponse, req *collaboration.Updat
 	} else if req.Field.GetDisplayName() != "" {
 		updated = "displayname"
 	}
-	e := events.ShareUpdated{
+	return events.ShareUpdated{
 		ShareID:        r.Share.Id,
 		ItemID:         r.Share.ResourceId,
 		Permissions:    r.Share.Permissions,
@@ -65,13 +61,11 @@ func ShareUpdated(r *collaboration.UpdateShareResponse, req *collaboration.Updat
 		MTime:          r.Share.Mtime,
 		Updated:        updated,
 	}
-
-	return e
 }
 
 // LinkCreated converts the response to an event
 func LinkCreated(r *link.CreatePublicShareResponse) events.LinkCreated {
-	e := events.LinkCreated{
+	return events.LinkCreated{
 		ShareID:           r.Share.Id,
 		Sharer:            r.Share.Creator,
 		ItemID:            r.Share.ResourceId,
@@ -82,6 +76,20 @@ func LinkCreated(r *link.CreatePublicShareResponse) events.LinkCreated {
 		CTime:             r.Share.Ctime,
 		Token:             r.Share.Token,
 	}
+}
 
-	return e
+// LinkUpdated converts the response to an event
+func LinkUpdated(r *link.UpdatePublicShareResponse, req *link.UpdatePublicShareRequest) events.LinkUpdated {
+	return events.LinkUpdated{
+		ShareID:           r.Share.Id,
+		Sharer:            r.Share.Creator,
+		ItemID:            r.Share.ResourceId,
+		Permissions:       r.Share.Permissions,
+		DisplayName:       r.Share.DisplayName,
+		Expiration:        r.Share.Expiration,
+		PasswordProtected: r.Share.PasswordProtected,
+		CTime:             r.Share.Ctime,
+		Token:             r.Share.Token,
+		FieldUpdated:      link.UpdatePublicShareRequest_Update_Type_name[int32(req.Update.GetType())],
+	}
 }
