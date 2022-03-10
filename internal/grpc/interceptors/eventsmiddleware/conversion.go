@@ -93,3 +93,11 @@ func LinkUpdated(r *link.UpdatePublicShareResponse, req *link.UpdatePublicShareR
 		FieldUpdated:      link.UpdatePublicShareRequest_Update_Type_name[int32(req.Update.GetType())],
 	}
 }
+
+// LinkRemoved converts the response to an event
+func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareRequest) events.LinkRemoved {
+	return events.LinkRemoved{
+		ShareID:    req.Ref.GetId(),
+		ShareToken: req.Ref.GetToken(),
+	}
+}

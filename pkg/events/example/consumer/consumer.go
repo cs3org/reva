@@ -39,6 +39,7 @@ func Example(c events.Consumer) {
 		events.ShareRemoved{},
 		events.LinkCreated{},
 		events.LinkUpdated{},
+		events.LinkRemoved{},
 	}
 
 	// Step 3 - create event channel
@@ -56,7 +57,7 @@ func Example(c events.Consumer) {
 		case events.ShareCreated:
 			fmt.Printf("%s) Share created: %+v\n", group, v)
 		default:
-			fmt.Printf("%s) Unregistered event: %+v\n", group, v)
+			fmt.Printf("%s) %T: %+v\n", group, v, v)
 		}
 	}
 

@@ -126,3 +126,17 @@ func (LinkUpdated) Unmarshal(v []byte) (interface{}, error) {
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
+
+// LinkRemoved is emitted when a share is removed
+type LinkRemoved struct {
+	// split protobuf Ref
+	ShareID    *link.PublicShareId
+	ShareToken string
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (LinkRemoved) Unmarshal(v []byte) (interface{}, error) {
+	e := LinkRemoved{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
