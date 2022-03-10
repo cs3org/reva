@@ -114,10 +114,13 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, err
 	}
 
+	lockID, _ := ctxpkg.ContextGetLockID(ctx)
+
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
 			"filename": filepath.Base(relative),
 			"dir":      filepath.Dir(relative),
+			"lockid":   lockID,
 		},
 		Size: uploadLength,
 		Storage: map[string]string{
@@ -235,6 +238,9 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 
 	// check lock
+	if info.MetaData["lockid"] != "" {
+		ctx = ctxpkg.ContextSetLockID(ctx, info.MetaData["lockid"])
+	}
 	if err := n.CheckLock(ctx); err != nil {
 		return nil, err
 	}
@@ -468,6 +474,9 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	n.SpaceRoot = node.New(spaceID, spaceID, "", "", 0, "", nil, upload.fs.lu)
 
 	// check lock
+	if upload.info.MetaData["lockid"] != "" {
+		ctx = ctxpkg.ContextSetLockID(ctx, upload.info.MetaData["lockid"])
+	}
 	if err := n.CheckLock(ctx); err != nil {
 		return err
 	}

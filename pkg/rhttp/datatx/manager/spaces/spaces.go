@@ -25,7 +25,6 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
@@ -69,11 +68,6 @@ func New(m map[string]interface{}) (datatx.DataTX, error) {
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-
-		if lockID := r.Header.Get("X-Lock-Id"); lockID != "" {
-			ctx = ctxpkg.ContextSetLockID(ctx, lockID)
-		}
-
 		var spaceID string
 		spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
 
