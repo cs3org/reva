@@ -244,14 +244,14 @@ func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool)
 		return v.GetRef(), true
 	case *provider.InitiateFileDownloadRequest:
 		return v.GetRef(), true
+
+	// App provider requests
+	case *appregistry.GetAppProvidersRequest:
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id, Path: v.ResourceInfo.Path}, true
 	case *appprovider.OpenInAppRequest:
-		return &provider.Reference{ResourceId: v.ResourceInfo.Id, Path: "."}, true
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id, Path: v.ResourceInfo.Path}, true
 	case *gateway.OpenInAppRequest:
 		return v.GetRef(), true
-
-		// App provider requests
-	case *appregistry.GetAppProvidersRequest:
-		return &provider.Reference{ResourceId: v.ResourceInfo.Id, Path: "."}, true
 	}
 
 	if !hasEditorRole {
