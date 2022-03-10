@@ -29,6 +29,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	v1beta12 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
@@ -70,6 +71,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		case *collaboration.UpdateShareResponse:
 			if isSuccess(v) {
 				ev = ShareUpdated(v, req.(*collaboration.UpdateShareRequest))
+			}
+		case *link.CreatePublicShareResponse:
+			if isSuccess(v) {
+				ev = LinkCreated(v)
 			}
 		}
 

@@ -20,6 +20,7 @@ package eventsmiddleware
 
 import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 )
 
@@ -63,6 +64,23 @@ func ShareUpdated(r *collaboration.UpdateShareResponse, req *collaboration.Updat
 		Sharer:         r.Share.Creator,
 		MTime:          r.Share.Mtime,
 		Updated:        updated,
+	}
+
+	return e
+}
+
+// LinkCreated converts the response to an event
+func LinkCreated(r *link.CreatePublicShareResponse) events.LinkCreated {
+	e := events.LinkCreated{
+		ShareID:           r.Share.Id,
+		Sharer:            r.Share.Creator,
+		ItemID:            r.Share.ResourceId,
+		Permissions:       r.Share.Permissions,
+		DisplayName:       r.Share.DisplayName,
+		Expiration:        r.Share.Expiration,
+		PasswordProtected: r.Share.PasswordProtected,
+		CTime:             r.Share.Ctime,
+		Token:             r.Share.Token,
 	}
 
 	return e

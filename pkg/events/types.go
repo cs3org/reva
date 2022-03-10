@@ -24,6 +24,7 @@ import (
 	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
@@ -77,6 +78,29 @@ type ShareUpdated struct {
 // Unmarshal to fulfill umarshaller interface
 func (ShareUpdated) Unmarshal(v []byte) (interface{}, error) {
 	e := ShareUpdated{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// LinkCreated is emitted when a public link is created
+type LinkCreated struct {
+	ShareID           *link.PublicShareId
+	Sharer            *user.UserId
+	ItemID            *provider.ResourceId
+	Permissions       *link.PublicSharePermissions
+	DisplayName       string
+	Expiration        *types.Timestamp
+	PasswordProtected bool
+	CTime             *types.Timestamp
+
+	// TODO: are we sure we want to send the token via event-bus? Imho this is a major security issue:
+	// Eveybody who has access to the event bus can access the file
+	Token string
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (LinkCreated) Unmarshal(v []byte) (interface{}, error) {
+	e := LinkCreated{}
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
