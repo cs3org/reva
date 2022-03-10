@@ -31,8 +31,9 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/share/manager/cs3"
-	"github.com/cs3org/reva/v2/pkg/share/manager/cs3/mocks"
 	indexerpkg "github.com/cs3org/reva/v2/pkg/storage/utils/indexer"
+	indexermocks "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/mocks"
+	storagemocks "github.com/cs3org/reva/v2/pkg/storage/utils/metadata/mocks"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
@@ -42,8 +43,8 @@ import (
 
 var _ = Describe("Manager", func() {
 	var (
-		storage    *mocks.Storage
-		indexer    *mocks.Indexer
+		storage    *storagemocks.Storage
+		indexer    *indexermocks.Indexer
 		user       *userpb.User
 		grantee    *userpb.User
 		share      *collaboration.Share
@@ -57,11 +58,11 @@ var _ = Describe("Manager", func() {
 	)
 
 	BeforeEach(func() {
-		storage = &mocks.Storage{}
+		storage = &storagemocks.Storage{}
 		storage.On("Init", mock.Anything, mock.Anything).Return(nil)
 		storage.On("MakeDirIfNotExist", mock.Anything, mock.Anything).Return(nil)
 		storage.On("SimpleUpload", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		indexer = &mocks.Indexer{}
+		indexer = &indexermocks.Indexer{}
 		indexer.On("AddIndex", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		indexer.On("Add", mock.Anything).Return([]indexerpkg.IdxAddResult{}, nil)
 		indexer.On("Delete", mock.Anything).Return(nil)
