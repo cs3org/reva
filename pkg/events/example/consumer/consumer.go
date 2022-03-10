@@ -42,6 +42,7 @@ func Example(c events.Consumer) {
 		events.LinkUpdated{},
 		events.LinkRemoved{},
 		events.LinkAccessed{},
+		events.LinkAccessFailed{},
 	}
 
 	// Step 3 - create event channel

@@ -117,7 +117,7 @@ func NewStream() grpc.StreamServerInterceptor {
 	return interceptor
 }
 
-// common interface to all respones
+// common interface to all responses
 type su interface {
 	GetStatus() *v1beta12.Status
 }
