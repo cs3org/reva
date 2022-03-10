@@ -62,6 +62,7 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 		var spaceID string
 		if p == _trashbinPath {
 			h.handleSpacesTrashbin(w, r, s, trashbinHandler)
+			return
 		} else {
 			spaceID = p
 		}
@@ -167,7 +168,6 @@ func (h *SpacesHandler) handleSpacesTrashbin(w http.ResponseWriter, r *http.Requ
 	case MethodPropfind:
 		trashbinHandler.listTrashbin(w, r, s, ref, path.Join(_trashbinPath, spaceID), key, r.URL.Path)
 	case http.MethodDelete:
-		// trashbinHandler.delete(w, r, s, )
+		trashbinHandler.delete(w, r, s, ref, key, r.URL.Path)
 	}
-
 }

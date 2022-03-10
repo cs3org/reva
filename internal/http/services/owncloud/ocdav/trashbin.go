@@ -161,7 +161,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 			h.restore(w, r, s, user, basePath, dst, key, r.URL.Path)
 		case http.MethodDelete:
-			h.delete(w, r, s, user, basePath, key, r.URL.Path)
+			h.delete(w, r, s, ref, key, r.URL.Path)
 		default:
 			http.Error(w, "501 Not implemented", http.StatusNotImplemented)
 		}
@@ -385,7 +385,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, refBas
 			Status: "HTTP/1.1 404 Not Found",
 			Prop:   []*props.PropertyXML{},
 		}
-		size := fmt.Sprintf("%d", item.Size)
+		size := strconv.FormatUint(item.Size, 10)
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
 			case net.NsOwncloud:
@@ -605,11 +605,11 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 }
 
 // delete has only a key
-func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
+func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, ref *provider.Reference, key, itemPath string) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "erase")
 	defer span.End()
 
-	sublog := appctx.GetLogger(ctx).With().Str("key", key).Logger()
+	sublog := appctx.GetLogger(ctx).With().Interface("reference", ref).Str("key", key).Str("item_path", itemPath).Logger()
 
 	client, err := s.getClient()
 	if err != nil {
@@ -618,22 +618,10 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		return
 	}
 
-	// set key as opaque id, the storageprovider will use it as the key for the
-	// storage drives  PurgeRecycleItem key call
-	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, basePath)
-	if err != nil {
-		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, status)
-		return
-	}
-
+	trashPath := path.Join(key, itemPath)
 	req := &provider.PurgeRecycleRequest{
-		Ref: spacelookup.MakeRelativeReference(space, basePath, false),
-		Key: path.Join(key, itemPath),
+		Ref: ref,
+		Key: trashPath,
 	}
 
 	res, err := client.PurgeRecycle(ctx, req)
@@ -646,9 +634,9 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	case rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusNoContent)
 	case rpc.Code_CODE_NOT_FOUND:
-		sublog.Debug().Str("path", basePath).Str("key", key).Interface("status", res.Status).Msg("resource not found")
+		sublog.Debug().Interface("status", res.Status).Msg("resource not found")
 		w.WriteHeader(http.StatusConflict)
-		m := fmt.Sprintf("path %s not found", basePath)
+		m := fmt.Sprintf("path %s not found", trashPath)
 		b, err := errors.Marshal(http.StatusConflict, m, "")
 		errors.HandleWebdavError(&sublog, w, b, err)
 	case rpc.Code_CODE_PERMISSION_DENIED:
