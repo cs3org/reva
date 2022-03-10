@@ -113,3 +113,16 @@ func ParseDepth(s string) (Depth, error) {
 		return "", fmt.Errorf("invalid depth: %s", s)
 	}
 }
+
+// ParseOverwrite parses the overwrite header value defined in https://datatracker.ietf.org/doc/html/rfc4918#section-10.6
+// Valid values are "T" and "F". An empty string will be parse to true.
+func ParseOverwrite(s string) (bool, error) {
+	s = strings.ToUpper(s)
+	if s == "" {
+		s = "T"
+	}
+	if s != "T" && s != "F" {
+		return false, fmt.Errorf("invalid overwrite: %s", s)
+	}
+	return s == "T", nil
+}

@@ -450,14 +450,10 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
 
-	overwrite := r.Header.Get(net.HeaderOverwrite)
+	oh := r.Header.Get(net.HeaderOverwrite)
 
-	overwrite = strings.ToUpper(overwrite)
-	if overwrite == "" {
-		overwrite = "T"
-	}
-
-	if overwrite != "T" && overwrite != "F" {
+	overwrite, err := net.ParseOverwrite(oh)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -521,8 +517,8 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 
-		if overwrite != "T" {
-			sublog.Warn().Str("overwrite", overwrite).Msg("dst already exists")
+		if !overwrite {
+			sublog.Warn().Bool("overwrite", overwrite).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 			b, err := errors.Marshal(
 				http.StatusPreconditionFailed,

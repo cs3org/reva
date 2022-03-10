@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -145,15 +144,11 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 }
 
 func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, log zerolog.Logger) {
-	overwrite := r.Header.Get(net.HeaderOverwrite)
-	log.Debug().Str("overwrite", overwrite).Msg("move")
+	oh := r.Header.Get(net.HeaderOverwrite)
+	log.Debug().Str("overwrite", oh).Msg("move")
 
-	overwrite = strings.ToUpper(overwrite)
-	if overwrite == "" {
-		overwrite = "T"
-	}
-
-	if overwrite != "T" && overwrite != "F" {
+	overwrite, err := net.ParseOverwrite(oh)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -201,8 +196,8 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 
-		if overwrite == "F" {
-			log.Warn().Str("overwrite", overwrite).Msg("dst already exists")
+		if !overwrite {
+			log.Warn().Bool("overwrite", overwrite).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 			return
 		}

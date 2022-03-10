@@ -90,4 +90,17 @@ var _ = Describe("Net", func() {
 			Expect(medianDuration).To(BeNumerically("<", 10*time.Millisecond))
 		})
 	})
+
+	DescribeTable("TestParseOverwrite",
+		func(v string, expectSuccess bool, expectedValue bool) {
+			parsed, err := net.ParseOverwrite(v)
+			Expect(err == nil).To(Equal(expectSuccess))
+			Expect(parsed).To(Equal(expectedValue))
+		},
+		Entry("default", "", true, true),
+		Entry("T", "T", true, true),
+		Entry("t", "t", true, true),
+		Entry("F", "F", true, false),
+		Entry("f", "f", true, false),
+		Entry("invalid", "invalid", false, false))
 })
