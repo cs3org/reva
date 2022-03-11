@@ -49,8 +49,8 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mitchellh/mapstructure v1.4.3
-	github.com/nats-io/nats-server/v2 v2.7.3
-	github.com/nats-io/nats-streaming-server v0.24.2
+	github.com/nats-io/nats-server/v2 v2.7.4
+	github.com/nats-io/nats-streaming-server v0.24.3
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.0
 	github.com/pkg/errors v0.9.1
@@ -75,10 +75,10 @@ require (
 	go.opentelemetry.io/otel/exporters/jaeger v1.4.1
 	go.opentelemetry.io/otel/sdk v1.4.1
 	go.opentelemetry.io/otel/trace v1.4.1
-	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
+	golang.org/x/crypto v0.0.0-20220307211146-efcb8507fb70
 	golang.org/x/oauth2 v0.0.0-20211005180243-6b3c2da341f1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220224120231-95c6836cb0e7
+	golang.org/x/sys v0.0.0-20220307203707-22a9840ba4d7
 	golang.org/x/term v0.0.0-20210916214954-140adaaadfaf
 	google.golang.org/genproto v0.0.0-20211021150943-2b146023228c
 	google.golang.org/grpc v1.44.0
