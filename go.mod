@@ -10,7 +10,7 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
-	github.com/asim/go-micro/plugins/events/natsjs/v4 v4.0.0-20220304145315-a2f6fac85247
+	github.com/asim/go-micro/plugins/events/natsjs/v4 v4.0.0-20220311080335-e5a35d38f931
 	github.com/aws/aws-sdk-go v1.42.39
 	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
