@@ -219,7 +219,9 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	fn := path.Join("shares", ref.GetId().OpaqueId)
 	err = m.storage.Delete(ctx, fn)
 	if err != nil {
-		return err
+		if _, ok := err.(errtypes.NotFound); !ok {
+			return err
+		}
 	}
 
 	return m.indexer.Delete(share)

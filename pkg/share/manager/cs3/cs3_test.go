@@ -60,7 +60,6 @@ var _ = Describe("Manager", func() {
 		storage = &mocks.Storage{}
 		storage.On("Init", mock.Anything, mock.Anything).Return(nil)
 		storage.On("MakeDirIfNotExist", mock.Anything, mock.Anything).Return(nil)
-		storage.On("Delete", mock.Anything, mock.Anything).Return(nil)
 		storage.On("SimpleUpload", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		indexer = &mocks.Indexer{}
 		indexer.On("AddIndex", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
@@ -217,17 +216,25 @@ var _ = Describe("Manager", func() {
 		})
 
 		Describe("Unshare", func() {
-			JustBeforeEach(func() {
+			It("deletes the share", func() {
+				storage.On("Delete", mock.Anything, mock.Anything).Return(nil)
 				err := m.Unshare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Id}})
 				Expect(err).ToNot(HaveOccurred())
-			})
-
-			It("deletes the share", func() {
 				expectedPath := path.Join("shares", share.Id.OpaqueId)
 				storage.AssertCalled(GinkgoT(), "Delete", mock.Anything, expectedPath)
 			})
 
 			It("removes the share from the index", func() {
+				storage.On("Delete", mock.Anything, mock.Anything).Return(nil)
+				err := m.Unshare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Id}})
+				Expect(err).ToNot(HaveOccurred())
+				indexer.AssertCalled(GinkgoT(), "Delete", mock.AnythingOfType("*collaborationv1beta1.Share"))
+			})
+
+			It("still tries to delete the share from the index when the share couldn't be found", func() {
+				storage.On("Delete", mock.Anything, mock.Anything).Return(errtypes.NotFound(""))
+				err := m.Unshare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Id}})
+				Expect(err).ToNot(HaveOccurred())
 				indexer.AssertCalled(GinkgoT(), "Delete", mock.AnythingOfType("*collaborationv1beta1.Share"))
 			})
 		})
