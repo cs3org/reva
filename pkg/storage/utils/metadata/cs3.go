@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -248,7 +247,7 @@ func (cs3 *CS3) Delete(ctx context.Context, path string) error {
 		return err
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return fmt.Errorf("error deleting path: %v", path)
+		return errtypes.NewErrtypeFromStatus(res.Status)
 	}
 
 	return nil
