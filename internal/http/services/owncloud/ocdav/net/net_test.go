@@ -99,9 +99,7 @@ var _ = Describe("Net", func() {
 		},
 		Entry("default", "", true, true),
 		Entry("T", "T", true, true),
-		Entry("t", "t", true, true),
 		Entry("F", "F", true, false),
-		Entry("f", "f", true, false),
 		Entry("invalid", "invalid", false, false))
 
 	DescribeTable("TestParseDestination",

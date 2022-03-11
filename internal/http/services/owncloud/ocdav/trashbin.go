@@ -152,8 +152,22 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
+			p := path.Join(ns, dst)
+			// The destination can be in another space. E.g. the 'Shares Jail'.
+			space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, p)
+			if err != nil {
+				log.Error().Err(err).Str("path", p).Msg("failed to look up destination storage space")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if rpcstatus.Code != rpc.Code_CODE_OK {
+				errors.HandleErrorStatus(log, w, rpcstatus)
+				return
+			}
+			dstRef := spacelookup.MakeRelativeReference(space, p, false)
+
 			log.Debug().Str("key", key).Str("dst", dst).Msg("restore")
-			h.restore(w, r, s, ref, dst, key, r.URL.Path)
+			h.restore(w, r, s, ref, dstRef, key, r.URL.Path)
 		case http.MethodDelete:
 			h.delete(w, r, s, ref, key, r.URL.Path)
 		default:
@@ -260,11 +274,6 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 			}
 		}
 	}
-
-	// TODO when using space based requests we should be able to get rid of this path unprefixing
-	// for i := range items {
-	// 	items[i].Ref.Path = strings.TrimPrefix(items[i].Ref.Path, basePath)
-	// }
 
 	propRes, err := h.formatTrashPropfind(ctx, s, refBase, &pf, items)
 	if err != nil {
@@ -438,7 +447,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, refBas
 	return &response, nil
 }
 
-func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, ref *provider.Reference, dst, key, itemPath string) {
+func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, ref, dst *provider.Reference, key, itemPath string) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "restore")
 	defer span.End()
 
@@ -459,10 +468,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 
-	dstRef := ref
-	dstRef.Path = utils.MakeRelativePath(dst)
-
-	dstStatReq := &provider.StatRequest{Ref: dstRef}
+	dstStatReq := &provider.StatRequest{Ref: dst}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending grpc stat request")
@@ -477,9 +483,8 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 	// Restoring to a non-existent location is not supported by the WebDAV spec. The following block ensures the target
 	// restore location exists, and if it doesn't returns a conflict error code.
-	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst) {
-		parentRef := ref
-		parentRef.Path = utils.MakeRelativePath(path.Dir(dst))
+	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst.Path) {
+		parentRef := &provider.Reference{ResourceId: dst.ResourceId, Path: utils.MakeRelativePath(path.Dir(dst.Path))}
 		parentStatReq := &provider.StatRequest{Ref: parentRef}
 
 		parentStatResponse, err := client.Stat(ctx, parentStatReq)
@@ -512,7 +517,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 			return
 		}
 		// delete existing tree
-		delReq := &provider.DeleteRequest{Ref: dstRef}
+		delReq := &provider.DeleteRequest{Ref: dst}
 		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error sending grpc delete request")
@@ -529,7 +534,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	req := &provider.RestoreRecycleItemRequest{
 		Ref:        ref,
 		Key:        path.Join(key, itemPath),
-		RestoreRef: dstRef,
+		RestoreRef: dst,
 	}
 
 	res, err := client.RestoreRecycleItem(ctx, req)
@@ -621,5 +626,5 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 
 func isNested(p string) bool {
 	dir, _ := path.Split(p)
-	return dir != "/"
+	return dir != "/" && dir != "./"
 }

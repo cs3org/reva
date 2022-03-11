@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 // SpacesHandler handles trashbin requests
@@ -184,9 +185,12 @@ func (h *SpacesHandler) handleSpacesTrashbin(w http.ResponseWriter, r *http.Requ
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-
 		log.Debug().Str("key", key).Str("path", r.URL.Path).Str("dst", dst).Msg("spaces restore")
-		trashbinHandler.restore(w, r, s, ref, dst, key, r.URL.Path)
+
+		dstRef := ref
+		dstRef.Path = utils.MakeRelativePath(dst)
+
+		trashbinHandler.restore(w, r, s, ref, dstRef, key, r.URL.Path)
 	case http.MethodDelete:
 		trashbinHandler.delete(w, r, s, ref, key, r.URL.Path)
 	default:

@@ -125,7 +125,6 @@ func ParseDepth(s string) (Depth, error) {
 // ParseOverwrite parses the overwrite header value defined in https://datatracker.ietf.org/doc/html/rfc4918#section-10.6
 // Valid values are "T" and "F". An empty string will be parse to true.
 func ParseOverwrite(s string) (bool, error) {
-	s = strings.ToUpper(s)
 	if s == "" {
 		s = "T"
 	}
