@@ -32,6 +32,7 @@ func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
 		GranteeGroupID: r.Share.GetGrantee().GetGroupId(),
 		ItemID:         r.Share.ResourceId,
 		CTime:          r.Share.Ctime,
+		Permissions:    r.Share.Permissions,
 	}
 }
 

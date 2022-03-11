@@ -38,6 +38,7 @@ type ShareCreated struct {
 	GranteeGroupID *group.GroupId
 	Sharee         *provider.Grantee
 	ItemID         *provider.ResourceId
+	Permissions    *collaboration.SharePermissions
 	CTime          *types.Timestamp
 }
 
