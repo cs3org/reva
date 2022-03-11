@@ -227,8 +227,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	return m.indexer.Delete(share)
 }
 
-// ListShares returns the shares created by the user. If md is provided is not nil,
-// it returns only shares attached to the given resource.
+// ListShares returns the shares created by the user
 func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
@@ -327,13 +326,12 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		}
 		metadata, err := m.downloadMetadata(ctx, share)
 		if err != nil {
-			if _, ok := err.(errtypes.NotFound); ok {
-				// use default values if the grantee didn't configure anything yet
-				metadata = ReceivedShareMetadata{
-					State: collaboration.ShareState_SHARE_STATE_PENDING,
-				}
-			} else {
+			if _, ok := err.(errtypes.NotFound); !ok {
 				return nil, err
+			}
+			// use default values if the grantee didn't configure anything yet
+			metadata = ReceivedShareMetadata{
+				State: collaboration.ShareState_SHARE_STATE_PENDING,
 			}
 		}
 		result = append(result, &collaboration.ReceivedShare{
@@ -358,13 +356,12 @@ func (m *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.Share
 
 	metadata, err := m.downloadMetadata(ctx, share)
 	if err != nil {
-		if _, ok := err.(errtypes.NotFound); ok {
-			// use default values if the grantee didn't configure anything yet
-			metadata = ReceivedShareMetadata{
-				State: collaboration.ShareState_SHARE_STATE_PENDING,
-			}
-		} else {
+		if _, ok := err.(errtypes.NotFound); !ok {
 			return nil, err
+		}
+		// use default values if the grantee didn't configure anything yet
+		metadata = ReceivedShareMetadata{
+			State: collaboration.ShareState_SHARE_STATE_PENDING,
 		}
 	}
 	return &collaboration.ReceivedShare{
