@@ -18,7 +18,10 @@
 
 package indexer
 
-import "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/index"
+import (
+	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/index"
+	"github.com/iancoleman/strcase"
+)
 
 // typeMap stores the indexer layout at runtime.
 
@@ -33,13 +36,13 @@ type typeMapping struct {
 
 func (m typeMap) addIndex(typeName string, pkName string, idx index.Index) {
 	if val, ok := m[typeName]; ok {
-		val.IndicesByField[idx.IndexBy().String()] = append(val.IndicesByField[idx.IndexBy().String()], idx)
+		val.IndicesByField[strcase.ToCamel(idx.IndexBy().String())] = append(val.IndicesByField[idx.IndexBy().String()], idx)
 		return
 	}
 	m[typeName] = typeMapping{
 		PKFieldName: pkName,
 		IndicesByField: map[string][]index.Index{
-			idx.IndexBy().String(): {idx},
+			strcase.ToCamel(idx.IndexBy().String()): {idx},
 		},
 	}
 }
