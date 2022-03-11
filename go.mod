@@ -49,7 +49,7 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mitchellh/mapstructure v1.4.3
-	github.com/nats-io/nats-server/v2 v2.7.3
+	github.com/nats-io/nats-server/v2 v2.7.4
 	github.com/nats-io/nats-streaming-server v0.24.2
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.0
