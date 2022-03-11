@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"sync"
 
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -61,6 +62,8 @@ type Indexer interface {
 
 // Manager implements a share manager using a cs3 storage backend
 type Manager struct {
+	sync.RWMutex
+
 	storage Storage
 	indexer Indexer
 
@@ -113,6 +116,13 @@ func New(s Storage, indexer Indexer) (*Manager, error) {
 
 func (m *Manager) initialize() error {
 	if m.initialized {
+		return nil
+	}
+
+	m.Lock()
+	defer m.Unlock()
+
+	if m.initialized { // check if initialization happened while grabbing the lock
 		return nil
 	}
 
