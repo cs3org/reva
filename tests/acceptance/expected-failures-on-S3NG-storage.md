@@ -1353,9 +1353,5 @@ _ocs: api compatibility, return correct status code_
 - [apiWebdavOperations/search.feature:273](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/search.feature#L273)
 - [apiWebdavOperations/search.feature:289](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/search.feature#L289)
 - [apiWebdavOperations/search.feature:314](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/search.feature#L314)
-
-#### [Trying to modify a shared file using spaces end-point returns 409 HTTP status code](https://github.com/owncloud/ocis/issues/3241)
-
-- [apiMain/checksums.feature:233](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L233)
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
