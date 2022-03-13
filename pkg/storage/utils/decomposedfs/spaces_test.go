@@ -35,7 +35,7 @@ var _ = Describe("Create Spaces", func() {
 
 	BeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv()
+		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 		env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
 	})
@@ -65,6 +65,45 @@ var _ = Describe("Create Spaces", func() {
 			Expect(string(resp.StorageSpace.Opaque.Map["spaceAlias"].Value)).To(Equal("project/mission-to-mars"))
 			Expect(resp.StorageSpace.Name).To(Equal("Mission to Mars"))
 			Expect(resp.StorageSpace.SpaceType).To(Equal("project"))
+		})
+	})
+	Describe("Create Spaces with custom alias template", func() {
+		var (
+			env *helpers.TestEnv
+		)
+
+		BeforeEach(func() {
+			var err error
+			env, err = helpers.NewTestEnv(map[string]interface{}{
+				"personalspacealias_template": "{{.SpaceType}}/{{.Email.Local}}@{{.Email.Domain}}",
+				"generalspacealias_template":  "{{.SpaceType}}:{{.SpaceName | replace \" \" \"-\" | upper}}",
+			})
+			Expect(err).ToNot(HaveOccurred())
+			env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
+		})
+
+		AfterEach(func() {
+			if env != nil {
+				env.Cleanup()
+			}
+		})
+		Context("during login", func() {
+			It("personal space is created with custom alias", func() {
+				resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resp)).To(Equal(1))
+				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username@_unknown"))
+			})
+		})
+		Context("creating a space", func() {
+			It("project space is created with custom alias", func() {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(resp.StorageSpace).ToNot(Equal(nil))
+				Expect(string(resp.StorageSpace.Opaque.Map["spaceAlias"].Value)).To(Equal("project:MISSION-TO-VENUS"))
+
+			})
 		})
 	})
 })

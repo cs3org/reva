@@ -40,7 +40,7 @@ var _ = Describe("Decomposed", func() {
 
 	BeforeEach(func() {
 		var err error
-		env, err = testhelpers.NewTestEnv()
+		env, err = testhelpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

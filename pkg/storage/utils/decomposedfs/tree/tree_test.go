@@ -45,7 +45,7 @@ var _ = Describe("Tree", func() {
 
 	JustBeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv()
+		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 		t = env.Tree
 	})

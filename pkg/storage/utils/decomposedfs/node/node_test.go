@@ -40,7 +40,7 @@ var _ = Describe("Node", func() {
 
 	BeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv()
+		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 
 		id = "fooId"

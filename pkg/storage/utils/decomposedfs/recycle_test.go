@@ -39,7 +39,7 @@ var _ = Describe("Recycle", func() {
 
 	BeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv()
+		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
