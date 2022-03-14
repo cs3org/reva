@@ -56,9 +56,8 @@ type Manager struct {
 }
 
 type PublicShareWithPassword struct {
-	link.PublicShare
-
-	HashedPassword string
+	PublicShare    *link.PublicShare `json:"public_share"`
+	HashedPassword string            `json:"password"`
 }
 
 // New returns a new filesystem public shares manager.
@@ -139,7 +138,7 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 	}
 
 	s := &PublicShareWithPassword{
-		PublicShare: link.PublicShare{
+		PublicShare: &link.PublicShare{
 			Id:                id,
 			Owner:             ri.GetOwner(),
 			Creator:           u.Id,
@@ -171,7 +170,7 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 		return nil, err
 	}
 
-	return &s.PublicShare, nil
+	return s.PublicShare, nil
 }
 
 func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
@@ -194,13 +193,13 @@ func (m *Manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	}
 
 	if ps.PublicShare.PasswordProtected && sign {
-		err = publicshare.AddSignature(&ps.PublicShare, ps.HashedPassword)
+		err = publicshare.AddSignature(ps.PublicShare, ps.HashedPassword)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return &ps.PublicShare, nil
+	return ps.PublicShare, nil
 }
 
 func (m *Manager) getById(ctx context.Context, id string) (*PublicShareWithPassword, error) {
@@ -221,12 +220,12 @@ func (m *Manager) getByToken(ctx context.Context, token string) (*PublicShareWit
 		return nil, err
 	}
 
-	ps := PublicShareWithPassword{}
-	err = json.Unmarshal(data, &ps)
+	ps := &PublicShareWithPassword{}
+	err = json.Unmarshal(data, ps)
 	if err != nil {
 		return nil, err
 	}
-	return &ps, nil
+	return ps, nil
 }
 
 func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
@@ -242,12 +241,12 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			return nil, err
 		}
 
-		if publicshare.MatchesFilters(&ps.PublicShare, filters) && !publicshare.IsExpired(&ps.PublicShare) {
-			result = append(result, &ps.PublicShare)
+		if publicshare.MatchesFilters(ps.PublicShare, filters) && !publicshare.IsExpired(ps.PublicShare) {
+			result = append(result, ps.PublicShare)
 		}
 
 		if ps.PublicShare.PasswordProtected && sign {
-			err = publicshare.AddSignature(&ps.PublicShare, ps.HashedPassword)
+			err = publicshare.AddSignature(ps.PublicShare, ps.HashedPassword)
 			if err != nil {
 				return nil, err
 			}
@@ -258,7 +257,19 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 }
 
 func (m *Manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
-	return nil
+	ps, err := m.GetPublicShare(ctx, u, ref, false)
+	if err != nil {
+		return err
+	}
+
+	err = m.storage.Delete(ctx, path.Join("publicshares", ps.Token))
+	if err != nil {
+		if _, ok := err.(errtypes.NotFound); !ok {
+			return err
+		}
+	}
+
+	return m.indexer.Delete(ps)
 }
 
 func (m *Manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
@@ -266,7 +277,7 @@ func (m *Manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 }
 
 func indexOwnerFunc(v interface{}) (string, error) {
-	ps, ok := v.(link.PublicShare)
+	ps, ok := v.(*link.PublicShare)
 	if !ok {
 		return "", fmt.Errorf("given entity is not a public share")
 	}

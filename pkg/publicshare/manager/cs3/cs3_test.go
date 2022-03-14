@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -36,9 +37,11 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/cs3"
 	indexerpkg "github.com/cs3org/reva/v2/pkg/storage/utils/indexer"
+	indexermocks "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/mocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	storagemocks "github.com/cs3org/reva/v2/pkg/storage/utils/metadata/mocks"
 )
@@ -82,9 +85,6 @@ var _ = Describe("Cs3", func() {
 		}
 		ctx = ctxpkg.ContextSetUser(context.Background(), user)
 
-		m, err = cs3.New(storage, indexer, bcrypt.DefaultCost)
-		Expect(err).ToNot(HaveOccurred())
-
 		share = &link.PublicShare{
 			Id:    &link.PublicShareId{OpaqueId: "1"},
 			Token: "abcd",
@@ -105,6 +105,12 @@ var _ = Describe("Cs3", func() {
 				Permissions: &provider.ResourcePermissions{AddGrant: true},
 			},
 		}
+	})
+
+	JustBeforeEach(func() {
+		var err error
+		m, err = cs3.New(storage, indexer, bcrypt.DefaultCost)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -157,7 +163,7 @@ var _ = Describe("Cs3", func() {
 			var err error
 			existingShare, err = m.CreatePublicShare(ctx, user, ri, grant)
 			Expect(err).ToNot(HaveOccurred())
-			shareJson, err := json.Marshal(existingShare)
+			shareJson, err := json.Marshal(cs3.PublicShareWithPassword{PublicShare: existingShare})
 			Expect(err).ToNot(HaveOccurred())
 			storage.On("SimpleDownload", mock.Anything, mock.MatchedBy(func(in string) bool {
 				return strings.HasPrefix(in, "publicshares/")
@@ -248,6 +254,71 @@ var _ = Describe("Cs3", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(returnedShare).ToNot(BeNil())
 				Expect(returnedShare.Signature).ToNot(BeNil())
+			})
+		})
+
+		Describe("RevokePublicShare", func() {
+			var (
+				mockIndexer *indexermocks.Indexer
+			)
+			BeforeEach(func() {
+				mockIndexer = &indexermocks.Indexer{}
+				mockIndexer.On("AddIndex", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+				mockIndexer.On("Add", mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
+				mockIndexer.On("Delete", mock.Anything, mock.Anything).Return(nil, nil)
+				mockIndexer.On("FindBy", mock.Anything, mock.Anything, mock.Anything).Return([]string{existingShare.Token}, nil)
+
+				indexer = mockIndexer
+			})
+
+			It("deletes the share by token", func() {
+				storage.On("Delete", mock.Anything, mock.Anything).Return(nil)
+				ref := &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Token{
+						Token: existingShare.Token,
+					},
+				}
+				err := m.RevokePublicShare(ctx, user, ref)
+				Expect(err).ToNot(HaveOccurred())
+				storage.AssertCalled(GinkgoT(), "Delete", mock.Anything, path.Join("publicshares", existingShare.Token))
+			})
+
+			It("deletes the share by id", func() {
+				storage.On("Delete", mock.Anything, mock.Anything).Return(nil)
+				ref := &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Id{
+						Id: existingShare.Id,
+					},
+				}
+				err := m.RevokePublicShare(ctx, user, ref)
+				Expect(err).ToNot(HaveOccurred())
+				storage.AssertCalled(GinkgoT(), "Delete", mock.Anything, path.Join("publicshares", existingShare.Token))
+			})
+
+			It("still removes the share from the index when the share itself couldn't be found", func() {
+				storage.On("Delete", mock.Anything, mock.Anything).Return(errtypes.NotFound(""))
+				ref := &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Token{
+						Token: existingShare.Token,
+					},
+				}
+				err := m.RevokePublicShare(ctx, user, ref)
+				Expect(err).ToNot(HaveOccurred())
+
+				mockIndexer.AssertCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+			})
+
+			It("does not removes the share from the index when the share itself couldn't be found", func() {
+				storage.On("Delete", mock.Anything, mock.Anything).Return(errtypes.InternalError(""))
+				ref := &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Token{
+						Token: existingShare.Token,
+					},
+				}
+				err := m.RevokePublicShare(ctx, user, ref)
+				Expect(err).To(HaveOccurred())
+
+				mockIndexer.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
 			})
 		})
 	})
