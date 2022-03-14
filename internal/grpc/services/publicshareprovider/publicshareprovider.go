@@ -23,7 +23,6 @@ import (
 	"regexp"
 
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -226,7 +225,7 @@ func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicShar
 	log.Info().Str("publicshareprovider", "list").Msg("list public share")
 	user, _ := ctxpkg.ContextGetUser(ctx)
 
-	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, &provider.ResourceInfo{}, req.GetSign())
+	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, req.GetSign())
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &link.ListPublicSharesResponse{
