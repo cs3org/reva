@@ -245,6 +245,16 @@ func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool)
 	case *provider.InitiateFileDownloadRequest:
 		return v.GetRef(), true
 
+	// Locking
+	case *provider.GetLockRequest:
+		return v.GetRef(), true
+	case *provider.SetLockRequest:
+		return v.GetRef(), true
+	case *provider.RefreshLockRequest:
+		return v.GetRef(), true
+	case *provider.UnlockRequest:
+		return v.GetRef(), true
+
 	// App provider requests
 	case *appregistry.GetAppProvidersRequest:
 		return &provider.Reference{ResourceId: v.ResourceInfo.Id, Path: v.ResourceInfo.Path}, true
