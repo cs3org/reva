@@ -44,7 +44,10 @@ func RunNatsServer(opts ...Option) error {
 
 	c := &nserver.JetStreamConfig{}
 
-	server.EnableJetStream(c)
+	err = server.EnableJetStream(c)
+	if err != nil {
+		return err
+	}
 
 	server.Start()
 	return nil
