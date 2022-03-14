@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -146,9 +147,10 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 // received shares. The display name of the shares should be the a friendly name, like the basename
 // of the original file.
 func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*collaboration.ListReceivedSharesResponse, error) {
+	logger := appctx.GetLogger(ctx)
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		appctx.GetLogger(ctx).
+		logger.Error().
 			Err(err).
 			Msg("ListReceivedShares: failed to get user share provider")
 		return &collaboration.ListReceivedSharesResponse{
@@ -160,6 +162,48 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListReceivedShares")
 	}
+
+	// TODO: This is a hack for now.
+	// Can we do that cleaner somehow?
+	// The `ListStorageSpaces` method in sharesstorageprovider/sharesstorageprovider.go needs the etags.
+	shareEtags := make(map[string]string, len(res.Shares))
+	for _, rs := range res.Shares {
+		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
+		if err != nil {
+			logger.Error().
+				Err(err).
+				Interface("resourceID", rs.Share.ResourceId).
+				Msg("ListRecievedShares: failed to stat the resource")
+			continue
+		}
+		if sRes.Status.Code != rpc.Code_CODE_OK {
+			logger.Error().
+				Interface("resourceID", rs.Share.ResourceId).
+				Msg("ListRecievedShares: failed to stat the resource")
+			continue
+		}
+		shareEtags[rs.Share.Id.OpaqueId] = sRes.Info.Etag
+	}
+
+	marshalled, err := json.Marshal(shareEtags)
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("ListRecievedShares: failed marshal share etags")
+	} else {
+		opaque := res.Opaque
+		if opaque == nil {
+			opaque = &typesv1beta1.Opaque{
+				Map: map[string]*typesv1beta1.OpaqueEntry{},
+			}
+		}
+		opaque.Map["etags"] = &typesv1beta1.OpaqueEntry{
+			Decoder: "json",
+			Value:   marshalled,
+		}
+		res.Opaque = opaque
+	}
+
 	return res, nil
 }
 

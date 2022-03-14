@@ -23,7 +23,10 @@ package mocks
 import (
 	context "context"
 
+	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+
 	grpc "google.golang.org/grpc"
 
 	mock "github.com/stretchr/testify/mock"
@@ -238,6 +241,36 @@ func (_m *GatewayClient) ListFileVersions(ctx context.Context, req *providerv1be
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.ListFileVersionsRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, req, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ListReceivedShares provides a mock function with given fields: ctx, req, opts
+func (_m *GatewayClient) ListReceivedShares(ctx context.Context, req *collaborationv1beta1.ListReceivedSharesRequest, opts ...grpc.CallOption) (*collaborationv1beta1.ListReceivedSharesResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, req)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *collaborationv1beta1.ListReceivedSharesResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *collaborationv1beta1.ListReceivedSharesRequest, ...grpc.CallOption) *collaborationv1beta1.ListReceivedSharesResponse); ok {
+		r0 = rf(ctx, req, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*collaborationv1beta1.ListReceivedSharesResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *collaborationv1beta1.ListReceivedSharesRequest, ...grpc.CallOption) error); ok {
 		r1 = rf(ctx, req, opts...)
 	} else {
 		r1 = ret.Error(1)

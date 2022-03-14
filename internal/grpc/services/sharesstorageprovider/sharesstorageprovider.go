@@ -20,6 +20,7 @@ package sharesstorageprovider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -62,6 +63,7 @@ type GatewayClient interface {
 	InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileUploadResponse, error)
 	SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest, opts ...grpc.CallOption) (*provider.SetArbitraryMetadataResponse, error)
 	UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest, opts ...grpc.CallOption) (*provider.UnsetArbitraryMetadataResponse, error)
+	ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest, opts ...grpc.CallOption) (*collaboration.ListReceivedSharesResponse, error)
 }
 
 // SharesProviderClient provides methods for listing and modifying received shares
@@ -300,7 +302,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-// ListStorageSpaces ruturns a list storage spaces with type "share" the current user has acces to.
+// ListStorageSpaces returns a list storage spaces with type "share" the current user has acces to.
 // Do owners of shares see type "shared"? Do they see andyhing? They need to if the want a fast lookup of shared with others
 // -> but then a storage sprovider has to do everything? not everything but permissions (= shares) related operations, yes
 // The root node of every storag space is the (spaceid, nodeid) of the shared node.
@@ -313,9 +315,6 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	spaceTypes := map[string]struct{}{}
 	var exists = struct{}{}
-	res := &provider.ListStorageSpacesResponse{
-		Status: status.NewOK(ctx),
-	}
 	var fetchShares bool
 	appendTypes := []string{}
 	var spaceID *provider.ResourceId
@@ -360,8 +359,9 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	}
 
 	var receivedShares []*collaboration.ReceivedShare
+	var shareEtags map[string]string
 	if fetchShares {
-		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
+		lsRes, err := s.gateway.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
 			// FIXME filter by received shares for resource id - listing all shares is tooo expensive!
 		})
 		if err != nil {
@@ -371,6 +371,16 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
 		}
 		receivedShares = lsRes.Shares
+		if lsRes.Opaque != nil {
+			if entry, ok := lsRes.Opaque.Map["etags"]; ok {
+				// If we can't get the etags thats fine, just continue.
+				_ = json.Unmarshal(entry.Value, &shareEtags)
+			}
+		}
+	}
+
+	res := &provider.ListStorageSpacesResponse{
+		Status: status.NewOK(ctx),
 	}
 	for k := range spaceTypes {
 		switch k {
@@ -380,8 +390,29 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				OpaqueId:  utils.ShareStorageProviderID,
 			}
 			if spaceID == nil || utils.ResourceIDEqual(virtualRootID, spaceID) {
+				var earliestShare *collaboration.Share
+				// Lookup the last changed received share and use its etag for the share jail.
+				for _, rs := range receivedShares {
+					current := rs.Share
+					switch {
+					case earliestShare == nil:
+						earliestShare = current
+					case current.Mtime.Seconds > earliestShare.Mtime.Seconds:
+						earliestShare = current
+					case current.Mtime.Seconds == earliestShare.Mtime.Seconds &&
+						current.Mtime.Nanos > earliestShare.Mtime.Nanos:
+						earliestShare = current
+					}
+				}
 
+				var opaque *typesv1beta1.Opaque
+				if earliestShare != nil {
+					if etag, ok := shareEtags[earliestShare.Id.OpaqueId]; ok {
+						opaque = utils.AppendPlainToOpaque(opaque, "etag", etag)
+					}
+				}
 				space := &provider.StorageSpace{
+					Opaque: opaque,
 					Id: &provider.StorageSpaceId{
 						OpaqueId: virtualRootID.StorageId + "!" + virtualRootID.OpaqueId,
 					},
@@ -401,8 +432,13 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 					// none of our business
 					continue
 				}
+				var opaque *typesv1beta1.Opaque
+				if etag, ok := shareEtags[receivedShare.Share.Id.OpaqueId]; ok {
+					opaque = utils.AppendPlainToOpaque(opaque, "etag", etag)
+				}
 				// we know a grant for this resource
 				space := &provider.StorageSpace{
+					Opaque: opaque,
 					Id: &provider.StorageSpaceId{
 						OpaqueId: root.StorageId + "!" + root.OpaqueId,
 					},
@@ -437,7 +473,12 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 						continue
 					}
 				}
+				var opaque *typesv1beta1.Opaque
+				if etag, ok := shareEtags[receivedShare.Share.Id.OpaqueId]; ok {
+					opaque = utils.AppendPlainToOpaque(opaque, "etag", etag)
+				}
 				space := &provider.StorageSpace{
+					Opaque: opaque,
 					Id: &provider.StorageSpaceId{
 						OpaqueId: root.StorageId + "!" + root.OpaqueId,
 					},
