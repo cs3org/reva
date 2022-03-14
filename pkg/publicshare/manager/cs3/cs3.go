@@ -179,17 +179,31 @@ func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 }
 
 func (m *Manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error) {
+	var err error
+	var ps *PublicShareWithPassword
 	switch {
 	case ref.GetToken() != "":
-		return m.getByToken(ctx, ref.GetToken())
+		ps, err = m.getByToken(ctx, ref.GetToken())
 	case ref.GetId().GetOpaqueId() != "":
-		return m.getById(ctx, ref.GetId().GetOpaqueId())
+		ps, err = m.getById(ctx, ref.GetId().GetOpaqueId())
 	default:
 		return nil, errtypes.BadRequest("neither id nor token given")
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	if ps.PublicShare.PasswordProtected && sign {
+		err = publicshare.AddSignature(&ps.PublicShare, ps.HashedPassword)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &ps.PublicShare, nil
 }
 
-func (m *Manager) getById(ctx context.Context, id string) (*link.PublicShare, error) {
+func (m *Manager) getById(ctx context.Context, id string) (*PublicShareWithPassword, error) {
 	tokens, err := m.indexer.FindBy(&link.PublicShare{}, "Id.OpaqueId", id)
 	if err != nil {
 		return nil, err
@@ -200,7 +214,7 @@ func (m *Manager) getById(ctx context.Context, id string) (*link.PublicShare, er
 	return m.getByToken(ctx, tokens[0])
 }
 
-func (m *Manager) getByToken(ctx context.Context, token string) (*link.PublicShare, error) {
+func (m *Manager) getByToken(ctx context.Context, token string) (*PublicShareWithPassword, error) {
 	fn := path.Join("publicshares", token)
 	data, err := m.storage.SimpleDownload(ctx, fn)
 	if err != nil {
@@ -212,7 +226,7 @@ func (m *Manager) getByToken(ctx context.Context, token string) (*link.PublicSha
 	if err != nil {
 		return nil, err
 	}
-	return &ps.PublicShare, nil
+	return &ps, nil
 }
 
 func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
@@ -228,8 +242,15 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			return nil, err
 		}
 
-		if publicshare.MatchesFilters(ps, filters) && !publicshare.IsExpired(ps) {
-			result = append(result, ps)
+		if publicshare.MatchesFilters(&ps.PublicShare, filters) && !publicshare.IsExpired(&ps.PublicShare) {
+			result = append(result, &ps.PublicShare)
+		}
+
+		if ps.PublicShare.PasswordProtected && sign {
+			err = publicshare.AddSignature(&ps.PublicShare, ps.HashedPassword)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

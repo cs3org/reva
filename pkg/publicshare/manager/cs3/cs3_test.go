@@ -153,6 +153,7 @@ var _ = Describe("Cs3", func() {
 		)
 
 		JustBeforeEach(func() {
+			grant.Password = "foo"
 			var err error
 			existingShare, err = m.CreatePublicShare(ctx, user, ri, grant)
 			Expect(err).ToNot(HaveOccurred())
@@ -168,6 +169,14 @@ var _ = Describe("Cs3", func() {
 				shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{}, ri, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(1))
+				Expect(shares[0].Signature).To(BeNil())
+			})
+
+			It("adds a signature", func() {
+				shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{}, ri, true)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(shares)).To(Equal(1))
+				Expect(shares[0].Signature).ToNot(BeNil())
 			})
 
 			It("filters by id", func() {
@@ -225,6 +234,20 @@ var _ = Describe("Cs3", func() {
 				}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(returnedShare).ToNot(BeNil())
+				Expect(returnedShare.Signature).To(BeNil())
+			})
+
+			It("adds a signature", func() {
+				returnedShare, err := m.GetPublicShare(ctx, user, &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Id{
+						Id: &link.PublicShareId{
+							OpaqueId: existingShare.Id.OpaqueId,
+						},
+					},
+				}, true)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(returnedShare).ToNot(BeNil())
+				Expect(returnedShare.Signature).ToNot(BeNil())
 			})
 		})
 	})
