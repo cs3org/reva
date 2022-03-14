@@ -20,6 +20,7 @@ package metadata
 
 import (
 	"context"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
@@ -66,6 +67,9 @@ func (disk *Disk) Delete(_ context.Context, path string) error {
 func (disk *Disk) ReadDir(_ context.Context, p string) ([]string, error) {
 	infos, err := ioutil.ReadDir(disk.targetPath(p))
 	if err != nil {
+		if _, ok := err.(*fs.PathError); ok {
+			return []string{}, nil
+		}
 		return nil, err
 	}
 
