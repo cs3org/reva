@@ -27,7 +27,9 @@ import (
 
 	"github.com/asim/go-micro/plugins/events/nats/v4"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	v1beta12 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
@@ -59,8 +61,38 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		var ev interface{}
 		switch v := res.(type) {
 		case *collaboration.CreateShareResponse:
-			if v.Status.Code == rpc.Code_CODE_OK {
+			if isSuccess(v) {
 				ev = ShareCreated(v)
+			}
+		case *collaboration.RemoveShareResponse:
+			if isSuccess(v) {
+				ev = ShareRemoved(v, req.(*collaboration.RemoveShareRequest))
+			}
+		case *collaboration.UpdateShareResponse:
+			if isSuccess(v) {
+				ev = ShareUpdated(v, req.(*collaboration.UpdateShareRequest))
+			}
+		case *collaboration.UpdateReceivedShareResponse:
+			if isSuccess(v) {
+				ev = ReceivedShareUpdated(v)
+			}
+		case *link.CreatePublicShareResponse:
+			if isSuccess(v) {
+				ev = LinkCreated(v)
+			}
+		case *link.UpdatePublicShareResponse:
+			if isSuccess(v) {
+				ev = LinkUpdated(v, req.(*link.UpdatePublicShareRequest))
+			}
+		case *link.RemovePublicShareResponse:
+			if isSuccess(v) {
+				ev = LinkRemoved(v, req.(*link.RemovePublicShareRequest))
+			}
+		case *link.GetPublicShareByTokenResponse:
+			if isSuccess(v) {
+				ev = LinkAccessed(v)
+			} else {
+				ev = LinkAccessFailed(v, req.(*link.GetPublicShareByTokenRequest))
 			}
 		}
 
@@ -83,6 +115,15 @@ func NewStream() grpc.StreamServerInterceptor {
 		return handler(srv, ss)
 	}
 	return interceptor
+}
+
+// common interface to all responses
+type su interface {
+	GetStatus() *v1beta12.Status
+}
+
+func isSuccess(res su) bool {
+	return res.GetStatus().Code == rpc.Code_CODE_OK
 }
 
 func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {
