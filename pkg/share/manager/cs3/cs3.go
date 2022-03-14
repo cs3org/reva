@@ -193,11 +193,8 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	}
 
 	_, err = m.indexer.Add(share)
-	if err != nil {
-		return nil, err
-	}
 
-	return share, nil
+	return share, err
 }
 
 // GetShare gets the information for a share by the given ref.
@@ -283,11 +280,8 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 
 	fn := path.Join("shares", share.Id.OpaqueId)
 	err = m.storage.SimpleUpload(ctx, fn, data)
-	if err != nil {
-		return nil, err
-	}
 
-	return share, nil
+	return share, err
 }
 
 // ListReceivedShares returns the list of shares the user has access to.
@@ -424,11 +418,8 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, rshare *collaboration
 		return nil, err
 	}
 	err = m.storage.SimpleUpload(ctx, fn, data)
-	if err != nil {
-		return nil, err
-	}
 
-	return rs, nil
+	return rs, err
 }
 
 func (m *Manager) downloadMetadata(ctx context.Context, share *collaboration.Share) (ReceivedShareMetadata, error) {
