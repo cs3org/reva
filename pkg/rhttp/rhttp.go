@@ -78,6 +78,8 @@ type config struct {
 	Address     string                            `mapstructure:"address"`
 	Services    map[string]map[string]interface{} `mapstructure:"services"`
 	Middlewares map[string]map[string]interface{} `mapstructure:"middlewares"`
+	CertFile    string                            `mapstructure:"certfile"`
+	KeyFile     string                            `mapstructure:"keyfile"`
 }
 
 func (c *config) init() {
@@ -109,8 +111,13 @@ func (s *Server) Start(ln net.Listener) error {
 	s.httpServer.Handler = handler
 	s.listener = ln
 
-	s.log.Info().Msgf("http server listening at %s://%s", "http", s.conf.Address)
-	err = s.httpServer.Serve(s.listener)
+	if (s.conf.CertFile != "") && (s.conf.KeyFile != "") {
+		s.log.Info().Msgf("https server listening at https://%s '%s' '%s'", s.conf.Address, s.conf.CertFile, s.conf.KeyFile)
+		err = s.httpServer.ServeTLS(s.listener, s.conf.CertFile, s.conf.KeyFile)
+	} else {
+		s.log.Info().Msgf("http server listening at http://%s '%s' '%s'", s.conf.Address, s.conf.CertFile, s.conf.KeyFile)
+		err = s.httpServer.Serve(s.listener)
+	}
 	if err == nil || err == http.ErrServerClosed {
 		return nil
 	}

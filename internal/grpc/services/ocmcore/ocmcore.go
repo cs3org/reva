@@ -22,11 +22,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
@@ -107,18 +107,11 @@ func (s *service) UnprotectedEndpoints() []string {
 	return []string{"/cs3.ocm.core.v1beta1.OcmCoreAPI/CreateOCMCoreShare"}
 }
 
+// CreateOCMCoreShare is called when an OCM request comes into this reva instance from
 func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
-	parts := strings.Split(req.ProviderId, ":")
-	if len(parts) < 2 {
-		err := errtypes.BadRequest("resource ID does not follow the layout storageid:opaqueid " + req.ProviderId)
-		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, err, "error decoding resource ID"),
-		}, nil
-	}
-
 	resource := &provider.ResourceId{
-		StorageId: parts[0],
-		OpaqueId:  parts[1],
+		StorageId: "remote",
+		OpaqueId:  req.Name,
 	}
 
 	var resourcePermissions *provider.ResourcePermissions
@@ -166,6 +159,15 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 			// For now, we only support user shares.
 			// TODO (ishank011): To be updated once this is decided.
 			Id: &provider.Grantee_UserId{UserId: req.ShareWith},
+			// passing this in grant.Grantee.Opaque because ShareGrant itself doesn't have a root opaque.
+			Opaque: &typespb.Opaque{
+				Map: map[string]*typespb.OpaqueEntry{
+					"remoteShareId": {
+						Decoder: "plain",
+						Value:   []byte(req.ProviderId),
+					},
+				},
+			},
 		},
 		Permissions: &ocm.SharePermissions{
 			Permissions: resourcePermissions,
@@ -181,6 +183,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	}
 
 	share, err := s.sm.Share(ctx, resource, grant, req.Name, nil, "", req.Owner, token, shareType)
+
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating ocm core share"),
