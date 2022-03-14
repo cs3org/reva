@@ -123,14 +123,15 @@ func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
 	}
 
 	// lock already expired
-	if time.Now().After(time.Unix(int64(lock.Expiration.Seconds), int64(lock.Expiration.Nanos))) {
+	if lock.Expiration != nil && time.Now().After(time.Unix(int64(lock.Expiration.Seconds), int64(lock.Expiration.Nanos))) {
 		if err = os.Remove(f.Name()); err != nil {
 			return nil, errors.Wrap(err, "Decomposedfs: could not remove expired lock file")
 		}
+		// we successfully deleted the expired lock
 		return nil, nil
 	}
 
-	return lock, err
+	return lock, nil
 }
 
 // RefreshLock refreshes the node's lock

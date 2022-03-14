@@ -158,20 +158,18 @@ var _ = Describe("Node locks", func() {
 				Expect(err.Error()).To(ContainSubstring("mismatching"))
 			})
 
-			It("refuses to refresh the lock for other users than the lock holder", func() {
+			It("refreshes the lock for other users than the lock holder", func() {
 				err := n.RefreshLock(otherCtx, newLock)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("permission denied"))
+				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("refuses to change the lock holder", func() {
+			It("changes the lock holder", func() {
 				newLock.User = otherUser.Id
 				err := n.RefreshLock(env.Ctx, newLock)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("permission denied"))
+				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("refreshes the lock", func() {
+			It("refreshes the lock for the original user", func() {
 				err := n.RefreshLock(env.Ctx, newLock)
 				Expect(err).ToNot(HaveOccurred())
 			})
@@ -191,10 +189,9 @@ var _ = Describe("Node locks", func() {
 				Expect(err.Error()).To(ContainSubstring(lock.LockId))
 			})
 
-			It("refuses to unlock for others even if they have the lock", func() {
+			It("unlocks when other another user uses the lock", func() {
 				err := n.Unlock(otherCtx, lock)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("mismatching"))
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("unlocks when the owner uses the lock", func() {
