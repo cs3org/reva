@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,6 +34,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/cs3"
@@ -150,26 +152,57 @@ var _ = Describe("Cs3", func() {
 			existingShare *link.PublicShare
 		)
 
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			var err error
 			existingShare, err = m.CreatePublicShare(ctx, user, ri, grant)
 			Expect(err).ToNot(HaveOccurred())
+			shareJson, err := json.Marshal(existingShare)
+			Expect(err).ToNot(HaveOccurred())
+			storage.On("SimpleDownload", mock.Anything, mock.MatchedBy(func(in string) bool {
+				return strings.HasPrefix(in, "publicshares/")
+			})).Return(shareJson, nil)
+		})
+
+		Describe("ListPublicShares", func() {
+			It("lists existing shares", func() {
+				shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{}, ri, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(shares)).To(Equal(1))
+			})
+
+			It("filters by id", func() {
+				shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{
+					publicshare.ResourceIDFilter(&provider.ResourceId{OpaqueId: "UnknownId"}),
+				}, ri, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(shares)).To(Equal(0))
+			})
+
+			It("filters by storage", func() {
+				shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{
+					publicshare.StorageIDFilter("unknownstorage"),
+				}, ri, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(shares)).To(Equal(0))
+			})
+
+			Context("when the share has expired", func() {
+				BeforeEach(func() {
+					t := time.Date(2022, time.January, 1, 12, 0, 0, 0, time.UTC)
+					grant.Expiration = &typespb.Timestamp{
+						Seconds: uint64(t.Unix()),
+					}
+				})
+
+				It("does not consider the share", func() {
+					shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{}, ri, false)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(shares)).To(Equal(0))
+				})
+			})
 		})
 
 		Describe("GetPublicShare", func() {
-			var (
-				shareJson []byte
-			)
-
-			BeforeEach(func() {
-				var err error
-				shareJson, err = json.Marshal(share)
-				Expect(err).ToNot(HaveOccurred())
-				storage.On("SimpleDownload", mock.Anything, mock.MatchedBy(func(in string) bool {
-					return strings.HasPrefix(in, "publicshares/")
-				})).Return(shareJson, nil)
-			})
-
 			It("gets the public share by token", func() {
 				returnedShare, err := m.GetPublicShare(ctx, user, &link.PublicShareReference{
 					Spec: &link.PublicShareReference_Token{
@@ -178,8 +211,8 @@ var _ = Describe("Cs3", func() {
 				}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(returnedShare).ToNot(BeNil())
-				Expect(returnedShare.Id.OpaqueId).To(Equal(share.Id.OpaqueId))
-				Expect(returnedShare.Token).To(Equal(share.Token))
+				Expect(returnedShare.Id.OpaqueId).To(Equal(existingShare.Id.OpaqueId))
+				Expect(returnedShare.Token).To(Equal(existingShare.Token))
 			})
 
 			It("gets the public share by id", func() {

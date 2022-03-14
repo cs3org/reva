@@ -21,6 +21,8 @@ package cs3
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/url"
 	"path"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -85,6 +88,13 @@ func (m *Manager) initialize() error {
 		return err
 	}
 	err = m.indexer.AddIndex(&link.PublicShare{}, option.IndexByField("Id.OpaqueId"), "Token", "publicshares", "unique", nil, true)
+	if err != nil {
+		return err
+	}
+	err = m.indexer.AddIndex(&link.PublicShare{}, option.IndexByFunc{
+		Name: "Owner",
+		Func: indexOwnerFunc,
+	}, "Token", "publicshares", "non_unique", nil, true)
 	if err != nil {
 		return err
 	}
@@ -156,7 +166,10 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 		return nil, err
 	}
 
-	m.indexer.Add(s.PublicShare)
+	_, err = m.indexer.Add(s.PublicShare)
+	if err != nil {
+		return nil, err
+	}
 
 	return &s.PublicShare, nil
 }
@@ -203,7 +216,24 @@ func (m *Manager) getByToken(ctx context.Context, token string) (*link.PublicSha
 }
 
 func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
-	return nil, nil
+	tokens, err := m.indexer.FindBy(&link.PublicShare{}, "Owner", userIdToIndex(u.Id))
+	if err != nil {
+		return nil, err
+	}
+
+	result := []*link.PublicShare{}
+	for _, token := range tokens {
+		ps, err := m.getByToken(ctx, token)
+		if err != nil {
+			return nil, err
+		}
+
+		if publicshare.MatchesFilters(ps, filters) && !publicshare.IsExpired(ps) {
+			result = append(result, ps)
+		}
+	}
+
+	return result, nil
 }
 
 func (m *Manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
@@ -212,4 +242,16 @@ func (m *Manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 
 func (m *Manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
 	return nil, nil
+}
+
+func indexOwnerFunc(v interface{}) (string, error) {
+	ps, ok := v.(link.PublicShare)
+	if !ok {
+		return "", fmt.Errorf("given entity is not a public share")
+	}
+	return userIdToIndex(ps.Owner), nil
+}
+
+func userIdToIndex(id *userpb.UserId) string {
+	return url.QueryEscape(id.Idp + ":" + id.OpaqueId)
 }
