@@ -153,8 +153,6 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		if ev != nil {
 			if err := events.Publish(publisher, ev); err != nil {
 				log.Error(err)
-			} else {
-				log.Debug("event emitted just fine")
 			}
 		}
 
@@ -190,7 +188,6 @@ func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {
 	case "nats":
 		address := m["address"].(string)
 		cid := m["clusterID"].(string)
-		pub, err := server.NewNatsStream(natsjs.Address(address), natsjs.ClusterID(cid))
-		return pub, err
+		return server.NewNatsStream(natsjs.Address(address), natsjs.ClusterID(cid))
 	}
 }

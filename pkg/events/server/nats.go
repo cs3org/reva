@@ -37,9 +37,7 @@ func RunNatsServer(opts ...Option) error {
 		o(options)
 	}
 
-	server, err := nserver.NewServer(
-		options,
-	)
+	server, err := nserver.NewServer(options)
 	if err != nil {
 		return err
 	}

@@ -58,7 +58,7 @@ func Server() {
 	err := server.RunNatsServer(
 		server.ClusterID("test-cluster"),
 		server.Host("127.0.0.1"),
-		server.Port(4222),
+		server.Port(9233),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -68,7 +68,7 @@ func Server() {
 // Client builds a nats client
 func Client() events.Stream {
 	c, err := server.NewNatsStream(
-		natsjs.Address("127.0.0.1:4222"),
+		natsjs.Address("127.0.0.1:9233"),
 		natsjs.ClusterID("test-cluster"),
 	)
 	if err != nil {
