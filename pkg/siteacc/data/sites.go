@@ -20,7 +20,6 @@ package data
 
 import (
 	"encoding/json"
-	"fmt"
 	"sort"
 
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
@@ -52,7 +51,6 @@ func QueryAvailableSites(mentixHost, dataEndpoint string) ([]SiteInformation, er
 	}
 	sites := siteData{}
 	if err := json.Unmarshal(data, &sites); err != nil {
-		fmt.Println(err)
 		return nil, errors.Wrap(err, "error while decoding the JSON data")
 	}
 

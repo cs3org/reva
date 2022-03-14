@@ -102,8 +102,20 @@ func (s *service) UnprotectedEndpoints() []string {
 	return []string{}
 }
 
+// Note: this is for outgoing OCM shares
+// This function is used when you for instance
+// call `ocm-share-create` in reva-cli.
+// For incoming OCM shares from internal/http/services/ocmd/shares.go
+// there is the very similar but slightly different function
+// CreateOCMCoreShare (the "Core" somehow means "incoming").
+// So make sure to keep in mind the difference between this file for outgoing:
+// internal/grpc/services/ocmshareprovider/ocmshareprovider.go
+// and the other one for incoming:
+// internal/grpc/service/ocmcore/ocmcore.go
+// Both functions end up calling the same s.sm.Share function
+// on the OCM share manager:
+// pkg/ocm/share/manager/{json|nextcloud|...}
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
-
 	if req.Opaque == nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, errtypes.BadRequest("can't find resource permissions"), ""),
@@ -146,6 +158,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	// discover share type
 	sharetype := ocm.Share_SHARE_TYPE_REGULAR
+	// FIXME: https://github.com/cs3org/reva/issues/2402
 	protocol, ok := req.Opaque.Map["protocol"]
 	if ok {
 		switch protocol.Decoder {
@@ -159,9 +172,12 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 				Status: status.NewInternal(ctx, err, "error creating share"),
 			}, nil
 		}
+		// token = protocol FIXME!
 	}
 
-	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions, nil, "", sharetype)
+	var sharedSecret string
+	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions, nil, sharedSecret, sharetype)
+
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating share"),

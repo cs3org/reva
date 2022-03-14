@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -51,7 +50,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
-	authProviderReq := &provider.AuthenticateRequest{
+	authProviderReq := &authpb.AuthenticateRequest{
 		ClientId:     req.ClientId,
 		ClientSecret: req.ClientSecret,
 	}
@@ -208,7 +207,7 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 	return res, nil
 }
 
-func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.ProviderAPIClient, error) {
+func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.ProviderAPIClient, error) {
 	c, err := pool.GetAuthRegistryServiceClient(s.c.AuthRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
