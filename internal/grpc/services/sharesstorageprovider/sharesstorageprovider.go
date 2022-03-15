@@ -477,6 +477,12 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				if etag, ok := shareEtags[receivedShare.Share.Id.OpaqueId]; ok {
 					opaque = utils.AppendPlainToOpaque(opaque, "etag", etag)
 				}
+				// add the resourceID for the grant
+				if receivedShare.Share.ResourceId != nil {
+					opaque = utils.AppendPlainToOpaque(opaque, "grantStorageID", receivedShare.Share.ResourceId.StorageId)
+					opaque = utils.AppendPlainToOpaque(opaque, "grantOpaqueID", receivedShare.Share.ResourceId.OpaqueId)
+				}
+
 				space := &provider.StorageSpace{
 					Opaque: opaque,
 					Id: &provider.StorageSpaceId{
