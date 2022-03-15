@@ -21,6 +21,7 @@ package eventsmiddleware
 import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 )
 
@@ -140,4 +141,39 @@ func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareR
 		ShareID:    req.Ref.GetId(),
 		ShareToken: req.Ref.GetToken(),
 	}
+}
+
+// FileUploaded converts the response to an event
+func FileUploaded(r *provider.InitiateFileUploadResponse, req *provider.InitiateFileUploadRequest) events.FileUploaded {
+	return events.FileUploaded{}
+}
+
+// FileDownloaded converts the response to an event
+func FileDownloaded(r *provider.InitiateFileDownloadResponse, req *provider.InitiateFileDownloadRequest) events.FileDownloaded {
+	return events.FileDownloaded{}
+}
+
+// ItemTrashed converts the response to an event
+func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest) events.ItemTrashed {
+	return events.ItemTrashed{}
+}
+
+// ItemMoved converts the response to an event
+func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest) events.ItemMoved {
+	return events.ItemMoved{}
+}
+
+// ItemPurged converts the response to an event
+func ItemPurged(r *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequest) events.ItemPurged {
+	return events.ItemPurged{}
+}
+
+// ItemRestored converts the response to an event
+func ItemRestored(r *provider.RestoreRecycleItemResponse, req *provider.RestoreRecycleItemRequest) events.ItemRestored {
+	return events.ItemRestored{}
+}
+
+// FileVersionRestored converts the response to an event
+func FileVersionRestored(r *provider.RestoreFileVersionResponse, req *provider.RestoreFileVersionRequest) events.FileVersionRestored {
+	return events.FileVersionRestored{}
 }
