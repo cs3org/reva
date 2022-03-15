@@ -18,14 +18,9 @@
 package ocdav
 
 import (
-	"context"
-	"errors"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 )
 
@@ -35,63 +30,6 @@ func TestWrapResourceID(t *testing.T) {
 
 	if wrapped != expected {
 		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
-	}
-}
-
-func TestExtractDestination(t *testing.T) {
-	expected := "/dst"
-	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
-	request.Header.Set(net.HeaderDestination, "https://example.org/remote.php/dav/dst")
-
-	ctx := context.WithValue(context.Background(), net.CtxKeyBaseURI, "remote.php/dav")
-	destination, err := extractDestination(request.WithContext(ctx))
-	if err != nil {
-		t.Errorf("Expected err to be nil got %s", err)
-	}
-
-	if destination != expected {
-		t.Errorf("Extracted destination is not expected, got %s want %s", destination, expected)
-	}
-}
-
-func TestExtractDestinationWithoutHeader(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
-
-	_, err := extractDestination(request)
-	if err == nil {
-		t.Errorf("Expected err to be nil got %s", err)
-	}
-
-	if !errors.Is(err, errInvalidValue) {
-		t.Errorf("Expected error invalid value, got %s", err)
-	}
-}
-
-func TestExtractDestinationWithInvalidDestination(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
-	request.Header.Set(net.HeaderDestination, "://example.org/remote.php/dav/dst")
-	_, err := extractDestination(request)
-	if err == nil {
-		t.Errorf("Expected err to be nil got %s", err)
-	}
-
-	if !errors.Is(err, errInvalidValue) {
-		t.Errorf("Expected error invalid value, got %s", err)
-	}
-}
-
-func TestExtractDestinationWithDestinationWrongBaseURI(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
-	request.Header.Set(net.HeaderDestination, "https://example.org/remote.php/dav/dst")
-
-	ctx := context.WithValue(context.Background(), net.CtxKeyBaseURI, "remote.php/webdav")
-	_, err := extractDestination(request.WithContext(ctx))
-	if err == nil {
-		t.Errorf("Expected err to be nil got %s", err)
-	}
-
-	if !errors.Is(err, errInvalidValue) {
-		t.Errorf("Expected error invalid value, got %s", err)
 	}
 }
 

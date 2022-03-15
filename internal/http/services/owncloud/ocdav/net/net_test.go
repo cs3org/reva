@@ -90,4 +90,27 @@ var _ = Describe("Net", func() {
 			Expect(medianDuration).To(BeNumerically("<", 10*time.Millisecond))
 		})
 	})
+
+	DescribeTable("TestParseOverwrite",
+		func(v string, expectSuccess bool, expectedValue bool) {
+			parsed, err := net.ParseOverwrite(v)
+			Expect(err == nil).To(Equal(expectSuccess))
+			Expect(parsed).To(Equal(expectedValue))
+		},
+		Entry("default", "", true, true),
+		Entry("T", "T", true, true),
+		Entry("F", "F", true, false),
+		Entry("invalid", "invalid", false, false))
+
+	DescribeTable("TestParseDestination",
+		func(baseURI, v string, expectSuccess bool, expectedValue string) {
+			parsed, err := net.ParseDestination(baseURI, v)
+			Expect(err == nil).To(Equal(expectSuccess))
+			Expect(parsed).To(Equal(expectedValue))
+		},
+		Entry("invalid1", "", "", false, ""),
+		Entry("invalid2", "baseURI", "", false, ""),
+		Entry("invalid3", "", "/dest/path", false, ""),
+		Entry("invalid4", "/foo", "/dest/path", false, ""),
+		Entry("valid", "/foo", "https://example.com/foo/dest/path", true, "/dest/path"))
 })

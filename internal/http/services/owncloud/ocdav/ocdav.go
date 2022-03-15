@@ -21,7 +21,6 @@ package ocdav
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -42,13 +41,10 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 var (
-	errInvalidValue = errors.New("invalid value")
-
 	nameRules = [...]nameRule{
 		nameNotEmpty{},
 		nameDoesNotContain{chars: "\f\r\n\\"},
@@ -338,25 +334,4 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	if r.TLS != nil {
 		headers.Set("Strict-Transport-Security", "max-age=63072000")
 	}
-}
-
-func extractDestination(r *http.Request) (string, error) {
-	dstHeader := r.Header.Get(net.HeaderDestination)
-	if dstHeader == "" {
-		return "", errors.Wrap(errInvalidValue, "destination header is empty")
-	}
-	dstURL, err := url.ParseRequestURI(dstHeader)
-	if err != nil {
-		return "", errors.Wrap(errInvalidValue, err.Error())
-	}
-
-	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
-	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
-	// Strip the base URI from the destination. The destination might contain redirection prefixes which need to be handled
-	urlSplit := strings.Split(dstURL.Path, baseURI)
-	if len(urlSplit) != 2 {
-		return "", errors.Wrap(errInvalidValue, "destination path does not contain base URI")
-	}
-
-	return urlSplit[1], nil
 }

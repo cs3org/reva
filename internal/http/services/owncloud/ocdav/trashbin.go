@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -38,12 +37,10 @@ import (
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
@@ -51,10 +48,12 @@ import (
 // TrashbinHandler handles trashbin requests
 type TrashbinHandler struct {
 	gatewaySvc string
+	namespace  string
 }
 
 func (h *TrashbinHandler) init(c *Config) error {
 	h.gatewaySvc = c.GatewaySvc
+	h.namespace = path.Join("/", c.FilesNamespace)
 	return nil
 }
 
@@ -71,20 +70,19 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 		var username string
 		username, r.URL.Path = router.ShiftPath(r.URL.Path)
-
 		if username == "" {
 			// listing is disabled, no auth will change that
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
 
-		u, ok := ctxpkg.ContextGetUser(ctx)
+		user, ok := ctxpkg.ContextGetUser(ctx)
 		if !ok {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		if u.Username != username {
-			log.Debug().Str("username", username).Interface("user", u).Msg("trying to read another users trash")
+		if user.Username != username {
+			log.Debug().Str("username", username).Interface("user", user).Msg("trying to read another users trash")
 			// listing other users trash is forbidden, no auth will change that
 			w.WriteHeader(http.StatusUnauthorized)
 			b, err := errors.Marshal(http.StatusUnauthorized, "", "")
@@ -102,72 +100,83 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
+		useLoggedInUser := true
+		ns, newPath, err := s.ApplyLayout(ctx, h.namespace, useLoggedInUser, r.URL.Path)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			b, err := errors.Marshal(http.StatusNotFound, fmt.Sprintf("could not get storage for %s", r.URL.Path), "")
+			errors.HandleWebdavError(appctx.GetLogger(r.Context()), w, b, err)
+		}
+		r.URL.Path = newPath
+
+		client, err := s.getClient()
+		if err != nil {
+			log.Error().Err(err).Msg("error getting grpc client")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		basePath := path.Join(ns, newPath)
+		space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, basePath)
+		if err != nil {
+			log.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if rpcstatus.Code != rpc.Code_CODE_OK {
+			errors.HandleErrorStatus(log, w, rpcstatus)
+			return
+		}
+		ref := spacelookup.MakeRelativeReference(space, ".", false)
+
 		// key will be a base64 encoded cs3 path, it uniquely identifies a trash item & storage
 		var key string
 		key, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-		// If the recycle bin corresponding to a speicific path is requested, use that.
-		// If not, we user the user home to route the request
-		basePath := r.URL.Query().Get("base_path")
-		if basePath == "" {
-			gc, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
-			if err != nil {
-				// TODO(jfd) how do we make the user aware that some storages are not available?
-				// opaque response property? Or a list of errors?
-				// add a recycle entry with the path to the storage that produced the error?
-				log.Error().Err(err).Msg("error getting gateway client")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
+		switch r.Method {
+		case MethodPropfind:
+			h.listTrashbin(w, r, s, ref, user.Username, key, r.URL.Path)
+		case MethodMove:
+			if key == "" {
+				http.Error(w, "501 Not implemented", http.StatusNotImplemented)
+				break
 			}
-
-			getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
-			if err != nil {
-				log.Error().Err(err).Msg("error calling GetHome")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-				errors.HandleErrorStatus(log, w, getHomeRes.Status)
-				return
-			}
-			basePath = getHomeRes.Path
-		}
-
-		if r.Method == MethodPropfind {
-			h.listTrashbin(w, r, s, u, basePath, key, r.URL.Path)
-			return
-		}
-		if key != "" && r.Method == MethodMove {
 			// find path in url relative to trash base
 			trashBase := ctx.Value(net.CtxKeyBaseURI).(string)
 			baseURI := path.Join(path.Dir(trashBase), "files", username)
-			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, baseURI)
-			r = r.WithContext(ctx)
 
-			// TODO make request.php optional in destination header
-			dst, err := extractDestination(r)
+			dh := r.Header.Get(net.HeaderDestination)
+			dst, err := net.ParseDestination(baseURI, dh)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			dst = path.Join(basePath, dst)
+
+			p := path.Join(ns, dst)
+			// The destination can be in another space. E.g. the 'Shares Jail'.
+			space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, p)
+			if err != nil {
+				log.Error().Err(err).Str("path", p).Msg("failed to look up destination storage space")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if rpcstatus.Code != rpc.Code_CODE_OK {
+				errors.HandleErrorStatus(log, w, rpcstatus)
+				return
+			}
+			dstRef := spacelookup.MakeRelativeReference(space, p, false)
 
 			log.Debug().Str("key", key).Str("dst", dst).Msg("restore")
-
-			h.restore(w, r, s, u, basePath, dst, key, r.URL.Path)
-			return
+			h.restore(w, r, s, ref, dstRef, key, r.URL.Path)
+		case http.MethodDelete:
+			h.delete(w, r, s, ref, key, r.URL.Path)
+		default:
+			http.Error(w, "501 Not implemented", http.StatusNotImplemented)
 		}
-
-		if r.Method == http.MethodDelete {
-			h.delete(w, r, s, u, basePath, key, r.URL.Path)
-			return
-		}
-
-		http.Error(w, "501 Not implemented", http.StatusNotImplemented)
 	})
 }
 
-func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
+func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, ref *provider.Reference, refBase, key, itemPath string) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "list_trashbin")
 	defer span.End()
 
@@ -181,15 +190,8 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	if depth == net.DepthZero {
-		propRes, err := h.formatTrashPropfind(ctx, s, u, nil, nil)
+		propRes, err := h.formatTrashPropfind(ctx, s, refBase, nil, nil)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error formatting propfind")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -213,31 +215,15 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	gc, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
+	client, err := s.getClient()
 	if err != nil {
-		// TODO(jfd) how do we make the user aware that some storages are not available?
-		// opaque response property? Or a list of errors?
-		// add a recycle entry with the path to the storage that produced the error?
-		sublog.Error().Err(err).Msg("error getting gateway client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, basePath)
-	if err != nil {
-		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if rpcstatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcstatus)
-		return
-	}
-	ref := spacelookup.MakeRelativeReference(space, basePath, false)
 
 	// ask gateway for recycle items
-	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: path.Join(key, itemPath)})
-
+	getRecycleRes, err := client.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: path.Join(key, itemPath)})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -264,7 +250,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 		for len(stack) > 0 {
 			key := stack[len(stack)-1]
-			getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: key})
+			getRecycleRes, err := client.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: key})
 			if err != nil {
 				sublog.Error().Err(err).Msg("error calling ListRecycle")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -289,12 +275,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		}
 	}
 
-	// TODO when using space based requests we should be able to get rid of this path unprefixing
-	for i := range items {
-		items[i].Ref.Path = strings.TrimPrefix(items[i].Ref.Path, basePath)
-	}
-
-	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, items)
+	propRes, err := h.formatTrashPropfind(ctx, s, refBase, &pf, items)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -310,7 +291,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfind.XML, items []*provider.RecycleItem) ([]byte, error) {
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, refBase string, pf *propfind.XML, items []*provider.RecycleItem) ([]byte, error) {
 	responses := make([]*propfind.ResponseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &propfind.ResponseXML{
@@ -335,7 +316,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 	})
 
 	for i := range items {
-		res, err := h.itemToPropResponse(ctx, s, u, pf, items[i])
+		res, err := h.itemToPropResponse(ctx, s, refBase, pf, items[i])
 		if err != nil {
 			return nil, err
 		}
@@ -357,10 +338,10 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 // itemToPropResponse needs to create a listing that contains a key and destination
 // the key is the name of an entry in the trash listing
 // for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id
-func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *userpb.User, pf *propfind.XML, item *provider.RecycleItem) (*propfind.ResponseXML, error) {
+func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, refBase string, pf *propfind.XML, item *provider.RecycleItem) (*propfind.ResponseXML, error) {
 
 	baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
-	ref := path.Join(baseURI, u.Username, item.Key)
+	ref := path.Join(baseURI, refBase, item.Key)
 	if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
@@ -407,7 +388,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 			Status: "HTTP/1.1 404 Not Found",
 			Prop:   []*props.PropertyXML{},
 		}
-		size := fmt.Sprintf("%d", item.Size)
+		size := strconv.FormatUint(item.Size, 10)
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
 			case net.NsOwncloud:
@@ -466,20 +447,16 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 	return &response, nil
 }
 
-func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, dst, key, itemPath string) {
+func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, ref, dst *provider.Reference, key, itemPath string) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "restore")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
 
-	overwrite := r.Header.Get(net.HeaderOverwrite)
+	oh := r.Header.Get(net.HeaderOverwrite)
 
-	overwrite = strings.ToUpper(overwrite)
-	if overwrite == "" {
-		overwrite = "T"
-	}
-
-	if overwrite != "T" && overwrite != "F" {
+	overwrite, err := net.ParseOverwrite(oh)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -490,22 +467,8 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, dst)
-	if err != nil {
-		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if rpcstatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcstatus)
-		return
-	}
-	dstRef := spacelookup.MakeRelativeReference(space, dst, false)
 
-	dstStatReq := &provider.StatRequest{
-		Ref: dstRef,
-	}
-
+	dstStatReq := &provider.StatRequest{Ref: dst}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending grpc stat request")
@@ -520,10 +483,9 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 	// Restoring to a non-existent location is not supported by the WebDAV spec. The following block ensures the target
 	// restore location exists, and if it doesn't returns a conflict error code.
-	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst) {
-		parentStatReq := &provider.StatRequest{
-			Ref: spacelookup.MakeRelativeReference(space, filepath.Dir(dst), false),
-		}
+	if dstStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && isNested(dst.Path) {
+		parentRef := &provider.Reference{ResourceId: dst.ResourceId, Path: utils.MakeRelativePath(path.Dir(dst.Path))}
+		parentStatReq := &provider.StatRequest{Ref: parentRef}
 
 		parentStatResponse, err := client.Stat(ctx, parentStatReq)
 		if err != nil {
@@ -543,8 +505,8 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 
-		if overwrite != "T" {
-			sublog.Warn().Str("overwrite", overwrite).Msg("dst already exists")
+		if !overwrite {
+			sublog.Warn().Bool("overwrite", overwrite).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 			b, err := errors.Marshal(
 				http.StatusPreconditionFailed,
@@ -555,7 +517,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 			return
 		}
 		// delete existing tree
-		delReq := &provider.DeleteRequest{Ref: dstRef}
+		delReq := &provider.DeleteRequest{Ref: dst}
 		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error sending grpc delete request")
@@ -569,24 +531,10 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		}
 	}
 
-	sourceSpace, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, basePath)
-	if err != nil {
-		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if rpcstatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcstatus)
-		return
-	}
 	req := &provider.RestoreRecycleItemRequest{
-		// use the target path to find the storage provider
-		// this means we can only undelete on the same storage, not to a different folder
-		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
-		// TODO currently limited to the home storage
-		Ref:        spacelookup.MakeRelativeReference(sourceSpace, basePath, false),
+		Ref:        ref,
 		Key:        path.Join(key, itemPath),
-		RestoreRef: dstRef,
+		RestoreRef: dst,
 	}
 
 	res, err := client.RestoreRecycleItem(ctx, req)
@@ -627,11 +575,11 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 }
 
 // delete has only a key
-func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
+func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, ref *provider.Reference, key, itemPath string) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "erase")
 	defer span.End()
 
-	sublog := appctx.GetLogger(ctx).With().Str("key", key).Logger()
+	sublog := appctx.GetLogger(ctx).With().Interface("reference", ref).Str("key", key).Str("item_path", itemPath).Logger()
 
 	client, err := s.getClient()
 	if err != nil {
@@ -640,22 +588,10 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		return
 	}
 
-	// set key as opaque id, the storageprovider will use it as the key for the
-	// storage drives  PurgeRecycleItem key call
-	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, basePath)
-	if err != nil {
-		sublog.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, status)
-		return
-	}
-
+	trashPath := path.Join(key, itemPath)
 	req := &provider.PurgeRecycleRequest{
-		Ref: spacelookup.MakeRelativeReference(space, basePath, false),
-		Key: path.Join(key, itemPath),
+		Ref: ref,
+		Key: trashPath,
 	}
 
 	res, err := client.PurgeRecycle(ctx, req)
@@ -668,9 +604,9 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	case rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusNoContent)
 	case rpc.Code_CODE_NOT_FOUND:
-		sublog.Debug().Str("path", basePath).Str("key", key).Interface("status", res.Status).Msg("resource not found")
+		sublog.Debug().Interface("status", res.Status).Msg("resource not found")
 		w.WriteHeader(http.StatusConflict)
-		m := fmt.Sprintf("path %s not found", basePath)
+		m := fmt.Sprintf("path %s not found", trashPath)
 		b, err := errors.Marshal(http.StatusConflict, m, "")
 		errors.HandleWebdavError(&sublog, w, b, err)
 	case rpc.Code_CODE_PERMISSION_DENIED:
@@ -690,5 +626,5 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 
 func isNested(p string) bool {
 	dir, _ := path.Split(p)
-	return dir != "/"
+	return dir != "/" && dir != "./"
 }

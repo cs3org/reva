@@ -27,7 +27,6 @@ import (
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
@@ -37,6 +36,10 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc/metadata"
+)
+
+const (
+	_trashbinPath = "trash-bin"
 )
 
 type tokenStatInfoKey struct{}
@@ -172,7 +175,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "spaces")
 			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
-			h.SpacesHandler.Handler(s).ServeHTTP(w, r)
+			h.SpacesHandler.Handler(s, h.TrashbinHandler).ServeHTTP(w, r)
 		case "public-files":
 			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, base)
@@ -203,9 +206,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case err != nil:
 				w.WriteHeader(http.StatusInternalServerError)
 				return
-			case res.Status.Code == rpcv1beta1.Code_CODE_PERMISSION_DENIED:
+			case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 				fallthrough
-			case res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED:
+			case res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
 				if hasValidBasicAuthHeader {
 					b, err := errors.Marshal(http.StatusUnauthorized, "Username or password was incorrect", "")
@@ -215,10 +218,10 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				b, err := errors.Marshal(http.StatusUnauthorized, "No 'Authorization: Basic' header found", "")
 				errors.HandleWebdavError(log, w, b, err)
 				return
-			case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 				w.WriteHeader(http.StatusNotFound)
 				return
-			case res.Status.Code != rpcv1beta1.Code_CODE_OK:
+			case res.Status.Code != rpc.Code_CODE_OK:
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}

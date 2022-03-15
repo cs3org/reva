@@ -22,11 +22,14 @@ import (
 	"net/http"
 	"path"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 // SpacesHandler handles trashbin requests
@@ -44,7 +47,7 @@ func (h *SpacesHandler) init(c *Config) error {
 }
 
 // Handler handles requests
-func (h *SpacesHandler) Handler(s *svc) http.Handler {
+func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.Handler {
 	config := s.Config()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ctx := r.Context()
@@ -55,14 +58,20 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		var spaceID string
-		spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-		if spaceID == "" {
+		var segment string
+		segment, r.URL.Path = router.ShiftPath(r.URL.Path)
+		if segment == "" {
 			// listing is disabled, no auth will change that
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
+
+		if segment == _trashbinPath {
+			h.handleSpacesTrashbin(w, r, s, trashbinHandler)
+			return
+		}
+
+		spaceID := segment
 
 		switch r.Method {
 		case MethodPropfind:
@@ -134,4 +143,57 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		}
 	})
+}
+
+func (h *SpacesHandler) handleSpacesTrashbin(w http.ResponseWriter, r *http.Request, s *svc, trashbinHandler *TrashbinHandler) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	var spaceID string
+	spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
+	if spaceID == "" {
+		// listing is disabled, no auth will change that
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ref := &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: spaceID,
+			OpaqueId:  spaceID,
+		},
+	}
+
+	var key string
+	key, r.URL.Path = router.ShiftPath(r.URL.Path)
+
+	switch r.Method {
+	case MethodPropfind:
+		trashbinHandler.listTrashbin(w, r, s, ref, path.Join(_trashbinPath, spaceID), key, r.URL.Path)
+	case MethodMove:
+		if key == "" {
+			http.Error(w, "501 Not implemented", http.StatusNotImplemented)
+			break
+		}
+		// find path in url relative to trash base
+		baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
+		baseURI = path.Join(baseURI, spaceID)
+
+		dh := r.Header.Get(net.HeaderDestination)
+		dst, err := net.ParseDestination(baseURI, dh)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		log.Debug().Str("key", key).Str("path", r.URL.Path).Str("dst", dst).Msg("spaces restore")
+
+		dstRef := ref
+		dstRef.Path = utils.MakeRelativePath(dst)
+
+		trashbinHandler.restore(w, r, s, ref, dstRef, key, r.URL.Path)
+	case http.MethodDelete:
+		trashbinHandler.delete(w, r, s, ref, key, r.URL.Path)
+	default:
+		http.Error(w, "501 Not implemented", http.StatusNotImplemented)
+	}
 }

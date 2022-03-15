@@ -295,6 +295,9 @@ func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Refe
 	}
 	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, key, relativePath)
 	if err != nil {
+		if errors.Is(err, iofs.ErrNotExist) {
+			return errtypes.NotFound(key)
+		}
 		return err
 	}
 

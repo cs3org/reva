@@ -25,7 +25,6 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -56,7 +55,10 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	defer span.End()
 
 	src := path.Join(ns, r.URL.Path)
-	dst, err := extractDestination(r)
+
+	dh := r.Header.Get(net.HeaderDestination)
+	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
+	dst, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -275,7 +277,9 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_copy")
 	defer span.End()
 
-	dst, err := extractDestination(r)
+	dh := r.Header.Get(net.HeaderDestination)
+	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
+	dst, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -480,7 +484,8 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 }
 
 func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, log *zerolog.Logger) *copy {
-	overwrite, err := extractOverwrite(w, r)
+	oh := r.Header.Get(net.HeaderOverwrite)
+	overwrite, err := net.ParseOverwrite(oh)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Overwrite header is set to incorrect value %v", overwrite)
@@ -504,7 +509,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		depth = net.DepthInfinity
 	}
 
-	log.Debug().Str("overwrite", overwrite).Str("depth", depth.String()).Msg("copy")
+	log.Debug().Bool("overwrite", overwrite).Str("depth", depth.String()).Msg("copy")
 
 	client, err := s.getClient()
 	if err != nil {
@@ -548,8 +553,8 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 
-		if overwrite == "F" {
-			log.Warn().Str("overwrite", overwrite).Msg("dst already exists")
+		if !overwrite {
+			log.Warn().Bool("overwrite", overwrite).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed)
 			m := fmt.Sprintf("Could not overwrite Resource %v", dstRef.Path)
 			b, err := errors.Marshal(http.StatusPreconditionFailed, m, "")
@@ -597,18 +602,4 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 
 	return &copy{source: srcRef, sourceInfo: srcStatRes.Info, depth: depth, successCode: successCode, destination: dstRef}
-}
-
-func extractOverwrite(w http.ResponseWriter, r *http.Request) (string, error) {
-	overwrite := r.Header.Get(net.HeaderOverwrite)
-	overwrite = strings.ToUpper(overwrite)
-	if overwrite == "" {
-		overwrite = "T"
-	}
-
-	if overwrite != "T" && overwrite != "F" {
-		return "", errInvalidValue
-	}
-
-	return overwrite, nil
 }
