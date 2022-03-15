@@ -180,8 +180,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		return nil, err
 	}
 
-	fn := path.Join("shares", share.Id.OpaqueId)
-	err = m.storage.SimpleUpload(ctx, fn, data)
+	err = m.storage.SimpleUpload(ctx, shareFilename(share.Id.OpaqueId), data)
 	if err != nil {
 		return nil, err
 	}
@@ -223,8 +222,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 		return err
 	}
 
-	fn := path.Join("shares", ref.GetId().OpaqueId)
-	err = m.storage.Delete(ctx, fn)
+	err = m.storage.Delete(ctx, shareFilename(ref.GetId().OpaqueId))
 	if err != nil {
 		if _, ok := err.(errtypes.NotFound); !ok {
 			return err
@@ -278,8 +276,7 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 		return nil, err
 	}
 
-	fn := path.Join("shares", share.Id.OpaqueId)
-	err = m.storage.SimpleUpload(ctx, fn, data)
+	err = m.storage.SimpleUpload(ctx, shareFilename(share.Id.OpaqueId), data)
 
 	return share, err
 }
