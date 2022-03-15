@@ -68,6 +68,10 @@ const (
 	storageIDPrefix string = "shared::"
 )
 
+var (
+	errParsingSpaceReference = errors.New("could not parse space reference")
+)
+
 // Handler implements the shares part of the ownCloud sharing API
 type Handler struct {
 	gatewayAddr            string
@@ -207,19 +211,16 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 	ref, err := h.extractReference(r)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "could not parse the reference", fmt.Errorf("could not parse the reference"))
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, errParsingSpaceReference.Error(), errParsingSpaceReference)
 		return
-	}
-
-	statReq := provider.StatRequest{
-		Ref: &ref,
 	}
 
 	sublog := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
 
+	statReq := provider.StatRequest{Ref: &ref}
 	statRes, err := client.Stat(ctx, &statReq)
 	if err != nil {
-		sublog.Debug().Err(err).Str("createShare", "shares").Msg("error on stat call")
+		sublog.Debug().Err(err).Msg("CreateShare: error on stat call")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
 		return
 	}
@@ -233,7 +234,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
 			w.WriteHeader(http.StatusForbidden)
 		default:
-			log.Error().Interface("status", statRes.Status).Msg("grpc request failed")
+			log.Error().Interface("status", statRes.Status).Msg("CreateShare: stat failed")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		return
@@ -738,13 +739,17 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 	var pinfo *provider.ResourceInfo
 	p := r.URL.Query().Get("path")
+	shareRef := r.URL.Query().Get("share_ref")
 	// we need to lookup the resource id so we can filter the list of shares later
-	if p != "" {
-		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		target := path.Join(h.getHomeNamespace(ctxpkg.ContextMustGetUser(ctx)), r.FormValue("path"))
+	if p != "" || shareRef != "" {
+		ref, err := h.extractReference(r)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, errParsingSpaceReference.Error(), errParsingSpaceReference)
+			return
+		}
 
 		var status *rpc.Status
-		pinfo, status, err = h.getResourceInfoByPath(ctx, client, target)
+		pinfo, status, err = h.getResourceInfoByReference(ctx, client, &ref)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
 			return
@@ -917,9 +922,14 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 
 	// shared with others
 	p := r.URL.Query().Get("path")
-	if p != "" {
-		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		filters, linkFilters, e = h.addFilters(w, r, h.getHomeNamespace(ctxpkg.ContextMustGetUser(r.Context())))
+	spaceRef := r.URL.Query().Get("space_ref")
+	if p != "" || spaceRef != "" {
+		ref, err := h.extractReference(r)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, errParsingSpaceReference.Error(), errParsingSpaceReference)
+			return
+		}
+		filters, linkFilters, e = h.addFilters(w, r, &ref)
 		if e != nil {
 			// result has been written as part of addFilters
 			return
@@ -990,9 +1000,7 @@ func (h *Handler) logProblems(s *rpc.Status, e error, msg string) {
 	}
 }
 
-func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.Filter, []*link.ListPublicSharesRequest_Filter, error) {
-	collaborationFilters := []*collaboration.Filter{}
-	linkFilters := []*link.ListPublicSharesRequest_Filter{}
+func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, ref *provider.Reference) ([]*collaboration.Filter, []*link.ListPublicSharesRequest_Filter, error) {
 	ctx := r.Context()
 
 	// first check if the file exists
@@ -1002,8 +1010,7 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 		return nil, nil, err
 	}
 
-	target := path.Join(prefix, r.FormValue("path"))
-	info, status, err := h.getResourceInfoByPath(ctx, client, target)
+	info, status, err := h.getResourceInfoByReference(ctx, client, ref)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
 		return nil, nil, err
@@ -1019,9 +1026,8 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 		return nil, nil, err
 	}
 
-	collaborationFilters = append(collaborationFilters, share.ResourceIDFilter(info.Id))
-
-	linkFilters = append(linkFilters, publicshare.ResourceIDFilter(info.Id))
+	collaborationFilters := []*collaboration.Filter{share.ResourceIDFilter(info.Id)}
+	linkFilters := []*link.ListPublicSharesRequest_Filter{publicshare.ResourceIDFilter(info.Id)}
 
 	return collaborationFilters, linkFilters, nil
 }
@@ -1232,11 +1238,19 @@ func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentif
 	return buf.String()
 }
 
-func (h *Handler) getResourceInfoByPath(ctx context.Context, client GatewayClient, path string) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, path, &provider.Reference{
-		// FIXME ResourceId?
-		Path: path,
-	})
+func (h *Handler) getResourceInfoByReference(ctx context.Context, client GatewayClient, ref *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
+	var key string
+	if ref.ResourceId == nil {
+		// This is a path based reference
+		key = ref.Path
+	} else {
+		var err error
+		key, err = utils.FormatStorageSpaceReference(ref)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return h.getResourceInfo(ctx, client, key, ref)
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client GatewayClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {

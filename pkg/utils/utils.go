@@ -42,6 +42,10 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+const (
+	spaceIDDelimiter = "!"
+)
+
 var (
 	matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
 	matchAllCap   = regexp.MustCompile("([a-z0-9])([A-Z])")
@@ -58,6 +62,8 @@ var (
 
 	// SpaceGrant is used to signal the storageprovider that the grant is on a space
 	SpaceGrant struct{}
+
+	errInvalidSpaceReference = errors.New("invalid storage space reference")
 )
 
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
@@ -326,7 +332,7 @@ func SplitStorageSpaceID(ssid string) (storageid, nodeid string, err error) {
 	if ssid == "" {
 		return "", "", errors.New("can't split empty StorageSpaceID")
 	}
-	parts := strings.SplitN(ssid, "!", 2)
+	parts := strings.SplitN(ssid, spaceIDDelimiter, 2)
 	if len(parts) == 1 {
 		return parts[0], parts[0], nil
 	}
@@ -355,6 +361,35 @@ func ParseStorageSpaceReference(sRef string) (provider.Reference, error) {
 		},
 		Path: MakeRelativePath(relPath),
 	}, nil
+}
+
+// FormatStorageSpaceReference will format a storage space reference into a string representation.
+// If ref or ref.ResourceId are nil an error will be returned.
+// The function doesn't check if all values are set.
+// The resulting format can be:
+//
+// "storage_id!opaque_id"
+// "storage_id!opaque_id/path"
+// "storage_id/path"
+// "storage_id"
+func FormatStorageSpaceReference(ref *provider.Reference) (string, error) {
+	if ref == nil || ref.ResourceId == nil || ref.ResourceId.StorageId == "" {
+		return "", errInvalidSpaceReference
+	}
+	var ssid string
+	if ref.ResourceId.OpaqueId == "" {
+
+		ssid = ref.ResourceId.StorageId
+	} else {
+		var sb strings.Builder
+		// ssid == storage_id!opaque_id
+		sb.Grow(len(ref.ResourceId.StorageId) + len(ref.ResourceId.OpaqueId) + 1)
+		sb.WriteString(ref.ResourceId.StorageId)
+		sb.WriteString(spaceIDDelimiter)
+		sb.WriteString(ref.ResourceId.OpaqueId)
+		ssid = sb.String()
+	}
+	return path.Join(ssid, ref.Path), nil
 }
 
 // GetViewMode converts a human-readable string to a view mode for opening a resource in an app.

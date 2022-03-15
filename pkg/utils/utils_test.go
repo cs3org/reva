@@ -19,6 +19,7 @@
 package utils
 
 import (
+	"errors"
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -204,6 +205,98 @@ func TestParseStorageSpaceReference(t *testing.T) {
 		}
 		if ref.Path != tt.relPath {
 			t.Errorf("Expected path %s got %s", tt.relPath, ref.Path)
+		}
+	}
+}
+
+func TestFormatStorageSpaceReference(t *testing.T) {
+	tests := []struct {
+		ref         *provider.Reference
+		expected    string
+		expectedErr error
+	}{
+		{
+			ref:         &provider.Reference{},
+			expected:    "",
+			expectedErr: errInvalidSpaceReference,
+		},
+		{
+			ref:         &provider.Reference{ResourceId: &provider.ResourceId{}},
+			expected:    "!",
+			expectedErr: errInvalidSpaceReference,
+		},
+		{
+			ref:         &provider.Reference{ResourceId: &provider.ResourceId{OpaqueId: "opaqueid"}, Path: "path"},
+			expectedErr: errInvalidSpaceReference,
+		},
+		{
+			ref:      &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}, Path: "path"},
+			expected: "storageid/path",
+		},
+		{
+			ref:      &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "path"},
+			expected: "storageid!opaqueid/path",
+		},
+		{
+			ref:      &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "."},
+			expected: "storageid!opaqueid",
+		},
+		{
+			ref:      &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}, Path: "."},
+			expected: "storageid",
+		},
+		{
+			ref:      &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}},
+			expected: "storageid",
+		},
+	}
+
+	for _, tt := range tests {
+		result, err := FormatStorageSpaceReference(tt.ref)
+		if err != nil && !errors.Is(err, tt.expectedErr) {
+			t.Errorf("FormateStorageSpaceRefence returned unexpected error: %v", err)
+		}
+		if err == nil && result != tt.expected {
+			t.Errorf("Reference %v got formatted to %s, expected %s", tt.ref, result, tt.expected)
+		}
+	}
+}
+
+func TestFormatAndParseReference(t *testing.T) {
+	tests := []struct {
+		orig     *provider.Reference
+		expected *provider.Reference
+	}{
+		{
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}, Path: "./path"},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "storageid"}, Path: "./path"},
+		},
+		{
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "./path"},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "./path"},
+		},
+		{
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "."},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "."},
+		},
+		{
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}, Path: "."},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "storageid"}, Path: "."},
+		},
+		{
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "storageid"}, Path: "."},
+		},
+	}
+
+	for _, tt := range tests {
+		formatted, _ := FormatStorageSpaceReference(tt.orig)
+		parsed, err := ParseStorageSpaceReference(formatted)
+		if err != nil {
+			t.Errorf("failed to parse space reference: %s error: %s", formatted, err)
+		}
+		if !(ResourceIDEqual(parsed.ResourceId, tt.expected.ResourceId) && parsed.Path == tt.expected.Path) {
+			t.Errorf("Formatted then parsed references don't match the original got: %v expected %v", parsed, tt.expected)
 		}
 	}
 }
