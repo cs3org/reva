@@ -31,6 +31,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -162,4 +163,27 @@ func GroupFiltersByType(filters []*link.ListPublicSharesRequest_Filter) map[link
 func IsExpired(s *link.PublicShare) bool {
 	expiration := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos()))
 	return s.Expiration != nil && expiration.Before(time.Now())
+}
+
+// Authenticate checks the signature or password authentication for a public share
+func Authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuthentication) bool {
+	switch {
+	case auth.GetPassword() != "":
+		if err := bcrypt.CompareHashAndPassword([]byte(pw), []byte(auth.GetPassword())); err == nil {
+			return true
+		}
+	case auth.GetSignature() != nil:
+		sig := auth.GetSignature()
+		now := time.Now()
+		expiration := time.Unix(int64(sig.GetSignatureExpiration().GetSeconds()), int64(sig.GetSignatureExpiration().GetNanos()))
+		if now.After(expiration) {
+			return false
+		}
+		s, err := CreateSignature(share.Token, pw, expiration)
+		if err != nil {
+			return false
+		}
+		return sig.GetSignature() == s
+	}
+	return false
 }

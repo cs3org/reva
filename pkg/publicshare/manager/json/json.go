@@ -521,7 +521,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 			}
 
 			if local.PasswordProtected {
-				if authenticate(&local, passDB, auth) {
+				if publicshare.Authenticate(&local, passDB, auth) {
 					if sign {
 						err := publicshare.AddSignature(&local, passDB)
 						if err != nil {
@@ -563,30 +563,6 @@ func (m *manager) writeDb(db map[string]interface{}) error {
 	}
 
 	return nil
-}
-
-func authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuthentication) bool {
-	switch {
-	case auth.GetPassword() != "":
-		if err := bcrypt.CompareHashAndPassword([]byte(pw), []byte(auth.GetPassword())); err == nil {
-			return true
-		}
-	case auth.GetSignature() != nil:
-		sig := auth.GetSignature()
-		now := time.Now()
-		expiration := time.Unix(int64(sig.GetSignatureExpiration().GetSeconds()), int64(sig.GetSignatureExpiration().GetNanos()))
-		if now.After(expiration) {
-			return false
-		}
-		s, err := publicshare.CreateSignature(share.Token, pw, expiration)
-		if err != nil {
-			// TODO(labkode): pass ctx to log error
-			// Now we are blind
-			return false
-		}
-		return sig.GetSignature() == s
-	}
-	return false
 }
 
 type publicShare struct {
