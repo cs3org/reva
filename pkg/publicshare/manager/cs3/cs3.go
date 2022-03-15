@@ -26,6 +26,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 
@@ -60,11 +61,32 @@ type PublicShareWithPassword struct {
 	HashedPassword string            `json:"password"`
 }
 
-// New returns a new filesystem public shares manager.
-func NewDefault(c map[string]interface{}) (publicshare.Manager, error) {
-	return nil, nil
+type config struct {
+	GatewayAddr       string `mapstructure:"gateway_addr"`
+	ProviderAddr      string `mapstructure:"provider_addr"`
+	ServiceUserID     string `mapstructure:"service_user_id"`
+	ServiceUserIdp    string `mapstructure:"service_user_idp"`
+	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 
+// NewDefault returns a new manager instance with default dependencies
+func NewDefault(m map[string]interface{}) (publicshare.Manager, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		err = errors.Wrap(err, "error creating a new manager")
+		return nil, err
+	}
+
+	s, err := metadata.NewCS3Storage(c.GatewayAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey)
+	if err != nil {
+		return nil, err
+	}
+	indexer := indexer.CreateIndexer(s)
+
+	return New(s, indexer, bcrypt.DefaultCost)
+}
+
+// New returns a new manager instance
 func New(storage metadata.Storage, indexer indexer.Indexer, passwordHashCost int) (publicshare.Manager, error) {
 	return &Manager{
 		storage:          storage,
