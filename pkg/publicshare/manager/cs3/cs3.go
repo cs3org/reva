@@ -228,7 +228,7 @@ func (m *Manager) getByToken(ctx context.Context, token string) (*PublicShareWit
 	return ps, nil
 }
 
-func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
+func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
 	tokens, err := m.indexer.FindBy(&link.PublicShare{}, "Owner", userIdToIndex(u.Id))
 	if err != nil {
 		return nil, err

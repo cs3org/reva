@@ -177,14 +177,14 @@ var _ = Describe("Cs3", func() {
 
 		Describe("ListPublicShares", func() {
 			It("lists existing shares", func() {
-				shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{}, ri, false)
+				shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(1))
 				Expect(shares[0].Signature).To(BeNil())
 			})
 
 			It("adds a signature", func() {
-				shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{}, ri, true)
+				shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{}, true)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(1))
 				Expect(shares[0].Signature).ToNot(BeNil())
@@ -193,7 +193,7 @@ var _ = Describe("Cs3", func() {
 			It("filters by id", func() {
 				shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{
 					publicshare.ResourceIDFilter(&provider.ResourceId{OpaqueId: "UnknownId"}),
-				}, ri, false)
+				}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(0))
 			})
@@ -201,7 +201,7 @@ var _ = Describe("Cs3", func() {
 			It("filters by storage", func() {
 				shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{
 					publicshare.StorageIDFilter("unknownstorage"),
-				}, ri, false)
+				}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(0))
 			})
@@ -215,7 +215,7 @@ var _ = Describe("Cs3", func() {
 				})
 
 				It("does not consider the share", func() {
-					shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{}, ri, false)
+					shares, err := m.ListPublicShares(ctx, user, []*link.ListPublicSharesRequest_Filter{}, false)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(shares)).To(Equal(0))
 				})

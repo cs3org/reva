@@ -249,7 +249,7 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 		log.Error().Msg("error getting user from context")
 	}
 
-	updateR, err := s.sm.UpdatePublicShare(ctx, u, req, nil)
+	updateR, err := s.sm.UpdatePublicShare(ctx, u, req)
 	if err != nil {
 		log.Err(err).Msgf("error updating public shares: %v", err)
 	}
