@@ -48,6 +48,9 @@ type Options struct {
 
 	// permissions service to use when checking permissions
 	PermissionsSVC string `mapstructure:"permissionssvc"`
+
+	PersonalSpaceAliasTemplate string `mapstructure:"personalspacealias_template"`
+	GeneralSpaceAliasTemplate  string `mapstructure:"generalspacealias_template"`
 }
 
 // New returns a new Options instance for the given configuration
@@ -72,6 +75,14 @@ func New(m map[string]interface{}) (*Options, error) {
 
 	// c.DataDirectory should never end in / unless it is the root
 	o.Root = filepath.Clean(o.Root)
+
+	if o.PersonalSpaceAliasTemplate == "" {
+		o.PersonalSpaceAliasTemplate = "{{.SpaceType}}/{{.User.Username}}"
+	}
+
+	if o.GeneralSpaceAliasTemplate == "" {
+		o.GeneralSpaceAliasTemplate = "{{.SpaceType}}/{{.SpaceName | replace \" \" \"-\" | lower}}"
+	}
 
 	return o, nil
 }

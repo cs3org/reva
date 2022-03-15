@@ -69,7 +69,7 @@ var _ = Describe("Grants", func() {
 
 	JustBeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv()
+		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 
 		ref = &provider.Reference{

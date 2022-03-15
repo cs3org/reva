@@ -47,7 +47,7 @@ build-reva: imports
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 test: off
-	go test -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration)
+	go test -v -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration)
 
 test-integration: build-ci
 	cd tests/integration && go test -race ./...

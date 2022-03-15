@@ -33,7 +33,7 @@ var _ = Describe("Lookup", func() {
 
 	JustBeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv()
+		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

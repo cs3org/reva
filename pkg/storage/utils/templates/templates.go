@@ -43,6 +43,14 @@ type UserData struct {
 	Email EmailData
 }
 
+// SpaceData contains the templace placeholders for a space.
+// For example {{.SpaceName}} {{.SpaceType}} or {{.User.Id.OpaqueId}}
+type SpaceData struct {
+	*UserData
+	SpaceType string
+	SpaceName string
+}
+
 // EmailData contains mail data
 // split into local and domain part.
 // It is extracted from splitting the username by @.
@@ -69,8 +77,30 @@ func WithUser(u *userpb.User, tpl string) string {
 	return b.String()
 }
 
+// WithSpacePropertiesAndUser generates a layout based on user data and a space type.
+func WithSpacePropertiesAndUser(u *userpb.User, spaceType string, spaceName string, tpl string) string {
+	tpl = clean(tpl)
+	sd := newSpaceData(u, spaceType, spaceName)
+	// compile given template tpl
+	t, err := template.New("tpl").Funcs(sprig.TxtFuncMap()).Parse(tpl)
+	if err != nil {
+		err := errors.Wrap(err, fmt.Sprintf("error parsing template: spaceanduser_template:%+v tpl:%s", sd, tpl))
+		panic(err)
+	}
+	b := bytes.Buffer{}
+	if err := t.Execute(&b, sd); err != nil {
+		err := errors.Wrap(err, fmt.Sprintf("error executing template: spaceanduser_template:%+v tpl:%s", sd, tpl))
+		panic(err)
+	}
+	return b.String()
+}
+
 func newUserData(u *userpb.User) *UserData {
 	usernameSplit := strings.Split(u.Username, "@")
+	if u.Mail != "" {
+		usernameSplit = strings.Split(u.Mail, "@")
+	}
+
 	if len(usernameSplit) == 1 {
 		usernameSplit = append(usernameSplit, "_unknown")
 	}
@@ -86,6 +116,16 @@ func newUserData(u *userpb.User) *UserData {
 		},
 	}
 	return ut
+}
+
+func newSpaceData(u *userpb.User, st string, n string) *SpaceData {
+	userData := newUserData(u)
+	sd := &SpaceData{
+		userData,
+		st,
+		n,
+	}
+	return sd
 }
 
 func clean(a string) string {

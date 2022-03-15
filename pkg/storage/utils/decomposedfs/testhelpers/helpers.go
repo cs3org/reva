@@ -64,20 +64,27 @@ type TestEnv struct {
 //  /dir1/
 //  /dir1/file1
 //  /dir1/subdir1/
-func NewTestEnv() (*TestEnv, error) {
+//
+// The default config can be overridden by providing the strings to override
+// via map as a parameter
+func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 	if err != nil {
 		return nil, err
 	}
-
-	config := map[string]interface{}{
+	defaultConfig := map[string]interface{}{
 		"root":                tmpRoot,
 		"treetime_accounting": true,
 		"treesize_accounting": true,
 		"share_folder":        "/Shares",
 		"user_layout":         "{{.Id.OpaqueId}}",
 	}
-	o, err := options.New(config)
+	// make it possible to override single config values
+	for k, v := range config {
+		defaultConfig[k] = v
+	}
+
+	o, err := options.New(defaultConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +92,7 @@ func NewTestEnv() (*TestEnv, error) {
 	owner := &userpb.User{
 		Id: &userpb.UserId{
 			Idp:      "idp",
-			OpaqueId: "u-s-e-r-id",
+			OpaqueId: "25b69780-5f39-43be-a7ac-a9b9e9fe4230",
 			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		},
 		Username: "username",
