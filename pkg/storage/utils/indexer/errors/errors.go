@@ -34,11 +34,8 @@ func (e *AlreadyExistsErr) Error() string {
 	return fmt.Sprintf("%s with %s=%s does already exist", e.TypeName, e.IndexBy.String(), e.Value)
 }
 
-// IsAlreadyExistsErr checks whether an error is of type AlreadyExistsErr.
-func IsAlreadyExistsErr(e error) bool {
-	_, ok := e.(*AlreadyExistsErr)
-	return ok
-}
+// IsAlreadyExists implements the IsAlreadyExists interface.
+func (e *AlreadyExistsErr) IsAlreadyExists() {}
 
 // NotFoundErr implements the Error interface.
 type NotFoundErr struct {
@@ -50,8 +47,5 @@ func (e *NotFoundErr) Error() string {
 	return fmt.Sprintf("%s with %s=%s not found", e.TypeName, e.IndexBy.String(), e.Value)
 }
 
-// IsNotFoundErr checks whether an error is of type IsNotFoundErr.
-func IsNotFoundErr(e error) bool {
-	_, ok := e.(*NotFoundErr)
-	return ok
-}
+// IsNotFound implements the IsNotFound interface.
+func (e *NotFoundErr) IsNotFound() {}

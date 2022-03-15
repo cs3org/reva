@@ -107,11 +107,6 @@ func TestUniqueIndexSearch(t *testing.T) {
 	_ = os.RemoveAll(dataDir)
 }
 
-func TestErrors(t *testing.T) {
-	assert.True(t, errors.IsAlreadyExistsErr(&errors.AlreadyExistsErr{}))
-	assert.True(t, errors.IsNotFoundErr(&errors.NotFoundErr{}))
-}
-
 func getUniqueIdxSut(t *testing.T, indexBy option.IndexBy, entityType interface{}) (index.Index, string) {
 	dataPath, _ := WriteIndexTestData(Data, "ID", "")
 	storage, err := metadata.NewDiskStorage(dataPath)

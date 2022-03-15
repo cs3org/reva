@@ -16,13 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package cs3_test
 
 import (
-	// Load core share manager drivers.
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/cs3"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/json"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/memory"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/sql"
-	// Add your own here
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
+
+func TestCs3(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Cs3 Suite")
+}

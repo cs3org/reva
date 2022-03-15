@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -248,7 +247,7 @@ func (cs3 *CS3) Delete(ctx context.Context, path string) error {
 		return err
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return fmt.Errorf("error deleting path: %v", path)
+		return errtypes.NewErrtypeFromStatus(res.Status)
 	}
 
 	return nil
@@ -277,7 +276,7 @@ func (cs3 *CS3) ReadDir(ctx context.Context, path string) ([]string, error) {
 		return nil, err
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, fmt.Errorf("error listing directory: %v", path)
+		return nil, errtypes.NewErrtypeFromStatus(res.Status)
 	}
 
 	entries := []string{}
@@ -326,7 +325,7 @@ func (cs3 *CS3) MakeDirIfNotExist(ctx context.Context, folder string) error {
 		}
 
 		if r.Status.Code != rpc.Code_CODE_OK {
-			return errtypes.NewErrtypeFromStatus(resp.Status)
+			return errtypes.NewErrtypeFromStatus(r.Status)
 		}
 	default:
 		return errtypes.NewErrtypeFromStatus(resp.Status)
