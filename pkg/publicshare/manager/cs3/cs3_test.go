@@ -44,6 +44,7 @@ import (
 	indexermocks "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/mocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	storagemocks "github.com/cs3org/reva/v2/pkg/storage/utils/metadata/mocks"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 var _ = Describe("Cs3", func() {
@@ -380,6 +381,88 @@ var _ = Describe("Cs3", func() {
 					Expect(err).To(HaveOccurred())
 					Expect(ps).To(BeNil())
 				})
+			})
+		})
+
+		Describe("UpdatePublicShare", func() {
+			var (
+				ref *link.PublicShareReference
+			)
+
+			JustBeforeEach(func() {
+				ref = &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Token{
+						Token: existingShare.Token,
+					},
+				}
+			})
+
+			It("fails when an invalid reference is given", func() {
+				_, err := m.UpdatePublicShare(ctx, user, &link.UpdatePublicShareRequest{
+					Ref: &link.PublicShareReference{Spec: &link.PublicShareReference_Id{Id: &link.PublicShareId{OpaqueId: "doesnotexist"}}},
+				})
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("fails when no valid update request is given", func() {
+				_, err := m.UpdatePublicShare(ctx, user, &link.UpdatePublicShareRequest{
+					Ref:    ref,
+					Update: &link.UpdatePublicShareRequest_Update{},
+				})
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("updates the display name", func() {
+				ps, err := m.UpdatePublicShare(ctx, user, &link.UpdatePublicShareRequest{
+					Ref: ref,
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type:        link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME,
+						DisplayName: "new displayname",
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ps).ToNot(BeNil())
+				Expect(ps.DisplayName).To(Equal("new displayname"))
+				storage.AssertNumberOfCalls(GinkgoT(), "SimpleUpload", 2) // Initial upload and update
+			})
+
+			It("updates the password", func() {
+				ps, err := m.UpdatePublicShare(ctx, user, &link.UpdatePublicShareRequest{
+					Ref: ref,
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type:  link.UpdatePublicShareRequest_Update_TYPE_PASSWORD,
+						Grant: &link.Grant{Password: "NewPass"},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ps).ToNot(BeNil())
+				storage.AssertNumberOfCalls(GinkgoT(), "SimpleUpload", 2) // Initial upload and update
+			})
+
+			It("updates the permissions", func() {
+				ps, err := m.UpdatePublicShare(ctx, user, &link.UpdatePublicShareRequest{
+					Ref: ref,
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type:  link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{Permissions: &link.PublicSharePermissions{Permissions: &provider.ResourcePermissions{Delete: true}}},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ps).ToNot(BeNil())
+				storage.AssertNumberOfCalls(GinkgoT(), "SimpleUpload", 2) // Initial upload and update
+			})
+
+			It("updates the expiration", func() {
+				ps, err := m.UpdatePublicShare(ctx, user, &link.UpdatePublicShareRequest{
+					Ref: ref,
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type:  link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
+						Grant: &link.Grant{Expiration: utils.TSNow()},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ps).ToNot(BeNil())
+				storage.AssertNumberOfCalls(GinkgoT(), "SimpleUpload", 2) // Initial upload and update
 			})
 		})
 	})

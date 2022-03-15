@@ -176,18 +176,7 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 		HashedPassword: password,
 	}
 
-	data, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-
-	fn := path.Join("publicshares", tkn)
-	err = m.storage.SimpleUpload(ctx, fn, data)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = m.indexer.Add(s.PublicShare)
+	err := m.persist(ctx, s)
 	if err != nil {
 		return nil, err
 	}
@@ -195,21 +184,40 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 	return s.PublicShare, nil
 }
 
-func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
-	return nil, nil
+func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest) (*link.PublicShare, error) {
+	ps, err := m.getWithPassword(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
+
+	switch req.Update.Type {
+	case link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME:
+		ps.PublicShare.DisplayName = req.Update.DisplayName
+	case link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS:
+		ps.PublicShare.Permissions = req.Update.Grant.Permissions
+	case link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION:
+		ps.PublicShare.Expiration = req.Update.Grant.Expiration
+	case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
+		h, err := bcrypt.GenerateFromPassword([]byte(req.Update.Grant.Password), m.passwordHashCost)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not hash share password")
+		}
+		ps.HashedPassword = string(h)
+		ps.PublicShare.PasswordProtected = true
+	default:
+		return nil, errtypes.BadRequest("no valid update type given")
+	}
+
+	err = m.persist(ctx, ps)
+	if err != nil {
+		return nil, err
+	}
+
+	return ps.PublicShare, nil
 }
 
 func (m *Manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error) {
-	var err error
-	var ps *PublicShareWithPassword
-	switch {
-	case ref.GetToken() != "":
-		ps, err = m.getByToken(ctx, ref.GetToken())
-	case ref.GetId().GetOpaqueId() != "":
-		ps, err = m.getById(ctx, ref.GetId().GetOpaqueId())
-	default:
-		return nil, errtypes.BadRequest("neither id nor token given")
-	}
+	ps, err := m.getWithPassword(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +230,17 @@ func (m *Manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	}
 
 	return ps.PublicShare, nil
+}
+
+func (m *Manager) getWithPassword(ctx context.Context, ref *link.PublicShareReference) (*PublicShareWithPassword, error) {
+	switch {
+	case ref.GetToken() != "":
+		return m.getByToken(ctx, ref.GetToken())
+	case ref.GetId().GetOpaqueId() != "":
+		return m.getById(ctx, ref.GetId().GetOpaqueId())
+	default:
+		return nil, errtypes.BadRequest("neither id nor token given")
+	}
 }
 
 func (m *Manager) getById(ctx context.Context, id string) (*PublicShareWithPassword, error) {
@@ -323,4 +342,32 @@ func indexOwnerFunc(v interface{}) (string, error) {
 
 func userIdToIndex(id *userpb.UserId) string {
 	return url.QueryEscape(id.Idp + ":" + id.OpaqueId)
+}
+
+func (m *Manager) persist(ctx context.Context, ps *PublicShareWithPassword) error {
+	data, err := json.Marshal(ps)
+	if err != nil {
+		return err
+	}
+
+	fn := path.Join("publicshares", ps.PublicShare.Token)
+	err = m.storage.SimpleUpload(ctx, fn, data)
+	if err != nil {
+		return err
+	}
+
+	_, err = m.indexer.Add(ps.PublicShare)
+	if err != nil {
+		if _, ok := err.(errtypes.IsAlreadyExists); !ok {
+			return err
+		}
+		err = m.indexer.Delete(ps.PublicShare)
+		if err != nil {
+			return err
+		}
+		_, err = m.indexer.Add(ps.PublicShare)
+		return err
+	}
+
+	return nil
 }
