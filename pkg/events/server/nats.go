@@ -19,10 +19,11 @@
 package server
 
 import (
-	"fmt"
+	"time"
 
 	"github.com/asim/go-micro/plugins/events/nats/v4"
 	"github.com/cenkalti/backoff"
+	"github.com/cs3org/reva/v2/pkg/logger"
 	"go-micro.dev/v4/events"
 
 	stanServer "github.com/nats-io/nats-streaming-server/server"
@@ -46,10 +47,10 @@ func NewNatsStream(opts ...nats.Option) (events.Stream, error) {
 	b := backoff.NewExponentialBackOff()
 	var stream events.Stream
 	o := func() error {
+		n := b.NextBackOff()
 		s, err := nats.NewStream(opts...)
-		if err != nil {
-			// TODO: should we get the standard logger here? if yes: How?
-			fmt.Printf("can't connect to nats (stan) server, retrying in %s\n", b.NextBackOff())
+		if err != nil && n > time.Second {
+			logger.New().Error().Err(err).Msgf("can't connect to nats (stan) server, retrying in %s", n)
 		}
 		stream = s
 		return err
