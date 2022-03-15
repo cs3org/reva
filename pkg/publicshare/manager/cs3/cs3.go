@@ -273,7 +273,22 @@ func (m *Manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 }
 
 func (m *Manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
-	return nil, nil
+	ps, err := m.getByToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	if publicshare.IsExpired(ps.PublicShare) {
+		return nil, errtypes.NotFound("public share has expired")
+	}
+
+	if ps.PublicShare.PasswordProtected {
+		if !publicshare.Authenticate(ps.PublicShare, ps.HashedPassword, auth) {
+			return nil, errtypes.InvalidCredentials("access denied")
+		}
+	}
+
+	return ps.PublicShare, nil
 }
 
 func indexOwnerFunc(v interface{}) (string, error) {

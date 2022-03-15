@@ -155,7 +155,8 @@ var _ = Describe("Cs3", func() {
 
 	Context("with an existing share", func() {
 		var (
-			existingShare *link.PublicShare
+			existingShare  *link.PublicShare
+			hashedPassword string
 		)
 
 		JustBeforeEach(func() {
@@ -163,7 +164,11 @@ var _ = Describe("Cs3", func() {
 			var err error
 			existingShare, err = m.CreatePublicShare(ctx, user, ri, grant)
 			Expect(err).ToNot(HaveOccurred())
-			shareJson, err := json.Marshal(cs3.PublicShareWithPassword{PublicShare: existingShare})
+
+			h, err := bcrypt.GenerateFromPassword([]byte(grant.Password), bcrypt.DefaultCost)
+			Expect(err).ToNot(HaveOccurred())
+			hashedPassword = string(h)
+			shareJson, err := json.Marshal(cs3.PublicShareWithPassword{PublicShare: existingShare, HashedPassword: hashedPassword})
 			Expect(err).ToNot(HaveOccurred())
 			storage.On("SimpleDownload", mock.Anything, mock.MatchedBy(func(in string) bool {
 				return strings.HasPrefix(in, "publicshares/")
@@ -319,6 +324,62 @@ var _ = Describe("Cs3", func() {
 				Expect(err).To(HaveOccurred())
 
 				mockIndexer.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+			})
+		})
+
+		Describe("GetPublicShareByToken", func() {
+			It("doesn't get the share using a wrong password", func() {
+				auth := &link.PublicShareAuthentication{
+					Spec: &link.PublicShareAuthentication_Password{
+						Password: "wroooong",
+					},
+				}
+				ps, err := m.GetPublicShareByToken(ctx, existingShare.Token, auth, false)
+				Expect(err).To(HaveOccurred())
+				Expect(ps).To(BeNil())
+			})
+
+			It("gets the share using a password", func() {
+				auth := &link.PublicShareAuthentication{
+					Spec: &link.PublicShareAuthentication_Password{
+						Password: grant.Password,
+					},
+				}
+				ps, err := m.GetPublicShareByToken(ctx, existingShare.Token, auth, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ps).ToNot(BeNil())
+			})
+
+			It("gets the share using a signature", func() {
+				publicshare.AddSignature(existingShare, hashedPassword)
+				auth := &link.PublicShareAuthentication{
+					Spec: &link.PublicShareAuthentication_Signature{
+						Signature: existingShare.Signature,
+					},
+				}
+				ps, err := m.GetPublicShareByToken(ctx, existingShare.Token, auth, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ps).ToNot(BeNil())
+
+			})
+
+			Context("when the share has expired", func() {
+				BeforeEach(func() {
+					t := time.Date(2022, time.January, 1, 12, 0, 0, 0, time.UTC)
+					grant.Expiration = &typespb.Timestamp{
+						Seconds: uint64(t.Unix()),
+					}
+				})
+				It("it doesn't consider expired shares", func() {
+					auth := &link.PublicShareAuthentication{
+						Spec: &link.PublicShareAuthentication_Password{
+							Password: grant.Password,
+						},
+					}
+					ps, err := m.GetPublicShareByToken(ctx, existingShare.Token, auth, false)
+					Expect(err).To(HaveOccurred())
+					Expect(ps).To(BeNil())
+				})
 			})
 		})
 	})
