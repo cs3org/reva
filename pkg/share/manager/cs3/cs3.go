@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"sync"
 
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -45,6 +46,8 @@ import (
 
 // Manager implements a share manager using a cs3 storage backend
 type Manager struct {
+	sync.RWMutex
+
 	storage metadata.Storage
 	indexer indexer.Indexer
 
