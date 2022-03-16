@@ -75,6 +75,9 @@ func (h *Handler) Init(c *config.Config) {
 	if h.c.Capabilities.Core.Status.ProductName == "" {
 		h.c.Capabilities.Core.Status.ProductName = "reva" // TODO make build determined
 	}
+	if h.c.Capabilities.Core.Status.Product == "" {
+		h.c.Capabilities.Core.Status.Product = "reva" // TODO make build determined
+	}
 	if h.c.Capabilities.Core.Status.Hostname == "" {
 		h.c.Capabilities.Core.Status.Hostname = "" // TODO get from context?
 	}
@@ -216,6 +219,7 @@ func (h *Handler) Init(c *config.Config) {
 			Micro:   11,
 			String:  "10.0.11",
 			Edition: "community",
+			Product: "reva",
 		}
 	}
 

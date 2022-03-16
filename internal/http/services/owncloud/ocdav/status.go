@@ -36,6 +36,7 @@ func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
 		VersionString:  "10.0.11",
 		Edition:        "community",
 		ProductName:    "reva",
+		Product:        "reva",
 	}
 
 	statusJSON, err := json.MarshalIndent(status, "", "    ")
