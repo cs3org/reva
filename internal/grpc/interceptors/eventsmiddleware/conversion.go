@@ -145,35 +145,57 @@ func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareR
 
 // FileUploaded converts the response to an event
 func FileUploaded(r *provider.InitiateFileUploadResponse, req *provider.InitiateFileUploadRequest) events.FileUploaded {
-	return events.FileUploaded{}
+	return events.FileUploaded{
+		FileID: req.Ref,
+	}
 }
 
 // FileDownloaded converts the response to an event
 func FileDownloaded(r *provider.InitiateFileDownloadResponse, req *provider.InitiateFileDownloadRequest) events.FileDownloaded {
-	return events.FileDownloaded{}
+	return events.FileDownloaded{
+		FileID: req.Ref,
+	}
 }
 
 // ItemTrashed converts the response to an event
 func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest) events.ItemTrashed {
-	return events.ItemTrashed{}
+	return events.ItemTrashed{
+		FileID: req.Ref,
+	}
 }
 
 // ItemMoved converts the response to an event
 func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest) events.ItemMoved {
-	return events.ItemMoved{}
+	return events.ItemMoved{
+		FileID:       req.Destination,
+		OldReference: req.Source,
+	}
 }
 
 // ItemPurged converts the response to an event
 func ItemPurged(r *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequest) events.ItemPurged {
-	return events.ItemPurged{}
+	return events.ItemPurged{
+		FileID: req.Ref,
+	}
 }
 
 // ItemRestored converts the response to an event
 func ItemRestored(r *provider.RestoreRecycleItemResponse, req *provider.RestoreRecycleItemRequest) events.ItemRestored {
-	return events.ItemRestored{}
+	ref := req.Ref
+	if req.RestoreRef != nil {
+		ref = req.RestoreRef
+	}
+	return events.ItemRestored{
+		FileID:       ref,
+		OldReference: req.Ref,
+		Key:          req.Key,
+	}
 }
 
 // FileVersionRestored converts the response to an event
 func FileVersionRestored(r *provider.RestoreFileVersionResponse, req *provider.RestoreFileVersionRequest) events.FileVersionRestored {
-	return events.FileVersionRestored{}
+	return events.FileVersionRestored{
+		FileID: req.Ref,
+		Key:    req.Key,
+	}
 }
