@@ -64,16 +64,19 @@ func (h *Handler) Init(c *config.Config) {
 	// h.c.Capabilities.Core.Status.Maintenance is boolean
 	// h.c.Capabilities.Core.Status.NeedsDBUpgrade is boolean
 	if h.c.Capabilities.Core.Status.Version == "" {
-		h.c.Capabilities.Core.Status.Version = "10.0.9.5" // TODO make build determined
+		h.c.Capabilities.Core.Status.Version = "10.0.11.5" // TODO make build determined
 	}
 	if h.c.Capabilities.Core.Status.VersionString == "" {
-		h.c.Capabilities.Core.Status.VersionString = "10.0.9" // TODO make build determined
+		h.c.Capabilities.Core.Status.VersionString = "10.0.11" // TODO make build determined
 	}
 	if h.c.Capabilities.Core.Status.Edition == "" {
 		h.c.Capabilities.Core.Status.Edition = "community" // TODO make build determined
 	}
 	if h.c.Capabilities.Core.Status.ProductName == "" {
 		h.c.Capabilities.Core.Status.ProductName = "reva" // TODO make build determined
+	}
+	if h.c.Capabilities.Core.Status.Product == "" {
+		h.c.Capabilities.Core.Status.Product = "reva" // TODO make build determined
 	}
 	if h.c.Capabilities.Core.Status.Hostname == "" {
 		h.c.Capabilities.Core.Status.Hostname = "" // TODO get from context?
@@ -213,9 +216,10 @@ func (h *Handler) Init(c *config.Config) {
 			// TODO get from build env
 			Major:   10,
 			Minor:   0,
-			Micro:   9,
-			String:  "10.0.9",
+			Micro:   11,
+			String:  "10.0.11",
 			Edition: "community",
+			Product: "reva",
 		}
 	}
 
