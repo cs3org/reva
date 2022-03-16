@@ -30,10 +30,10 @@ import (
 	"github.com/jedib0t/go-pretty/table"
 )
 
-func transferGetStatusCommand() *command {
-	cmd := newCommand("transfer-get-status")
-	cmd.Description = func() string { return "get the status of a transfer" }
-	cmd.Usage = func() string { return "Usage: transfer-get-status [-flags]" }
+func transferRetryCommand() *command {
+	cmd := newCommand("transfer-retry")
+	cmd.Description = func() string { return "retry a transfer" }
+	cmd.Usage = func() string { return "Usage: transfer-retry [-flags]" }
 	txID := cmd.String("txId", "", "the transfer identifier")
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -48,30 +48,32 @@ func transferGetStatusCommand() *command {
 			return err
 		}
 
-		getStatusRequest := &datatx.GetTransferStatusRequest{
-			TxId: &datatx.TxId{OpaqueId: *txID},
+		retryRequest := &datatx.RetryTransferRequest{
+			TxId: &datatx.TxId{
+				OpaqueId: *txID,
+			},
 		}
 
-		getStatusResponse, err := client.GetTransferStatus(ctx, getStatusRequest)
+		retryResponse, err := client.RetryTransfer(ctx, retryRequest)
 		if err != nil {
 			return err
 		}
-		if getStatusResponse.Status.Code != rpc.Code_CODE_OK {
-			return formatError(getStatusResponse.Status)
+		if retryResponse.Status.Code != rpc.Code_CODE_OK {
+			return formatError(retryResponse.Status)
 		}
 
 		if len(w) == 0 {
 			t := table.NewWriter()
 			t.SetOutputMirror(os.Stdout)
 			t.AppendHeader(table.Row{"ShareId.OpaqueId", "Id.OpaqueId", "Status", "Ctime"})
-			cTime := time.Unix(int64(getStatusResponse.TxInfo.Ctime.Seconds), int64(getStatusResponse.TxInfo.Ctime.Nanos))
+			cTime := time.Unix(int64(retryResponse.TxInfo.Ctime.Seconds), int64(retryResponse.TxInfo.Ctime.Nanos))
 			t.AppendRows([]table.Row{
-				{getStatusResponse.TxInfo.ShareId.OpaqueId, getStatusResponse.TxInfo.Id.OpaqueId, getStatusResponse.TxInfo.Status, cTime.Format("Mon Jan 2 15:04:05 -0700 MST 2006")},
+				{retryResponse.TxInfo.ShareId.OpaqueId, retryResponse.TxInfo.Id.OpaqueId, retryResponse.TxInfo.Status, cTime},
 			})
 			t.Render()
 		} else {
 			enc := gob.NewEncoder(w[0])
-			if err := enc.Encode(getStatusResponse.TxInfo); err != nil {
+			if err := enc.Encode(retryResponse.TxInfo); err != nil {
 				return err
 			}
 		}

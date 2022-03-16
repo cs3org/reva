@@ -20,58 +20,67 @@ package main
 
 import (
 	"encoding/gob"
-	"errors"
 	"io"
 	"os"
-	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	"github.com/jedib0t/go-pretty/table"
 )
 
-func transferGetStatusCommand() *command {
-	cmd := newCommand("transfer-get-status")
-	cmd.Description = func() string { return "get the status of a transfer" }
-	cmd.Usage = func() string { return "Usage: transfer-get-status [-flags]" }
-	txID := cmd.String("txId", "", "the transfer identifier")
+func transferListCommand() *command {
+	cmd := newCommand("transfer-list")
+	cmd.Description = func() string { return "get a list of transfers" }
+	cmd.Usage = func() string { return "Usage: transfer-list [-flags]" }
+	filterShareID := cmd.String("shareId", "", "share ID filter (optional)")
 
 	cmd.Action = func(w ...io.Writer) error {
-		// validate flags
-		if *txID == "" {
-			return errors.New("txId must be specified: use -txId flag\n" + cmd.Usage())
-		}
-
 		ctx := getAuthContext()
 		client, err := getClient()
 		if err != nil {
 			return err
 		}
 
-		getStatusRequest := &datatx.GetTransferStatusRequest{
-			TxId: &datatx.TxId{OpaqueId: *txID},
+		// validate flags
+		var filters []*datatx.ListTransfersRequest_Filter
+		if *filterShareID != "" {
+			filters = append(filters, &datatx.ListTransfersRequest_Filter{
+				Type: datatx.ListTransfersRequest_Filter_TYPE_SHARE_ID,
+				Term: &datatx.ListTransfersRequest_Filter_ShareId{
+					ShareId: &ocm.ShareId{
+						OpaqueId: *filterShareID,
+					},
+				},
+			})
 		}
 
-		getStatusResponse, err := client.GetTransferStatus(ctx, getStatusRequest)
+		transferslistRequest := &datatx.ListTransfersRequest{
+			Filters: filters,
+		}
+
+		listTransfersResponse, err := client.ListTransfers(ctx, transferslistRequest)
 		if err != nil {
 			return err
 		}
-		if getStatusResponse.Status.Code != rpc.Code_CODE_OK {
-			return formatError(getStatusResponse.Status)
+		if listTransfersResponse.Status.Code != rpc.Code_CODE_OK {
+			return formatError(listTransfersResponse.Status)
 		}
 
 		if len(w) == 0 {
 			t := table.NewWriter()
 			t.SetOutputMirror(os.Stdout)
-			t.AppendHeader(table.Row{"ShareId.OpaqueId", "Id.OpaqueId", "Status", "Ctime"})
-			cTime := time.Unix(int64(getStatusResponse.TxInfo.Ctime.Seconds), int64(getStatusResponse.TxInfo.Ctime.Nanos))
-			t.AppendRows([]table.Row{
-				{getStatusResponse.TxInfo.ShareId.OpaqueId, getStatusResponse.TxInfo.Id.OpaqueId, getStatusResponse.TxInfo.Status, cTime.Format("Mon Jan 2 15:04:05 -0700 MST 2006")},
-			})
+			t.AppendHeader(table.Row{"ShareId.OpaqueId", "Id.OpaqueId"})
+
+			for _, s := range listTransfersResponse.Transfers {
+				t.AppendRows([]table.Row{
+					{s.ShareId.OpaqueId, s.Id.OpaqueId},
+				})
+			}
 			t.Render()
 		} else {
 			enc := gob.NewEncoder(w[0])
-			if err := enc.Encode(getStatusResponse.TxInfo); err != nil {
+			if err := enc.Encode(listTransfersResponse.Transfers); err != nil {
 				return err
 			}
 		}
