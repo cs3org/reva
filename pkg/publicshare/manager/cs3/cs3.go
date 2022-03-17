@@ -151,7 +151,7 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 	displayName := tkn
 	if ri.ArbitraryMetadata != nil {
 		metadataName, ok := ri.ArbitraryMetadata.Metadata["name"]
-		if !ok {
+		if ok {
 			displayName = metadataName
 		}
 	}

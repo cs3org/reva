@@ -152,6 +152,19 @@ var _ = Describe("Cs3", func() {
 				return bcrypt.CompareHashAndPassword([]byte(ps.HashedPassword), []byte("secret123")) == nil
 			}))
 		})
+
+		It("picks up the displayname from the metadata", func() {
+			ri.ArbitraryMetadata = &provider.ArbitraryMetadata{
+				Metadata: map[string]string{
+					"name": "metadata name",
+				},
+			}
+
+			link, err := m.CreatePublicShare(ctx, user, ri, grant)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(link).ToNot(BeNil())
+			Expect(link.DisplayName).To(Equal("metadata name"))
+		})
 	})
 
 	Context("with an existing share", func() {
