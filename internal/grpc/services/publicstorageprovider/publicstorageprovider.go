@@ -25,12 +25,13 @@ import (
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
@@ -163,12 +164,19 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 
 func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.Reference) (*provider.Reference, string, *link.PublicShare, *rpc.Status, error) {
 	log := appctx.GetLogger(ctx)
-	tkn, opaqueid, relativePath, err := s.unwrap(ctx, ref)
-	if err != nil {
-		return nil, "", nil, nil, err
-	}
 
-	ls, shareInfo, st, err := s.resolveToken(ctx, tkn)
+	share, _, ok := extractLinkAndInfo(ctx)
+	if !ok {
+		return nil, "", nil, nil, gstatus.Errorf(codes.NotFound, "share or token not found")
+	}
+	/*
+		tkn, opaqueid, relativePath, err := s.unwrap(ctx, ref)
+		if err != nil {
+			return nil, "", nil, nil, err
+		}
+	*/
+
+	ls, shareInfo, st, err := s.resolveToken(ctx, share.Token)
 	switch {
 	case err != nil:
 		return nil, "", nil, nil, err
@@ -180,7 +188,7 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 	switch shareInfo.Type {
 	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
 		// folders point to the folder -> path needs to be added
-		path = utils.MakeRelativePath(relativePath)
+		path = utils.MakeRelativePath(ref.Path)
 	case provider.ResourceType_RESOURCE_TYPE_FILE:
 		// files already point to the correct id
 		path = "."
@@ -189,27 +197,20 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 		// path = utils.MakeRelativePath(relativePath)
 	}
 
-	if opaqueid == "" {
-		opaqueid = shareInfo.Id.OpaqueId
-	}
-
 	cs3Ref := &provider.Reference{
-		ResourceId: &provider.ResourceId{
-			StorageId: shareInfo.Id.StorageId,
-			OpaqueId:  opaqueid,
-		},
-		Path: path,
+		ResourceId: shareInfo.Id,
+		Path:       path,
 	}
 
 	log.Debug().
 		Interface("sourceRef", ref).
 		Interface("cs3Ref", cs3Ref).
 		Interface("share", ls).
-		Str("tkn", tkn).
+		Str("tkn", share.Token).
 		Str("originalPath", shareInfo.Path).
-		Str("relativePath", relativePath).
+		Str("relativePath", path).
 		Msg("translatePublicRefToCS3Ref")
-	return cs3Ref, tkn, ls, nil, nil
+	return cs3Ref, share.Token, ls, nil, nil
 }
 
 // Both, t.dir and tokenPath paths need to be merged:
@@ -350,49 +351,160 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 // 2. look up the storage space using ListStorageSpaces.
 // 3. make related requests to that (spaceid, nodeid)
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+	spaceTypes := map[string]struct{}{}
+	var exists = struct{}{}
+	appendTypes := []string{}
+	var spaceID *provider.ResourceId
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			switch f.GetSpaceType() {
-			case SpaceTypePublic:
+			spaceType := f.GetSpaceType()
+			// do we need to fetch the shares?
+			if spaceType == "+mountpoint" || spaceType == "+grant" {
+				appendTypes = append(appendTypes, strings.TrimPrefix(spaceType, "+"))
 				continue
-			case "mountpoint", "+mountpoint":
-				continue
-			default:
-				return &provider.ListStorageSpacesResponse{
-					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-				}, nil
 			}
+			spaceTypes[spaceType] = exists
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, _, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			spaceid, shareid, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
 			if err != nil {
 				continue
 			}
 			if spaceid != utils.PublicStorageProviderID {
 				return &provider.ListStorageSpacesResponse{
-					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+					// a specific id was requested, return not found instead of empty list
+					Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND},
 				}, nil
 			}
+			spaceID = &provider.ResourceId{StorageId: spaceid, OpaqueId: shareid}
 		}
 	}
 
-	return &provider.ListStorageSpacesResponse{
-		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-		StorageSpaces: []*provider.StorageSpace{{
-			Id: &provider.StorageSpaceId{
-				OpaqueId: utils.PublicStorageProviderID,
-			},
-			SpaceType: SpaceTypePublic,
-			// return the actual resource id?
-			Root: &provider.ResourceId{
-				StorageId: utils.PublicStorageProviderID,
-				OpaqueId:  utils.PublicStorageProviderID,
-			},
-			Name:  "Public shares",
-			Mtime: &typesv1beta1.Timestamp{}, // do we need to update it?
-		}},
-	}, nil
+	// if there is no public scope there are no publicstorage spaces
+	share, _, ok := extractLinkAndInfo(ctx)
+	if !ok {
+		// TODO when the ocdav publicfile handler sends the token as opaqueid the
+		// public scope needs to change
+		// it always needs to check if the accessed path is a child of the resource identified by
+		// the token
+		return &provider.ListStorageSpacesResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+		}, nil
+	}
 
+	if len(spaceTypes) == 0 {
+		spaceTypes["mountpoint"] = exists
+	}
+	for _, s := range appendTypes {
+		spaceTypes[s] = exists
+	}
+
+	res := &provider.ListStorageSpacesResponse{
+		Status: status.NewOK(ctx),
+	}
+	for k := range spaceTypes {
+		switch k {
+		case "grant":
+			// when a list storage space with the resourceid of an external
+			// resource is made we may have a grant for it
+			root := share.ResourceId
+			// do we filter by id?
+			if spaceID != nil && !utils.ResourceIDEqual(spaceID, root) {
+				// none of our business
+				continue
+			}
+			/*
+				var opaque *typesv1beta1.Opaque
+				if etag, ok := shareEtags[share.Id.OpaqueId]; ok {
+					opaque = utils.AppendPlainToOpaque(opaque, "etag", etag)
+				}
+			*/
+			// we know a grant for this resource
+			space := &provider.StorageSpace{
+				//Opaque: opaque,
+				Id: &provider.StorageSpaceId{
+					OpaqueId: root.StorageId + "!" + root.OpaqueId,
+				},
+				SpaceType: "grant",
+				Owner:     &userv1beta1.User{Id: share.Owner},
+				// the publicstorageprovider keeps track of mount points
+				Root: root,
+			}
+
+			res.StorageSpaces = append(res.StorageSpaces, space)
+		case "mountpoint":
+			root := &provider.ResourceId{
+				StorageId: utils.PublicStorageProviderID,
+				OpaqueId:  share.Token, // the link share has no id, only the token
+			}
+			// do we filter by id
+			if spaceID != nil {
+				switch {
+				case utils.ResourceIDEqual(spaceID, root):
+					// we have a virtual node
+				case utils.ResourceIDEqual(spaceID, share.ResourceId):
+					// we have a mount point
+					root = share.ResourceId
+				default:
+					// none of our business
+					continue
+				}
+			}
+			/*
+				var opaque *typesv1beta1.Opaque
+				if etag, ok := shareEtags[receivedShare.Share.Id.OpaqueId]; ok {
+					opaque = utils.AppendPlainToOpaque(opaque, "etag", etag)
+				}
+			*/
+			space := &provider.StorageSpace{
+				//Opaque: opaque,
+				Id: &provider.StorageSpaceId{
+					OpaqueId: root.StorageId + "!" + root.OpaqueId,
+				},
+				SpaceType: "mountpoint",
+				Owner:     &userv1beta1.User{Id: share.Owner}, // FIXME actually, the mount point belongs to the recipient
+				// the publicstorageprovider keeps track of mount points
+				Root: root,
+			}
+
+			// "Public share ~token"? nah, the spaceregistry uses the token in the name as the mountpoint
+			// TODO use token in root opaqueid when building path
+			space.Name = share.Token
+
+			// what if we don't have a name?
+			res.StorageSpaces = append(res.StorageSpaces, space)
+		}
+	}
+	return res, nil
+}
+
+func extractLinkAndInfo(ctx context.Context) (*link.PublicShare, *provider.ResourceInfo, bool) {
+	scopes, ok := ctxpkg.ContextGetScopes(ctx)
+	if !ok {
+		return nil, nil, false
+	}
+	var share *link.PublicShare
+	var info *provider.ResourceInfo
+	for k, v := range scopes {
+		switch {
+		case strings.HasPrefix(k, "publicshare:") && v.Resource.Decoder == "json":
+			share = &link.PublicShare{}
+			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, share)
+			if err != nil {
+				continue
+			}
+		case strings.HasPrefix(k, "resourceinfo:") && v.Resource.Decoder == "json":
+			info = &provider.ResourceInfo{}
+			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, info)
+			if err != nil {
+				continue
+			}
+		}
+	}
+	if share == nil || info == nil || !utils.ResourceIDEqual(share.ResourceId, info.Id) {
+		return nil, nil, false
+	}
+	return share, info, true
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
@@ -569,12 +681,16 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Value: attribute.StringValue(req.Ref.String()),
 		})
 
-	tkn, opaqueid, relativePath, err := s.unwrap(ctx, req.Ref)
-	if err != nil {
-		return nil, err
+	share, _, ok := extractLinkAndInfo(ctx)
+	if !ok {
+		return &provider.StatResponse{
+			Status: status.NewNotFound(ctx, "share or token not found"),
+		}, nil
 	}
 
-	share, shareInfo, st, err := s.resolveToken(ctx, tkn)
+	// the share is minimally populated, we need more than the token
+	// look up complete share
+	share, shareInfo, st, err := s.resolveToken(ctx, share.Token)
 	switch {
 	case err != nil:
 		return nil, err
@@ -588,25 +704,18 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	if shareInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE || relativePath == "" {
+	if shareInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE || req.Ref.Path == "" {
 		res := &provider.StatResponse{
 			Status: status.NewOK(ctx),
 			Info:   shareInfo,
 		}
-		s.augmentStatResponse(ctx, res, shareInfo, share, tkn)
+		s.augmentStatResponse(ctx, res, shareInfo, share, share.Token)
 		return res, nil
 	}
 
-	if opaqueid == "" {
-		opaqueid = share.ResourceId.OpaqueId
-	}
-
 	ref := &provider.Reference{
-		ResourceId: &provider.ResourceId{
-			StorageId: share.ResourceId.StorageId,
-			OpaqueId:  opaqueid,
-		},
-		Path: utils.MakeRelativePath(relativePath),
+		ResourceId: share.ResourceId,
+		Path:       utils.MakeRelativePath(req.Ref.Path),
 	}
 
 	statResponse, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: ref})
@@ -616,7 +725,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	s.augmentStatResponse(ctx, statResponse, shareInfo, share, tkn)
+	s.augmentStatResponse(ctx, statResponse, shareInfo, share, share.Token)
 
 	return statResponse, nil
 }
@@ -644,7 +753,7 @@ func (s *service) augmentStatResponse(ctx context.Context, res *provider.StatRes
 // setPublicStorageID encodes the actual spaceid and nodeid as an opaqueid in the publicstorageprovider space
 func (s *service) setPublicStorageID(info *provider.ResourceInfo, shareToken string) {
 	info.Id.StorageId = utils.PublicStorageProviderID
-	info.Id.OpaqueId = shareToken + "/" + info.Id.OpaqueId
+	info.Id.OpaqueId = shareToken
 }
 
 func addShare(i *provider.ResourceInfo, ls *link.PublicShare) error {
@@ -667,12 +776,16 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	tkn, opaqueid, relativePath, err := s.unwrap(ctx, req.Ref)
-	if err != nil {
-		return nil, err
-	}
 
-	share, shareInfo, st, err := s.resolveToken(ctx, tkn)
+	share, _, ok := extractLinkAndInfo(ctx)
+	if !ok {
+		return &provider.ListContainerResponse{
+			Status: status.NewNotFound(ctx, "share or token not found"),
+		}, nil
+	}
+	// the share is minimally populated, we need more than the token
+	// look up complete share
+	share, _, st, err := s.resolveToken(ctx, share.Token)
 	switch {
 	case err != nil:
 		return nil, err
@@ -687,20 +800,13 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}, nil
 	}
 
-	if opaqueid == "" {
-		opaqueid = shareInfo.Id.OpaqueId
-	}
-
 	listContainerR, err := s.gateway.ListContainer(
 		ctx,
 		&provider.ListContainerRequest{
 			Ref: &provider.Reference{
-				ResourceId: &provider.ResourceId{
-					StorageId: shareInfo.Id.StorageId,
-					OpaqueId:  opaqueid,
-				},
+				ResourceId: share.ResourceId,
 				// prefix relative path with './' to make it a CS3 relative path
-				Path: utils.MakeRelativePath(relativePath),
+				Path: utils.MakeRelativePath(req.Ref.Path),
 			},
 		},
 	)
@@ -711,8 +817,9 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	}
 
 	for i := range listContainerR.Infos {
+		// FIXME how do we reduce permissions to what is granted by the public link?
 		filterPermissions(listContainerR.Infos[i].PermissionSet, share.GetPermissions().Permissions)
-		s.setPublicStorageID(listContainerR.Infos[i], tkn)
+		//s.setPublicStorageID(listContainerR.Infos[i], tkn)
 		if err := addShare(listContainerR.Infos[i], share); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("share", share).Interface("info", listContainerR.Infos[i]).Msg("error when adding share")
 		}
@@ -740,43 +847,6 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 	l.RestoreRecycleItem = l.RestoreRecycleItem && r.RestoreRecycleItem
 	l.Stat = l.Stat && r.Stat
 	l.UpdateGrant = l.UpdateGrant && r.UpdateGrant
-}
-
-func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token, opaqueid, relativePath string, err error) {
-	isValidReference := func(r *provider.Reference) bool {
-		return r != nil && r.ResourceId != nil && r.ResourceId.StorageId != "" && r.ResourceId.OpaqueId != ""
-	}
-
-	switch {
-	case !isValidReference(ref):
-		return "", "", "", errtypes.BadRequest("resourceid required, got " + ref.String())
-	case utils.ResourceIDEqual(ref.ResourceId, &provider.ResourceId{
-		StorageId: utils.PublicStorageProviderID,
-		OpaqueId:  utils.PublicStorageProviderID,
-	}):
-		// path has the form "./{token}/relative/path/"
-		parts := strings.SplitN(ref.Path, "/", 3)
-		if len(parts) < 2 {
-			// FIXME ... we should expose every public link as a storage space
-			// but do we need to list them then?
-			return "", "", "", errtypes.BadRequest("need at least token in ref: got " + ref.String())
-		}
-		token = parts[1]
-		if len(parts) > 2 {
-			relativePath = parts[2]
-		}
-	default:
-		// id based stat
-		parts := strings.SplitN(ref.ResourceId.OpaqueId, "/", 2)
-		if len(parts) < 2 {
-			return "", "", "", errtypes.BadRequest("OpaqueId needs to have form {token}/{shared node id}: got " + ref.String())
-		}
-		token = parts[0]
-		opaqueid = parts[1]
-		relativePath = ref.Path
-	}
-
-	return
 }
 
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
