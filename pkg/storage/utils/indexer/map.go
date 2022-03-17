@@ -36,7 +36,7 @@ type typeMapping struct {
 
 func (m typeMap) addIndex(typeName string, pkName string, idx index.Index) {
 	if val, ok := m[typeName]; ok {
-		val.IndicesByField[strcase.ToCamel(idx.IndexBy().String())] = append(val.IndicesByField[idx.IndexBy().String()], idx)
+		val.IndicesByField[strcase.ToCamel(idx.IndexBy().String())] = append(val.IndicesByField[strcase.ToCamel(idx.IndexBy().String())], idx)
 		return
 	}
 	m[typeName] = typeMapping{
