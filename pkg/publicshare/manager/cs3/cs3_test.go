@@ -423,7 +423,12 @@ var _ = Describe("Cs3", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ps).ToNot(BeNil())
 				Expect(ps.DisplayName).To(Equal("new displayname"))
-				storage.AssertNumberOfCalls(GinkgoT(), "SimpleUpload", 2) // Initial upload and update
+				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, path.Join("publicshares", ps.Token), mock.MatchedBy(func(data []byte) bool {
+					s := cs3.PublicShareWithPassword{}
+					err := json.Unmarshal(data, &s)
+					Expect(err).ToNot(HaveOccurred())
+					return s.PublicShare.DisplayName == "new displayname"
+				}))
 			})
 
 			It("updates the password", func() {
@@ -436,7 +441,12 @@ var _ = Describe("Cs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ps).ToNot(BeNil())
-				storage.AssertNumberOfCalls(GinkgoT(), "SimpleUpload", 2) // Initial upload and update
+				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, path.Join("publicshares", ps.Token), mock.MatchedBy(func(data []byte) bool {
+					s := cs3.PublicShareWithPassword{}
+					err := json.Unmarshal(data, &s)
+					Expect(err).ToNot(HaveOccurred())
+					return s.HashedPassword != ""
+				}))
 			})
 
 			It("updates the permissions", func() {
@@ -449,10 +459,16 @@ var _ = Describe("Cs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ps).ToNot(BeNil())
-				storage.AssertNumberOfCalls(GinkgoT(), "SimpleUpload", 2) // Initial upload and update
+				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, path.Join("publicshares", ps.Token), mock.MatchedBy(func(data []byte) bool {
+					s := cs3.PublicShareWithPassword{}
+					err := json.Unmarshal(data, &s)
+					Expect(err).ToNot(HaveOccurred())
+					return s.PublicShare.Permissions.Permissions.Delete
+				}))
 			})
 
 			It("updates the expiration", func() {
+				ts := utils.TSNow()
 				ps, err := m.UpdatePublicShare(ctx, user, &link.UpdatePublicShareRequest{
 					Ref: ref,
 					Update: &link.UpdatePublicShareRequest_Update{
@@ -462,7 +478,12 @@ var _ = Describe("Cs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ps).ToNot(BeNil())
-				storage.AssertNumberOfCalls(GinkgoT(), "SimpleUpload", 2) // Initial upload and update
+				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, path.Join("publicshares", ps.Token), mock.MatchedBy(func(data []byte) bool {
+					s := cs3.PublicShareWithPassword{}
+					err := json.Unmarshal(data, &s)
+					Expect(err).ToNot(HaveOccurred())
+					return s.PublicShare.Expiration != nil && s.PublicShare.Expiration.Seconds == ts.Seconds
+				}))
 			})
 		})
 	})
