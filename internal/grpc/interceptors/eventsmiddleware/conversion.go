@@ -126,12 +126,15 @@ func LinkAccessed(r *link.GetPublicShareByTokenResponse) events.LinkAccessed {
 
 // LinkAccessFailed converts the response to an event
 func LinkAccessFailed(r *link.GetPublicShareByTokenResponse, req *link.GetPublicShareByTokenRequest) events.LinkAccessFailed {
-	return events.LinkAccessFailed{
-		ShareID: r.Share.Id,
-		Token:   r.Share.Token,
+	e := events.LinkAccessFailed{
 		Status:  r.Status.Code,
 		Message: r.Status.Message,
 	}
+	if r.Share != nil {
+		e.ShareID = r.Share.Id
+		e.Token = r.Share.Token
+	}
+	return e
 }
 
 // LinkRemoved converts the response to an event
