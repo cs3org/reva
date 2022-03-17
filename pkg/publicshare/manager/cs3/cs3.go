@@ -124,8 +124,8 @@ func (m *Manager) initialize() error {
 }
 
 func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
-	if !m.initialized {
-		m.initialize()
+	if err := m.initialize(); err != nil {
+		return nil, err
 	}
 
 	id := &link.PublicShareId{
@@ -185,6 +185,10 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 }
 
 func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest) (*link.PublicShare, error) {
+	if err := m.initialize(); err != nil {
+		return nil, err
+	}
+
 	ps, err := m.getWithPassword(ctx, req.Ref)
 	if err != nil {
 		return nil, err
@@ -217,6 +221,10 @@ func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 }
 
 func (m *Manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error) {
+	if err := m.initialize(); err != nil {
+		return nil, err
+	}
+
 	ps, err := m.getWithPassword(ctx, ref)
 	if err != nil {
 		return nil, err
@@ -270,6 +278,10 @@ func (m *Manager) getByToken(ctx context.Context, token string) (*PublicShareWit
 }
 
 func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
+	if err := m.initialize(); err != nil {
+		return nil, err
+	}
+
 	tokens, err := m.indexer.FindBy(&link.PublicShare{}, "Owner", userIdToIndex(u.Id))
 	if err != nil {
 		return nil, err
@@ -298,6 +310,10 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 }
 
 func (m *Manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
+	if err := m.initialize(); err != nil {
+		return err
+	}
+
 	ps, err := m.GetPublicShare(ctx, u, ref, false)
 	if err != nil {
 		return err
@@ -314,6 +330,10 @@ func (m *Manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 }
 
 func (m *Manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
+	if err := m.initialize(); err != nil {
+		return nil, err
+	}
+
 	ps, err := m.getByToken(ctx, token)
 	if err != nil {
 		return nil, err
