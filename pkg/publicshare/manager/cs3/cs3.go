@@ -158,7 +158,7 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 
 	var passwordProtected bool
 	password := g.Password
-	if len(password) > 0 {
+	if password != "" {
 		h, err := bcrypt.GenerateFromPassword([]byte(password), m.passwordHashCost)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not hash share password")
