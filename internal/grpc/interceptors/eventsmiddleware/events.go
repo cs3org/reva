@@ -30,6 +30,7 @@ import (
 	v1beta12 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
@@ -93,6 +94,34 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 				ev = LinkAccessed(v)
 			} else {
 				ev = LinkAccessFailed(v, req.(*link.GetPublicShareByTokenRequest))
+			}
+		case *provider.InitiateFileUploadResponse:
+			if isSuccess(v) {
+				ev = FileUploaded(v, req.(*provider.InitiateFileUploadRequest))
+			}
+		case *provider.InitiateFileDownloadResponse:
+			if isSuccess(v) {
+				ev = FileDownloaded(v, req.(*provider.InitiateFileDownloadRequest))
+			}
+		case *provider.DeleteResponse:
+			if isSuccess(v) {
+				ev = ItemTrashed(v, req.(*provider.DeleteRequest))
+			}
+		case *provider.MoveResponse:
+			if isSuccess(v) {
+				ev = ItemMoved(v, req.(*provider.MoveRequest))
+			}
+		case *provider.PurgeRecycleResponse:
+			if isSuccess(v) {
+				ev = ItemPurged(v, req.(*provider.PurgeRecycleRequest))
+			}
+		case *provider.RestoreRecycleItemResponse:
+			if isSuccess(v) {
+				ev = ItemRestored(v, req.(*provider.RestoreRecycleItemRequest))
+			}
+		case *provider.RestoreFileVersionResponse:
+			if isSuccess(v) {
+				ev = FileVersionRestored(v, req.(*provider.RestoreFileVersionRequest))
 			}
 		}
 

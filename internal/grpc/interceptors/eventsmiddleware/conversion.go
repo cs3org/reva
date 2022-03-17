@@ -21,6 +21,7 @@ package eventsmiddleware
 import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 )
 
@@ -142,5 +143,62 @@ func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareR
 	return events.LinkRemoved{
 		ShareID:    req.Ref.GetId(),
 		ShareToken: req.Ref.GetToken(),
+	}
+}
+
+// FileUploaded converts the response to an event
+func FileUploaded(r *provider.InitiateFileUploadResponse, req *provider.InitiateFileUploadRequest) events.FileUploaded {
+	return events.FileUploaded{
+		FileID: req.Ref,
+	}
+}
+
+// FileDownloaded converts the response to an event
+func FileDownloaded(r *provider.InitiateFileDownloadResponse, req *provider.InitiateFileDownloadRequest) events.FileDownloaded {
+	return events.FileDownloaded{
+		FileID: req.Ref,
+	}
+}
+
+// ItemTrashed converts the response to an event
+func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest) events.ItemTrashed {
+	return events.ItemTrashed{
+		FileID: req.Ref,
+	}
+}
+
+// ItemMoved converts the response to an event
+func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest) events.ItemMoved {
+	return events.ItemMoved{
+		FileID:       req.Destination,
+		OldReference: req.Source,
+	}
+}
+
+// ItemPurged converts the response to an event
+func ItemPurged(r *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequest) events.ItemPurged {
+	return events.ItemPurged{
+		FileID: req.Ref,
+	}
+}
+
+// ItemRestored converts the response to an event
+func ItemRestored(r *provider.RestoreRecycleItemResponse, req *provider.RestoreRecycleItemRequest) events.ItemRestored {
+	ref := req.Ref
+	if req.RestoreRef != nil {
+		ref = req.RestoreRef
+	}
+	return events.ItemRestored{
+		FileID:       ref,
+		OldReference: req.Ref,
+		Key:          req.Key,
+	}
+}
+
+// FileVersionRestored converts the response to an event
+func FileVersionRestored(r *provider.RestoreFileVersionResponse, req *provider.RestoreFileVersionRequest) events.FileVersionRestored {
+	return events.FileVersionRestored{
+		FileID: req.Ref,
+		Key:    req.Key,
 	}
 }
