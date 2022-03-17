@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/mitchellh/mapstructure"
@@ -50,6 +51,8 @@ func init() {
 
 // Manager implements a publicshare manager using a cs3 storage backend
 type Manager struct {
+	sync.RWMutex
+
 	storage          metadata.Storage
 	indexer          indexer.Indexer
 	passwordHashCost int
@@ -100,6 +103,13 @@ func New(storage metadata.Storage, indexer indexer.Indexer, passwordHashCost int
 
 func (m *Manager) initialize() error {
 	if m.initialized {
+		return nil
+	}
+
+	m.Lock()
+	defer m.Unlock()
+
+	if m.initialized { // check if initialization happened while grabbing the lock
 		return nil
 	}
 
