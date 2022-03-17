@@ -169,11 +169,11 @@ var _ = Describe("Cs3", func() {
 			h, err := bcrypt.GenerateFromPassword([]byte(grant.Password), bcrypt.DefaultCost)
 			Expect(err).ToNot(HaveOccurred())
 			hashedPassword = string(h)
-			shareJson, err := json.Marshal(cs3.PublicShareWithPassword{PublicShare: existingShare, HashedPassword: hashedPassword})
+			shareJSON, err := json.Marshal(cs3.PublicShareWithPassword{PublicShare: existingShare, HashedPassword: hashedPassword})
 			Expect(err).ToNot(HaveOccurred())
 			storage.On("SimpleDownload", mock.Anything, mock.MatchedBy(func(in string) bool {
 				return strings.HasPrefix(in, "publicshares/")
-			})).Return(shareJson, nil)
+			})).Return(shareJSON, nil)
 		})
 
 		Describe("ListPublicShares", func() {
@@ -352,7 +352,8 @@ var _ = Describe("Cs3", func() {
 			})
 
 			It("gets the share using a signature", func() {
-				publicshare.AddSignature(existingShare, hashedPassword)
+				err := publicshare.AddSignature(existingShare, hashedPassword)
+				Expect(err).ToNot(HaveOccurred())
 				auth := &link.PublicShareAuthentication{
 					Spec: &link.PublicShareAuthentication_Signature{
 						Signature: existingShare.Signature,

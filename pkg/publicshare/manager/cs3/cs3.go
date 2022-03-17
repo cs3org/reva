@@ -48,6 +48,7 @@ func init() {
 	registry.Register("cs3", NewDefault)
 }
 
+// Manager implements a publicshare manager using a cs3 storage backend
 type Manager struct {
 	storage          metadata.Storage
 	indexer          indexer.Indexer
@@ -56,6 +57,7 @@ type Manager struct {
 	initialized bool
 }
 
+// PublicShareWithPassword represents a public share including its hashes password
 type PublicShareWithPassword struct {
 	PublicShare    *link.PublicShare `json:"public_share"`
 	HashedPassword string            `json:"password"`
@@ -123,6 +125,7 @@ func (m *Manager) initialize() error {
 	return nil
 }
 
+// CreatePublicShare creates a new public share
 func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
@@ -184,6 +187,7 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 	return s.PublicShare, nil
 }
 
+// UpdatePublicShare updates an existing public share
 func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest) (*link.PublicShare, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
@@ -220,6 +224,7 @@ func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	return ps.PublicShare, nil
 }
 
+// GetPublicShare returns an existing public share
 func (m *Manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
@@ -245,13 +250,13 @@ func (m *Manager) getWithPassword(ctx context.Context, ref *link.PublicShareRefe
 	case ref.GetToken() != "":
 		return m.getByToken(ctx, ref.GetToken())
 	case ref.GetId().GetOpaqueId() != "":
-		return m.getById(ctx, ref.GetId().GetOpaqueId())
+		return m.getByID(ctx, ref.GetId().GetOpaqueId())
 	default:
 		return nil, errtypes.BadRequest("neither id nor token given")
 	}
 }
 
-func (m *Manager) getById(ctx context.Context, id string) (*PublicShareWithPassword, error) {
+func (m *Manager) getByID(ctx context.Context, id string) (*PublicShareWithPassword, error) {
 	tokens, err := m.indexer.FindBy(&link.PublicShare{}, "Id.OpaqueId", id)
 	if err != nil {
 		return nil, err
@@ -277,12 +282,13 @@ func (m *Manager) getByToken(ctx context.Context, token string) (*PublicShareWit
 	return ps, nil
 }
 
+// ListPublicShares lists existing public shares matching the given filters
 func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}
 
-	tokens, err := m.indexer.FindBy(&link.PublicShare{}, "Owner", userIdToIndex(u.Id))
+	tokens, err := m.indexer.FindBy(&link.PublicShare{}, "Owner", userIDToIndex(u.Id))
 	if err != nil {
 		return nil, err
 	}
@@ -309,6 +315,7 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	return result, nil
 }
 
+// RevokePublicShare revokes an existing public share
 func (m *Manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
 	if err := m.initialize(); err != nil {
 		return err
@@ -329,6 +336,7 @@ func (m *Manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 	return m.indexer.Delete(ps)
 }
 
+// GetPublicShareByToken gets an existing public share in an unauthenticated context using either a password or a signature
 func (m *Manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
@@ -357,10 +365,10 @@ func indexOwnerFunc(v interface{}) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("given entity is not a public share")
 	}
-	return userIdToIndex(ps.Owner), nil
+	return userIDToIndex(ps.Owner), nil
 }
 
-func userIdToIndex(id *userpb.UserId) string {
+func userIDToIndex(id *userpb.UserId) string {
 	return url.QueryEscape(id.Idp + ":" + id.OpaqueId)
 }
 
