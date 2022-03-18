@@ -47,7 +47,7 @@ func init() {
 	global.Register("appprovider", New)
 }
 
-// Config holds the config options that need to be passed down to all ocdav handlers
+// Config holds the config options for the HTTP appprovider service
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`

@@ -16,16 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package preferences
 
 import (
-	// Load cbox specific drivers.
-	_ "github.com/cs3org/reva/pkg/cbox/favorite/sql"
-	_ "github.com/cs3org/reva/pkg/cbox/group/rest"
-	_ "github.com/cs3org/reva/pkg/cbox/preferences/sql"
-	_ "github.com/cs3org/reva/pkg/cbox/publicshare/sql"
-	_ "github.com/cs3org/reva/pkg/cbox/share/sql"
-	_ "github.com/cs3org/reva/pkg/cbox/storage/eoshomewrapper"
-	_ "github.com/cs3org/reva/pkg/cbox/storage/eoswrapper"
-	_ "github.com/cs3org/reva/pkg/cbox/user/rest"
+	"context"
 )
+
+// Manager defines an interface for a preferences manager.
+type Manager interface {
+	// SetKey sets a key under a specified namespace.
+	SetKey(ctx context.Context, key, namespace, value string) error
+	// GetKey returns the value for a combination of key and namespace, if set.
+	GetKey(ctx context.Context, key, namespace string) (string, error)
+}
