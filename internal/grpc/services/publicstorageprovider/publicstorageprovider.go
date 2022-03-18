@@ -819,7 +819,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	for i := range listContainerR.Infos {
 		// FIXME how do we reduce permissions to what is granted by the public link?
 		filterPermissions(listContainerR.Infos[i].PermissionSet, share.GetPermissions().Permissions)
-		//s.setPublicStorageID(listContainerR.Infos[i], tkn)
+		// s.setPublicStorageID(listContainerR.Infos[i], tkn)
 		if err := addShare(listContainerR.Infos[i], share); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("share", share).Interface("info", listContainerR.Infos[i]).Msg("error when adding share")
 		}
