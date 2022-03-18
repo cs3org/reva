@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 const (
@@ -122,6 +123,30 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		case *provider.RestoreFileVersionResponse:
 			if isSuccess(v) {
 				ev = FileVersionRestored(v, req.(*provider.RestoreFileVersionRequest))
+			}
+		case *provider.CreateStorageSpaceResponse:
+			if isSuccess(v) {
+				ev = SpaceCreated(v)
+			}
+		case *provider.UpdateStorageSpaceResponse:
+			if isSuccess(v) {
+				r := req.(*provider.UpdateStorageSpaceRequest)
+				if r.StorageSpace.Name != "" {
+					ev = SpaceRenamed(v, r)
+				}
+
+				if utils.ExistsInOpaque(r.Opaque, "restore") {
+					ev = SpaceEnabled(v, r)
+				}
+			}
+		case *provider.DeleteStorageSpaceResponse:
+			if isSuccess(v) {
+				r := req.(*provider.DeleteStorageSpaceRequest)
+				if utils.ExistsInOpaque(r.Opaque, "purge") {
+					ev = SpaceDeleted(v, r)
+				} else {
+					ev = SpaceDisabled(v, r)
+				}
 			}
 		}
 

@@ -19,6 +19,7 @@
 package eventsmiddleware
 
 import (
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -201,4 +202,55 @@ func FileVersionRestored(r *provider.RestoreFileVersionResponse, req *provider.R
 		FileID: req.Ref,
 		Key:    req.Key,
 	}
+}
+
+// SpaceCreated converts the response to an event
+func SpaceCreated(r *provider.CreateStorageSpaceResponse) events.SpaceCreated {
+	return events.SpaceCreated{
+		ID:    r.StorageSpace.Id,
+		Owner: extractOwner(r.StorageSpace.Owner),
+		Root:  r.StorageSpace.Root,
+		Name:  r.StorageSpace.Name,
+		Type:  r.StorageSpace.SpaceType,
+		Quota: r.StorageSpace.Quota,
+		MTime: r.StorageSpace.Mtime,
+	}
+}
+
+// SpaceRenamed converts the response to an event
+func SpaceRenamed(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest) events.SpaceRenamed {
+	return events.SpaceRenamed{
+		ID:    r.StorageSpace.Id,
+		Owner: extractOwner(r.StorageSpace.Owner),
+		Name:  r.StorageSpace.Name,
+	}
+}
+
+// SpaceEnabled converts the response to an event
+func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest) events.SpaceEnabled {
+	return events.SpaceEnabled{
+		ID:    r.StorageSpace.Id,
+		Owner: extractOwner(r.StorageSpace.Owner),
+	}
+}
+
+// SpaceDisabled converts the response to an event
+func SpaceDisabled(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest) events.SpaceDisabled {
+	return events.SpaceDisabled{
+		ID: req.Id,
+	}
+}
+
+// SpaceDeleted converts the response to an event
+func SpaceDeleted(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest) events.SpaceDeleted {
+	return events.SpaceDeleted{
+		ID: req.Id,
+	}
+}
+
+func extractOwner(u *user.User) *user.UserId {
+	if u != nil {
+		return u.Id
+	}
+	return nil
 }
