@@ -80,7 +80,7 @@ driver = "memory"
 driver = "static"
 
 [grpc.services.appprovider]
-driver = "demo"
+driver = "wopi"
 app_provider_url = "localhost:19000"
 
 [grpc.services.appprovider.drivers.wopi]
