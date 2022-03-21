@@ -431,3 +431,13 @@ func ReadPlainFromOpaque(o *types.Opaque, key string) string {
 	}
 	return ""
 }
+
+// ExistsInOpaque returns true if the key exists in the opaque (ignoring the value)
+func ExistsInOpaque(o *types.Opaque, key string) bool {
+	if o == nil || o.Map == nil {
+		return false
+	}
+
+	_, ok := o.Map[key]
+	return ok
+}
