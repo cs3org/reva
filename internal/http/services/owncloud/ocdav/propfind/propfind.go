@@ -721,6 +721,11 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
 
+	// replace fileid of /public/{token} mountpoint with grant fileid
+	if ls != nil && md.Id != nil && md.Id.StorageId == utils.PublicStorageProviderID && md.Id.OpaqueId == ls.Token {
+		md.Id = ls.ResourceId
+	}
+
 	propstatOK := PropstatXML{
 		Status: "HTTP/1.1 200 OK",
 		Prop:   []*props.PropertyXML{},
