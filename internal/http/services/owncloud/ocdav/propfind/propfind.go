@@ -734,6 +734,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			propstatOK.Prop = append(propstatOK.Prop,
 				props.NewProp("oc:id", id),
 				props.NewProp("oc:fileid", id),
+				props.NewProp("oc:spaceid", md.Id.StorageId),
 			)
 		}
 
@@ -842,6 +843,12 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:id", resourceid.OwnCloudResourceIDWrap(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:id", ""))
+					}
+				case "spaceid":
+					if md.Id != nil {
+						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:spaceid", md.Id.StorageId))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:spaceid", ""))
 					}
 				case "permissions": // both
 					// oc:permissions take several char flags to indicate the permissions the user has on this node:

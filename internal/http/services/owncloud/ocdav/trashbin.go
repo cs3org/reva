@@ -191,7 +191,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	if depth == net.DepthZero {
-		propRes, err := h.formatTrashPropfind(ctx, s, refBase, nil, nil)
+		propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.StorageId, refBase, nil, nil)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error formatting propfind")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -275,7 +275,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		}
 	}
 
-	propRes, err := h.formatTrashPropfind(ctx, s, refBase, &pf, items)
+	propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.StorageId, refBase, &pf, items)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -291,7 +291,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, refBase string, pf *propfind.XML, items []*provider.RecycleItem) ([]byte, error) {
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, spaceID, refBase string, pf *propfind.XML, items []*provider.RecycleItem) ([]byte, error) {
 	responses := make([]*propfind.ResponseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &propfind.ResponseXML{
@@ -316,7 +316,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, refBa
 	})
 
 	for i := range items {
-		res, err := h.itemToPropResponse(ctx, s, refBase, pf, items[i])
+		res, err := h.itemToPropResponse(ctx, s, spaceID, refBase, pf, items[i])
 		if err != nil {
 			return nil, err
 		}
@@ -338,7 +338,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, refBa
 // itemToPropResponse needs to create a listing that contains a key and destination
 // the key is the name of an entry in the trash listing
 // for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id
-func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, refBase string, pf *propfind.XML, item *provider.RecycleItem) (*propfind.ResponseXML, error) {
+func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, spaceID, refBase string, pf *propfind.XML, item *provider.RecycleItem) (*propfind.ResponseXML, error) {
 
 	baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
 	ref := path.Join(baseURI, refBase, item.Key)
@@ -355,29 +355,31 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, refBas
 
 	t := utils.TSToTime(item.DeletionTime).UTC()
 	dTime := t.Format(time.RFC1123Z)
+	size := strconv.FormatUint(item.Size, 10)
 
 	// when allprops has been requested
 	if pf.Allprop != nil {
 		// return all known properties
-		response.Propstat = append(response.Propstat, propfind.PropstatXML{
+		propstatOK := propfind.PropstatXML{
 			Status: "HTTP/1.1 200 OK",
 			Prop:   []*props.PropertyXML{},
-		})
+		}
 		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, props.NewProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, props.NewProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, props.NewProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, props.NewProp("oc:trashbin-delete-datetime", dTime))
+		propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
+		propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:trashbin-original-location", strings.TrimPrefix(item.Ref.Path, "/")))
+		propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
+		propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:trashbin-delete-datetime", dTime))
 		if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, props.NewPropRaw("d:resourcetype", "<d:collection/>"))
+			propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("d:resourcetype", "<d:collection/>"))
 			// TODO(jfd): decide if we can and want to list oc:size for folders
 		} else {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+			propstatOK.Prop = append(propstatOK.Prop,
 				props.NewProp("d:resourcetype", ""),
-				props.NewProp("d:getcontentlength", fmt.Sprintf("%d", item.Size)),
+				props.NewProp("d:getcontentlength", size),
 			)
 		}
-
+		propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:spaceid", spaceID))
+		response.Propstat = append(response.Propstat, propstatOK)
 	} else {
 		// otherwise return only the requested properties
 		propstatOK := propfind.PropstatXML{
@@ -388,7 +390,6 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, refBas
 			Status: "HTTP/1.1 404 Not Found",
 			Prop:   []*props.PropertyXML{},
 		}
-		size := strconv.FormatUint(item.Size, 10)
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
 			case net.NsOwncloud:
@@ -409,6 +410,8 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, refBas
 					propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:trashbin-delete-datetime", dTime))
 				case "trashbin-delete-timestamp":
 					propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
+				case "spaceid":
+					propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:spaceid", spaceID))
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:"+pf.Prop[i].Local, ""))
 				}
