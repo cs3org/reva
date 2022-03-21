@@ -176,7 +176,7 @@ func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
 		return errtypes.PreconditionFailed("mismatching lock")
 	}
 
-	if ok, err := isLockModificationAllowed(oldLock, lock); !ok {
+	if ok, err := isLockModificationAllowed(ctx, oldLock, lock); !ok {
 		return err
 	}
 
@@ -228,7 +228,7 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 		return errtypes.Locked(oldLock.LockId)
 	}
 
-	if ok, err := isLockModificationAllowed(oldLock, lock); !ok {
+	if ok, err := isLockModificationAllowed(ctx, oldLock, lock); !ok {
 		return err
 	}
 
@@ -313,7 +313,7 @@ func (n *Node) hasLocks(ctx context.Context) bool {
 	return err == nil
 }
 
-func isLockModificationAllowed(oldLock *provider.Lock, newLock *provider.Lock) (bool, error) {
+func isLockModificationAllowed(ctx context.Context, oldLock *provider.Lock, newLock *provider.Lock) (bool, error) {
 	if oldLock.Type == provider.LockType_LOCK_TYPE_SHARED {
 		return true, nil
 	}
@@ -329,6 +329,12 @@ func isLockModificationAllowed(oldLock *provider.Lock, newLock *provider.Lock) (
 	if oldLock.User != nil && !utils.UserEqual(oldLock.User, newLock.GetUser()) {
 		allowed = false
 		err = errtypes.PermissionDenied("cannot change holder (user) when refreshing a lock")
+	}
+
+	u := ctxpkg.ContextMustGetUser(ctx)
+	if oldLock.User != nil && !utils.UserEqual(oldLock.User, u.Id) {
+		allowed = false
+		err = errtypes.PermissionDenied("mismatching holder")
 	}
 
 	return allowed, err
