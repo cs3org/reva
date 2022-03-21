@@ -32,6 +32,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -175,6 +176,10 @@ func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
 		return errtypes.PreconditionFailed("mismatching lock")
 	}
 
+	if ok, err := isLockModificationAllowed(oldLock, lock); !ok {
+		return err
+	}
+
 	if err := json.NewEncoder(f).Encode(lock); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not write lock file")
 	}
@@ -221,6 +226,10 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 	// check lock
 	if lock == nil || (oldLock.LockId != lock.LockId) {
 		return errtypes.Locked(oldLock.LockId)
+	}
+
+	if ok, err := isLockModificationAllowed(oldLock, lock); !ok {
+		return err
 	}
 
 	if err = os.Remove(f.Name()); err != nil {
@@ -302,4 +311,25 @@ func readLocksIntoOpaque(ctx context.Context, n *Node, ri *provider.ResourceInfo
 func (n *Node) hasLocks(ctx context.Context) bool {
 	_, err := os.Stat(n.LockFilePath()) // FIXME better error checking
 	return err == nil
+}
+
+func isLockModificationAllowed(oldLock *provider.Lock, newLock *provider.Lock) (bool, error) {
+	if oldLock.Type == provider.LockType_LOCK_TYPE_SHARED {
+		return true, nil
+	}
+
+	var allowed bool = true
+	var err error
+
+	if oldLock.AppName != "" && oldLock.AppName != newLock.AppName {
+		allowed = false
+		err = errtypes.PermissionDenied("cannot change holder (app name) when refreshing a lock")
+	}
+
+	if oldLock.User != nil && !utils.UserEqual(oldLock.User, newLock.GetUser()) {
+		allowed = false
+		err = errtypes.PermissionDenied("cannot change holder (user) when refreshing a lock")
+	}
+
+	return allowed, err
 }
