@@ -83,10 +83,10 @@ type PropstatXML struct {
 	// not honoring namespace declarations inside a xmltag with a
 	// parent element for anonymous slice elements.
 	// Use of multistatusWriter takes care of this.
-	Prop                []*props.PropertyXML `xml:"d:prop>_ignored_"`
-	Status              string               `xml:"d:status"`
-	Error               *errors.ErrorXML     `xml:"d:error"`
-	ResponseDescription string               `xml:"d:responsedescription,omitempty"`
+	Prop                []props.PropertyXML `xml:"d:prop>_ignored_"`
+	Status              string              `xml:"d:status"`
+	Error               *errors.ErrorXML    `xml:"d:error"`
+	ResponseDescription string              `xml:"d:responsedescription,omitempty"`
 }
 
 // ResponseXML holds the xml representation of a propfind response
@@ -728,11 +728,11 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 
 	propstatOK := PropstatXML{
 		Status: "HTTP/1.1 200 OK",
-		Prop:   []*props.PropertyXML{},
+		Prop:   []props.PropertyXML{},
 	}
 	propstatNotFound := PropstatXML{
 		Status: "HTTP/1.1 404 Not Found",
-		Prop:   []*props.PropertyXML{},
+		Prop:   []props.PropertyXML{},
 	}
 	// when allprops has been requested
 	if pf.Allprop != nil {

@@ -50,8 +50,8 @@ func xmlEscaped(val string) []byte {
 }
 
 // NewPropNS returns a new PropertyXML instance
-func NewPropNS(namespace string, local string, val string) *PropertyXML {
-	return &PropertyXML{
+func NewPropNS(namespace string, local string, val string) PropertyXML {
+	return PropertyXML{
 		XMLName:  xml.Name{Space: namespace, Local: local},
 		Lang:     "",
 		InnerXML: xmlEscaped(val),
@@ -60,8 +60,8 @@ func NewPropNS(namespace string, local string, val string) *PropertyXML {
 
 // NewProp returns a new PropertyXML instance while xml-escaping the value
 // TODO properly use the space
-func NewProp(key, val string) *PropertyXML {
-	return &PropertyXML{
+func NewProp(key, val string) PropertyXML {
+	return PropertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
 		Lang:     "",
 		InnerXML: xmlEscaped(val),
@@ -69,16 +69,16 @@ func NewProp(key, val string) *PropertyXML {
 }
 
 // NewNotFound returns a new PropertyXML instance with an empty value
-func NewNotFound(key string) *PropertyXML {
-	return &PropertyXML{
+func NewNotFound(key string) PropertyXML {
+	return PropertyXML{
 		XMLName: xml.Name{Space: "", Local: key},
 		Lang:    "",
 	}
 }
 
 // NewNotFound returns a new PropertyXML instance with the given namespace and an empty value
-func NewNotFoundNS(namespace, key string) *PropertyXML {
-	return &PropertyXML{
+func NewNotFoundNS(namespace, key string) PropertyXML {
+	return PropertyXML{
 		XMLName: xml.Name{Space: namespace, Local: key},
 		Lang:    "",
 	}
@@ -86,8 +86,8 @@ func NewNotFoundNS(namespace, key string) *PropertyXML {
 
 // NewPropRaw returns a new PropertyXML instance for the given key/value pair
 // TODO properly use the space
-func NewPropRaw(key, val string) *PropertyXML {
-	return &PropertyXML{
+func NewPropRaw(key, val string) PropertyXML {
+	return PropertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
 		Lang:     "",
 		InnerXML: []byte(val),

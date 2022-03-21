@@ -299,13 +299,13 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, space
 		Propstat: []propfind.PropstatXML{
 			{
 				Status: "HTTP/1.1 200 OK",
-				Prop: []*props.PropertyXML{
+				Prop: []props.PropertyXML{
 					props.NewPropRaw("d:resourcetype", "<d:collection/>"),
 				},
 			},
 			{
 				Status: "HTTP/1.1 404 Not Found",
-				Prop: []*props.PropertyXML{
+				Prop: []props.PropertyXML{
 					props.NewNotFound("oc:trashbin-original-filename"),
 					props.NewNotFound("oc:trashbin-original-location"),
 					props.NewNotFound("oc:trashbin-delete-datetime"),
@@ -362,7 +362,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, spaceI
 		// return all known properties
 		propstatOK := propfind.PropstatXML{
 			Status: "HTTP/1.1 200 OK",
-			Prop:   []*props.PropertyXML{},
+			Prop:   []props.PropertyXML{},
 		}
 		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
 		propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
@@ -384,11 +384,11 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, spaceI
 		// otherwise return only the requested properties
 		propstatOK := propfind.PropstatXML{
 			Status: "HTTP/1.1 200 OK",
-			Prop:   []*props.PropertyXML{},
+			Prop:   []props.PropertyXML{},
 		}
 		propstatNotFound := propfind.PropstatXML{
 			Status: "HTTP/1.1 404 Not Found",
-			Prop:   []*props.PropertyXML{},
+			Prop:   []props.PropertyXML{},
 		}
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
