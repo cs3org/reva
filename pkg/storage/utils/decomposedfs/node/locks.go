@@ -129,7 +129,7 @@ func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
 			return nil, errors.Wrap(err, "Decomposedfs: could not remove expired lock file")
 		}
 		// we successfully deleted the expired lock
-		return nil, nil
+		return nil, errtypes.NotFound("no lock found")
 	}
 
 	return lock, nil
