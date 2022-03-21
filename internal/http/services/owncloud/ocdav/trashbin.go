@@ -306,10 +306,10 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, space
 			{
 				Status: "HTTP/1.1 404 Not Found",
 				Prop: []*props.PropertyXML{
-					props.NewProp("oc:trashbin-original-filename", ""),
-					props.NewProp("oc:trashbin-original-location", ""),
-					props.NewProp("oc:trashbin-delete-datetime", ""),
-					props.NewProp("d:getcontentlength", ""),
+					props.NewNotFound("oc:trashbin-original-filename"),
+					props.NewNotFound("oc:trashbin-original-location"),
+					props.NewNotFound("oc:trashbin-delete-datetime"),
+					props.NewNotFound("d:getcontentlength"),
 				},
 			},
 		},
@@ -398,7 +398,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, spaceI
 					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getcontentlength", size))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:size", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewNotFound("oc:size"))
 					}
 				case "trashbin-original-filename":
 					// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
@@ -413,13 +413,13 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, spaceI
 				case "spaceid":
 					propstatOK.Prop = append(propstatOK.Prop, props.NewProp("oc:spaceid", spaceID))
 				default:
-					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("oc:"+pf.Prop[i].Local, ""))
+					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewNotFound("oc:"+pf.Prop[i].Local))
 				}
 			case net.NsDav:
 				switch pf.Prop[i].Local {
 				case "getcontentlength":
 					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:getcontentlength", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewNotFound("d:getcontentlength"))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getcontentlength", size))
 					}
@@ -427,21 +427,21 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, spaceI
 					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("d:resourcetype", "<d:collection/>"))
 					} else {
-						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:resourcetype", ""))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("d:resourcetype", ""))
 						// redirectref is another option
 					}
 				case "getcontenttype":
 					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatOK.Prop = append(propstatOK.Prop, props.NewProp("d:getcontenttype", "httpd/unix-directory"))
+						propstatOK.Prop = append(propstatOK.Prop, props.NewPropRaw("d:getcontenttype", "httpd/unix-directory"))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:getcontenttype", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewNotFound("d:getcontenttype"))
 					}
 				default:
-					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp("d:"+pf.Prop[i].Local, ""))
+					propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewNotFound("d:"+pf.Prop[i].Local))
 				}
 			default:
 				// TODO (jfd) lookup shortname for unknown namespaces?
-				propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewProp(pf.Prop[i].Space+":"+pf.Prop[i].Local, ""))
+				propstatNotFound.Prop = append(propstatNotFound.Prop, props.NewNotFound(pf.Prop[i].Space+":"+pf.Prop[i].Local))
 			}
 		}
 		response.Propstat = append(response.Propstat, propstatOK, propstatNotFound)
