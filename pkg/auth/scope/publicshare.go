@@ -158,29 +158,6 @@ func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Refer
 	return false
 }
 
-// public link access must send a filter with id or type
-/*
-func checkPublicListStorageSpacesFilter(filters []*provider.ListStorageSpacesRequest_Filter) bool {
-	// return true
-	for _, f := range filters {
-		switch f.Type {
-		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			switch f.GetSpaceType() {
-			case "mountpoint", "+mountpoint":
-				return true
-			case "grant", "+grant":
-				return true
-			}
-		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			if f.GetId().OpaqueId != "" {
-				return true
-			}
-		}
-	}
-	return false
-}
-*/
-
 func checkPublicShareRef(s *link.PublicShare, ref *link.PublicShareReference) bool {
 	// ref: <token:$token >
 	return ref.GetToken() == s.Token

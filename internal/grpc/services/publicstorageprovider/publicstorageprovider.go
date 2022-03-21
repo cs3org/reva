@@ -16,6 +16,8 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package publicstorageprovider provides a CS3 storageprovider implementation for public links.
+// It will list spaces with type `grant` and `mountpoint` when a public scope is present.
 package publicstorageprovider
 
 import (
@@ -44,9 +46,6 @@ import (
 	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
 )
-
-// SpaceTypePublic is the public space type
-var SpaceTypePublic = "public"
 
 func init() {
 	rgrpc.Register("publicstorageprovider", New)
@@ -82,7 +81,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new IsPublic Storage Provider service.
+// New creates a new publicstorageprovider service.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
@@ -169,13 +168,9 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 	if !ok {
 		return nil, "", nil, nil, gstatus.Errorf(codes.NotFound, "share or token not found")
 	}
-	/*
-		tkn, opaqueid, relativePath, err := s.unwrap(ctx, ref)
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
-	*/
 
+	// the share is minimally populated, we need more than the token
+	// look up complete share
 	ls, shareInfo, st, err := s.resolveToken(ctx, share.Token)
 	switch {
 	case err != nil:
@@ -212,13 +207,6 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 		Msg("translatePublicRefToCS3Ref")
 	return cs3Ref, share.Token, ls, nil, nil
 }
-
-// Both, t.dir and tokenPath paths need to be merged:
-// tokenPath   = /oc/einstein/public-links
-// t.dir       = /public/ausGxuUePCOi/foldera/folderb/
-// res         = /public-links/foldera/folderb/
-// this `res` will get then expanded taking into account the authenticated user and the storage:
-// end         = /einstein/files/public-links/foldera/folderb/
 
 func (s *service) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
@@ -344,12 +332,17 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-// ListStorageSpaces returns a Storage spaces of type "public" when given a filter by id with  the public link token as spaceid.
-// The root node of every storag space is the real (spaceid, nodeid) of the publicly shared node
-// The ocdav service has to
-// 1. Authenticate / Log in at the gateway using the token and can then
-// 2. look up the storage space using ListStorageSpaces.
-// 3. make related requests to that (spaceid, nodeid)
+// ListStorageSpaces returns storage spaces when a public scope is present
+// in the context.
+//
+// On the one hand, it lists a `mountpoint` space that can be used by the
+// registry to construct a mount path. These spaces have their root
+// storageid set to 7993447f-687f-490d-875c-ac95e89a62a4 and the
+// opaqueid set to the link token.
+//
+// On the other hand, it lists a `grant` space for the shared resource id,
+// so id based requests can find the correct storage provider. These spaces
+// have their root set to the shared resource.
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	spaceTypes := map[string]struct{}{}
 	var exists = struct{}{}
@@ -359,7 +352,6 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			spaceType := f.GetSpaceType()
-			// do we need to fetch the shares?
 			if spaceType == "+mountpoint" || spaceType == "+grant" {
 				appendTypes = append(appendTypes, strings.TrimPrefix(spaceType, "+"))
 				continue
@@ -383,10 +375,6 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	// if there is no public scope there are no publicstorage spaces
 	share, _, ok := extractLinkAndInfo(ctx)
 	if !ok {
-		// TODO when the ocdav publicfile handler sends the token as opaqueid the
-		// public scope needs to change
-		// it always needs to check if the accessed path is a child of the resource identified by
-		// the token
 		return &provider.ListStorageSpacesResponse{
 			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 		}, nil
@@ -408,20 +396,12 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			// when a list storage space with the resourceid of an external
 			// resource is made we may have a grant for it
 			root := share.ResourceId
-			// do we filter by id?
 			if spaceID != nil && !utils.ResourceIDEqual(spaceID, root) {
 				// none of our business
 				continue
 			}
-			/*
-				var opaque *typesv1beta1.Opaque
-				if etag, ok := shareEtags[share.Id.OpaqueId]; ok {
-					opaque = utils.AppendPlainToOpaque(opaque, "etag", etag)
-				}
-			*/
 			// we know a grant for this resource
 			space := &provider.StorageSpace{
-				//Opaque: opaque,
 				Id: &provider.StorageSpaceId{
 					OpaqueId: root.StorageId + "!" + root.OpaqueId,
 				},
@@ -437,7 +417,6 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				StorageId: utils.PublicStorageProviderID,
 				OpaqueId:  share.Token, // the link share has no id, only the token
 			}
-			// do we filter by id
 			if spaceID != nil {
 				switch {
 				case utils.ResourceIDEqual(spaceID, root):
@@ -450,28 +429,16 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 					continue
 				}
 			}
-			/*
-				var opaque *typesv1beta1.Opaque
-				if etag, ok := shareEtags[receivedShare.Share.Id.OpaqueId]; ok {
-					opaque = utils.AppendPlainToOpaque(opaque, "etag", etag)
-				}
-			*/
 			space := &provider.StorageSpace{
-				//Opaque: opaque,
 				Id: &provider.StorageSpaceId{
 					OpaqueId: root.StorageId + "!" + root.OpaqueId,
 				},
 				SpaceType: "mountpoint",
-				Owner:     &userv1beta1.User{Id: share.Owner}, // FIXME actually, the mount point belongs to the recipient
+				Owner:     &userv1beta1.User{Id: share.Owner}, // FIXME actually, the mount point belongs to no one?
 				// the publicstorageprovider keeps track of mount points
 				Root: root,
 			}
 
-			// "Public share ~token"? nah, the spaceregistry uses the token in the name as the mountpoint
-			// TODO use token in root opaqueid when building path
-			space.Name = share.Token
-
-			// what if we don't have a name?
 			res.StorageSpaces = append(res.StorageSpaces, space)
 		}
 	}
@@ -818,8 +785,8 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 	for i := range listContainerR.Infos {
 		// FIXME how do we reduce permissions to what is granted by the public link?
+		// only a problem for id based access -> middleware
 		filterPermissions(listContainerR.Infos[i].PermissionSet, share.GetPermissions().Permissions)
-		// s.setPublicStorageID(listContainerR.Infos[i], tkn)
 		if err := addShare(listContainerR.Infos[i], share); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("share", share).Interface("info", listContainerR.Infos[i]).Msg("error when adding share")
 		}
