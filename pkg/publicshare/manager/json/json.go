@@ -219,7 +219,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 }
 
 // UpdatePublicShare updates the public share
-func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
+func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest) (*link.PublicShare, error) {
 	log := appctx.GetLogger(ctx)
 	share, err := m.GetPublicShare(ctx, u, req.Ref, false)
 	if err != nil {
@@ -353,7 +353,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 }
 
 // ListPublicShares retrieves all the shares on the manager that are valid.
-func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
+func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
 	var shares []*link.PublicShare
 
 	m.mutex.Lock()
@@ -521,7 +521,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 			}
 
 			if local.PasswordProtected {
-				if authenticate(&local, passDB, auth) {
+				if publicshare.Authenticate(&local, passDB, auth) {
 					if sign {
 						err := publicshare.AddSignature(&local, passDB)
 						if err != nil {
@@ -563,30 +563,6 @@ func (m *manager) writeDb(db map[string]interface{}) error {
 	}
 
 	return nil
-}
-
-func authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuthentication) bool {
-	switch {
-	case auth.GetPassword() != "":
-		if err := bcrypt.CompareHashAndPassword([]byte(pw), []byte(auth.GetPassword())); err == nil {
-			return true
-		}
-	case auth.GetSignature() != nil:
-		sig := auth.GetSignature()
-		now := time.Now()
-		expiration := time.Unix(int64(sig.GetSignatureExpiration().GetSeconds()), int64(sig.GetSignatureExpiration().GetNanos()))
-		if now.After(expiration) {
-			return false
-		}
-		s, err := publicshare.CreateSignature(share.Token, pw, expiration)
-		if err != nil {
-			// TODO(labkode): pass ctx to log error
-			// Now we are blind
-			return false
-		}
-		return sig.GetSignature() == s
-	}
-	return false
 }
 
 type publicShare struct {

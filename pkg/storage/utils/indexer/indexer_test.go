@@ -283,11 +283,11 @@ func TestQueryDiskImpl(t *testing.T) {
 	_ = os.RemoveAll(dataDir)
 }
 
-func createDiskIndexer(dataDir string) *Indexer {
+func createDiskIndexer(dataDir string) *StorageIndexer {
 	storage, err := metadata.NewDiskStorage(dataDir)
 	if err != nil {
 		return nil
 	}
 
-	return CreateIndexer(storage)
+	return CreateIndexer(storage).(*StorageIndexer)
 }

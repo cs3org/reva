@@ -36,8 +36,18 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/sync"
 )
 
+//go:generate mockery -name Indexer
+
 // Indexer is a facade to configure and query over multiple indices.
-type Indexer struct {
+type Indexer interface {
+	AddIndex(t interface{}, indexBy option.IndexBy, pkName, entityDirName, indexType string, bound *option.Bound, caseInsensitive bool) error
+	Add(t interface{}) ([]IdxAddResult, error)
+	FindBy(t interface{}, field string, val string) ([]string, error)
+	Delete(t interface{}) error
+}
+
+// StorageIndexer is the indexer implementation using metadata storage
+type StorageIndexer struct {
 	storage metadata.Storage
 	indices typeMap
 	mu      sync.NamedRWMutex
@@ -49,8 +59,8 @@ type IdxAddResult struct {
 }
 
 // CreateIndexer creates a new Indexer.
-func CreateIndexer(storage metadata.Storage) *Indexer {
-	return &Indexer{
+func CreateIndexer(storage metadata.Storage) Indexer {
+	return &StorageIndexer{
 		storage: storage,
 		indices: typeMap{},
 		mu:      sync.NewNamedRWMutex(),
@@ -58,7 +68,7 @@ func CreateIndexer(storage metadata.Storage) *Indexer {
 }
 
 // Reset takes care of deleting all indices from storage and from the internal map of indices
-func (i *Indexer) Reset() error {
+func (i *StorageIndexer) Reset() error {
 	for j := range i.indices {
 		for _, indices := range i.indices[j].IndicesByField {
 			for _, idx := range indices {
@@ -75,7 +85,7 @@ func (i *Indexer) Reset() error {
 }
 
 // AddIndex adds a new index to the indexer receiver.
-func (i *Indexer) AddIndex(t interface{}, indexBy option.IndexBy, pkName, entityDirName, indexType string, bound *option.Bound, caseInsensitive bool) error {
+func (i *StorageIndexer) AddIndex(t interface{}, indexBy option.IndexBy, pkName, entityDirName, indexType string, bound *option.Bound, caseInsensitive bool) error {
 	var idx index.Index
 
 	var f func(metadata.Storage, ...option.Option) index.Index
@@ -102,7 +112,7 @@ func (i *Indexer) AddIndex(t interface{}, indexBy option.IndexBy, pkName, entity
 }
 
 // Add a new entry to the indexer
-func (i *Indexer) Add(t interface{}) ([]IdxAddResult, error) {
+func (i *StorageIndexer) Add(t interface{}) ([]IdxAddResult, error) {
 	typeName := getTypeFQN(t)
 
 	i.mu.Lock(typeName)
@@ -136,7 +146,7 @@ func (i *Indexer) Add(t interface{}) ([]IdxAddResult, error) {
 }
 
 // FindBy finds a value on an index by field and value.
-func (i *Indexer) FindBy(t interface{}, findBy, val string) ([]string, error) {
+func (i *StorageIndexer) FindBy(t interface{}, findBy, val string) ([]string, error) {
 	typeName := getTypeFQN(t)
 
 	i.mu.RLock(typeName)
@@ -171,7 +181,7 @@ func (i *Indexer) FindBy(t interface{}, findBy, val string) ([]string, error) {
 }
 
 // Delete deletes all indexed fields of a given type t on the Indexer.
-func (i *Indexer) Delete(t interface{}) error {
+func (i *StorageIndexer) Delete(t interface{}) error {
 	typeName := getTypeFQN(t)
 
 	i.mu.Lock(typeName)
@@ -199,7 +209,7 @@ func (i *Indexer) Delete(t interface{}) error {
 }
 
 // FindByPartial allows for glob search across all indexes.
-func (i *Indexer) FindByPartial(t interface{}, field string, pattern string) ([]string, error) {
+func (i *StorageIndexer) FindByPartial(t interface{}, field string, pattern string) ([]string, error) {
 	typeName := getTypeFQN(t)
 
 	i.mu.RLock(typeName)
@@ -234,7 +244,7 @@ func (i *Indexer) FindByPartial(t interface{}, field string, pattern string) ([]
 }
 
 // Update updates all indexes on a value <from> to a value <to>.
-func (i *Indexer) Update(from, to interface{}) error {
+func (i *StorageIndexer) Update(from, to interface{}) error {
 	typeNameFrom := getTypeFQN(from)
 
 	i.mu.Lock(typeNameFrom)
@@ -285,7 +295,7 @@ func (i *Indexer) Update(from, to interface{}) error {
 }
 
 // Query parses an OData query into something our indexer.Index understands and resolves it.
-func (i *Indexer) Query(ctx context.Context, t interface{}, q string) ([]string, error) {
+func (i *StorageIndexer) Query(ctx context.Context, t interface{}, q string) ([]string, error) {
 	query, err := godata.ParseFilterString(ctx, q)
 	if err != nil {
 		return nil, err
@@ -308,7 +318,7 @@ func (i *Indexer) Query(ctx context.Context, t interface{}, q string) ([]string,
 // conventions and be in PascalCase. For a better overview on this contemplate reading the reflection package under the
 // indexer directory. Traversal of the tree happens in a pre-order fashion.
 // TODO implement logic for `and` operators.
-func (i *Indexer) resolveTree(t interface{}, tree *queryTree, partials *[]string) error {
+func (i *StorageIndexer) resolveTree(t interface{}, tree *queryTree, partials *[]string) error {
 	if partials == nil {
 		return errors.New("return value cannot be nil: partials")
 	}

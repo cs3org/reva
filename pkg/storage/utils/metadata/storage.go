@@ -22,6 +22,8 @@ import (
 	"context"
 )
 
+//go:generate mockery -name Storage
+
 // Storage is the interface to maintain metadata in a storage
 type Storage interface {
 	Backend() string

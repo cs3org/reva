@@ -44,28 +44,12 @@ import (
 	"google.golang.org/genproto/protobuf/field_mask"
 )
 
-//go:generate mockery -name Storage
-//go:generate mockery -name Indexer
-
-// Storage is the interface to the metadata storage backend
-type Storage interface {
-	metadata.Storage
-}
-
-// Indexer is the interface to the indexer being used for indexing shares
-type Indexer interface {
-	AddIndex(t interface{}, indexBy option.IndexBy, pkName, entityDirName, indexType string, bound *option.Bound, caseInsensitive bool) error
-	Add(t interface{}) ([]indexer.IdxAddResult, error)
-	FindBy(t interface{}, field string, val string) ([]string, error)
-	Delete(t interface{}) error
-}
-
 // Manager implements a share manager using a cs3 storage backend
 type Manager struct {
 	sync.RWMutex
 
-	storage Storage
-	indexer Indexer
+	storage metadata.Storage
+	indexer indexer.Indexer
 
 	initialized bool
 }
@@ -106,7 +90,7 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 }
 
 // New returns a new manager instance
-func New(s Storage, indexer Indexer) (*Manager, error) {
+func New(s metadata.Storage, indexer indexer.Indexer) (*Manager, error) {
 	return &Manager{
 		storage:     s,
 		indexer:     indexer,

@@ -92,6 +92,10 @@ func (idx *NonUnique) Lookup(v string) ([]string, error) {
 		matches = append(matches, path.Base(p))
 	}
 
+	if len(matches) == 0 {
+		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
+	}
+
 	return matches, nil
 }
 

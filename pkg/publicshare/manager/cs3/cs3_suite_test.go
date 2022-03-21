@@ -16,33 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package indexer
+package cs3_test
 
 import (
-	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/index"
-	"github.com/iancoleman/strcase"
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-// typeMap stores the indexer layout at runtime.
-
-type typeMap map[tName]typeMapping
-type tName = string
-type fieldName = string
-
-type typeMapping struct {
-	PKFieldName    string
-	IndicesByField map[fieldName][]index.Index
-}
-
-func (m typeMap) addIndex(typeName string, pkName string, idx index.Index) {
-	if val, ok := m[typeName]; ok {
-		val.IndicesByField[strcase.ToCamel(idx.IndexBy().String())] = append(val.IndicesByField[strcase.ToCamel(idx.IndexBy().String())], idx)
-		return
-	}
-	m[typeName] = typeMapping{
-		PKFieldName: pkName,
-		IndicesByField: map[string][]index.Index{
-			strcase.ToCamel(idx.IndexBy().String()): {idx},
-		},
-	}
+func TestCs3(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Cs3 Suite")
 }
