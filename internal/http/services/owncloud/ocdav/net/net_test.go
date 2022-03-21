@@ -64,7 +64,7 @@ var _ = Describe("Net", func() {
 	Describe("EncodePath", func() {
 		It("encodes paths", func() {
 			Expect(net.EncodePath("foo")).To(Equal("foo"))
-			Expect(net.EncodePath("/some/path/Folder %^*(#1)")).To(Equal("/some/path/Folder%20%25%5e%2a(%231)"))
+			Expect(net.EncodePath("/some/path/Folder %^*(#1)")).To(Equal("/some/path/Folder%20%25%5E%2A%28%231%29"))
 		})
 
 		/*
