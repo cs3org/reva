@@ -141,7 +141,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	conf.init()
+	return NewWithConfig(conf, log)
+}
 
+// New returns a new ocdav
+func NewWithConfig(conf *Config, _ *zerolog.Logger) (global.Service, error) {
 	fm, err := getFavoritesManager(conf)
 	if err != nil {
 		return nil, err
