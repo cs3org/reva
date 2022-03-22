@@ -360,22 +360,11 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 
 	var receivedShares []*collaboration.ReceivedShare
 	var shareEtags map[string]string
+	var err error
 	if fetchShares {
-		lsRes, err := s.gateway.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
-			// FIXME filter by received shares for resource id - listing all shares is tooo expensive!
-		})
+		receivedShares, shareEtags, err = s.fetchShares(ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
-		}
-		if lsRes.Status.Code != rpc.Code_CODE_OK {
-			return nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
-		}
-		receivedShares = lsRes.Shares
-		if lsRes.Opaque != nil {
-			if entry, ok := lsRes.Opaque.Map["etags"]; ok {
-				// If we can't get the etags thats fine, just continue.
-				_ = json.Unmarshal(entry.Value, &shareEtags)
-			}
 		}
 	}
 
@@ -390,39 +379,29 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				OpaqueId:  utils.ShareStorageProviderID,
 			}
 			if spaceID == nil || utils.ResourceIDEqual(virtualRootID, spaceID) {
-				var earliestShare *collaboration.Share
-				// Lookup the last changed received share and use its etag for the share jail.
-				for _, rs := range receivedShares {
-					current := rs.Share
-					switch {
-					case earliestShare == nil:
-						earliestShare = current
-					case current.Mtime.Seconds > earliestShare.Mtime.Seconds:
-						earliestShare = current
-					case current.Mtime.Seconds == earliestShare.Mtime.Seconds &&
-						current.Mtime.Nanos > earliestShare.Mtime.Nanos:
-						earliestShare = current
-					}
-				}
-
+				earliestShare, atLeastOneAccepted := findEarliestShare(receivedShares)
 				var opaque *typesv1beta1.Opaque
 				if earliestShare != nil {
 					if etag, ok := shareEtags[earliestShare.Id.OpaqueId]; ok {
 						opaque = utils.AppendPlainToOpaque(opaque, "etag", etag)
 					}
 				}
-				space := &provider.StorageSpace{
-					Opaque: opaque,
-					Id: &provider.StorageSpaceId{
-						OpaqueId: virtualRootID.StorageId + "!" + virtualRootID.OpaqueId,
-					},
-					SpaceType: "virtual",
-					//Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
-					// the sharesstorageprovider keeps track of mount points
-					Root: virtualRootID,
-					Name: "Shares Jail",
+				// only display the shares jail if we have accepted shares
+				if atLeastOneAccepted == true {
+					opaque = utils.AppendPlainToOpaque(opaque, "spaceAlias", "virtual/shares")
+					space := &provider.StorageSpace{
+						Opaque: opaque,
+						Id: &provider.StorageSpaceId{
+							OpaqueId: virtualRootID.StorageId + "!" + virtualRootID.OpaqueId,
+						},
+						SpaceType: "virtual",
+						//Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
+						// the sharesstorageprovider keeps track of mount points
+						Root: virtualRootID,
+						Name: "Shares Jail",
+					}
+					res.StorageSpaces = append(res.StorageSpaces, space)
 				}
-				res.StorageSpaces = append(res.StorageSpaces, space)
 			}
 		case "grant":
 			for _, receivedShare := range receivedShares {
@@ -676,6 +655,11 @@ func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	if isVirtualRoot(req.Ref.ResourceId) && (req.Ref.Path == "" || req.Ref.Path == ".") {
+		receivedShares, shareEtags, err := s.fetchShares(ctx)
+		if err != nil {
+			return nil, err
+		}
+		earliestShare, _ := findEarliestShare(receivedShares)
 		// The root is empty, it is filled by mountpoints
 		return &provider.StatResponse{
 			Status: status.NewOK(ctx),
@@ -693,13 +677,14 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 					OpaqueId:  utils.ShareStorageProviderID,
 				},
 				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Mtime:         &typesv1beta1.Timestamp{},
+				Mtime:         earliestShare.Mtime, // TODO, use the mtime of the latest resource
 				Path:          "/",
 				MimeType:      "httpd/unix-directory",
 				Size:          0,
 				PermissionSet: &provider.ResourcePermissions{
 					// TODO
 				},
+				Etag: shareEtags[earliestShare.Id.OpaqueId],
 			},
 		}, nil
 	}
@@ -944,4 +929,47 @@ func (s *service) rejectReceivedShare(ctx context.Context, receivedShare *collab
 	}
 
 	return errtypes.NewErrtypeFromStatus(res.Status)
+}
+
+func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedShare, map[string]string, error) {
+	lsRes, err := s.gateway.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
+		// FIXME filter by received shares for resource id - listing all shares is tooo expensive!
+	})
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
+	}
+	if lsRes.Status.Code != rpc.Code_CODE_OK {
+		return nil, nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
+	}
+	receivedShares := lsRes.Shares
+
+	var shareEtags map[string]string
+	if lsRes.Opaque != nil {
+		if entry, ok := lsRes.Opaque.Map["etags"]; ok {
+			// If we can't get the etags thats fine, just continue.
+			_ = json.Unmarshal(entry.Value, &shareEtags)
+		}
+	}
+	return receivedShares, shareEtags, nil
+}
+
+func findEarliestShare(receivedShares []*collaboration.ReceivedShare) (earliestShare *collaboration.Share, atLeastOneAccepted bool) {
+	// Lookup the last changed received share and use its etag for the share jail.
+	atLeastOneAccepted = false
+	for _, rs := range receivedShares {
+		current := rs.Share
+		if rs.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
+			atLeastOneAccepted = true
+		}
+		switch {
+		case earliestShare == nil:
+			earliestShare = current
+		case current.Mtime.Seconds > earliestShare.Mtime.Seconds:
+			earliestShare = current
+		case current.Mtime.Seconds == earliestShare.Mtime.Seconds &&
+			current.Mtime.Nanos > earliestShare.Mtime.Nanos:
+			earliestShare = current
+		}
+	}
+	return earliestShare, atLeastOneAccepted
 }
