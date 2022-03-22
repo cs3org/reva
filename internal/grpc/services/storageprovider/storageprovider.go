@@ -29,6 +29,7 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -1044,7 +1045,7 @@ func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlink
 }
 
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
-	total, used, err := s.storage.GetQuota(ctx, req.Ref)
+	total, used, remaining, err := s.storage.GetQuota(ctx, req.Ref)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -1067,6 +1068,14 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 	}
 
 	res := &provider.GetQuotaResponse{
+		Opaque: &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"remaining": {
+					Decoder: "plain",
+					Value:   []byte(strconv.FormatUint(remaining, 10)),
+				},
+			},
+		},
 		Status:     status.NewOK(ctx),
 		TotalBytes: total,
 		UsedBytes:  used,

@@ -692,21 +692,25 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 }
 
 // GetQuota as defined in the storage.FS interface
-func (nc *StorageDriver) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
+func (nc *StorageDriver) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("GetQuota")
 
 	_, respBody, err := nc.do(ctx, Action{"GetQuota", ""})
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	var respMap map[string]interface{}
 	err = json.Unmarshal(respBody, &respMap)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	return uint64(respMap["totalBytes"].(float64)), uint64(respMap["usedBytes"].(float64)), err
+
+	total := uint64(respMap["totalBytes"].(float64))
+	used := uint64(respMap["usedBytes"].(float64))
+	remaining := total - used
+	return total, used, remaining, err
 }
 
 // CreateReference as defined in the storage.FS interface
