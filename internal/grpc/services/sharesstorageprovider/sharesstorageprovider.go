@@ -387,7 +387,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 					}
 				}
 				// only display the shares jail if we have accepted shares
-				if atLeastOneAccepted == true {
+				if atLeastOneAccepted {
 					opaque = utils.AppendPlainToOpaque(opaque, "spaceAlias", "virtual/shares")
 					space := &provider.StorageSpace{
 						Opaque: opaque,
@@ -660,6 +660,18 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			return nil, err
 		}
 		earliestShare, _ := findEarliestShare(receivedShares)
+
+		resourceResp, err := s.gateway.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				ResourceId: earliestShare.ResourceId,
+			},
+		})
+		if err != nil {
+			return nil, errors.Wrap(err, "Transport error while stating the earliest share resource")
+		}
+		if resourceResp.Status.Code != rpc.Code_CODE_OK {
+			return nil, errors.New("Could not stat earliest share resource")
+		}
 		// The root is empty, it is filled by mountpoints
 		return &provider.StatResponse{
 			Status: status.NewOK(ctx),
@@ -677,7 +689,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 					OpaqueId:  utils.ShareStorageProviderID,
 				},
 				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Mtime:         earliestShare.Mtime, // TODO, use the mtime of the latest resource
+				Mtime:         resourceResp.Info.Mtime,
 				Path:          "/",
 				MimeType:      "httpd/unix-directory",
 				Size:          0,
@@ -954,8 +966,6 @@ func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedSha
 }
 
 func findEarliestShare(receivedShares []*collaboration.ReceivedShare) (earliestShare *collaboration.Share, atLeastOneAccepted bool) {
-	// Lookup the last changed received share and use its etag for the share jail.
-	atLeastOneAccepted = false
 	for _, rs := range receivedShares {
 		current := rs.Share
 		if rs.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
