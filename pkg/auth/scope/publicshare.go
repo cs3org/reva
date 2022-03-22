@@ -71,6 +71,8 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 			}
 		}
 		return checkStorageRef(ctx, &share, ref), nil
+	case *provider.CreateHomeRequest:
+		return false, nil
 	case *provider.GetPathRequest:
 		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.GetResourceId()}), nil
 	case *provider.StatRequest:
@@ -127,7 +129,7 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		return checkResourcePath(v), nil
 	}
 
-	msg := "resource type assertion failed"
+	msg := "public resource type assertion failed"
 	logger.Debug().Str("scope", "publicshareScope").Interface("resource", resource).Msg(msg)
 	return false, errtypes.InternalError(msg)
 }
