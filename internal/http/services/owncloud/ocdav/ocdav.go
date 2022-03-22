@@ -133,7 +133,7 @@ func getLockSystem(c *Config) (LockSystem, error) {
 	return NewCS3LS(client), nil
 }
 
-// New returns a new ocdav
+// New returns a new ocdav service
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
@@ -141,11 +141,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	conf.init()
-	return NewWithConfig(conf, log)
-}
 
-// New returns a new ocdav
-func NewWithConfig(conf *Config, _ *zerolog.Logger) (global.Service, error) {
 	fm, err := getFavoritesManager(conf)
 	if err != nil {
 		return nil, err
@@ -155,6 +151,11 @@ func NewWithConfig(conf *Config, _ *zerolog.Logger) (global.Service, error) {
 		return nil, err
 	}
 
+	return NewWith(conf, fm, ls, log)
+}
+
+// NewWith returns a new ocdav service
+func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger) (global.Service, error) {
 	s := &svc{
 		c:             conf,
 		webDavHandler: new(WebDavHandler),

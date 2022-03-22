@@ -329,8 +329,11 @@ func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient
 		ArbitraryMetadataKeys: metadataKeys,
 	}
 	res, err := client.Stat(ctx, req)
-	if err != nil || res == nil || res.Status == nil || res.Status.Code != rpc.Code_CODE_OK {
-		return nil, res.Status, err
+	if err != nil {
+		return nil, nil, err
+	}
+	if res == nil || res.Status == nil {
+		return nil, nil, nil
 	}
 	return res.Info, res.Status, nil
 }
@@ -387,7 +390,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		// TODO get mtime, and size from space as well, so we no longer have to stat here?
 		spaceRef := spacelookup.MakeRelativeReference(space, requestPath, spacesPropfind)
 		info, status, err := p.statSpace(ctx, client, space, spaceRef, metadataKeys)
-		if err != nil || status.Code != rpc.Code_CODE_OK {
+		if err != nil || status == nil || status.Code != rpc.Code_CODE_OK {
 			continue
 		}
 
