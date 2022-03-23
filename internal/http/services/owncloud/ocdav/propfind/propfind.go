@@ -274,6 +274,7 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 
 	filters := make([]*link.ListPublicSharesRequest_Filter, 0, len(resourceInfos))
 	for i := range resourceInfos {
+		// the list of filters grows with every public link in a folder
 		filters = append(filters, publicshare.ResourceIDFilter(resourceInfos[i].Id))
 	}
 
@@ -285,15 +286,18 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 	}
 
 	var linkshares map[string]struct{}
-	listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
-	if err == nil {
-		linkshares = make(map[string]struct{}, len(listResp.Share))
-		for i := range listResp.Share {
-			linkshares[listResp.Share[i].ResourceId.OpaqueId] = struct{}{}
+	// public link access does not show share-types
+	if namespace != "/public" {
+		listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
+		if err == nil {
+			linkshares = make(map[string]struct{}, len(listResp.Share))
+			for i := range listResp.Share {
+				linkshares[listResp.Share[i].ResourceId.OpaqueId] = struct{}{}
+			}
+		} else {
+			log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
+			span.SetStatus(codes.Error, err.Error())
 		}
-	} else {
-		log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
-		span.SetStatus(codes.Error, err.Error())
 	}
 
 	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, linkshares)
@@ -715,6 +719,11 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			isPublic,
 		)
 		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
+	}
+
+	// replace fileid of /public/{token} mountpoint with grant fileid
+	if ls != nil && md.Id != nil && md.Id.StorageId == utils.PublicStorageProviderID && md.Id.OpaqueId == ls.Token {
+		md.Id = ls.ResourceId
 	}
 
 	propstatOK := PropstatXML{

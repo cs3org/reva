@@ -84,7 +84,8 @@ home_template = "/users/{{.Id.OpaqueId}}"
 ## While public shares are mounted at /public logged in end will should never see that path because it is only created by the spaces registry when
 ## a public link is accessed.
 [grpc.services.storageregistry.drivers.spaces.providers."localhost:13000".spaces]
-"public" = { "mount_point" = "/public" }
+"grant" = { "mount_point" = "." }
+"mountpoint" = { "mount_point" = "/public", "path_template" = "/public/{{.Space.Root.OpaqueId}}" }
 
 [http]
 address = "0.0.0.0:19001"

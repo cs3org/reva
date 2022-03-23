@@ -284,6 +284,9 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 
 			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, r.UserAgent())
 
+			// store scopes in context
+			ctx = ctxpkg.ContextSetScopes(ctx, tokenScope)
+
 			r = r.WithContext(ctx)
 			h.ServeHTTP(w, r)
 		})

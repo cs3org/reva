@@ -28,6 +28,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -70,6 +71,8 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 			}
 		}
 		return checkStorageRef(ctx, &share, ref), nil
+	case *provider.CreateHomeRequest:
+		return false, nil
 	case *provider.GetPathRequest:
 		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.GetResourceId()}), nil
 	case *provider.StatRequest:
@@ -112,14 +115,21 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		return true, nil
 
 	case *provider.ListStorageSpacesRequest:
-		return checkPublicListStorageSpacesFilter(v.Filters), nil
+		return true, nil
 	case *link.GetPublicShareRequest:
 		return checkPublicShareRef(&share, v.GetRef()), nil
+	case *link.ListPublicSharesRequest:
+		// public links must not leak info about other links
+		return false, nil
+
+	case *collaboration.ListReceivedSharesRequest:
+		// public links must not leak info about collaborative shares
+		return false, nil
 	case string:
 		return checkResourcePath(v), nil
 	}
 
-	msg := "resource type assertion failed"
+	msg := "public resource type assertion failed"
 	logger.Debug().Str("scope", "publicshareScope").Interface("resource", resource).Msg(msg)
 	return false, errtypes.InternalError(msg)
 }
@@ -135,32 +145,15 @@ func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Refer
 		return true
 	}
 
-	// r: <resource_id:<storage_id: opaque_id:$token/$opaqueID> path:$path>
+	// r: <resource_id:<storage_id: opaque_id:$token> path:$path>
 	if id := r.GetResourceId(); id.GetStorageId() == PublicStorageProviderID {
-		if id.GetOpaqueId() == PublicStorageProviderID && strings.HasPrefix(r.Path, "./"+s.Token) {
+		// access to /public
+		if id.GetOpaqueId() == PublicStorageProviderID {
 			return true
 		}
-		// r: <resource_id:<storage_id: opaque_id:$token/$opaqueID> path:$path>
-		if strings.HasPrefix(id.GetOpaqueId(), s.Token+"/") {
+		// access relative to /public/$token
+		if id.GetOpaqueId() == s.Token {
 			return true
-		}
-	}
-	return false
-}
-
-// public link access must send a filter with id or type
-func checkPublicListStorageSpacesFilter(filters []*provider.ListStorageSpacesRequest_Filter) bool {
-	// return true
-	for _, f := range filters {
-		switch f.Type {
-		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			if f.GetSpaceType() == "public" {
-				return true
-			}
-		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			if f.GetId().OpaqueId != "" {
-				return true
-			}
 		}
 	}
 	return false
