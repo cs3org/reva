@@ -32,8 +32,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/prop"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/props"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
@@ -323,9 +323,9 @@ func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.N
 	}
 
 	if len(acceptedProps) > 0 {
-		propstatBody := []props.PropertyXML{}
+		propstatBody := []prop.PropertyXML{}
 		for i := range acceptedProps {
-			propstatBody = append(propstatBody, props.NewPropNS(acceptedProps[i].Space, acceptedProps[i].Local, ""))
+			propstatBody = append(propstatBody, prop.EscapedNS(acceptedProps[i].Space, acceptedProps[i].Local, ""))
 		}
 		response.Propstat = append(response.Propstat, propfind.PropstatXML{
 			Status: "HTTP/1.1 200 OK",
@@ -334,9 +334,9 @@ func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.N
 	}
 
 	if len(removedProps) > 0 {
-		propstatBody := []props.PropertyXML{}
+		propstatBody := []prop.PropertyXML{}
 		for i := range removedProps {
-			propstatBody = append(propstatBody, props.NewPropNS(removedProps[i].Space, removedProps[i].Local, ""))
+			propstatBody = append(propstatBody, prop.EscapedNS(removedProps[i].Space, removedProps[i].Local, ""))
 		}
 		response.Propstat = append(response.Propstat, propfind.PropstatXML{
 			Status: "HTTP/1.1 204 No Content",
@@ -386,11 +386,11 @@ type Proppatch struct {
 	// remove them, it sets them.
 	Remove bool
 	// Props contains the properties to be set or removed.
-	Props []props.PropertyXML
+	Props []prop.PropertyXML
 }
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for proppatch)
-type proppatchProps []props.PropertyXML
+type proppatchProps []prop.PropertyXML
 
 // UnmarshalXML appends the property names and values enclosed within start
 // to ps.
@@ -403,7 +403,7 @@ type proppatchProps []props.PropertyXML
 func (ps *proppatchProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	lang := xmlLang(start, "")
 	for {
-		t, err := props.Next(d)
+		t, err := prop.Next(d)
 		if err != nil {
 			return err
 		}
@@ -414,7 +414,7 @@ func (ps *proppatchProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) e
 			}
 			return nil
 		case xml.StartElement:
-			p := props.PropertyXML{}
+			p := prop.PropertyXML{}
 			err = d.DecodeElement(&p, &elem)
 			if err != nil {
 				return err

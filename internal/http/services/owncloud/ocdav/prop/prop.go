@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package props
+package prop
 
 import (
 	"bytes"
@@ -49,8 +49,8 @@ func xmlEscaped(val string) []byte {
 	return buf.Bytes()
 }
 
-// NewPropNS returns a new PropertyXML instance
-func NewPropNS(namespace string, local string, val string) PropertyXML {
+// EscapedNS returns a new PropertyXML instance while xml-escaping the value
+func EscapedNS(namespace string, local string, val string) PropertyXML {
 	return PropertyXML{
 		XMLName:  xml.Name{Space: namespace, Local: local},
 		Lang:     "",
@@ -58,9 +58,9 @@ func NewPropNS(namespace string, local string, val string) PropertyXML {
 	}
 }
 
-// NewProp returns a new PropertyXML instance while xml-escaping the value
+// Escaped returns a new PropertyXML instance while xml-escaping the value
 // TODO properly use the space
-func NewProp(key, val string) PropertyXML {
+func Escaped(key, val string) PropertyXML {
 	return PropertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
 		Lang:     "",
@@ -68,25 +68,25 @@ func NewProp(key, val string) PropertyXML {
 	}
 }
 
-// NewNotFound returns a new PropertyXML instance with an empty value
-func NewNotFound(key string) PropertyXML {
+// NotFound returns a new PropertyXML instance with an empty value
+func NotFound(key string) PropertyXML {
 	return PropertyXML{
 		XMLName: xml.Name{Space: "", Local: key},
 		Lang:    "",
 	}
 }
 
-// NewNotFound returns a new PropertyXML instance with the given namespace and an empty value
-func NewNotFoundNS(namespace, key string) PropertyXML {
+// NotFoundNS returns a new PropertyXML instance with the given namespace and an empty value
+func NotFoundNS(namespace, key string) PropertyXML {
 	return PropertyXML{
 		XMLName: xml.Name{Space: namespace, Local: key},
 		Lang:    "",
 	}
 }
 
-// NewPropRaw returns a new PropertyXML instance for the given key/value pair
+// Raw returns a new PropertyXML instance for the given key/value pair
 // TODO properly use the space
-func NewPropRaw(key, val string) PropertyXML {
+func Raw(key, val string) PropertyXML {
 	return PropertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
 		Lang:     "",
