@@ -66,6 +66,12 @@ var (
 	errInvalidSpaceReference = errors.New("invalid storage space reference")
 )
 
+// ShareMetadata contains Metadata for a share
+type ShareMetadata struct {
+	ETag  string
+	Mtime *types.Timestamp
+}
+
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
 // i.e: /a/b/c/d/e contains prefix /a/b/c
 func Skip(source string, prefixes []string) bool {
