@@ -318,24 +318,31 @@ func isLockModificationAllowed(ctx context.Context, oldLock *provider.Lock, newL
 		return true, nil
 	}
 
-	var allowed bool = true
+	var forbidden bool = true
 	var err error
 
-	if oldLock.AppName != "" && oldLock.AppName != newLock.AppName {
-		allowed = false
-		err = errtypes.PermissionDenied("cannot change holder (app name) when refreshing a lock")
+	if oldLock.AppName != "" || newLock.AppName != "" {
+		if oldLock.AppName != newLock.AppName {
+			err = errtypes.PermissionDenied("cannot change holder (app name) when refreshing a lock")
+		} else {
+			forbidden = forbidden && true
+		}
 	}
 
-	if oldLock.User != nil && !utils.UserEqual(oldLock.User, newLock.GetUser()) {
-		allowed = false
-		err = errtypes.PermissionDenied("cannot change holder (user) when refreshing a lock")
+	if oldLock.User != nil || newLock.GetUser() != nil {
+		if !utils.UserEqual(oldLock.User, newLock.GetUser()) {
+			err = errtypes.PermissionDenied("cannot change holder (user) when refreshing a lock")
+		} else {
+			forbidden = forbidden && true
+		}
+
+		u := ctxpkg.ContextMustGetUser(ctx)
+		if !utils.UserEqual(oldLock.User, u.Id) {
+			err = errtypes.PermissionDenied("mismatching holder")
+		} else {
+			forbidden = forbidden && true
+		}
 	}
 
-	u := ctxpkg.ContextMustGetUser(ctx)
-	if oldLock.User != nil && !utils.UserEqual(oldLock.User, u.Id) {
-		allowed = false
-		err = errtypes.PermissionDenied("mismatching holder")
-	}
-
-	return allowed, err
+	return !forbidden, err
 }
