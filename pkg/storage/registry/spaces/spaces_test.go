@@ -53,7 +53,7 @@ var _ = Describe("Spaces", func() {
 			Id: &userpb.UserId{
 				OpaqueId: "alice",
 			},
-			Username: "Alice",
+			Username: "alice",
 		}
 	)
 
@@ -333,24 +333,24 @@ var _ = Describe("Spaces", func() {
 
 			It("filters by id", func() {
 				filters := map[string]string{
-					"storage_id": "barspace",
-					"opaque_id":  "barspace",
+					"storage_id": "foospace",
+					"opaque_id":  "foospace",
 				}
 				providers, err := handler.ListProviders(ctxAlice, filters)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(providers)).To(Equal(1))
 				p := providers[0]
-				Expect(p.Address).To(Equal("127.0.0.1:13021"))
+				Expect(p.Address).To(Equal("127.0.0.1:13020"))
 
 				spaces := []*provider.StorageSpace{}
 				err = json.Unmarshal(p.Opaque.Map["spaces"].Value, &spaces)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(spaces)).To(Equal(1))
 
-				Expect(spaces[0].Id.OpaqueId).To(Equal("barspace"))
+				Expect(spaces[0].Id.OpaqueId).To(Equal("foospace"))
 				Expect(spaces[0].Opaque.Map["path"].Decoder).To(Equal("plain"))
 				spacePath := string(spaces[0].Opaque.Map["path"].Value)
-				Expect(spacePath).To(Equal("/users/Alice"))
+				Expect(spacePath).To(Equal("/users/alice"))
 
 				filters = map[string]string{
 					"storage_id": "bazspace2",

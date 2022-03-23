@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -125,7 +126,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	itemType := conversions.ResourceTypeToItem(md.Type)
 	targetPath := path.Join("/", path.Base(md.Path))
 	permissions := conversions.SharePermToInt(g.Permissions.Permissions)
-	prefix := md.Id.StorageId
+	prefix, _ := storagespace.SplitStorageID(md.Id.StorageId)
 	itemSource := md.Id.OpaqueId
 	fileSource, err := strconv.ParseUint(itemSource, 10, 64)
 	if err != nil {
@@ -286,14 +287,10 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 				coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type,
 			  	id, stime, permissions, share_type
 			  FROM oc_share
-			  WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner=? or uid_initiator=?)`
-	params := []interface{}{uid, uid}
+			  WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner=? or uid_initiator=?) AND (share_type=? OR share_type=?)`
+	params := []interface{}{uid, uid, shareTypeUser, shareTypeGroup}
 
-	if len(filters) == 0 {
-		query += " AND (share_type=? OR share_type=?)"
-		params = append(params, shareTypeUser)
-		params = append(params, shareTypeGroup)
-	} else {
+	if len(filters) > 0 {
 		filterQuery, filterParams, err := translateFilters(filters)
 		if err != nil {
 			return nil, err
@@ -336,7 +333,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 	}
 
 	query := `SELECT coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with,
-	            coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type,
+	            coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(file_target, '') as file_target,
 				ts.id, stime, permissions, share_type, coalesce(tr.state, 0) as state
 			  FROM oc_share ts LEFT JOIN oc_share_status tr ON (ts.id = tr.id AND tr.recipient = ?)
 			  WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner != ? AND uid_initiator != ?)`
@@ -365,7 +362,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 	var s conversions.DBShare
 	shares := []*collaboration.ReceivedShare{}
 	for rows.Next() {
-		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
+		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
 			continue
 		}
 		shares = append(shares, conversions.ConvertToCS3ReceivedShare(s))
@@ -388,7 +385,7 @@ func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*
 
 	s := conversions.DBShare{ID: id.OpaqueId}
 	query := `select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with,
-			    coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type,
+			    coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(file_target, '') as file_target,
 				stime, permissions, share_type, coalesce(tr.state, 0) as state
 			  FROM oc_share ts LEFT JOIN oc_share_status tr ON (ts.id = tr.id AND tr.recipient = ?)
 			  WHERE (orphan = 0 or orphan IS NULL) AND ts.id=?`
@@ -397,7 +394,7 @@ func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*
 	} else {
 		query += " AND (share_with=?  AND share_type = 0)"
 	}
-	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
+	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.FileTarget, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(id.OpaqueId)
 		}
@@ -418,7 +415,7 @@ func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey)
 
 	s := conversions.DBShare{}
 	query := `select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with,
-	            coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type,
+	            coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(file_target, '') as file_target,
 				ts.id, stime, permissions, share_type, coalesce(tr.state, 0) as state
 			  FROM oc_share ts LEFT JOIN oc_share_status tr ON (ts.id = tr.id AND tr.recipient = ?)
 			  WHERE (orphan = 0 or orphan IS NULL) AND uid_owner=? AND fileid_prefix=? AND item_source=? AND share_type=? AND share_with=?`
@@ -428,7 +425,7 @@ func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey)
 		query += " AND (share_with=? AND share_type = 0)"
 	}
 
-	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
+	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(key.String())
 		}
@@ -528,7 +525,8 @@ func translateFilters(filters []*collaboration.Filter) (string, []interface{}, e
 			filterQuery += "("
 			for i, f := range filters {
 				filterQuery += "(fileid_prefix =? AND item_source=?)"
-				params = append(params, f.GetResourceId().StorageId, f.GetResourceId().OpaqueId)
+				prefix, _ := storagespace.SplitStorageID(f.GetResourceId().StorageId)
+				params = append(params, prefix, f.GetResourceId().OpaqueId)
 
 				if i != len(filters)-1 {
 					filterQuery += " OR "

@@ -210,7 +210,6 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, errParsingSpaceReference.Error(), errParsingSpaceReference)
 		return
 	}
-
 	sublog := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
 
 	statReq := provider.StatRequest{Ref: &ref}
@@ -275,7 +274,6 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 
 		h.mapUserIds(ctx, client, s)
-
 		if shareType == int(conversions.ShareTypeUser) {
 			res, err := client.GetUser(ctx, &userpb.GetUserRequest{
 				UserId: &userpb.UserId{
@@ -861,7 +859,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		data.State = mapState(rs.GetState())
 
 		if err := h.addFileInfo(ctx, data, info); err != nil {
-			log.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
+			log.Debug().Interface("received_share", rs.Share.Id).Err(err).Msg("could not add file info, skipping")
 			continue
 		}
 		h.mapUserIds(r.Context(), client, data)

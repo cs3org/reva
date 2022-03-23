@@ -40,7 +40,7 @@ import (
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
 	// Don't use the share manager when sharing a space root
-	if refIsSpaceRoot(req.ResourceInfo.Id) {
+	if !s.c.UseCommonSpaceRootShareLogic && refIsSpaceRoot(req.ResourceInfo.Id) {
 		return s.addSpaceShare(ctx, req)
 	}
 	return s.addShare(ctx, req)
@@ -48,7 +48,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 
 func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
 	key := req.Ref.GetKey()
-	if shareIsSpaceRoot(key) {
+	if !s.c.UseCommonSpaceRootShareLogic && shareIsSpaceRoot(key) {
 		return s.removeSpaceShare(ctx, key.ResourceId, key.Grantee)
 	}
 	return s.removeShare(ctx, req)

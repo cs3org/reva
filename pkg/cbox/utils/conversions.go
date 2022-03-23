@@ -29,6 +29,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 )
 
 // DBShare stores information about user and public shares.
@@ -195,7 +196,7 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 		},
 		//ResourceId:  &provider.Reference{StorageId: s.Prefix, NodeId: s.ItemSource},
 		ResourceId: &provider.ResourceId{
-			StorageId: s.Prefix,
+			StorageId: storagespace.FormatStorageID(s.Prefix, s.ItemSource),
 			OpaqueId:  s.ItemSource,
 		},
 		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
@@ -210,8 +211,9 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 // ConvertToCS3ReceivedShare converts a DBShare to a CS3API collaboration received share
 func ConvertToCS3ReceivedShare(s DBShare) *collaboration.ReceivedShare {
 	return &collaboration.ReceivedShare{
-		Share: ConvertToCS3Share(s),
-		State: IntToShareState(s.State),
+		Share:      ConvertToCS3Share(s),
+		State:      IntToShareState(s.State),
+		MountPoint: &provider.Reference{Path: strings.TrimLeft(s.FileTarget, "/")},
 	}
 }
 
@@ -238,7 +240,7 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 			OpaqueId: s.ID,
 		},
 		ResourceId: &provider.ResourceId{
-			StorageId: s.Prefix,
+			StorageId: storagespace.FormatStorageID(s.Prefix, s.ItemSource),
 			OpaqueId:  s.ItemSource,
 		},
 		Permissions:       &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
