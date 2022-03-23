@@ -21,6 +21,7 @@ package trace
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"go.opentelemetry.io/otel/exporters/jaeger"
@@ -76,11 +77,17 @@ func SetTraceProvider(collectorEndpoint string, agentEndpoint, serviceName strin
 		}
 	}
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+
 	Provider = sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exp),
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(serviceName),
+			semconv.HostNameKey.String(hostname),
 		)),
 	)
 }
