@@ -187,9 +187,11 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 	}
 
 	switch quotaStr {
-	case node.QuotaUncalculated, node.QuotaUnknown, node.QuotaUnlimited:
+	case node.QuotaUncalculated, node.QuotaUnknown:
 		// best we can do is return current total
 		// TODO indicate unlimited total? -> in opaque data?
+	case node.QuotaUnlimited:
+		total = 0
 	default:
 		total, err = strconv.ParseUint(quotaStr, 10, 64)
 		if err != nil {
