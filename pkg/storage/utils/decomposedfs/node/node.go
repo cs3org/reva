@@ -58,9 +58,9 @@ const (
 	UserShareType    = "0"
 	QuotaKey         = "quota"
 
+	QuotaUnlimited    = "0"
 	QuotaUncalculated = "-1"
 	QuotaUnknown      = "-2"
-	QuotaUnlimited    = "-3"
 
 	// TrashIDDelimiter represents the characters used to separate the nodeid and the deletion time.
 	TrashIDDelimiter    = ".T."

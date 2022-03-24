@@ -148,32 +148,32 @@ func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
 
 // GetQuota returns the quota available
 // TODO Document in the cs3 should we return quota or free space?
-func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, inUse uint64, err error) {
+func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, inUse uint64, remaining uint64, err error) {
 	var n *node.Node
 	if ref == nil {
 		err = errtypes.BadRequest("no space given")
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	if !n.Exists {
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
-		return 0, 0, errtypes.InternalError(err.Error())
+		return 0, 0, 0, errtypes.InternalError(err.Error())
 	case !rp.GetQuota:
-		return 0, 0, errtypes.PermissionDenied(n.ID)
+		return 0, 0, 0, errtypes.PermissionDenied(n.ID)
 	}
 
 	ri, err := n.AsResourceInfo(ctx, &rp, []string{"treesize", "quota"}, true)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	quotaStr := node.QuotaUnknown
@@ -181,25 +181,34 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 		quotaStr = string(ri.Opaque.Map["quota"].Value)
 	}
 
-	avail, err := node.GetAvailableSize(n.InternalPath())
+	remaining, err = node.GetAvailableSize(n.InternalPath())
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	total = avail + ri.Size
 
-	switch {
-	case quotaStr == node.QuotaUncalculated, quotaStr == node.QuotaUnknown, quotaStr == node.QuotaUnlimited:
-	// best we can do is return current total
-	// TODO indicate unlimited total? -> in opaque data?
+	switch quotaStr {
+	case node.QuotaUncalculated, node.QuotaUnknown:
+		// best we can do is return current total
+		// TODO indicate unlimited total? -> in opaque data?
+	case node.QuotaUnlimited:
+		total = 0
 	default:
-		if quota, err := strconv.ParseUint(quotaStr, 10, 64); err == nil {
-			if total > quota {
-				total = quota
+		total, err = strconv.ParseUint(quotaStr, 10, 64)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+
+		if total <= remaining {
+			// Prevent overflowing
+			if ri.Size >= total {
+				remaining = 0
+			} else {
+				remaining = total - ri.Size
 			}
 		}
 	}
 
-	return total, ri.Size, nil
+	return total, ri.Size, remaining, nil
 }
 
 // CreateHome creates a new home node for the given user

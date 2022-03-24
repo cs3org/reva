@@ -79,7 +79,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they do not count towards the quota anymore", func() {
-				_, used, err := env.Fs.GetQuota(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes})
+				_, used, _, err := env.Fs.GetQuota(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(used).To(Equal(uint64(0)))
 			})
@@ -296,10 +296,11 @@ var _ = Describe("Recycle", func() {
 				err = env.Fs.RestoreRecycleItem(env.Ctx, &provider.Reference{ResourceId: projectID}, items[0].Key, "/", nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				max, used, err := env.Fs.GetQuota(env.Ctx, &provider.Reference{ResourceId: projectID})
+				max, used, remaining, err := env.Fs.GetQuota(env.Ctx, &provider.Reference{ResourceId: projectID})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(max).To(Equal(uint64(2000)))
 				Expect(used).To(Equal(uint64(3234)))
+				Expect(remaining).To(Equal(uint64(0)))
 			})
 
 		})
