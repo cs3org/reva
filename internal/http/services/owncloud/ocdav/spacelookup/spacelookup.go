@@ -105,7 +105,13 @@ func LookUpStorageSpacesForPathWithChildren(ctx context.Context, client gateway.
 	}
 
 	lSSRes, err := client.ListStorageSpaces(ctx, lSSReq)
-	if err != nil || lSSRes.Status.Code != rpc.Code_CODE_OK {
+	if err != nil {
+		return nil, nil, err
+	}
+	if lSSRes == nil {
+		return nil, &rpc.Status{Code: rpc.Code_CODE_INTERNAL, Message: "no error but result was nil"}, nil
+	}
+	if lSSRes.Status.Code != rpc.Code_CODE_OK {
 		return nil, lSSRes.Status, err
 	}
 
