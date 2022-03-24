@@ -25,7 +25,7 @@ import (
 	"go-micro.dev/v4/util/log"
 	"google.golang.org/grpc"
 
-	"github.com/asim/go-micro/plugins/events/nats/v4"
+	"github.com/asim/go-micro/plugins/events/natsjs/v4"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	v1beta12 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -188,6 +188,6 @@ func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {
 	case "nats":
 		address := m["address"].(string)
 		cid := m["clusterID"].(string)
-		return server.NewNatsStream(nats.Address(address), nats.ClusterID(cid))
+		return server.NewNatsStream(natsjs.Address(address), natsjs.ClusterID(cid))
 	}
 }

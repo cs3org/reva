@@ -21,36 +21,48 @@ package server
 import (
 	"time"
 
-	"github.com/asim/go-micro/plugins/events/nats/v4"
 	"github.com/cenkalti/backoff"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"go-micro.dev/v4/events"
 
-	stanServer "github.com/nats-io/nats-streaming-server/server"
+	"github.com/asim/go-micro/plugins/events/natsjs/v4"
+	nserver "github.com/nats-io/nats-server/v2/server"
 )
 
-// RunNatsServer runs the nats streaming server
+// RunNatsServer starts the nats server and blocks
 func RunNatsServer(opts ...Option) error {
-	natsOpts := stanServer.DefaultNatsServerOptions
-	stanOpts := stanServer.GetDefaultOptions()
+	options := &nserver.Options{}
 
 	for _, o := range opts {
-		o(&natsOpts, stanOpts)
+		o(options)
 	}
-	_, err := stanServer.RunServerWithOpts(stanOpts, &natsOpts)
-	return err
+
+	server, err := nserver.NewServer(options)
+	if err != nil {
+		return err
+	}
+
+	c := &nserver.JetStreamConfig{}
+
+	err = server.EnableJetStream(c)
+	if err != nil {
+		return err
+	}
+
+	server.Start()
+	return nil
 }
 
 // NewNatsStream returns a streaming client used by `Consume` and `Publish` methods
 // retries exponentially to connect to a nats server
-func NewNatsStream(opts ...nats.Option) (events.Stream, error) {
+func NewNatsStream(opts ...natsjs.Option) (events.Stream, error) {
 	b := backoff.NewExponentialBackOff()
 	var stream events.Stream
 	o := func() error {
 		n := b.NextBackOff()
-		s, err := nats.NewStream(opts...)
+		s, err := natsjs.NewStream(opts...)
 		if err != nil && n > time.Second {
-			logger.New().Error().Err(err).Msgf("can't connect to nats (stan) server, retrying in %s", n)
+			logger.New().Error().Err(err).Msgf("can't connect to nats (jetstream) server, retrying in %s", n)
 		}
 		stream = s
 		return err

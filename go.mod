@@ -10,7 +10,7 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
-	github.com/asim/go-micro/plugins/events/nats/v4 v4.0.0-20220118152736-9e0be6c85d75
+	github.com/asim/go-micro/plugins/events/natsjs/v4 v4.0.0-20220311080335-e5a35d38f931
 	github.com/aws/aws-sdk-go v1.42.39
 	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
@@ -53,13 +53,13 @@ require (
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/nats-io/nats-server/v2 v2.7.2
-	github.com/nats-io/nats-streaming-server v0.24.1
 	github.com/onsi/ginkgo/v2 v2.0.0
 	github.com/onsi/gomega v1.18.1
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.4
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus/alertmanager v0.23.0
+	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/rs/cors v1.8.2
 	github.com/rs/zerolog v1.26.1
 	github.com/sciencemesh/meshdirectory-web v1.0.4
@@ -70,7 +70,7 @@ require (
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tus/tusd v1.8.0
 	github.com/wk8/go-ordered-map v0.2.0
-	go-micro.dev/v4 v4.3.1-0.20211108085239-0c2041e43908
+	go-micro.dev/v4 v4.6.0
 	go.mongodb.org/mongo-driver v1.7.2 // indirect
 	go.opencensus.io v0.23.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.28.0
@@ -78,11 +78,11 @@ require (
 	go.opentelemetry.io/otel/exporters/jaeger v1.3.0
 	go.opentelemetry.io/otel/sdk v1.3.0
 	go.opentelemetry.io/otel/trace v1.3.0
-	golang.org/x/crypto v0.0.0-20220112180741-5e0467b6c7ce
+	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
 	golang.org/x/oauth2 v0.0.0-20211005180243-6b3c2da341f1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9
-	golang.org/x/term v0.0.0-20210916214954-140adaaadfaf
+	golang.org/x/sys v0.0.0-20220209214540-3681064d5158
+	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 	google.golang.org/genproto v0.0.0-20211021150943-2b146023228c
 	google.golang.org/grpc v1.42.0
 	google.golang.org/protobuf v1.27.1

@@ -19,37 +19,29 @@
 package server
 
 import (
-	natsServer "github.com/nats-io/nats-server/v2/server"
-	stanServer "github.com/nats-io/nats-streaming-server/server"
+	nserver "github.com/nats-io/nats-server/v2/server"
 )
 
 // Option configures the nats server
-type Option func(*natsServer.Options, *stanServer.Options)
+type Option func(*nserver.Options)
 
 // Host sets the host URL for the nats server
 func Host(url string) Option {
-	return func(no *natsServer.Options, _ *stanServer.Options) {
-		no.Host = url
+	return func(o *nserver.Options) {
+		o.Host = url
 	}
 }
 
 // Port sets the host URL for the nats server
 func Port(port int) Option {
-	return func(no *natsServer.Options, _ *stanServer.Options) {
-		no.Port = port
+	return func(o *nserver.Options) {
+		o.Port = port
 	}
 }
 
-// NatsOpts allows setting Options from nats package directly
-func NatsOpts(opt func(*natsServer.Options)) Option {
-	return func(no *natsServer.Options, _ *stanServer.Options) {
-		opt(no)
-	}
-}
-
-// StanOpts allows setting Options from stan package directly
-func StanOpts(opt func(*stanServer.Options)) Option {
-	return func(_ *natsServer.Options, so *stanServer.Options) {
-		opt(so)
+// ClusterID sets the name for the nats cluster
+func ClusterID(clusterID string) Option {
+	return func(o *nserver.Options) {
+		o.Cluster.Name = clusterID
 	}
 }
