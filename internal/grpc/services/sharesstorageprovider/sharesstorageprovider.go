@@ -954,13 +954,28 @@ func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedSha
 
 func findEarliestShare(receivedShares []*collaboration.ReceivedShare, shareMd map[string]utils.ShareMetadata) (earliestShare *collaboration.Share, atLeastOneAccepted bool) {
 	for _, rs := range receivedShares {
+		var hasCurrentMd bool
+		var hasEarliestMd bool
+
 		current := rs.Share
 		if rs.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
 			atLeastOneAccepted = true
 		}
+
+		// We cannot assume that every share has metadata
+		if current.Id != nil {
+			_, hasCurrentMd = shareMd[current.Id.OpaqueId]
+		}
+		if earliestShare != nil && earliestShare.Id != nil {
+			_, hasEarliestMd = shareMd[earliestShare.Id.OpaqueId]
+		}
+
 		switch {
 		case earliestShare == nil:
 			earliestShare = current
+		// ignore if one of the shares has no metadata
+		case !hasEarliestMd || !hasCurrentMd:
+			continue
 		case shareMd[current.Id.OpaqueId].Mtime.Seconds > shareMd[earliestShare.Id.OpaqueId].Mtime.Seconds:
 			earliestShare = current
 		case shareMd[current.Id.OpaqueId].Mtime.Seconds == shareMd[earliestShare.Id.OpaqueId].Mtime.Seconds &&
