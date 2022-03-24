@@ -20,7 +20,8 @@ type Options struct {
 	Context   context.Context
 	//Metrics   *metrics.Metrics
 	//Flags     []cli.Flag
-	Name string
+	Name      string
+	JWTSecret string
 
 	FavoriteManager favorite.Manager
 
@@ -51,6 +52,13 @@ func TLSConfig(config *tls.Config) Option {
 func Address(val string) Option {
 	return func(o *Options) {
 		o.Address = val
+	}
+}
+
+// JWTSecret provides a function to set the jwt secret option.
+func JWTSecret(s string) Option {
+	return func(o *Options) {
+		o.JWTSecret = s
 	}
 }
 

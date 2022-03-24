@@ -15,12 +15,6 @@ import (
 	"go-micro.dev/v4"
 	"go-micro.dev/v4/registry"
 	"go-micro.dev/v4/server"
-
-	// initialize reva registries by importing the relevant loader packages
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/auth/credential/loader"
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/auth/token/loader"
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/auth/tokenwriter/loader"
-	_ "github.com/cs3org/reva/v2/pkg/token/manager/loader"
 )
 
 const (
@@ -111,13 +105,13 @@ func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service) error {
 
 	// auth
 	for _, v := range svc.Unprotected() {
-		sopts.Logger.Info().Msgf("unprotected URL: %s", v)
+		sopts.Logger.Info().Str("url", v).Msg("unprotected URL")
 	}
 	authMiddle, err := auth.New(map[string]interface{}{
 		"gatewaysvc": sopts.config.GatewaySvc,
 		"token_managers": map[string]interface{}{
 			"jwt": map[string]interface{}{
-				"secret": "Pive-Fumkiu4",
+				"secret": sopts.JWTSecret,
 			},
 		},
 	}, svc.Unprotected())
