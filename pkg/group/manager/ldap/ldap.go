@@ -239,9 +239,14 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 	if err != nil {
 		return nil, err
 	}
-	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
-	if err != nil {
-		return nil, err
+
+	gidNumber := m.c.Nobody
+	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
+	if gidValue != "" {
+		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	g := &grouppb.Group{
