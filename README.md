@@ -123,9 +123,12 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
     ../../../cmd/revad/revad -c frontend.toml &
     ../../../cmd/revad/revad -c gateway.toml &
     ../../../cmd/revad/revad -c shares.toml &
+    ../../../cmd/revad/revad -c storage-shares.toml &
     ../../../cmd/revad/revad -c storage-home.toml &
     ../../../cmd/revad/revad -c storage-users.toml &
     ../../../cmd/revad/revad -c storage-publiclink.toml &
+    ../../../cmd/revad/revad -c machine-auth.toml &
+    ../../../cmd/revad/revad -c permissions-ocis-ci.toml &
     ../../../cmd/revad/revad -c ldap-users.toml
     ```
 
