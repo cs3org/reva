@@ -477,6 +477,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				// for now use the name from the share to override the name determined by stat
 				if receivedShare.MountPoint != nil {
 					space.Name = receivedShare.MountPoint.Path
+					space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "spaceAlias", space.SpaceType+"/"+strings.ReplaceAll(strings.ToLower(space.Name), " ", "-"))
 				}
 
 				// what if we don't have a name?
