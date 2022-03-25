@@ -318,50 +318,29 @@ func isLockModificationAllowed(ctx context.Context, oldLock *provider.Lock, newL
 		return true, nil
 	}
 
-	var appNameEquals, lockUserEquals, contextUserEquals bool
-
-	if oldLock.AppName != "" || newLock.AppName != "" {
-		appNameEquals = oldLock.AppName == newLock.AppName
-	} else {
-		// no app lock set
-		appNameEquals = true
+	appNameEquals := oldLock.AppName == newLock.AppName
+	if !appNameEquals {
+		return false, errtypes.PermissionDenied("app names of the locks are mismatching")
 	}
 
-	if oldLock.User != nil || newLock.GetUser() != nil {
-		lockUserEquals = utils.UserEqual(oldLock.User, newLock.GetUser())
-
-		u := ctxpkg.ContextMustGetUser(ctx)
-		contextUserEquals = utils.UserEqual(oldLock.User, u.Id)
-	} else {
+	var lockUserEquals, contextUserEquals bool
+	if oldLock.User == nil && newLock.GetUser() == nil {
 		// no user lock set
 		lockUserEquals = true
 		contextUserEquals = true
-	}
-
-	if appNameEquals && lockUserEquals && contextUserEquals {
-		return true, nil
-	}
-
-	denialReasons := []string{}
-
-	if !appNameEquals {
-		denialReasons = append(denialReasons, "app names of the locks are mismatching")
-	}
-	if !lockUserEquals {
-		denialReasons = append(denialReasons, "users of the locks are mismatching")
-	}
-	if !contextUserEquals {
-		denialReasons = append(denialReasons, "lock holder and current user are mismatching")
-	}
-
-	errMsg := "cannot modify the lock because: "
-
-	for i, reason := range denialReasons {
-		if i != 0 && i != len(denialReasons)-1 {
-			errMsg += ", "
+	} else {
+		lockUserEquals = utils.UserEqual(oldLock.User, newLock.GetUser())
+		if !lockUserEquals {
+			return false, errtypes.PermissionDenied("users of the locks are mismatching")
 		}
-		errMsg += reason
+
+		u := ctxpkg.ContextMustGetUser(ctx)
+		contextUserEquals = utils.UserEqual(oldLock.User, u.Id)
+		if !contextUserEquals {
+			return false, errtypes.PermissionDenied("lock holder and current user are mismatching")
+		}
 	}
 
-	return false, errtypes.PermissionDenied(errMsg)
+	return appNameEquals && lockUserEquals && contextUserEquals, nil
+
 }
