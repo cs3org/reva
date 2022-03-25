@@ -54,7 +54,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
-//go:generate mockery -name GatewayClient
+//go:generate make --no-print-directory -C ../../../../../.. mockery NAME=GatewayClient
 
 type countingReader struct {
 	n int

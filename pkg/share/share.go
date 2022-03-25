@@ -35,7 +35,7 @@ const (
 	StorageIDFilterType collaboration.Filter_Type = 7
 )
 
-//go:generate mockery -name Manager
+//go:generate make --no-print-directory -C ../.. mockery NAME=Manager
 
 // Manager is the interface that manipulates shares.
 type Manager interface {
