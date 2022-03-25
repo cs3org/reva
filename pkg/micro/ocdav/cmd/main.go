@@ -26,6 +26,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// main starts a go micro service that uses the ocdev handler
+// It is an example how to use pkg/micro/ocdav Service and leaves out any flag parsing.
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
