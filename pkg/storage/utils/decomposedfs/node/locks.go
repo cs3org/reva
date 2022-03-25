@@ -329,7 +329,6 @@ func isLockModificationAllowed(ctx context.Context, oldLock *provider.Lock, newL
 
 	if oldLock.User != nil || newLock.GetUser() != nil {
 		lockUserEquals = utils.UserEqual(oldLock.User, newLock.GetUser())
-		//err = errtypes.PermissionDenied("cannot change holder (user) when refreshing a lock")
 
 		u := ctxpkg.ContextMustGetUser(ctx)
 		contextUserEquals = utils.UserEqual(oldLock.User, u.Id)
@@ -359,9 +358,9 @@ func isLockModificationAllowed(ctx context.Context, oldLock *provider.Lock, newL
 
 	for i, reason := range denialReasons {
 		if i != 0 && i != len(denialReasons)-1 {
-			errMsg = errMsg + ", "
+			errMsg += ", "
 		}
-		errMsg = errMsg + reason
+		errMsg += reason
 	}
 
 	return false, errtypes.PermissionDenied(errMsg)
