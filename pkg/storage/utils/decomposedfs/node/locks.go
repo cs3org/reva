@@ -318,31 +318,51 @@ func isLockModificationAllowed(ctx context.Context, oldLock *provider.Lock, newL
 		return true, nil
 	}
 
-	var forbidden bool = true
-	var err error
+	var appNameEquals, lockUserEquals, contextUserEquals bool
 
 	if oldLock.AppName != "" || newLock.AppName != "" {
-		if oldLock.AppName != newLock.AppName {
-			err = errtypes.PermissionDenied("cannot change holder (app name) when refreshing a lock")
-		} else {
-			forbidden = forbidden && true
-		}
+		appNameEquals = oldLock.AppName == newLock.AppName
+	} else {
+		// no app lock set
+		appNameEquals = true
 	}
 
 	if oldLock.User != nil || newLock.GetUser() != nil {
-		if !utils.UserEqual(oldLock.User, newLock.GetUser()) {
-			err = errtypes.PermissionDenied("cannot change holder (user) when refreshing a lock")
-		} else {
-			forbidden = forbidden && true
-		}
+		lockUserEquals = utils.UserEqual(oldLock.User, newLock.GetUser())
+		//err = errtypes.PermissionDenied("cannot change holder (user) when refreshing a lock")
 
 		u := ctxpkg.ContextMustGetUser(ctx)
-		if !utils.UserEqual(oldLock.User, u.Id) {
-			err = errtypes.PermissionDenied("mismatching holder")
-		} else {
-			forbidden = forbidden && true
-		}
+		contextUserEquals = utils.UserEqual(oldLock.User, u.Id)
+	} else {
+		// no user lock set
+		lockUserEquals = true
+		contextUserEquals = true
 	}
 
-	return !forbidden, err
+	if appNameEquals && lockUserEquals && contextUserEquals {
+		return true, nil
+	}
+
+	denialReasons := []string{}
+
+	if !appNameEquals {
+		denialReasons = append(denialReasons, "app names of the locks are mismatching")
+	}
+	if !lockUserEquals {
+		denialReasons = append(denialReasons, "users of the locks are mismatching")
+	}
+	if !contextUserEquals {
+		denialReasons = append(denialReasons, "lock holder and current user are mismatching")
+	}
+
+	errMsg := "cannot modify the lock because: "
+
+	for i, reason := range denialReasons {
+		if i != 0 && i != len(denialReasons)-1 {
+			errMsg = errMsg + ", "
+		}
+		errMsg = errMsg + reason
+	}
+
+	return false, errtypes.PermissionDenied(errMsg)
 }
