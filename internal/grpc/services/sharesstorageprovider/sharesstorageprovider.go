@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cs3org/reva/v2/pkg/share"
 	"google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
@@ -359,7 +360,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	}
 
 	var receivedShares []*collaboration.ReceivedShare
-	var shareMd map[string]utils.ShareMetadata
+	var shareMd map[string]share.Metadata
 	var err error
 	if fetchShares {
 		receivedShares, shareMd, err = s.fetchShares(ctx)
@@ -931,7 +932,7 @@ func (s *service) rejectReceivedShare(ctx context.Context, receivedShare *collab
 	return errtypes.NewErrtypeFromStatus(res.Status)
 }
 
-func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedShare, map[string]utils.ShareMetadata, error) {
+func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedShare, map[string]share.Metadata, error) {
 	lsRes, err := s.gateway.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
 		// FIXME filter by received shares for resource id - listing all shares is tooo expensive!
 	})
@@ -943,7 +944,7 @@ func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedSha
 	}
 	receivedShares := lsRes.Shares
 
-	var shareMd map[string]utils.ShareMetadata
+	var shareMd map[string]share.Metadata
 	if lsRes.Opaque != nil {
 		if entry, ok := lsRes.Opaque.Map["shareMetadata"]; ok {
 			// If we can't get the etags thats fine, just continue.
@@ -953,7 +954,7 @@ func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedSha
 	return receivedShares, shareMd, nil
 }
 
-func findEarliestShare(receivedShares []*collaboration.ReceivedShare, shareMd map[string]utils.ShareMetadata) (earliestShare *collaboration.Share, atLeastOneAccepted bool) {
+func findEarliestShare(receivedShares []*collaboration.ReceivedShare, shareMd map[string]share.Metadata) (earliestShare *collaboration.Share, atLeastOneAccepted bool) {
 	for _, rs := range receivedShares {
 		var hasCurrentMd bool
 		var hasEarliestMd bool

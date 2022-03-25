@@ -32,9 +32,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -167,7 +167,7 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 	// TODO: This is a hack for now.
 	// Can we do that cleaner somehow?
 	// The `ListStorageSpaces` method in sharesstorageprovider/sharesstorageprovider.go needs the etags.
-	shareMetaData := make(map[string]utils.ShareMetadata, len(res.Shares))
+	shareMetaData := make(map[string]share.Metadata, len(res.Shares))
 	for _, rs := range res.Shares {
 		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
 		if err != nil {
@@ -183,7 +183,7 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 				Msg("ListRecievedShares: failed to stat the resource")
 			continue
 		}
-		shareMetaData[rs.Share.Id.OpaqueId] = utils.ShareMetadata{ETag: sRes.Info.Etag, Mtime: sRes.Info.Mtime}
+		shareMetaData[rs.Share.Id.OpaqueId] = share.Metadata{ETag: sRes.Info.Etag, Mtime: sRes.Info.Mtime}
 	}
 
 	marshalled, err := json.Marshal(shareMetaData)

@@ -24,6 +24,7 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/genproto/protobuf/field_mask"
@@ -36,6 +37,12 @@ const (
 )
 
 //go:generate mockery -name Manager
+
+// Metadata contains Metadata for a share
+type Metadata struct {
+	ETag  string
+	Mtime *types.Timestamp
+}
 
 // Manager is the interface that manipulates shares.
 type Manager interface {
