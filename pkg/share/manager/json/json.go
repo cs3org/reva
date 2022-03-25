@@ -353,37 +353,35 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 	defer m.Unlock()
 
 	user := ctxpkg.ContextMustGetUser(ctx)
+	mem := make(map[string]int)
 	var rss []*collaboration.ReceivedShare
 	for _, s := range m.model.Shares {
 		if !share.IsCreatedByUser(s, user) &&
 			share.IsGrantedToUser(s, user) &&
 			share.MatchesFilters(s, filters) {
-			rss = append(rss, m.convert(user, s))
-		}
-	}
 
-	// if there is a mix-up of shares of type group and shares of type user we need to deduplicate them, since it points
-	// to the same resource. Leave the more explicit and hide the less explicit. In this case we hide the group shares
-	// and return the user share to the user.
-	filtered := make([]*collaboration.ReceivedShare, 0)
-	filtered = append(filtered, rss...)
+			rs := m.convert(user, s)
+			idx, seen := mem[s.ResourceId.OpaqueId]
+			if !seen {
+				rss = append(rss, rs)
+				mem[s.ResourceId.OpaqueId] = len(rss) - 1
+				continue
+			}
 
-	for i := range rss {
-		for j := range rss {
-			if rss[i].Share.ResourceId.GetOpaqueId() == rss[j].Share.ResourceId.GetOpaqueId() {
-				if rss[i].Share.GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_GROUP && rss[j].Share.GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER {
-					if rss[i].State == rss[j].State {
-						// remove the group share from the results
-						filtered[i] = filtered[len(filtered)-1]
-						filtered[len(filtered)-1] = nil
-						filtered = filtered[:len(filtered)-1]
-					}
+			// When we arrive here there was already a share for this resource.
+			// if there is a mix-up of shares of type group and shares of type user we need to deduplicate them, since it points
+			// to the same resource. Leave the more explicit and hide the less explicit. In this case we hide the group shares
+			// and return the user share to the user.
+			other := rss[idx]
+			if other.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP && s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
+				if other.State == rs.State {
+					rss[idx] = rs
 				}
 			}
 		}
 	}
 
-	return filtered, nil
+	return rss, nil
 }
 
 // convert must be called in a lock-controlled block.
