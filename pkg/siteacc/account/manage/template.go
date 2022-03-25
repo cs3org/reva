@@ -63,7 +63,7 @@ html * {
 const tplBody = `
 <div>
 	<p><strong>Hello {{.Account.FirstName}} {{.Account.LastName}},</strong></p>
-	<p>On this page, you can manage your ScienceMesh user account. This includes editing your personal information, requesting access to the GOCDB and more.</p>
+	<p>On this page, you can manage your ScienceMesh Site Administrator Account. This includes editing your personal information, requesting access to the GOCDB and more.</p>
 </div>
 <div>&nbsp;</div>
 <div>

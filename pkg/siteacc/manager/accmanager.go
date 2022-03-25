@@ -19,17 +19,14 @@
 package manager
 
 import (
-	"path"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/email"
 	"github.com/cs3org/reva/pkg/siteacc/manager/gocdb"
-	"github.com/cs3org/reva/pkg/siteacc/sitereg"
 	"github.com/cs3org/reva/pkg/smtpclient"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -39,10 +36,6 @@ import (
 const (
 	// FindByEmail holds the string value of the corresponding search criterium.
 	FindByEmail = "email"
-	// FindByAPIKey holds the string value of the corresponding search criterium.
-	FindByAPIKey = "apikey"
-	// FindBySiteID holds the string value of the corresponding search criterium.
-	FindBySiteID = "siteid"
 )
 
 // AccountsManager is responsible for all site account related tasks.
@@ -128,12 +121,6 @@ func (mngr *AccountsManager) findAccount(by string, value string) (*data.Account
 	switch strings.ToLower(by) {
 	case FindByEmail:
 		account = mngr.findAccountByPredicate(func(account *data.Account) bool { return strings.EqualFold(account.Email, value) })
-
-	case FindByAPIKey:
-		account = mngr.findAccountByPredicate(func(account *data.Account) bool { return account.Data.APIKey == value })
-
-	case FindBySiteID:
-		account = mngr.findAccountByPredicate(func(account *data.Account) bool { return account.GetSiteID() == value })
 
 	default:
 		return nil, errors.Errorf("invalid search type %v", by)
@@ -266,31 +253,6 @@ func (mngr *AccountsManager) FindAccountEx(by string, value string, cloneAccount
 	return account, nil
 }
 
-// AuthorizeAccount sets the authorization status of the account identified by the account email; if no such account exists, an error is returned.
-func (mngr *AccountsManager) AuthorizeAccount(accountData *data.Account, authorized bool) error {
-	mngr.mutex.Lock()
-	defer mngr.mutex.Unlock()
-
-	account, err := mngr.findAccount(FindByEmail, accountData.Email)
-	if err != nil {
-		return errors.Wrap(err, "no account with the specified email exists")
-	}
-
-	authorizedOld := account.Data.Authorized
-	account.Data.Authorized = authorized
-
-	mngr.storage.AccountUpdated(account)
-	mngr.writeAllAccounts()
-
-	if account.Data.Authorized && account.Data.Authorized != authorizedOld {
-		mngr.sendEmail(account, nil, email.SendAccountAuthorized)
-	}
-
-	mngr.callListeners(account, AccountsListener.AccountUpdated)
-
-	return nil
-}
-
 // GrantGOCDBAccess sets the GOCDB access status of the account identified by the account email; if no such account exists, an error is returned.
 func (mngr *AccountsManager) GrantGOCDBAccess(accountData *data.Account, grantAccess bool) error {
 	mngr.mutex.Lock()
@@ -312,67 +274,6 @@ func (mngr *AccountsManager) GrantGOCDBAccess(accountData *data.Account, grantAc
 	}
 
 	mngr.callListeners(account, AccountsListener.AccountUpdated)
-
-	return nil
-}
-
-// AssignAPIKeyToAccount is used to assign a new API key to the account identified by the account email; if no such account exists, an error is returned.
-func (mngr *AccountsManager) AssignAPIKeyToAccount(accountData *data.Account, flags int) error {
-	mngr.mutex.Lock()
-	defer mngr.mutex.Unlock()
-
-	account, err := mngr.findAccount(FindByEmail, accountData.Email)
-	if err != nil {
-		return errors.Wrap(err, "no account with the specified email exists")
-	}
-
-	if len(account.Data.APIKey) > 0 {
-		return errors.Errorf("the account already has an API key assigned")
-	}
-
-	for {
-		apiKey, err := key.GenerateAPIKey(key.SaltFromEmail(account.Email), flags)
-		if err != nil {
-			return errors.Wrap(err, "error while generating API key")
-		}
-
-		// See if the key already exists (super extremely unlikely); if so, generate a new one and try again
-		if acc, _ := mngr.findAccount(FindByAPIKey, apiKey); acc != nil {
-			continue
-		}
-
-		account.Data.APIKey = apiKey
-		break
-	}
-
-	mngr.storage.AccountUpdated(account)
-	mngr.writeAllAccounts()
-
-	mngr.sendEmail(account, nil, email.SendAPIKeyAssigned)
-	mngr.callListeners(account, AccountsListener.AccountUpdated)
-
-	return nil
-}
-
-// UnregisterAccountSite unregisters the site associated with the given account.
-func (mngr *AccountsManager) UnregisterAccountSite(accountData *data.Account) error {
-	mngr.mutex.RLock()
-	defer mngr.mutex.RUnlock()
-
-	account, err := mngr.findAccount(FindByEmail, accountData.Email)
-	if err != nil {
-		return errors.Wrap(err, "no account with the specified email exists")
-	}
-
-	salt := key.SaltFromEmail(account.Email)
-	siteID, err := key.CalculateSiteID(account.Data.APIKey, salt)
-	if err != nil {
-		return errors.Wrap(err, "unable to get site ID")
-	}
-
-	if err := sitereg.UnregisterSite(path.Join(mngr.conf.Mentix.URL, mngr.conf.Mentix.SiteRegistrationEndpoint), account.Data.APIKey, siteID, salt); err != nil {
-		return errors.Wrap(err, "error while unregistering the site")
-	}
 
 	return nil
 }
