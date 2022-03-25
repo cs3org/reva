@@ -16,30 +16,13 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package ocdav
 
 import (
-	"fmt"
-	"os"
-
-	"github.com/cs3org/reva/v2/pkg/micro/ocdav"
-	"github.com/rs/zerolog"
+	// initialize reva registries by importing the relevant loader packages
+	// see cmd/revad/runtime/loader.go for other loaders if a service is not found
+	_ "github.com/cs3org/reva/v2/internal/http/interceptors/auth/credential/loader"
+	_ "github.com/cs3org/reva/v2/internal/http/interceptors/auth/token/loader"
+	_ "github.com/cs3org/reva/v2/internal/http/interceptors/auth/tokenwriter/loader"
+	_ "github.com/cs3org/reva/v2/pkg/token/manager/loader"
 )
-
-func main() {
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-
-	s, err := ocdav.Service(
-		ocdav.Logger(logger),
-		ocdav.GatewaySvc("127.0.0.1:9142"),
-		ocdav.FilesNamespace("/users/{{.Id.OpaqueId}}"),
-		ocdav.WebdavNamespace("/users/{{.Id.OpaqueId}}"),
-		ocdav.SharesNamespace("/Shares"),
-	)
-	if err != nil {
-		fmt.Printf(err.Error())
-		return
-	}
-	s.Run()
-}
