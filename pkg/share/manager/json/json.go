@@ -24,15 +24,19 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -53,6 +57,10 @@ func New(m map[string]interface{}) (share.Manager, error) {
 	if err != nil {
 		err = errors.Wrap(err, "error creating a new manager")
 		return nil, err
+	}
+
+	if c.GatewayAddr == "" {
+		return nil, errors.New("share manager config is missing gateway address")
 	}
 
 	c.init()
@@ -161,7 +169,8 @@ type mgr struct {
 }
 
 type config struct {
-	File string `mapstructure:"file"`
+	File        string `mapstructure:"file"`
+	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
 func (c *config) init() {
@@ -335,12 +344,41 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 }
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
-	var ss []*collaboration.Share
 	m.Lock()
 	defer m.Unlock()
+	log := appctx.GetLogger(ctx)
 	user := ctxpkg.ContextMustGetUser(ctx)
+
+	client, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list shares")
+	}
+	cache := make(map[string]struct{})
+	var ss []*collaboration.Share
 	for _, s := range m.model.Shares {
-		if share.IsCreatedByUser(s, user) && share.MatchesFilters(s, filters) {
+		if share.MatchesFilters(s, filters) {
+			// Only add the share if the share was created by the user or if
+			// the user has ListGrants permissions on the shared resource.
+			// The ListGrants check is necessary when a space member wants
+			// to list shares in a space.
+			// We are using a cache here so that we don't have to stat a
+			// resource multiple times.
+			key := strings.Join([]string{s.ResourceId.StorageId, s.ResourceId.OpaqueId}, "!")
+			if _, hit := cache[key]; !hit && !share.IsCreatedByUser(s, user) {
+				sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: s.ResourceId}})
+				if err != nil || sRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+					log.Error().
+						Err(err).
+						Interface("status", sRes.Status).
+						Interface("resource_id", s.ResourceId).
+						Msg("ListShares: could not stat resource")
+					continue
+				}
+				if !sRes.Info.PermissionSet.ListGrants {
+					continue
+				}
+				cache[key] = struct{}{}
+			}
 			ss = append(ss, s)
 		}
 	}
