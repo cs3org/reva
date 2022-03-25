@@ -21,11 +21,13 @@ package json
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"sync"
 	"time"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -69,8 +71,7 @@ func New(m map[string]interface{}) (share.Manager, error) {
 }
 
 func loadOrCreate(file string) (*shareModel, error) {
-	info, err := os.Stat(file)
-	if os.IsNotExist(err) || info.Size() == 0 {
+	if info, err := os.Stat(file); errors.Is(err, fs.ErrNotExist) || info.Size() == 0 {
 		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "error opening/creating the file: "+file)
 			return nil, err
@@ -177,17 +178,13 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func genID() string {
-	return uuid.New().String()
-}
-
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
-	id := genID()
+	id := uuid.NewString()
 	user := ctxpkg.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
+		Seconds: uint64(now / int64(time.Second)),
+		Nanos:   uint32(now % int64(time.Second)),
 	}
 
 	// do not allow share to myself or the owner if share is for a user
@@ -203,10 +200,12 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 		ResourceId: md.Id,
 		Grantee:    g.Grantee,
 	}
-	_, err := m.getByKey(ctx, key)
 
-	// share already exists
+	m.Lock()
+	defer m.Unlock()
+	_, _, err := m.getByKey(key)
 	if err == nil {
+		// share already exists
 		return nil, errtypes.AlreadyExists(key.String())
 	}
 
@@ -223,9 +222,6 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 		Mtime:       ts,
 	}
 
-	m.Lock()
-	defer m.Unlock()
-
 	m.model.Shares = append(m.model.Shares, s)
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "error saving model")
@@ -235,123 +231,107 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	return s, nil
 }
 
-func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
-	m.Lock()
-	defer m.Unlock()
-	for _, s := range m.model.Shares {
+// getByID must be called in a lock-controlled block.
+func (m *mgr) getByID(id *collaboration.ShareId) (int, *collaboration.Share, error) {
+	for i, s := range m.model.Shares {
 		if s.GetId().OpaqueId == id.OpaqueId {
-			return s, nil
+			return i, s, nil
 		}
 	}
-	return nil, errtypes.NotFound(id.String())
+	return -1, nil, errtypes.NotFound(id.String())
 }
 
-func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
-	m.Lock()
-	defer m.Unlock()
-	for _, s := range m.model.Shares {
+// getByKey must be called in a lock-controlled block.
+func (m *mgr) getByKey(key *collaboration.ShareKey) (int, *collaboration.Share, error) {
+	for i, s := range m.model.Shares {
 		if (utils.UserEqual(key.Owner, s.Owner) || utils.UserEqual(key.Owner, s.Creator)) &&
 			utils.ResourceIDEqual(key.ResourceId, s.ResourceId) && utils.GranteeEqual(key.Grantee, s.Grantee) {
-			return s, nil
+			return i, s, nil
 		}
 	}
-	return nil, errtypes.NotFound(key.String())
+	return -1, nil, errtypes.NotFound(key.String())
 }
 
-func (m *mgr) get(ctx context.Context, ref *collaboration.ShareReference) (s *collaboration.Share, err error) {
+// get must be called in a lock-controlled block.
+func (m *mgr) get(ref *collaboration.ShareReference) (idx int, s *collaboration.Share, err error) {
 	switch {
 	case ref.GetId() != nil:
-		s, err = m.getByID(ctx, ref.GetId())
+		idx, s, err = m.getByID(ref.GetId())
 	case ref.GetKey() != nil:
-		s, err = m.getByKey(ctx, ref.GetKey())
+		idx, s, err = m.getByKey(ref.GetKey())
 	default:
 		err = errtypes.NotFound(ref.String())
 	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	// check if we are the owner
-	user := ctxpkg.ContextMustGetUser(ctx)
-	if share.IsCreatedByUser(s, user) {
-		return s, nil
-	}
-
-	// or the grantee
-	if share.IsGrantedToUser(s, user) {
-		return s, nil
-	}
-
-	// we return not found to not disclose information
-	return nil, errtypes.NotFound(ref.String())
+	return
 }
 
 func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
-	share, err := m.get(ctx, ref)
+	m.Lock()
+	defer m.Unlock()
+	_, s, err := m.get(ref)
 	if err != nil {
 		return nil, err
 	}
-
-	return share, nil
+	// check if we are the owner or the grantee
+	user := ctxpkg.ContextMustGetUser(ctx)
+	if share.IsCreatedByUser(s, user) || share.IsGrantedToUser(s, user) {
+		return s, nil
+	}
+	// we return not found to not disclose information
+	return nil, errtypes.NotFound(ref.String())
 }
 
 func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
 	m.Lock()
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
-	for i, s := range m.model.Shares {
-		if sharesEqual(ref, s) {
-			if share.IsCreatedByUser(s, user) {
-				m.model.Shares[len(m.model.Shares)-1], m.model.Shares[i] = m.model.Shares[i], m.model.Shares[len(m.model.Shares)-1]
-				m.model.Shares = m.model.Shares[:len(m.model.Shares)-1]
-				if err := m.model.Save(); err != nil {
-					err = errors.Wrap(err, "error saving model")
-					return err
-				}
-				return nil
-			}
-		}
-	}
-	return errtypes.NotFound(ref.String())
-}
 
-func sharesEqual(ref *collaboration.ShareReference, s *collaboration.Share) bool {
-	if ref.GetId() != nil && s.Id != nil {
-		if ref.GetId().OpaqueId == s.Id.OpaqueId {
-			return true
-		}
-	} else if ref.GetKey() != nil {
-		if (utils.UserEqual(ref.GetKey().Owner, s.Owner) || utils.UserEqual(ref.GetKey().Owner, s.Creator)) &&
-			utils.ResourceIDEqual(ref.GetKey().ResourceId, s.ResourceId) && utils.GranteeEqual(ref.GetKey().Grantee, s.Grantee) {
-			return true
-		}
+	idx, s, err := m.get(ref)
+	if err != nil {
+		return err
 	}
-	return false
+	if !share.IsCreatedByUser(s, user) {
+		return errtypes.NotFound(ref.String())
+	}
+
+	last := len(m.model.Shares) - 1
+	m.model.Shares[idx] = m.model.Shares[last]
+	// explicitly nil the reference to prevent memory leaks
+	// https://github.com/golang/go/wiki/SliceTricks#delete-without-preserving-order
+	m.model.Shares[last] = nil
+	m.model.Shares = m.model.Shares[:last]
+	if err := m.model.Save(); err != nil {
+		err = errors.Wrap(err, "error saving model")
+		return err
+	}
+	return nil
 }
 
 func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
-	user := ctxpkg.ContextMustGetUser(ctx)
-	for i, s := range m.model.Shares {
-		if sharesEqual(ref, s) {
-			if share.IsCreatedByUser(s, user) {
-				now := time.Now().UnixNano()
-				m.model.Shares[i].Permissions = p
-				m.model.Shares[i].Mtime = &typespb.Timestamp{
-					Seconds: uint64(now / 1000000000),
-					Nanos:   uint32(now % 1000000000),
-				}
-				if err := m.model.Save(); err != nil {
-					err = errors.Wrap(err, "error saving model")
-					return nil, err
-				}
-				return m.model.Shares[i], nil
-			}
-		}
+	idx, s, err := m.get(ref)
+	if err != nil {
+		return nil, err
 	}
-	return nil, errtypes.NotFound(ref.String())
+
+	user := ctxpkg.ContextMustGetUser(ctx)
+	if !share.IsCreatedByUser(s, user) {
+		return nil, errtypes.NotFound(ref.String())
+	}
+
+	now := time.Now().UnixNano()
+	m.model.Shares[idx].Permissions = p
+	m.model.Shares[idx].Mtime = &typespb.Timestamp{
+		Seconds: uint64(now / int64(time.Second)),
+		Nanos:   uint32(now % int64(time.Second)),
+	}
+
+	if err := m.model.Save(); err != nil {
+		err = errors.Wrap(err, "error saving model")
+		return nil, err
+	}
+	return m.model.Shares[idx], nil
 }
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
@@ -360,16 +340,8 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
-		if share.IsCreatedByUser(s, user) {
-			// no filter we return earlier
-			if len(filters) == 0 {
-				ss = append(ss, s)
-				continue
-			}
-			// check filters
-			if share.MatchesFilters(s, filters) {
-				ss = append(ss, s)
-			}
+		if share.IsCreatedByUser(s, user) && share.MatchesFilters(s, filters) {
+			ss = append(ss, s)
 		}
 	}
 	return ss, nil
@@ -377,25 +349,16 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 
 // we list the shares that are targeted to the user in context or to the user groups.
 func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
-	var rss []*collaboration.ReceivedShare
 	m.Lock()
 	defer m.Unlock()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
+	var rss []*collaboration.ReceivedShare
 	for _, s := range m.model.Shares {
-		if share.IsCreatedByUser(s, user) || !share.IsGrantedToUser(s, user) {
-			// omit shares created by the user or shares the user can't access
-			continue
-		}
-
-		if len(filters) == 0 {
-			rs := m.convert(ctx, s)
-			rss = append(rss, rs)
-			continue
-		}
-
-		if share.MatchesFilters(s, filters) {
-			rs := m.convert(ctx, s)
-			rss = append(rss, rs)
+		if !share.IsCreatedByUser(s, user) &&
+			share.IsGrantedToUser(s, user) &&
+			share.MatchesFilters(s, filters) {
+			rss = append(rss, m.convert(user, s))
 		}
 	}
 
@@ -424,18 +387,17 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 }
 
 // convert must be called in a lock-controlled block.
-func (m *mgr) convert(ctx context.Context, s *collaboration.Share) *collaboration.ReceivedShare {
+func (m *mgr) convert(currentUser *userv1beta1.User, s *collaboration.Share) *collaboration.ReceivedShare {
 	rs := &collaboration.ReceivedShare{
 		Share: s,
 		State: collaboration.ShareState_SHARE_STATE_PENDING,
 	}
-	user := ctxpkg.ContextMustGetUser(ctx)
-	if v, ok := m.model.State[user.Id.String()]; ok {
+	if v, ok := m.model.State[currentUser.Id.String()]; ok {
 		if state, ok := v[s.Id.String()]; ok {
 			rs.State = state
 		}
 	}
-	if v, ok := m.model.MountPoint[user.Id.String()]; ok {
+	if v, ok := m.model.MountPoint[currentUser.Id.String()]; ok {
 		if mp, ok := v[s.Id.String()]; ok {
 			rs.MountPoint = mp
 		}
@@ -450,16 +412,15 @@ func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareRefe
 func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
-	user := ctxpkg.ContextMustGetUser(ctx)
-	for _, s := range m.model.Shares {
-		if sharesEqual(ref, s) {
-			if share.IsGrantedToUser(s, user) {
-				rs := m.convert(ctx, s)
-				return rs, nil
-			}
-		}
+	_, s, err := m.get(ref)
+	if err != nil {
+		return nil, err
 	}
-	return nil, errtypes.NotFound(ref.String())
+	user := ctxpkg.ContextMustGetUser(ctx)
+	if !share.IsGrantedToUser(s, user) {
+		return nil, errtypes.NotFound(ref.String())
+	}
+	return m.convert(user, s), nil
 }
 
 func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
@@ -468,7 +429,6 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaborat
 		return nil, err
 	}
 
-	user := ctxpkg.ContextMustGetUser(ctx)
 	m.Lock()
 	defer m.Unlock()
 
@@ -483,6 +443,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaborat
 		}
 	}
 
+	user := ctxpkg.ContextMustGetUser(ctx)
 	// Persist state
 	if v, ok := m.model.State[user.Id.String()]; ok {
 		v[rs.Share.Id.String()] = rs.State

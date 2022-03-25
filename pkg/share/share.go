@@ -161,6 +161,9 @@ func MatchesAnyFilter(share *collaboration.Share, filters []*collaboration.Filte
 // Here is an example:
 // (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP)
 func MatchesFilters(share *collaboration.Share, filters []*collaboration.Filter) bool {
+	if len(filters) == 0 {
+		return true
+	}
 	grouped := GroupFiltersByType(filters)
 	for _, f := range grouped {
 		if !MatchesAnyFilter(share, f) {
