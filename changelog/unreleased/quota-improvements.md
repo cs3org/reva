@@ -5,3 +5,4 @@ Also added a new return value for the remaining space which will either be quota
 
 https://github.com/owncloud/ocis/issues/3233
 https://github.com/cs3org/reva/pull/2666
+https://github.com/cs3org/reva/pull/2688
