@@ -222,6 +222,15 @@ func NewUploaderRole() *Role {
 	}
 }
 
+// NewNoneRole creates a role with no permissions
+func NewNoneRole() *Role {
+	return &Role{
+		Name:                   "none",
+		cS3ResourcePermissions: &provider.ResourcePermissions{},
+		ocsPermissions:         PermissionInvalid,
+	}
+}
+
 // NewManagerRole creates an manager role
 func NewManagerRole() *Role {
 	return &Role{
@@ -254,6 +263,10 @@ func NewManagerRole() *Role {
 
 // RoleFromOCSPermissions tries to map ocs permissions to a role
 func RoleFromOCSPermissions(p Permissions) *Role {
+	if p == PermissionInvalid {
+		return NewNoneRole()
+	}
+
 	if p.Contain(PermissionRead) {
 		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) {
 			if p.Contain(PermissionShare) {
