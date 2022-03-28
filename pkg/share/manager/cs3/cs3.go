@@ -128,6 +128,13 @@ func (m *Manager) initialize() error {
 		return err
 	}
 	err = m.indexer.AddIndex(&collaboration.Share{}, option.IndexByFunc{
+		Name: "CreatorId",
+		Func: indexCreatorFunc,
+	}, "Id.OpaqueId", "shares", "non_unique", nil, true)
+	if err != nil {
+		return err
+	}
+	err = m.indexer.AddIndex(&collaboration.Share{}, option.IndexByFunc{
 		Name: "GranteeId",
 		Func: indexGranteeFunc,
 	}, "Id.OpaqueId", "shares", "non_unique", nil, true)
@@ -499,6 +506,14 @@ func indexOwnerFunc(v interface{}) (string, error) {
 		return "", fmt.Errorf("given entity is not a share")
 	}
 	return userIDToIndex(share.Owner), nil
+}
+
+func indexCreatorFunc(v interface{}) (string, error) {
+	share, ok := v.(*collaboration.Share)
+	if !ok {
+		return "", fmt.Errorf("given entity is not a share")
+	}
+	return userIDToIndex(share.Creator), nil
 }
 
 func userIDToIndex(id *userpb.UserId) string {
