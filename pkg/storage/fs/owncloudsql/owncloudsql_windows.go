@@ -64,11 +64,11 @@ func (fs *owncloudsqlfs) GetQuota(ctx context.Context, ref *provider.Reference) 
 
 	pathPtr, err := windows.UTF16PtrFromString(fs.toInternalPath(ctx, "/"))
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	err = windows.GetDiskFreeSpaceEx(pathPtr, &avail, &total, &free)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	used := total - free
