@@ -66,7 +66,7 @@ input[type="checkbox"] {
 
 const tplBody = `
 <div>
-	<p>Configure your ScienceMesh account below.</p>	
+	<p>Configure your ScienceMesh Site Administrator Account below.</p>	
 </div>
 <div>&nbsp;</div>
 <div>

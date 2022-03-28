@@ -52,7 +52,6 @@ type PrometheusSDExporter struct {
 
 const (
 	labelSiteName    = "__meta_mentix_site"
-	labelSiteType    = "__meta_mentix_site_type"
 	labelSiteID      = "__meta_mentix_site_id"
 	labelSiteCountry = "__meta_mentix_site_country"
 	labelType        = "__meta_mentix_type"
@@ -77,7 +76,6 @@ func getScrapeTargetLabels(site *meshdata.Site, service *meshdata.Service, endpo
 	endpointURL, _ := url.Parse(endpoint.URL)
 	labels := map[string]string{
 		labelSiteName:    site.Name,
-		labelSiteType:    meshdata.GetSiteTypeName(site.Type),
 		labelSiteID:      site.ID,
 		labelSiteCountry: site.CountryCode,
 		labelType:        endpoint.Type.Name,

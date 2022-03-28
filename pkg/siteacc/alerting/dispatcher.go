@@ -74,6 +74,23 @@ func (dispatcher *Dispatcher) DispatchAlerts(alerts *template.Data, accounts dat
 				}
 			}
 		}
+
+		// Dispatch the alert to the global receiver (if set)
+		if dispatcher.conf.Email.NotificationsMail != "" {
+			globalAccount := data.Account{ // On-the-fly account representing the "global alerts receiver"
+				Email:     dispatcher.conf.Email.NotificationsMail,
+				FirstName: "ScienceMesh",
+				LastName:  "Global Alerts receiver",
+				Site:      "Global",
+				Role:      "Alerts receiver",
+				Settings: data.AccountSettings{
+					ReceiveAlerts: true,
+				},
+			}
+			if err := dispatcher.dispatchAlert(alert, &globalAccount); err != nil {
+				dispatcher.log.Err(err).Str("id", alert.Fingerprint).Str("recipient", globalAccount.Email).Msg("unable to dispatch alert to global alerts receiver")
+			}
+		}
 	}
 	return nil
 }
@@ -86,6 +103,7 @@ func (dispatcher *Dispatcher) dispatchAlert(alert template.Alert, account *data.
 		"Fingerprint": alert.Fingerprint,
 
 		"Name":     alert.Labels["alertname"],
+		"Service":  alert.Labels["service_type"],
 		"Instance": alert.Labels["instance"],
 		"Job":      alert.Labels["job"],
 		"Severity": alert.Labels["severity"],
@@ -96,7 +114,7 @@ func (dispatcher *Dispatcher) dispatchAlert(alert template.Alert, account *data.
 		"Summary":     alert.Annotations["summary"],
 	}
 
-	return email.SendAlertNotification(account, []string{account.Email, dispatcher.conf.Email.NotificationsMail}, alertValues, *dispatcher.conf)
+	return email.SendAlertNotification(account, []string{account.Email}, alertValues, *dispatcher.conf)
 }
 
 // NewDispatcher creates a new dispatcher instance.
