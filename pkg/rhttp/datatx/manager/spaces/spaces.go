@@ -68,7 +68,6 @@ func New(m map[string]interface{}) (datatx.DataTX, error) {
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-
 		var spaceID string
 		spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
 

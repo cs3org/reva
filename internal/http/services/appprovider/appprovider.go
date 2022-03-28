@@ -349,6 +349,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 
 	fileRef := &provider.Reference{
 		ResourceId: resourceID,
+		Path:       ".",
 	}
 
 	statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: fileRef})

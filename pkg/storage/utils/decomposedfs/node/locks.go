@@ -24,6 +24,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -121,7 +122,17 @@ func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not decode lock file, ignoring")
 		return nil, errors.Wrap(err, "Decomposedfs: could not read lock file")
 	}
-	return lock, err
+
+	// lock already expired
+	if lock.Expiration != nil && time.Now().After(time.Unix(int64(lock.Expiration.Seconds), int64(lock.Expiration.Nanos))) {
+		if err = os.Remove(f.Name()); err != nil {
+			return nil, errors.Wrap(err, "Decomposedfs: could not remove expired lock file")
+		}
+		// we successfully deleted the expired lock
+		return nil, errtypes.NotFound("no lock found")
+	}
+
+	return lock, nil
 }
 
 // RefreshLock refreshes the node's lock
@@ -165,13 +176,8 @@ func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
 		return errtypes.PreconditionFailed("mismatching lock")
 	}
 
-	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.User, u.Id) {
-		return errtypes.PermissionDenied("cannot refresh lock of another holder")
-	}
-
-	if !utils.UserEqual(oldLock.User, lock.GetUser()) {
-		return errtypes.PermissionDenied("cannot change holder when refreshing a lock")
+	if ok, err := isLockModificationAllowed(ctx, oldLock, lock); !ok {
+		return err
 	}
 
 	if err := json.NewEncoder(f).Encode(lock); err != nil {
@@ -222,9 +228,8 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 		return errtypes.Locked(oldLock.LockId)
 	}
 
-	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.User, u.Id) {
-		return errtypes.PermissionDenied("mismatching holder")
+	if ok, err := isLockModificationAllowed(ctx, oldLock, lock); !ok {
+		return err
 	}
 
 	if err = os.Remove(f.Name()); err != nil {
@@ -306,4 +311,36 @@ func readLocksIntoOpaque(ctx context.Context, n *Node, ri *provider.ResourceInfo
 func (n *Node) hasLocks(ctx context.Context) bool {
 	_, err := os.Stat(n.LockFilePath()) // FIXME better error checking
 	return err == nil
+}
+
+func isLockModificationAllowed(ctx context.Context, oldLock *provider.Lock, newLock *provider.Lock) (bool, error) {
+	if oldLock.Type == provider.LockType_LOCK_TYPE_SHARED {
+		return true, nil
+	}
+
+	appNameEquals := oldLock.AppName == newLock.AppName
+	if !appNameEquals {
+		return false, errtypes.PermissionDenied("app names of the locks are mismatching")
+	}
+
+	var lockUserEquals, contextUserEquals bool
+	if oldLock.User == nil && newLock.GetUser() == nil {
+		// no user lock set
+		lockUserEquals = true
+		contextUserEquals = true
+	} else {
+		lockUserEquals = utils.UserEqual(oldLock.User, newLock.GetUser())
+		if !lockUserEquals {
+			return false, errtypes.PermissionDenied("users of the locks are mismatching")
+		}
+
+		u := ctxpkg.ContextMustGetUser(ctx)
+		contextUserEquals = utils.UserEqual(oldLock.User, u.Id)
+		if !contextUserEquals {
+			return false, errtypes.PermissionDenied("lock holder and current user are mismatching")
+		}
+	}
+
+	return appNameEquals && lockUserEquals && contextUserEquals, nil
+
 }

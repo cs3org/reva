@@ -37,10 +37,12 @@ var _ = Describe("Node locks", func() {
 	var (
 		env *helpers.TestEnv
 
-		lock      *provider.Lock
-		wrongLock *provider.Lock
-		n         *node.Node
-		n2        *node.Node
+		lockByUser      *provider.Lock
+		wrongLockByUser *provider.Lock
+		lockByApp       *provider.Lock
+		wrongLockByApp  *provider.Lock
+		n               *node.Node
+		n2              *node.Node
 
 		otherUser = &userpb.User{
 			Id: &userpb.UserId{
@@ -58,15 +60,25 @@ var _ = Describe("Node locks", func() {
 		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 
-		lock = &provider.Lock{
+		lockByUser = &provider.Lock{
 			Type:   provider.LockType_LOCK_TYPE_EXCL,
 			User:   env.Owner.Id,
 			LockId: uuid.New().String(),
 		}
-		wrongLock = &provider.Lock{
+		wrongLockByUser = &provider.Lock{
 			Type:   provider.LockType_LOCK_TYPE_EXCL,
 			User:   env.Owner.Id,
 			LockId: uuid.New().String(),
+		}
+		lockByApp = &provider.Lock{
+			Type:    provider.LockType_LOCK_TYPE_WRITE,
+			AppName: "app1",
+			LockId:  uuid.New().String(),
+		}
+		wrongLockByApp = &provider.Lock{
+			Type:    provider.LockType_LOCK_TYPE_WRITE,
+			AppName: "app2",
+			LockId:  uuid.New().String(),
 		}
 		n = node.New("u-s-e-r-id", "tobelockedid", "", "tobelocked", 10, "", env.Owner.Id, env.Lookup)
 		n2 = node.New("u-s-e-r-id", "neverlockedid", "", "neverlocked", 10, "", env.Owner.Id, env.Lookup)
@@ -78,12 +90,12 @@ var _ = Describe("Node locks", func() {
 		}
 	})
 
-	Describe("SetLock", func() {
+	Describe("SetLock for a user", func() {
 		It("sets the lock", func() {
 			_, err := os.Stat(n.LockFilePath())
 			Expect(err).To(HaveOccurred())
 
-			err = n.SetLock(env.Ctx, lock)
+			err = n.SetLock(env.Ctx, lockByUser)
 			Expect(err).ToNot(HaveOccurred())
 
 			_, err = os.Stat(n.LockFilePath())
@@ -91,30 +103,64 @@ var _ = Describe("Node locks", func() {
 		})
 
 		It("refuses to lock if already locked an existing lock was not provided", func() {
-			err := n.SetLock(env.Ctx, lock)
+			err := n.SetLock(env.Ctx, lockByUser)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = n.SetLock(env.Ctx, lock)
+			err = n.SetLock(env.Ctx, lockByUser)
 			Expect(err).To(HaveOccurred())
 
-			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, wrongLock.LockId)
-			err = n.SetLock(env.Ctx, lock)
+			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, wrongLockByUser.LockId)
+			err = n.SetLock(env.Ctx, lockByUser)
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("relocks if the existing lock was provided", func() {
-			err := n.SetLock(env.Ctx, lock)
+			err := n.SetLock(env.Ctx, lockByUser)
 			Expect(err).ToNot(HaveOccurred())
 
-			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, lock.LockId)
-			err = n.SetLock(env.Ctx, lock)
+			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, lockByUser.LockId)
+			err = n.SetLock(env.Ctx, lockByUser)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
-	Context("with an existing lock", func() {
+	Describe("SetLock for an app", func() {
+		It("sets the lock", func() {
+			_, err := os.Stat(n.LockFilePath())
+			Expect(err).To(HaveOccurred())
+
+			err = n.SetLock(env.Ctx, lockByApp)
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = os.Stat(n.LockFilePath())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("refuses to lock if already locked an existing lock was not provided", func() {
+			err := n.SetLock(env.Ctx, lockByApp)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = n.SetLock(env.Ctx, lockByApp)
+			Expect(err).To(HaveOccurred())
+
+			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, wrongLockByApp.LockId)
+			err = n.SetLock(env.Ctx, lockByApp)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("relocks if the existing lock was provided", func() {
+			err := n.SetLock(env.Ctx, lockByApp)
+			Expect(err).ToNot(HaveOccurred())
+
+			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, lockByApp.LockId)
+			err = n.SetLock(env.Ctx, lockByApp)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("with an existing lock for a user", func() {
 		BeforeEach(func() {
-			err := n.SetLock(env.Ctx, lock)
+			err := n.SetLock(env.Ctx, lockByUser)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -122,10 +168,10 @@ var _ = Describe("Node locks", func() {
 			It("returns the lock", func() {
 				l, err := n.ReadLock(env.Ctx)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(l).To(Equal(lock))
+				Expect(l).To(Equal(lockByUser))
 			})
 
-			It("reporst an error when the node wasn't locked", func() {
+			It("reports an error when the node wasn't locked", func() {
 				_, err := n2.ReadLock(env.Ctx)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("no lock found"))
@@ -141,12 +187,12 @@ var _ = Describe("Node locks", func() {
 				newLock = &provider.Lock{
 					Type:   provider.LockType_LOCK_TYPE_EXCL,
 					User:   env.Owner.Id,
-					LockId: lock.LockId,
+					LockId: lockByUser.LockId,
 				}
 			})
 
 			It("fails when the node is unlocked", func() {
-				err := n2.RefreshLock(env.Ctx, lock)
+				err := n2.RefreshLock(env.Ctx, lockByUser)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("precondition failed"))
 			})
@@ -180,25 +226,25 @@ var _ = Describe("Node locks", func() {
 		Describe("Unlock", func() {
 			It("refuses to unlock without having a lock", func() {
 				err := n.Unlock(env.Ctx, nil)
-				Expect(err.Error()).To(ContainSubstring(lock.LockId))
+				Expect(err.Error()).To(ContainSubstring(lockByUser.LockId))
 			})
 
 			It("refuses to unlock without having the proper lock", func() {
 				err := n.Unlock(env.Ctx, nil)
-				Expect(err.Error()).To(ContainSubstring(lock.LockId))
+				Expect(err.Error()).To(ContainSubstring(lockByUser.LockId))
 
-				err = n.Unlock(env.Ctx, wrongLock)
-				Expect(err.Error()).To(ContainSubstring(lock.LockId))
+				err = n.Unlock(env.Ctx, wrongLockByUser)
+				Expect(err.Error()).To(ContainSubstring(lockByUser.LockId))
 			})
 
 			It("refuses to unlock for others even if they have the lock", func() {
-				err := n.Unlock(otherCtx, lock)
+				err := n.Unlock(otherCtx, lockByUser)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("mismatching"))
 			})
 
 			It("unlocks when the owner uses the lock", func() {
-				err := n.Unlock(env.Ctx, lock)
+				err := n.Unlock(env.Ctx, lockByUser)
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = os.Stat(n.LockFilePath())
@@ -206,10 +252,112 @@ var _ = Describe("Node locks", func() {
 			})
 
 			It("fails to unlock an unlocked node", func() {
-				err := n.Unlock(env.Ctx, lock)
+				err := n.Unlock(env.Ctx, lockByUser)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = n.Unlock(env.Ctx, lock)
+				err = n.Unlock(env.Ctx, lockByUser)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("lock does not exist"))
+			})
+		})
+	})
+
+	Context("with an existing lock for an app", func() {
+		BeforeEach(func() {
+			err := n.SetLock(env.Ctx, lockByApp)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Describe("ReadLock", func() {
+			It("returns the lock", func() {
+				l, err := n.ReadLock(env.Ctx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(l).To(Equal(lockByApp))
+			})
+
+			It("reports an error when the node wasn't locked", func() {
+				_, err := n2.ReadLock(env.Ctx)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("no lock found"))
+			})
+		})
+
+		Describe("RefreshLock", func() {
+			var (
+				newLock *provider.Lock
+			)
+
+			JustBeforeEach(func() {
+				newLock = &provider.Lock{
+					Type:    provider.LockType_LOCK_TYPE_EXCL,
+					AppName: lockByApp.AppName,
+					LockId:  lockByApp.LockId,
+				}
+			})
+
+			It("fails when the node is unlocked", func() {
+				err := n2.RefreshLock(env.Ctx, lockByApp)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("precondition failed"))
+			})
+
+			It("refuses to refresh the lock without holding the lock", func() {
+				newLock.LockId = "somethingsomething"
+				err := n.RefreshLock(env.Ctx, newLock)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("mismatching"))
+			})
+
+			It("refreshes the lock for other users", func() {
+				err := n.RefreshLock(otherCtx, lockByApp)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("refuses to change the lock holder", func() {
+				newLock.AppName = wrongLockByApp.AppName
+				err := n.RefreshLock(env.Ctx, newLock)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("permission denied"))
+			})
+
+			It("refreshes the lock", func() {
+				err := n.RefreshLock(env.Ctx, newLock)
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Describe("Unlock", func() {
+			It("refuses to unlock without having a lock", func() {
+				err := n.Unlock(env.Ctx, nil)
+				Expect(err.Error()).To(ContainSubstring(lockByApp.LockId))
+			})
+
+			It("refuses to unlock without having the proper lock", func() {
+				err := n.Unlock(env.Ctx, nil)
+				Expect(err.Error()).To(ContainSubstring(lockByApp.LockId))
+
+				err = n.Unlock(env.Ctx, wrongLockByUser)
+				Expect(err.Error()).To(ContainSubstring(lockByApp.LockId))
+			})
+
+			It("accepts to unlock for others if they have the lock", func() {
+				err := n.Unlock(otherCtx, lockByApp)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("unlocks when the owner uses the lock", func() {
+				err := n.Unlock(env.Ctx, lockByApp)
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = os.Stat(n.LockFilePath())
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("fails to unlock an unlocked node", func() {
+				err := n.Unlock(env.Ctx, lockByApp)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = n.Unlock(env.Ctx, lockByApp)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("lock does not exist"))
 			})
