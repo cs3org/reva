@@ -661,6 +661,7 @@ func (s *svc) addSpaceShare(ctx context.Context, req *collaboration.CreateShareR
 	switch st.Code {
 	case rpc.Code_CODE_OK:
 		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.ResourceInfo.Id)
+		s.cache.RemoveListStorageProviders(req.ResourceInfo.Id)
 	case rpc.Code_CODE_UNIMPLEMENTED:
 		appctx.GetLogger(ctx).Debug().Interface("status", st).Interface("req", req).Msg("storing grants not supported, ignoring")
 	default:
@@ -764,6 +765,7 @@ func (s *svc) removeSpaceShare(ctx context.Context, ref *provider.ResourceId, gr
 		}, err
 	}
 	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), ref)
+	s.cache.RemoveListStorageProviders(ref)
 	return &collaboration.RemoveShareResponse{Status: status.NewOK(ctx)}, nil
 }
 
