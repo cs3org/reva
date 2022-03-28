@@ -21,7 +21,6 @@ package test
 import (
 	"bytes"
 	"errors"
-	"io/ioutil"
 	"os"
 	"path"
 )
@@ -47,7 +46,7 @@ type CleanerFunc func()
 // TmpDir creates a dir in the system temp folder that has
 // TmpDirPattern as prefix
 func TmpDir() (string, CleanerFunc, error) {
-	name, err := ioutil.TempDir("", TmpDirPattern)
+	name, err := os.MkdirTemp("", TmpDirPattern)
 	if err != nil {
 		return "", nil, err
 	}

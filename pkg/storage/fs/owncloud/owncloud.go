@@ -23,7 +23,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -1789,7 +1788,7 @@ func (fs *ocfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []str
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
-	mds, err := ioutil.ReadDir(ip)
+	mds, err := os.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrapf(err, "ocfs: error listing %s", ip)
 	}
@@ -1840,7 +1839,7 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
-	mds, err := ioutil.ReadDir(ip)
+	mds, err := os.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing files")
 	}
@@ -1857,7 +1856,7 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 
 	// list shadow_files
 	ip = fs.toInternalShadowPath(ctx, home)
-	mds, err = ioutil.ReadDir(ip)
+	mds, err = os.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
 	}
@@ -1884,7 +1883,7 @@ func (fs *ocfs) listShareFolderRoot(ctx context.Context, sp string, mdKeys []str
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
-	mds, err := ioutil.ReadDir(ip)
+	mds, err := os.ReadDir(ip)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
@@ -1996,7 +1995,7 @@ func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*
 	bn := filepath.Base(ip)
 
 	revisions := []*provider.FileVersion{}
-	mds, err := ioutil.ReadDir(filepath.Dir(vp))
+	mds, err := os.ReadDir(filepath.Dir(vp))
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error reading"+filepath.Dir(vp))
 	}
@@ -2195,7 +2194,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath str
 	}
 
 	// list files folder
-	mds, err := ioutil.ReadDir(filepath.Join(rp, key))
+	mds, err := os.ReadDir(filepath.Join(rp, key))
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")

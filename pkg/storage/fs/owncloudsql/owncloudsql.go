@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"hash/adler32"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -1744,7 +1743,7 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativ
 	}
 
 	// list files folder
-	mds, err := ioutil.ReadDir(rp)
+	mds, err := os.ReadDir(rp)
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")

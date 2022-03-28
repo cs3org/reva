@@ -20,7 +20,6 @@ package decomposedfs_test
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path"
 	"sync"
@@ -116,7 +115,7 @@ var _ = Describe("Decomposed", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(revisions)).To(Equal(1))
 
-				_, err = ioutil.ReadFile(path.Join(tmpRoot, "nodes", "root", "uploaded.txt"))
+				_, err = os.ReadFile(path.Join(tmpRoot, "nodes", "root", "uploaded.txt"))
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})

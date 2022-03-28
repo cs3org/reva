@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,7 +77,7 @@ func main() {
 			return nil
 		}
 
-		src, err := ioutil.ReadFile(path)
+		src, err := os.ReadFile(path)
 		if err != nil {
 			return nil
 		}
@@ -88,7 +87,7 @@ func main() {
 			err := fmt.Errorf("%v: license header not present or not at the top, to fix run: go run tools/check-license/check-license.go -fix", path)
 			if *fix {
 				newSrc := licenseText + string(src)
-				if err := ioutil.WriteFile(path, []byte(newSrc), 0644); err != nil {
+				if err := os.WriteFile(path, []byte(newSrc), 0644); err != nil {
 					fmt.Println(err)
 					os.Exit(1)
 				}

@@ -23,7 +23,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -993,7 +992,7 @@ func (fs *localfs) listFolder(ctx context.Context, fn string, mdKeys []string) (
 
 	fn = fs.wrap(ctx, fn)
 
-	mds, err := ioutil.ReadDir(fn)
+	mds, err := os.ReadDir(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fn)
@@ -1015,7 +1014,7 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string, mdKeys 
 
 	fn := fs.wrapReferences(ctx, home)
 
-	mds, err := ioutil.ReadDir(fn)
+	mds, err := os.ReadDir(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fn)
@@ -1087,7 +1086,7 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 
 	versionsDir := fs.wrapVersions(ctx, np)
 	revisions := []*provider.FileVersion{}
-	mds, err := ioutil.ReadDir(versionsDir)
+	mds, err := os.ReadDir(versionsDir)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error reading"+versionsDir)
 	}
@@ -1226,7 +1225,7 @@ func (fs *localfs) ListRecycle(ctx context.Context, basePath, key, relativePath 
 
 	rp := fs.wrapRecycleBin(ctx, "/")
 
-	mds, err := ioutil.ReadDir(rp)
+	mds, err := os.ReadDir(rp)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error listing deleted files")
 	}

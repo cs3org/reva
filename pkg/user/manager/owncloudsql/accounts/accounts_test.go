@@ -21,7 +21,6 @@ package accounts_test
 import (
 	"context"
 	"database/sql"
-	"io/ioutil"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -41,10 +40,10 @@ var _ = Describe("Accounts", func() {
 
 	BeforeEach(func() {
 		var err error
-		testDbFile, err = ioutil.TempFile("", "example")
+		testDbFile, err = os.CreateTemp("", "example")
 		Expect(err).ToNot(HaveOccurred())
 
-		dbData, err := ioutil.ReadFile("test.sqlite")
+		dbData, err := os.ReadFile("test.sqlite")
 		Expect(err).ToNot(HaveOccurred())
 
 		_, err = testDbFile.Write(dbData)

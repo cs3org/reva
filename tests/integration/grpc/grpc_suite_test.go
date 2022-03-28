@@ -20,7 +20,6 @@ package grpc_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -91,12 +90,12 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		ownAddress := addresses[name]
 
 		// Create a temporary root for this revad
-		tmpRoot, err := ioutil.TempDir("", "reva-grpc-integration-tests-*-root")
+		tmpRoot, err := os.MkdirTemp("", "reva-grpc-integration-tests-*-root")
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not create tmpdir")
 		}
 		newCfgPath := path.Join(tmpRoot, "config.toml")
-		rawCfg, err := ioutil.ReadFile(path.Join("fixtures", config))
+		rawCfg, err := os.ReadFile(path.Join("fixtures", config))
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not read config file")
 		}
@@ -109,7 +108,7 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		for name, address := range addresses {
 			cfg = strings.ReplaceAll(cfg, "{{"+name+"_address}}", address)
 		}
-		err = ioutil.WriteFile(newCfgPath, []byte(cfg), 0600)
+		err = os.WriteFile(newCfgPath, []byte(cfg), 0600)
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not write config file")
 		}

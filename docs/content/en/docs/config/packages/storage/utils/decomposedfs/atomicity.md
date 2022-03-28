@@ -167,16 +167,15 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 )
 
 func main() {
-	err := ioutil.WriteFile("file1", []byte(""), 0600)
+	err := os.WriteFile("file1", []byte(""), 0600)
 	if err != nil {
 		os.Exit(1)
 	}
-	err = ioutil.WriteFile("file2", []byte(""), 0600)
+	err = os.WriteFile("file2", []byte(""), 0600)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -208,16 +207,15 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 )
 
 func main() {
-	err := ioutil.WriteFile("file1", []byte(""), 0600)
+	err := os.WriteFile("file1", []byte(""), 0600)
 	if err != nil {
 		os.Exit(1)
 	}
-	err = ioutil.WriteFile("file2", []byte(""), 0600)
+	err = os.WriteFile("file2", []byte(""), 0600)
 	if err != nil {
 		os.Exit(1)
 	}

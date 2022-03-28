@@ -20,7 +20,6 @@ package filecache_test
 
 import (
 	"database/sql"
-	"io/ioutil"
 	"os"
 	"strconv"
 
@@ -41,10 +40,10 @@ var _ = Describe("Filecache", func() {
 
 	BeforeEach(func() {
 		var err error
-		testDbFile, err = ioutil.TempFile("", "example")
+		testDbFile, err = os.CreateTemp("", "example")
 		Expect(err).ToNot(HaveOccurred())
 
-		dbData, err := ioutil.ReadFile("test.db")
+		dbData, err := os.ReadFile("test.db")
 		Expect(err).ToNot(HaveOccurred())
 
 		_, err = testDbFile.Write(dbData)

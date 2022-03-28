@@ -21,8 +21,8 @@ package open
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"net/url"
+	"os"
 	"strings"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -46,7 +46,7 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 	}
 	c.init()
 
-	f, err := ioutil.ReadFile(c.Providers)
+	f, err := os.ReadFile(c.Providers)
 	if err != nil {
 		return nil, err
 	}

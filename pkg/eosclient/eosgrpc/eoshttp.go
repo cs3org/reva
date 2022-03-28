@@ -289,7 +289,7 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		// Let's support redirections... and if we retry we have to retry at the same FST, avoid going back to the MGM
 		if resp != nil && (resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusTemporaryRedirect) {
 
-			// io.Copy(ioutil.Discard, resp.Body)
+			// io.Copy(io.Discard, resp.Body)
 			// resp.Body.Close()
 
 			loc, err := resp.Location()
@@ -383,7 +383,7 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		// Let's support redirections... and if we retry we retry at the same FST
 		if resp != nil && resp.StatusCode == 307 {
 
-			// io.Copy(ioutil.Discard, resp.Body)
+			// io.Copy(io.Discard, resp.Body)
 			// resp.Body.Close()
 
 			loc, err := resp.Location()

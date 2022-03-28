@@ -19,7 +19,7 @@
 package exporters
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -37,7 +37,7 @@ type BaseRequestExporter struct {
 
 // HandleRequest handles the actual HTTP request.
 func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req *http.Request, conf *config.Configuration, log *zerolog.Logger) {
-	body, _ := ioutil.ReadAll(req.Body)
+	body, _ := io.ReadAll(req.Body)
 	status, respData, err := exporter.handleQuery(body, req.URL.Query(), conf, log)
 	if err != nil {
 		respData = []byte(err.Error())

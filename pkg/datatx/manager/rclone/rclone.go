@@ -23,7 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -158,7 +158,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 func loadOrCreate(file string) (*transferModel, error) {
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
-		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
+		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "error creating the transfers storage file: "+file)
 			return nil, err
 		}
@@ -171,7 +171,7 @@ func loadOrCreate(file string) (*transferModel, error) {
 	}
 	defer fd.Close()
 
-	data, err := ioutil.ReadAll(fd)
+	data, err := io.ReadAll(fd)
 	if err != nil {
 		err = errors.Wrap(err, "error reading the data")
 		return nil, err
@@ -199,7 +199,7 @@ func (m *transferModel) saveTransfer(e error) error {
 		return e
 	}
 
-	if err := ioutil.WriteFile(m.File, data, 0644); err != nil {
+	if err := os.WriteFile(m.File, data, 0644); err != nil {
 		e = errors.Wrap(err, "error writing transfer data to file: "+m.File)
 		return e
 	}

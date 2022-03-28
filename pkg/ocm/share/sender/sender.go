@@ -21,7 +21,7 @@ package sender
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -81,7 +81,7 @@ func Send(requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) e
 
 	defer resp.Body.Close()
 	if (resp.StatusCode != http.StatusCreated) && (resp.StatusCode != http.StatusOK) {
-		respBody, e := ioutil.ReadAll(resp.Body)
+		respBody, e := io.ReadAll(resp.Body)
 		if e != nil {
 			e = errors.Wrap(e, "sender: error reading request body")
 			return e

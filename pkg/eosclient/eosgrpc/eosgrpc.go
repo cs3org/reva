@@ -24,7 +24,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -1236,7 +1235,7 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 	length = -1
 
 	if c.opt.WriteUsesLocalTemp {
-		fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
+		fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
 		if err != nil {
 			return err
 		}

@@ -20,7 +20,6 @@ package data
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -67,7 +66,7 @@ func (storage *FileStorage) ReadAll() (*Accounts, error) {
 	accounts := &Accounts{}
 
 	// Read the data from the configured file
-	jsonData, err := ioutil.ReadFile(storage.filePath)
+	jsonData, err := os.ReadFile(storage.filePath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to read file %v", storage.filePath)
 	}
@@ -83,7 +82,7 @@ func (storage *FileStorage) ReadAll() (*Accounts, error) {
 func (storage *FileStorage) WriteAll(accounts *Accounts) error {
 	// Write the data to the configured file
 	jsonData, _ := json.MarshalIndent(accounts, "", "\t")
-	if err := ioutil.WriteFile(storage.filePath, jsonData, 0755); err != nil {
+	if err := os.WriteFile(storage.filePath, jsonData, 0755); err != nil {
 		return errors.Wrapf(err, "unable to write file %v", storage.filePath)
 	}
 
