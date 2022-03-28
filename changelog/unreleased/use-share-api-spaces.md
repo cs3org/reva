@@ -4,3 +4,4 @@ We now use the cs3 share Api to manage the space roles. We do not send the reque
 
 https://github.com/cs3org/reva/pull/2600
 https://github.com/cs3org/reva/pull/2620
+https://github.com/cs3org/reva/pull/2687
