@@ -38,6 +38,9 @@ const (
 	// EndpointRemove is the endpoint path for account removal.
 	EndpointRemove = "/remove"
 
+	// EndpointSiteConfigure is the endpoint path for site configuration.
+	EndpointSiteConfigure = "/site-configure"
+
 	// EndpointLogin is the endpoint path for (internal) user login.
 	EndpointLogin = "/login"
 	// EndpointLogout is the endpoint path for (internal) user logout.

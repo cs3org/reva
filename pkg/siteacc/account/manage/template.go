@@ -19,7 +19,7 @@
 package manage
 
 const tplJavaScript = `
-function handleSettings() {
+function handleAccountSettings() {
 	setState(STATE_STATUS, "Redirecting to the account settings...");
 	window.location.replace("{{getServerAddress}}/account/?path=settings");
 }
@@ -27,6 +27,11 @@ function handleSettings() {
 function handleEditAccount() {
 	setState(STATE_STATUS, "Redirecting to the account editor...");
 	window.location.replace("{{getServerAddress}}/account/?path=edit");
+}
+
+function handleSiteSettings() {
+	setState(STATE_STATUS, "Redirecting to the site settings...");
+	window.location.replace("{{getServerAddress}}/account/?path=site");
 }
 
 function handleRequestAccess(scope) {
@@ -58,6 +63,9 @@ const tplStyleSheet = `
 html * {
 	font-family: arial !important;
 }
+button {
+	min-width: 170px;
+}
 `
 
 const tplBody = `
@@ -87,25 +95,38 @@ const tplBody = `
 </div>
 <div>
 	<form id="form" method="POST" class="box" style="width: 100%;">
-		<button type="button" onClick="handleSettings();">Settings</button>
-		<button type="button" onClick="handleEditAccount();">Edit account</button>
-		<span style="width: 25px;">&nbsp;</span>
-		<button type="button" onClick="handleRequestAccess('Site');" {{if .Account.Data.SiteAccess}}disabled{{end}}>Request Site access</button>
-		<button type="button" onClick="handleRequestAccess('GOCDB');" {{if .Account.Data.GOCDBAccess}}disabled{{end}}>Request GOCDB access</button>
-		
-		<button type="button" onClick="handleLogout();" style="float: right;">Logout</button>
+		<div>
+			<button type="button" onClick="handleAccountSettings();">Account settings</button>
+			<button type="button" onClick="handleEditAccount();">Edit account</button>
+			<span style="width: 25px;">&nbsp;</span>
+			
+			{{if .Account.Data.SiteAccess}}
+			<button type="button" onClick="handleSiteSettings();">Site settings</button>
+			<span style="width: 25px;">&nbsp;</span>
+			{{end}}	
+
+			<button type="button" onClick="handleLogout();" style="float: right;">Logout</button>
+		</div>
+		<div style="margin-top: 0.5em;">
+			<button type="button" onClick="handleRequestAccess('Site');" {{if .Account.Data.SiteAccess}}disabled{{end}}>Request Site access</button>
+			<button type="button" onClick="handleRequestAccess('GOCDB');" {{if .Account.Data.GOCDBAccess}}disabled{{end}}>Request GOCDB access</button>	
+		</div>
 	</form>
 </div>
-<div>
-	<p>Notes:</p>
-	<ul>
-		<li>The <em>Site access</em> allows you to access and modify the global configuration of your site.</li>
-		<li>The <em>GOCDB access</em> allows you to log into the central database where all site metadata is stored.</li>
-	</ul>
-	<p>Quick links:</p>
-	<ul>
-		<li><a href="https://gocdb.sciencemesh.uni-muenster.de" target="_blank">Central Database (GOCDB)</a></li>
-		<li><a href="https://developer.sciencemesh.io/docs/technical-documentation/central-database/" target="_blank">Central Database documentation</a></li>
-	</ul>
+<div style="font-size: 90%; margin-top: 1em;">
+	<div>
+		<div>Notes:</div>
+		<ul style="margin-top: 0em;">
+			<li>The <em>Site access</em> allows you to access and modify the global configuration of your site.</li>
+			<li>The <em>GOCDB access</em> allows you to log into the central database where all site metadata is stored.</li>
+		</ul>
+	</div>
+	<div>
+		<div>Quick links:</div>
+		<ul style="margin-top: 0em;">
+			<li><a href="https://gocdb.sciencemesh.uni-muenster.de" target="_blank">Central Database (GOCDB)</a></li>
+			<li><a href="https://developer.sciencemesh.io/docs/technical-documentation/central-database/" target="_blank">Central Database documentation</a></li>
+		</ul>
+	</div>
 </div>
 `

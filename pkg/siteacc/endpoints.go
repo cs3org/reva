@@ -74,6 +74,8 @@ func getEndpoints() []endpoint {
 		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
 		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), false},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
+		// Site endpoints
+		{config.EndpointSiteConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleSiteConfigure), false},
 		// Login endpoints
 		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
 		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), true},
@@ -227,6 +229,24 @@ func handleRemove(siteacc *SiteAccounts, values url.Values, body []byte, session
 	if err := siteacc.AccountsManager().RemoveAccount(account); err != nil {
 		return nil, errors.Wrap(err, "unable to remove account")
 	}
+
+	return nil, nil
+}
+
+func handleSiteConfigure(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	account, err := unmarshalRequestData(body)
+	if err != nil {
+		return nil, err
+	}
+
+	email, _, err := processInvoker(siteacc, values, session)
+	if err != nil {
+		return nil, err
+	}
+	account.Email = email
+
+	// TODO: Do config stuff
+	fmt.Println("!!! COMING SOON !!!")
 
 	return nil, nil
 }

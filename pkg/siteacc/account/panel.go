@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/siteacc/account/manage"
 	"github.com/cs3org/reva/pkg/siteacc/account/registration"
 	"github.com/cs3org/reva/pkg/siteacc/account/settings"
+	"github.com/cs3org/reva/pkg/siteacc/account/site"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
@@ -50,6 +51,7 @@ const (
 	templateManage       = "manage"
 	templateSettings     = "settings"
 	templateEdit         = "edit"
+	templateSite         = "site"
 	templateContact      = "contact"
 	templateRegistration = "register"
 )
@@ -84,6 +86,10 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 		return errors.Wrap(err, "unable to create the account editing template")
 	}
 
+	if err := panel.htmlPanel.AddTemplate(templateSite, &site.PanelTemplate{}); err != nil {
+		return errors.Wrap(err, "unable to create the site template")
+	}
+
 	if err := panel.htmlPanel.AddTemplate(templateContact, &contact.PanelTemplate{}); err != nil {
 		return errors.Wrap(err, "unable to create the contact template")
 	}
@@ -97,7 +103,7 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 
 // GetActiveTemplate returns the name of the active template.
 func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string {
-	validPaths := []string{templateLogin, templateManage, templateSettings, templateEdit, templateContact, templateRegistration}
+	validPaths := []string{templateLogin, templateManage, templateSettings, templateEdit, templateSite, templateContact, templateRegistration}
 	template := templateLogin
 
 	// Only allow valid template paths; redirect to the login page otherwise
@@ -113,7 +119,7 @@ func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string
 
 // PreExecute is called before the actual template is being executed.
 func (panel *Panel) PreExecute(session *html.Session, path string, w http.ResponseWriter, r *http.Request) (html.ExecutionResult, error) {
-	protectedPaths := []string{templateManage, templateSettings, templateEdit, templateContact}
+	protectedPaths := []string{templateManage, templateSettings, templateEdit, templateSite, templateContact}
 
 	if session.LoggedInUser == nil {
 		// If no user is logged in, redirect protected paths to the login page
@@ -121,6 +127,11 @@ func (panel *Panel) PreExecute(session *html.Session, path string, w http.Respon
 			if protected == path {
 				return panel.redirect(templateLogin, w, r), nil
 			}
+		}
+	} else if path == templateSite {
+		// If the logged in user doesn't have site access, redirect him back to the main account page
+		if !session.LoggedInUser.Data.SiteAccess {
+			return panel.redirect(templateManage, w, r), nil
 		}
 	} else if path == templateLogin || path == templateRegistration {
 		// If a user is logged in and tries to login or register again, redirect to the main account page
