@@ -441,16 +441,14 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 		*/
 	}
 
-	/*
-		existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
-		if permissions == conversions.PermissionInvalid || !existingPermissions.Contain(permissions) {
-			return nil, nil, &ocsError{
-				Code:    http.StatusNotFound,
-				Message: "Cannot set the requested share permissions",
-				Error:   errors.New("cannot set the requested share permissions"),
-			}
+	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
+	if !existingPermissions.Contain(permissions) {
+		return nil, nil, &ocsError{
+			Code:    http.StatusNotFound,
+			Message: "Cannot set the requested share permissions",
+			Error:   errors.New("cannot set the requested share permissions"),
 		}
-	*/
+	}
 
 	role = conversions.RoleFromOCSPermissions(permissions)
 	roleMap := map[string]string{"name": role.Name}
