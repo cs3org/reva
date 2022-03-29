@@ -50,6 +50,8 @@ const (
 	// EndpointVerifyUserToken is the endpoint path for user token validation.
 	EndpointVerifyUserToken = "/verify-user-token"
 
+	// EndpointGrantSiteAccess is the endpoint path for granting or revoking Site access.
+	EndpointGrantSiteAccess = "/grant-site-access"
 	// EndpointGrantGOCDBAccess is the endpoint path for granting or revoking GOCDB access.
 	EndpointGrantGOCDBAccess = "/grant-gocdb-access"
 

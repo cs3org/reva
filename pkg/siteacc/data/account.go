@@ -50,6 +50,7 @@ type Account struct {
 // AccountData holds additional data for a site account.
 type AccountData struct {
 	GOCDBAccess bool `json:"gocdbAccess"`
+	SiteAccess  bool `json:"siteAccess"`
 }
 
 // AccountSettings holds additional settings for a site account.
@@ -124,6 +125,9 @@ func (acc *Account) CheckScopeAccess(scope string) bool {
 
 	case ScopeGOCDB:
 		hasAccess = acc.Data.GOCDBAccess
+
+	case ScopeSite:
+		hasAccess = acc.Data.SiteAccess
 	}
 
 	return hasAccess
@@ -198,6 +202,7 @@ func NewAccount(email string, title, firstName, lastName string, site, role stri
 		DateModified: t,
 		Data: AccountData{
 			GOCDBAccess: false,
+			SiteAccess:  false,
 		},
 		Settings: AccountSettings{
 			ReceiveAlerts: true,

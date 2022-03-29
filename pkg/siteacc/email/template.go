@@ -32,6 +32,18 @@ Kind regards,
 The ScienceMesh Team
 `
 
+const siteAccessGrantedTemplate = `
+Dear {{.Account.FirstName}} {{.Account.LastName}},
+
+You have been granted access to the global configuration of your site.
+
+Log in to your account to access this configuration:
+{{.AccountsAddress}} 
+
+Kind regards,
+The ScienceMesh Team
+`
+
 const gocdbAccessGrantedTemplate = `
 Dear {{.Account.FirstName}} {{.Account.LastName}},
 

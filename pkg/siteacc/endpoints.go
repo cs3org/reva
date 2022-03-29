@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
+	"github.com/cs3org/reva/pkg/siteacc/manager"
 	"github.com/pkg/errors"
 	"github.com/prometheus/alertmanager/template"
 )
@@ -38,6 +39,7 @@ const (
 )
 
 type methodCallback = func(*SiteAccounts, url.Values, []byte, *html.Session) (interface{}, error)
+type accessSetterCallback = func(*manager.AccountsManager, *data.Account, bool) error
 
 type endpoint struct {
 	Path            string
@@ -80,6 +82,7 @@ func getEndpoints() []endpoint {
 		// Authentication endpoints
 		{config.EndpointVerifyUserToken, callMethodEndpoint, createMethodCallbacks(handleVerifyUserToken, nil), true},
 		// Access management endpoints
+		{config.EndpointGrantSiteAccess, callMethodEndpoint, createMethodCallbacks(nil, handleGrantSiteAccess), false},
 		{config.EndpointGrantGOCDBAccess, callMethodEndpoint, createMethodCallbacks(nil, handleGrantGOCDBAccess), false},
 		// Alerting endpoints
 		{config.EndpointDispatchAlert, callMethodEndpoint, createMethodCallbacks(nil, handleDispatchAlert), false},
@@ -316,7 +319,15 @@ func handleDispatchAlert(siteacc *SiteAccounts, values url.Values, body []byte, 
 	return nil, nil
 }
 
+func handleGrantSiteAccess(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	return handleGrantAccess((*manager.AccountsManager).GrantSiteAccess, siteacc, values, body, session)
+}
+
 func handleGrantGOCDBAccess(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	return handleGrantAccess((*manager.AccountsManager).GrantGOCDBAccess, siteacc, values, body, session)
+}
+
+func handleGrantAccess(accessSetter accessSetterCallback, siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
@@ -336,8 +347,8 @@ func handleGrantGOCDBAccess(siteacc *SiteAccounts, values url.Values, body []byt
 		}
 
 		// Grant access to the account through the accounts manager
-		if err := siteacc.AccountsManager().GrantGOCDBAccess(account, grantAccess); err != nil {
-			return nil, errors.Wrap(err, "unable to change the GOCDB access status of the account")
+		if err := accessSetter(siteacc.AccountsManager(), account, grantAccess); err != nil {
+			return nil, errors.Wrap(err, "unable to change the access status of the account")
 		}
 	} else {
 		return nil, errors.Errorf("no access status provided")

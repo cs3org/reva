@@ -52,6 +52,9 @@ type AccountsManager struct {
 	mutex sync.RWMutex
 }
 
+type accessGetter = func(account *data.Account) bool
+type accessSetter func(account *data.Account, value bool)
+
 func (mngr *AccountsManager) initialize(conf *config.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return errors.Errorf("no configuration provided")
@@ -253,6 +256,19 @@ func (mngr *AccountsManager) FindAccountEx(by string, value string, cloneAccount
 	return account, nil
 }
 
+// GrantSiteAccess sets the Site access status of the account identified by the account email; if no such account exists, an error is returned.
+func (mngr *AccountsManager) GrantSiteAccess(accountData *data.Account, grantAccess bool) error {
+	mngr.mutex.Lock()
+	defer mngr.mutex.Unlock()
+
+	account, err := mngr.findAccount(FindByEmail, accountData.Email)
+	if err != nil {
+		return errors.Wrap(err, "no account with the specified email exists")
+	}
+
+	return mngr.grantAccess(account, &account.Data.SiteAccess, grantAccess, email.SendSiteAccessGranted)
+}
+
 // GrantGOCDBAccess sets the GOCDB access status of the account identified by the account email; if no such account exists, an error is returned.
 func (mngr *AccountsManager) GrantGOCDBAccess(accountData *data.Account, grantAccess bool) error {
 	mngr.mutex.Lock()
@@ -263,19 +279,7 @@ func (mngr *AccountsManager) GrantGOCDBAccess(accountData *data.Account, grantAc
 		return errors.Wrap(err, "no account with the specified email exists")
 	}
 
-	accessOld := account.Data.GOCDBAccess
-	account.Data.GOCDBAccess = grantAccess
-
-	mngr.storage.AccountUpdated(account)
-	mngr.writeAllAccounts()
-
-	if account.Data.GOCDBAccess && account.Data.GOCDBAccess != accessOld {
-		mngr.sendEmail(account, nil, email.SendGOCDBAccessGranted)
-	}
-
-	mngr.callListeners(account, AccountsListener.AccountUpdated)
-
-	return nil
+	return mngr.grantAccess(account, &account.Data.GOCDBAccess, grantAccess, email.SendGOCDBAccessGranted)
 }
 
 // RemoveAccount removes the account identified by the account email; if no such account exists, an error is returned.
@@ -313,6 +317,22 @@ func (mngr *AccountsManager) CloneAccounts(erasePasswords bool) data.Accounts {
 	}
 
 	return clones
+}
+
+func (mngr *AccountsManager) grantAccess(account *data.Account, accessFlag *bool, grantAccess bool, emailFunc email.SendFunction) error {
+	accessOld := *accessFlag
+	*accessFlag = grantAccess
+
+	mngr.storage.AccountUpdated(account)
+	mngr.writeAllAccounts()
+
+	if *accessFlag && *accessFlag != accessOld {
+		mngr.sendEmail(account, nil, emailFunc)
+	}
+
+	mngr.callListeners(account, AccountsListener.AccountUpdated)
+
+	return nil
 }
 
 func (mngr *AccountsManager) callListeners(account *data.Account, cb AccountsListenerCallback) {

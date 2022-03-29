@@ -29,9 +29,9 @@ function handleEditAccount() {
 	window.location.replace("{{getServerAddress}}/account/?path=edit");
 }
 
-function handleRequestAccess() {
+function handleRequestAccess(scope) {
 	setState(STATE_STATUS, "Redirecting to the contact form...");		
-	window.location.replace("{{getServerAddress}}/account/?path=contact&subject=" + encodeURIComponent("Request GOCDB access"));
+	window.location.replace("{{getServerAddress}}/account/?path=contact&subject=" + encodeURIComponent("Request " + scope + " access"));
 }
 
 function handleLogout() {
@@ -81,7 +81,8 @@ const tplBody = `
 <div>
 	<strong>Account data:</strong>
 	<ul style="margin-top: 0em;">	
-		<li>GOCDB access: <em>{{if .Account.Data.GOCDBAccess}}Granted{{else}}Not granted{{end}}</em></li>
+		<li>Site access: <em>{{if .Account.Data.SiteAccess}}Granted{{else}}Not granted{{end}}</em></li>
+		<li>GOCDB access: <em>{{if .Account.Data.GOCDBAccess}}Granted{{else}}Not granted{{end}}</em></li>	
 	</ul>
 </div>
 <div>
@@ -89,12 +90,18 @@ const tplBody = `
 		<button type="button" onClick="handleSettings();">Settings</button>
 		<button type="button" onClick="handleEditAccount();">Edit account</button>
 		<span style="width: 25px;">&nbsp;</span>
-		<button type="button" onClick="handleRequestAccess();" {{if .Account.Data.GOCDBAccess}}disabled{{end}}>Request GOCDB access</button>
+		<button type="button" onClick="handleRequestAccess('Site');" {{if .Account.Data.SiteAccess}}disabled{{end}}>Request Site access</button>
+		<button type="button" onClick="handleRequestAccess('GOCDB');" {{if .Account.Data.GOCDBAccess}}disabled{{end}}>Request GOCDB access</button>
 		
 		<button type="button" onClick="handleLogout();" style="float: right;">Logout</button>
 	</form>
 </div>
 <div>
+	<p>Notes:</p>
+	<ul>
+		<li>The <em>Site access</em> allows you to access and modify the global configuration of your site.</li>
+		<li>The <em>GOCDB access</em> allows you to log into the central database where all site metadata is stored.</li>
+	</ul>
 	<p>Quick links:</p>
 	<ul>
 		<li><a href="https://gocdb.sciencemesh.uni-muenster.de" target="_blank">Central Database (GOCDB)</a></li>
