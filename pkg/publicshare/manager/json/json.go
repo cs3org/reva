@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -34,6 +35,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -41,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -60,6 +63,7 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	conf.init()
 
 	m := manager{
+		gatewayAddr:                conf.GatewayAddr,
 		mutex:                      &sync.Mutex{},
 		file:                       conf.File,
 		passwordHashCost:           conf.SharePasswordHashCost,
@@ -93,6 +97,7 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 }
 
 type config struct {
+	GatewayAddr                string `mapstructure:"gateway_addr"`
 	File                       string `mapstructure:"file"`
 	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
 	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
@@ -112,8 +117,9 @@ func (c *config) init() {
 }
 
 type manager struct {
-	mutex *sync.Mutex
-	file  string
+	gatewayAddr string
+	mutex       *sync.Mutex
+	file        string
 
 	passwordHashCost           int
 	janitorRunInterval         int
@@ -364,7 +370,13 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		return nil, err
 	}
 
-	var shares []*link.PublicShare
+	client, err := pool.GetGatewayServiceClient(m.gatewayAddr)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list shares")
+	}
+	cache := make(map[string]struct{})
+
+	shares := []*link.PublicShare{}
 	for _, v := range db {
 		var local publicShare
 		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local.PublicShare); err != nil {
@@ -380,11 +392,27 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			continue
 		}
 
-		// skip if the share isn't created by the current user or if the share
-		// doesn't match the given filters.
-		if !(publicshare.IsCreatedByUser(local.PublicShare, u) &&
-			publicshare.MatchesFilters(local.PublicShare, filters)) {
+		if !publicshare.MatchesFilters(local.PublicShare, filters) {
 			continue
+		}
+
+		key := strings.Join([]string{local.ResourceId.StorageId, local.ResourceId.OpaqueId}, "!")
+		if _, hit := cache[key]; !hit && !publicshare.IsCreatedByUser(local.PublicShare, u) {
+			sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: local.ResourceId}})
+			if err != nil || sRes.Status.Code != rpc.Code_CODE_OK {
+				log.Error().
+					Err(err).
+					Interface("status", sRes.Status).
+					Interface("resource_id", local.ResourceId).
+					Msg("ListShares: could not stat resource")
+				continue
+			}
+			if !sRes.Info.PermissionSet.ListGrants {
+				// skip because the user doesn't have the permissions to list
+				// shares of this file.
+				continue
+			}
+			cache[key] = struct{}{}
 		}
 
 		if local.PublicShare.PasswordProtected && sign {
@@ -395,7 +423,6 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 		shares = append(shares, &local.PublicShare)
 	}
-
 	return shares, nil
 }
 
