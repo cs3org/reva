@@ -426,11 +426,11 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 	}
 
 	permissions := role.OCSPermissions()
-	/*
-		if ri != nil && ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
-			// Single file shares should never have delete or create permissions
-			permissions &^= conversions.PermissionCreate
-			permissions &^= conversions.PermissionDelete
+	if ri != nil && ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		// Single file shares should never have delete or create permissions
+		permissions &^= conversions.PermissionCreate
+		permissions &^= conversions.PermissionDelete
+		/*
 			if permissions == conversions.PermissionInvalid {
 				return nil, nil, &ocsError{
 					Code:    response.MetaBadRequest.StatusCode,
@@ -438,8 +438,10 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 					Error:   errors.New("cannot set the requested share permissions"),
 				}
 			}
-		}
+		*/
+	}
 
+	/*
 		existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
 		if permissions == conversions.PermissionInvalid || !existingPermissions.Contain(permissions) {
 			return nil, nil, &ocsError{
