@@ -20,6 +20,16 @@ package site
 
 const tplJavaScript = `
 function verifyForm(formData) {
+	if (formData.getTrimmed("clientID") == "") {
+		setState(STATE_ERROR, "Please enter the name of the test user.", "form", "clientID", true);
+		return false;
+	}
+
+	if (formData.get("secret") == "") {
+		setState(STATE_ERROR, "Please enter the password of the test user.", "form", "secret", true);
+		return false;
+	}
+
 	return true;
 }
 
@@ -45,6 +55,8 @@ function handleAction(action) {
 	}
 
 	var postData = {
+		"clientID": formData.getTrimmed("clientID"),
+		"secret": formData.get("secret")
     };
 
     xhr.send(JSON.stringify(postData));
@@ -59,6 +71,11 @@ html * {
 input[type="checkbox"] {
 	width: auto;
 }
+
+.mandatory {
+	color: red;
+	font-weight: bold;
+}
 `
 
 const tplBody = `
@@ -70,10 +87,21 @@ const tplBody = `
 	<form id="form" method="POST" class="box container-inline" style="width: 100%;" onSubmit="handleAction('site-configure?invoker=user'); return false;">
 		<div style="grid-row: 1; grid-column: 1 / span 2;">
 			<h3>Test user settings</h3>
+			<p>In order to perform automated tests on your site, a test user has to be configured below. Please note that the user <em>has to exist in your Reva instance</em>! If you do not have a user for automated tests in your instance yet, create one first.</p>
 			<hr>
 		</div>
 
-		<div style="grid-row: 3; grid-column: 2; text-align: right;">
+		<div style="grid-row: 2;"><label for="clientID">User name: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 3;"><input type="text" id="clientID" name="clientID" placeholder="User name"/></div>
+		<div style="grid-row: 2;"><label for="secret">Password: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 3;"><input type="password" id="secret" name="secret" placeholder="Password"/></div>
+
+		<div style="grid-row: 4;">&nbsp;</div>
+
+		<div style="grid-row: 5; align-self: center;">
+			Fields marked with <span class="mandatory">*</span> are mandatory.
+		</div>
+		<div style="grid-row: 5; grid-column: 2; text-align: right;">
 			<button type="reset">Reset</button>
 			<button type="submit" style="font-weight: bold;">Save</button>
 		</div>

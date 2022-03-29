@@ -245,8 +245,19 @@ func handleSiteConfigure(siteacc *SiteAccounts, values url.Values, body []byte, 
 	}
 	account.Email = email
 
+	type jsonData struct {
+		ClientID string `json:"clientID"`
+		Secret   string `json:"secret"`
+	}
+	siteData := &jsonData{}
+	if err := json.Unmarshal(body, siteData); err != nil {
+		return nil, errors.Wrap(err, "invalid form data")
+	}
+
 	// TODO: Do config stuff
 	fmt.Println("!!! COMING SOON !!!")
+	fmt.Println(siteData.ClientID)
+	fmt.Println(siteData.Secret)
 
 	return nil, nil
 }
