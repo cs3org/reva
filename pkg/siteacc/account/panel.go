@@ -121,21 +121,26 @@ func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string
 func (panel *Panel) PreExecute(session *html.Session, path string, w http.ResponseWriter, r *http.Request) (html.ExecutionResult, error) {
 	protectedPaths := []string{templateManage, templateSettings, templateEdit, templateSite, templateContact}
 
-	if session.LoggedInUser == nil {
+	if session.LoggedInUser != nil {
+		switch path {
+		case templateSite:
+			// If the logged in user doesn't have site access, redirect him back to the main account page
+			if !session.LoggedInUser.Data.SiteAccess {
+				return panel.redirect(templateManage, w, r), nil
+			}
+
+		case templateLogin:
+		case templateRegistration:
+			// If a user is logged in and tries to login or register again, redirect to the main account page
+			return panel.redirect(templateManage, w, r), nil
+		}
+	} else {
 		// If no user is logged in, redirect protected paths to the login page
 		for _, protected := range protectedPaths {
 			if protected == path {
 				return panel.redirect(templateLogin, w, r), nil
 			}
 		}
-	} else if path == templateSite {
-		// If the logged in user doesn't have site access, redirect him back to the main account page
-		if !session.LoggedInUser.Data.SiteAccess {
-			return panel.redirect(templateManage, w, r), nil
-		}
-	} else if path == templateLogin || path == templateRegistration {
-		// If a user is logged in and tries to login or register again, redirect to the main account page
-		return panel.redirect(templateManage, w, r), nil
 	}
 
 	return html.ContinueExecution, nil

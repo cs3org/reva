@@ -52,9 +52,6 @@ type AccountsManager struct {
 	mutex sync.RWMutex
 }
 
-type accessGetter = func(account *data.Account) bool
-type accessSetter func(account *data.Account, value bool)
-
 func (mngr *AccountsManager) initialize(conf *config.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return errors.Errorf("no configuration provided")
