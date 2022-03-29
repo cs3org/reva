@@ -24,14 +24,18 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"strings"
 	"sync"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer"
@@ -46,8 +50,9 @@ import (
 
 // Manager implements a share manager using a cs3 storage backend
 type Manager struct {
-	sync.RWMutex
+	gatewayClient gatewayv1beta1.GatewayAPIClient
 
+	sync.RWMutex
 	storage metadata.Storage
 	indexer indexer.Indexer
 
@@ -86,15 +91,21 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 	}
 	indexer := indexer.CreateIndexer(s)
 
-	return New(s, indexer)
+	client, err := pool.GetGatewayServiceClient(c.GatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return New(client, s, indexer)
 }
 
 // New returns a new manager instance
-func New(s metadata.Storage, indexer indexer.Indexer) (*Manager, error) {
+func New(gatewayClient gatewayv1beta1.GatewayAPIClient, s metadata.Storage, indexer indexer.Indexer) (*Manager, error) {
 	return &Manager{
-		storage:     s,
-		indexer:     indexer,
-		initialized: false,
+		gatewayClient: gatewayClient,
+		storage:       s,
+		indexer:       indexer,
+		initialized:   false,
 	}, nil
 }
 
@@ -137,6 +148,13 @@ func (m *Manager) initialize() error {
 	err = m.indexer.AddIndex(&collaboration.Share{}, option.IndexByFunc{
 		Name: "GranteeId",
 		Func: indexGranteeFunc,
+	}, "Id.OpaqueId", "shares", "non_unique", nil, true)
+	if err != nil {
+		return err
+	}
+	err = m.indexer.AddIndex(&collaboration.Share{}, option.IndexByFunc{
+		Name: "ResourceId",
+		Func: indexResourceIdFunc,
 	}, "Id.OpaqueId", "shares", "non_unique", nil, true)
 	if err != nil {
 		return err
@@ -234,20 +252,96 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		return nil, errtypes.UserRequired("error getting user from context")
 	}
 
-	allShareIds, err := m.indexer.FindBy(&collaboration.Share{}, "OwnerId", userIDToIndex(user.GetId()))
+	ownedShareIds, err := m.indexer.FindBy(&collaboration.Share{}, "OwnerId", userIDToIndex(user.GetId()))
 	if err != nil {
 		return nil, err
 	}
+	createdShareIds, err := m.indexer.FindBy(&collaboration.Share{}, "CreatorId", userIDToIndex(user.GetId()))
+	if err != nil {
+		return nil, err
+	}
+
+	mem := make(map[string]struct{})
 	result := []*collaboration.Share{}
-	for _, id := range allShareIds {
+	for _, id := range ownedShareIds {
 		s, err := m.getShareByID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
 		if share.MatchesFilters(s, filters) {
 			result = append(result, s)
+			mem[s.Id.OpaqueId] = struct{}{}
 		}
 	}
+	for _, id := range createdShareIds {
+		if _, handled := mem[id]; handled {
+			// We don't want to add a share multiple times when we added it
+			// already.
+			continue
+		}
+		s, err := m.getShareByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if share.MatchesFilters(s, filters) {
+			result = append(result, s)
+			mem[s.Id.OpaqueId] = struct{}{}
+		}
+	}
+
+	grouped := share.GroupFiltersByType(filters)
+	idFilter, ok := grouped[collaboration.Filter_TYPE_RESOURCE_ID]
+	if !ok {
+		return result, nil
+	}
+
+	// shareIDsByResourceID contains the shareID as the key and the resourceID
+	// as the value.
+	shareIDsByResourceID := make(map[string]*provider.ResourceId)
+	for _, filter := range idFilter {
+		resourceID := filter.GetResourceId()
+		ids, err := m.indexer.FindBy(&collaboration.Share{}, "ResourceId", resourceIDToIndex(resourceID))
+		if err != nil {
+			return nil, err
+		}
+
+		for _, id := range ids {
+			shareIDsByResourceID[id] = resourceID
+		}
+	}
+
+	statMem := make(map[string]struct{})
+	for shareID, resourceID := range shareIDsByResourceID {
+		if _, handled := mem[shareID]; handled {
+			// We don't want to add a share multiple times when we added it
+			// already.
+			continue
+		}
+
+		if _, checked := statMem[resourceIDToIndex(resourceID)]; !checked {
+			sRes, err := m.gatewayClient.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: resourceID}})
+			if err != nil {
+				continue
+			}
+			if sRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+				continue
+			}
+			if !sRes.Info.PermissionSet.ListGrants {
+				continue
+			}
+			statMem[resourceIDToIndex(resourceID)] = struct{}{}
+		}
+
+		s, err := m.getShareByID(ctx, shareID)
+		if err != nil {
+			return nil, err
+		}
+		if share.MatchesFilters(s, filters) {
+			result = append(result, s)
+			mem[s.Id.OpaqueId] = struct{}{}
+		}
+	}
+
 	return result, nil
 }
 
@@ -526,6 +620,18 @@ func indexGranteeFunc(v interface{}) (string, error) {
 		return "", fmt.Errorf("given entity is not a share")
 	}
 	return granteeToIndex(share.Grantee)
+}
+
+func indexResourceIdFunc(v interface{}) (string, error) {
+	share, ok := v.(*collaboration.Share)
+	if !ok {
+		return "", fmt.Errorf("given entity is not a share")
+	}
+	return resourceIDToIndex(share.ResourceId), nil
+}
+
+func resourceIDToIndex(id *provider.ResourceId) string {
+	return strings.Join([]string{id.StorageId, id.OpaqueId}, "!")
 }
 
 func granteeToIndex(grantee *provider.Grantee) (string, error) {
