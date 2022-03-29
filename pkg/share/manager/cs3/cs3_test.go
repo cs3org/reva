@@ -140,7 +140,7 @@ var _ = Describe("Manager", func() {
 
 	Describe("New", func() {
 		JustBeforeEach(func() {
-			m, err := cs3.New(storage, indexer)
+			m, err := cs3.New(nil, storage, indexer)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(m).ToNot(BeNil())
 		})
@@ -163,7 +163,7 @@ var _ = Describe("Manager", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			m, err = cs3.New(storage, indexer)
+			m, err = cs3.New(nil, storage, indexer)
 			Expect(err).ToNot(HaveOccurred())
 			data, err := json.Marshal(share)
 			Expect(err).ToNot(HaveOccurred())
@@ -277,9 +277,13 @@ var _ = Describe("Manager", func() {
 
 				Context("when requesting the share by key", func() {
 					It("returns NotFound", func() {
-						indexer.On("FindBy", mock.Anything, "OwnerId", url.QueryEscape(share.Owner.Idp+":"+share.Owner.OpaqueId)).
+						indexer.On("FindBy", mock.Anything,
+							indexerpkg.NewField("OwnerId", url.QueryEscape(share.Owner.Idp+":"+share.Owner.OpaqueId)),
+						).
 							Return([]string{share.Id.OpaqueId, share2.Id.OpaqueId}, nil)
-						indexer.On("FindBy", mock.Anything, "GranteeId", url.QueryEscape("user:"+grantee.Id.Idp+":"+grantee.Id.OpaqueId)).
+						indexer.On("FindBy", mock.Anything,
+							indexerpkg.NewField("GranteeId", url.QueryEscape("user:"+grantee.Id.Idp+":"+grantee.Id.OpaqueId)),
+						).
 							Return([]string{}, nil)
 						returnedShare, err := m.GetShare(ctx, &collaboration.ShareReference{
 							Spec: &collaboration.ShareReference_Key{
@@ -294,9 +298,13 @@ var _ = Describe("Manager", func() {
 						Expect(returnedShare).To(BeNil())
 					})
 					It("gets the share", func() {
-						indexer.On("FindBy", mock.Anything, "OwnerId", url.QueryEscape(share.Owner.Idp+":"+share.Owner.OpaqueId)).
+						indexer.On("FindBy", mock.Anything,
+							indexerpkg.NewField("OwnerId", url.QueryEscape(share.Owner.Idp+":"+share.Owner.OpaqueId)),
+						).
 							Return([]string{share.Id.OpaqueId, share2.Id.OpaqueId}, nil)
-						indexer.On("FindBy", mock.Anything, "GranteeId", url.QueryEscape("user:"+grantee.Id.Idp+":"+grantee.Id.OpaqueId)).
+						indexer.On("FindBy", mock.Anything,
+							indexerpkg.NewField("GranteeId", url.QueryEscape("user:"+grantee.Id.Idp+":"+grantee.Id.OpaqueId)),
+						).
 							Return([]string{share2.Id.OpaqueId}, nil)
 						returnedShare, err := m.GetShare(ctx, &collaboration.ShareReference{
 							Spec: &collaboration.ShareReference_Key{
@@ -343,7 +351,19 @@ var _ = Describe("Manager", func() {
 
 		Describe("ListShares", func() {
 			JustBeforeEach(func() {
-				indexer.On("FindBy", mock.Anything, "OwnerId", mock.Anything).Return([]string{share.Id.OpaqueId, share2.Id.OpaqueId}, nil)
+				indexer.On("FindBy", mock.Anything,
+					mock.MatchedBy(func(input indexerpkg.Field) bool {
+						return input.Name == "OwnerId"
+					}),
+					mock.MatchedBy(func(input indexerpkg.Field) bool {
+						return input.Name == "CreatorId"
+					}),
+				).Return([]string{share.Id.OpaqueId, share2.Id.OpaqueId}, nil)
+				indexer.On("FindBy", mock.Anything,
+					mock.MatchedBy(func(input indexerpkg.Field) bool {
+						return input.Name == "ResourceId" && input.Value == "!abcd"
+					}),
+				).Return([]string{share.Id.OpaqueId}, nil)
 			})
 			It("uses the index to get the owned shares", func() {
 				shares, err := m.ListShares(ctx, []*collaboration.Filter{})
@@ -371,9 +391,17 @@ var _ = Describe("Manager", func() {
 		Describe("ListReceivedShares", func() {
 			Context("with a received user share", func() {
 				BeforeEach(func() {
-					indexer.On("FindBy", mock.Anything, "GranteeId", granteeFn).
+					indexer.On("FindBy", mock.Anything,
+						mock.MatchedBy(func(input indexerpkg.Field) bool {
+							return input.Name == "GranteeId" && input.Value == granteeFn
+						}),
+					).
 						Return([]string{share2.Id.OpaqueId}, nil)
-					indexer.On("FindBy", mock.Anything, "GranteeId", mock.Anything).
+					indexer.On("FindBy", mock.Anything,
+						mock.MatchedBy(func(input indexerpkg.Field) bool {
+							return input.Name == "GranteeId"
+						}),
+					).
 						Return([]string{}, nil)
 				})
 
@@ -393,9 +421,17 @@ var _ = Describe("Manager", func() {
 
 			Context("with a received group share", func() {
 				BeforeEach(func() {
-					indexer.On("FindBy", mock.Anything, "GranteeId", groupFn).
+					indexer.On("FindBy", mock.Anything,
+						mock.MatchedBy(func(input indexerpkg.Field) bool {
+							return input.Name == "GranteeId" && input.Value == groupFn
+						}),
+					).
 						Return([]string{share2.Id.OpaqueId}, nil)
-					indexer.On("FindBy", mock.Anything, "GranteeId", mock.Anything).
+					indexer.On("FindBy", mock.Anything,
+						mock.MatchedBy(func(input indexerpkg.Field) bool {
+							return input.Name == "GranteeId"
+						}),
+					).
 						Return([]string{}, nil)
 				})
 
