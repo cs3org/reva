@@ -80,7 +80,7 @@ input[type="checkbox"] {
 
 const tplBody = `
 <div>
-	<p>Configure your ScienceMesh Site below.</p>	
+	<p>Configure your ScienceMesh Site below. <em>These settings affect your entire site and not just your account.</em></p>
 </div>
 <div>&nbsp;</div>
 <div>
