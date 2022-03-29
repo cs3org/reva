@@ -314,7 +314,7 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			return nil, err
 		}
 
-		if publicshare.MatchesFilters(ps.PublicShare, filters) && !publicshare.IsExpired(ps.PublicShare) {
+		if publicshare.MatchesFilters(*ps.PublicShare, filters) && !publicshare.IsExpired(*ps.PublicShare) {
 			result = append(result, ps.PublicShare)
 		}
 
@@ -361,7 +361,7 @@ func (m *Manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 		return nil, err
 	}
 
-	if publicshare.IsExpired(ps.PublicShare) {
+	if publicshare.IsExpired(*ps.PublicShare) {
 		return nil, errtypes.NotFound("public share has expired")
 	}
 
