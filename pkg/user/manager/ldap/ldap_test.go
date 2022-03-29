@@ -24,7 +24,7 @@ import (
 
 func TestUserManager(t *testing.T) {
 	// negative test for parseConfig
-	_, err := New(map[string]interface{}{"hostname": 42})
+	_, err := New(map[string]interface{}{"uri": 42})
 	if err == nil {
 		t.Fatal("expected error but got none")
 	}

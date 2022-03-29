@@ -8,8 +8,7 @@ address = "{{grpc_address}}"
 driver = "ldap"
 
 [grpc.services.groupprovider.drivers.ldap]
-hostname="ocisldap"
-port=636
+uri="ldaps://openldap:636"
 insecure=true
 base_dn="dc=owncloud,dc=com"
 groupfilter="(&(objectclass=posixGroup)(ownclouduuid={{.OpaqueId}}))"

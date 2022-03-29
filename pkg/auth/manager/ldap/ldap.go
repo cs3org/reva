@@ -46,7 +46,8 @@ func init() {
 }
 
 type mgr struct {
-	c *config
+	c          *config
+	ldapClient ldap.Client
 }
 
 type config struct {
@@ -108,6 +109,10 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	manager.ldapClient, err = utils.GetLDAPClientWithReconnect(&manager.c.LDAPConn)
+	if err != nil {
+		return nil, err
+	}
 	return manager, nil
 }
 
@@ -136,11 +141,6 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 
 func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx)
-	l, err := utils.GetLDAPConnection(&am.c.LDAPConn)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer l.Close()
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
@@ -151,7 +151,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		nil,
 	)
 
-	sr, err := l.Search(searchRequest)
+	sr, err := am.ldapClient.Search(searchRequest)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -163,7 +163,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	userdn := sr.Entries[0].DN
 
 	// Bind as the user to verify their password
-	err = l.Bind(userdn, clientSecret)
+	la, err := utils.GetLDAPClientForAuth(&am.c.LDAPConn)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer la.Close()
+	err = la.Bind(userdn, clientSecret)
 	if err != nil {
 		log.Debug().Err(err).Interface("userdn", userdn).Msg("bind with user credentials failed")
 		return nil, nil, err

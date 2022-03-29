@@ -21,9 +21,9 @@ package utils
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io/ioutil"
 
+	ldapReconnect "github.com/cs3org/reva/v2/pkg/utils/ldap"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/pkg/errors"
 )
@@ -31,40 +31,67 @@ import (
 // LDAPConn holds the basic parameter for setting up an
 // LDAP connection.
 type LDAPConn struct {
-	Hostname     string `mapstructure:"hostname"`
-	Port         int    `mapstructure:"port"`
+	URI          string `mapstructure:"uri"`
 	Insecure     bool   `mapstructure:"insecure"`
 	CACert       string `mapstructure:"cacert"`
-	BindUsername string `mapstructure:"bind_username"`
+	BindDN       string `mapstructure:"bind_username"`
 	BindPassword string `mapstructure:"bind_password"`
 }
 
-// GetLDAPConnection initializes an LDAPS connection and allows
-// to set TLS options e.g. to add trusted Certificates or disable
-// Certificate verification
-func GetLDAPConnection(c *LDAPConn) (*ldap.Conn, error) {
-	tlsconfig := &tls.Config{InsecureSkipVerify: c.Insecure}
-
+// GetLDAPClientWithReconnect initializes a long-lived LDAP connection that
+// automatically reconnects on connection errors. It allows to set TLS options
+// e.g. to add trusted Certificates or disable Certificate verification
+func GetLDAPClientWithReconnect(c *LDAPConn) (ldap.Client, error) {
+	var tlsConf *tls.Config
+	if c.Insecure {
+		tlsConf = &tls.Config{
+			//nolint:gosec // We need the ability to run with "insecure" (dev/testing)
+			InsecureSkipVerify: c.Insecure,
+		}
+	}
 	if !c.Insecure && c.CACert != "" {
 		if pemBytes, err := ioutil.ReadFile(c.CACert); err == nil {
 			rpool, _ := x509.SystemCertPool()
 			rpool.AppendCertsFromPEM(pemBytes)
-			tlsconfig.RootCAs = rpool
+			tlsConf = &tls.Config{
+				RootCAs: rpool,
+			}
 		} else {
 			return nil, errors.Wrapf(err, "Error reading LDAP CA Cert '%s.'", c.CACert)
 		}
 	}
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", c.Hostname, c.Port), tlsconfig)
+
+	conn := ldapReconnect.NewLDAPWithReconnect(
+		ldapReconnect.Config{
+			URI:          c.URI,
+			BindDN:       c.BindDN,
+			BindPassword: c.BindPassword,
+			TLSConfig:    tlsConf,
+		},
+	)
+	return conn, nil
+}
+
+// GetLDAPClientForAuth initializes an LDAP connection. The connection is not authenticated
+// when returned. The main purpose for GetLDAPClientForAuth is to get and LDAP connection that
+// can be used to issue a single bind request to authenticate a user.
+func GetLDAPClientForAuth(c *LDAPConn) (ldap.Client, error) {
+	tlsconfig := &tls.Config{InsecureSkipVerify: c.Insecure}
+	if !c.Insecure && c.CACert != "" {
+		if pemBytes, err := ioutil.ReadFile(c.CACert); err == nil {
+			rpool, _ := x509.SystemCertPool()
+			rpool.AppendCertsFromPEM(pemBytes)
+			tlsConf = &tls.Config{
+				RootCAs: rpool,
+			}
+		} else {
+			return nil, errors.Wrapf(err, "Error reading LDAP CA Cert '%s.'", c.CACert)
+		}
+	}
+	l, err := ldap.DialURL(c.URI, ldap.DialWithTLSConfig(tlsconfig))
 	if err != nil {
 		return nil, err
 	}
 
-	if c.BindUsername != "" && c.BindPassword != "" {
-		err = l.Bind(c.BindUsername, c.BindPassword)
-		if err != nil {
-			l.Close()
-			return nil, err
-		}
-	}
 	return l, nil
 }

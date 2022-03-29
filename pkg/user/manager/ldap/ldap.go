@@ -46,6 +46,7 @@ func init() {
 type manager struct {
 	c          *config
 	userfilter *template.Template
+	ldapClient ldap.Client
 }
 
 type config struct {
@@ -114,6 +115,11 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	mgr.ldapClient, err = utils.GetLDAPClientWithReconnect(&mgr.c.LDAPConn)
+	if err != nil {
+		return nil, err
+	}
 	return mgr, nil
 }
 
@@ -149,13 +155,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		return nil, errtypes.NotFound("idp mismatch")
 	}
 
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
-	if err != nil {
-		return nil, err
-	}
-	defer l.Close()
-
-	userEntry, err := m.getLDAPUserByID(ctx, l, uid)
+	userEntry, err := m.getLDAPUserByID(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		return nil, err
 	}
 
-	groups, err := m.getLDAPUserGroups(ctx, l, userEntry)
+	groups, err := m.getLDAPUserGroups(ctx, userEntry)
 	if err != nil {
 		return nil, err
 	}
@@ -219,11 +219,6 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	}
 
 	log := appctx.GetLogger(ctx)
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
-	if err != nil {
-		return nil, err
-	}
-	defer l.Close()
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
@@ -234,7 +229,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 		nil,
 	)
 
-	sr, err := l.Search(searchRequest)
+	sr, err := m.ldapClient.Search(searchRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +244,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	if err != nil {
 		return nil, err
 	}
-	groups, err := m.getLDAPUserGroups(ctx, l, sr.Entries[0])
+	groups, err := m.getLDAPUserGroups(ctx, sr.Entries[0])
 	if err != nil {
 		return nil, err
 	}
@@ -284,12 +279,6 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
-	if err != nil {
-		return nil, err
-	}
-	defer l.Close()
-
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
 		m.c.BaseDN,
@@ -299,7 +288,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		nil,
 	)
 
-	sr, err := l.Search(searchRequest)
+	sr, err := m.ldapClient.Search(searchRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +300,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		if err != nil {
 			return nil, err
 		}
-		groups, err := m.getLDAPUserGroups(ctx, l, entry)
+		groups, err := m.getLDAPUserGroups(ctx, entry)
 		if err != nil {
 			return nil, err
 		}
@@ -347,17 +336,11 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
+	userEntry, err := m.getLDAPUserByID(ctx, uid)
 	if err != nil {
 		return []string{}, err
 	}
-	defer l.Close()
-
-	userEntry, err := m.getLDAPUserByID(ctx, l, uid)
-	if err != nil {
-		return []string{}, err
-	}
-	return m.getLDAPUserGroups(ctx, l, userEntry)
+	return m.getLDAPUserGroups(ctx, userEntry)
 }
 
 func (m *manager) ldapEntryToUserID(entry *ldap.Entry) (*userpb.UserId, error) {
@@ -380,7 +363,7 @@ func (m *manager) ldapEntryToUserID(entry *ldap.Entry) (*userpb.UserId, error) {
 	}, nil
 }
 
-func (m *manager) getLDAPUserByID(ctx context.Context, conn *ldap.Conn, uid *userpb.UserId) (*ldap.Entry, error) {
+func (m *manager) getLDAPUserByID(ctx context.Context, uid *userpb.UserId) (*ldap.Entry, error) {
 	log := appctx.GetLogger(ctx)
 	// Search for the given clientID, use a sizeLimit of 1 to be able
 	// to error out early when the userid is not unique
@@ -392,7 +375,7 @@ func (m *manager) getLDAPUserByID(ctx context.Context, conn *ldap.Conn, uid *use
 		nil,
 	)
 
-	sr, err := conn.Search(searchRequest)
+	sr, err := m.ldapClient.Search(searchRequest)
 	if err != nil {
 		if lerr, ok := err.(*ldap.Error); ok {
 			if lerr.ResultCode == ldap.LDAPResultSizeLimitExceeded {
@@ -409,7 +392,7 @@ func (m *manager) getLDAPUserByID(ctx context.Context, conn *ldap.Conn, uid *use
 
 }
 
-func (m *manager) getLDAPUserGroups(ctx context.Context, conn *ldap.Conn, userEntry *ldap.Entry) ([]string, error) {
+func (m *manager) getLDAPUserGroups(ctx context.Context, userEntry *ldap.Entry) ([]string, error) {
 	username := userEntry.GetEqualFoldAttributeValue(m.c.Schema.CN)
 	searchRequest := ldap.NewSearchRequest(
 		m.c.BaseDN,
@@ -419,7 +402,7 @@ func (m *manager) getLDAPUserGroups(ctx context.Context, conn *ldap.Conn, userEn
 		nil,
 	)
 
-	sr, err := conn.Search(searchRequest)
+	sr, err := m.ldapClient.Search(searchRequest)
 	if err != nil {
 		return []string{}, err
 	}

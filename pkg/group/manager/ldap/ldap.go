@@ -47,6 +47,7 @@ type manager struct {
 	c            *config
 	groupfilter  *template.Template
 	memberfilter *template.Template
+	ldapClient   ldap.Client
 }
 
 type config struct {
@@ -126,6 +127,11 @@ func New(m map[string]interface{}) (group.Manager, error) {
 		panic(err)
 	}
 
+	mgr.ldapClient, err = utils.GetLDAPClientWithReconnect(&mgr.c.LDAPConn)
+	if err != nil {
+		return nil, err
+	}
+
 	return mgr, nil
 }
 
@@ -134,11 +140,6 @@ func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.
 	if gid.Idp != "" && gid.Idp != m.c.Idp {
 		return nil, errtypes.NotFound("idp mismatch")
 	}
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
-	if err != nil {
-		return nil, err
-	}
-	defer l.Close()
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
@@ -149,7 +150,7 @@ func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.
 		nil,
 	)
 
-	sr, err := l.Search(searchRequest)
+	sr, err := m.ldapClient.Search(searchRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -205,11 +206,6 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 	}
 
 	log := appctx.GetLogger(ctx)
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
-	if err != nil {
-		return nil, err
-	}
-	defer l.Close()
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
@@ -220,7 +216,7 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 		nil,
 	)
 
-	sr, err := l.Search(searchRequest)
+	sr, err := m.ldapClient.Search(searchRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -262,12 +258,6 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 }
 
 func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Group, error) {
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
-	if err != nil {
-		return nil, err
-	}
-	defer l.Close()
-
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
 		m.c.BaseDN,
@@ -277,7 +267,7 @@ func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Grou
 		nil,
 	)
 
-	sr, err := l.Search(searchRequest)
+	sr, err := m.ldapClient.Search(searchRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -308,12 +298,6 @@ func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Grou
 }
 
 func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*userpb.UserId, error) {
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
-	if err != nil {
-		return nil, err
-	}
-	defer l.Close()
-
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
 		m.c.BaseDN,
@@ -323,7 +307,7 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		nil,
 	)
 
-	sr, err := l.Search(searchRequest)
+	sr, err := m.ldapClient.Search(searchRequest)
 	if err != nil {
 		return nil, err
 	}

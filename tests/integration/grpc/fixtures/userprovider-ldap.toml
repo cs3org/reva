@@ -1,12 +1,14 @@
 [grpc]
 address = "{{grpc_address}}"
 
+[log]
+level = "debug"
+
 [grpc.services.userprovider]
 driver = "ldap"
 
 [grpc.services.userprovider.drivers.ldap]
-hostname="localhost"
-port=10389
+uri="ldaps://openldap:636"
 insecure=true
 base_dn="dc=owncloud,dc=com"
 userfilter="(&(objectclass=posixAccount)(ownclouduuid={{.OpaqueId}}))"

@@ -12,8 +12,7 @@ address = "0.0.0.0:38000"
 auth_manager = "ldap"
 
 [grpc.services.authprovider.auth_managers.ldap]
-hostname="localhost"
-port=636
+uri="ldaps://localhost:636"
 insecure=true
 base_dn="dc=owncloud,dc=com"
 loginfilter="(&(objectclass=posixAccount)(|(cn={{login}}))(uid={{login}}))"
@@ -31,8 +30,7 @@ cn="cn"
 driver = "ldap"
 
 [grpc.services.userprovider.drivers.ldap]
-hostname="localhost"
-port=636
+uri="ldaps://localhost:636"
 insecure=true
 base_dn="dc=owncloud,dc=com"
 userfilter="(&(objectclass=posixAccount)(|(uid={{.OpaqueId}})(cn={{.OpaqueId}})))"
@@ -54,8 +52,7 @@ gid="entryuuid"
 driver = "ldap"
 
 [grpc.services.groupprovider.drivers.ldap]
-hostname="localhost"
-port=636
+uri="ldaps://localhost:636"
 insecure=true
 base_dn="dc=owncloud,dc=com"
 groupfilter="(&(objectclass=posixGroup)(|(entryuuid={{.OpaqueId}})(cn={{.OpaqueId}})))"
