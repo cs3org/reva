@@ -604,7 +604,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		}
 	}
 
-	var parentID *provider.ResourceId = nil
+	var parentID *provider.ResourceId
 	if p, err := n.Parent(); err == nil {
 		parentID = &provider.ResourceId{
 			StorageId: p.SpaceID,
