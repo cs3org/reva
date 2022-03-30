@@ -205,11 +205,7 @@ func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		w.WriteHeader(http.StatusInternalServerError)
 		log.Error().Interface("status", res.Status).Msg("error setting key")
 		return
 	}

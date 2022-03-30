@@ -33,10 +33,10 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
+	"github.com/go-chi/chi/v5"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -62,7 +62,8 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	conf *Config
+	conf   *Config
+	router *chi.Mux
 }
 
 // New returns a new ocmd object
@@ -74,10 +75,24 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 	conf.init()
 
+	r := chi.NewRouter()
 	s := &svc{
-		conf: conf,
+		conf:   conf,
+		router: r,
 	}
+
+	if err := s.routerInit(); err != nil {
+		return nil, err
+	}
+
 	return s, nil
+}
+
+func (s *svc) routerInit() error {
+	s.router.Get("/list", s.handleList)
+	s.router.Post("/new", s.handleNew)
+	s.router.Post("/open", s.handleOpen)
+	return nil
 }
 
 // Close performs cleanup.
@@ -95,29 +110,7 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-		switch r.Method {
-		case "POST":
-			switch head {
-			case "new":
-				s.handleNew(w, r)
-			case "open":
-				s.handleOpen(w, r)
-			default:
-				writeError(w, r, appErrorUnimplemented, "unsupported POST endpoint", nil)
-			}
-		case "GET":
-			switch head {
-			case "list":
-				s.handleList(w, r)
-			default:
-				writeError(w, r, appErrorUnimplemented, "unsupported GET endpoint", nil)
-			}
-		default:
-			writeError(w, r, appErrorUnimplemented, "unsupported method", nil)
-		}
+		s.router.ServeHTTP(w, r)
 	})
 }
 
