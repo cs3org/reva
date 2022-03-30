@@ -19,7 +19,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20220214084335-d975ab5d6e65
+	github.com/cs3org/go-cs3apis v0.0.0-20220330081745-2ad58f5932b9
 	github.com/cubewise-code/go-mime v0.0.0-20200519001935-8c5762b177d8
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
@@ -61,7 +61,7 @@ require (
 	github.com/rs/zerolog v1.26.1
 	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	github.com/studio-b12/gowebdav v0.0.0-20210917133250-a3a86976a1df
 	github.com/thanhpk/randstr v1.0.4
 	github.com/tidwall/pretty v1.2.0 // indirect
@@ -71,10 +71,10 @@ require (
 	go.mongodb.org/mongo-driver v1.7.2 // indirect
 	go.opencensus.io v0.23.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.29.0
-	go.opentelemetry.io/otel v1.4.1
+	go.opentelemetry.io/otel v1.6.1
 	go.opentelemetry.io/otel/exporters/jaeger v1.4.1
 	go.opentelemetry.io/otel/sdk v1.4.1
-	go.opentelemetry.io/otel/trace v1.4.1
+	go.opentelemetry.io/otel/trace v1.6.1
 	golang.org/x/crypto v0.0.0-20220307211146-efcb8507fb70
 	golang.org/x/oauth2 v0.0.0-20211005180243-6b3c2da341f1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
