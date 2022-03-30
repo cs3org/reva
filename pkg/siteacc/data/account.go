@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/pkg/siteacc/password"
+	"github.com/cs3org/reva/pkg/siteacc/credentials"
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/pkg/utils"
@@ -38,7 +38,7 @@ type Account struct {
 	Role        string `json:"role"`
 	PhoneNumber string `json:"phoneNumber"`
 
-	Password password.Password `json:"password"`
+	Password credentials.Password `json:"password"`
 
 	DateCreated  time.Time `json:"dateCreated"`
 	DateModified time.Time `json:"dateModified"`

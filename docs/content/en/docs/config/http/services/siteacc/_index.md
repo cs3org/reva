@@ -111,12 +111,20 @@ driver = "file"
 {{< /highlight >}}
 {{% /dir %}}
 
-### Storage settings - File driver
-{{% dir name="file" type="string" default="" %}}
-The file location.
+### Storage settings - File drivers
+{{% dir name="sites_file" type="string" default="" %}}
+The sites file location.
 {{< highlight toml >}}
 [http.services.siteacc.storage.file]
-file = "/var/reva/accounts.json"
+sites_file = "/var/reva/sites.json"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="accounts_file" type="string" default="" %}}
+The accounts file location.
+{{< highlight toml >}}
+[http.services.siteacc.storage.file]
+accounts_file = "/var/reva/accounts.json"
 {{< /highlight >}}
 {{% /dir %}}
 

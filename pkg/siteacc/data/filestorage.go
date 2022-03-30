@@ -36,7 +36,8 @@ type FileStorage struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	filePath string
+	sitesFilePath    string
+	accountsFilePath string
 }
 
 func (storage *FileStorage) initialize(conf *config.Configuration, log *zerolog.Logger) error {
@@ -50,66 +51,115 @@ func (storage *FileStorage) initialize(conf *config.Configuration, log *zerolog.
 	}
 	storage.log = log
 
-	if conf.Storage.File.File == "" {
-		return errors.Errorf("no file set in the configuration")
+	if conf.Storage.File.SitesFile == "" {
+		return errors.Errorf("no sites file set in the configuration")
 	}
-	storage.filePath = conf.Storage.File.File
+	storage.sitesFilePath = conf.Storage.File.SitesFile
 
-	// Create the file directory if necessary
-	dir := filepath.Dir(storage.filePath)
-	_ = os.MkdirAll(dir, 0755)
+	if conf.Storage.File.AccountsFile == "" {
+		return errors.Errorf("no accounts file set in the configuration")
+	}
+	storage.accountsFilePath = conf.Storage.File.AccountsFile
+
+	// Create the file directories if necessary
+	_ = os.MkdirAll(filepath.Dir(storage.sitesFilePath), 0755)
+	_ = os.MkdirAll(filepath.Dir(storage.accountsFilePath), 0755)
 
 	return nil
 }
 
-// ReadAll reads all stored accounts into the given data object.
-func (storage *FileStorage) ReadAll() (*Accounts, error) {
-	accounts := &Accounts{}
-
-	// Read the data from the configured file
-	jsonData, err := ioutil.ReadFile(storage.filePath)
+func (storage *FileStorage) readData(file string, obj interface{}) error {
+	// Read the data from the specified file
+	jsonData, err := ioutil.ReadFile(file)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to read file %v", storage.filePath)
+		return errors.Wrapf(err, "unable to read file %v", file)
 	}
 
-	if err := json.Unmarshal(jsonData, accounts); err != nil {
-		return nil, errors.Wrapf(err, "invalid file %v", storage.filePath)
+	if err := json.Unmarshal(jsonData, obj); err != nil {
+		return errors.Wrapf(err, "invalid file %v", file)
 	}
 
+	return nil
+}
+
+// ReadSites reads all stored sites into the given data object.
+func (storage *FileStorage) ReadSites() (*Sites, error) {
+	sites := &Sites{}
+	if err := storage.readData(storage.sitesFilePath, sites); err != nil {
+		return nil, errors.Wrapf(err, "error reading sites")
+	}
+	return sites, nil
+}
+
+// ReadAccounts reads all stored accounts into the given data object.
+func (storage *FileStorage) ReadAccounts() (*Accounts, error) {
+	accounts := &Accounts{}
+	if err := storage.readData(storage.accountsFilePath, accounts); err != nil {
+		return nil, errors.Wrapf(err, "error reading accounts")
+	}
 	return accounts, nil
 }
 
-// WriteAll writes all stored accounts from the given data object.
-func (storage *FileStorage) WriteAll(accounts *Accounts) error {
-	// Write the data to the configured file
-	jsonData, _ := json.MarshalIndent(accounts, "", "\t")
-	if err := ioutil.WriteFile(storage.filePath, jsonData, 0755); err != nil {
-		return errors.Wrapf(err, "unable to write file %v", storage.filePath)
+func (storage *FileStorage) writeData(file string, obj interface{}) error {
+	// Write the data to the specified file
+	jsonData, _ := json.MarshalIndent(obj, "", "\t")
+	if err := ioutil.WriteFile(file, jsonData, 0755); err != nil {
+		return errors.Wrapf(err, "unable to write file %v", file)
 	}
-
 	return nil
+}
+
+// WriteSites writes all stored sites from the given data object.
+func (storage *FileStorage) WriteSites(sites *Sites) error {
+	if err := storage.writeData(storage.sitesFilePath, sites); err != nil {
+		return errors.Wrapf(err, "error writing sites")
+	}
+	return nil
+}
+
+// WriteAccounts writes all stored accounts from the given data object.
+func (storage *FileStorage) WriteAccounts(accounts *Accounts) error {
+	if err := storage.writeData(storage.accountsFilePath, accounts); err != nil {
+		return errors.Wrapf(err, "error writing accounts")
+	}
+	return nil
+}
+
+// SiteAdded is called when a site has been added.
+func (storage *FileStorage) SiteAdded(site *Site) {
+	// Simply skip this action; all data is saved solely in WriteSites
+}
+
+// SiteUpdated is called when a site has been updated.
+func (storage *FileStorage) SiteUpdated(site *Site) {
+	// Simply skip this action; all data is saved solely in WriteSites
+}
+
+// SiteRemoved is called when a site has been removed.
+func (storage *FileStorage) SiteRemoved(site *Site) {
+	// Simply skip this action; all data is saved solely in WriteSites
 }
 
 // AccountAdded is called when an account has been added.
 func (storage *FileStorage) AccountAdded(account *Account) {
-	// Simply skip this action; all data is saved solely in WriteAll
+	// Simply skip this action; all data is saved solely in WriteAccounts
 }
 
 // AccountUpdated is called when an account has been updated.
 func (storage *FileStorage) AccountUpdated(account *Account) {
-	// Simply skip this action; all data is saved solely in WriteAll
+	// Simply skip this action; all data is saved solely in WriteAccounts
 }
 
 // AccountRemoved is called when an account has been removed.
 func (storage *FileStorage) AccountRemoved(account *Account) {
-	// Simply skip this action; all data is saved solely in WriteAll
+	// Simply skip this action; all data is saved solely in WriteAccounts
 }
 
-// NewFileStorage creates a new filePath storage.
+// NewFileStorage creates a new file storage.
 func NewFileStorage(conf *config.Configuration, log *zerolog.Logger) (*FileStorage, error) {
 	storage := &FileStorage{}
 	if err := storage.initialize(conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the filePath storage")
+		return nil, errors.Wrapf(err, "unable to initialize the file storage")
 	}
 	return storage, nil
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/siteacc/admin"
 	"github.com/cs3org/reva/pkg/siteacc/alerting"
 	"github.com/cs3org/reva/pkg/siteacc/config"
+	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
 	"github.com/cs3org/reva/pkg/siteacc/manager"
 	"github.com/pkg/errors"
@@ -38,6 +39,8 @@ type SiteAccounts struct {
 	log  *zerolog.Logger
 
 	sessions *html.SessionManager
+
+	storage data.Storage
 
 	accountsManager *manager.AccountsManager
 	usersManager    *manager.UsersManager
@@ -66,8 +69,15 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 	}
 	siteacc.sessions = sessions
 
+	// Create the sites and accounts storage
+	storage, err := siteacc.createStorage(conf.Storage.Driver)
+	if err != nil {
+		return errors.Wrap(err, "unable to create storage")
+	}
+	siteacc.storage = storage
+
 	// Create the accounts manager instance
-	amngr, err := manager.NewAccountsManager(conf, log)
+	amngr, err := manager.NewAccountsManager(storage, conf, log)
 	if err != nil {
 		return errors.Wrap(err, "error creating the accounts manager")
 	}
@@ -171,6 +181,14 @@ func (siteacc *SiteAccounts) GetPublicEndpoints() []string {
 		}
 	}
 	return endpoints
+}
+
+func (siteacc *SiteAccounts) createStorage(driver string) (data.Storage, error) {
+	if driver == "file" {
+		return data.NewFileStorage(siteacc.conf, siteacc.log)
+	}
+
+	return nil, errors.Errorf("unknown storage driver %v", driver)
 }
 
 // New returns a new Site Accounts service instance.

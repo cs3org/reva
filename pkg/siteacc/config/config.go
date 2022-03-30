@@ -32,7 +32,8 @@ type Configuration struct {
 		Driver string `mapstructure:"driver"`
 
 		File struct {
-			File string `mapstructure:"file"`
+			SitesFile    string `mapstructure:"sites_file"`
+			AccountsFile string `mapstructure:"accounts_file"`
 		} `mapstructure:"file"`
 	} `mapstructure:"storage"`
 
