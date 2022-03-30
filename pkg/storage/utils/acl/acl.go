@@ -124,22 +124,26 @@ type Entry struct {
 // ParseEntry parses a single ACL
 func ParseEntry(singleSysACL string) (*Entry, error) {
 	tokens := strings.Split(singleSysACL, ":")
-	if len(tokens) != 3 {
-		if len(tokens) == 2 {
-			// The ACL entries might be stored as type:qualifier=permissions
-			// Handle that case separately
-			parts := (strings.Split(tokens[1], "="))
-			tokens = []string{tokens[0], parts[0], parts[1]}
-		} else {
-			return nil, errInvalidACL
+	switch len(tokens) {
+	case 2:
+		// The ACL entries might be stored as type:qualifier=permissions
+		// Handle that case separately
+		parts := strings.SplitN(tokens[1], "=", 2)
+		if len(parts) == 2 {
+			return &Entry{
+				Type:        tokens[0],
+				Qualifier:   parts[0],
+				Permissions: parts[1],
+			}, nil
 		}
+	case 3:
+		return &Entry{
+			Type:        tokens[0],
+			Qualifier:   tokens[1],
+			Permissions: tokens[2],
+		}, nil
 	}
-
-	return &Entry{
-		Type:        tokens[0],
-		Qualifier:   tokens[1],
-		Permissions: tokens[2],
-	}, nil
+	return nil, errInvalidACL
 }
 
 // ParseLWEntry parses a single lightweight ACL
