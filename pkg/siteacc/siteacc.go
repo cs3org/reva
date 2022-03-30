@@ -42,6 +42,7 @@ type SiteAccounts struct {
 
 	storage data.Storage
 
+	sitesManager    *manager.SitesManager
 	accountsManager *manager.AccountsManager
 	usersManager    *manager.UsersManager
 
@@ -69,12 +70,19 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 	}
 	siteacc.sessions = sessions
 
-	// Create the sites and accounts storage
+	// Create the central storage
 	storage, err := siteacc.createStorage(conf.Storage.Driver)
 	if err != nil {
 		return errors.Wrap(err, "unable to create storage")
 	}
 	siteacc.storage = storage
+
+	// Create the sites manager instance
+	smngr, err := manager.NewSitesManager(storage, conf, log)
+	if err != nil {
+		return errors.Wrap(err, "error creating the sites manager")
+	}
+	siteacc.sitesManager = smngr
 
 	// Create the accounts manager instance
 	amngr, err := manager.NewAccountsManager(storage, conf, log)
@@ -152,6 +160,11 @@ func (siteacc *SiteAccounts) ShowAdministrationPanel(w http.ResponseWriter, r *h
 // ShowAccountPanel writes the account panel HTTP output directly to the response writer.
 func (siteacc *SiteAccounts) ShowAccountPanel(w http.ResponseWriter, r *http.Request, session *html.Session) error {
 	return siteacc.accountPanel.Execute(w, r, session)
+}
+
+// SitesManager returns the central sites manager instance.
+func (siteacc *SiteAccounts) SitesManager() *manager.SitesManager {
+	return siteacc.sitesManager
 }
 
 // AccountsManager returns the central accounts manager instance.

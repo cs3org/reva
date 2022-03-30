@@ -38,6 +38,18 @@ type SiteConfiguration struct {
 // Sites holds an array of sites.
 type Sites = []*Site
 
+// Update copies the data of the given site to this site.
+func (site *Site) Update(other *Site, setTestClientCredentials bool) error {
+	if setTestClientCredentials && other.Config.TestClientCredentials.IsValid() {
+		// If credentials were provided, use those as the new ones
+		if err := site.UpdateTestClientCredentials(other.Config.TestClientCredentials.ID, other.Config.TestClientCredentials.Secret); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // UpdateTestClientCredentials assigns new test client credentials, encrypting the information first.
 func (site *Site) UpdateTestClientCredentials(id, secret string) error {
 	if err := site.Config.TestClientCredentials.Set(id, secret); err != nil {

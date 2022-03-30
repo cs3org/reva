@@ -107,6 +107,7 @@ func NewSession(name string, timeout time.Duration, r *http.Request) *Session {
 		RemoteAddress:     getRemoteAddress(r),
 		CreationTime:      time.Now(),
 		Timeout:           timeout,
+		LoggedInUser:      nil,
 		Data:              make(map[string]interface{}, 10),
 		expirationTime:    time.Now().Add(timeout),
 		halflifeTime:      time.Now().Add(timeout / 2),
