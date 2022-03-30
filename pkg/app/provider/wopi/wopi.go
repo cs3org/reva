@@ -165,13 +165,19 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			q.Add("appviewurl", viewAppURL)
 		}
 	}
-	if editAppURLs, ok := p.appURLs["edit"]; ok {
+	var access string = "edit"
+	if resource.GetSize() == 0 {
+		if _, ok := p.appURLs["editnew"]; ok {
+			access = "editnew"
+		}
+	}
+	if editAppURLs, ok := p.appURLs[access]; ok {
 		if editAppURL, ok := editAppURLs[ext]; ok {
 			q.Add("appurl", editAppURL)
 		}
 	}
 	if q.Get("appurl") == "" {
-		// assuming that an view action is always available in the /hosting/discovery manifest
+		// assuming that a view action is always available in the /hosting/discovery manifest
 		// eg. Collabora does support viewing jpgs but no editing
 		// eg. OnlyOffice does support viewing pdfs but no editing
 		// there is no known case of supporting edit only without view
@@ -371,7 +377,7 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 			for _, app := range netzone.SelectElements("app") {
 				for _, action := range app.SelectElements("action") {
 					access := action.SelectAttrValue("name", "")
-					if access == "view" || access == "edit" {
+					if access == "view" || access == "edit" || access == "editnew" {
 						ext := action.SelectAttrValue("ext", "")
 						urlString := action.SelectAttrValue("urlsrc", "")
 
