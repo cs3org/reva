@@ -135,6 +135,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 		switch head {
+		case "test":
+			s.HandleGetToken(w, r)
 		case "avatars":
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
 		case "files":

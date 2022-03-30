@@ -19,17 +19,26 @@
 package ocdav
 
 import (
+	"context"
+	"encoding/json"
+	"encoding/xml"
+	"fmt"
 	"net/http"
 	"path"
 	"path/filepath"
 
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"google.golang.org/grpc/metadata"
 )
 
 // PublicFileHandler handles requests on a shared file. it needs to be wrapped in a collection
@@ -81,6 +90,124 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 			}
 		}
 	})
+}
+
+// TokenInfo contains information about the token
+type TokenInfo struct {
+	Token             string `xml:"token"`
+	LinkURL           string `xml:"linkurl"`
+	PasswordProtected bool   `xml:"passwordprotected"`
+
+	StorageID string
+	OpaqueID  string
+	Path      string
+}
+
+// HandleGetToken will return details about the token. NOTE: this endpoint is publicly available.
+func (s *svc) HandleGetToken(w http.ResponseWriter, r *http.Request) {
+	c, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	tkn, _ := router.ShiftPath(r.URL.Path)
+	t := TokenInfo{Token: tkn}
+
+	{
+		ctx := context.Background()
+		// get token details - if possible
+		q := r.URL.Query()
+		sig := q.Get("signature")
+		expiration := q.Get("expiration")
+		// We restrict the pre-signed urls to downloads.
+		if sig != "" && expiration != "" && r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		res, err := handleSignatureAuth(ctx, c, tkn, sig, expiration)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		switch res.Status.Code {
+		case rpc.Code_CODE_OK:
+			// nothing to do
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			if res.Status.Message == "wrong password" {
+				t.PasswordProtected = true
+				b, err := xml.Marshal(t)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				w.Write(b)
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			fallthrough
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		ctx = ctxpkg.ContextSetToken(ctx, res.Token)
+		ctx = ctxpkg.ContextSetUser(ctx, res.User)
+		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, res.Token)
+
+		r = r.WithContext(ctx)
+		sRes, err := getTokenStatInfo(ctx, c, tkn)
+		if err != nil || sRes.Status.Code != rpc.Code_CODE_OK {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		ls := &link.PublicShare{}
+		_ = json.Unmarshal(sRes.Info.Opaque.Map["link-share"].Value, ls)
+
+		t.StorageID = ls.ResourceId.GetStorageId()
+		t.OpaqueID = ls.ResourceId.GetOpaqueId()
+
+		baseURI, ok := ctx.Value(net.CtxKeyBaseURI).(string)
+		if ok {
+			ref := path.Join(baseURI, sRes.Info.Path)
+			if sRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				ref += "/"
+			}
+			t.LinkURL = ref
+		}
+	}
+
+	{
+		u, ok := ctxpkg.ContextGetUser(r.Context())
+		if ok {
+			//ref := &provider.Reference{
+			//ResourceId: &provider.ResourceId{StorageId: t.StorageID, OpaqueId: t.OpaqueID},
+			//Path:       t.Path,
+			//}
+			ref := &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: t.StorageID, // "4c510ada-c86b-4815-8820-42cdf82c3d51",
+					OpaqueId:  "1fe0481e-7bbb-4fb3-bb8f-a21231cf9e92",
+				},
+				Path: "",
+			}
+			ctx := context.Background()
+			ctx = ctxpkg.ContextSetUser(ctx, u)
+			res, err := c.Stat(r.Context(), &provider.StatRequest{
+				Ref: ref})
+			fmt.Println(res, err)
+		}
+
+	}
+
+	b, err := xml.Marshal(t)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(b)
+	w.WriteHeader(http.StatusOK)
+	return
 }
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
