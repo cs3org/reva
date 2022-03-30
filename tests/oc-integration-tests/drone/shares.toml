@@ -18,3 +18,4 @@ gateway_addr = "localhost:19000"
 
 [grpc.services.publicshareprovider.drivers.json]
 file = "/drone/src/tmp/reva/publicshares.json"
+gateway_addr = "localhost:19000"

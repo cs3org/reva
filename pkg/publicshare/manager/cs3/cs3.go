@@ -267,7 +267,9 @@ func (m *Manager) getWithPassword(ctx context.Context, ref *link.PublicShareRefe
 }
 
 func (m *Manager) getByID(ctx context.Context, id string) (*PublicShareWithPassword, error) {
-	tokens, err := m.indexer.FindBy(&link.PublicShare{}, "Id.OpaqueId", id)
+	tokens, err := m.indexer.FindBy(&link.PublicShare{},
+		indexer.NewField("Id.OpaqueId", id),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +300,9 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		return nil, err
 	}
 
-	tokens, err := m.indexer.FindBy(&link.PublicShare{}, "Owner", userIDToIndex(u.Id))
+	tokens, err := m.indexer.FindBy(&link.PublicShare{},
+		indexer.NewField("Owner", userIDToIndex(u.Id)),
+	)
 	if err != nil {
 		return nil, err
 	}

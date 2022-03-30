@@ -95,11 +95,16 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 		return
 	}
 
+	permissions := role.CS3ResourcePermissions()
+	// All members of a space should be able to list shares inside that space.
+	// The viewer role doesn't have the ListGrants permission so we set it here.
+	permissions.ListGrants = true
+
 	createShareRes, err := client.CreateShare(ctx, &collaborationv1beta1.CreateShareRequest{
 		ResourceInfo: info,
 		Grant: &collaborationv1beta1.ShareGrant{
 			Permissions: &collaborationv1beta1.SharePermissions{
-				Permissions: role.CS3ResourcePermissions(),
+				Permissions: permissions,
 			},
 			Grantee: &grantee,
 		},

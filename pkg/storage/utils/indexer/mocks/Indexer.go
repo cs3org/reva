@@ -83,13 +83,20 @@ func (_m *Indexer) Delete(t interface{}) error {
 	return r0
 }
 
-// FindBy provides a mock function with given fields: t, field, val
-func (_m *Indexer) FindBy(t interface{}, field string, val string) ([]string, error) {
-	ret := _m.Called(t, field, val)
+// FindBy provides a mock function with given fields: t, fields
+func (_m *Indexer) FindBy(t interface{}, fields ...indexer.Field) ([]string, error) {
+	_va := make([]interface{}, len(fields))
+	for _i := range fields {
+		_va[_i] = fields[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, t)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
 
 	var r0 []string
-	if rf, ok := ret.Get(0).(func(interface{}, string, string) []string); ok {
-		r0 = rf(t, field, val)
+	if rf, ok := ret.Get(0).(func(interface{}, ...indexer.Field) []string); ok {
+		r0 = rf(t, fields...)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]string)
@@ -97,8 +104,8 @@ func (_m *Indexer) FindBy(t interface{}, field string, val string) ([]string, er
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(interface{}, string, string) error); ok {
-		r1 = rf(t, field, val)
+	if rf, ok := ret.Get(1).(func(interface{}, ...indexer.Field) error); ok {
+		r1 = rf(t, fields...)
 	} else {
 		r1 = ret.Error(1)
 	}

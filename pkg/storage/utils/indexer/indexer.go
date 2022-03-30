@@ -42,8 +42,19 @@ import (
 type Indexer interface {
 	AddIndex(t interface{}, indexBy option.IndexBy, pkName, entityDirName, indexType string, bound *option.Bound, caseInsensitive bool) error
 	Add(t interface{}) ([]IdxAddResult, error)
-	FindBy(t interface{}, field string, val string) ([]string, error)
+	FindBy(t interface{}, fields ...Field) ([]string, error)
 	Delete(t interface{}) error
+}
+
+// Field combines the name and value of an indexed field.
+type Field struct {
+	Name  string
+	Value string
+}
+
+// NewField is a utility function to create a new Field.
+func NewField(name, value string) Field {
+	return Field{Name: name, Value: value}
 }
 
 // StorageIndexer is the indexer implementation using metadata storage
@@ -145,36 +156,38 @@ func (i *StorageIndexer) Add(t interface{}) ([]IdxAddResult, error) {
 	return results, nil
 }
 
-// FindBy finds a value on an index by field and value.
-func (i *StorageIndexer) FindBy(t interface{}, findBy, val string) ([]string, error) {
+// FindBy finds a value on an index by fields.
+// If multiple fields are given then they are handled like an or condition.
+func (i *StorageIndexer) FindBy(t interface{}, queryFields ...Field) ([]string, error) {
 	typeName := getTypeFQN(t)
 
 	i.mu.RLock(typeName)
 	defer i.mu.RUnlock(typeName)
 
-	resultPaths := make([]string, 0)
+	resultPaths := make(map[string]struct{})
 	if fields, ok := i.indices[typeName]; ok {
-		for _, idx := range fields.IndicesByField[strcase.ToCamel(findBy)] {
-			idxVal := val
-			res, err := idx.Lookup(idxVal)
-			if err != nil {
-				if _, ok := err.(errtypes.IsNotFound); ok {
-					continue
-				}
-
+		for _, field := range queryFields {
+			for _, idx := range fields.IndicesByField[strcase.ToCamel(field.Name)] {
+				res, err := idx.Lookup(field.Value)
 				if err != nil {
-					return nil, err
+					if _, ok := err.(errtypes.IsNotFound); ok {
+						continue
+					}
+
+					if err != nil {
+						return nil, err
+					}
+				}
+				for _, r := range res {
+					resultPaths[path.Base(r)] = struct{}{}
 				}
 			}
-
-			resultPaths = append(resultPaths, res...)
-
 		}
 	}
 
 	result := make([]string, 0, len(resultPaths))
-	for _, v := range resultPaths {
-		result = append(result, path.Base(v))
+	for p := range resultPaths {
+		result = append(result, path.Base(p))
 	}
 
 	return result, nil
@@ -340,7 +353,8 @@ func (i *StorageIndexer) resolveTree(t interface{}, tree *queryTree, partials *[
 				return err
 			}
 
-			r, err := i.FindBy(t, operand.field, operand.value)
+			field := Field{Name: operand.field, Value: operand.value}
+			r, err := i.FindBy(t, field)
 			if err != nil {
 				return err
 			}
