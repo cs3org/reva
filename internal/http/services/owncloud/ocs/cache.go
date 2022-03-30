@@ -30,8 +30,12 @@ import (
 
 func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 	if s.warmupCacheTracker != nil {
-		u := ctxpkg.ContextMustGetUser(r.Context())
-		tkn := ctxpkg.ContextMustGetToken(r.Context())
+		u, ok1 := ctxpkg.ContextGetUser(r.Context())
+		tkn, ok2 := ctxpkg.ContextGetToken(r.Context())
+		if !ok1 || !ok2 {
+			return
+		}
+
 		log := appctx.GetLogger(r.Context())
 
 		// We make a copy of the context because the original one comes with its cancel channel,

@@ -19,6 +19,7 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -35,14 +36,17 @@ import (
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -151,7 +155,6 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 
 	chain := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
 			// OPTION requests need to pass for preflight requests
 			// TODO(labkode): this will break options for auth protected routes.
 			// Maybe running the CORS middleware before auth kicks in is enough.
@@ -160,135 +163,156 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				return
 			}
 
-			log := appctx.GetLogger(ctx)
+			log := appctx.GetLogger(r.Context())
+			isUnprotectedEndpoint := false
 
-			client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
-			if err != nil {
-				log.Error().Err(err).Msg("error getting the authsvc client")
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			// skip auth for urls set in the config.
-			// TODO(labkode): maybe use method:url to bypass auth.
+			// For unprotected URLs, we try to authenticate the request in case some service needs it,
+			// but don't return any errors if it fails.
 			if utils.Skip(r.URL.Path, unprotected) {
 				log.Info().Msg("skipping auth check for: " + r.URL.Path)
-				h.ServeHTTP(w, r)
-				return
+				isUnprotectedEndpoint = true
 			}
 
-			tkn := tokenStrategy.GetToken(r)
-			if tkn == "" {
-				log.Warn().Msg("core access token not set")
-
-				userAgentCredKeys := getCredsForUserAgent(r.UserAgent(), conf.CredentialsByUserAgent, conf.CredentialChain)
-
-				// obtain credentials (basic auth, bearer token, ...) based on user agent
-				var creds *auth.Credentials
-				for _, k := range userAgentCredKeys {
-					creds, err = credChain[k].GetCredentials(w, r)
-					if err != nil {
-						log.Debug().Err(err).Msg("error retrieving credentials")
-					}
-
-					if creds != nil {
-						log.Debug().Msgf("credentials obtained from credential strategy: type: %s, client_id: %s", creds.Type, creds.ClientID)
-						break
-					}
-				}
-
-				// if no credentials are found, reply with authentication challenge depending on user agent
-				if creds == nil {
-					for _, key := range userAgentCredKeys {
-						if cred, ok := credChain[key]; ok {
-							cred.AddWWWAuthenticate(w, r, conf.Realm)
-						} else {
-							panic("auth credential strategy: " + key + "must have been loaded in init method")
-						}
-					}
-					w.WriteHeader(http.StatusUnauthorized)
+			ctx, err := authenticateUser(w, r, conf, unprotected, tokenStrategy, tokenManager, tokenWriter, credChain, isUnprotectedEndpoint)
+			if err != nil {
+				if !isUnprotectedEndpoint {
 					return
 				}
-
-				req := &gateway.AuthenticateRequest{
-					Type:         creds.Type,
-					ClientId:     creds.ClientID,
-					ClientSecret: creds.ClientSecret,
-				}
-
-				log.Debug().Msgf("AuthenticateRequest: type: %s, client_id: %s against %s", req.Type, req.ClientId, conf.GatewaySvc)
-
-				res, err := client.Authenticate(ctx, req)
-				if err != nil {
-					log.Error().Err(err).Msg("error calling Authenticate")
-					w.WriteHeader(http.StatusUnauthorized)
-					return
-				}
-
-				if res.Status.Code != rpc.Code_CODE_OK {
-					err := status.NewErrorFromCode(res.Status.Code, "auth")
-					log.Err(err).Msg("error generating access token from credentials")
-					w.WriteHeader(http.StatusUnauthorized)
-					return
-				}
-
-				log.Info().Msg("core access token generated")
-				// write token to response
-				tkn = res.Token
-				tokenWriter.WriteToken(tkn, w)
 			} else {
-				log.Debug().Msg("access token is already provided")
+				r = r.WithContext(ctx)
 			}
-
-			// validate token
-			u, tokenScope, err := tokenManager.DismantleToken(r.Context(), tkn)
-			if err != nil {
-				log.Error().Err(err).Msg("error dismantling token")
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			if sharedconf.SkipUserGroupsInToken() {
-				var groups []string
-				if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
-					groups = groupsIf.([]string)
-				} else {
-					groupsRes, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
-					if err != nil {
-						log.Error().Err(err).Msg("error retrieving user groups")
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-					groups = groupsRes.Groups
-					_ = userGroupsCache.SetWithExpire(u.Id.OpaqueId, groupsRes.Groups, 3600*time.Second)
-				}
-				u.Groups = groups
-			}
-
-			// ensure access to the resource is allowed
-			ok, err := scope.VerifyScope(ctx, tokenScope, r.URL.Path)
-			if err != nil {
-				log.Error().Err(err).Msg("error verifying scope of access token")
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-			if !ok {
-				log.Error().Err(err).Msg("access to resource not allowed")
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			// store user and core access token in context.
-			ctx = ctxpkg.ContextSetUser(ctx, u)
-			ctx = ctxpkg.ContextSetToken(ctx, tkn)
-			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
-
-			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, r.UserAgent())
-
-			r = r.WithContext(ctx)
 			h.ServeHTTP(w, r)
 		})
 	}
 	return chain, nil
+}
+
+func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, unprotected []string, tokenStrategy auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	// Add the request user-agent to the ctx
+	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{ctxpkg.UserAgentHeader: r.UserAgent()}))
+
+	client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
+	if err != nil {
+		logError(isUnprotectedEndpoint, log, err, "error getting the authsvc client", http.StatusUnauthorized, w)
+		return nil, err
+	}
+
+	tkn := tokenStrategy.GetToken(r)
+	if tkn == "" {
+		log.Warn().Msg("core access token not set")
+
+		userAgentCredKeys := getCredsForUserAgent(r.UserAgent(), conf.CredentialsByUserAgent, conf.CredentialChain)
+
+		// obtain credentials (basic auth, bearer token, ...) based on user agent
+		var creds *auth.Credentials
+		for _, k := range userAgentCredKeys {
+			creds, err = credChain[k].GetCredentials(w, r)
+			if err != nil {
+				log.Debug().Err(err).Msg("error retrieving credentials")
+			}
+
+			if creds != nil {
+				log.Debug().Msgf("credentials obtained from credential strategy: type: %s, client_id: %s", creds.Type, creds.ClientID)
+				break
+			}
+		}
+
+		// if no credentials are found, reply with authentication challenge depending on user agent
+		if creds == nil {
+			if !isUnprotectedEndpoint {
+				for _, key := range userAgentCredKeys {
+					if cred, ok := credChain[key]; ok {
+						cred.AddWWWAuthenticate(w, r, conf.Realm)
+					} else {
+						panic("auth credential strategy: " + key + "must have been loaded in init method")
+					}
+				}
+				w.WriteHeader(http.StatusUnauthorized)
+			}
+			return nil, errtypes.PermissionDenied("no credentials found")
+		}
+
+		req := &gateway.AuthenticateRequest{
+			Type:         creds.Type,
+			ClientId:     creds.ClientID,
+			ClientSecret: creds.ClientSecret,
+		}
+
+		log.Debug().Msgf("AuthenticateRequest: type: %s, client_id: %s against %s", req.Type, req.ClientId, conf.GatewaySvc)
+
+		res, err := client.Authenticate(ctx, req)
+		if err != nil {
+			logError(isUnprotectedEndpoint, log, err, "error calling Authenticate", http.StatusUnauthorized, w)
+			return nil, err
+		}
+
+		if res.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(res.Status.Code, "auth")
+			logError(isUnprotectedEndpoint, log, err, "error generating access token from credentials", http.StatusUnauthorized, w)
+			return nil, err
+		}
+
+		log.Info().Msg("core access token generated")
+		// write token to response
+		tkn = res.Token
+		tokenWriter.WriteToken(tkn, w)
+	} else {
+		log.Debug().Msg("access token is already provided")
+	}
+
+	// validate token
+	u, tokenScope, err := tokenManager.DismantleToken(r.Context(), tkn)
+	if err != nil {
+		logError(isUnprotectedEndpoint, log, err, "error dismantling token", http.StatusUnauthorized, w)
+		return nil, err
+	}
+
+	if sharedconf.SkipUserGroupsInToken() {
+		var groups []string
+		if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
+			groups = groupsIf.([]string)
+		} else {
+			groupsRes, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+			if err != nil {
+				logError(isUnprotectedEndpoint, log, err, "error retrieving user groups", http.StatusInternalServerError, w)
+				return nil, err
+			}
+			groups = groupsRes.Groups
+			_ = userGroupsCache.SetWithExpire(u.Id.OpaqueId, groupsRes.Groups, 3600*time.Second)
+		}
+		u.Groups = groups
+	}
+
+	// ensure access to the resource is allowed
+	ok, err := scope.VerifyScope(ctx, tokenScope, r.URL.Path)
+	if err != nil {
+		logError(isUnprotectedEndpoint, log, err, "error verifying scope of access token", http.StatusInternalServerError, w)
+		return nil, err
+	}
+	if !ok {
+		err := errtypes.PermissionDenied("access to resource not allowed")
+		logError(isUnprotectedEndpoint, log, err, "access to resource not allowed", http.StatusUnauthorized, w)
+		return nil, err
+	}
+
+	// store user and core access token in context.
+	ctx = ctxpkg.ContextSetUser(ctx, u)
+	ctx = ctxpkg.ContextSetToken(ctx, tkn)
+	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+
+	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, r.UserAgent())
+
+	return ctx, nil
+}
+
+func logError(isUnprotectedEndpoint bool, log *zerolog.Logger, err error, msg string, status int, w http.ResponseWriter) {
+	if !isUnprotectedEndpoint {
+		log.Error().Err(err).Msg(msg)
+		w.WriteHeader(status)
+	}
 }
 
 // getCredsForUserAgent returns the WWW Authenticate challenges keys to use given an http request
