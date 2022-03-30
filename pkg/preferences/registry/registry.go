@@ -16,16 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package registry
 
-import (
-	// Load cbox specific drivers.
-	_ "github.com/cs3org/reva/pkg/cbox/favorite/sql"
-	_ "github.com/cs3org/reva/pkg/cbox/group/rest"
-	_ "github.com/cs3org/reva/pkg/cbox/preferences/sql"
-	_ "github.com/cs3org/reva/pkg/cbox/publicshare/sql"
-	_ "github.com/cs3org/reva/pkg/cbox/share/sql"
-	_ "github.com/cs3org/reva/pkg/cbox/storage/eoshomewrapper"
-	_ "github.com/cs3org/reva/pkg/cbox/storage/eoswrapper"
-	_ "github.com/cs3org/reva/pkg/cbox/user/rest"
-)
+import "github.com/cs3org/reva/pkg/preferences"
+
+// NewFunc is the function that preferences implementations
+// should register at init time.
+type NewFunc func(map[string]interface{}) (preferences.Manager, error)
+
+// NewFuncs is a map containing all the registered preferences implementations.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new preferences function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
+}
