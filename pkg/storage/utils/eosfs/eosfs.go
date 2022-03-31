@@ -915,18 +915,7 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
 	}
 
-	encodedLock, err := encodeLock(newLock)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error encoding lock")
-	}
-
-	attr := &eosclient.Attribute{
-		Type: UserAttr,
-		Key:  LockKeyAttr,
-		Val:  encodedLock,
-	}
-
-	return fs.c.SetAttr(ctx, auth, attr, false, false, path)
+	return fs.setLock(ctx, auth, newLock, path)
 }
 
 func sameHolder(l1, l2 *provider.Lock) bool {
@@ -991,7 +980,7 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
 	}
-	return fs.c.UnsetAttr(ctx, auth, &eosclient.Attribute{Type: UserAttr, Key: LockKeyAttr}, false, path)
+	return fs.removeLockAttrs(ctx, auth, path)
 }
 
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
