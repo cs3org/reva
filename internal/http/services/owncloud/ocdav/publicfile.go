@@ -92,17 +92,6 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-// TokenInfo contains information about the token
-type TokenInfo struct {
-	Token             string `xml:"token"`
-	LinkURL           string `xml:"linkurl"`
-	PasswordProtected bool   `xml:"passwordprotected"`
-
-	StorageID string
-	OpaqueID  string
-	Path      string
-}
-
 // HandleGetToken will return details about the token. NOTE: this endpoint is publicly available.
 func (s *svc) HandleGetToken(w http.ResponseWriter, r *http.Request) {
 	c, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
@@ -177,25 +166,35 @@ func (s *svc) HandleGetToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	{
-		u, ok := ctxpkg.ContextGetUser(r.Context())
-		if ok {
-			//ref := &provider.Reference{
-			//ResourceId: &provider.ResourceId{StorageId: t.StorageID, OpaqueId: t.OpaqueID},
-			//Path:       t.Path,
-			//}
-			ref := &provider.Reference{
-				ResourceId: &provider.ResourceId{
-					StorageId: t.StorageID, // "4c510ada-c86b-4815-8820-42cdf82c3d51",
-					OpaqueId:  "1fe0481e-7bbb-4fb3-bb8f-a21231cf9e92",
-				},
-				Path: "",
+		// _, ok := ctxpkg.ContextGetUser(r.Context())
+		// if ok {
+		//ref := &provider.Reference{
+		//ResourceId: &provider.ResourceId{StorageId: t.StorageID, OpaqueId: t.OpaqueID},
+		//Path:       t.Path,
+		//}
+
+		fmt.Println("LOOKY LOOKY UP UP?", t.StorageID)
+		/*
+			res, status, err := spacelookup.LookUpStorageSpaceByID(r.Context(), c, t.StorageID)
+			fmt.Println(res, status, err)
+			if err != nil || status.Code != rpc.Code_CODE_OK {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
-			ctx := context.Background()
-			ctx = ctxpkg.ContextSetUser(ctx, u)
-			res, err := c.Stat(r.Context(), &provider.StatRequest{
-				Ref: ref})
-			fmt.Println(res, err)
+		*/
+		ref := &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: t.StorageID,
+				OpaqueId:  t.OpaqueID,
+			},
+			Path: "",
 		}
+		//ctx := context.Background()
+		//ctx = ctxpkg.ContextSetUser(ctx, u)
+		res, err := c.Stat(r.Context(), &provider.StatRequest{
+			Ref: ref})
+		fmt.Println(res, err)
+		//}
 
 	}
 
