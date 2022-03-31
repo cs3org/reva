@@ -81,15 +81,27 @@ func (s *service) UnprotectedEndpoints() []string {
 	return []string{}
 }
 
-func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
-	return &datatx.CreateTransferResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateTransfer not implemented"), "CreateTransfer not implemented"),
+func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest) (*datatx.PullTransferResponse, error) {
+	return &datatx.PullTransferResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("PullTransfer not implemented"), "PullTransfer not implemented"),
 	}, nil
 }
 
 func (s *service) GetTransferStatus(ctx context.Context, in *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
 	return &datatx.GetTransferStatusResponse{
 		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("GetTransferStatus not implemented"), "GetTransferStatus not implemented"),
+	}, nil
+}
+
+func (s *service) ListTransfers(ctx context.Context, in *datatx.ListTransfersRequest) (*datatx.ListTransfersResponse, error) {
+	return &datatx.ListTransfersResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("ListTransfers not implemented"), "ListTransfers not implemented"),
+	}, nil
+}
+
+func (s *service) RetryTransfer(ctx context.Context, in *datatx.RetryTransferRequest) (*datatx.RetryTransferResponse, error) {
+	return &datatx.RetryTransferResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("RetryTransfer not implemented"), "RetryTransfer not implemented"),
 	}, nil
 }
 

@@ -27,17 +27,49 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
+func (s *svc) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest) (*datatx.PullTransferResponse, error) {
 	c, err := pool.GetDataTxClient(s.c.DataTxEndpoint)
 	if err != nil {
-		return &datatx.CreateTransferResponse{
+		return &datatx.PullTransferResponse{
 			Status: status.NewInternal(ctx, "error getting data transfer client"),
 		}, nil
 	}
 
-	res, err := c.CreateTransfer(ctx, req)
+	res, err := c.PullTransfer(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling CreateTransfer")
+		return nil, errors.Wrap(err, "gateway: error calling PullTransfer")
+	}
+
+	return res, nil
+}
+
+func (s *svc) ListTransfers(ctx context.Context, req *datatx.ListTransfersRequest) (*datatx.ListTransfersResponse, error) {
+	c, err := pool.GetDataTxClient(s.c.DataTxEndpoint)
+	if err != nil {
+		return &datatx.ListTransfersResponse{
+			Status: status.NewInternal(ctx, "error getting data transfer client"),
+		}, nil
+	}
+
+	res, err := c.ListTransfers(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling ListTransfers")
+	}
+
+	return res, nil
+}
+
+func (s *svc) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRequest) (*datatx.RetryTransferResponse, error) {
+	c, err := pool.GetDataTxClient(s.c.DataTxEndpoint)
+	if err != nil {
+		return &datatx.RetryTransferResponse{
+			Status: status.NewInternal(ctx, "error getting data transfer client"),
+		}, nil
+	}
+
+	res, err := c.RetryTransfer(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling RetryTransfer")
 	}
 
 	return res, nil

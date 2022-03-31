@@ -456,36 +456,6 @@ func (_m *GatewayClient) CreateSymlink(ctx context.Context, in *providerv1beta1.
 	return r0, r1
 }
 
-// CreateTransfer provides a mock function with given fields: ctx, in, opts
-func (_m *GatewayClient) CreateTransfer(ctx context.Context, in *txv1beta1.CreateTransferRequest, opts ...grpc.CallOption) (*txv1beta1.CreateTransferResponse, error) {
-	_va := make([]interface{}, len(opts))
-	for _i := range opts {
-		_va[_i] = opts[_i]
-	}
-	var _ca []interface{}
-	_ca = append(_ca, ctx, in)
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
-
-	var r0 *txv1beta1.CreateTransferResponse
-	if rf, ok := ret.Get(0).(func(context.Context, *txv1beta1.CreateTransferRequest, ...grpc.CallOption) *txv1beta1.CreateTransferResponse); ok {
-		r0 = rf(ctx, in, opts...)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*txv1beta1.CreateTransferResponse)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, *txv1beta1.CreateTransferRequest, ...grpc.CallOption) error); ok {
-		r1 = rf(ctx, in, opts...)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // Delete provides a mock function with given fields: ctx, in, opts
 func (_m *GatewayClient) Delete(ctx context.Context, in *providerv1beta1.DeleteRequest, opts ...grpc.CallOption) (*providerv1beta1.DeleteResponse, error) {
 	_va := make([]interface{}, len(opts))
@@ -2046,6 +2016,36 @@ func (_m *GatewayClient) ListSupportedMimeTypes(ctx context.Context, in *registr
 	return r0, r1
 }
 
+// ListTransfers provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayClient) ListTransfers(ctx context.Context, in *txv1beta1.ListTransfersRequest, opts ...grpc.CallOption) (*txv1beta1.ListTransfersResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *txv1beta1.ListTransfersResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *txv1beta1.ListTransfersRequest, ...grpc.CallOption) *txv1beta1.ListTransfersResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*txv1beta1.ListTransfersResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *txv1beta1.ListTransfersRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Move provides a mock function with given fields: ctx, in, opts
 func (_m *GatewayClient) Move(ctx context.Context, in *providerv1beta1.MoveRequest, opts ...grpc.CallOption) (*providerv1beta1.MoveResponse, error) {
 	_va := make([]interface{}, len(opts))
@@ -2098,6 +2098,36 @@ func (_m *GatewayClient) OpenInApp(ctx context.Context, in *gatewayv1beta1.OpenI
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, *gatewayv1beta1.OpenInAppRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// PullTransfer provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayClient) PullTransfer(ctx context.Context, in *txv1beta1.PullTransferRequest, opts ...grpc.CallOption) (*txv1beta1.PullTransferResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *txv1beta1.PullTransferResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *txv1beta1.PullTransferRequest, ...grpc.CallOption) *txv1beta1.PullTransferResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*txv1beta1.PullTransferResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *txv1beta1.PullTransferRequest, ...grpc.CallOption) error); ok {
 		r1 = rf(ctx, in, opts...)
 	} else {
 		r1 = ret.Error(1)
@@ -2308,6 +2338,36 @@ func (_m *GatewayClient) RestoreRecycleItem(ctx context.Context, in *providerv1b
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.RestoreRecycleItemRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// RetryTransfer provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayClient) RetryTransfer(ctx context.Context, in *txv1beta1.RetryTransferRequest, opts ...grpc.CallOption) (*txv1beta1.RetryTransferResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *txv1beta1.RetryTransferResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *txv1beta1.RetryTransferRequest, ...grpc.CallOption) *txv1beta1.RetryTransferResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*txv1beta1.RetryTransferResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *txv1beta1.RetryTransferRequest, ...grpc.CallOption) error); ok {
 		r1 = rf(ctx, in, opts...)
 	} else {
 		r1 = ret.Error(1)
