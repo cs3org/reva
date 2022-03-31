@@ -14,12 +14,12 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -29,7 +29,6 @@ type TokenHandler struct{}
 // Handler handles http requests
 func (t TokenHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("TOKEN Handler")
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -55,13 +54,20 @@ func (t TokenHandler) Handler(s *svc) http.Handler {
 
 // TokenInfo contains information about the token
 type TokenInfo struct {
+	// for all callers
 	Token             string `xml:"token"`
 	LinkURL           string `xml:"linkurl"`
 	PasswordProtected bool   `xml:"passwordprotected"`
 
+	// if not password protected
 	StorageID string `xml:"storageid"`
 	OpaqueID  string `xml:"opaqueid"`
 	Path      string `xml:"path"`
+
+	// if native access
+	SpacePath  string `xml:"spacePath"`
+	SpaceAlias string `xml:"spaceAlias"`
+	SpaceURL   string `xml:"spaceURL"`
 }
 
 func (s *svc) handleGetToken(w http.ResponseWriter, r *http.Request, tkn string, c gateway.GatewayAPIClient, protected bool) {
@@ -88,17 +94,14 @@ func (s *svc) handleGetToken(w http.ResponseWriter, r *http.Request, tkn string,
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		ref := &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: t.StorageID,
-				OpaqueId:  t.OpaqueID,
-			},
-			Path: "",
+		space, status, err := spacelookup.LookUpStorageSpaceByID(ctx, c, t.StorageID)
+		// add info only if user is able to stat
+		if err == nil && status.Code == rpc.Code_CODE_OK {
+			t.SpacePath = utils.ReadPlainFromOpaque(space.Opaque, "path")
+			t.SpaceAlias = utils.ReadPlainFromOpaque(space.Opaque, "spaceAlias")
+			t.SpaceURL = path.Join(t.SpaceAlias, t.OpaqueID, t.Path)
 		}
-		res, err := c.Stat(ctx, &provider.StatRequest{
-			Ref: ref,
-		})
-		fmt.Println("FILE STAT", res, err)
+
 	}
 
 	b, err := xml.Marshal(t)
@@ -114,7 +117,7 @@ func (s *svc) handleGetToken(w http.ResponseWriter, r *http.Request, tkn string,
 }
 
 func buildTokenInfo(owner *user.User, tkn string, token string, passProtected bool, c gateway.GatewayAPIClient) (TokenInfo, error) {
-	t := TokenInfo{Token: tkn}
+	t := TokenInfo{Token: tkn, LinkURL: "/s/" + tkn}
 	if passProtected {
 		t.PasswordProtected = true
 		return t, nil
@@ -134,15 +137,6 @@ func buildTokenInfo(owner *user.User, tkn string, token string, passProtected bo
 
 	t.StorageID = ls.ResourceId.GetStorageId()
 	t.OpaqueID = ls.ResourceId.GetOpaqueId()
-
-	baseURI, ok := ctx.Value(net.CtxKeyBaseURI).(string)
-	if ok {
-		ref := path.Join(baseURI, sRes.Info.Path)
-		if sRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			ref += "/"
-		}
-		t.LinkURL = ref
-	}
 
 	return t, nil
 }
