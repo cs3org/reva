@@ -2183,7 +2183,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 	// filter 'sys' attrs and the reserved lock
 	filteredAttrs := make(map[string]string)
 	for k, v := range eosFileInfo.Attrs {
-		if !strings.HasPrefix(k, "sys") && k != "user."+LockKeyAttr {
+		if !strings.HasPrefix(k, "sys") {
 			filteredAttrs[k] = v
 		}
 	}
