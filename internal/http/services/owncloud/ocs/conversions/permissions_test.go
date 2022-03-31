@@ -33,7 +33,6 @@ func TestNewPermissions(t *testing.T) {
 
 func TestNewPermissionsWithInvalidValueShouldFail(t *testing.T) {
 	vals := []int{
-		int(PermissionInvalid),
 		-1,
 		int(PermissionAll) + 1,
 	}
