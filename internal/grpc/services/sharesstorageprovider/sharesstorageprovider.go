@@ -48,7 +48,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-//go:generate mockery -name GatewayClient -name SharesProviderClient
+//go:generate make --no-print-directory -C ../../../.. mockery NAME=GatewayClient
+//go:generate make --no-print-directory -C ../../../.. mockery NAME=SharesProviderClient
 
 // GatewayClient describe the interface of a gateway client
 type GatewayClient interface {

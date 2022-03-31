@@ -62,7 +62,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-//go:generate mockery -name GatewayClient
+//go:generate make --no-print-directory -C ../../../../../../../../.. mockery NAME=GatewayClient
 
 const (
 	storageIDPrefix string = "shared::"

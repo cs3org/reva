@@ -36,7 +36,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/sync"
 )
 
-//go:generate mockery -name Indexer
+//go:generate make --no-print-directory -C ../../../.. mockery NAME=Indexer
 
 // Indexer is a facade to configure and query over multiple indices.
 type Indexer interface {

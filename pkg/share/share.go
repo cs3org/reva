@@ -36,7 +36,7 @@ const (
 	StorageIDFilterType collaboration.Filter_Type = 7
 )
 
-//go:generate mockery -name Manager
+//go:generate make --no-print-directory -C ../.. mockery NAME=Manager
 
 // Metadata contains Metadata for a share
 type Metadata struct {
