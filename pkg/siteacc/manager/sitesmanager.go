@@ -115,6 +115,19 @@ func (mngr *SitesManager) UpdateSite(siteData *data.Site, setTestUserCredentials
 	return nil
 }
 
+// CloneSites retrieves all sites currently stored by cloning the data, thus avoiding race conflicts and making outside modifications impossible.
+func (mngr *SitesManager) CloneSites(eraseCredentials bool) data.Sites {
+	mngr.mutex.RLock()
+	defer mngr.mutex.RUnlock()
+
+	clones := make(data.Sites, 0, len(mngr.sites))
+	for _, site := range mngr.sites {
+		clones = append(clones, site.Clone(eraseCredentials))
+	}
+
+	return clones
+}
+
 func (mngr *SitesManager) getSite(id string) (*data.Site, error) {
 	site, err := mngr.findSite(id)
 	if site == nil {
@@ -130,7 +143,7 @@ func (mngr *SitesManager) createSite(id string) (*data.Site, error) {
 		mngr.writeAllSites()
 		return site, nil
 	} else {
-		return nil, errors.Wrapf(err, "error while creating site")
+		return nil, errors.Wrap(err, "error while creating site")
 	}
 }
 
@@ -160,7 +173,7 @@ func (mngr *SitesManager) findSiteByPredicate(predicate func(*data.Site) bool) *
 func NewSitesManager(storage data.Storage, conf *config.Configuration, log *zerolog.Logger) (*SitesManager, error) {
 	mngr := &SitesManager{}
 	if err := mngr.initialize(storage, conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the sites manager")
+		return nil, errors.Wrap(err, "unable to initialize the sites manager")
 	}
 	return mngr, nil
 }

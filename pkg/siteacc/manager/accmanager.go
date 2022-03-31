@@ -337,7 +337,7 @@ func (mngr *AccountsManager) sendEmail(account *data.Account, params map[string]
 func NewAccountsManager(storage data.Storage, conf *config.Configuration, log *zerolog.Logger) (*AccountsManager, error) {
 	mngr := &AccountsManager{}
 	if err := mngr.initialize(storage, conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the accounts manager")
+		return nil, errors.Wrap(err, "unable to initialize the accounts manager")
 	}
 	return mngr, nil
 }

@@ -157,8 +157,13 @@ func (mngr *SessionManager) migrateSession(session *Session, r *http.Request) (*
 
 	// Carry over the old session information, thus preserving the existing session
 	sessionNew.MigrationID = session.ID
-	sessionNew.LoggedInUser = session.LoggedInUser
 	sessionNew.Data = session.Data
+
+	if user := session.LoggedInUser(); user != nil {
+		sessionNew.LoginUser(user.Account, user.Site)
+	} else {
+		sessionNew.LogoutUser()
+	}
 
 	// Delete the old session
 	delete(mngr.sessions, session.ID)
@@ -180,7 +185,7 @@ func (mngr *SessionManager) logSessionInfo(session *Session, r *http.Request, in
 func NewSessionManager(name string, conf *config.Configuration, log *zerolog.Logger) (*SessionManager, error) {
 	mngr := &SessionManager{}
 	if err := mngr.initialize(name, conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the session manager")
+		return nil, errors.Wrap(err, "unable to initialize the session manager")
 	}
 	return mngr, nil
 }

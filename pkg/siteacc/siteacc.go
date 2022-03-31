@@ -92,7 +92,7 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 	siteacc.accountsManager = amngr
 
 	// Create the users manager instance
-	umngr, err := manager.NewUsersManager(conf, log, siteacc.accountsManager)
+	umngr, err := manager.NewUsersManager(conf, log, siteacc.sitesManager, siteacc.accountsManager)
 	if err != nil {
 		return errors.Wrap(err, "error creating the users manager")
 	}

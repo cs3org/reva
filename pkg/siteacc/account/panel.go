@@ -121,11 +121,11 @@ func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string
 func (panel *Panel) PreExecute(session *html.Session, path string, w http.ResponseWriter, r *http.Request) (html.ExecutionResult, error) {
 	protectedPaths := []string{templateManage, templateSettings, templateEdit, templateSite, templateContact}
 
-	if session.LoggedInUser != nil {
+	if user := session.LoggedInUser(); user != nil {
 		switch path {
 		case templateSite:
 			// If the logged in user doesn't have site access, redirect him back to the main account page
-			if !session.LoggedInUser.Data.SiteAccess {
+			if !user.Account.Data.SiteAccess {
 				return panel.redirect(templateManage, w, r), nil
 			}
 
@@ -161,18 +161,25 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 
 		type TemplateData struct {
 			Account *data.Account
+			Site    *data.Site
 			Params  map[string]string
 
 			Titles []string
 			Sites  []data.SiteInformation
 		}
 
-		return TemplateData{
-			Account: session.LoggedInUser,
+		tplData := TemplateData{
+			Account: nil,
+			Site:    nil,
 			Params:  flatValues,
 			Titles:  []string{"Mr", "Mrs", "Ms", "Prof", "Dr"},
 			Sites:   availSites,
 		}
+		if user := session.LoggedInUser(); user != nil {
+			tplData.Account = user.Account
+			tplData.Site = user.Site
+		}
+		return tplData
 	}
 	return panel.htmlPanel.Execute(w, r, session, dataProvider)
 }
@@ -199,7 +206,7 @@ func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request
 func NewPanel(conf *config.Configuration, log *zerolog.Logger) (*Panel, error) {
 	form := &Panel{}
 	if err := form.initialize(conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the account panel")
+		return nil, errors.Wrap(err, "unable to initialize the account panel")
 	}
 	return form, nil
 }

@@ -298,7 +298,7 @@ func handleResetPassword(siteacc *SiteAccounts, values url.Values, body []byte, 
 }
 
 func handleContact(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
-	if session.LoggedInUser == nil {
+	if !session.IsUserLoggedIn() {
 		return nil, errors.Errorf("no user is currently logged in")
 	}
 
@@ -312,7 +312,7 @@ func handleContact(siteacc *SiteAccounts, values url.Values, body []byte, sessio
 	}
 
 	// Send an email through the accounts manager
-	siteacc.AccountsManager().SendContactForm(session.LoggedInUser, strings.TrimSpace(contactData.Subject), strings.TrimSpace(contactData.Message))
+	siteacc.AccountsManager().SendContactForm(session.LoggedInUser().Account, strings.TrimSpace(contactData.Subject), strings.TrimSpace(contactData.Message))
 	return nil, nil
 }
 
@@ -417,11 +417,11 @@ func processInvoker(siteacc *SiteAccounts, values url.Values, session *html.Sess
 	switch strings.ToLower(values.Get("invoker")) {
 	case invokerUser:
 		// If this endpoint was called by the user, set the account email from the stored session
-		if session.LoggedInUser == nil {
+		if !session.IsUserLoggedIn() {
 			return "", false, errors.Errorf("no user is currently logged in")
 		}
 
-		email = session.LoggedInUser.Email
+		email = session.LoggedInUser().Account.Email
 		invokedByUser = true
 
 	default:

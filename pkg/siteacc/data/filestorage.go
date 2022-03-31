@@ -86,7 +86,7 @@ func (storage *FileStorage) readData(file string, obj interface{}) error {
 func (storage *FileStorage) ReadSites() (*Sites, error) {
 	sites := &Sites{}
 	if err := storage.readData(storage.sitesFilePath, sites); err != nil {
-		return nil, errors.Wrapf(err, "error reading sites")
+		return nil, errors.Wrap(err, "error reading sites")
 	}
 	return sites, nil
 }
@@ -95,7 +95,7 @@ func (storage *FileStorage) ReadSites() (*Sites, error) {
 func (storage *FileStorage) ReadAccounts() (*Accounts, error) {
 	accounts := &Accounts{}
 	if err := storage.readData(storage.accountsFilePath, accounts); err != nil {
-		return nil, errors.Wrapf(err, "error reading accounts")
+		return nil, errors.Wrap(err, "error reading accounts")
 	}
 	return accounts, nil
 }
@@ -112,7 +112,7 @@ func (storage *FileStorage) writeData(file string, obj interface{}) error {
 // WriteSites writes all stored sites from the given data object.
 func (storage *FileStorage) WriteSites(sites *Sites) error {
 	if err := storage.writeData(storage.sitesFilePath, sites); err != nil {
-		return errors.Wrapf(err, "error writing sites")
+		return errors.Wrap(err, "error writing sites")
 	}
 	return nil
 }
@@ -120,7 +120,7 @@ func (storage *FileStorage) WriteSites(sites *Sites) error {
 // WriteAccounts writes all stored accounts from the given data object.
 func (storage *FileStorage) WriteAccounts(accounts *Accounts) error {
 	if err := storage.writeData(storage.accountsFilePath, accounts); err != nil {
-		return errors.Wrapf(err, "error writing accounts")
+		return errors.Wrap(err, "error writing accounts")
 	}
 	return nil
 }
@@ -159,7 +159,7 @@ func (storage *FileStorage) AccountRemoved(account *Account) {
 func NewFileStorage(conf *config.Configuration, log *zerolog.Logger) (*FileStorage, error) {
 	storage := &FileStorage{}
 	if err := storage.initialize(conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the file storage")
+		return nil, errors.Wrap(err, "unable to initialize the file storage")
 	}
 	return storage, nil
 }
