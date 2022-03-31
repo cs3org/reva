@@ -12,7 +12,7 @@ address = "0.0.0.0:18000"
 auth_manager = "ldap"
 
 [grpc.services.authprovider.auth_managers.ldap]
-uri="ldaps://localhost:636"
+uri="ldaps://ldap:636"
 insecure=true
 base_dn="dc=owncloud,dc=com"
 loginfilter="(&(objectclass=posixAccount)(|(cn={{login}}))(uid={{login}}))"
@@ -29,41 +29,52 @@ cn="cn"
 driver = "ldap"
 
 [grpc.services.userprovider.drivers.ldap]
-uri="ldaps://localhost:636"
+uri="ldaps://ldap:636"
 insecure=true
-base_dn="dc=owncloud,dc=com"
-userfilter="(&(objectclass=posixAccount)(|(entryuuid={{.OpaqueId}})(cn={{.OpaqueId}})))"
-findfilter="(&(objectclass=posixAccount)(|(cn={{query}}*)(displayname={{query}}*)(mail={{query}}*)))"
-attributefilter="(&(objectclass=posixAccount)({{attr}}={{value}}))"
-groupfilter="(&(objectclass=posixGroup)(cn=*)(memberuid={{query}}))"
+user_base_dn="ou=testusers,dc=owncloud,dc=com"
+group_base_dn="ou=testgroups,dc=owncloud,dc=com"
+user_filter=""
+user_objectclass="posixAccount"
+group_filter=""
+group_objectclass="posixGroup"
 bind_username="cn=admin,dc=owncloud,dc=com"
 bind_password="admin"
 idp="http://localhost:20080"
 
-[grpc.services.userprovider.drivers.ldap.schema]
-uid="entryuuid"
+[grpc.services.userprovider.drivers.ldap.user_schema]
+id="entryuuid"
 displayName="displayName"
-dn="dn"
-cn="cn"
-gid="entryuuid"
+userName="cn"
+
+[grpc.services.userprovider.drivers.ldap.group_schema]
+id="entryuuid"
+displayName="cn"
+groupName="cn"
+member="memberUID"
 
 [grpc.services.groupprovider]
 driver = "ldap"
 
 [grpc.services.groupprovider.drivers.ldap]
-uri="ldaps://localhost:636"
+uri="ldaps://ldap:636"
 insecure=true
-base_dn="dc=owncloud,dc=com"
-groupfilter="(&(objectclass=posixGroup)(|(entryuuid={{.OpaqueId}})(cn={{.OpaqueId}})))"
-findfilter="(&(objectclass=posixGroup)(|(cn={{query}}*)(displayname={{query}}*)(mail={{query}}*)))"
-attributefilter="(&(objectclass=posixGroup)({{attr}}={{value}}))"
-memberfilter="(&(objectclass=posixAccount)(entryuuid={{.OpaqueId}}))"
+user_base_dn="ou=testusers,dc=owncloud,dc=com"
+group_base_dn="ou=testgroups,dc=owncloud,dc=com"
+user_filter=""
+user_objectclass="posixAccount"
+group_filter=""
+group_objectclass="posixGroup"
 bind_username="cn=admin,dc=owncloud,dc=com"
 bind_password="admin"
 idp="http://localhost:20080"
 
-[grpc.services.groupprovider.drivers.ldap.schema]
-gid="entryuuid"
+[grpc.services.groupprovider.drivers.ldap.user_schema]
+id="entryuuid"
+displayName="displayName"
+userName="cn"
+
+[grpc.services.groupprovider.drivers.ldap.group_schema]
+id="entryuuid"
 displayName="cn"
-dn="dn"
-cn="cn"
+groupName="cn"
+member="memberUID"
