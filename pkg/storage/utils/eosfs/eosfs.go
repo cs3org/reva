@@ -623,23 +623,35 @@ func (fs *eosfs) getLockContent(ctx context.Context, auth eosclient.Authorizatio
 
 }
 
-// GetLock returns an existing lock on the given reference
-func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
-	path, err := fs.resolve(ctx, ref)
+func (fs *eosfs) removeLockAttrs(ctx context.Context, auth eosclient.Authorization, path string) error {
+	err := fs.c.UnsetAttr(ctx, auth, &eosclient.Attribute{
+		Type: SystemAttr,
+		Key:  LockExpirationKey,
+	}, false, path)
 	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error resolving reference")
-	}
-	path = fs.wrap(ctx, path)
-
-	user, err := getUser(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	auth, err := fs.getUserAuth(ctx, user, path)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error getting uid and gid for user")
+		return errors.Wrap(err, "eosfs: error unsetting the lock expiration")
 	}
 
+	err = fs.c.UnsetAttr(ctx, auth, &eosclient.Attribute{
+		Type: SystemAttr,
+		Key:  LockTypeKey,
+	}, false, path)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error unsetting the lock type")
+	}
+
+	err = fs.c.UnsetAttr(ctx, auth, &eosclient.Attribute{
+		Type: SystemAttr,
+		Key:  LockPayloadKey,
+	}, false, path)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error unsetting the lock payload")
+	}
+
+	return nil
+}
+
+func (fs *eosfs) getLock(ctx context.Context, auth eosclient.Authorization, user *userpb.User, path string, ref *provider.Reference) (*provider.Lock, error) {
 	// the cs3apis require to have the read permission on the resource
 	// to get the eventual lock.
 	has, err := fs.userHasReadAccess(ctx, user, ref)
@@ -657,12 +669,74 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 
 	if !valid {
 		// the previous lock expired
-		// at this point we could leave the value in the attribute
-		// as the next SetLock will reset a new value
+		if err := fs.removeLockAttrs(ctx, auth, path); err != nil {
+			return nil, err
+		}
 		return nil, errtypes.NotFound("lock not found for ref")
 	}
 
 	return fs.getLockContent(ctx, auth, path, expiration)
+}
+
+// GetLock returns an existing lock on the given reference
+func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	path, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "eosfs: error resolving reference")
+	}
+	path = fs.wrap(ctx, path)
+
+	user, err := getUser(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "eosfs: no user in ctx")
+	}
+	auth, err := fs.getUserAuth(ctx, user, path)
+	if err != nil {
+		return nil, errors.Wrap(err, "eosfs: error getting uid and gid for user")
+	}
+
+	return fs.getLock(ctx, auth, user, path, ref)
+}
+
+func (fs *eosfs) setLock(ctx context.Context, auth eosclient.Authorization, lock *provider.Lock, path string) error {
+	encodedLock, err := encodeLock(lock)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error encoding lock")
+	}
+
+	// set expiration
+	err = fs.c.SetAttr(ctx, auth, &eosclient.Attribute{
+		Type: SystemAttr,
+		Key:  LockExpirationKey,
+		Val:  strconv.FormatUint(lock.Expiration.Seconds, 10),
+	}, true, false, path)
+	switch {
+	case errors.Is(err, eosclient.AttrAlreadyExistsError):
+		return errtypes.BadRequest("lock already set")
+	default:
+		return err
+	}
+
+	// set lock type
+	err = fs.c.SetAttr(ctx, auth, &eosclient.Attribute{
+		Type: SystemAttr,
+		Key:  LockTypeKey,
+		Val:  strconv.FormatUint(uint64(lock.Type), 10),
+	}, false, false, path)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error setting lock type")
+	}
+
+	// set payload
+	err = fs.c.SetAttr(ctx, auth, &eosclient.Attribute{
+		Type: SystemAttr,
+		Key:  LockPayloadKey,
+		Val:  encodedLock,
+	}, false, false, path)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error setting lock payload")
+	}
+	return nil
 }
 
 // SetLock puts a lock on the given reference
@@ -684,6 +758,18 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 	auth, err := fs.getUserAuth(ctx, user, path)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
+	}
+
+	_, err = fs.getLock(ctx, auth, user, path, ref)
+	if err != nil {
+		// if the err is NotFound it is fine, otherwise we have to return
+		if _, ok := err.(errtypes.NotFound); !ok {
+			return err
+		}
+	}
+	if err == nil {
+		// the resource is already locked
+		return errtypes.BadRequest("resource already locked")
 	}
 
 	// the cs3apis require to have the write permission on the resource
@@ -710,24 +796,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 		}
 	}
 
-	encodedLock, err := encodeLock(l)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error encoding lock")
-	}
-
-	attr := &eosclient.Attribute{
-		Type: UserAttr,
-		Key:  LockKeyAttr,
-		Val:  encodedLock,
-	}
-
-	err = fs.c.SetAttr(ctx, auth, attr, true, false, path)
-	switch {
-	case errors.Is(err, eosclient.AttrAlreadyExistsError):
-		return errtypes.BadRequest("lock already set")
-	default:
-		return err
-	}
+	return fs.setLock(ctx, auth, l, path)
 }
 
 func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*userpb.User, error) {
