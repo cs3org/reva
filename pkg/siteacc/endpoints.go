@@ -249,11 +249,10 @@ func handleSiteConfigure(siteacc *SiteAccounts, values url.Values, body []byte, 
 	}
 	siteData.ID = account.Site
 
-	// TODO: Do config stuff
-	fmt.Println("!!! COMING SOON !!!")
-	fmt.Println(siteData.ID)
-	fmt.Println(siteData.Config.TestClientCredentials.ID)
-	fmt.Println(siteData.Config.TestClientCredentials.Secret)
+	// Configure the site through the sites manager
+	if err := siteacc.SitesManager().UpdateSite(siteData, true); err != nil {
+		return nil, errors.Wrap(err, "unable to configure site")
+	}
 
 	return nil, nil
 }
