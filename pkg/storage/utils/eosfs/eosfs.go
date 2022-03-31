@@ -71,8 +71,14 @@ const (
 	UserAttr
 )
 
-// LockKeyAttr is the key in the xattr for sp
-const LockKeyAttr = "iop.lock"
+// LockPayloadKey is the key in the xattr for lock payload
+const LockPayloadKey = "reva.lock.payload"
+
+// LockExpirationKey is the key in the xattr for lock expiration
+const LockExpirationKey = "reva.lock.payload"
+
+// LockTypeKey is the key in the xattr for lock payload
+const LockTypeKey = "reva.lock.payload"
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
@@ -517,7 +523,8 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 			return errtypes.BadRequest(fmt.Sprintf("eosfs: key or value is empty: key:%s, value:%s", k, v))
 		}
 
-		if k == LockKeyAttr {
+		// do not allow to set a lock key attr
+		if k == LockPayloadKey || k == LockExpirationKey || k == LockTypeKey {
 			return errtypes.BadRequest(fmt.Sprintf("eosfs: key %s not allowed", k))
 		}
 
@@ -567,6 +574,55 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 	return nil
 }
 
+func (fs *eosfs) getLockExpiration(ctx context.Context, auth eosclient.Authorization, path string) (*types.Timestamp, bool, error) {
+	expiration, err := fs.c.GetAttr(ctx, auth, "sys."+LockExpirationKey, path)
+	if err != nil {
+		return nil, false, err
+	}
+	// the expiration value should be unix time encoded
+	unixTime, err := strconv.ParseInt(expiration.Val, 10, 64)
+	if err != nil {
+		return nil, false, errors.Wrap(err, "eosfs: error converting unix time")
+	}
+	t := time.Unix(unixTime, 0)
+	timestamp := &types.Timestamp{
+		Seconds: uint64(unixTime),
+	}
+	return timestamp, t.Before(time.Now()), nil
+}
+
+func (fs *eosfs) getLockContent(ctx context.Context, auth eosclient.Authorization, path string, expiration *types.Timestamp) (*provider.Lock, error) {
+	t, err := fs.c.GetAttr(ctx, auth, "sys."+LockTypeKey, path)
+	if err != nil {
+		return nil, err
+	}
+	lockType, err := strconv.ParseUint(t.Val, 10, 64)
+	if err != nil {
+		return nil, errors.Wrap(err, "eosfs: error decoding lock type")
+	}
+
+	d, err := fs.c.GetAttr(ctx, auth, "sys."+LockPayloadKey, path)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := b64.StdEncoding.DecodeString(d.Val)
+	if err != nil {
+		return nil, err
+	}
+	l := new(provider.Lock)
+	err = json.Unmarshal(data, l)
+	if err != nil {
+		return nil, err
+	}
+
+	l.Type = provider.LockType(lockType)
+	l.Expiration = expiration
+
+	return l, nil
+
+}
+
 // GetLock returns an existing lock on the given reference
 func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
 	path, err := fs.resolve(ctx, ref)
@@ -594,17 +650,19 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, errtypes.BadRequest("user has not read access on resource")
 	}
 
-	attr, err := fs.c.GetAttr(ctx, auth, "user."+LockKeyAttr, path)
+	expiration, valid, err := fs.getLockExpiration(ctx, auth, path)
 	if err != nil {
 		return nil, err
 	}
 
-	lock, err := decodeLock(attr.Val)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error decoding attr value")
+	if !valid {
+		// the previous lock expired
+		// at this point we could leave the value in the attribute
+		// as the next SetLock will reset a new value
+		return nil, errtypes.NotFound("lock not found for ref")
 	}
 
-	return lock, nil
+	return fs.getLockContent(ctx, auth, path, expiration)
 }
 
 // SetLock puts a lock on the given reference
