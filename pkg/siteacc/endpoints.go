@@ -234,30 +234,26 @@ func handleRemove(siteacc *SiteAccounts, values url.Values, body []byte, session
 }
 
 func handleSiteConfigure(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
-	account, err := unmarshalRequestData(body)
-	if err != nil {
-		return nil, err
-	}
-
 	email, _, err := processInvoker(siteacc, values, session)
 	if err != nil {
 		return nil, err
 	}
-	account.Email = email
-
-	type jsonData struct {
-		ClientID string `json:"clientID"`
-		Secret   string `json:"secret"`
+	account, err := siteacc.AccountsManager().FindAccount(manager.FindByEmail, email)
+	if err != nil {
+		return nil, err
 	}
-	siteData := &jsonData{}
+
+	siteData := &data.Site{}
 	if err := json.Unmarshal(body, siteData); err != nil {
 		return nil, errors.Wrap(err, "invalid form data")
 	}
+	siteData.ID = account.Site
 
 	// TODO: Do config stuff
 	fmt.Println("!!! COMING SOON !!!")
-	fmt.Println(siteData.ClientID)
-	fmt.Println(siteData.Secret)
+	fmt.Println(siteData.ID)
+	fmt.Println(siteData.Config.TestClientCredentials.ID)
+	fmt.Println(siteData.Config.TestClientCredentials.Secret)
 
 	return nil, nil
 }

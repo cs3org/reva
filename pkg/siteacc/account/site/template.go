@@ -55,8 +55,12 @@ function handleAction(action) {
 	}
 
 	var postData = {
-		"clientID": formData.getTrimmed("clientID"),
-		"secret": formData.get("secret")
+		"config": {
+			"testClientCredentials": {
+				"id": formData.getTrimmed("clientID"),
+				"secret": formData.get("secret")
+			}
+		}
     };
 
     xhr.send(JSON.stringify(postData));
@@ -92,9 +96,9 @@ const tplBody = `
 		</div>
 
 		<div style="grid-row: 2;"><label for="clientID">User name: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 3;"><input type="text" id="clientID" name="clientID" placeholder="User name"/></div>
+		<div style="grid-row: 3;"><input type="text" id="clientID" name="clientID" placeholder="User name" value="{{.Site.Config.TestClientCredentials.ID}}"/></div>
 		<div style="grid-row: 2;"><label for="secret">Password: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 3;"><input type="password" id="secret" name="secret" placeholder="Password"/></div>
+		<div style="grid-row: 3;"><input type="password" id="secret" name="secret" placeholder="Password" value="{{.Site.Config.TestClientCredentials.Secret}}"/></div>
 
 		<div style="grid-row: 4;">&nbsp;</div>
 
