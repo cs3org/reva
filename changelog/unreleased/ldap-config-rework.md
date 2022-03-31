@@ -1,10 +1,16 @@
 Enhancement: Rework LDAP configuration of user and group providers
 
 We reworked to LDAP configuration of the LDAP user and group provider to
-share a common configuratio scheme. Additionally the LDAP configuration
+share a common configuration scheme. Additionally the LDAP configuration
 no longer relies on templating LDAP filters in the configuration which
-is error prone and can be confusing. The new LDAP configuration basically looks
-this
+is error prone and can be confusing. Additionally the providers are now
+somewhat more flexible about the group membership schema. Instead of only
+supporting RFC2307 (posixGroup) style groups. It's now possible to also
+use standard LDAP groups (groupOfName/groupOfUniqueNames) which track
+group membership by DN instead of username (the behaviour is switched
+automatically depending on the group_objectclass setting).
+
+The new LDAP configuration basically looks this:
 
 ```ini
 [grpc.services.userprovider.drivers.ldap]
@@ -51,3 +57,4 @@ user/group attributes to LDAP Attributes
 
 https://github.com/cs3org/reva/pull/2708
 https://github.com/cs3org/reva/issues/2122
+https://github.com/cs3org/reva/issues/2124

@@ -299,11 +299,12 @@ func (m *manager) ldapEntryToUserID(entry *ldap.Entry) (*userpb.UserId, error) {
 	var uid string
 	if m.c.LDAPIdentity.User.Schema.IDIsOctetString {
 		rawValue := entry.GetEqualFoldRawAttributeValue(m.c.LDAPIdentity.User.Schema.ID)
-		if value, err := uuid.FromBytes(rawValue); err == nil {
-			uid = value.String()
-		} else {
+		var value uuid.UUID
+		var err error
+		if value, err = uuid.FromBytes(rawValue); err != nil {
 			return nil, err
 		}
+		uid = value.String()
 	} else {
 		uid = entry.GetEqualFoldAttributeValue(m.c.LDAPIdentity.User.Schema.ID)
 	}

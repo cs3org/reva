@@ -20,6 +20,7 @@ package ldap
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/go-ldap/ldap/v3"
@@ -195,6 +196,37 @@ func (i *Identity) GetLDAPUserByFilter(log *zerolog.Logger, lc ldap.Client, filt
 	return res.Entries[0], nil
 }
 
+// GetLDAPUserByDN looks up a single user by the supplied LDAP DN
+// returns the corresponding ldap.Entry
+func (i *Identity) GetLDAPUserByDN(log *zerolog.Logger, lc ldap.Client, dn string) (*ldap.Entry, error) {
+	filter := fmt.Sprintf("(objectclass=%s)", i.User.Objectclass)
+	if i.User.Filter != "" {
+		filter = fmt.Sprintf("(&%s%s)", i.User.Filter, filter)
+	}
+	searchRequest := ldap.NewSearchRequest(
+		dn, i.User.scopeVal, ldap.NeverDerefAliases, 1, 0, false,
+		filter,
+		[]string{
+			i.User.Schema.DisplayName,
+			i.User.Schema.ID,
+			i.User.Schema.Mail,
+			i.User.Schema.Username,
+		},
+		nil,
+	)
+	log.Debug().Str("backend", "ldap").Str("basedn", dn).Str("filter", filter).Int("scope", i.User.scopeVal).Msg("LDAP Search")
+	res, err := lc.Search(searchRequest)
+
+	if err != nil {
+		return nil, errtypes.NotFound(dn)
+	}
+	if len(res.Entries) == 0 {
+		return nil, errtypes.NotFound(dn)
+	}
+
+	return res.Entries[0], nil
+}
+
 // GetLDAPUsers searches for users using a prefix-substring match on the user
 // attributes. Returns a slice of matching ldap.Entries
 func (i *Identity) GetLDAPUsers(log *zerolog.Logger, lc ldap.Client, query string) ([]*ldap.Entry, error) {
@@ -218,11 +250,20 @@ func (i *Identity) GetLDAPUsers(log *zerolog.Logger, lc ldap.Client, query strin
 // GetLDAPUserGroups looks up the group member ship of the supplied LDAP user entry.
 // Returns a slice of strings with groupids
 func (i *Identity) GetLDAPUserGroups(log *zerolog.Logger, lc ldap.Client, userEntry *ldap.Entry) ([]string, error) {
-	username := userEntry.GetEqualFoldAttributeValue(i.User.Schema.Username)
+	var memberValue string
+
+	if strings.ToLower(i.Group.Objectclass) == "posixgroup" {
+		// posixGroup usually means that the member attribute just contains the username
+		memberValue = userEntry.GetEqualFoldAttributeValue(i.User.Schema.Username)
+	} else {
+		// In all other case we assume the member Attribute to contain full LDAP DNs
+		memberValue = userEntry.DN
+	}
+
 	searchRequest := ldap.NewSearchRequest(
 		i.Group.BaseDN, i.Group.scopeVal,
 		ldap.NeverDerefAliases, 0, 0, false,
-		i.getGroupMemberFilter(username),
+		i.getGroupMemberFilter(memberValue),
 		[]string{i.Group.Schema.ID},
 		nil,
 	)
@@ -325,7 +366,13 @@ func (i *Identity) GetLDAPGroupMembers(log *zerolog.Logger, lc ldap.Client, grou
 	log.Debug().Str("dn", group.DN).Interface("member", members).Msg("Get Group members")
 	memberEntries := make([]*ldap.Entry, 0, len(members))
 	for _, member := range members {
-		e, err := i.GetLDAPUserByAttribute(log, lc, "username", member)
+		var e *ldap.Entry
+		var err error
+		if strings.ToLower(i.Group.Objectclass) == "posixgroup" {
+			e, err = i.GetLDAPUserByAttribute(log, lc, "username", member)
+		} else {
+			e, err = i.GetLDAPUserByDN(log, lc, member)
+		}
 		if err != nil {
 			log.Warn().Err(err).Interface("member", member).Msg("Failed read user entry for member")
 			continue

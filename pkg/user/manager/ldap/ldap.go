@@ -73,10 +73,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}
 
 	mgr.ldapClient, err = utils.GetLDAPClientWithReconnect(&mgr.c.LDAPConn)
-	if err != nil {
-		return nil, err
-	}
-	return mgr, nil
+	return mgr, err
 }
 
 // Configure initializes the configuration of the user manager from the supplied config map
