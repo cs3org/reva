@@ -106,12 +106,7 @@ func (s *svc) handleGetToken(w http.ResponseWriter, r *http.Request, tkn string,
 		return
 	}
 
-	if protected {
-		if t.PasswordProtected {
-			log.Error().Msg("password protected private links are not supported")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
+	if protected && !t.PasswordProtected {
 		space, status, err := spacelookup.LookUpStorageSpaceByID(ctx, c, t.StorageID)
 		// add info only if user is able to stat
 		if err == nil && status.Code == rpc.Code_CODE_OK {
