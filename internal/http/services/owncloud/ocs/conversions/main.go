@@ -154,6 +154,24 @@ type ShareeData struct {
 	Remotes []*MatchData      `json:"remotes" xml:"remotes>element"`
 }
 
+// TokenInfo holds token information
+type TokenInfo struct {
+	// for all callers
+	Token             string `json:"token" xml:"token"`
+	LinkURL           string `json:"linkURL" xml:"linkurl"`
+	PasswordProtected bool   `json:"passwordProtected" xml:"passwordprotected"`
+
+	// if not password protected
+	StorageID string `json:"storageID" xml:"storageid"`
+	OpaqueID  string `json:"opaqueID" xml:"opaqueid"`
+	Path      string `json:"path" xml:"path"`
+
+	// if native access
+	SpacePath  string `json:"spacePath" xml:"spacepath"`
+	SpaceAlias string `json:"spaceAlias" xml:"spacealias"`
+	SpaceURL   string `json:"spaceURL" xml:"spaceurl"`
+}
+
 // ExactMatchesData hold exact matches
 type ExactMatchesData struct {
 	Users   []*MatchData `json:"users" xml:"users>element"`

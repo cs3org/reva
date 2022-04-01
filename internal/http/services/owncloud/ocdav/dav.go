@@ -52,7 +52,6 @@ type DavHandler struct {
 	MetaHandler         *MetaHandler
 	TrashbinHandler     *TrashbinHandler
 	SpacesHandler       *SpacesHandler
-	TokenHandler        *TokenHandler
 	PublicFolderHandler *WebDavHandler
 	PublicFileHandler   *PublicFileHandler
 	SharesHandler       *WebDavHandler
@@ -95,7 +94,6 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 
-	h.TokenHandler = new(TokenHandler)
 	return nil
 }
 
@@ -140,8 +138,6 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 		switch head {
-		case "tokeninfo":
-			h.TokenHandler.Handler(s).ServeHTTP(w, r)
 		case "avatars":
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
 		case "files":

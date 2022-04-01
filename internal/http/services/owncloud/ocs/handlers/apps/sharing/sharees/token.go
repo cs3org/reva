@@ -16,12 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdav
+package sharees
 
 import (
 	"context"
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"net/http"
@@ -31,79 +30,54 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc/metadata"
 )
 
-// TokenHandler handles requests for public link tokens
-type TokenHandler struct{}
+// TokenInfo handles http requests regarding tokens
+func (h *Handler) TokenInfo(protected bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 
-// Handler handles http requests
-func (t TokenHandler) Handler(s *svc) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
+		log := appctx.GetLogger(r.Context())
+		tkn := path.Base(r.URL.Path)
+		_, pw, _ := r.BasicAuth()
 
-		typ, tkn := router.ShiftPath(r.URL.Path)
-		tkn, _ = router.ShiftPath(tkn)
-
-		c, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
+		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			// endpoint public - don't exponse information
+			log.Error().Err(err).Msg("error getting gateway client")
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "", nil)
 			return
 		}
 
-		switch typ {
-		case "protected":
-			s.handleGetToken(w, r, tkn, c, true)
-		case "unprotected":
-			s.handleGetToken(w, r, tkn, c, false)
+		t, err := handleGetToken(r.Context(), tkn, pw, c, protected)
+		if err != nil {
+			// endpoint public - don't exponse information
+			log.Error().Err(err).Msg("error while handling GET TokenInfo")
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "", nil)
+			return
 		}
-	})
+
+		response.WriteOCSSuccess(w, r, t)
+	}
 }
 
-// TokenInfo contains information about the token
-type TokenInfo struct {
-	// for all callers
-	Token             string `xml:"token"`
-	LinkURL           string `xml:"linkurl"`
-	PasswordProtected bool   `xml:"passwordprotected"`
-
-	// if not password protected
-	StorageID string `xml:"storageid"`
-	OpaqueID  string `xml:"opaqueid"`
-	Path      string `xml:"path"`
-
-	// if native access
-	SpacePath  string `xml:"spacePath"`
-	SpaceAlias string `xml:"spaceAlias"`
-	SpaceURL   string `xml:"spaceURL"`
-}
-
-func (s *svc) handleGetToken(w http.ResponseWriter, r *http.Request, tkn string, c gateway.GatewayAPIClient, protected bool) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
-
-	_, pw, _ := r.BasicAuth()
+func handleGetToken(ctx context.Context, tkn string, pw string, c gateway.GatewayAPIClient, protected bool) (conversions.TokenInfo, error) {
 	user, token, passwordProtected, err := getInfoForToken(tkn, pw, c)
 	if err != nil {
-		log.Error().Err(err).Msg("error stating token")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return conversions.TokenInfo{}, err
 	}
 
 	t, err := buildTokenInfo(user, tkn, token, passwordProtected, c)
 	if err != nil {
-		log.Error().Err(err).Msg("error stating resource behind token")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return t, err
 	}
 
 	if protected && !t.PasswordProtected {
@@ -117,19 +91,11 @@ func (s *svc) handleGetToken(w http.ResponseWriter, r *http.Request, tkn string,
 
 	}
 
-	b, err := xml.Marshal(t)
-	if err != nil {
-		log.Error().Err(err).Msg("error marshaling xml")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	_, _ = w.Write(b)
-	w.WriteHeader(http.StatusOK)
+	return t, nil
 }
 
-func buildTokenInfo(owner *user.User, tkn string, token string, passProtected bool, c gateway.GatewayAPIClient) (TokenInfo, error) {
-	t := TokenInfo{Token: tkn, LinkURL: "/s/" + tkn}
+func buildTokenInfo(owner *user.User, tkn string, token string, passProtected bool, c gateway.GatewayAPIClient) (conversions.TokenInfo, error) {
+	t := conversions.TokenInfo{Token: tkn, LinkURL: "/s/" + tkn}
 	if passProtected {
 		t.PasswordProtected = true
 		return t, nil
@@ -178,4 +144,23 @@ func getInfoForToken(tkn string, pw string, c gateway.GatewayAPIClient) (owner *
 	}
 
 	return res.User, res.Token, false, nil
+}
+
+func handleBasicAuth(ctx context.Context, c gateway.GatewayAPIClient, token, pw string) (*gateway.AuthenticateResponse, error) {
+	authenticateRequest := gateway.AuthenticateRequest{
+		Type:         "publicshares",
+		ClientId:     token,
+		ClientSecret: "password|" + pw,
+	}
+
+	return c.Authenticate(ctx, &authenticateRequest)
+}
+
+func getTokenStatInfo(ctx context.Context, client gateway.GatewayAPIClient, token string) (*provider.StatResponse, error) {
+	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: utils.PublicStorageProviderID,
+			OpaqueId:  token,
+		},
+	}})
 }
