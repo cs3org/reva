@@ -39,26 +39,14 @@ import (
 // SetLock sets a lock on the node
 func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 	lockFilePath := n.LockFilePath()
-	// check existing lock
-
-	if l, _ := n.ReadLock(ctx); l != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if l.LockId != lockID {
-			return errtypes.Locked(l.LockId)
-		}
-
-		err := os.Remove(lockFilePath)
-		if err != nil {
-			return err
-		}
-	}
 
 	// ensure parent path exists
 	if err := os.MkdirAll(filepath.Dir(lockFilePath), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating parent folder for lock")
 	}
-	fileLock, err := filelocks.AcquireWriteLock(n.InternalPath())
 
+	// get file lock, so that nobody can create the lock in the meantime
+	fileLock, err := filelocks.AcquireWriteLock(n.InternalPath())
 	if err != nil {
 		return err
 	}
@@ -71,6 +59,11 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 			err = rerr
 		}
 	}()
+
+	// check if already locked
+	if l, _ := n.ReadLock(ctx); l != nil {
+		return errtypes.PreconditionFailed("already locked")
+	}
 
 	// O_EXCL to make open fail when the file already exists
 	f, err := os.OpenFile(lockFilePath, os.O_EXCL|os.O_CREATE|os.O_WRONLY, 0600)
