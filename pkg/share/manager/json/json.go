@@ -414,6 +414,8 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 			if other.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP && s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
 				if other.State == rs.State {
 					rss[idx] = rs
+				} else {
+					rss = append(rss, rs)
 				}
 			}
 		}
