@@ -158,18 +158,18 @@ type ShareeData struct {
 type TokenInfo struct {
 	// for all callers
 	Token             string `json:"token" xml:"token"`
-	LinkURL           string `json:"linkURL" xml:"linkurl"`
-	PasswordProtected bool   `json:"passwordProtected" xml:"passwordprotected"`
+	LinkURL           string `json:"link_url" xml:"link_url"`
+	PasswordProtected bool   `json:"password_protected" xml:"password_protected"`
 
 	// if not password protected
-	StorageID string `json:"storageID" xml:"storageid"`
-	OpaqueID  string `json:"opaqueID" xml:"opaqueid"`
+	StorageID string `json:"storage_id" xml:"storage_id"`
+	OpaqueID  string `json:"opaque_id" xml:"opaque_id"`
 	Path      string `json:"path" xml:"path"`
 
 	// if native access
-	SpacePath  string `json:"spacePath" xml:"spacepath"`
-	SpaceAlias string `json:"spaceAlias" xml:"spacealias"`
-	SpaceURL   string `json:"spaceURL" xml:"spaceurl"`
+	SpacePath  string `json:"space_path" xml:"space_path"`
+	SpaceAlias string `json:"space_alias" xml:"space_alias"`
+	SpaceURL   string `json:"space_url" xml:"space_url"`
 }
 
 // ExactMatchesData hold exact matches
