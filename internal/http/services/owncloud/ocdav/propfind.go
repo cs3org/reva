@@ -51,6 +51,9 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
+// name is the Tracer name used to identify this instrumentation library.
+const name = "ocdav"
+
 const (
 	_nsDav      = "DAV:"
 	_nsOwncloud = "http://owncloud.org/ns"
@@ -68,10 +71,11 @@ const (
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
+	ctx, span := rtrace.Provider.Tracer(name).Start(r.Context(), "path_propfind")
 	defer span.End()
 
-	span.SetAttributes(attribute.String("component", "ocdav"))
+	span.SetAttributes(attribute.String("http_request_method", r.Method))
+	span.SetAttributes(attribute.String("http_request_url_method", r.URL.Path))
 
 	fn := path.Join(ns, r.URL.Path)
 
@@ -95,7 +99,7 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 }
 
 func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_propfind")
+	ctx, span := rtrace.Provider.Tracer(name).Start(r.Context(), "spaces_propfind")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
@@ -143,7 +147,7 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 }
 
 func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(ctx, "propfind_response")
+	ctx, span := rtrace.Provider.Tracer(name).Start(ctx, "propfind_response")
 	defer span.End()
 
 	filters := make([]*link.ListPublicSharesRequest_Filter, 0, len(resourceInfos))

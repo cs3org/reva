@@ -37,6 +37,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/propagation"
 )
 
@@ -208,6 +209,7 @@ func (s *Server) registerServices() error {
 
 			// instrument services with opencensus tracing.
 			h := traceHandler(svcName, svc.Handler())
+			h = otelhttp.NewHandler(h, svcName)
 			s.handlers[svc.Prefix()] = h
 			s.svcs[svc.Prefix()] = svc
 			s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
