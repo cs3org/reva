@@ -488,7 +488,7 @@ func (s *svc) lockReference(ctx context.Context, w http.ResponseWriter, r *http.
 		//      this actually is a name based lock ... ugh
 		token, err = s.LockSystem.Create(ctx, now, ld)
 		if err != nil {
-			if _, ok := err.(errtypes.Locked); ok {
+			if _, ok := err.(errtypes.PreconditionFailed); ok {
 				return http.StatusLocked, err
 			}
 			return http.StatusInternalServerError, err
