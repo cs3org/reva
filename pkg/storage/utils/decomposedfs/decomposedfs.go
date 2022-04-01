@@ -596,7 +596,7 @@ func (fs *Decomposedfs) GetLock(ctx context.Context, ref *provider.Reference) (*
 	case !ok:
 		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
-	return node.ReadLock(ctx)
+	return node.ReadLock(ctx, false)
 }
 
 // SetLock puts a lock on the given reference
