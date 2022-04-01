@@ -1,6 +1,11 @@
 [http]
 address = "0.0.0.0:9600"
 
+# Security settings
+[http.services.siteacc.security]
+creds_passphrase = "superdupersecret"
+
+# Connection to the GOCDB
 [http.services.siteacc.gocdb]
 url = "https://sciencemesh-test.uni-muenster.de/gocdb/"
 write_url = "https://sciencemesh-test.uni-muenster.de/gocdbpi/"

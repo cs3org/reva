@@ -28,6 +28,10 @@ import (
 type Configuration struct {
 	Prefix string `mapstructure:"prefix"`
 
+	Security struct {
+		CredentialsPassphrase string `mapstructure:"creds_passphrase"`
+	} `mapstructure:"security"`
+
 	Storage struct {
 		Driver string `mapstructure:"driver"`
 

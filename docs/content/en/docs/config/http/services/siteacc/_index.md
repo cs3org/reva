@@ -19,6 +19,15 @@ prefix = "/siteacc"
 {{< /highlight >}}
 {{% /dir %}}
 
+## Security settings
+{{% dir name="creds_passphrase" type="string" default="" %}}
+The passphrase to use when encoding stored credentials. Should be exactly 32 characters long.
+{{< highlight toml >}}
+[http.services.siteacc.security]
+creds_passphrase = "supersecretpasswordthatyouknow!"
+{{< /highlight >}}
+{{% /dir %}}
+
 ## GOCDB settings
 {{% dir name="url" type="string" default="" %}}
 The external URL of the central GOCDB instance.

@@ -96,7 +96,7 @@ func (mngr *SitesManager) GetSite(id string, cloneSite bool) (*data.Site, error)
 }
 
 // UpdateSite updates the site identified by the site ID; if no such site exists, one will be created first.
-func (mngr *SitesManager) UpdateSite(siteData *data.Site, setTestUserCredentials bool) error {
+func (mngr *SitesManager) UpdateSite(siteData *data.Site) error {
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
@@ -105,7 +105,7 @@ func (mngr *SitesManager) UpdateSite(siteData *data.Site, setTestUserCredentials
 		return errors.Wrap(err, "site to update not found")
 	}
 
-	if err := site.Update(siteData, setTestUserCredentials); err == nil {
+	if err := site.Update(siteData, mngr.conf.Security.CredentialsPassphrase); err == nil {
 		mngr.storage.SiteUpdated(site)
 		mngr.writeAllSites()
 	} else {
@@ -137,14 +137,14 @@ func (mngr *SitesManager) getSite(id string) (*data.Site, error) {
 }
 
 func (mngr *SitesManager) createSite(id string) (*data.Site, error) {
-	if site, err := data.NewSite(id); err == nil {
-		mngr.sites = append(mngr.sites, site)
-		mngr.storage.SiteAdded(site)
-		mngr.writeAllSites()
-		return site, nil
-	} else {
+	site, err := data.NewSite(id)
+	if err != nil {
 		return nil, errors.Wrap(err, "error while creating site")
 	}
+	mngr.sites = append(mngr.sites, site)
+	mngr.storage.SiteAdded(site)
+	mngr.writeAllSites()
+	return site, nil
 }
 
 func (mngr *SitesManager) findSite(id string) (*data.Site, error) {

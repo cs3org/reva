@@ -250,7 +250,7 @@ func handleSiteConfigure(siteacc *SiteAccounts, values url.Values, body []byte, 
 	siteData.ID = account.Site
 
 	// Configure the site through the sites manager
-	if err := siteacc.SitesManager().UpdateSite(siteData, true); err != nil {
+	if err := siteacc.SitesManager().UpdateSite(siteData); err != nil {
 		return nil, errors.Wrap(err, "unable to configure site")
 	}
 

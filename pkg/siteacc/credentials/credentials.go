@@ -18,6 +18,11 @@
 
 package credentials
 
+import (
+	"github.com/cs3org/reva/pkg/siteacc/credentials/crypto"
+	"github.com/pkg/errors"
+)
+
 // Credentials stores and en-/decrypts credentials
 type Credentials struct {
 	ID     string `json:"id"`
@@ -25,20 +30,30 @@ type Credentials struct {
 }
 
 // Get decrypts and retrieves the stored credentials.
-func (creds *Credentials) Get() (string, string) {
-	// TODO: Decrypt
-	id := creds.ID
-	secret := creds.Secret
-
-	return id, secret
+func (creds *Credentials) Get(passphrase string) (string, string, error) {
+	id, err := crypto.DecodeString(creds.ID, passphrase)
+	if err != nil {
+		return "", "", errors.Wrap(err, "unable to decode ID")
+	}
+	secret, err := crypto.DecodeString(creds.Secret, passphrase)
+	if err != nil {
+		return "", "", errors.Wrap(err, "unable to decode secret")
+	}
+	return id, secret, nil
 }
 
 // Set encrypts and sets new credentials.
-func (creds *Credentials) Set(id, secret string) error {
-	// TODO: Encrypt
-	creds.ID = id
-	creds.Secret = secret
-
+func (creds *Credentials) Set(id, secret string, passphrase string) error {
+	if s, err := crypto.EncodeString(id, passphrase); err == nil {
+		creds.ID = s
+	} else {
+		return errors.Wrap(err, "unable to encode ID")
+	}
+	if s, err := crypto.EncodeString(secret, passphrase); err == nil {
+		creds.Secret = s
+	} else {
+		return errors.Wrap(err, "unable to encode secret")
+	}
 	return nil
 }
 

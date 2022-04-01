@@ -160,8 +160,8 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 		}
 
 		type TemplateData struct {
-			Account *data.Account
 			Site    *data.Site
+			Account *data.Account
 			Params  map[string]string
 
 			Titles []string
@@ -169,15 +169,15 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 		}
 
 		tplData := TemplateData{
-			Account: nil,
 			Site:    nil,
+			Account: nil,
 			Params:  flatValues,
 			Titles:  []string{"Mr", "Mrs", "Ms", "Prof", "Dr"},
 			Sites:   availSites,
 		}
 		if user := session.LoggedInUser(); user != nil {
+			tplData.Site = panel.cloneUserSite(user.Site)
 			tplData.Account = user.Account
-			tplData.Site = user.Site
 		}
 		return tplData
 	}
@@ -200,6 +200,17 @@ func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request
 	newURL.RawQuery = params.Encode()
 	http.Redirect(w, r, newURL.String(), http.StatusFound)
 	return html.AbortExecution
+}
+
+func (panel *Panel) cloneUserSite(site *data.Site) *data.Site {
+	// Clone the user's site and decrypt the credentials for the panel
+	siteClone := site.Clone(true)
+	id, secret, err := site.Config.TestClientCredentials.Get(panel.conf.Security.CredentialsPassphrase)
+	if err == nil {
+		siteClone.Config.TestClientCredentials.ID = id
+		siteClone.Config.TestClientCredentials.Secret = secret
+	}
+	return siteClone
 }
 
 // NewPanel creates a new account panel.

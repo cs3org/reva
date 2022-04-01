@@ -39,10 +39,10 @@ type SiteConfiguration struct {
 type Sites = []*Site
 
 // Update copies the data of the given site to this site.
-func (site *Site) Update(other *Site, setTestClientCredentials bool) error {
-	if setTestClientCredentials && other.Config.TestClientCredentials.IsValid() {
+func (site *Site) Update(other *Site, credsPassphrase string) error {
+	if other.Config.TestClientCredentials.IsValid() {
 		// If credentials were provided, use those as the new ones
-		if err := site.UpdateTestClientCredentials(other.Config.TestClientCredentials.ID, other.Config.TestClientCredentials.Secret); err != nil {
+		if err := site.UpdateTestClientCredentials(other.Config.TestClientCredentials.ID, other.Config.TestClientCredentials.Secret, credsPassphrase); err != nil {
 			return err
 		}
 	}
@@ -51,8 +51,8 @@ func (site *Site) Update(other *Site, setTestClientCredentials bool) error {
 }
 
 // UpdateTestClientCredentials assigns new test client credentials, encrypting the information first.
-func (site *Site) UpdateTestClientCredentials(id, secret string) error {
-	if err := site.Config.TestClientCredentials.Set(id, secret); err != nil {
+func (site *Site) UpdateTestClientCredentials(id, secret string, passphrase string) error {
+	if err := site.Config.TestClientCredentials.Set(id, secret, passphrase); err != nil {
 		return errors.Wrap(err, "unable to update the test client credentials")
 	}
 	return nil
