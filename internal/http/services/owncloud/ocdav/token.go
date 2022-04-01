@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"path"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -92,7 +91,8 @@ func (s *svc) handleGetToken(w http.ResponseWriter, r *http.Request, tkn string,
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	user, token, passwordProtected, err := getInfoForToken(tkn, r.URL.Query(), c)
+	_, pw, _ := r.BasicAuth()
+	user, token, passwordProtected, err := getInfoForToken(tkn, pw, c)
 	if err != nil {
 		log.Error().Err(err).Msg("error stating token")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -153,12 +153,10 @@ func buildTokenInfo(owner *user.User, tkn string, token string, passProtected bo
 	return t, nil
 }
 
-func getInfoForToken(tkn string, q url.Values, c gateway.GatewayAPIClient) (owner *user.User, token string, passwordProtected bool, err error) {
+func getInfoForToken(tkn string, pw string, c gateway.GatewayAPIClient) (owner *user.User, token string, passwordProtected bool, err error) {
 	ctx := context.Background()
 
-	sig := q.Get("signature")
-	expiration := q.Get("expiration")
-	res, err := handleSignatureAuth(ctx, c, tkn, sig, expiration)
+	res, err := handleBasicAuth(ctx, c, tkn, pw)
 	if err != nil {
 		return
 	}
