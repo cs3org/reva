@@ -95,6 +95,12 @@ func (mngr *SitesManager) GetSite(id string, cloneSite bool) (*data.Site, error)
 	return site, nil
 }
 
+// FindSite returns the site specified by the ID if one exists.
+func (mngr *SitesManager) FindSite(id string) *data.Site {
+	site, _ := mngr.findSite(id)
+	return site
+}
+
 // UpdateSite updates the site identified by the site ID; if no such site exists, one will be created first.
 func (mngr *SitesManager) UpdateSite(siteData *data.Site) error {
 	mngr.mutex.Lock()

@@ -75,6 +75,7 @@ func getEndpoints() []endpoint {
 		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), false},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
 		// Site endpoints
+		{config.EndpointSiteGet, callMethodEndpoint, createMethodCallbacks(handleSiteGet, nil), false},
 		{config.EndpointSiteConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleSiteConfigure), false},
 		// Login endpoints
 		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
@@ -231,6 +232,18 @@ func handleRemove(siteacc *SiteAccounts, values url.Values, body []byte, session
 	}
 
 	return nil, nil
+}
+
+func handleSiteGet(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	siteID := values.Get("site")
+	if siteID == "" {
+		return nil, errors.Errorf("no site specified")
+	}
+	site := siteacc.SitesManager().FindSite(siteID)
+	if site == nil {
+		return nil, errors.Errorf("no site with ID %v exists", siteID)
+	}
+	return map[string]interface{}{"site": site.Clone(false)}, nil
 }
 
 func handleSiteConfigure(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {

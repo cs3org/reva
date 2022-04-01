@@ -38,6 +38,8 @@ const (
 	// EndpointRemove is the endpoint path for account removal.
 	EndpointRemove = "/remove"
 
+	// EndpointSiteGet is the endpoint path for retrieving site data.
+	EndpointSiteGet = "/site-get"
 	// EndpointSiteConfigure is the endpoint path for site configuration.
 	EndpointSiteConfigure = "/site-configure"
 
