@@ -61,8 +61,16 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 	}()
 
 	// check if already locked
-	if l, _ := n.ReadLock(ctx); l != nil {
-		return errtypes.PreconditionFailed("already locked")
+	l, err := n.ReadLock(ctx, true) // we already have a write file lock, so ReadLock() would fail to acquire a read file lock -> skip it
+	switch err.(type) {
+	case errtypes.NotFound:
+		// file not locked, continue
+	case nil:
+		if l != nil {
+			return errtypes.PreconditionFailed("already locked")
+		}
+	default:
+		return errors.Wrap(err, "Decomposedfs: could check if file already is locked")
 	}
 
 	// O_EXCL to make open fail when the file already exists
@@ -80,26 +88,30 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 }
 
 // ReadLock reads the lock id for a node
-func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
+func (n Node) ReadLock(ctx context.Context, skipFileLock bool) (*provider.Lock, error) {
 
 	// ensure parent path exists
 	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error creating parent folder for lock")
 	}
-	fileLock, err := filelocks.AcquireReadLock(n.InternalPath())
 
-	if err != nil {
-		return nil, err
-	}
+	// the caller of ReadLock already may hold a file lock
+	if !skipFileLock {
+		fileLock, err := filelocks.AcquireReadLock(n.InternalPath())
 
-	defer func() {
-		rerr := filelocks.ReleaseLock(fileLock)
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
+		if err != nil {
+			return nil, err
 		}
-	}()
+
+		defer func() {
+			rerr := filelocks.ReleaseLock(fileLock)
+
+			// if err is non nil we do not overwrite that
+			if err == nil {
+				err = rerr
+			}
+		}()
+	}
 
 	f, err := os.Open(n.LockFilePath())
 	if err != nil {
@@ -234,7 +246,7 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 // CheckLock compares the context lock with the node lock
 func (n *Node) CheckLock(ctx context.Context) error {
 	lockID, _ := ctxpkg.ContextGetLockID(ctx)
-	lock, _ := n.ReadLock(ctx)
+	lock, _ := n.ReadLock(ctx, false)
 	if lock != nil {
 		switch lockID {
 		case "":

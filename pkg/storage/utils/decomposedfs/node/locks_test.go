@@ -29,6 +29,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 )
@@ -102,25 +103,14 @@ var _ = Describe("Node locks", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("refuses to lock if already locked an existing lock was not provided", func() {
+		It("refuses to set a lock if already locked", func() {
 			err := n.SetLock(env.Ctx, lockByUser)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = n.SetLock(env.Ctx, lockByUser)
 			Expect(err).To(HaveOccurred())
-
-			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, wrongLockByUser.LockId)
-			err = n.SetLock(env.Ctx, lockByUser)
-			Expect(err).To(HaveOccurred())
-		})
-
-		It("relocks if the existing lock was provided", func() {
-			err := n.SetLock(env.Ctx, lockByUser)
-			Expect(err).ToNot(HaveOccurred())
-
-			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, lockByUser.LockId)
-			err = n.SetLock(env.Ctx, lockByUser)
-			Expect(err).ToNot(HaveOccurred())
+			_, ok := err.(errtypes.PreconditionFailed)
+			Expect(ok).To(BeTrue())
 		})
 	})
 
@@ -136,26 +126,16 @@ var _ = Describe("Node locks", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("refuses to lock if already locked an existing lock was not provided", func() {
+		It("refuses to set a lock if already locked", func() {
 			err := n.SetLock(env.Ctx, lockByApp)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = n.SetLock(env.Ctx, lockByApp)
 			Expect(err).To(HaveOccurred())
-
-			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, wrongLockByApp.LockId)
-			err = n.SetLock(env.Ctx, lockByApp)
-			Expect(err).To(HaveOccurred())
+			_, ok := err.(errtypes.PreconditionFailed)
+			Expect(ok).To(BeTrue())
 		})
 
-		It("relocks if the existing lock was provided", func() {
-			err := n.SetLock(env.Ctx, lockByApp)
-			Expect(err).ToNot(HaveOccurred())
-
-			env.Ctx = ctxpkg.ContextSetLockID(env.Ctx, lockByApp.LockId)
-			err = n.SetLock(env.Ctx, lockByApp)
-			Expect(err).ToNot(HaveOccurred())
-		})
 	})
 
 	Context("with an existing lock for a user", func() {
@@ -166,13 +146,13 @@ var _ = Describe("Node locks", func() {
 
 		Describe("ReadLock", func() {
 			It("returns the lock", func() {
-				l, err := n.ReadLock(env.Ctx)
+				l, err := n.ReadLock(env.Ctx, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(l).To(Equal(lockByUser))
 			})
 
 			It("reports an error when the node wasn't locked", func() {
-				_, err := n2.ReadLock(env.Ctx)
+				_, err := n2.ReadLock(env.Ctx, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("no lock found"))
 			})
@@ -270,13 +250,13 @@ var _ = Describe("Node locks", func() {
 
 		Describe("ReadLock", func() {
 			It("returns the lock", func() {
-				l, err := n.ReadLock(env.Ctx)
+				l, err := n.ReadLock(env.Ctx, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(l).To(Equal(lockByApp))
 			})
 
 			It("reports an error when the node wasn't locked", func() {
-				_, err := n2.ReadLock(env.Ctx)
+				_, err := n2.ReadLock(env.Ctx, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("no lock found"))
 			})
