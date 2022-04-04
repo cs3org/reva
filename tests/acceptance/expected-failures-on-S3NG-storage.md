@@ -1569,5 +1569,18 @@ _ocs: api compatibility, return correct status code_
 
 - [apiMain/checksums.feature:233](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L233)
 
+#### empty permissions on a link is now allowed
+
+- [apiShareUpdateToShares/updateShare.feature:112](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L112)
+- [apiShareUpdateToShares/updateShare.feature:113](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L113)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:116](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L116)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:117](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L117)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:131](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L131)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:132](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L132)
+- [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L26)
+- [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L27)
+- [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L28)
+- [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L29)
+
  Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.

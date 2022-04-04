@@ -75,6 +75,9 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 	h.TrashbinHandler = new(TrashbinHandler)
+	if err := h.TrashbinHandler.init(c); err != nil {
+		return err
+	}
 
 	h.SpacesHandler = new(SpacesHandler)
 	if err := h.SpacesHandler.init(c); err != nil {
@@ -91,7 +94,7 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 
-	return h.TrashbinHandler.init(c)
+	return nil
 }
 
 func isOwner(userIDorName string, user *userv1beta1.User) bool {

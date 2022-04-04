@@ -497,6 +497,8 @@ func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermi
 
 // Maps oc10 public link permissions to roles
 var ocPublicPermToRole = map[int]string{
+	// Recipients can do nothing
+	0: "none",
 	// Recipients can view and download contents.
 	1: "viewer",
 	// Recipients can view, download and edit single files.

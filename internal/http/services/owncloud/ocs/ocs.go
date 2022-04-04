@@ -87,6 +87,8 @@ func (s *svc) Unprotected() []string {
 	return []string{
 		"/v1.php/config",
 		"/v2.php/config",
+		"/v1.php/apps/files_sharing/api/v1/tokeninfo/unprotected",
+		"/v2.php/apps/files_sharing/api/v1/tokeninfo/unprotected",
 	}
 }
 
@@ -125,6 +127,10 @@ func (s *svc) routerInit() error {
 				r.Delete("/{shareid}", sharesHandler.RemoveShare)
 			})
 			r.Get("/sharees", shareesHandler.FindSharees)
+			r.Route("/tokeninfo", func(r chi.Router) {
+				r.Get("/protected/{tkn}", shareesHandler.TokenInfo(true))
+				r.Get("/unprotected/{tkn}", shareesHandler.TokenInfo(false))
+			})
 		})
 
 		// placeholder for notifications

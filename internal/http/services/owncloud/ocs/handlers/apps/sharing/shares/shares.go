@@ -426,7 +426,7 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 	}
 
 	permissions := role.OCSPermissions()
-	if ri != nil && ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+	if ri != nil && ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE && permissions != conversions.PermissionInvalid {
 		// Single file shares should never have delete or create permissions
 		permissions &^= conversions.PermissionCreate
 		permissions &^= conversions.PermissionDelete
@@ -440,7 +440,7 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 	}
 
 	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
-	if permissions == conversions.PermissionInvalid || !existingPermissions.Contain(permissions) {
+	if !existingPermissions.Contain(permissions) {
 		return nil, nil, &ocsError{
 			Code:    http.StatusNotFound,
 			Message: "Cannot set the requested share permissions",
