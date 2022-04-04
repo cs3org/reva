@@ -101,7 +101,7 @@ var userDefaults = userConfig{
 	},
 }
 
-// Default userConfig (Active Directory)
+// Default groupConfig (Active Directory)
 var groupDefaults = groupConfig{
 	Scope:       "sub",
 	Objectclass: "posixGroup",
@@ -179,12 +179,11 @@ func (i *Identity) GetLDAPUserByFilter(log *zerolog.Logger, lc ldap.Client, filt
 	res, err := lc.Search(searchRequest)
 
 	if err != nil {
+		log.Debug().Str("backend", "ldap").Err(err).Str("userfilter", filter).Msg("Error looking up user by filter")
 		var errmsg string
 		if lerr, ok := err.(*ldap.Error); ok {
 			if lerr.ResultCode == ldap.LDAPResultSizeLimitExceeded {
 				errmsg = fmt.Sprintf("too many results searching for user '%s'", filter)
-				log.Debug().Str("backend", "ldap").Err(lerr).
-					Str("userfilter", filter).Msg("too many results searching for user")
 			}
 		}
 		return nil, errtypes.NotFound(errmsg)
@@ -218,6 +217,7 @@ func (i *Identity) GetLDAPUserByDN(log *zerolog.Logger, lc ldap.Client, dn strin
 	res, err := lc.Search(searchRequest)
 
 	if err != nil {
+		log.Debug().Str("backend", "ldap").Err(err).Str("dn", dn).Msg("Error looking up user by DN")
 		return nil, errtypes.NotFound(dn)
 	}
 	if len(res.Entries) == 0 {
@@ -242,7 +242,8 @@ func (i *Identity) GetLDAPUsers(log *zerolog.Logger, lc ldap.Client, query strin
 	log.Debug().Str("backend", "ldap").Str("basedn", i.User.BaseDN).Str("filter", filter).Int("scope", i.User.scopeVal).Msg("LDAP Search")
 	sr, err := lc.Search(searchRequest)
 	if err != nil {
-		return nil, err
+		log.Debug().Str("backend", "ldap").Err(err).Str("filter", filter).Msg("Error searching users")
+		return nil, errtypes.NotFound(query)
 	}
 	return sr.Entries, nil
 }
@@ -260,16 +261,19 @@ func (i *Identity) GetLDAPUserGroups(log *zerolog.Logger, lc ldap.Client, userEn
 		memberValue = userEntry.DN
 	}
 
+	filter := i.getGroupMemberFilter(memberValue)
 	searchRequest := ldap.NewSearchRequest(
 		i.Group.BaseDN, i.Group.scopeVal,
 		ldap.NeverDerefAliases, 0, 0, false,
-		i.getGroupMemberFilter(memberValue),
+		filter,
 		[]string{i.Group.Schema.ID},
 		nil,
 	)
 
+	log.Debug().Str("backend", "ldap").Str("basedn", i.Group.BaseDN).Str("filter", filter).Int("scope", i.Group.scopeVal).Msg("LDAP Search")
 	sr, err := lc.Search(searchRequest)
 	if err != nil {
+		log.Debug().Str("backend", "ldap").Err(err).Str("filter", filter).Msg("Error looking up group memberships")
 		return []string{}, err
 	}
 
@@ -320,16 +324,16 @@ func (i *Identity) GetLDAPGroupByFilter(log *zerolog.Logger, lc ldap.Client, fil
 		},
 		nil,
 	)
-	log.Debug().Str("backend", "ldap").Msgf("Search %s", i.Group.BaseDN)
+
+	log.Debug().Str("backend", "ldap").Str("basedn", i.Group.BaseDN).Str("filter", filter).Int("scope", i.Group.scopeVal).Msg("LDAP Search")
 	res, err := lc.Search(searchRequest)
 
 	if err != nil {
+		log.Debug().Str("backend", "ldap").Err(err).Str("filter", filter).Msg("Error looking up group by filter")
 		var errmsg string
 		if lerr, ok := err.(*ldap.Error); ok {
 			if lerr.ResultCode == ldap.LDAPResultSizeLimitExceeded {
 				errmsg = fmt.Sprintf("too many results searching for group '%s'", filter)
-				log.Debug().Str("backend", "ldap").Err(lerr).
-					Str("groupfilter", filter).Msg("too many results searching for group")
 			}
 		}
 		return nil, errtypes.NotFound(errmsg)
@@ -354,7 +358,8 @@ func (i *Identity) GetLDAPGroups(log *zerolog.Logger, lc ldap.Client, query stri
 
 	sr, err := lc.Search(searchRequest)
 	if err != nil {
-		return nil, err
+		log.Debug().Str("backend", "ldap").Err(err).Str("query", query).Msg("Error search for groups")
+		return nil, errtypes.NotFound(query)
 	}
 	return sr.Entries, nil
 }

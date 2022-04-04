@@ -50,7 +50,8 @@ type config struct {
 	utils.LDAPConn `mapstructure:",squash"`
 	LDAPIdentity   ldapIdentity.Identity `mapstructure:",squash"`
 	Idp            string                `mapstructure:"idp"`
-	Nobody         int64                 `mapstructure:"nobody"`
+	// Nobody specifies the fallback gid number for groups that don't have a gidNumber set in LDAP
+	Nobody int64 `mapstructure:"nobody"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

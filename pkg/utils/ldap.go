@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"io/ioutil"
 
+	"github.com/cs3org/reva/v2/pkg/logger"
 	ldapReconnect "github.com/cs3org/reva/v2/pkg/utils/ldap"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/pkg/errors"
@@ -44,9 +45,10 @@ type LDAPConn struct {
 func GetLDAPClientWithReconnect(c *LDAPConn) (ldap.Client, error) {
 	var tlsConf *tls.Config
 	if c.Insecure {
+		logger.New().Warn().Msg("SSL Certificate verification is disabled. This is strongly discouraged for production environments.")
 		tlsConf = &tls.Config{
 			//nolint:gosec // We need the ability to run with "insecure" (dev/testing)
-			InsecureSkipVerify: c.Insecure,
+			InsecureSkipVerify: true,
 		}
 	}
 	if !c.Insecure && c.CACert != "" {
@@ -76,7 +78,14 @@ func GetLDAPClientWithReconnect(c *LDAPConn) (ldap.Client, error) {
 // when returned. The main purpose for GetLDAPClientForAuth is to get and LDAP connection that
 // can be used to issue a single bind request to authenticate a user.
 func GetLDAPClientForAuth(c *LDAPConn) (ldap.Client, error) {
-	tlsconfig := &tls.Config{InsecureSkipVerify: c.Insecure}
+	var tlsConf *tls.Config
+	if c.Insecure {
+		logger.New().Warn().Msg("SSL Certificate verification is disabled. Is is strongly discouraged for production environments.")
+		tlsConf = &tls.Config{
+			//nolint:gosec // We need the ability to run with "insecure" (dev/testing)
+			InsecureSkipVerify: true,
+		}
+	}
 	if !c.Insecure && c.CACert != "" {
 		if pemBytes, err := ioutil.ReadFile(c.CACert); err == nil {
 			rpool, _ := x509.SystemCertPool()
@@ -88,7 +97,7 @@ func GetLDAPClientForAuth(c *LDAPConn) (ldap.Client, error) {
 			return nil, errors.Wrapf(err, "Error reading LDAP CA Cert '%s.'", c.CACert)
 		}
 	}
-	l, err := ldap.DialURL(c.URI, ldap.DialWithTLSConfig(tlsconfig))
+	l, err := ldap.DialURL(c.URI, ldap.DialWithTLSConfig(tlsConf))
 	if err != nil {
 		return nil, err
 	}
