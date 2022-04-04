@@ -32,7 +32,8 @@ import (
 )
 
 var (
-	errMaxRetries = errors.New("max retries")
+	defaultRetries = 1
+	errMaxRetries  = errors.New("max retries")
 )
 
 type ldapConnection struct {
@@ -61,7 +62,7 @@ func NewLDAPWithReconnect(config Config) *ConnWithReconnect {
 	conn := ConnWithReconnect{
 		conn:    make(chan ldapConnection),
 		reset:   make(chan *ldap.Conn),
-		retries: 1,
+		retries: defaultRetries,
 	}
 	logger := zerolog.Nop()
 	conn.logger = &logger
@@ -74,130 +75,82 @@ func (c *ConnWithReconnect) SetLogger(logger *zerolog.Logger) {
 	c.logger = logger
 }
 
-// Search implements the ldap.Client interface
-func (c *ConnWithReconnect) Search(sr *ldap.SearchRequest) (*ldap.SearchResult, error) {
+func (c *ConnWithReconnect) retry(fn func(c ldap.Client) error) error {
 	conn, err := c.getConnection()
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var res *ldap.SearchResult
 	for try := 0; try <= c.retries; try++ {
-		res, err = conn.Search(sr)
+		if try > 0 {
+			c.logger.Debug().Msgf("retrying attempt %d", try)
+			conn, err = c.reconnect(conn)
+			if err != nil {
+				// reconnection failed stop this attempt
+				return err
+			}
+		}
+		if err = fn(conn); err == nil {
+			// function succeed no need to retry
+			return nil
+		}
 		if !ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
-			// non network error, return it to the client
-			return res, err
+			// non network error, stop retrying
+			return err
 		}
-
-		c.logger.Debug().Msgf("Network Error. attempt %d", try)
-		conn, err = c.reconnect(conn)
-		if err != nil {
-			return nil, err
-		}
-		c.logger.Debug().Msg("retrying LDAP Search")
 	}
-	// if we get here we reached the maximum retries. So return an error
-	return nil, ldap.NewError(ldap.ErrorNetwork, errMaxRetries)
+	return ldap.NewError(ldap.ErrorNetwork, errMaxRetries)
+}
+
+// Search implements the ldap.Client interface
+func (c *ConnWithReconnect) Search(sr *ldap.SearchRequest) (*ldap.SearchResult, error) {
+	var err error
+	var res *ldap.SearchResult
+
+	retryErr := c.retry(func(c ldap.Client) error {
+		res, err = c.Search(sr)
+		return err
+	})
+
+	return res, retryErr
+
 }
 
 // Add implements the ldap.Client interface
 func (c *ConnWithReconnect) Add(a *ldap.AddRequest) error {
-	conn, err := c.getConnection()
-	if err != nil {
-		return err
-	}
-	for try := 0; try <= c.retries; try++ {
-		err = conn.Add(a)
-		if !ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
-			// non network error, return it to the client
-			return err
-		}
+	err := c.retry(func(c ldap.Client) error {
+		return c.Add(a)
+	})
 
-		c.logger.Debug().Msgf("Network Error. attempt %d", try)
-		conn, err = c.reconnect(conn)
-		if err != nil {
-			return err
-		}
-		c.logger.Debug().Msg("retrying LDAP Add")
-	}
-	// if we get here we reached the maximum retries. So return an error
-	return ldap.NewError(ldap.ErrorNetwork, errMaxRetries)
+	return err
 }
 
 // Del implements the ldap.Client interface
 func (c *ConnWithReconnect) Del(d *ldap.DelRequest) error {
-	conn, err := c.getConnection()
-	if err != nil {
-		return err
-	}
+	err := c.retry(func(c ldap.Client) error {
+		return c.Del(d)
+	})
 
-	for try := 0; try <= c.retries; try++ {
-		err = conn.Del(d)
-		if !ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
-			// non network error, return it to the client
-			return err
-		}
-
-		c.logger.Debug().Msgf("Network Error. attempt %d", try)
-		conn, err = c.reconnect(conn)
-		if err != nil {
-			return err
-		}
-		c.logger.Debug().Msg("retrying LDAP Del")
-	}
-	// if we get here we reached the maximum retries. So return an error
-	return ldap.NewError(ldap.ErrorNetwork, errMaxRetries)
+	return err
 }
 
 // Modify implements the ldap.Client interface
 func (c *ConnWithReconnect) Modify(m *ldap.ModifyRequest) error {
-	conn, err := c.getConnection()
-	if err != nil {
-		return err
-	}
+	err := c.retry(func(c ldap.Client) error {
+		return c.Modify(m)
+	})
 
-	for try := 0; try <= c.retries; try++ {
-		err = conn.Modify(m)
-		if !ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
-			// non network error, return it to the client
-			return err
-		}
-
-		c.logger.Debug().Msgf("Network Error. attempt %d", try)
-		conn, err = c.reconnect(conn)
-		if err != nil {
-			return err
-		}
-		c.logger.Debug().Msg("retrying LDAP Modify")
-	}
-	// if we get here we reached the maximum retries. So return an error
-	return ldap.NewError(ldap.ErrorNetwork, errMaxRetries)
+	return err
 }
 
 // ModifyDN implements the ldap.Client interface
 func (c *ConnWithReconnect) ModifyDN(m *ldap.ModifyDNRequest) error {
-	conn, err := c.getConnection()
-	if err != nil {
-		return err
-	}
+	err := c.retry(func(c ldap.Client) error {
+		return c.ModifyDN(m)
+	})
 
-	for try := 0; try <= c.retries; try++ {
-		err = conn.ModifyDN(m)
-		if !ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
-			// non network error, return it to the client
-			return err
-		}
-
-		c.logger.Debug().Msgf("Network Error. attempt %d", try)
-		conn, err = c.reconnect(conn)
-		if err != nil {
-			return err
-		}
-		c.logger.Debug().Msg("retrying LDAP ModifyDN")
-	}
-	// if we get here we reached the maximum retries. So return an error
-	return ldap.NewError(ldap.ErrorNetwork, errMaxRetries)
+	return err
 }
 
 func (c *ConnWithReconnect) getConnection() (*ldap.Conn, error) {
@@ -221,15 +174,17 @@ func (c *ConnWithReconnect) ldapAutoConnect(config Config) {
 			// Only close the connection and reconnect if the current
 			// connection, matches the one we got via the reset channel.
 			// If they differ we already reconnected
-			if l != nil && l == resConn {
-				c.logger.Debug().Msgf("closing connection %v", &l)
-				l.Close()
-			}
-			if l == resConn || l == nil {
+			switch {
+			case l == nil:
 				c.logger.Debug().Msg("reconnecting to LDAP")
 				l, err = c.ldapConnect(config)
-			} else {
+			case l != resConn:
 				c.logger.Debug().Msg("already reconnected")
+				continue
+			default:
+				c.logger.Debug().Msg("closing and reconnecting to LDAP")
+				l.Close()
+				l, err = c.ldapConnect(config)
 			}
 		case c.conn <- ldapConnection{l, err}:
 		}
@@ -249,21 +204,21 @@ func (c *ConnWithReconnect) ldapConnect(config Config) (*ldap.Conn, error) {
 
 	if err != nil {
 		c.logger.Debug().Err(err).Msg("could not get ldap Connection")
-	} else {
-		c.logger.Debug().Msg("LDAP Connected")
-		if config.BindDN != "" {
-			c.logger.Debug().Msgf("Binding as %s", config.BindDN)
-			err = l.Bind(config.BindDN, config.BindPassword)
-			if err != nil {
-				c.logger.Debug().Err(err).Msg("Bind failed")
-				l.Close()
-				return nil, err
-			}
-
-		}
+		return nil, err
 	}
+	c.logger.Debug().Msg("LDAP Connected")
+	if config.BindDN != "" {
+		c.logger.Debug().Msgf("Binding as %s", config.BindDN)
+		err = l.Bind(config.BindDN, config.BindPassword)
+		if err != nil {
+			c.logger.Debug().Err(err).Msg("Bind failed")
+			l.Close()
+			return nil, err
+		}
 
+	}
 	return l, err
+
 }
 
 func (c *ConnWithReconnect) reconnect(resetConn *ldap.Conn) (*ldap.Conn, error) {
@@ -317,12 +272,7 @@ func (c *ConnWithReconnect) ExternalBind() error {
 
 // ModifyWithResult implements the ldap.Client interface
 func (c *ConnWithReconnect) ModifyWithResult(m *ldap.ModifyRequest) (*ldap.ModifyResult, error) {
-	conn, err := c.getConnection()
-	if err != nil {
-		return nil, err
-	}
-
-	return conn.ModifyWithResult(m)
+	return nil, ldap.NewError(ldap.LDAPResultNotSupported, fmt.Errorf("not implemented"))
 }
 
 // Compare implements the ldap.Client interface
