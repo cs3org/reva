@@ -56,6 +56,10 @@ import (
 
 //go:generate make --no-print-directory -C ../../../../../.. mockery NAME=GatewayClient
 
+const (
+	_spaceTypeProject = "project"
+)
+
 type countingReader struct {
 	n int
 	r io.Reader
@@ -217,7 +221,7 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
 	}
-	p.propfindResponse(ctx, w, r, ns, pf, sendTusHeaders, resourceInfos, sublog)
+	p.propfindResponse(ctx, w, r, ns, spaces[0].SpaceType, pf, sendTusHeaders, resourceInfos, sublog)
 }
 
 // HandleSpacesPropfind handles a spaces based propfind request
@@ -264,11 +268,11 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 		resourceInfos[i].Path = path.Join("/", spaceID, resourceInfos[i].Path)
 	}
 
-	p.propfindResponse(ctx, w, r, "", pf, sendTusHeaders, resourceInfos, sublog)
+	p.propfindResponse(ctx, w, r, "", space.SpaceType, pf, sendTusHeaders, resourceInfos, sublog)
 
 }
 
-func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf XML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace, spaceType string, pf XML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(ctx, "propfind_response")
 	defer span.End()
 
@@ -300,7 +304,7 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, linkshares)
+	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, spaceType, linkshares)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -638,10 +642,10 @@ func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 }
 
 // MultistatusResponse converts a list of resource infos into a multistatus response string
-func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) ([]byte, error) {
+func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns, spaceType string, linkshares map[string]struct{}) ([]byte, error) {
 	responses := make([]*ResponseXML, 0, len(mds))
 	for i := range mds {
-		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, linkshares)
+		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, spaceType, linkshares)
 		if err != nil {
 			return nil, err
 		}
@@ -660,7 +664,7 @@ func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceI
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
-func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) (*ResponseXML, error) {
+func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns, spaceType string, linkshares map[string]struct{}) (*ResponseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
@@ -708,7 +712,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 
 	role := conversions.RoleFromResourcePermissions(md.PermissionSet)
 
-	isShared := !net.IsCurrentUserOwner(ctx, md.Owner)
+	isShared := spaceType != _spaceTypeProject && !net.IsCurrentUserOwner(ctx, md.Owner)
 	var wdp string
 	isPublic := ls != nil
 	if md.PermissionSet != nil {
