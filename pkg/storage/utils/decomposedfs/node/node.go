@@ -604,6 +604,14 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		}
 	}
 
+	var parentID *provider.ResourceId
+	if p, err := n.Parent(); err == nil {
+		parentID = &provider.ResourceId{
+			StorageId: p.SpaceID,
+			OpaqueId:  p.ID,
+		}
+	}
+
 	ri = &provider.ResourceInfo{
 		Id:            id,
 		Path:          fn,
@@ -613,6 +621,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		Target:        target,
 		PermissionSet: rp,
 		Owner:         n.Owner(),
+		ParentId:      parentID,
 	}
 
 	if nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {

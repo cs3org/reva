@@ -110,7 +110,7 @@ var _ = Describe("Cs3", func() {
 
 	JustBeforeEach(func() {
 		var err error
-		m, err = cs3.New(storage, indexer, bcrypt.DefaultCost)
+		m, err = cs3.New(nil, storage, indexer, bcrypt.DefaultCost)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -122,7 +122,7 @@ var _ = Describe("Cs3", func() {
 
 	Describe("New", func() {
 		It("returns a new instance", func() {
-			m, err := cs3.New(storage, indexer, bcrypt.DefaultCost)
+			m, err := cs3.New(nil, storage, indexer, bcrypt.DefaultCost)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(m).ToNot(BeNil())
 		})
@@ -226,6 +226,7 @@ var _ = Describe("Cs3", func() {
 					grant.Expiration = &typespb.Timestamp{
 						Seconds: uint64(t.Unix()),
 					}
+					storage.On("Delete", mock.Anything, mock.Anything).Return(nil, nil)
 				})
 
 				It("does not consider the share", func() {

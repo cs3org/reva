@@ -43,7 +43,7 @@ func TestIndexer_Disk_FindByWithUniqueIndex(t *testing.T) {
 	_, err = indexer.Add(u)
 	assert.NoError(t, err)
 
-	res, err := indexer.FindBy(User{}, "UserName", "mikey")
+	res, err := indexer.FindBy(User{}, NewField("UserName", "mikey"))
 	assert.NoError(t, err)
 	t.Log(res)
 
@@ -82,7 +82,7 @@ func TestIndexer_Disk_AddWithNonUniqueIndex(t *testing.T) {
 	_, err = indexer.Add(pet2)
 	assert.NoError(t, err)
 
-	res, err := indexer.FindBy(Pet{}, "Kind", "Hog")
+	res, err := indexer.FindBy(Pet{}, NewField("Kind", "Hog"))
 	assert.NoError(t, err)
 
 	t.Log(res)
@@ -108,7 +108,7 @@ func TestIndexer_Disk_AddWithAutoincrementIndex(t *testing.T) {
 	assert.Equal(t, "UID", res2[0].Field)
 	assert.Equal(t, "6", path.Base(res2[0].Value))
 
-	resFindBy, err := indexer.FindBy(User{}, "UID", "6")
+	resFindBy, err := indexer.FindBy(User{}, NewField("UID", "6"))
 	assert.NoError(t, err)
 	assert.Equal(t, "hijklmn-456", resFindBy[0])
 	t.Log(resFindBy)
@@ -189,10 +189,10 @@ func TestIndexer_Disk_UpdateWithUniqueIndex(t *testing.T) {
 		Email:    "mikey@example.com",
 	})
 	assert.NoError(t, err)
-	v, err1 := indexer.FindBy(&User{}, "UserName", "mikey-new")
+	v, err1 := indexer.FindBy(&User{}, NewField("UserName", "mikey-new"))
 	assert.NoError(t, err1)
 	assert.Len(t, v, 1)
-	v, err2 := indexer.FindBy(&User{}, "UserName", "mikey")
+	v, err2 := indexer.FindBy(&User{}, NewField("UserName", "mikey"))
 	assert.NoError(t, err2)
 	assert.Len(t, v, 0)
 
@@ -206,10 +206,10 @@ func TestIndexer_Disk_UpdateWithUniqueIndex(t *testing.T) {
 		Email:    "mikey-new@example.com",
 	})
 	assert.NoError(t, err1)
-	fbUserName, err2 := indexer.FindBy(&User{}, "UserName", "mikey-newest")
+	fbUserName, err2 := indexer.FindBy(&User{}, NewField("UserName", "mikey-newest"))
 	assert.NoError(t, err2)
 	assert.Len(t, fbUserName, 1)
-	fbEmail, err3 := indexer.FindBy(&User{}, "Email", "mikey-new@example.com")
+	fbEmail, err3 := indexer.FindBy(&User{}, NewField("Email", "mikey-new@example.com"))
 	assert.NoError(t, err3)
 	assert.Len(t, fbEmail, 1)
 

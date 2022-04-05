@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,14 +32,17 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
@@ -51,6 +55,7 @@ func init() {
 
 // Manager implements a publicshare manager using a cs3 storage backend
 type Manager struct {
+	gatewayClient gateway.GatewayAPIClient
 	sync.RWMutex
 
 	storage          metadata.Storage
@@ -88,12 +93,18 @@ func NewDefault(m map[string]interface{}) (publicshare.Manager, error) {
 	}
 	indexer := indexer.CreateIndexer(s)
 
-	return New(s, indexer, bcrypt.DefaultCost)
+	client, err := pool.GetGatewayServiceClient(c.GatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return New(client, s, indexer, bcrypt.DefaultCost)
 }
 
 // New returns a new manager instance
-func New(storage metadata.Storage, indexer indexer.Indexer, passwordHashCost int) (publicshare.Manager, error) {
+func New(gatewayClient gateway.GatewayAPIClient, storage metadata.Storage, indexer indexer.Indexer, passwordHashCost int) (publicshare.Manager, error) {
 	return &Manager{
+		gatewayClient:    gatewayClient,
 		storage:          storage,
 		indexer:          indexer,
 		passwordHashCost: passwordHashCost,
@@ -127,6 +138,20 @@ func (m *Manager) initialize() error {
 	err = m.indexer.AddIndex(&link.PublicShare{}, option.IndexByFunc{
 		Name: "Owner",
 		Func: indexOwnerFunc,
+	}, "Token", "publicshares", "non_unique", nil, true)
+	if err != nil {
+		return err
+	}
+	err = m.indexer.AddIndex(&link.PublicShare{}, option.IndexByFunc{
+		Name: "Creator",
+		Func: indexCreatorFunc,
+	}, "Token", "publicshares", "non_unique", nil, true)
+	if err != nil {
+		return err
+	}
+	err = m.indexer.AddIndex(&link.PublicShare{}, option.IndexByFunc{
+		Name: "ResourceId",
+		Func: indexResourceIDFunc,
 	}, "Token", "publicshares", "non_unique", nil, true)
 	if err != nil {
 		return err
@@ -168,8 +193,8 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 	}
 
 	createdAt := &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
+		Seconds: uint64(now / int64(time.Second)),
+		Nanos:   uint32(now % int64(time.Second)),
 	}
 
 	s := &PublicShareWithPassword{
@@ -267,7 +292,9 @@ func (m *Manager) getWithPassword(ctx context.Context, ref *link.PublicShareRefe
 }
 
 func (m *Manager) getByID(ctx context.Context, id string) (*PublicShareWithPassword, error) {
-	tokens, err := m.indexer.FindBy(&link.PublicShare{}, "Id.OpaqueId", id)
+	tokens, err := m.indexer.FindBy(&link.PublicShare{},
+		indexer.NewField("Id.OpaqueId", id),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -298,20 +325,43 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		return nil, err
 	}
 
-	tokens, err := m.indexer.FindBy(&link.PublicShare{}, "Owner", userIDToIndex(u.Id))
+	log := appctx.GetLogger(ctx)
+
+	createdShareTokens, err := m.indexer.FindBy(&link.PublicShare{},
+		indexer.NewField("Owner", userIDToIndex(u.Id)),
+		indexer.NewField("Creator", userIDToIndex(u.Id)),
+	)
 	if err != nil {
 		return nil, err
 	}
 
+	// We use shareMem as a temporary lookup store to check which shares were
+	// already added. This is to prevent duplicates.
+	shareMem := make(map[string]struct{})
 	result := []*link.PublicShare{}
-	for _, token := range tokens {
+	for _, token := range createdShareTokens {
 		ps, err := m.getByToken(ctx, token)
 		if err != nil {
 			return nil, err
 		}
 
-		if publicshare.MatchesFilters(ps.PublicShare, filters) && !publicshare.IsExpired(ps.PublicShare) {
-			result = append(result, ps.PublicShare)
+		if !publicshare.MatchesFilters(*ps.PublicShare, filters) {
+			continue
+		}
+
+		if publicshare.IsExpired(*ps.PublicShare) {
+			ref := &link.PublicShareReference{
+				Spec: &link.PublicShareReference_Id{
+					Id: ps.PublicShare.Id,
+				},
+			}
+			if err := m.RevokePublicShare(ctx, u, ref); err != nil {
+				log.Error().Err(err).
+					Str("public_share_token", ps.PublicShare.Token).
+					Str("public_share_id", ps.PublicShare.Id.OpaqueId).
+					Msg("failed to revoke expired public share")
+			}
+			continue
 		}
 
 		if ps.PublicShare.PasswordProtected && sign {
@@ -320,8 +370,70 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 				return nil, err
 			}
 		}
+		result = append(result, ps.PublicShare)
+		shareMem[ps.PublicShare.Token] = struct{}{}
 	}
 
+	// If a user requests to list shares which have not been created by them
+	// we have to explicitly fetch these shares and check if the user is
+	// allowed to list the shares.
+	// Only then can we add these shares to the result.
+	grouped := publicshare.GroupFiltersByType(filters)
+	idFilter, ok := grouped[link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID]
+	if !ok {
+		return result, nil
+	}
+
+	tokensByResourceID := make(map[string]*provider.ResourceId)
+	for _, filter := range idFilter {
+		resourceID := filter.GetResourceId()
+		tokens, err := m.indexer.FindBy(&link.PublicShare{},
+			indexer.NewField("ResourceId", resourceIDToIndex(resourceID)),
+		)
+		if err != nil {
+			continue
+		}
+		for _, token := range tokens {
+			tokensByResourceID[token] = resourceID
+		}
+	}
+
+	// statMem is used as a local cache to prevent statting resources which
+	// already have been checked.
+	statMem := make(map[string]struct{})
+	for token, resourceID := range tokensByResourceID {
+		if _, handled := shareMem[token]; handled {
+			// We don't want to add a share multiple times when we added it
+			// already.
+			continue
+		}
+
+		if _, checked := statMem[resourceIDToIndex(resourceID)]; !checked {
+			sReq := &provider.StatRequest{
+				Ref: &provider.Reference{ResourceId: resourceID},
+			}
+			sRes, err := m.gatewayClient.Stat(ctx, sReq)
+			if err != nil {
+				continue
+			}
+			if sRes.Status.Code != rpc.Code_CODE_OK {
+				continue
+			}
+			if !sRes.Info.PermissionSet.ListGrants {
+				continue
+			}
+			statMem[resourceIDToIndex(resourceID)] = struct{}{}
+		}
+
+		s, err := m.getByToken(ctx, token)
+		if err != nil {
+			return nil, err
+		}
+		if publicshare.MatchesFilters(*s.PublicShare, filters) {
+			result = append(result, s.PublicShare)
+			shareMem[s.PublicShare.Token] = struct{}{}
+		}
+	}
 	return result, nil
 }
 
@@ -357,7 +469,7 @@ func (m *Manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 		return nil, err
 	}
 
-	if publicshare.IsExpired(ps.PublicShare) {
+	if publicshare.IsExpired(*ps.PublicShare) {
 		return nil, errtypes.NotFound("public share has expired")
 	}
 
@@ -378,8 +490,28 @@ func indexOwnerFunc(v interface{}) (string, error) {
 	return userIDToIndex(ps.Owner), nil
 }
 
-func userIDToIndex(id *userpb.UserId) string {
+func indexCreatorFunc(v interface{}) (string, error) {
+	ps, ok := v.(*link.PublicShare)
+	if !ok {
+		return "", fmt.Errorf("given entity is not a public share")
+	}
+	return userIDToIndex(ps.Creator), nil
+}
+
+func indexResourceIDFunc(v interface{}) (string, error) {
+	ps, ok := v.(*link.PublicShare)
+	if !ok {
+		return "", fmt.Errorf("given entity is not a public share")
+	}
+	return resourceIDToIndex(ps.ResourceId), nil
+}
+
+func userIDToIndex(id *user.UserId) string {
 	return url.QueryEscape(id.Idp + ":" + id.OpaqueId)
+}
+
+func resourceIDToIndex(id *provider.ResourceId) string {
+	return strings.Join([]string{id.StorageId, id.OpaqueId}, "!")
 }
 
 func (m *Manager) persist(ctx context.Context, ps *PublicShareWithPassword) error {

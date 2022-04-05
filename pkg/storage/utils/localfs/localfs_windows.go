@@ -64,11 +64,11 @@ func (fs *localfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint6
 
 	pathPtr, err := windows.UTF16PtrFromString(fs.wrap(ctx, "/"))
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	err = windows.GetDiskFreeSpaceEx(pathPtr, &avail, &total, &free)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	used := total - free

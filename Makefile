@@ -16,6 +16,10 @@ LITMUS_USERNAME="einstein"
 LITMUS_PASSWORD="relativity"
 TESTS="basic http copymove props"
 
+ifneq (, $(shell which go 2> /dev/null)) # suppress `command not found warnings` for non go targets in CI
+include .bingo/Variables.mk
+endif
+
 default: build test lint gen-doc check-changelog
 release: deps build test lint gen-doc
 
@@ -141,3 +145,12 @@ vendor-bin/behat/composer.lock: vendor-bin/behat/composer.json
 
 composer.lock: composer.json
 	@echo composer.lock is not up to date.
+
+.PHONY: mockery
+mockery: $(MOCKERY)
+	$(MOCKERY) --dir $(PWD) --output $(PWD)/mocks --boilerplate-file ./.templates/mockery.go.tmpl --name $(NAME)
+	@echo ""
+
+.PHONY: go-generate
+go-generate:
+	go generate ./...

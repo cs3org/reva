@@ -333,6 +333,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	for i := range matches {
 		var err error
+		// do not investigate flock files any further. They indicate file locks but are not relevant here.
+		if strings.HasSuffix(matches[i], ".flock") {
+			continue
+		}
 		// always read link in case storage space id != node id
 		spaceID, nodeID, err = readSpaceAndNodeFromSpaceTypeLink(matches[i])
 		if err != nil {

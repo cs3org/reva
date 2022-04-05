@@ -24,6 +24,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -38,26 +39,14 @@ import (
 // SetLock sets a lock on the node
 func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 	lockFilePath := n.LockFilePath()
-	// check existing lock
-
-	if l, _ := n.ReadLock(ctx); l != nil {
-		lockID, _ := ctxpkg.ContextGetLockID(ctx)
-		if l.LockId != lockID {
-			return errtypes.Locked(l.LockId)
-		}
-
-		err := os.Remove(lockFilePath)
-		if err != nil {
-			return err
-		}
-	}
 
 	// ensure parent path exists
 	if err := os.MkdirAll(filepath.Dir(lockFilePath), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating parent folder for lock")
 	}
-	fileLock, err := filelocks.AcquireWriteLock(n.InternalPath())
 
+	// get file lock, so that nobody can create the lock in the meantime
+	fileLock, err := filelocks.AcquireWriteLock(n.InternalPath())
 	if err != nil {
 		return err
 	}
@@ -70,6 +59,19 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 			err = rerr
 		}
 	}()
+
+	// check if already locked
+	l, err := n.ReadLock(ctx, true) // we already have a write file lock, so ReadLock() would fail to acquire a read file lock -> skip it
+	switch err.(type) {
+	case errtypes.NotFound:
+		// file not locked, continue
+	case nil:
+		if l != nil {
+			return errtypes.PreconditionFailed("already locked")
+		}
+	default:
+		return errors.Wrap(err, "Decomposedfs: could check if file already is locked")
+	}
 
 	// O_EXCL to make open fail when the file already exists
 	f, err := os.OpenFile(lockFilePath, os.O_EXCL|os.O_CREATE|os.O_WRONLY, 0600)
@@ -86,26 +88,30 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 }
 
 // ReadLock reads the lock id for a node
-func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
+func (n Node) ReadLock(ctx context.Context, skipFileLock bool) (*provider.Lock, error) {
 
 	// ensure parent path exists
 	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error creating parent folder for lock")
 	}
-	fileLock, err := filelocks.AcquireReadLock(n.InternalPath())
 
-	if err != nil {
-		return nil, err
-	}
+	// the caller of ReadLock already may hold a file lock
+	if !skipFileLock {
+		fileLock, err := filelocks.AcquireReadLock(n.InternalPath())
 
-	defer func() {
-		rerr := filelocks.ReleaseLock(fileLock)
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
+		if err != nil {
+			return nil, err
 		}
-	}()
+
+		defer func() {
+			rerr := filelocks.ReleaseLock(fileLock)
+
+			// if err is non nil we do not overwrite that
+			if err == nil {
+				err = rerr
+			}
+		}()
+	}
 
 	f, err := os.Open(n.LockFilePath())
 	if err != nil {
@@ -121,7 +127,17 @@ func (n Node) ReadLock(ctx context.Context) (*provider.Lock, error) {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not decode lock file, ignoring")
 		return nil, errors.Wrap(err, "Decomposedfs: could not read lock file")
 	}
-	return lock, err
+
+	// lock already expired
+	if lock.Expiration != nil && time.Now().After(time.Unix(int64(lock.Expiration.Seconds), int64(lock.Expiration.Nanos))) {
+		if err = os.Remove(f.Name()); err != nil {
+			return nil, errors.Wrap(err, "Decomposedfs: could not remove expired lock file")
+		}
+		// we successfully deleted the expired lock
+		return nil, errtypes.NotFound("no lock found")
+	}
+
+	return lock, nil
 }
 
 // RefreshLock refreshes the node's lock
@@ -165,13 +181,8 @@ func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
 		return errtypes.PreconditionFailed("mismatching lock")
 	}
 
-	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.User, u.Id) {
-		return errtypes.PermissionDenied("cannot refresh lock of another holder")
-	}
-
-	if !utils.UserEqual(oldLock.User, lock.GetUser()) {
-		return errtypes.PermissionDenied("cannot change holder when refreshing a lock")
+	if ok, err := isLockModificationAllowed(ctx, oldLock, lock); !ok {
+		return err
 	}
 
 	if err := json.NewEncoder(f).Encode(lock); err != nil {
@@ -222,9 +233,8 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 		return errtypes.Locked(oldLock.LockId)
 	}
 
-	u := ctxpkg.ContextMustGetUser(ctx)
-	if !utils.UserEqual(oldLock.User, u.Id) {
-		return errtypes.PermissionDenied("mismatching holder")
+	if ok, err := isLockModificationAllowed(ctx, oldLock, lock); !ok {
+		return err
 	}
 
 	if err = os.Remove(f.Name()); err != nil {
@@ -236,7 +246,7 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 // CheckLock compares the context lock with the node lock
 func (n *Node) CheckLock(ctx context.Context) error {
 	lockID, _ := ctxpkg.ContextGetLockID(ctx)
-	lock, _ := n.ReadLock(ctx)
+	lock, _ := n.ReadLock(ctx, false)
 	if lock != nil {
 		switch lockID {
 		case "":
@@ -306,4 +316,36 @@ func readLocksIntoOpaque(ctx context.Context, n *Node, ri *provider.ResourceInfo
 func (n *Node) hasLocks(ctx context.Context) bool {
 	_, err := os.Stat(n.LockFilePath()) // FIXME better error checking
 	return err == nil
+}
+
+func isLockModificationAllowed(ctx context.Context, oldLock *provider.Lock, newLock *provider.Lock) (bool, error) {
+	if oldLock.Type == provider.LockType_LOCK_TYPE_SHARED {
+		return true, nil
+	}
+
+	appNameEquals := oldLock.AppName == newLock.AppName
+	if !appNameEquals {
+		return false, errtypes.PermissionDenied("app names of the locks are mismatching")
+	}
+
+	var lockUserEquals, contextUserEquals bool
+	if oldLock.User == nil && newLock.GetUser() == nil {
+		// no user lock set
+		lockUserEquals = true
+		contextUserEquals = true
+	} else {
+		lockUserEquals = utils.UserEqual(oldLock.User, newLock.GetUser())
+		if !lockUserEquals {
+			return false, errtypes.PermissionDenied("users of the locks are mismatching")
+		}
+
+		u := ctxpkg.ContextMustGetUser(ctx)
+		contextUserEquals = utils.UserEqual(oldLock.User, u.Id)
+		if !contextUserEquals {
+			return false, errtypes.PermissionDenied("lock holder and current user are mismatching")
+		}
+	}
+
+	return appNameEquals && lockUserEquals && contextUserEquals, nil
+
 }

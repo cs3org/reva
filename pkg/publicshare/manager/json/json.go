@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -34,6 +35,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -41,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -60,6 +63,7 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	conf.init()
 
 	m := manager{
+		gatewayAddr:                conf.GatewayAddr,
 		mutex:                      &sync.Mutex{},
 		file:                       conf.File,
 		passwordHashCost:           conf.SharePasswordHashCost,
@@ -93,6 +97,7 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 }
 
 type config struct {
+	GatewayAddr                string `mapstructure:"gateway_addr"`
 	File                       string `mapstructure:"file"`
 	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
 	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
@@ -112,8 +117,9 @@ func (c *config) init() {
 }
 
 type manager struct {
-	mutex *sync.Mutex
-	file  string
+	gatewayAddr string
+	mutex       *sync.Mutex
+	file        string
 
 	passwordHashCost           int
 	janitorRunInterval         int
@@ -165,8 +171,8 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	}
 
 	createdAt := &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
+		Seconds: uint64(now / int64(time.Second)),
+		Nanos:   uint32(now % int64(time.Second)),
 	}
 
 	s := link.PublicShare{
@@ -262,8 +268,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	}
 
 	share.Mtime = &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
+		Seconds: uint64(now / int64(time.Second)),
+		Nanos:   uint32(now % int64(time.Second)),
 	}
 
 	m.mutex.Lock()
@@ -333,7 +339,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		}
 
 		if ref.GetId().GetOpaqueId() == ps.Id.OpaqueId {
-			if publicshare.IsExpired(&ps) {
+			if publicshare.IsExpired(ps) {
 				if err := m.revokeExpiredPublicShare(ctx, &ps, u); err != nil {
 					return nil, err
 				}
@@ -354,25 +360,59 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 
 // ListPublicShares retrieves all the shares on the manager that are valid.
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
-	var shares []*link.PublicShare
-
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
+	log := appctx.GetLogger(ctx)
 
 	db, err := m.readDb()
 	if err != nil {
 		return nil, err
 	}
 
+	client, err := pool.GetGatewayServiceClient(m.gatewayAddr)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list shares")
+	}
+	cache := make(map[string]struct{})
+
+	shares := []*link.PublicShare{}
 	for _, v := range db {
 		var local publicShare
 		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local.PublicShare); err != nil {
 			return nil, err
 		}
 
-		// skip if the share isn't created by the current user.
-		if local.Creator.GetOpaqueId() != u.Id.OpaqueId || (local.Creator.GetIdp() != "" && u.Id.Idp != local.Creator.GetIdp()) {
+		if publicshare.IsExpired(local.PublicShare) {
+			if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {
+				log.Error().Err(err).
+					Str("share_token", local.Token).
+					Msg("failed to revoke expired public share")
+			}
 			continue
+		}
+
+		if !publicshare.MatchesFilters(local.PublicShare, filters) {
+			continue
+		}
+
+		key := strings.Join([]string{local.ResourceId.StorageId, local.ResourceId.OpaqueId}, "!")
+		if _, hit := cache[key]; !hit && !publicshare.IsCreatedByUser(local.PublicShare, u) {
+			sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: local.ResourceId}})
+			if err != nil || sRes.Status.Code != rpc.Code_CODE_OK {
+				log.Error().
+					Err(err).
+					Interface("status", sRes.Status).
+					Interface("resource_id", local.ResourceId).
+					Msg("ListShares: could not stat resource")
+				continue
+			}
+			if !sRes.Info.PermissionSet.ListGrants {
+				// skip because the user doesn't have the permissions to list
+				// shares of this file.
+				continue
+			}
+			cache[key] = struct{}{}
 		}
 
 		if local.PublicShare.PasswordProtected && sign {
@@ -381,20 +421,8 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			}
 		}
 
-		if len(filters) == 0 {
-			shares = append(shares, &local.PublicShare)
-			continue
-		}
-
-		if publicshare.MatchesFilters(&local.PublicShare, filters) {
-			if !publicshare.IsExpired(&local.PublicShare) {
-				shares = append(shares, &local.PublicShare)
-			} else if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {
-				return nil, err
-			}
-		}
+		shares = append(shares, &local.PublicShare)
 	}
-
 	return shares, nil
 }
 
@@ -410,7 +438,7 @@ func (m *manager) cleanupExpiredShares() {
 		var ps link.PublicShare
 		_ = utils.UnmarshalJSONToProtoV1([]byte(d.(string)), &ps)
 
-		if publicshare.IsExpired(&ps) {
+		if publicshare.IsExpired(ps) {
 			_ = m.revokeExpiredPublicShare(context.Background(), &ps, nil)
 		}
 	}
@@ -512,7 +540,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 		}
 
 		if local.Token == token {
-			if publicshare.IsExpired(&local) {
+			if publicshare.IsExpired(local) {
 				// TODO user is not needed at all in this API.
 				if err := m.revokeExpiredPublicShare(ctx, &local, nil); err != nil {
 					return nil, err

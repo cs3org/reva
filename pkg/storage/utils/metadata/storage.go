@@ -22,7 +22,7 @@ import (
 	"context"
 )
 
-//go:generate mockery -name Storage
+//go:generate make --no-print-directory -C ../../../.. mockery NAME=Storage
 
 // Storage is the interface to maintain metadata in a storage
 type Storage interface {

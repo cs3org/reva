@@ -24,6 +24,7 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/genproto/protobuf/field_mask"
@@ -35,7 +36,13 @@ const (
 	StorageIDFilterType collaboration.Filter_Type = 7
 )
 
-//go:generate mockery -name Manager
+//go:generate make --no-print-directory -C ../.. mockery NAME=Manager
+
+// Metadata contains Metadata for a share
+type Metadata struct {
+	ETag  string
+	Mtime *types.Timestamp
+}
 
 // Manager is the interface that manipulates shares.
 type Manager interface {
@@ -161,6 +168,9 @@ func MatchesAnyFilter(share *collaboration.Share, filters []*collaboration.Filte
 // Here is an example:
 // (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP)
 func MatchesFilters(share *collaboration.Share, filters []*collaboration.Filter) bool {
+	if len(filters) == 0 {
+		return true
+	}
 	grouped := GroupFiltersByType(filters)
 	for _, f := range grouped {
 		if !MatchesAnyFilter(share, f) {

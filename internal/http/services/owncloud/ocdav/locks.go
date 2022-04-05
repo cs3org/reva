@@ -220,10 +220,13 @@ func (cls *cs3LS) Refresh(ctx context.Context, now time.Time, token string, dura
 	return LockDetails{}, errors.ErrNotImplemented
 }
 func (cls *cs3LS) Unlock(ctx context.Context, now time.Time, ref *provider.Reference, token string) error {
+	u := ctxpkg.ContextMustGetUser(ctx)
+
 	r := &provider.UnlockRequest{
 		Ref: ref,
 		Lock: &provider.Lock{
 			LockId: token, // can be a token or a Coded-URL
+			User:   u.Id,
 		},
 	}
 	res, err := cls.client.Unlock(ctx, r)
@@ -485,7 +488,7 @@ func (s *svc) lockReference(ctx context.Context, w http.ResponseWriter, r *http.
 		//      this actually is a name based lock ... ugh
 		token, err = s.LockSystem.Create(ctx, now, ld)
 		if err != nil {
-			if _, ok := err.(errtypes.Locked); ok {
+			if _, ok := err.(errtypes.PreconditionFailed); ok {
 				return http.StatusLocked, err
 			}
 			return http.StatusInternalServerError, err

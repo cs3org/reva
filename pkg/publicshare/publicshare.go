@@ -115,7 +115,7 @@ func StorageIDFilter(id string) *link.ListPublicSharesRequest_Filter {
 }
 
 // MatchesFilter tests if the share passes the filter.
-func MatchesFilter(share *link.PublicShare, filter *link.ListPublicSharesRequest_Filter) bool {
+func MatchesFilter(share link.PublicShare, filter *link.ListPublicSharesRequest_Filter) bool {
 	switch filter.Type {
 	case link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID:
 		return utils.ResourceIDEqual(share.ResourceId, filter.GetResourceId())
@@ -127,7 +127,7 @@ func MatchesFilter(share *link.PublicShare, filter *link.ListPublicSharesRequest
 }
 
 // MatchesAnyFilter checks if the share passes at least one of the given filters.
-func MatchesAnyFilter(share *link.PublicShare, filters []*link.ListPublicSharesRequest_Filter) bool {
+func MatchesAnyFilter(share link.PublicShare, filters []*link.ListPublicSharesRequest_Filter) bool {
 	for _, f := range filters {
 		if MatchesFilter(share, f) {
 			return true
@@ -140,7 +140,10 @@ func MatchesAnyFilter(share *link.PublicShare, filters []*link.ListPublicSharesR
 // Filters of the same type form a disjuntion, a logical OR. Filters of separate type form a conjunction, a logical AND.
 // Here is an example:
 // (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP)
-func MatchesFilters(share *link.PublicShare, filters []*link.ListPublicSharesRequest_Filter) bool {
+func MatchesFilters(share link.PublicShare, filters []*link.ListPublicSharesRequest_Filter) bool {
+	if len(filters) == 0 {
+		return true
+	}
 	grouped := GroupFiltersByType(filters)
 	for _, f := range grouped {
 		if !MatchesAnyFilter(share, f) {
@@ -160,7 +163,7 @@ func GroupFiltersByType(filters []*link.ListPublicSharesRequest_Filter) map[link
 }
 
 // IsExpired tests whether a public share is expired
-func IsExpired(s *link.PublicShare) bool {
+func IsExpired(s link.PublicShare) bool {
 	expiration := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos()))
 	return s.Expiration != nil && expiration.Before(time.Now())
 }
@@ -186,4 +189,9 @@ func Authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuth
 		return sig.GetSignature() == s
 	}
 	return false
+}
+
+// IsCreatedByUser checks if a share was created by the user.
+func IsCreatedByUser(share link.PublicShare, user *user.User) bool {
+	return utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator)
 }

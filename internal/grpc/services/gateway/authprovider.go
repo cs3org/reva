@@ -210,7 +210,7 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.Pro
 		return nil, err
 	}
 
-	res, err := c.GetAuthProvider(ctx, &registry.GetAuthProviderRequest{
+	res, err := c.GetAuthProviders(ctx, &registry.GetAuthProvidersRequest{
 		Type: authType,
 	})
 
@@ -219,9 +219,9 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.Pro
 		return nil, err
 	}
 
-	if res.Status.Code == rpc.Code_CODE_OK && res.Provider != nil {
+	if res.Status.Code == rpc.Code_CODE_OK && res.Providers != nil && len(res.Providers) > 0 {
 		// TODO(labkode): check for capabilities here
-		c, err := pool.GetAuthProviderServiceClient(res.Provider.Address)
+		c, err := pool.GetAuthProviderServiceClient(res.Providers[0].Address)
 		if err != nil {
 			err = errors.Wrap(err, "gateway: error getting an auth provider client")
 			return nil, err

@@ -45,7 +45,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-//go:generate mockery -name StorageProviderClient
+//go:generate make --no-print-directory -C ../../../.. mockery NAME=StorageProviderClient
 
 func init() {
 	pkgregistry.Register("spaces", NewDefault)

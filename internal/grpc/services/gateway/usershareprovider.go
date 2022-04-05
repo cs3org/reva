@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/pkg/errors"
@@ -166,7 +167,7 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 	// TODO: This is a hack for now.
 	// Can we do that cleaner somehow?
 	// The `ListStorageSpaces` method in sharesstorageprovider/sharesstorageprovider.go needs the etags.
-	shareEtags := make(map[string]string, len(res.Shares))
+	shareMetaData := make(map[string]share.Metadata, len(res.Shares))
 	for _, rs := range res.Shares {
 		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
 		if err != nil {
@@ -182,10 +183,10 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 				Msg("ListRecievedShares: failed to stat the resource")
 			continue
 		}
-		shareEtags[rs.Share.Id.OpaqueId] = sRes.Info.Etag
+		shareMetaData[rs.Share.Id.OpaqueId] = share.Metadata{ETag: sRes.Info.Etag, Mtime: sRes.Info.Mtime}
 	}
 
-	marshalled, err := json.Marshal(shareEtags)
+	marshalled, err := json.Marshal(shareMetaData)
 	if err != nil {
 		logger.Error().
 			Err(err).
@@ -197,7 +198,7 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 				Map: map[string]*typesv1beta1.OpaqueEntry{},
 			}
 		}
-		opaque.Map["etags"] = &typesv1beta1.OpaqueEntry{
+		opaque.Map["shareMetadata"] = &typesv1beta1.OpaqueEntry{
 			Decoder: "json",
 			Value:   marshalled,
 		}
@@ -661,6 +662,7 @@ func (s *svc) addSpaceShare(ctx context.Context, req *collaboration.CreateShareR
 	switch st.Code {
 	case rpc.Code_CODE_OK:
 		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.ResourceInfo.Id)
+		s.cache.RemoveListStorageProviders(req.ResourceInfo.Id)
 	case rpc.Code_CODE_UNIMPLEMENTED:
 		appctx.GetLogger(ctx).Debug().Interface("status", st).Interface("req", req).Msg("storing grants not supported, ignoring")
 	default:
@@ -764,6 +766,7 @@ func (s *svc) removeSpaceShare(ctx context.Context, ref *provider.ResourceId, gr
 		}, err
 	}
 	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), ref)
+	s.cache.RemoveListStorageProviders(ref)
 	return &collaboration.RemoveShareResponse{Status: status.NewOK(ctx)}, nil
 }
 
