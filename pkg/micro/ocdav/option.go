@@ -36,8 +36,8 @@ type Options struct {
 	Address   string
 	Logger    zerolog.Logger
 	Context   context.Context
-	//Metrics   *metrics.Metrics
-	//Flags     []cli.Flag
+	// Metrics   *metrics.Metrics
+	// Flags     []cli.Flag
 	Name      string
 	JWTSecret string
 

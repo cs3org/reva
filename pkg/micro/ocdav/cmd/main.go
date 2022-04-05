@@ -19,7 +19,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/cs3org/reva/v2/pkg/micro/ocdav"
@@ -40,8 +39,10 @@ func main() {
 		ocdav.SharesNamespace("/Shares"),
 	)
 	if err != nil {
-		fmt.Printf(err.Error())
+		logger.Fatal().Err(err).Msg("failed starting ocdav service")
 		return
 	}
-	s.Run()
+	if err := s.Run(); err != nil {
+		logger.Fatal().Err(err).Msg("ocdav service exited with error")
+	}
 }
