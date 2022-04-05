@@ -20,8 +20,8 @@ package ldap
 
 import (
 	"context"
+	"fmt"
 	"strconv"
-	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -30,11 +30,10 @@ import (
 	"github.com/cs3org/reva/v2/pkg/auth"
 	"github.com/cs3org/reva/v2/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/auth/scope"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	ldapIdentity "github.com/cs3org/reva/v2/pkg/utils/ldap"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -51,49 +50,18 @@ type mgr struct {
 }
 
 type config struct {
-	utils.LDAPConn `mapstructure:",squash"`
-	BaseDN         string     `mapstructure:"base_dn"`
-	UserFilter     string     `mapstructure:"userfilter"`
-	LoginFilter    string     `mapstructure:"loginfilter"`
-	Idp            string     `mapstructure:"idp"`
-	GatewaySvc     string     `mapstructure:"gatewaysvc"`
-	Schema         attributes `mapstructure:"schema"`
-	Nobody         int64      `mapstructure:"nobody"`
-}
-
-type attributes struct {
-	// DN is the distinguished name in ldap, e.g. `cn=einstein,ou=users,dc=example,dc=org`
-	DN string `mapstructure:"dn"`
-	// UID is an immutable user id, see https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
-	UID              string `mapstructure:"uid"`
-	UIDIsOctetString bool   `mapstructure:"uidIsOctetString"`
-	// CN is the username, typically `cn`, `uid` or `samaccountname`
-	CN string `mapstructure:"cn"`
-	// Mail is the email address of a user
-	Mail string `mapstructure:"mail"`
-	// Displayname is the Human readable name, e.g. `Albert Einstein`
-	DisplayName string `mapstructure:"displayName"`
-	// UIDNumber is a numeric id that maps to a filesystem uid, eg. 123546
-	UIDNumber string `mapstructure:"uidNumber"`
-	// GIDNumber is a numeric id that maps to a filesystem gid, eg. 654321
-	GIDNumber string `mapstructure:"gidNumber"`
-}
-
-// Default attributes (Active Directory)
-var ldapDefaults = attributes{
-	DN:               "dn",
-	UID:              "ms-DS-ConsistencyGuid", // you can fall back to objectguid or even samaccountname but you will run into trouble when user names change. You have been warned.
-	UIDIsOctetString: false,
-	CN:               "cn",
-	Mail:             "mail",
-	DisplayName:      "displayName",
-	UIDNumber:        "uidNumber",
-	GIDNumber:        "gidNumber",
+	utils.LDAPConn  `mapstructure:",squash"`
+	LDAPIdentity    ldapIdentity.Identity `mapstructure:",squash"`
+	Idp             string                `mapstructure:"idp"`
+	GatewaySvc      string                `mapstructure:"gatewaysvc"`
+	Nobody          int64                 `mapstructure:"nobody"`
+	LoginAttributes []string              `mapstructure:"login_attributes"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{
-		Schema: ldapDefaults,
+		LDAPIdentity:    ldapIdentity.New(),
+		LoginAttributes: []string{"cn"},
 	}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
@@ -122,18 +90,13 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 		return err
 	}
 
-	// backwards compatibility
-	if c.UserFilter != "" {
-		logger.New().Warn().Msg("userfilter is deprecated, use a loginfilter like `(&(objectclass=posixAccount)(|(cn={{login}}))(mail={{login}}))`")
-	}
-	if c.LoginFilter == "" {
-		c.LoginFilter = c.UserFilter
-		c.LoginFilter = strings.ReplaceAll(c.LoginFilter, "%s", "{{login}}")
-	}
 	if c.Nobody == 0 {
 		c.Nobody = 99
 	}
 
+	if err = c.LDAPIdentity.Setup(); err != nil {
+		return fmt.Errorf("error setting up Identity config: %w", err)
+	}
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 	am.c = c
 	return nil
@@ -142,25 +105,13 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx)
 
-	// Search for the given clientID
-	searchRequest := ldap.NewSearchRequest(
-		am.c.BaseDN,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		am.getLoginFilter(clientID),
-		[]string{am.c.Schema.DN, am.c.Schema.UID, am.c.Schema.CN, am.c.Schema.Mail, am.c.Schema.DisplayName, am.c.Schema.UIDNumber, am.c.Schema.GIDNumber},
-		nil,
-	)
+	filter := am.getLoginFilter(clientID)
 
-	sr, err := am.ldapClient.Search(searchRequest)
+	userEntry, err := am.c.LDAPIdentity.GetLDAPUserByFilter(log, am.ldapClient, filter)
+
 	if err != nil {
 		return nil, nil, err
 	}
-
-	if len(sr.Entries) != 1 {
-		return nil, nil, errtypes.NotFound(clientID)
-	}
-
-	userdn := sr.Entries[0].DN
 
 	// Bind as the user to verify their password
 	la, err := utils.GetLDAPClientForAuth(&am.c.LDAPConn)
@@ -168,20 +119,20 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, err
 	}
 	defer la.Close()
-	err = la.Bind(userdn, clientSecret)
+	err = la.Bind(userEntry.DN, clientSecret)
 	if err != nil {
-		log.Debug().Err(err).Interface("userdn", userdn).Msg("bind with user credentials failed")
+		log.Debug().Err(err).Interface("userdn", userEntry.DN).Msg("bind with user credentials failed")
 		return nil, nil, err
 	}
 
 	var uid string
-	if am.c.Schema.UIDIsOctetString {
-		rawValue := sr.Entries[0].GetEqualFoldRawAttributeValue(am.c.Schema.UID)
+	if am.c.LDAPIdentity.User.Schema.IDIsOctetString {
+		rawValue := userEntry.GetEqualFoldRawAttributeValue(am.c.LDAPIdentity.User.Schema.ID)
 		if value, err := uuid.FromBytes(rawValue); err == nil {
 			uid = value.String()
 		}
 	} else {
-		uid = sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID)
+		uid = userEntry.GetEqualFoldAttributeValue(am.c.LDAPIdentity.User.Schema.ID)
 	}
 
 	userID := &user.UserId{
@@ -203,7 +154,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
 	}
 	gidNumber := am.c.Nobody
-	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber)
+	gidValue := userEntry.GetEqualFoldAttributeValue(am.c.LDAPIdentity.User.Schema.GIDNumber)
 	if gidValue != "" {
 		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
 		if err != nil {
@@ -211,7 +162,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		}
 	}
 	uidNumber := am.c.Nobody
-	uidValue := sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber)
+	uidValue := userEntry.GetEqualFoldAttributeValue(am.c.LDAPIdentity.User.Schema.UIDNumber)
 	if uidValue != "" {
 		uidNumber, err = strconv.ParseInt(uidValue, 10, 64)
 		if err != nil {
@@ -221,11 +172,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	u := &user.User{
 		Id: userID,
 		// TODO add more claims from the StandardClaims, eg EmailVerified
-		Username: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.CN),
+		Username: userEntry.GetEqualFoldAttributeValue(am.c.LDAPIdentity.User.Schema.Username),
 		// TODO groups
 		Groups:      getGroupsResp.Groups,
-		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.Mail),
-		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.DisplayName),
+		Mail:        userEntry.GetEqualFoldAttributeValue(am.c.LDAPIdentity.User.Schema.Mail),
+		DisplayName: userEntry.GetEqualFoldAttributeValue(am.c.LDAPIdentity.User.Schema.DisplayName),
 		UidNumber:   uidNumber,
 		GidNumber:   gidNumber,
 	}
@@ -243,12 +194,21 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		}
 	}
 
-	log.Debug().Interface("entry", sr.Entries[0]).Interface("user", u).Msg("authenticated user")
+	log.Debug().Interface("entry", userEntry).Interface("user", u).Msg("authenticated user")
 
 	return u, scopes, nil
 
 }
 
 func (am *mgr) getLoginFilter(login string) string {
-	return strings.ReplaceAll(am.c.LoginFilter, "{{login}}", ldap.EscapeFilter(login))
+	var filter string
+	for _, attr := range am.c.LoginAttributes {
+		filter = fmt.Sprintf("%s(%s=%s*)", filter, attr, ldap.EscapeFilter(login))
+	}
+
+	return fmt.Sprintf("(&%s(objectclass=%s)(|%s))",
+		am.c.LDAPIdentity.User.Filter,
+		am.c.LDAPIdentity.User.Objectclass,
+		filter,
+	)
 }
