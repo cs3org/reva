@@ -51,6 +51,9 @@ type ctxKey int
 
 const (
 	ctxKeyBaseURI ctxKey = iota
+
+	// name is the Tracer name used to identify this instrumentation library.
+	tracerName = "ocdav"
 )
 
 var (

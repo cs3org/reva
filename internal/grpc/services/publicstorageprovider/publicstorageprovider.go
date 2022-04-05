@@ -44,6 +44,9 @@ import (
 	gstatus "google.golang.org/grpc/status"
 )
 
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "publicstorageprovider"
+
 func init() {
 	rgrpc.Register("publicstorageprovider", New)
 }
@@ -344,7 +347,7 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "CreateContainer")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "CreateContainer")
 	defer span.End()
 
 	span.SetAttributes(attribute.KeyValue{
@@ -397,7 +400,7 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Delete")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "Delete")
 	defer span.End()
 
 	span.SetAttributes(attribute.KeyValue{
@@ -437,7 +440,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Move")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "Move")
 	defer span.End()
 
 	span.SetAttributes(
@@ -500,7 +503,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Stat")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "Stat")
 	defer span.End()
 
 	span.SetAttributes(

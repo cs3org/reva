@@ -37,7 +37,7 @@ import (
 )
 
 func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "proppatch")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "proppatch")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -104,7 +104,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 }
 
 func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_proppatch")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_proppatch")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()

@@ -47,7 +47,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "delete")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "delete")
 	defer span.End()
 
 	req := &provider.DeleteRequest{Ref: ref}
@@ -96,7 +96,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 
 func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx := r.Context()
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "spaces_delete")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "spaces_delete")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()

@@ -30,6 +30,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "appctx"
+
 // New returns a new HTTP middleware that stores the log
 // in the context with request ID information.
 func New(log zerolog.Logger) func(http.Handler) http.Handler {
@@ -46,7 +49,7 @@ func handler(log zerolog.Logger, h http.Handler) http.Handler {
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = rtrace.Provider.Tracer("http").Start(ctx, "http interceptor")
+			ctx, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "http interceptor")
 		}
 
 		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()

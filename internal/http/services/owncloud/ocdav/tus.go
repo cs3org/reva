@@ -42,7 +42,7 @@ import (
 )
 
 func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "tus-post")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "tus-post")
 	defer span.End()
 
 	// read filename from metadata
@@ -65,7 +65,7 @@ func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns strin
 }
 
 func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces-tus-post")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces-tus-post")
 	defer span.End()
 
 	// read filename from metadata
