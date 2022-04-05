@@ -37,6 +37,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+// QuicklinkName is the reserved name for a quicklink.
+// Creating (or updating) a link with (to) the same name will be blocked by the server
+var QuicklinkName = "Quicklink"
+
 func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) (*link.PublicShare, *ocsError) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -57,6 +61,54 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 			Message: "Could not parse form from request",
 			Error:   err,
 		}
+	}
+
+	// check reserved names
+	linkname := r.FormValue("name")
+	quick, _ := strconv.ParseBool(r.FormValue("quicklink")) // no need to check the error - defaults to zero value!
+	if !quick && linkname == QuicklinkName {
+		return nil, &ocsError{
+			Code:    response.MetaBadRequest.StatusCode,
+			Message: fmt.Sprintf("not allowed to use `%s` as name", linkname),
+		}
+
+	}
+
+	// check if a quicklink should be created
+	if quick {
+		_, f, err := h.addFilters(w, r, &provider.Reference{ResourceId: statInfo.Id})
+		if err != nil {
+			log.Error().Err(err).Msg("could not add filters")
+			return nil, &ocsError{
+				Code:    response.MetaServerError.StatusCode,
+				Message: "could not add filters",
+				Error:   err,
+			}
+		}
+
+		req := link.ListPublicSharesRequest{Filters: f}
+		res, err := c.ListPublicShares(ctx, &req)
+		if err != nil {
+			return nil, &ocsError{
+				Code:    response.MetaServerError.StatusCode,
+				Message: "could not list public links",
+				Error:   err,
+			}
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return nil, &ocsError{
+				Code:    int(res.Status.GetCode()),
+				Message: "could not list public links",
+			}
+		}
+
+		for _, l := range res.GetShare() {
+			if l.DisplayName == QuicklinkName {
+				return l, nil
+			}
+		}
+
+		linkname = QuicklinkName
 	}
 
 	newPermissions, err := permissionFromRequest(r, h)
@@ -120,7 +172,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	// set displayname and password protected as arbitrary metadata
 	req.ResourceInfo.ArbitraryMetadata = &provider.ArbitraryMetadata{
 		Metadata: map[string]string{
-			"name": r.FormValue("name"),
+			"name": linkname,
 			// "password": r.FormValue("password"),
 		},
 	}
@@ -262,7 +314,15 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	newName, ok := r.Form["name"]
 	if ok {
 		updatesFound = true
-		if newName[0] != before.Share.DisplayName {
+		if n := newName[0]; n != before.Share.DisplayName {
+			if n == QuicklinkName {
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, fmt.Sprintf("not allowed to rename a link to '%s'", n), nil)
+				return
+			}
+			if before.Share.DisplayName == QuicklinkName {
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "not allowed to rename a quicklink", nil)
+				return
+			}
 			updates = append(updates, &link.UpdatePublicShareRequest_Update{
 				Type:        link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME,
 				DisplayName: newName[0],
