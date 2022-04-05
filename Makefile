@@ -27,9 +27,6 @@ off:
 	echo VERSION=${VERSION}
 	echo GO_VERSION=${GO_VERSION}
 
-imports: off
-	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
-
 build: build-revad build-reva test-go-version
 
 build-cephfs: build-revad-cephfs build-reva
@@ -37,13 +34,13 @@ build-cephfs: build-revad-cephfs build-reva
 tidy:
 	go mod tidy
 
-build-revad: imports
+build-revad: 
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 
-build-revad-cephfs: imports
+build-revad-cephfs: 
 	go build -ldflags ${BUILD_FLAGS} -tags ceph -o ./cmd/revad/revad ./cmd/revad
 
-build-reva: imports
+build-reva:
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 test: off
@@ -81,7 +78,6 @@ test-go-version:
 # for manual building only
 deps:
 	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.42.1' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
-	cd /tmp && go get golang.org/x/tools/cmd/goimports
 
 build-ci: off
 	go build -ldflags ${CI_BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
