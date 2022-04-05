@@ -33,13 +33,19 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "auth"
 
 var userGroupsCache gcache.Cache
 var scopeExpansionCache gcache.Cache
@@ -91,6 +97,12 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		log := appctx.GetLogger(ctx)
 
+		span := trace.SpanFromContext(ctx)
+		defer span.End()
+		if !span.SpanContext().HasTraceID() {
+			ctx, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "grpc auth unary")
+		}
+
 		if utils.Skip(info.FullMethod, unprotected) {
 			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 
@@ -101,6 +113,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 				u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, true)
 				if err == nil {
 					ctx = ctxpkg.ContextSetUser(ctx, u)
+					span.SetAttributes(attribute.String("enduser.id", u.Id.OpaqueId))
 				}
 			}
 			return handler(ctx, req)
@@ -121,6 +134,9 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		}
 
 		ctx = ctxpkg.ContextSetUser(ctx, u)
+
+		span.SetAttributes(attribute.String("enduser.id", u.Id.OpaqueId))
+
 		return handler(ctx, req)
 	}
 	return interceptor, nil
@@ -155,6 +171,12 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		ctx := ss.Context()
 		log := appctx.GetLogger(ctx)
 
+		span := trace.SpanFromContext(ctx)
+		defer span.End()
+		if !span.SpanContext().HasTraceID() {
+			ctx, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "grpc auth new stream")
+		}
+
 		if utils.Skip(info.FullMethod, unprotected) {
 			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 
@@ -166,6 +188,8 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 				if err == nil {
 					ctx = ctxpkg.ContextSetUser(ctx, u)
 					ss = newWrappedServerStream(ctx, ss)
+
+					span.SetAttributes(attribute.String("enduser.id", u.Id.OpaqueId))
 				}
 			}
 
@@ -189,6 +213,9 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		// store user and core access token in context.
 		ctx = ctxpkg.ContextSetUser(ctx, u)
 		wrapped := newWrappedServerStream(ctx, ss)
+
+		span.SetAttributes(attribute.String("enduser.id", u.Id.OpaqueId))
+
 		return handler(srv, wrapped)
 	}
 	return interceptor, nil
