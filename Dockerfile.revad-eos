@@ -35,9 +35,6 @@ RUN make build-revad-docker && cp /go/src/github/cs3org/reva/cmd/revad/revad /us
 RUN mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
 RUN mkdir -p /usr/local/bin
 
-# COPY --from=builder /go/bin/revad /usr/bin/revad
-# COPY --from=builder /etc/revad /etc/revad
-
 RUN chmod +x /usr/bin/revad
 
 ENTRYPOINT [ "/usr/bin/revad" ]
