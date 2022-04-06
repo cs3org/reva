@@ -38,10 +38,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// QuicklinkName is the reserved name for a quicklink.
-// Creating (or updating) a link with (to) the same name will be blocked by the server
-const QuicklinkName = "Quicklink"
-
 func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) (*link.PublicShare, *ocsError) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -64,18 +60,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
-	// check reserved names
-	linkname := r.FormValue("name")
-	quick, _ := strconv.ParseBool(r.FormValue("quicklink")) // no need to check the error - defaults to zero value!
-	if !quick && linkname == QuicklinkName {
-		return nil, &ocsError{
-			Code:    response.MetaBadRequest.StatusCode,
-			Message: fmt.Sprintf("not allowed to use `%s` as name", linkname),
-		}
-
-	}
-
 	// check if a quicklink should be created
+	quick, _ := strconv.ParseBool(r.FormValue("quicklink")) // no need to check the error - defaults to zero value!
 	if quick {
 		f := []*link.ListPublicSharesRequest_Filter{publicshare.ResourceIDFilter(statInfo.Id)}
 		req := link.ListPublicSharesRequest{Filters: f}
@@ -95,12 +81,10 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		}
 
 		for _, l := range res.GetShare() {
-			if l.DisplayName == QuicklinkName {
+			if l.Quicklink {
 				return l, nil
 			}
 		}
-
-		linkname = QuicklinkName
 	}
 
 	newPermissions, err := permissionFromRequest(r, h)
@@ -164,7 +148,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	// set displayname and password protected as arbitrary metadata
 	req.ResourceInfo.ArbitraryMetadata = &provider.ArbitraryMetadata{
 		Metadata: map[string]string{
-			"name": linkname,
+			"name":      r.FormValue("name"),
+			"quicklink": r.FormValue("quicklink"),
 			// "password": r.FormValue("password"),
 		},
 	}
@@ -306,15 +291,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	newName, ok := r.Form["name"]
 	if ok {
 		updatesFound = true
-		if n := newName[0]; n != before.Share.DisplayName {
-			if n == QuicklinkName {
-				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, fmt.Sprintf("not allowed to rename a link to '%s'", n), nil)
-				return
-			}
-			if before.Share.DisplayName == QuicklinkName {
-				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "not allowed to rename a quicklink", nil)
-				return
-			}
+		if newName[0] != before.Share.DisplayName {
 			updates = append(updates, &link.UpdatePublicShareRequest_Update{
 				Type:        link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME,
 				DisplayName: newName[0],

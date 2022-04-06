@@ -142,6 +142,8 @@ type ShareData struct {
 	URL string `json:"url,omitempty" xml:"url,omitempty"`
 	// Attributes associated
 	Attributes string `json:"attributes,omitempty" xml:"attributes,omitempty"`
+	// Quicklink indicates if the link is the quicklink
+	Quicklink bool `json:"quicklink,omitempty" xml:"quicklink,omitempty"`
 	// PasswordProtected represents a public share is password protected
 	// PasswordProtected bool `json:"password_protected,omitempty" xml:"password_protected,omitempty"`
 }
@@ -233,6 +235,7 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 		URL:          publicURL + path.Join("/", "s/"+share.Token),
 		UIDOwner:     LocalUserIDToString(share.Creator),
 		UIDFileOwner: LocalUserIDToString(share.Owner),
+		Quicklink:    share.Quicklink,
 	}
 	if share.Id != nil {
 		sd.ID = share.Id.OpaqueId
