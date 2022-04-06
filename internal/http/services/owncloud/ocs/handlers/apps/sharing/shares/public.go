@@ -33,13 +33,14 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
 // QuicklinkName is the reserved name for a quicklink.
 // Creating (or updating) a link with (to) the same name will be blocked by the server
-var QuicklinkName = "Quicklink"
+const QuicklinkName = "Quicklink"
 
 func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) (*link.PublicShare, *ocsError) {
 	ctx := r.Context()
@@ -76,16 +77,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 
 	// check if a quicklink should be created
 	if quick {
-		_, f, err := h.addFilters(w, r, &provider.Reference{ResourceId: statInfo.Id})
-		if err != nil {
-			log.Error().Err(err).Msg("could not add filters")
-			return nil, &ocsError{
-				Code:    response.MetaServerError.StatusCode,
-				Message: "could not add filters",
-				Error:   err,
-			}
-		}
-
+		f := []*link.ListPublicSharesRequest_Filter{publicshare.ResourceIDFilter(statInfo.Id)}
 		req := link.ListPublicSharesRequest{Filters: f}
 		res, err := c.ListPublicShares(ctx, &req)
 		if err != nil {
