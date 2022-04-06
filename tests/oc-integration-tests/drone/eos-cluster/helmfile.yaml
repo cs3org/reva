@@ -11,6 +11,9 @@ releases:
     namespace: default
     chart: openldap/openldap
     values:
+      - service:
+          type: NodePort
+          ldapPortNodePort: 636
       - env:
           LDAP_DOMAIN: "owncloud.com"
           LDAP_ORGANISATION: "ownCloud"
