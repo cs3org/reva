@@ -36,7 +36,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/props"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/prop"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
@@ -557,10 +557,10 @@ func writeLockInfo(w io.Writer, token string, ld LockDetails) (int, error) {
 		lockdiscovery.WriteString("  <d:timeout>Infinite</d:timeout>\n")
 	}
 	if token != "" {
-		lockdiscovery.WriteString(fmt.Sprintf("  <d:locktoken><d:href>%s</d:href></d:locktoken>\n", props.Escape(token)))
+		lockdiscovery.WriteString(fmt.Sprintf("  <d:locktoken><d:href>%s</d:href></d:locktoken>\n", prop.Escape(token)))
 	}
 	if href != "" {
-		lockdiscovery.WriteString(fmt.Sprintf("  <d:lockroot><d:href>%s</d:href></d:lockroot>\n", props.Escape(href)))
+		lockdiscovery.WriteString(fmt.Sprintf("  <d:lockroot><d:href>%s</d:href></d:lockroot>\n", prop.Escape(href)))
 	}
 	lockdiscovery.WriteString("</d:activelock></d:lockdiscovery></d:prop>")
 

@@ -20,6 +20,7 @@ package conversions
 
 import (
 	"fmt"
+	"strconv"
 )
 
 // Permissions reflects the CRUD permissions used in the OCS sharing API
@@ -61,4 +62,8 @@ func NewPermissions(val int) (Permissions, error) {
 // Contain tests if the permissions contain another one.
 func (p Permissions) Contain(other Permissions) bool {
 	return p&other == other
+}
+
+func (p Permissions) String() string {
+	return strconv.FormatUint(uint64(p), 10)
 }

@@ -107,6 +107,8 @@ def main(ctx):
         litmusOcisOldWebdav(),
         litmusOcisNewWebdav(),
         litmusOcisSpacesDav(),
+        cs3ApiValidatorOcis(),
+        cs3ApiValidatorS3NG(),
         # virtual views don't work on edge at the moment
         #virtualViews(),
     ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
@@ -756,6 +758,115 @@ def litmusOcisSpacesDav():
                     "/usr/local/bin/litmus-wrapper",
                 ],
             },
+        ],
+        "depends_on": ["changelog"],
+    }
+
+def cs3ApiValidatorOcis():
+    return {
+        "kind": "pipeline",
+        "type": "docker",
+        "name": "cs3api-validator-ocis",
+        "platform": {
+            "os": "linux",
+            "arch": "amd64",
+        },
+        "trigger": {
+            "event": {
+                "include": [
+                    "pull_request",
+                    "tag",
+                ],
+            },
+        },
+        "steps": [
+            makeStep("build-ci"),
+            {
+                "name": "revad-services",
+                "image": "registry.cern.ch/docker.io/library/golang:1.17",
+                "detach": True,
+                "commands": [
+                    "cd /drone/src/tests/oc-integration-tests/drone/",
+                    "/drone/src/cmd/revad/revad -c frontend.toml &",
+                    "/drone/src/cmd/revad/revad -c gateway.toml &",
+                    "/drone/src/cmd/revad/revad -c storage-users-ocis.toml &",
+                    "/drone/src/cmd/revad/revad -c storage-shares.toml &",
+                    "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
+                    "/drone/src/cmd/revad/revad -c shares.toml &",
+                    "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
+                    "/drone/src/cmd/revad/revad -c users.toml",
+                ],
+            },
+            {
+                "name": "sleep-for-revad-start",
+                "image": "registry.cern.ch/docker.io/library/golang:1.17",
+                "commands": [
+                    "sleep 5",
+                ],
+            },
+            {
+                "name": "cs3api-validator-ocis",
+                "image": "owncloud/cs3api-validator:latest",
+                "commands": [
+                    "/usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000",
+                ],
+            },
+        ],
+        "depends_on": ["changelog"],
+    }
+
+def cs3ApiValidatorS3NG():
+    return {
+        "kind": "pipeline",
+        "type": "docker",
+        "name": "cs3api-validator-S3NG",
+        "platform": {
+            "os": "linux",
+            "arch": "amd64",
+        },
+        "trigger": {
+            "event": {
+                "include": [
+                    "pull_request",
+                    "tag",
+                ],
+            },
+        },
+        "steps": [
+            makeStep("build-ci"),
+            {
+                "name": "revad-services",
+                "image": "registry.cern.ch/docker.io/library/golang:1.17",
+                "detach": True,
+                "commands": [
+                    "cd /drone/src/tests/oc-integration-tests/drone/",
+                    "/drone/src/cmd/revad/revad -c frontend.toml &",
+                    "/drone/src/cmd/revad/revad -c gateway.toml &",
+                    "/drone/src/cmd/revad/revad -c storage-users-s3ng.toml &",
+                    "/drone/src/cmd/revad/revad -c storage-shares.toml &",
+                    "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
+                    "/drone/src/cmd/revad/revad -c shares.toml &",
+                    "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
+                    "/drone/src/cmd/revad/revad -c users.toml",
+                ],
+            },
+            {
+                "name": "sleep-for-revad-start",
+                "image": "registry.cern.ch/docker.io/library/golang:1.17",
+                "commands": [
+                    "sleep 5",
+                ],
+            },
+            {
+                "name": "cs3api-validator-S3NG",
+                "image": "owncloud/cs3api-validator:latest",
+                "commands": [
+                    "/usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000",
+                ],
+            },
+        ],
+        "services": [
+            cephService(),
         ],
         "depends_on": ["changelog"],
     }

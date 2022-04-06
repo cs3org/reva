@@ -104,7 +104,13 @@ func (s *svc) sign(_ context.Context, target string) (string, error) {
 }
 
 func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
-	u := ctxpkg.ContextMustGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return &provider.CreateHomeResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "can't create home for anonymous user"),
+		}, nil
+
+	}
 	createReq := &provider.CreateStorageSpaceRequest{
 		Type:  "personal",
 		Owner: u,
