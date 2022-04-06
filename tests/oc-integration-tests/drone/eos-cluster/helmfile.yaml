@@ -1,62 +1,105 @@
 repositories:
+  - name: openldap
+    url: https://jp-gouin.github.io/helm-openldap/
   - name: eos
     url: https://registry.cern.ch/chartrepo/eos
-
   - name: cs3org
     url: https://cs3org.github.io/charts/
 
 releases:
+  - name: ldap
+    namespace: default
+    chart: openldap/openldap
+    values:
+      - env:
+          LDAP_DOMAIN: "owncloud.com"
+          LDAP_ORGANISATION: "ownCloud"
+          LDAP_ADMIN_PASSWORD: "admin"
+          LDAP_TLS_VERIFY_CLIENT: "never"
+          HOSTNAME: "ldap"
+      - phpldapadmin:
+          ingress:
+            enabled: false
+      - ltb-passwd:
+          ingress:
+            enabled: false
+
   - name: eos
     namespace: default
     chart: eos/server
-
-  - name: revad-gateway
-    namespace: default
-    chart: cs3org/revad
     values:
-      - image:
-          repository: docker:5000/cs3org/revad
-          tag: latest-eos
-      #- ingress:
-      #    enabled: true
-      #    services:
-      #      http:
-      #        hostname: docker
-      #      grpc:
-      #        hostname: docker
-    set:
-      - name: "configFiles.revad\\.toml"
-        file: ./revad-gateway.toml
+      - mgm:
+          ldapBindUsers:
+            enable: true
+            nslcd:
+              config:
+                ldap_base: ou=users,dc=example,dc=org
+                ldap_binddn: cn=idp,ou=sysusers,dc=example,dc=org
+                ldap_bindpw: idp
+                ldap_filter_group: (objectClass=group)
+                ldap_filter_passwd: (objectClass=posixAccount)
+                ldap_group_search_base: ou=groups,dc=example,dc=org
+                ldap_uri: ldap://ldap.default.svc.cluster.local:636
+                ldap_user_search_base: dc=example,dc=org
 
-  - name: revad-home
-    namespace: default
-    chart: cs3org/revad
-    values:
-      - image:
-          repository: docker:5000/cs3org/revad
-          tag: latest-eos
-    set:
-      - name: "configFiles.revad\\.toml"
-        file: ./revad-home.toml
+  # - name: revad-gateway
+  #   namespace: default
+  #   chart: cs3org/revad
+  #   values:
+  #     - image:
+  #         repository: cs3org/revad
+  #         #tag: latest-eos
+  #     - service:
+  #         grpc:
+  #           port: 9142
+  #         http:
+  #           port: 9143
+  #   set:
+  #     - name: "configFiles.revad\\.toml"
+  #       file: ./gateway.toml
 
-  - name: revad-shares
-    namespace: default
-    chart: cs3org/revad
-    values:
-      - image:
-          repository: docker:5000/cs3org/revad
-          tag: latest-eos
-    set:
-      - name: "configFiles.revad\\.toml"
-        file: ./revad-shares.toml
+  # - name: revad-home
+  #   namespace: default
+  #   chart: cs3org/revad
+  #   values:
+  #     - image:
+  #         repository: cs3org/revad
+  #         #tag: latest-eos
+  #     - service:
+  #         grpc:
+  #           port: 18000
+  #         http:
+  #           port: 17000
+  #   set:
+  #     - name: "configFiles.revad\\.toml"
+  #       file: ./storageprovider-home.toml
 
-  - name: revad-users
-    namespace: default
-    chart: cs3org/revad
-    values:
-      - image:
-          repository: docker:5000/cs3org/revad
-          tag: latest-eos
-    set:
-      - name: "configFiles.revad\\.toml"
-        file: ./revad-users.toml
+  # - name: revad-public
+  #   namespace: default
+  #   chart: cs3org/revad
+  #   values:
+  #     - image:
+  #         repository: cs3org/revad
+  #         #tag: latest-eos
+  #     - service:
+  #         grpc:
+  #           port: 9278
+  #   set:
+  #     - name: "configFiles.revad\\.toml"
+  #       file: ./storageprovider-public.toml
+
+  # - name: revad-users
+  #   namespace: default
+  #   chart: cs3org/revad
+  #   values:
+  #     - image:
+  #         repository: cs3org/revad
+  #         #tag: latest-eos
+  #     - service:
+  #         grpc:
+  #           port: 16000
+  #         http:
+  #           port: 15000
+  #   set:
+  #     - name: "configFiles.revad\\.toml"
+  #       file: ./storageprovider-user.toml

@@ -1034,7 +1034,6 @@ def eosIntegrationTests(parallelRuns, skipExceptParts = []):
                     },
                 ],
                 "services": [
-                    ldapService(),
                     dind(),
                 ],
                 "volumes": [
