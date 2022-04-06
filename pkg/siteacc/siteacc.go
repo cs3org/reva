@@ -185,7 +185,7 @@ func (siteacc *SiteAccounts) AlertsDispatcher() *alerting.Dispatcher {
 // GetPublicEndpoints returns a list of all public endpoints.
 func (siteacc *SiteAccounts) GetPublicEndpoints() []string {
 	// TODO: Only for local testing!
-	return []string{"/"}
+	// return []string{"/"}
 
 	endpoints := make([]string, 0, 5)
 	for _, ep := range getEndpoints() {
