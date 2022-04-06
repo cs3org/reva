@@ -13,7 +13,7 @@ releases:
     values:
       - service:
           type: NodePort
-          ldapPortNodePort: 636
+          ldapPortNodePort: 30636
       - env:
           LDAP_DOMAIN: "owncloud.com"
           LDAP_ORGANISATION: "ownCloud"

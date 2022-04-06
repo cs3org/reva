@@ -980,22 +980,22 @@ def eosIntegrationTests(parallelRuns, skipExceptParts = []):
                             {"name": "kubeconfig", "path": "/mnt/config"},
                         ],
                     },
-                    {
-                        "name": "build-docker-revad-eos-latest",
-                        "pull": "always",
-                        "image": "plugins/docker",
-                        "settings": {
-                            "insecure": "true",
-                            "registry": "docker:5000",
-                            "repo": "docker:5000/cs3org/revad",
-                            "tags": "latest-eos",
-                            "dockerfile": "Dockerfile.revad-eos",
-                            "custom_dns": [
-                                "128.142.17.5",
-                                "128.142.16.5",
-                            ],
-                        },
-                    },
+                    # {
+                    #     "name": "build-docker-revad-eos-latest",
+                    #     "pull": "always",
+                    #     "image": "plugins/docker",
+                    #     "settings": {
+                    #         "insecure": "true",
+                    #         "registry": "docker:5000",
+                    #         "repo": "docker:5000/cs3org/revad",
+                    #         "tags": "latest-eos",
+                    #         "dockerfile": "Dockerfile.revad-eos",
+                    #         "custom_dns": [
+                    #             "128.142.17.5",
+                    #             "128.142.16.5",
+                    #         ],
+                    #     },
+                    # },
                     {
                         "name": "start-helmfile",
                         "image": "registry.cern.ch/quay.io/roboll/helmfile:v0.142.0",

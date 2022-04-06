@@ -20,5 +20,5 @@ nodes:
       - "docker"
 - role: worker
   extraPortMappings:
-  - containerPort: 636
-    hostPort: 636
+  - containerPort: 30636
+    hostPort: 30636
