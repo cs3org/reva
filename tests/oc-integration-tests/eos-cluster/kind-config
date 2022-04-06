@@ -19,3 +19,6 @@ nodes:
       certSANs:
       - "docker"
 - role: worker
+  extraPortMappings:
+  - containerPort: 636
+    hostPort: 636
