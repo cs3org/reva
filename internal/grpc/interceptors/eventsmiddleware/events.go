@@ -125,7 +125,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 				ev = FileVersionRestored(v, req.(*provider.RestoreFileVersionRequest))
 			}
 		case *provider.CreateStorageSpaceResponse:
-			if isSuccess(v) {
+			if isSuccess(v) && v.StorageSpace != nil { // TODO: Why are there CreateStorageSpaceResponses with nil StorageSpace?
 				ev = SpaceCreated(v)
 			}
 		case *provider.UpdateStorageSpaceResponse:
