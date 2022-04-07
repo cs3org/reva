@@ -577,6 +577,11 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 func (fs *eosfs) getLockExpiration(ctx context.Context, auth eosclient.Authorization, path string) (*types.Timestamp, bool, error) {
 	expiration, err := fs.c.GetAttr(ctx, auth, "sys."+LockExpirationKey, path)
 	if err != nil {
+		// since the expiration is optional, if we do not find it in the attr
+		// just return a nil value, without reporting the error
+		if _, ok := err.(errtypes.NotFound); ok {
+			return nil, true, nil
+		}
 		return nil, false, err
 	}
 	// the expiration value should be unix time encoded
@@ -704,17 +709,19 @@ func (fs *eosfs) setLock(ctx context.Context, auth eosclient.Authorization, lock
 		return errors.Wrap(err, "eosfs: error encoding lock")
 	}
 
-	// set expiration
-	err = fs.c.SetAttr(ctx, auth, &eosclient.Attribute{
-		Type: SystemAttr,
-		Key:  LockExpirationKey,
-		Val:  strconv.FormatUint(lock.Expiration.Seconds, 10),
-	}, true, false, path)
-	switch {
-	case errors.Is(err, eosclient.AttrAlreadyExistsError):
-		return errtypes.BadRequest("lock already set")
-	default:
-		return err
+	if lock.Expiration != nil {
+		// set expiration
+		err = fs.c.SetAttr(ctx, auth, &eosclient.Attribute{
+			Type: SystemAttr,
+			Key:  LockExpirationKey,
+			Val:  strconv.FormatUint(lock.Expiration.Seconds, 10),
+		}, true, false, path)
+		switch {
+		case errors.Is(err, eosclient.AttrAlreadyExistsError):
+			return errtypes.BadRequest("lock already set")
+		case err != nil:
+			return err
+		}
 	}
 
 	// set lock type
