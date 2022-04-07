@@ -634,7 +634,11 @@ func (fs *eosfs) removeLockAttrs(ctx context.Context, auth eosclient.Authorizati
 		Key:  LockExpirationKey,
 	}, false, path)
 	if err != nil {
-		return errors.Wrap(err, "eosfs: error unsetting the lock expiration")
+		// as the expiration time in the lock is optional
+		// we will discard the error if the attr is not set
+		if !errors.Is(err, eosclient.AttrNotExistsError) {
+			return errors.Wrap(err, "eosfs: error unsetting the lock expiration")
+		}
 	}
 
 	err = fs.c.UnsetAttr(ctx, auth, &eosclient.Attribute{
