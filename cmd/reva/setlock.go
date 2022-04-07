@@ -68,8 +68,8 @@ func setlockCommand() *command {
 
 		ref := &provider.Reference{Path: fn}
 
-		if !*refreshFlag {
-			res, err := client.SetLock(ctx, &provider.SetLockRequest{
+		if *refreshFlag {
+			res, err := client.RefreshLock(ctx, &provider.RefreshLockRequest{
 				Ref:  ref,
 				Lock: lock,
 			})
@@ -81,7 +81,7 @@ func setlockCommand() *command {
 				return formatError(res.Status)
 			}
 		} else {
-			res, err := client.RefreshLock(ctx, &provider.RefreshLockRequest{
+			res, err := client.SetLock(ctx, &provider.SetLockRequest{
 				Ref:  ref,
 				Lock: lock,
 			})
