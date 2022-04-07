@@ -684,7 +684,13 @@ func (fs *eosfs) getLock(ctx context.Context, auth eosclient.Authorization, user
 		return nil, errtypes.NotFound("lock not found for ref")
 	}
 
-	return fs.getLockContent(ctx, auth, path, expiration)
+	l, err := fs.getLockContent(ctx, auth, path, expiration)
+	if err != nil {
+		if !errors.Is(err, eosclient.AttrNotExistsError) {
+			return nil, errtypes.NotFound("lock not found for ref")
+		}
+	}
+	return l, nil
 }
 
 // GetLock returns an existing lock on the given reference
