@@ -165,7 +165,6 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 			}
 		}
 	}
-
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
 }
 
@@ -257,9 +256,9 @@ func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool)
 
 	// App provider requests
 	case *appregistry.GetAppProvidersRequest:
-		return &provider.Reference{ResourceId: v.ResourceInfo.Id, Path: v.ResourceInfo.Path}, true
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	case *appprovider.OpenInAppRequest:
-		return &provider.Reference{ResourceId: v.ResourceInfo.Id, Path: v.ResourceInfo.Path}, true
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	case *gateway.OpenInAppRequest:
 		return v.GetRef(), true
 	}
