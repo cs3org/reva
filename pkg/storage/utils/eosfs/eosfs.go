@@ -75,10 +75,10 @@ const (
 const LockPayloadKey = "reva.lock.payload"
 
 // LockExpirationKey is the key in the xattr for lock expiration
-const LockExpirationKey = "reva.lock.payload"
+const LockExpirationKey = "reva.lock.expiration"
 
 // LockTypeKey is the key in the xattr for lock payload
-const LockTypeKey = "reva.lock.payload"
+const LockTypeKey = "reva.lock.type"
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
