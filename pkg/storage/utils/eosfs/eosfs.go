@@ -593,7 +593,7 @@ func (fs *eosfs) getLockExpiration(ctx context.Context, auth eosclient.Authoriza
 	timestamp := &types.Timestamp{
 		Seconds: uint64(unixTime),
 	}
-	return timestamp, t.Before(time.Now()), nil
+	return timestamp, t.After(time.Now()), nil
 }
 
 func (fs *eosfs) getLockContent(ctx context.Context, auth eosclient.Authorization, path string, expiration *types.Timestamp) (*provider.Lock, error) {
