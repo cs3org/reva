@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -173,12 +174,14 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 	tkn := utils.RandString(15)
 	now := time.Now().UnixNano()
 
-	displayName := tkn
+	displayName, quicklink := tkn, false
 	if ri.ArbitraryMetadata != nil {
 		metadataName, ok := ri.ArbitraryMetadata.Metadata["name"]
 		if ok {
 			displayName = metadataName
 		}
+
+		quicklink, _ = strconv.ParseBool(ri.ArbitraryMetadata.Metadata["quicklink"])
 	}
 
 	var passwordProtected bool
@@ -210,6 +213,7 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 			PasswordProtected: passwordProtected,
 			Expiration:        g.Expiration,
 			DisplayName:       displayName,
+			Quicklink:         quicklink,
 		},
 		HashedPassword: password,
 	}
