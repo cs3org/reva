@@ -622,6 +622,17 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 
 // GetAttr returns the attribute specified by key
 func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key, path string) (*eosclient.Attribute, error) {
+
+	// As SetAttr set the attr on the version folder, we will read the attribute on it
+	// if the resource is not a folder
+	info, err := c.getRawFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir {
+		path = getVersionFolder(path)
+	}
+
 	args := []string{"attr", "get", key, path}
 	attrOut, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
