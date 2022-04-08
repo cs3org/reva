@@ -46,11 +46,16 @@ func (UserDeleted) Unmarshal(v []byte) (interface{}, error) {
 	return e, err
 }
 
+// UserFeature represents a user feature
+type UserFeature struct {
+	Name  string
+	Value string
+}
+
 // UserFeatureChanged is emitted when a user feature was changed
 type UserFeatureChanged struct {
-	UserID  string
-	Feature string
-	Value   string
+	UserID   string
+	Features []UserFeature
 }
 
 // Unmarshal to fulfill umarshaller interface
