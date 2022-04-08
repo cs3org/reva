@@ -713,7 +713,7 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 	return fs.getLock(ctx, auth, user, path, ref)
 }
 
-func (fs *eosfs) setLock(ctx context.Context, auth eosclient.Authorization, lock *provider.Lock, path string) error {
+func (fs *eosfs) setLock(ctx context.Context, auth eosclient.Authorization, lock *provider.Lock, path string, check bool) error {
 	encodedLock, err := encodeLock(lock)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error encoding lock")
@@ -725,7 +725,7 @@ func (fs *eosfs) setLock(ctx context.Context, auth eosclient.Authorization, lock
 			Type: SystemAttr,
 			Key:  LockExpirationKey,
 			Val:  strconv.FormatUint(lock.Expiration.Seconds, 10),
-		}, true, false, path)
+		}, check, false, path)
 		switch {
 		case errors.Is(err, eosclient.AttrAlreadyExistsError):
 			return errtypes.BadRequest("lock already set")
@@ -813,7 +813,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 		}
 	}
 
-	return fs.setLock(ctx, auth, l, path)
+	return fs.setLock(ctx, auth, l, path, true)
 }
 
 func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*userpb.User, error) {
@@ -932,7 +932,7 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
 	}
 
-	return fs.setLock(ctx, auth, newLock, path)
+	return fs.setLock(ctx, auth, newLock, path, false)
 }
 
 func sameHolder(l1, l2 *provider.Lock) bool {
