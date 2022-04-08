@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
@@ -56,6 +57,33 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 			Code:    response.MetaBadRequest.StatusCode,
 			Message: "Could not parse form from request",
 			Error:   err,
+		}
+	}
+
+	// check if a quicklink should be created
+	quick, _ := strconv.ParseBool(r.FormValue("quicklink")) // no need to check the error - defaults to zero value!
+	if quick {
+		f := []*link.ListPublicSharesRequest_Filter{publicshare.ResourceIDFilter(statInfo.Id)}
+		req := link.ListPublicSharesRequest{Filters: f}
+		res, err := c.ListPublicShares(ctx, &req)
+		if err != nil {
+			return nil, &ocsError{
+				Code:    response.MetaServerError.StatusCode,
+				Message: "could not list public links",
+				Error:   err,
+			}
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return nil, &ocsError{
+				Code:    int(res.Status.GetCode()),
+				Message: "could not list public links",
+			}
+		}
+
+		for _, l := range res.GetShare() {
+			if l.Quicklink {
+				return l, nil
+			}
 		}
 	}
 
@@ -120,7 +148,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	// set displayname and password protected as arbitrary metadata
 	req.ResourceInfo.ArbitraryMetadata = &provider.ArbitraryMetadata{
 		Metadata: map[string]string{
-			"name": r.FormValue("name"),
+			"name":      r.FormValue("name"),
+			"quicklink": r.FormValue("quicklink"),
 			// "password": r.FormValue("password"),
 		},
 	}

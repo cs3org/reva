@@ -92,10 +92,10 @@ func (s *service) SetKey(ctx context.Context, req *preferences.SetKeyRequest) (*
 	mutex.Lock()
 	defer mutex.Unlock()
 	if len(m[name]) == 0 {
-		m[name] = map[string]string{key: value}
+		m[name] = map[string]string{key.Key: value}
 	} else {
 		usersettings := m[name]
-		usersettings[key] = value
+		usersettings[key.Key] = value
 	}
 
 	return &preferences.SetKeyResponse{
@@ -118,7 +118,7 @@ func (s *service) GetKey(ctx context.Context, req *preferences.GetKeyRequest) (*
 	mutex.Lock()
 	defer mutex.Unlock()
 	if len(m[name]) != 0 {
-		if value, ok := m[name][key]; ok {
+		if value, ok := m[name][key.Key]; ok {
 			return &preferences.GetKeyResponse{
 				Status: status.NewOK(ctx),
 				Val:    value,
