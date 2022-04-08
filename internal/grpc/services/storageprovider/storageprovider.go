@@ -187,12 +187,7 @@ func registerMimeTypes(mimes map[string]string) {
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
-	// FIXME these should be part of the SetArbitraryMetadataRequest object
-	if req.Opaque != nil {
-		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
-			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
-		}
-	}
+	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	err := s.storage.SetArbitraryMetadata(ctx, req.Ref, req.ArbitraryMetadata)
 
@@ -202,12 +197,7 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
-	// FIXME these should be part of the UnsetArbitraryMetadataRequest object
-	if req.Opaque != nil {
-		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
-			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
-		}
-	}
+	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	err := s.storage.UnsetArbitraryMetadata(ctx, req.Ref, req.ArbitraryMetadataKeys)
 
@@ -317,12 +307,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		metadata["if-match"] = ifMatch
 	}
 
-	// FIXME these should be part of the InitiateFileUploadRequest object
-	if req.Opaque != nil {
-		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
-			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
-		}
-	}
+	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	var uploadLength int64
 	if req.Opaque != nil && req.Opaque.Map != nil {
@@ -589,15 +574,14 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		}, nil
 	}
 
+	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
+
 	// check DeleteRequest for any known opaque properties.
 	// FIXME these should be part of the DeleteRequest object
 	if req.Opaque != nil {
 		if _, ok := req.Opaque.Map["deleting_shared_resource"]; ok {
 			// it is a binary key; its existence signals true. Although, do not assume.
 			ctx = context.WithValue(ctx, appctx.DeletingSharedResource, true)
-		}
-		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
-			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
 		}
 	}
 
@@ -609,12 +593,8 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	// FIXME these should be part of the MoveRequest object
-	if req.Opaque != nil {
-		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
-			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
-		}
-	}
+	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
+
 	err := s.storage.Move(ctx, req.Source, req.Destination)
 
 	return &provider.MoveResponse{
@@ -705,12 +685,8 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 }
 
 func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
-	// FIXME these should be part of the RestoreFileVersionRequest object
-	if req.Opaque != nil {
-		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
-			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
-		}
-	}
+	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
+
 	err := s.storage.RestoreRevision(ctx, req.Ref, req.Key)
 
 	return &provider.RestoreFileVersionResponse{
@@ -797,12 +773,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 }
 
 func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
-	// FIXME these should be part of the RestoreRecycleItemRequest object
-	if req.Opaque != nil {
-		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
-			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
-		}
-	}
+	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	key, itemPath := router.ShiftPath(req.Key)
@@ -931,15 +902,14 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
+	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
+
 	// TODO: update CS3 APIs
 	// FIXME these should be part of the AddGrantRequest object
 	if req.Opaque != nil {
 		_, spacegrant := req.Opaque.Map["spacegrant"]
 		if spacegrant {
 			ctx = context.WithValue(ctx, utils.SpaceGrant, struct{}{})
-		}
-		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
-			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
 		}
 	}
 
@@ -980,12 +950,7 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 }
 
 func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequest) (*provider.RemoveGrantResponse, error) {
-	// FIXME these should be part of the RemoveGrantRequest object
-	if req.Opaque != nil {
-		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
-			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
-		}
-	}
+	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	// check targetType is valid
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
