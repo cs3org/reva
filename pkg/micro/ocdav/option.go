@@ -43,6 +43,10 @@ type Options struct {
 
 	FavoriteManager favorite.Manager
 
+	TracingEnabled   bool
+	TracingCollector string
+	TracingEndpoint  string
+
 	// ocdav.* is internal so we need to set config options individually
 	config     ocdav.Config
 	lockSystem ocdav.LockSystem
@@ -168,5 +172,14 @@ func FavoriteManager(val favorite.Manager) Option {
 func LockSystem(val ocdav.LockSystem) Option {
 	return func(o *Options) {
 		o.lockSystem = val
+	}
+}
+
+// Tracing enables tracing
+func Tracing(trEndpoint string, trCollector string) Option {
+	return func(o *Options) {
+		o.TracingEnabled = true
+		o.TracingEndpoint = trEndpoint
+		o.TracingCollector = trCollector
 	}
 }

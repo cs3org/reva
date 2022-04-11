@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"net/http"
 	"strings"
 
 	httpServer "github.com/asim/go-micro/plugins/server/http/v4"
@@ -29,10 +30,12 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/global"
 	"github.com/cs3org/reva/v2/pkg/storage/favorite/memory"
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/go-chi/chi/v5"
 	"go-micro.dev/v4"
 	"go-micro.dev/v4/registry"
 	"go-micro.dev/v4/server"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 const (
@@ -139,28 +142,32 @@ func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service) error {
 
 	// log
 	lm := revaLogMiddleware.New()
-	// TODO wrap middlewares with traceHandler
+
+	// tracing
+	tm := func(h http.Handler) http.Handler { return h }
+	if sopts.TracingEnabled {
+		tm = traceHandler("ocdav", sopts.TracingCollector, sopts.TracingEndpoint)
+	}
 
 	// ctx
 	cm := appctx.New(sopts.Logger)
 
 	// actually register
-	r.Use(authMiddle, lm, cm)
-
+	r.Use(authMiddle, lm, cm, tm)
 	return nil
 }
 
-/*
-// TODO use traceHandler() to wrap other middlewares as in rhttp
-func traceHandler(name string, h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		t := rtrace.Provider.Tracer("reva")
-		ctx, span := t.Start(ctx, name)
-		defer span.End()
+func traceHandler(name string, collector string, endpoint string) func(http.Handler) http.Handler {
+	rtrace.SetTraceProvider(collector, endpoint)
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+			t := rtrace.Provider.Tracer("reva")
+			ctx, span := t.Start(ctx, name)
+			defer span.End()
 
-		rtrace.Propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))
-		h.ServeHTTP(w, r.WithContext(ctx))
-	})
+			rtrace.Propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))
+			h.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
-*/
