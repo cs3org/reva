@@ -153,7 +153,7 @@ func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service) error {
 	cm := appctx.New(sopts.Logger)
 
 	// actually register
-	r.Use(authMiddle, lm, cm, tm)
+	r.Use(tm, lm, authMiddle, cm)
 	return nil
 }
 
