@@ -336,9 +336,6 @@ func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient
 	if err != nil {
 		return nil, nil, err
 	}
-	if res == nil || res.Status == nil {
-		return nil, nil, nil
-	}
 	return res.GetInfo(), res.GetStatus(), nil
 }
 
