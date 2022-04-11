@@ -397,8 +397,32 @@ func (fs *owncloudsqlfs) getUser(ctx context.Context, usernameOrID string) (id *
 			Str("userprovidersvc", fs.c.UserProviderEndpoint).
 			Str("usernameOrID", usernameOrID).
 			Interface("status", res.Status).
-			Msg("user not found")
-		return nil, fmt.Errorf("user not found")
+			Msg("user not found by id. Trying by name")
+
+		var cres *userpb.GetUserByClaimResponse
+		cres, err = c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+			Claim: "username",
+			Value: usernameOrID,
+		})
+		if err != nil {
+			appctx.GetLogger(ctx).
+				Error().Err(err).
+				Str("userprovidersvc", fs.c.UserProviderEndpoint).
+				Str("usernameOrID", usernameOrID).
+				Msg("could not get user by username")
+			return nil, err
+		}
+		if cres.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			appctx.GetLogger(ctx).
+				Error().
+				Str("userprovidersvc", fs.c.UserProviderEndpoint).
+				Str("usernameOrID", usernameOrID).
+				Interface("status", cres.Status).
+				Msg("user not found by username")
+			return nil, fmt.Errorf("user not found")
+		}
+		res.User = cres.User
+		res.Status = cres.Status
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
