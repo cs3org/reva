@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/fs/nextcloud"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis"
 	jwt "github.com/cs3org/reva/v2/pkg/token/manager/jwt"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/google/uuid"
 
@@ -620,8 +619,8 @@ var _ = Describe("storage providers", func() {
 			Context("with the owner holding the lock", func() {
 				It("can initiate an upload", func() {
 					ulRes, err := serviceClient.InitiateFileUpload(ctx, &storagep.InitiateFileUploadRequest{
-						Opaque: utils.AppendPlainToOpaque(nil, "lockid", lock.LockId),
 						Ref:    subdirRef,
+						LockId: lock.LockId,
 					})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(ulRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -629,8 +628,8 @@ var _ = Describe("storage providers", func() {
 
 				It("can delete the file", func() {
 					delRes, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{
-						Opaque: utils.AppendPlainToOpaque(nil, "lockid", lock.LockId),
 						Ref:    subdirRef,
+						LockId: lock.LockId,
 					})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
