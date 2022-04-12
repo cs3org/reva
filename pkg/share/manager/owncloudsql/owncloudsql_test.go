@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package sql_test
+package owncloudsql_test
 
 import (
 	"context"
@@ -31,8 +31,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/share"
-	sqlmanager "github.com/cs3org/reva/v2/pkg/share/manager/sql"
-	mocks "github.com/cs3org/reva/v2/pkg/share/manager/sql/mocks"
+	sqlmanager "github.com/cs3org/reva/v2/pkg/share/manager/owncloudsql"
+	mocks "github.com/cs3org/reva/v2/pkg/share/manager/owncloudsql/mocks"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	_ "github.com/mattn/go-sqlite3"

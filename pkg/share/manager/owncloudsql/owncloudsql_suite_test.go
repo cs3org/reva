@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package sql_test
+package owncloudsql_test
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestSql(t *testing.T) {
+func TestOwnCloudSQL(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Sql Suite")
+	RunSpecs(t, "ownCloudSQL share manager Suite")
 }

@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package sql
+package owncloudsql
 
 import (
 	"context"
@@ -49,7 +49,7 @@ const (
 )
 
 func init() {
-	registry.Register("oc10-sql", NewMysql)
+	registry.Register("owncloudsql", NewMysql)
 }
 
 type config struct {
@@ -112,7 +112,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	// TODO(labkode): should not this be caught already at the gw level?
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
 		(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
-		return nil, errors.New("sql: owner/creator and grantee are the same")
+		return nil, errors.New("owncloudsql: owner/creator and grantee are the same")
 	}
 
 	// check if share already exists.
