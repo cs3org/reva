@@ -23,6 +23,6 @@ import (
 	_ "github.com/cs3org/reva/v2/pkg/share/manager/cs3"
 	_ "github.com/cs3org/reva/v2/pkg/share/manager/json"
 	_ "github.com/cs3org/reva/v2/pkg/share/manager/memory"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/sql"
+	_ "github.com/cs3org/reva/v2/pkg/share/manager/owncloudsql"
 	// Add your own here
 )
