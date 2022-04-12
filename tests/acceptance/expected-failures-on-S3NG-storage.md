@@ -516,8 +516,8 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 - [apiShareReshareToShares3/reShareUpdate.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L62)
 
 #### [file_target in share response](https://github.com/owncloud/product/issues/203)
-- [apiShareReshareToShares2/reShareSubfolder.feature:180](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L180)
-- [apiShareReshareToShares2/reShareSubfolder.feature:181](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L181)
+- [apiShareReshareToShares2/reShareSubfolder.feature:178](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L178)
+- [apiShareReshareToShares2/reShareSubfolder.feature:179](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares2/reShareSubfolder.feature#L179)
 
 #### [deleting a file inside a received shared folder is moved to the trash-bin of the sharer not the receiver](https://github.com/owncloud/ocis/issues/1124)
 
@@ -1220,8 +1220,8 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 - [apiWebdavUploadTUS/uploadToShare.feature:373](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadToShare.feature#L373)
 
 #### [Share inaccessible if folder with same name was deleted and recreated](https://github.com/owncloud/ocis/issues/1787)
-- [apiShareReshareToShares1/reShare.feature:269](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L269)
-- [apiShareReshareToShares1/reShare.feature:270](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L270)
+- [apiShareReshareToShares1/reShare.feature:259](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L259)
+- [apiShareReshareToShares1/reShare.feature:260](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L260)
 - [apiShareReshareToShares1/reShare.feature:287](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L287)
 - [apiShareReshareToShares1/reShare.feature:288](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L288)
 - [apiShareReshareToShares1/reShare.feature:305](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L305)
