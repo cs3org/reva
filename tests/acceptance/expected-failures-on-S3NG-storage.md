@@ -1573,5 +1573,10 @@ _ocs: api compatibility, return correct status code_
 - [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L28)
 - [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L29)
 
+#### resource path is no longer included in the returned error message
+- [apiWebdavProperties2/getFileProperties.feature:324](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L324)
+- [apiWebdavProperties2/getFileProperties.feature:336](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L336)
+- [apiWebdavProperties2/getFileProperties.feature:337](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L337)
+
  Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
