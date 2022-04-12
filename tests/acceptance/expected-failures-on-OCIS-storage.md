@@ -1213,10 +1213,10 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 #### [Share inaccessible if folder with same name was deleted and recreated](https://github.com/owncloud/ocis/issues/1787)
 - [apiShareReshareToShares1/reShare.feature:259](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L259)
 - [apiShareReshareToShares1/reShare.feature:260](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L260)
-- [apiShareReshareToShares1/reShare.feature:287](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L287)
-- [apiShareReshareToShares1/reShare.feature:288](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L288)
-- [apiShareReshareToShares1/reShare.feature:305](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L305)
-- [apiShareReshareToShares1/reShare.feature:306](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L306)
+- [apiShareReshareToShares1/reShare.feature:277](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L277)
+- [apiShareReshareToShares1/reShare.feature:278](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L278)
+- [apiShareReshareToShares1/reShare.feature:295](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L295)
+- [apiShareReshareToShares1/reShare.feature:296](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares1/reShare.feature#L296)
 
 #### [incorrect ocs(v2) status value when getting info of share that does not exist should be 404, gives 998](https://github.com/owncloud/product/issues/250)
 _ocs: api compatibility, return correct status code_
