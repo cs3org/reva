@@ -333,6 +333,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 		}
 
 		// register the supported mimetypes in the AppRegistry: this is hardcoded for the time being
+		// TODO(lopresti) move to config
 		switch c.AppName {
 		case "CodiMD":
 			appURLs = getCodimdExtensions(c.AppURL)
