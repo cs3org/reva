@@ -21,7 +21,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20220328105952-297bef33e13f
+	github.com/cs3org/go-cs3apis v0.0.0-20220412090512-93c5918b4bde
 	github.com/cubewise-code/go-mime v0.0.0-20200519001935-8c5762b177d8
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
@@ -94,7 +94,6 @@ require (
 go 1.16
 
 replace (
-	github.com/cs3org/go-cs3apis => github.com/kobergj/go-cs3apis v0.0.0-20220406134716-65f04386eb09 // temporary fork
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 	google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
