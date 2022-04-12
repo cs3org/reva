@@ -62,10 +62,12 @@ func getRemoteAddress(r *http.Request) string {
 	return remoteAddress
 }
 
+// LoggedInUser retrieves the currently logged in user or nil if none is logged in.
 func (sess *Session) LoggedInUser() *SessionUser {
 	return sess.loggedInUser
 }
 
+// LoginUser logs in the provided user.
 func (sess *Session) LoginUser(acc *data.Account, site *data.Site) {
 	sess.loggedInUser = &SessionUser{
 		Account: acc,
@@ -73,10 +75,12 @@ func (sess *Session) LoginUser(acc *data.Account, site *data.Site) {
 	}
 }
 
+// LogoutUser logs out the currently logged in user.
 func (sess *Session) LogoutUser() {
 	sess.loggedInUser = nil
 }
 
+// IsUserLoggedIn tells whether a user is currently logged in.
 func (sess *Session) IsUserLoggedIn() bool {
 	return sess.loggedInUser != nil
 }
