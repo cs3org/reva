@@ -19,9 +19,20 @@
 package ocdav
 
 import (
+	"encoding/xml"
+	"fmt"
 	"net/http"
+	"path"
 
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/prop"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 )
 
@@ -42,7 +53,7 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		var id string
 		id, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if id == "" {
-			http.Error(w, "400 Bad Request", http.StatusBadRequest)
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
@@ -51,6 +62,12 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		switch head {
+		case "":
+			if r.Method != MethodPropfind {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			h.handlePathForUser(w, r, s, did)
 		case "v":
 			h.VersionsHandler.Handler(s, did).ServeHTTP(w, r)
 		default:
@@ -58,4 +75,98 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		}
 
 	})
+}
+
+func (h *MetaHandler) handlePathForUser(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "meta_propfind")
+	defer span.End()
+
+	id := resourceid.OwnCloudResourceIDWrap(rid)
+	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("resourceid", id).Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	pf, status, err := propfind.ReadPropfind(r.Body)
+	if err != nil {
+		sublog.Debug().Err(err).Msg("error reading propfind request")
+		w.WriteHeader(status)
+		return
+	}
+
+	if ok := hasProp(&pf, net.PropOcMetaPathForUser); !ok {
+		sublog.Debug().Str("prop", net.PropOcMetaPathForUser).Msg("error finding prop in request")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	pathReq := &provider.GetPathRequest{ResourceId: rid}
+	pathRes, err := client.GetPath(ctx, pathReq)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending GetPath grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	switch pathRes.Status.Code {
+	case rpc.Code_CODE_NOT_FOUND:
+		sublog.Debug().Str("code", string(pathRes.Status.Code)).Msg("resource not found")
+		w.WriteHeader(http.StatusNotFound)
+		m := fmt.Sprintf("Resource %s not found", id)
+		b, err := errors.Marshal(http.StatusNotFound, m, "")
+		errors.HandleWebdavError(&sublog, w, b, err)
+		return
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		// raise StatusNotFound so that resources can't be enumerated
+		sublog.Debug().Str("code", string(pathRes.Status.Code)).Msg("resource access denied")
+		w.WriteHeader(http.StatusNotFound)
+		m := fmt.Sprintf("Resource %s not found", id)
+		b, err := errors.Marshal(http.StatusNotFound, m, "")
+		errors.HandleWebdavError(&sublog, w, b, err)
+		return
+	}
+
+	propstatOK := propfind.PropstatXML{
+		Status: "HTTP/1.1 200 OK",
+		Prop: []prop.PropertyXML{
+			prop.Escaped("oc:meta-path-for-user", pathRes.Path),
+		},
+	}
+	baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
+	msr := propfind.NewMultiStatusResponseXML()
+	msr.Responses = []*propfind.ResponseXML{
+		{
+			Href: net.EncodePath(path.Join(baseURI, id) + "/"),
+			Propstat: []propfind.PropstatXML{
+				propstatOK,
+			},
+		},
+	}
+	propRes, err := xml.Marshal(msr)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error marshalling propfind response xml")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
+	w.WriteHeader(http.StatusMultiStatus)
+	if _, err := w.Write(propRes); err != nil {
+		sublog.Error().Err(err).Msg("error writing propfind response")
+		return
+	}
+}
+
+func hasProp(pf *propfind.XML, key string) bool {
+	for i := range pf.Prop {
+		k := fmt.Sprintf("%s/%s", pf.Prop[i].Space, pf.Prop[i].Local)
+		if k == key {
+			return true
+		}
+	}
+	return false
 }
