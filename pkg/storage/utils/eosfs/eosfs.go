@@ -868,19 +868,6 @@ func encodeLock(l *provider.Lock) (string, error) {
 	return b64.StdEncoding.EncodeToString(data), nil
 }
 
-func decodeLock(raw string) (*provider.Lock, error) {
-	data, err := b64.StdEncoding.DecodeString(raw)
-	if err != nil {
-		return nil, err
-	}
-	l := new(provider.Lock)
-	err = json.Unmarshal(data, l)
-	if err != nil {
-		return nil, err
-	}
-	return l, nil
-}
-
 // RefreshLock refreshes an existing lock on the given reference
 func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock) error {
 	// TODO (gdelmont): check if the new lock is already expired?
