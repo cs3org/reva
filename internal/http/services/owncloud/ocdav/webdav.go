@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"path"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -69,7 +70,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 
 		switch r.Method {
 		case MethodPropfind:
-			p := propfind.NewHandler(config.PublicURL, func() (propfind.GatewayClient, error) {
+			p := propfind.NewHandler(config.PublicURL, func() (gateway.GatewayAPIClient, error) {
 				return pool.GetGatewayServiceClient(config.GatewaySvc)
 			})
 			p.HandlePathPropfind(w, r, ns)

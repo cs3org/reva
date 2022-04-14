@@ -25,6 +25,7 @@ import (
 	"path"
 	"sort"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -184,7 +185,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 }
 
 // getReceivedShareFromID uses a client to the gateway to fetch a share based on its ID.
-func getReceivedShareFromID(ctx context.Context, client GatewayClient, shareID string) (*collaboration.GetReceivedShareResponse, *response.Response) {
+func getReceivedShareFromID(ctx context.Context, client gateway.GatewayAPIClient, shareID string) (*collaboration.GetReceivedShareResponse, *response.Response) {
 	s, err := client.GetReceivedShare(ctx, &collaboration.GetReceivedShareRequest{
 		Ref: &collaboration.ShareReference{
 			Spec: &collaboration.ShareReference_Id{
@@ -213,7 +214,7 @@ func getReceivedShareFromID(ctx context.Context, client GatewayClient, shareID s
 }
 
 // getSharedResource attempts to get a shared resource from the storage from the resource reference.
-func getSharedResource(ctx context.Context, client GatewayClient, resID *provider.ResourceId) (*provider.StatResponse, *response.Response) {
+func getSharedResource(ctx context.Context, client gateway.GatewayAPIClient, resID *provider.ResourceId) (*provider.StatResponse, *response.Response) {
 	res, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
 			ResourceId: resID,
@@ -237,7 +238,7 @@ func getSharedResource(ctx context.Context, client GatewayClient, resID *provide
 }
 
 // getSharedResource gets the list of all shares for the current user.
-func getSharesList(ctx context.Context, client GatewayClient) (*collaboration.ListReceivedSharesResponse, *response.Response) {
+func getSharesList(ctx context.Context, client gateway.GatewayAPIClient) (*collaboration.ListReceivedSharesResponse, *response.Response) {
 	shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 	if err != nil {
 		e := errors.Wrap(err, "error getting shares list")
