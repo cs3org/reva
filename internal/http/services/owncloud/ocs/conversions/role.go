@@ -105,7 +105,10 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 		fmt.Fprintf(&b, "D") // TODO oc10 shows received shares as deletable
 	}
 	if r.ocsPermissions.Contain(PermissionWrite) {
-		fmt.Fprintf(&b, "NV")
+		// Single file public link shares cannot be renamed
+		if !isPublic || (isPublic && r.cS3ResourcePermissions != nil && r.cS3ResourcePermissions.Move) {
+			fmt.Fprintf(&b, "NV")
+		}
 		if !isDir {
 			fmt.Fprintf(&b, "W")
 		}
