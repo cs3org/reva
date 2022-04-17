@@ -281,7 +281,7 @@ func timestampToExpiration(t *types.Timestamp) string {
 
 // ParseTimestamp tries to parses the ocs expiry into a CS3 Timestamp
 func ParseTimestamp(timestampString string) (*types.Timestamp, error) {
-	parsedTime, err := time.Parse("2006-01-02T15:04:05Z0700", timestampString)
+	parsedTime, err := time.Parse(time.RFC3339, timestampString)
 	if err != nil {
 		parsedTime, err = time.Parse("2006-01-02", timestampString)
 	}
