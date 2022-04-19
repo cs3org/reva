@@ -323,7 +323,9 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 	}
 
 	// if we don't need to create/delete references then we return early.
-	if !s.c.CommitShareToStorageRef || ctxpkg.ContextMustGetUser(ctx).Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+	if !s.c.CommitShareToStorageRef ||
+		ctxpkg.ContextMustGetUser(ctx).Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
+		ctxpkg.ContextMustGetUser(ctx).Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		return res, nil
 	}
 

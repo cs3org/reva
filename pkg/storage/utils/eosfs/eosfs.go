@@ -467,7 +467,7 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 	if err != nil {
 		return "", errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		auth, err := fs.getRootAuth(ctx)
 		if err != nil {
 			return "", err
@@ -647,7 +647,8 @@ func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, 
 	var qualifier string
 	if t == acl.TypeUser {
 		// if the grantee is a lightweight account, we need to set it accordingly
-		if g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		if g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
+			g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_FEDERATED {
 			t = acl.TypeLightweight
 			qualifier = g.Grantee.GetUserId().OpaqueId
 		} else {
@@ -680,7 +681,8 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 	var recipient string
 	if eosACLType == acl.TypeUser {
 		// if the grantee is a lightweight account, we need to set it accordingly
-		if g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		if g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
+			g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_FEDERATED {
 			eosACLType = acl.TypeLightweight
 			recipient = g.Grantee.GetUserId().OpaqueId
 		} else {
@@ -779,7 +781,8 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	}
 
 	fn := ""
-	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
+		u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		p, err := fs.resolve(ctx, ref)
 		if err != nil {
 			return nil, errors.Wrap(err, "eosfs: error resolving reference")
@@ -1951,7 +1954,8 @@ func (fs *eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eo
 		return fs.singleUserAuth, err
 	}
 
-	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
+		u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		return fs.getEOSToken(ctx, u, fn)
 	}
 

@@ -199,6 +199,8 @@ func ExtractUserID(u string) *userpb.UserId {
 	t := userpb.UserType_USER_TYPE_PRIMARY
 	if strings.HasPrefix(u, "guest:") {
 		t = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+	} else if strings.Contains(u, "@") {
+		t = userpb.UserType_USER_TYPE_FEDERATED
 	}
 	return &userpb.UserId{OpaqueId: u, Type: t}
 }

@@ -140,7 +140,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if ok { // else defaults to "Guest xyz"
-		if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 			q.Add("userid", resource.Owner.OpaqueId+"@"+resource.Owner.Idp)
 		} else {
 			q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
