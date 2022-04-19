@@ -423,7 +423,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	if len(spaceInfos) == 0 || rootInfo == nil {
 		// TODO if we have children invent node on the fly
 		w.WriteHeader(http.StatusNotFound)
-		m := fmt.Sprintf("Resource %v not found", requestPath)
+		m := "Resource not found"
 		b, err := errors.Marshal(http.StatusNotFound, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
 		return nil, false, false
