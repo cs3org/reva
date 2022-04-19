@@ -203,12 +203,6 @@ func (s *svc) Handler() http.Handler {
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 		switch head {
-		case "cernbox":
-			var origin string
-			origin, r.URL.Path = router.ShiftPath(r.URL.Path) // desktop or mobile
-			_, r.URL.Path = router.ShiftPath(r.URL.Path)      // remote.php
-			head, r.URL.Path = router.ShiftPath(r.URL.Path)
-			base = path.Join(base, "cernbox", origin, "remote.php")
 		case "status.php":
 			s.doStatus(w, r)
 			return
