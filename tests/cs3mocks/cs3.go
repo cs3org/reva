@@ -26,10 +26,12 @@ import (
 //go:generate mockery --name=GatewayAPIClient
 //go:generate mockery --name=CollaborationAPIClient
 
+// GatewayAPIClient provides the mocks for the gateway.GatewayAPIClient
 type GatewayAPIClient interface {
 	gateway.GatewayAPIClient
 }
 
+// CollaborationAPIClient provides the mocks for the collaboration.CollaborationAPIClient
 type CollaborationAPIClient interface {
 	collaboration.CollaborationAPIClient
 }
