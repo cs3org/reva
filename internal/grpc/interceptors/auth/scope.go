@@ -50,13 +50,6 @@ const (
 	scopeCacheExpiration = 3600
 )
 
-var roleRankings = map[authpb.Role]int{
-	authpb.Role_ROLE_VIEWER:   0,
-	authpb.Role_ROLE_UPLOADER: 1,
-	authpb.Role_ROLE_EDITOR:   2,
-	authpb.Role_ROLE_OWNER:    3,
-}
-
 func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, user *userpb.User, gatewayAddr string, mgr token.Manager) error {
 	log := appctx.GetLogger(ctx)
 	client, err := pool.GetGatewayServiceClient(gatewayAddr)
@@ -64,15 +57,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 		return err
 	}
 
-	highestRole := authpb.Role_ROLE_VIEWER
-	for _, v := range tokenScope {
-		if roleRankings[v.Role] > roleRankings[highestRole] {
-			highestRole = v.Role
-			break
-		}
-	}
-
-	if ref, ok := extractRef(req, highestRole); ok {
+	if ref, ok := extractRef(req, tokenScope); ok {
 		// The request is for a storage reference. This can be the case for multiple scenarios:
 		// - If the path is not empty, the request might be coming from a share where the accessor is
 		//   trying to impersonate the owner, since the share manager doesn't know the
@@ -279,12 +264,21 @@ func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
 		return v.GetRef(), true
 	case *provider.TouchFileRequest:
 		return v.GetRef(), true
+	case *provider.InitiateFileUploadRequest:
+		return v.GetRef(), true
+	}
+
+	return nil, false
+
+}
+
+func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
+	switch v := req.(type) {
+	// Remaining edit Requests
 	case *provider.DeleteRequest:
 		return v.GetRef(), true
 	case *provider.MoveRequest:
 		return v.GetSource(), true
-	case *provider.InitiateFileUploadRequest:
-		return v.GetRef(), true
 	case *provider.SetArbitraryMetadataRequest:
 		return v.GetRef(), true
 	case *provider.UnsetArbitraryMetadataRequest:
@@ -295,22 +289,39 @@ func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
 
 }
 
-func extractRef(req interface{}, role authpb.Role) (*provider.Reference, bool) {
-	switch role {
-	case authpb.Role_ROLE_UPLOADER:
-		return extractRefForUploaderRole(req)
-	case authpb.Role_ROLE_VIEWER:
-		return extractRefForReaderRole(req)
-	default: // Owner or editor role
+func extractRef(req interface{}, tokenScope map[string]*authpb.Scope) (*provider.Reference, bool) {
+	var readPerm, uploadPerm, editPerm bool
+	for _, v := range tokenScope {
+		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR || v.Role == authpb.Role_ROLE_VIEWER {
+			readPerm = true
+		}
+		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR || v.Role == authpb.Role_ROLE_UPLOADER {
+			uploadPerm = true
+		}
+		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR {
+			editPerm = true
+		}
+	}
+
+	if readPerm {
 		ref, ok := extractRefForReaderRole(req)
 		if ok {
 			return ref, true
 		}
-		ref, ok = extractRefForUploaderRole(req)
+	}
+	if uploadPerm {
+		ref, ok := extractRefForUploaderRole(req)
 		if ok {
 			return ref, true
 		}
 	}
+	if editPerm {
+		ref, ok := extractRefForEditorRole(req)
+		if ok {
+			return ref, true
+		}
+	}
+
 	return nil, false
 }
 
