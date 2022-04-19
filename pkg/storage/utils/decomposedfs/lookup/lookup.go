@@ -27,6 +27,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
@@ -39,30 +40,36 @@ type Lookup struct {
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
 func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error) {
-	if ref.ResourceId != nil {
-		// check if a storage space reference is used
-		// currently, the decomposed fs uses the root node id as the space id
-		n, err := lu.NodeFromID(ctx, ref.ResourceId)
-		if err != nil {
-			return nil, err
+	if ref.ResourceId == nil {
+		// TODO check path has at least one segment
+		var spaceid string
+		// assume first path segment equals space id
+		spaceid, ref.Path = router.ShiftPath(ref.Path)
+		ref.ResourceId = &provider.ResourceId{
+			StorageId: spaceid,
+			OpaqueId:  spaceid,
 		}
-		// is this a relative reference?
-		if ref.Path != "" {
-			p := filepath.Clean(ref.Path)
-			if p != "." && p != "/" {
-				// walk the relative path
-				n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error { return nil })
-				if err != nil {
-					return nil, err
-				}
-				n.SpaceID = ref.ResourceId.StorageId
-			}
-		}
-		return n, nil
 	}
+	// check if a storage space reference is used
+	// currently, the decomposed fs uses the root node id as the space id
+	n, err := lu.NodeFromID(ctx, ref.ResourceId)
+	if err != nil {
+		return nil, err
+	}
+	// is this a relative reference?
+	if ref.Path != "" {
+		p := filepath.Clean(ref.Path)
+		if p != "." && p != "/" {
+			// walk the relative path
+			n, err = lu.WalkPath(ctx, n, p, false, func(ctx context.Context, n *node.Node) error { return nil })
+			if err != nil {
+				return nil, err
+			}
+			n.SpaceID = ref.ResourceId.StorageId
+		}
+	}
+	return n, nil
 
-	// reference is invalid
-	return nil, fmt.Errorf("invalid reference %+v. resource_id must be set", ref)
 }
 
 // NodeFromID returns the internal path for the id

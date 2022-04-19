@@ -164,7 +164,12 @@ func MakeRelativeReference(space *storageProvider.StorageSpace, relativePath str
 	spacePath := string(space.Opaque.Map["path"].Value)
 	relativeSpacePath := "."
 	if strings.HasPrefix(relativePath, spacePath) {
-		relativeSpacePath = utils.MakeRelativePath(strings.TrimPrefix(relativePath, spacePath))
+		if space.Root == nil {
+			// stay in path wonderland
+			relativeSpacePath = relativePath
+		} else {
+			relativeSpacePath = utils.MakeRelativePath(strings.TrimPrefix(relativePath, spacePath))
+		}
 	} else if spacesDavRequest {
 		relativeSpacePath = utils.MakeRelativePath(relativePath)
 	}
