@@ -70,12 +70,20 @@ func unwrap(rid string, delimiter string) (string, string, error) {
 // OwnCloudResourceIDWrap wraps a resource id into a xml safe string
 // which can then be passed to the outside world
 func OwnCloudResourceIDWrap(r *provider.ResourceId) string {
-	return wrap(r.StorageId, r.OpaqueId)
+	return wrap(r.StorageId, r.OpaqueId, _idDelimiter)
 }
 
-// The storageID and OpaqueID need to be separated by a delimiter
-// this delimiter should be Url safe
-// we use a reserved character
-func wrap(sid string, oid string) string {
-	return sid + _idDelimiter + oid
+// StorageIDWrap wraps a storageid and storageproviderid into a xml safe string
+// which can then be passed to the outside world
+func StorageIDWrap(sid string, spid string) string {
+	return wrap(spid, sid, _providerDelimiter)
+}
+
+// returns second argument in case the first is empty (without adding the delimiter)
+// the delimiter should be Url safe (we use a reserved character)
+func wrap(first string, second string, delimiter string) string {
+	if first == "" {
+		return second
+	}
+	return first + delimiter + second
 }
