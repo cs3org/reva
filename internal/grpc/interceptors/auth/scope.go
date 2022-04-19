@@ -260,6 +260,10 @@ func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
 func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
 	switch v := req.(type) {
 	// Write Requests
+	case *registry.GetStorageProvidersRequest:
+		return v.GetRef(), true
+	case *provider.StatRequest:
+		return v.GetRef(), true
 	case *provider.CreateContainerRequest:
 		return v.GetRef(), true
 	case *provider.TouchFileRequest:
