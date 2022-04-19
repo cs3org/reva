@@ -27,33 +27,44 @@ import (
 )
 
 const (
-	idDelimiter string = "!"
+	_idDelimiter       string = "!"
+	_providerDelimiter string = "$"
 )
+
+// StorageIDUnwrap unwraps the 'encoded' into the storageID and the storageProviderID
+func StorageIDUnwrap(s string) (sid string, spid string) {
+	spid, sid, err := unwrap(s, _providerDelimiter)
+	if err != nil {
+		// assume it's only a storageid
+		return s, ""
+	}
+	return sid, spid
+}
 
 // OwnCloudResourceIDUnwrap returns the wrapped resource id
 // by OwnCloudResourceIDWrap and returns nil if not possible
 func OwnCloudResourceIDUnwrap(rid string) *provider.ResourceId {
-	id, err := unwrap(rid)
+	sid, oid, err := unwrap(rid, _idDelimiter)
 	if err != nil {
 		return nil
 	}
-	return id
+	return &provider.ResourceId{
+		StorageId: sid,
+		OpaqueId:  oid,
+	}
 }
 
-func unwrap(rid string) (*provider.ResourceId, error) {
-	parts := strings.SplitN(rid, idDelimiter, 2)
+func unwrap(rid string, delimiter string) (string, string, error) {
+	parts := strings.SplitN(rid, delimiter, 2)
 	if len(parts) != 2 {
-		return nil, errors.New("could not find two parts with given delimiter")
+		return "", "", errors.New("could not find two parts with given delimiter")
 	}
 
 	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
-		return nil, errors.New("invalid utf8 string found")
+		return "", "", errors.New("invalid utf8 string found")
 	}
 
-	return &provider.ResourceId{
-		StorageId: parts[0],
-		OpaqueId:  parts[1],
-	}, nil
+	return parts[0], parts[1], nil
 }
 
 // OwnCloudResourceIDWrap wraps a resource id into a xml safe string
@@ -66,5 +77,5 @@ func OwnCloudResourceIDWrap(r *provider.ResourceId) string {
 // this delimiter should be Url safe
 // we use a reserved character
 func wrap(sid string, oid string) string {
-	return sid + idDelimiter + oid
+	return sid + _idDelimiter + oid
 }

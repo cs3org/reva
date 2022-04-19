@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 )
 
 // Lookup implements transformations from filepath to node and back
@@ -50,6 +51,10 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 			OpaqueId:  spaceid,
 		}
 	}
+
+	// unwrap magic ID
+	ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(ref.ResourceId.StorageId)
+
 	// check if a storage space reference is used
 	// currently, the decomposed fs uses the root node id as the space id
 	n, err := lu.NodeFromID(ctx, ref.ResourceId)

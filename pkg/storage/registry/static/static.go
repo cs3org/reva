@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/registry/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -152,15 +153,26 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 	var match *registrypb.ProviderInfo
 	var shardedMatches []*registrypb.ProviderInfo
 	// If the reference has a resource id set, use it to route
-	if filters["storage_id"] != "" {
+	if s := filters["storage_id"]; s != "" {
+		sid, spid := resourceid.StorageIDUnwrap(s)
 		for prefix, rule := range b.c.Rules {
 			addr, _ := getProviderAddr(ctx, rule)
+			if spid != "" && spid == rule.ProviderID {
+				return []*registrypb.ProviderInfo{{
+					ProviderId:   spid,
+					Address:      addr,
+					ProviderPath: rule.ProviderPath,
+				}}, nil
+
+			}
+
 			r, err := regexp.Compile("^" + prefix + "$")
 			if err != nil {
 				continue
 			}
+
 			// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-			if m := r.FindString(filters["storage_id"]); m != "" {
+			if m := r.FindString(sid); m != "" {
 				return []*registrypb.ProviderInfo{{
 					ProviderId:   prefix,
 					Address:      addr,
