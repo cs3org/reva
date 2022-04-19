@@ -203,7 +203,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 func (am *mgr) getLoginFilter(login string) string {
 	var filter string
 	for _, attr := range am.c.LoginAttributes {
-		filter = fmt.Sprintf("%s(%s=%s*)", filter, attr, ldap.EscapeFilter(login))
+		filter = fmt.Sprintf("%s(%s=%s)", filter, attr, ldap.EscapeFilter(login))
 	}
 
 	return fmt.Sprintf("(&%s(objectclass=%s)(|%s))",
