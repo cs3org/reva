@@ -254,28 +254,17 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	}
 
 	if isOwnersMeshProvider {
-		// token, ok := ctxpkg.ContextGetToken(ctx)
-		// if !ok {
-		// 	return nil, errors.New("Could not get token from context")
-		// }
-		var protocol map[string]interface{}
-		if st == ocm.Share_SHARE_TYPE_TRANSFER {
-			protocol = map[string]interface{}{
-				"name": "datatx",
-				"options": map[string]string{
-					"permissions": pm,
-					"token":       token,
-				},
-			}
-		} else {
-			protocol = map[string]interface{}{
-				"name": "webdav",
-				"options": map[string]string{
-					"permissions": pm,
-					"token":       token,
-				},
-			}
+		protocol := map[string]interface{}{
+			"name": "webdav",
+			"options": map[string]string{
+				"permissions": pm,
+				"token":       ctxpkg.ContextMustGetToken(ctx),
+			},
 		}
+		if st == ocm.Share_SHARE_TYPE_TRANSFER {
+			protocol["name"] = "datatx"
+		}
+
 		requestBodyMap := map[string]interface{}{
 			"shareWith":    g.Grantee.GetUserId().OpaqueId,
 			"name":         name,
