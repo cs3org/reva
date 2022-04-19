@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"strings"
 
-	httpServer "github.com/asim/go-micro/plugins/server/http/v4"
 	"github.com/cs3org/reva/v2/internal/http/interceptors/appctx"
 	"github.com/cs3org/reva/v2/internal/http/interceptors/auth"
 	revaLogMiddleware "github.com/cs3org/reva/v2/internal/http/interceptors/log"
@@ -32,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/favorite/memory"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/go-chi/chi/v5"
+	httpServer "github.com/go-micro/plugins/v4/server/http"
 	"go-micro.dev/v4"
 	"go-micro.dev/v4/registry"
 	"go-micro.dev/v4/server"

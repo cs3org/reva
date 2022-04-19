@@ -22,11 +22,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/asim/go-micro/plugins/events/natsjs/v4"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/example/consumer"
 	"github.com/cs3org/reva/v2/pkg/events/example/publisher"
 	"github.com/cs3org/reva/v2/pkg/events/server"
+	"github.com/go-micro/plugins/v4/events/natsjs"
 )
 
 // Simple example of an event workflow
