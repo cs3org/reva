@@ -396,10 +396,14 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		}
 
 		// adjust path
-		if spacesPropfind {
+		switch {
+		case strings.HasPrefix(spaceRef.Path, spacePath):
+			//info.Path = spaceRef.Path
+			fallthrough
+		case spacesPropfind:
 			// we need to prefix the path with / to make subsequent prefix matches work
 			info.Path = filepath.Join("/", spaceRef.Path)
-		} else {
+		default:
 			info.Path = filepath.Join(spacePath, spaceRef.Path)
 		}
 
