@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/pkg/siteacc/password"
+	"github.com/cs3org/reva/pkg/siteacc/credentials"
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/pkg/utils"
@@ -38,7 +38,7 @@ type Account struct {
 	Role        string `json:"role"`
 	PhoneNumber string `json:"phoneNumber"`
 
-	Password password.Password `json:"password"`
+	Password credentials.Password `json:"password"`
 
 	DateCreated  time.Time `json:"dateCreated"`
 	DateModified time.Time `json:"dateModified"`
@@ -50,6 +50,7 @@ type Account struct {
 // AccountData holds additional data for a site account.
 type AccountData struct {
 	GOCDBAccess bool `json:"gocdbAccess"`
+	SiteAccess  bool `json:"siteAccess"`
 }
 
 // AccountSettings holds additional settings for a site account.
@@ -124,6 +125,9 @@ func (acc *Account) CheckScopeAccess(scope string) bool {
 
 	case ScopeGOCDB:
 		hasAccess = acc.Data.GOCDBAccess
+
+	case ScopeSite:
+		hasAccess = acc.Data.SiteAccess
 	}
 
 	return hasAccess
@@ -198,6 +202,7 @@ func NewAccount(email string, title, firstName, lastName string, site, role stri
 		DateModified: t,
 		Data: AccountData{
 			GOCDBAccess: false,
+			SiteAccess:  false,
 		},
 		Settings: AccountSettings{
 			ReceiveAlerts: true,

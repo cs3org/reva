@@ -70,7 +70,7 @@ const tplBody = `
 </div>
 <div>&nbsp;</div>
 <div>
-	<form id="form" method="POST" class="box container-inline" style="width: 100%;"  onSubmit="handleAction('configure?invoker=user'); return false;">
+	<form id="form" method="POST" class="box container-inline" style="width: 100%;" onSubmit="handleAction('configure?invoker=user'); return false;">
 		<div style="grid-row: 1; grid-column: 1 / span 2;">
 			<h3>Notification settings</h3>
 			<hr>

@@ -50,11 +50,11 @@ html * {
 `
 
 const tplBody = `
-<div>
+<div style="font-size: 14px;">
 	<ul>
 	{{range .Accounts}}
 		<li>
-			<p>
+			<div>
 				<div>
 					<strong>{{.Email}}</strong><br>
 					{{.Title}}. {{.FirstName}} {{.LastName}} <em>(Joined: {{.DateCreated.Format "Jan 02, 2006 15:04"}}; Last modified: {{.DateModified.Format "Jan 02, 2006 15:04"}})</em>
@@ -66,21 +66,38 @@ const tplBody = `
 						<li>Phone: {{.PhoneNumber}}</li>
 					</ul>
 				</div>
-			</p>
-			<p>
-				<strong>GOCDB access:</strong> <em>{{if .Data.GOCDBAccess}}Granted{{else}}Not granted{{end}}</em>
-			</p>
-			<p>
+			</div>
+
+			<div>&nbsp;</div>
+
+			<div>
+				<strong>Account data:</strong>
+				<ul style="padding-left: 1em; padding-top: 0em;">	
+					<li>Site access: <em>{{if .Data.SiteAccess}}Granted{{else}}Not granted{{end}}</em></li>
+					<li>GOCDB access: <em>{{if .Data.GOCDBAccess}}Granted{{else}}Not granted{{end}}</em></li>	
+				</ul>
+			</div>
+
+			<div>&nbsp;</div>
+
+			<div>
 				<form method="POST" style="width: 100%;">
+				{{if .Data.SiteAccess}}
+					<button type="button" onClick="handleAction('grant-site-access?status=false', '{{.Email}}');">Revoke Site access</button>
+				{{else}}
+					<button type="button" onClick="handleAction('grant-site-access?status=true', '{{.Email}}');">Grant Site access</button>
+				{{end}}
+
 				{{if .Data.GOCDBAccess}}
 					<button type="button" onClick="handleAction('grant-gocdb-access?status=false', '{{.Email}}');">Revoke GOCDB access</button>
 				{{else}}
 					<button type="button" onClick="handleAction('grant-gocdb-access?status=true', '{{.Email}}');">Grant GOCDB access</button>
 				{{end}}
+
 					<span style="width: 25px;">&nbsp;</span>
 					<button type="button" onClick="handleAction('remove', '{{.Email}}');" style="float: right;">Remove</button>
 				</form>
-			</p>
+			</div>
 			<hr>
 		</li>
 	{{end}}
