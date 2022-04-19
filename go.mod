@@ -10,8 +10,6 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
-	github.com/asim/go-micro/plugins/events/natsjs/v4 v4.0.0-20220311080335-e5a35d38f931
-	github.com/asim/go-micro/plugins/server/http/v4 v4.0.0-20220317022205-c6d352c83291
 	github.com/aws/aws-sdk-go v1.42.39
 	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
@@ -28,6 +26,8 @@ require (
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-ldap/ldap/v3 v3.4.1
+	github.com/go-micro/plugins/v4/events/natsjs v1.0.0
+	github.com/go-micro/plugins/v4/server/http v1.0.0
 	github.com/go-openapi/errors v0.20.1 // indirect
 	github.com/go-openapi/strfmt v0.20.2 // indirect
 	github.com/go-sql-driver/mysql v1.6.0
@@ -53,7 +53,7 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mitchellh/mapstructure v1.4.3
-	github.com/nats-io/nats-server/v2 v2.7.2
+	github.com/nats-io/nats-server/v2 v2.7.4
 	github.com/onsi/ginkgo/v2 v2.0.0
 	github.com/onsi/gomega v1.18.1
 	github.com/pkg/errors v0.9.1

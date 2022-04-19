@@ -25,7 +25,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"go-micro.dev/v4/events"
 
-	"github.com/asim/go-micro/plugins/events/natsjs/v4"
+	"github.com/go-micro/plugins/v4/events/natsjs"
 	nserver "github.com/nats-io/nats-server/v2/server"
 )
 

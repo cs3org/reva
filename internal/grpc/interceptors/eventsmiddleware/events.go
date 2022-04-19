@@ -25,7 +25,6 @@ import (
 	"go-micro.dev/v4/util/log"
 	"google.golang.org/grpc"
 
-	"github.com/asim/go-micro/plugins/events/natsjs/v4"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	v1beta12 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -35,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/go-micro/plugins/v4/events/natsjs"
 )
 
 const (
