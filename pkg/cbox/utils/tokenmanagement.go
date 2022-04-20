@@ -127,7 +127,7 @@ func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, e
 }
 
 // SendAPIGetRequest makes an API GET Request to the passed URL
-func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, forceRenewal bool) ([]interface{}, error) {
+func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, forceRenewal bool) (map[string]interface{}, error) {
 	err := a.renewAPIToken(ctx, forceRenewal)
 	if err != nil {
 		return nil, err
@@ -168,10 +168,5 @@ func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, for
 		return nil, err
 	}
 
-	responseData, ok := result["data"].([]interface{})
-	if !ok {
-		return nil, errors.New("rest: error in type assertion")
-	}
-
-	return responseData, nil
+	return result, nil
 }
