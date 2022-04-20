@@ -622,6 +622,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		return nil, err
 	}
 
+	sid := resourceid.StorageIDWrap(n.SpaceRoot.SpaceID, fs.o.ProviderID)
 	space := &provider.StorageSpace{
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
@@ -631,9 +632,9 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 				},
 			},
 		},
-		Id: &provider.StorageSpaceId{OpaqueId: n.SpaceRoot.SpaceID},
+		Id: &provider.StorageSpaceId{OpaqueId: sid},
 		Root: &provider.ResourceId{
-			StorageId: n.SpaceRoot.SpaceID,
+			StorageId: sid,
 			OpaqueId:  n.SpaceRoot.ID,
 		},
 		Name: sname,

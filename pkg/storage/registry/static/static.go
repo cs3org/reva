@@ -55,6 +55,7 @@ type rule struct {
 	ProviderPath      string           `mapstructure:"provider_path"`
 	Aliases           map[string]alias `mapstructure:"aliases"`
 	AllowedUserAgents []string         `mapstructure:"allowed_user_agents"`
+	SpaceType         string           `mapstructure:"space_type"`
 }
 
 type config struct {
@@ -153,10 +154,18 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 	var match *registrypb.ProviderInfo
 	var shardedMatches []*registrypb.ProviderInfo
 	// If the reference has a resource id set, use it to route
+	typ := filters["space_type"]
 	if s := filters["storage_id"]; s != "" {
 		sid, spid := resourceid.StorageIDUnwrap(s)
 		for prefix, rule := range b.c.Rules {
 			addr, _ := getProviderAddr(ctx, rule)
+			if typ == rule.SpaceType {
+				return []*registrypb.ProviderInfo{{
+					ProviderId:   rule.ProviderID,
+					Address:      addr,
+					ProviderPath: rule.ProviderPath,
+				}}, nil
+			}
 			if spid != "" && spid == rule.ProviderID {
 				return []*registrypb.ProviderInfo{{
 					ProviderId:   spid,
@@ -193,6 +202,14 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 	if fn != "" {
 		for prefix, rule := range b.c.Rules {
 			addr, id := getProviderAddr(ctx, rule)
+			if typ == rule.SpaceType {
+				return []*registrypb.ProviderInfo{{
+					ProviderId:   rule.ProviderID,
+					Address:      addr,
+					ProviderPath: rule.ProviderPath,
+				}}, nil
+			}
+
 			r, err := regexp.Compile("^" + prefix)
 			if err != nil {
 				continue
