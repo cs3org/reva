@@ -198,16 +198,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	if claims["email"] == nil {
 		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
 	}
-	if uid, ok := claims[am.c.UIDClaim].(float64); ok {
-		claims[am.c.UIDClaim] = int64(uid)
-	} else {
-		return nil, nil, fmt.Errorf("malformed or missing uid claim in userinfo: '%v'", claims[am.c.UIDClaim])
-	}
-	if gid, ok := claims[am.c.GIDClaim].(float64); ok {
-		claims[am.c.GIDClaim] = int64(gid)
-	} else {
-		return nil, nil, fmt.Errorf("malformed or missing gid claim in userinfo: '%v'", claims[am.c.GIDClaim])
-	}
+
+	uid, _ := claims[am.c.UIDClaim].(float64)
+	claims[am.c.UIDClaim] = int64(uid) // in case the uid claim is missing and a mapping is to be performed, resolveUser() will populate it
+	// Note that if not, will silently carry a user with 0 uid, potentially problematic with storage providers
+	gid, _ := claims[am.c.GIDClaim].(float64)
+	claims[am.c.GIDClaim] = int64(gid)
 
 	err = am.resolveUser(ctx, claims)
 	if err != nil {
