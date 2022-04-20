@@ -530,7 +530,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 }
 
 func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
-	var args []string
+	args := []string{"attr"}
 	if recursive {
 		args = append(args, "-r")
 	}
