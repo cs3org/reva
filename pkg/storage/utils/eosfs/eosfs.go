@@ -601,7 +601,7 @@ func (fs *eosfs) getLockContent(ctx context.Context, auth eosclient.Authorizatio
 	if err != nil {
 		return nil, err
 	}
-	lockType, err := strconv.ParseUint(t.Val, 10, 64)
+	lockType, err := strconv.ParseInt(t.Val, 10, 32)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error decoding lock type")
 	}
