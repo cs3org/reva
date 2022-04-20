@@ -82,6 +82,12 @@ func (c *config) init() {
 	if c.GroupClaim == "" {
 		c.GroupClaim = "groups"
 	}
+	if c.UIDClaim == "" {
+		c.UIDClaim = "uid"
+	}
+	if c.GIDClaim == "" {
+		c.GIDClaim = "gid"
+	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
@@ -192,6 +198,16 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	if claims["email"] == nil {
 		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
 	}
+	if uid, ok := claims[am.c.UIDClaim].(float64); ok {
+		claims[am.c.UIDClaim] = int64(uid)
+	} else {
+		return nil, nil, fmt.Errorf("malformed or missing uid claim in userinfo: '%v'", claims[am.c.UIDClaim])
+	}
+	if gid, ok := claims[am.c.GIDClaim].(float64); ok {
+		claims[am.c.GIDClaim] = int64(gid)
+	} else {
+		return nil, nil, fmt.Errorf("malformed or missing gid claim in userinfo: '%v'", claims[am.c.GIDClaim])
+	}
 
 	err = am.resolveUser(ctx, claims)
 	if err != nil {
@@ -218,14 +234,6 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, status.NewErrorFromCode(getGroupsResp.Status.Code, "oidc")
 	}
 
-	var uid, gid int64
-	if am.c.UIDClaim != "" {
-		uid, _ = claims[am.c.UIDClaim].(int64)
-	}
-	if am.c.GIDClaim != "" {
-		gid, _ = claims[am.c.GIDClaim].(int64)
-	}
-
 	u := &user.User{
 		Id:           userID,
 		Username:     claims["preferred_username"].(string),
@@ -233,8 +241,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Mail:         claims["email"].(string),
 		MailVerified: claims["email_verified"].(bool),
 		DisplayName:  claims["name"].(string),
-		UidNumber:    uid,
-		GidNumber:    gid,
+		UidNumber:    claims[am.c.UIDClaim].(int64),
+		GidNumber:    claims[am.c.GIDClaim].(int64),
 	}
 
 	var scopes map[string]*authpb.Scope
@@ -338,12 +346,8 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 		claims["preferred_username"] = username
 		claims[am.c.IDClaim] = getUserByClaimResp.GetUser().GetId().OpaqueId
 		claims["iss"] = getUserByClaimResp.GetUser().GetId().Idp
-		if am.c.UIDClaim != "" {
-			claims[am.c.UIDClaim] = getUserByClaimResp.GetUser().UidNumber
-		}
-		if am.c.GIDClaim != "" {
-			claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
-		}
+		claims[am.c.UIDClaim] = getUserByClaimResp.GetUser().UidNumber
+		claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
 		appctx.GetLogger(ctx).Debug().Str("username", username).Interface("claims", claims).Msg("resolveUser: claims overridden from mapped user")
 	}
 	return nil
