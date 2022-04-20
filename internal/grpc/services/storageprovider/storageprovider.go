@@ -59,6 +59,7 @@ type config struct {
 	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
 	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
 	MimeTypes        map[string]string                 `mapstructure:"mimetypes" docs:"nil;List of supported mime types and corresponding file extensions."`
+	MountID          string                            `mapstructure:"mount_id"`
 }
 
 func (c *config) init() {
@@ -1049,8 +1050,10 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 }
 
 func getFS(c *config) (storage.FS, error) {
+	m := c.Drivers[c.Driver]
+	m["providerid"] = c.MountID
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(m)
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }

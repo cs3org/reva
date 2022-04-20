@@ -83,8 +83,6 @@ type Node struct {
 	Exists    bool
 	SpaceRoot *Node
 
-	StorageProviderID string // Only for easy testing - the node should not know about her provider
-
 	lu PathLookup
 }
 
@@ -567,7 +565,7 @@ func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 }
 
 // AsResourceInfo return the node as CS3 ResourceInfo
-func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
+func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string, returnBasename bool, providerID string) (ri *provider.ResourceInfo, err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n.ID).Logger()
 
 	var fn string
@@ -596,7 +594,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	}
 
-	rid := resourceid.StorageIDWrap(n.SpaceID, n.StorageProviderID)
+	rid := resourceid.StorageIDWrap(n.SpaceID, providerID)
 	id := &provider.ResourceId{StorageId: rid, OpaqueId: n.ID}
 
 	if returnBasename {

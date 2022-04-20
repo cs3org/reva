@@ -53,7 +53,7 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 	}
 
 	// unwrap magic ID
-	sid, spid := resourceid.StorageIDUnwrap(ref.ResourceId.StorageId)
+	sid, _ := resourceid.StorageIDUnwrap(ref.ResourceId.StorageId)
 
 	// check if a storage space reference is used
 	// currently, the decomposed fs uses the root node id as the space id
@@ -61,8 +61,6 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 	if err != nil {
 		return nil, err
 	}
-
-	n.StorageProviderID = spid
 
 	// is this a relative reference?
 	if ref.Path != "" {

@@ -51,6 +51,9 @@ type Options struct {
 
 	PersonalSpaceAliasTemplate string `mapstructure:"personalspacealias_template"`
 	GeneralSpaceAliasTemplate  string `mapstructure:"generalspacealias_template"`
+
+	// ProviderID - the ID of the storage provider
+	ProviderID string `mapstructure:"providerid"`
 }
 
 // New returns a new Options instance for the given configuration

@@ -171,7 +171,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 		return 0, 0, 0, errtypes.PermissionDenied(n.ID)
 	}
 
-	ri, err := n.AsResourceInfo(ctx, &rp, []string{"treesize", "quota"}, true)
+	ri, err := n.AsResourceInfo(ctx, &rp, []string{"treesize", "quota"}, true, fs.o.ProviderID)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -474,7 +474,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx, &rp, mdKeys, utils.IsRelativeReference(ref))
+	return node.AsResourceInfo(ctx, &rp, mdKeys, utils.IsRelativeReference(ref), fs.o.ProviderID)
 }
 
 // ListFolder returns a list of resources in the specified folder
@@ -511,7 +511,7 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		// add this childs permissions
 		pset := n.PermissionSet(ctx)
 		node.AddPermissions(&np, &pset)
-		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, utils.IsRelativeReference(ref)); err == nil {
+		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, utils.IsRelativeReference(ref), fs.o.ProviderID); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}
