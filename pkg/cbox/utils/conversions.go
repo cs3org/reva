@@ -28,6 +28,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 )
 
 // DBShare stores information about user and public shares.
@@ -129,46 +130,14 @@ func SharePermToInt(p *provider.ResourcePermissions) int {
 func IntTosharePerm(p int, itemType string) *provider.ResourcePermissions {
 	switch p {
 	case 1:
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-		}
+		return conversions.NewViewerRole().CS3ResourcePermissions()
 	case 15:
-		perm := &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-		}
 		if itemType == "folder" {
-			perm.CreateContainer = true
-			perm.Delete = true
-			perm.Move = true
-			perm.PurgeRecycle = true
+			return conversions.NewEditorRole().CS3ResourcePermissions()
 		}
-		return perm
+		return conversions.NewFileEditorRole().CS3ResourcePermissions()
 	case 4:
-		return &provider.ResourcePermissions{
-			Stat:               true,
-			ListContainer:      true,
-			GetPath:            true,
-			CreateContainer:    true,
-			InitiateFileUpload: true,
-		}
+		return conversions.NewUploaderRole().CS3ResourcePermissions()
 	default:
 		// TODO we may have other options, for now this is a denial
 		return &provider.ResourcePermissions{}

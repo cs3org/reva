@@ -162,6 +162,18 @@ func (w *wrapper) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 	return w.FS.RestoreRevision(ctx, ref, revisionKey)
 }
 
+func (w *wrapper) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	// This is only allowed for project space admins
+	if strings.HasPrefix(w.conf.Namespace, eosProjectsNamespace) {
+		if err := w.userIsProjectAdmin(ctx, ref); err != nil {
+			return err
+		}
+		return w.FS.DenyGrant(ctx, ref, g)
+	}
+
+	return errtypes.NotSupported("eos: deny grant is only enabled for project spaces")
+}
+
 func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) string {
 	if r == nil {
 		return ""
@@ -194,6 +206,7 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 				r.PermissionSet.UpdateGrant = true
 				r.PermissionSet.ListGrants = true
 				r.PermissionSet.GetQuota = true
+				r.PermissionSet.DenyGrant = true
 				return nil
 			}
 		}
