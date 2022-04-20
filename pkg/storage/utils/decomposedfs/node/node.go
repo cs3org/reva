@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -81,6 +82,8 @@ type Node struct {
 	owner     *userpb.UserId
 	Exists    bool
 	SpaceRoot *Node
+
+	StorageProviderID string // Only for easy testing - the node should not know about her provider
 
 	lu PathLookup
 }
@@ -593,7 +596,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	}
 
-	id := &provider.ResourceId{StorageId: n.SpaceID, OpaqueId: n.ID}
+	rid := resourceid.StorageIDWrap(n.SpaceID, n.StorageProviderID)
+	id := &provider.ResourceId{StorageId: rid, OpaqueId: n.ID}
 
 	if returnBasename {
 		fn = n.Name
