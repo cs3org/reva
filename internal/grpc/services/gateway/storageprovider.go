@@ -266,7 +266,11 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 	spaces := []*provider.StorageSpace{}
 	for _, providerInfo := range res.Providers {
-		spaces = append(spaces, decodeSpaces(providerInfo)...)
+		sps, err := s.statSpaces(ctx, providerInfo, req)
+		if err != nil {
+			continue // for now
+		}
+		spaces = append(spaces, sps...)
 	}
 
 	return &provider.ListStorageSpacesResponse{
@@ -1169,6 +1173,19 @@ func (s *svc) findProvider(ctx context.Context, listReq *registry.ListStoragePro
 	}
 
 	return res.Providers, nil
+}
+
+func (s *svc) statSpaces(ctx context.Context, i *registry.ProviderInfo, req *provider.ListStorageSpacesRequest) ([]*provider.StorageSpace, error) {
+	c, err := s.getStorageProviderClient(ctx, i)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.ListStorageSpaces(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return res.StorageSpaces, nil
 }
 
 // unwrap takes a reference and builds a reference for the provider. can be absolute or relative to a root node
