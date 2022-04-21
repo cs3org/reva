@@ -51,7 +51,7 @@ func (bs *Blobstore) Upload(node *node.Node, data io.Reader) error {
 
 	// ensure parent path exists
 	if err := os.MkdirAll(filepath.Dir(bs.path(node)), 0700); err != nil {
-		return errors.Wrap(err, "Decomposedfs: oCIS blobstore: error creating parent folder for lock")
+		return errors.Wrap(err, "Decomposedfs: oCIS blobstore: error creating parent folders for blob")
 	}
 
 	f, err := os.OpenFile(bs.path(node), os.O_CREATE|os.O_WRONLY, 0700)
