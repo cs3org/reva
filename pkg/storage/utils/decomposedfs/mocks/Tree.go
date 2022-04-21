@@ -67,13 +67,13 @@ func (_m *Tree) Delete(ctx context.Context, _a1 *node.Node) error {
 	return r0
 }
 
-// DeleteBlob provides a mock function with given fields: key
-func (_m *Tree) DeleteBlob(key string) error {
-	ret := _m.Called(key)
+// DeleteBlob provides a mock function with given fields: _a0
+func (_m *Tree) DeleteBlob(_a0 *node.Node) error {
+	ret := _m.Called(_a0)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string) error); ok {
-		r0 = rf(key)
+	if rf, ok := ret.Get(0).(func(*node.Node) error); ok {
+		r0 = rf(_a0)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -187,13 +187,13 @@ func (_m *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid string, key st
 	return r0, r1, r2
 }
 
-// ReadBlob provides a mock function with given fields: key
-func (_m *Tree) ReadBlob(key string) (io.ReadCloser, error) {
-	ret := _m.Called(key)
+// ReadBlob provides a mock function with given fields: _a0
+func (_m *Tree) ReadBlob(_a0 *node.Node) (io.ReadCloser, error) {
+	ret := _m.Called(_a0)
 
 	var r0 io.ReadCloser
-	if rf, ok := ret.Get(0).(func(string) io.ReadCloser); ok {
-		r0 = rf(key)
+	if rf, ok := ret.Get(0).(func(*node.Node) io.ReadCloser); ok {
+		r0 = rf(_a0)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(io.ReadCloser)
@@ -201,8 +201,8 @@ func (_m *Tree) ReadBlob(key string) (io.ReadCloser, error) {
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(key)
+	if rf, ok := ret.Get(1).(func(*node.Node) error); ok {
+		r1 = rf(_a0)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -265,13 +265,13 @@ func (_m *Tree) Setup() error {
 	return r0
 }
 
-// WriteBlob provides a mock function with given fields: key, reader
-func (_m *Tree) WriteBlob(key string, reader io.Reader) error {
-	ret := _m.Called(key, reader)
+// WriteBlob provides a mock function with given fields: _a0, reader
+func (_m *Tree) WriteBlob(_a0 *node.Node, reader io.Reader) error {
+	ret := _m.Called(_a0, reader)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, io.Reader) error); ok {
-		r0 = rf(key, reader)
+	if rf, ok := ret.Get(0).(func(*node.Node, io.Reader) error); ok {
+		r0 = rf(_a0, reader)
 	} else {
 		r0 = ret.Error(0)
 	}
