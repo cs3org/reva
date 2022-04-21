@@ -27,13 +27,14 @@ import (
 	"net/http/httptest"
 	"strings"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind/mocks"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
@@ -44,7 +45,7 @@ import (
 var _ = Describe("Propfind", func() {
 	var (
 		handler *propfind.Handler
-		client  *mocks.GatewayClient
+		client  *mocks.GatewayAPIClient
 		ctx     context.Context
 
 		readResponse = func(r io.Reader) (*propfind.MultiStatusResponseUnmarshalXML, string, error) {
@@ -150,8 +151,8 @@ var _ = Describe("Propfind", func() {
 
 	JustBeforeEach(func() {
 		ctx = context.WithValue(context.Background(), net.CtxKeyBaseURI, "http://127.0.0.1:3000")
-		client = &mocks.GatewayClient{}
-		handler = propfind.NewHandler("127.0.0.1:3000", func() (propfind.GatewayClient, error) {
+		client = &mocks.GatewayAPIClient{}
+		handler = propfind.NewHandler("127.0.0.1:3000", func() (gateway.GatewayAPIClient, error) {
 			return client, nil
 		})
 

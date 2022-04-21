@@ -48,32 +48,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-//go:generate make --no-print-directory -C ../../../.. mockery NAME=GatewayClient
-//go:generate make --no-print-directory -C ../../../.. mockery NAME=SharesProviderClient
-
-// GatewayClient describe the interface of a gateway client
-type GatewayClient interface {
-	GetPath(ctx context.Context, in *provider.GetPathRequest, opts ...grpc.CallOption) (*provider.GetPathResponse, error)
-	Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error)
-	Move(ctx context.Context, in *provider.MoveRequest, opts ...grpc.CallOption) (*provider.MoveResponse, error)
-	Delete(ctx context.Context, in *provider.DeleteRequest, opts ...grpc.CallOption) (*provider.DeleteResponse, error)
-	CreateContainer(ctx context.Context, in *provider.CreateContainerRequest, opts ...grpc.CallOption) (*provider.CreateContainerResponse, error)
-	ListContainer(ctx context.Context, in *provider.ListContainerRequest, opts ...grpc.CallOption) (*provider.ListContainerResponse, error)
-	ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest, opts ...grpc.CallOption) (*provider.ListFileVersionsResponse, error)
-	RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest, opts ...grpc.CallOption) (*provider.RestoreFileVersionResponse, error)
-	InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileDownloadResponse, error)
-	InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest, opts ...grpc.CallOption) (*gateway.InitiateFileUploadResponse, error)
-	SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest, opts ...grpc.CallOption) (*provider.SetArbitraryMetadataResponse, error)
-	UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest, opts ...grpc.CallOption) (*provider.UnsetArbitraryMetadataResponse, error)
-	ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest, opts ...grpc.CallOption) (*collaboration.ListReceivedSharesResponse, error)
-}
-
-// SharesProviderClient provides methods for listing and modifying received shares
-type SharesProviderClient interface {
-	ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest, opts ...grpc.CallOption) (*collaboration.ListReceivedSharesResponse, error)
-	UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest, opts ...grpc.CallOption) (*collaboration.UpdateReceivedShareResponse, error)
-}
-
 func init() {
 	rgrpc.Register("sharesstorageprovider", NewDefault)
 }
@@ -84,8 +58,8 @@ type config struct {
 }
 
 type service struct {
-	gateway              GatewayClient
-	sharesProviderClient SharesProviderClient
+	gateway              gateway.GatewayAPIClient
+	sharesProviderClient collaboration.CollaborationAPIClient
 }
 
 func (s *service) Close() error {
@@ -122,7 +96,7 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error)
 }
 
 // New returns a new instance of the SharesStorageProvider service
-func New(gateway GatewayClient, c SharesProviderClient) (rgrpc.Service, error) {
+func New(gateway gateway.GatewayAPIClient, c collaboration.CollaborationAPIClient) (rgrpc.Service, error) {
 	s := &service{
 		gateway:              gateway,
 		sharesProviderClient: c,
