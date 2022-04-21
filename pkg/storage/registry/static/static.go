@@ -159,7 +159,7 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 		sid, spid := resourceid.StorageIDUnwrap(s)
 		for prefix, rule := range b.c.Rules {
 			addr, _ := getProviderAddr(ctx, rule)
-			if typ == rule.SpaceType {
+			if typ != "" && typ == rule.SpaceType {
 				return []*registrypb.ProviderInfo{{
 					ProviderId:   rule.ProviderID,
 					Address:      addr,
@@ -202,7 +202,7 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 	if fn != "" {
 		for prefix, rule := range b.c.Rules {
 			addr, id := getProviderAddr(ctx, rule)
-			if typ == rule.SpaceType {
+			if typ != "" && typ == rule.SpaceType {
 				return []*registrypb.ProviderInfo{{
 					ProviderId:   rule.ProviderID,
 					Address:      addr,
