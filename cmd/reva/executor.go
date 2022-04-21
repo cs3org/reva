@@ -30,7 +30,7 @@ import (
 
 // Executor provides exec command handler
 type Executor struct {
-	Timeout int
+	Timeout int64
 }
 
 // Execute provides execute commands
@@ -79,7 +79,7 @@ func (e *Executor) Execute(s string) {
 					select {
 					case <-signalChan:
 						cancel()
-					case <-time.After(time.Duration(e.Timeout * int(time.Second))):
+					case <-time.After(time.Duration(e.Timeout * int64(time.Second))):
 						cancel()
 					case <-ctx.Done():
 					}

@@ -104,10 +104,8 @@ func downloadCommand() *command {
 			httpReq.Header.Set(datagateway.TokenTransportHeader, p.Token)
 			httpClient := rhttp.GetHTTPClient(
 				rhttp.Context(ctx),
-				// TODO make insecure configurable
-				rhttp.Insecure(true),
-				// TODO make timeout configurable
-				rhttp.Timeout(time.Duration(24*int64(time.Hour))),
+				rhttp.Insecure(insecure),
+				rhttp.Timeout(time.Duration(timeout*int64(time.Hour))),
 			)
 
 			httpRes, err := httpClient.Do(httpReq)

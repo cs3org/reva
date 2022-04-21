@@ -123,7 +123,10 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	}
 	c.init()
 	redisPool := initRedisPool(c.RedisAddress, c.RedisUsername, c.RedisPassword)
-	apiTokenManager := utils.InitAPITokenManager(c.TargetAPI, c.OIDCTokenEndpoint, c.ClientID, c.ClientSecret)
+	apiTokenManager, err := utils.InitAPITokenManager(ml)
+	if err != nil {
+		return err
+	}
 	m.conf = c
 	m.redisPool = redisPool
 	m.apiTokenManager = apiTokenManager

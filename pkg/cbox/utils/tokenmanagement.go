@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/mitchellh/mapstructure"
 )
 
 // APITokenManager stores config related to api management
@@ -47,26 +48,27 @@ type OIDCToken struct {
 }
 
 type config struct {
-	TargetAPI         string
-	OIDCTokenEndpoint string
-	ClientID          string
-	ClientSecret      string
+	TargetAPI         string `mapstructure:"target_api"`
+	OIDCTokenEndpoint string `mapstructure:"oidc_token_endpoint"`
+	ClientID          string `mapstructure:"client_id"`
+	ClientSecret      string `mapstructure:"client_secret"`
+	Timeout           int64  `mapstructure:"timeout"`
+	Insecure          bool   `mapstructure:"insecure"`
 }
 
 // InitAPITokenManager initializes a new APITokenManager
-func InitAPITokenManager(targetAPI, oidcTokenEndpoint, clientID, clientSecret string) *APITokenManager {
-	return &APITokenManager{
-		conf: &config{
-			TargetAPI:         targetAPI,
-			OIDCTokenEndpoint: oidcTokenEndpoint,
-			ClientID:          clientID,
-			ClientSecret:      clientSecret,
-		},
-		client: rhttp.GetHTTPClient(
-			rhttp.Timeout(10*time.Second),
-			rhttp.Insecure(true),
-		),
+func InitAPITokenManager(conf map[string]interface{}) (*APITokenManager, error) {
+	c := &config{}
+	if err := mapstructure.Decode(conf, c); err != nil {
+		return nil, err
 	}
+
+	return &APITokenManager{
+		conf: c,
+		client: rhttp.GetHTTPClient(
+			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+			rhttp.Insecure(c.Insecure),
+		)}, nil
 }
 
 func (a *APITokenManager) renewAPIToken(ctx context.Context, forceRenewal bool) error {
