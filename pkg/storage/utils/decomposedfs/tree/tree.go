@@ -46,9 +46,9 @@ import (
 
 // Blobstore defines an interface for storing blobs in a blobstore
 type Blobstore interface {
-	Upload(key string, reader io.Reader) error
-	Download(key string) (io.ReadCloser, error)
-	Delete(key string) error
+	Upload(node *node.Node, reader io.Reader) error
+	Download(node *node.Node) (io.ReadCloser, error)
+	Delete(node *node.Node) error
 }
 
 // PathLookup defines the interface for the lookup component
@@ -548,7 +548,7 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 
 		// delete blob from blobstore
 		if rn.BlobID != "" {
-			if err = t.DeleteBlob(rn.BlobID); err != nil {
+			if err = t.DeleteBlob(rn); err != nil {
 				log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item blob")
 				return err
 			}
@@ -735,22 +735,25 @@ func calculateTreeSize(ctx context.Context, nodePath string) (uint64, error) {
 }
 
 // WriteBlob writes a blob to the blobstore
-func (t *Tree) WriteBlob(key string, reader io.Reader) error {
-	return t.blobstore.Upload(key, reader)
+func (t *Tree) WriteBlob(node *node.Node, reader io.Reader) error {
+	return t.blobstore.Upload(node, reader)
 }
 
 // ReadBlob reads a blob from the blobstore
-func (t *Tree) ReadBlob(key string) (io.ReadCloser, error) {
-	return t.blobstore.Download(key)
+func (t *Tree) ReadBlob(node *node.Node) (io.ReadCloser, error) {
+	return t.blobstore.Download(node)
 }
 
 // DeleteBlob deletes a blob from the blobstore
-func (t *Tree) DeleteBlob(key string) error {
-	if key == "" {
-		return fmt.Errorf("could not delete blob, empty key was given")
+func (t *Tree) DeleteBlob(node *node.Node) error {
+	if node == nil {
+		return fmt.Errorf("could not delete blob, nil node was given")
+	}
+	if node.BlobID == "" {
+		return fmt.Errorf("could not delete blob, node with empty blob id was given")
 	}
 
-	return t.blobstore.Delete(key)
+	return t.blobstore.Delete(node)
 }
 
 // TODO check if node exists?

@@ -82,9 +82,9 @@ type Tree interface {
 	RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPath string, target *node.Node) (*node.Node, *node.Node, func() error, error)
 	PurgeRecycleItemFunc(ctx context.Context, spaceid, key, purgePath string) (*node.Node, func() error, error)
 
-	WriteBlob(key string, reader io.Reader) error
-	ReadBlob(key string) (io.ReadCloser, error)
-	DeleteBlob(key string) error
+	WriteBlob(node *node.Node, reader io.Reader) error
+	ReadBlob(node *node.Node) (io.ReadCloser, error)
+	DeleteBlob(node *node.Node) error
 
 	Propagate(ctx context.Context, node *node.Node) (err error)
 }
@@ -568,7 +568,7 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	reader, err := fs.tp.ReadBlob(node.BlobID)
+	reader, err := fs.tp.ReadBlob(node)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error download blob '"+node.ID+"'")
 	}

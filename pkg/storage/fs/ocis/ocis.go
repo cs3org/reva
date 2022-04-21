@@ -40,7 +40,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	bs, err := blobstore.New(path.Join(o.Root, "blobs"))
+	bs, err := blobstore.New(path.Join(o.Root))
 	if err != nil {
 		return nil, err
 	}
