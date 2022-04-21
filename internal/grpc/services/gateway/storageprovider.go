@@ -266,9 +266,12 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 	spaces := []*provider.StorageSpace{}
 	for _, providerInfo := range res.Providers {
-		sps, err := s.statSpaces(ctx, providerInfo, req)
-		if err != nil {
-			continue // for now
+		sps := decodeSpaces(providerInfo)
+		if len(sps) == 0 || sps[0].Id.GetOpaqueId() == "" {
+			sps, err = s.statSpaces(ctx, providerInfo, req)
+			if err != nil {
+				continue // for now
+			}
 		}
 		spaces = append(spaces, sps...)
 	}
