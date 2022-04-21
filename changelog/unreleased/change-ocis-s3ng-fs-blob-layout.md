@@ -10,7 +10,7 @@ large numbers of files.
 
 The previous layout on disk looked like this:
 
-```
+```markdown
 |-- spaces
 | |-- ..
 | |  |-- ..
@@ -30,7 +30,7 @@ The previous layout on disk looked like this:
 
 Now it looks like this:
 
-```
+```markdown
 |-- spaces
 | |-- ..
 | |  |-- ..
@@ -58,14 +58,14 @@ and mitigates S3 api performance drops for large buckets (https://aws.amazon.com
 
 The previous S3 bucket (blobs only looked like this):
 
-```
+```markdown
 |-- ..
 |-- xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx <- blob id
 ```
 
 Now it looks like this:
 
-```
+```markdown
 |-- ..
 |-- xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx <- space id
    |-- ..
