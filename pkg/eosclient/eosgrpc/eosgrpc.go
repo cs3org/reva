@@ -21,6 +21,7 @@ package eosgrpc
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -44,6 +45,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -104,6 +106,17 @@ type Options struct {
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
+
+	// Disables transport security for new GRPC connections.
+	Insecure bool
+
+	// SkipVerify controls whether a client verifies the server's
+	// certificate chain and host name. If SkipVerify is true, crypto/tls
+	// accepts any certificate presented by the server and any host name in that
+	// certificate. In this mode, TLS is susceptible to machine-in-the-middle
+	// attacks unless custom verification is used. This should be used only for
+	// testing or in combination with VerifyConnection or VerifyPeerCertificate.
+	SkipVerify bool
 }
 
 func (opt *Options) init() {
@@ -135,7 +148,14 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("Setting up GRPC towards ", "'"+opt.GrpcURI+"'").Msg("")
 
-	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	var creds credentials.TransportCredentials
+	if opt.Insecure {
+		creds = insecure.NewCredentials()
+	} else {
+		tlsconf := &tls.Config{InsecureSkipVerify: opt.SkipVerify}
+		creds = credentials.NewTLS(tlsconf)
+	}
+	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		log.Warn().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
 	}
