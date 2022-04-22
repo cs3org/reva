@@ -8,13 +8,15 @@ issues:
       text: "SA1019:"
       linters:
         - staticcheck
-    # Exclude scopelint for tests files because of https://github.com/kyoh86/scopelint/issues/4
     - path: _test\.go
       linters:
-        - scopelint
+        - exportloopref
+linters-settings:
+  govet:
+    enable:
+      - fieldalignment
 linters:
   enable:
-    - maligned
     - bodyclose
     - deadcode
     - errcheck
@@ -27,10 +29,10 @@ linters:
     - unused
     - varcheck
     - depguard
-    - golint
+    - revive
     - goimports
     - unconvert
-    - scopelint
+    - exportloopref
     - misspell
     - gocritic
     - prealloc
