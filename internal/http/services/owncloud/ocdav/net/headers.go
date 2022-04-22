@@ -63,4 +63,5 @@ const (
 	HeaderOCMtime              = "X-OC-Mtime"
 	HeaderExpectedEntityLength = "X-Expected-Entity-Length"
 	HeaderLitmus               = "X-Litmus"
+	HeaderTransferAuth         = "TransferHeaderAuthorization"
 )

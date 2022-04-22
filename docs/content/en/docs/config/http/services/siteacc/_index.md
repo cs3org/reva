@@ -19,6 +19,15 @@ prefix = "/siteacc"
 {{< /highlight >}}
 {{% /dir %}}
 
+## Security settings
+{{% dir name="creds_passphrase" type="string" default="" %}}
+The passphrase to use when encoding stored credentials. Should be exactly 32 characters long.
+{{< highlight toml >}}
+[http.services.siteacc.security]
+creds_passphrase = "supersecretpasswordthatyouknow!"
+{{< /highlight >}}
+{{% /dir %}}
+
 ## GOCDB settings
 {{% dir name="url" type="string" default="" %}}
 The external URL of the central GOCDB instance.
@@ -111,12 +120,20 @@ driver = "file"
 {{< /highlight >}}
 {{% /dir %}}
 
-### Storage settings - File driver
-{{% dir name="file" type="string" default="" %}}
-The file location.
+### Storage settings - File drivers
+{{% dir name="sites_file" type="string" default="" %}}
+The sites file location.
 {{< highlight toml >}}
 [http.services.siteacc.storage.file]
-file = "/var/reva/accounts.json"
+sites_file = "/var/reva/sites.json"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="accounts_file" type="string" default="" %}}
+The accounts file location.
+{{< highlight toml >}}
+[http.services.siteacc.storage.file]
+accounts_file = "/var/reva/accounts.json"
 {{< /highlight >}}
 {{% /dir %}}
 

@@ -158,7 +158,7 @@ func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service) error {
 }
 
 func traceHandler(name string, collector string, endpoint string) func(http.Handler) http.Handler {
-	rtrace.SetTraceProvider(collector, endpoint)
+	rtrace.SetTraceProvider(collector, endpoint, "ocdav-micro")
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))

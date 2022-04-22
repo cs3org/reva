@@ -43,6 +43,7 @@ import (
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type provider struct {
@@ -89,7 +90,7 @@ var (
 func NewConn(endpoint string) (*grpc.ClientConn, error) {
 	conn, err := grpc.Dial(
 		endpoint,
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize),
 		),

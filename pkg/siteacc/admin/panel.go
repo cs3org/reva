@@ -63,12 +63,12 @@ func (panel *Panel) GetActiveTemplate(*html.Session, string) string {
 
 // GetTitle returns the title of the htmlPanel.
 func (panel *Panel) GetTitle() string {
-	return "ScienceMesh Administration Panel"
+	return "ScienceMesh Site Administrator Accounts Panel"
 }
 
 // GetCaption returns the caption which is displayed on the htmlPanel.
 func (panel *Panel) GetCaption() string {
-	return "Accounts ({{.Accounts | len}})"
+	return "ScienceMesh Site Administrator Accounts ({{.Accounts | len}})"
 }
 
 // GetContentJavaScript delivers additional JavaScript code.
@@ -109,7 +109,7 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 func NewPanel(conf *config.Configuration, log *zerolog.Logger) (*Panel, error) {
 	panel := &Panel{}
 	if err := panel.initialize(conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the administration panel")
+		return nil, errors.Wrap(err, "unable to initialize the administration panel")
 	}
 	return panel, nil
 }

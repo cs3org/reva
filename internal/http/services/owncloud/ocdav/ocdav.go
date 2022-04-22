@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -85,11 +86,13 @@ type Config struct {
 	// Example: if WebdavNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
-	WebdavNamespace        string                            `mapstructure:"webdav_namespace"`
-	SharesNamespace        string                            `mapstructure:"shares_namespace"`
-	GatewaySvc             string                            `mapstructure:"gatewaysvc"`
-	Timeout                int64                             `mapstructure:"timeout"`
-	Insecure               bool                              `mapstructure:"insecure"`
+	WebdavNamespace string `mapstructure:"webdav_namespace"`
+	SharesNamespace string `mapstructure:"shares_namespace"`
+	GatewaySvc      string `mapstructure:"gatewaysvc"`
+	Timeout         int64  `mapstructure:"timeout"`
+	Insecure        bool   `mapstructure:"insecure"`
+	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
+	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
@@ -111,7 +114,8 @@ type svc struct {
 	favoritesManager favorite.Manager
 	client           *http.Client
 	// LockSystem is the lock management system.
-	LockSystem LockSystem
+	LockSystem          LockSystem
+	userIdentifierCache *ttlcache.Cache
 }
 
 func (s *svc) Config() *Config {
@@ -164,9 +168,12 @@ func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
-		favoritesManager: fm,
-		LockSystem:       ls,
+		favoritesManager:    fm,
+		LockSystem:          ls,
+		userIdentifierCache: ttlcache.NewCache(),
 	}
+	_ = s.userIdentifierCache.SetTTL(60 * time.Second)
+
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
 		return nil, err

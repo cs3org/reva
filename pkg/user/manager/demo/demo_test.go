@@ -44,8 +44,42 @@ func TestUserManager(t *testing.T) {
 		UidNumber:   123,
 		GidNumber:   987,
 	}
+	userEinsteinWithoutGroups := &userpb.User{
+		Id:          uidEinstein,
+		Username:    "einstein",
+		Mail:        "einstein@example.org",
+		DisplayName: "Albert Einstein",
+		UidNumber:   123,
+		GidNumber:   987,
+	}
+
 	uidFake := &userpb.UserId{Idp: "nonesense", OpaqueId: "fakeUser"}
 	groupsEinstein := []string{"sailing-lovers", "violin-haters", "physics-lovers"}
+
+	// positive test GetUserByClaim by uid
+	resUserByUID, _ := manager.GetUserByClaim(ctx, "uid", "123", false)
+	if !reflect.DeepEqual(resUserByUID, userEinstein) {
+		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByUID)
+	}
+
+	// negative test GetUserByClaim by uid
+	expectedErr := errtypes.NotFound("789")
+	_, err := manager.GetUserByClaim(ctx, "uid", "789", false)
+	if !reflect.DeepEqual(err, expectedErr) {
+		t.Fatalf("user not found error differs: expected='%v' got='%v'", expectedErr, err)
+	}
+
+	// positive test GetUserByClaim by mail
+	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", false)
+	if !reflect.DeepEqual(resUserByEmail, userEinstein) {
+		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByEmail)
+	}
+
+	// positive test GetUserByClaim by uid without groups
+	resUserByUIDWithoutGroups, _ := manager.GetUserByClaim(ctx, "uid", "123", true)
+	if !reflect.DeepEqual(resUserByUIDWithoutGroups, userEinsteinWithoutGroups) {
+		t.Fatalf("user differs: expected=%v got=%v", userEinsteinWithoutGroups, resUserByUIDWithoutGroups)
+	}
 
 	// positive test GetUserGroups
 	resGroups, _ := manager.GetUserGroups(ctx, uidEinstein)
@@ -54,39 +88,20 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// negative test GetUserGroups
-	expectedErr := errtypes.NotFound(uidFake.OpaqueId)
-	_, err := manager.GetUserGroups(ctx, uidFake)
+	expectedErr = errtypes.NotFound(uidFake.OpaqueId)
+	_, err = manager.GetUserGroups(ctx, uidFake)
 	if !reflect.DeepEqual(err, expectedErr) {
 		t.Fatalf("user not found error differs: expected='%v' got='%v'", expectedErr, err)
-	}
-
-	// positive test GetUserByClaim by uid
-	resUserByUID, _ := manager.GetUserByClaim(ctx, "uid", "123")
-	if !reflect.DeepEqual(resUserByUID, userEinstein) {
-		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByUID)
-	}
-
-	// negative test GetUserByClaim by uid
-	expectedErr = errtypes.NotFound("789")
-	_, err = manager.GetUserByClaim(ctx, "uid", "789")
-	if !reflect.DeepEqual(err, expectedErr) {
-		t.Fatalf("user not found error differs: expected='%v' got='%v'", expectedErr, err)
-	}
-
-	// positive test GetUserByClaim by mail
-	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org")
-	if !reflect.DeepEqual(resUserByEmail, userEinstein) {
-		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByEmail)
 	}
 
 	// test FindUsers
-	resUser, _ := manager.FindUsers(ctx, "einstein")
+	resUser, _ := manager.FindUsers(ctx, "einstein", false)
 	if !reflect.DeepEqual(resUser, []*userpb.User{userEinstein}) {
 		t.Fatalf("user differs: expected=%v got=%v", []*userpb.User{userEinstein}, resUser)
 	}
 
 	// negative test FindUsers
-	resUsers, _ := manager.FindUsers(ctx, "notARealUser")
+	resUsers, _ := manager.FindUsers(ctx, "notARealUser", false)
 	if len(resUsers) > 0 {
 		t.Fatalf("user not in group: expected=%v got=%v", []*userpb.User{}, resUsers)
 	}

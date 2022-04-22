@@ -31,6 +31,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
@@ -165,28 +166,11 @@ func ocmShareCreateCommand() *command {
 func getOCMSharePerm(p string) (*ocm.SharePermissions, int, error) {
 	if p == viewerPermission {
 		return &ocm.SharePermissions{
-			Permissions: &provider.ResourcePermissions{
-				GetPath:              true,
-				InitiateFileDownload: true,
-				ListFileVersions:     true,
-				ListContainer:        true,
-				Stat:                 true,
-			},
+			Permissions: conversions.NewViewerRole().CS3ResourcePermissions(),
 		}, 1, nil
 	} else if p == editorPermission {
 		return &ocm.SharePermissions{
-			Permissions: &provider.ResourcePermissions{
-				GetPath:              true,
-				InitiateFileDownload: true,
-				ListFileVersions:     true,
-				ListContainer:        true,
-				Stat:                 true,
-				CreateContainer:      true,
-				Delete:               true,
-				InitiateFileUpload:   true,
-				RestoreFileVersion:   true,
-				Move:                 true,
-			},
+			Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 		}, 15, nil
 	}
 	return nil, 0, errors.New("invalid rol: " + p)

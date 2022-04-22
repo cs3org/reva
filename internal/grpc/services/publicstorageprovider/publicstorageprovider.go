@@ -200,7 +200,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.Reference) (*provider.Reference, string, *link.PublicShare, *rpc.Status, error) {
 	log := appctx.GetLogger(ctx)
 
-	share, _, ok := extractLinkAndInfo(ctx)
+	share, ok := extractLinkFromScope(ctx)
 	if !ok {
 		return nil, "", nil, nil, gstatus.Errorf(codes.NotFound, "share or token not found")
 	}
@@ -409,7 +409,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	}
 
 	// if there is no public scope there are no publicstorage spaces
-	share, _, ok := extractLinkAndInfo(ctx)
+	share, ok := extractLinkFromScope(ctx)
 	if !ok {
 		return &provider.ListStorageSpacesResponse{
 			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
@@ -481,33 +481,25 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	return res, nil
 }
 
-func extractLinkAndInfo(ctx context.Context) (*link.PublicShare, *provider.ResourceInfo, bool) {
+func extractLinkFromScope(ctx context.Context) (*link.PublicShare, bool) {
 	scopes, ok := ctxpkg.ContextGetScopes(ctx)
 	if !ok {
-		return nil, nil, false
+		return nil, false
 	}
 	var share *link.PublicShare
-	var info *provider.ResourceInfo
 	for k, v := range scopes {
-		switch {
-		case strings.HasPrefix(k, "publicshare:") && v.Resource.Decoder == "json":
+		if strings.HasPrefix(k, "publicshare:") && v.Resource.Decoder == "json" {
 			share = &link.PublicShare{}
 			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, share)
 			if err != nil {
 				continue
 			}
-		case strings.HasPrefix(k, "resourceinfo:") && v.Resource.Decoder == "json":
-			info = &provider.ResourceInfo{}
-			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, info)
-			if err != nil {
-				continue
-			}
 		}
 	}
-	if share == nil || info == nil || !utils.ResourceIDEqual(share.ResourceId, info.Id) {
-		return nil, nil, false
+	if share == nil {
+		return nil, false
 	}
-	return share, info, true
+	return share, true
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
@@ -684,7 +676,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Value: attribute.StringValue(req.Ref.String()),
 		})
 
-	share, _, ok := extractLinkAndInfo(ctx)
+	share, ok := extractLinkFromScope(ctx)
 	if !ok {
 		return &provider.StatResponse{
 			Status: status.NewNotFound(ctx, "share or token not found"),
@@ -780,7 +772,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 
-	share, _, ok := extractLinkAndInfo(ctx)
+	share, ok := extractLinkFromScope(ctx)
 	if !ok {
 		return &provider.ListContainerResponse{
 			Status: status.NewNotFound(ctx, "share or token not found"),

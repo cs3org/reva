@@ -20,7 +20,9 @@ package storageprovider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -52,13 +54,13 @@ func init() {
 }
 
 type config struct {
-	Driver           string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
-	Drivers          map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
-	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
-	DataServerURL    string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
-	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
-	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
-	MimeTypes        map[string]string                 `mapstructure:"mimetypes" docs:"nil;List of supported mime types and corresponding file extensions."`
+	Driver              string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
+	Drivers             map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
+	TmpFolder           string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
+	DataServerURL       string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
+	ExposeDataServer    bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
+	AvailableXS         map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+	CustomMimeTypesJSON string                            `mapstructure:"custom_mimetypes_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
 }
 
 func (c *config) init() {
@@ -83,10 +85,6 @@ func (c *config) init() {
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
-	if c.MimeTypes == nil || len(c.MimeTypes) == 0 {
-		c.MimeTypes = map[string]string{".zmd": "application/compressed-markdown"}
-	}
-
 }
 
 type service struct {
@@ -132,6 +130,25 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
+func registerMimeTypes(mappingFile string) error {
+	if mappingFile != "" {
+		f, err := ioutil.ReadFile(mappingFile)
+		if err != nil {
+			return fmt.Errorf("storageprovider: error reading the custom mime types file: +%v", err)
+		}
+		mimeTypes := map[string]string{}
+		err = json.Unmarshal(f, &mimeTypes)
+		if err != nil {
+			return fmt.Errorf("storageprovider: error unmarshalling the custom mime types file: +%v", err)
+		}
+		// register all mime types that were read
+		for e, m := range mimeTypes {
+			mime.RegisterMime(e, m)
+		}
+	}
+	return nil
+}
+
 // New creates a new storage provider svc
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
@@ -167,7 +184,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, errtypes.NotFound("no available checksum, please set in config")
 	}
 
-	registerMimeTypes(c.MimeTypes)
+	// read and register custom mime types if configured
+	err = registerMimeTypes(c.CustomMimeTypesJSON)
+	if err != nil {
+		return nil, err
+	}
 
 	service := &service{
 		conf:          c,
@@ -178,12 +199,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	return service, nil
-}
-
-func registerMimeTypes(mimes map[string]string) {
-	for k, v := range mimes {
-		mime.RegisterMime(k, v)
-	}
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {

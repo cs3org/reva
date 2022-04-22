@@ -1,6 +1,11 @@
 [http]
 address = "0.0.0.0:9600"
 
+# Security settings
+[http.services.siteacc.security]
+creds_passphrase = "superdupersecret"
+
+# Connection to the GOCDB
 [http.services.siteacc.gocdb]
 url = "https://sciencemesh-test.uni-muenster.de/gocdb/"
 write_url = "https://sciencemesh-test.uni-muenster.de/gocdbpi/"
@@ -10,7 +15,8 @@ apikey = "verysecret"
 [http.services.siteacc.storage]
 driver = "file"
 [http.services.siteacc.storage.file]
-file = "/var/revad/accounts.json"
+sites_file = "/var/revad/sites.json"
+accounts_file = "/var/revad/accounts.json"
 
 # Email related settings
 [http.services.siteacc.email]

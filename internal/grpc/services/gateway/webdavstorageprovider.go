@@ -22,7 +22,9 @@ import (
 	"context"
 	"net/url"
 	"path"
+	"strings"
 
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/pkg/errors"
 )
@@ -71,4 +73,19 @@ func appendNameQuery(targetURL string, nameQueries ...string) (string, error) {
 	q.Set("name", path.Join(name...))
 	uri.RawQuery = q.Encode()
 	return uri.String(), nil
+}
+
+func (s *svc) getWebdavEndpoint(ctx context.Context, domain string) (string, error) {
+	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		Domain: domain,
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "gateway: error calling GetInfoByDomain")
+	}
+	for _, s := range meshProvider.ProviderInfo.Services {
+		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
+			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errtypes.NotFound(domain)
 }

@@ -140,7 +140,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if ok { // else defaults to "Guest xyz"
-		if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 			q.Add("userid", resource.Owner.OpaqueId+"@"+resource.Owner.Idp)
 		} else {
 			q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
@@ -154,7 +154,6 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 		if !isPublicShare {
 			q.Add("username", u.Username)
-			q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
 		}
 	}
 
@@ -166,13 +165,19 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			q.Add("appviewurl", viewAppURL)
 		}
 	}
-	if editAppURLs, ok := p.appURLs["edit"]; ok {
+	access := "edit"
+	if resource.GetSize() == 0 {
+		if _, ok := p.appURLs["editnew"]; ok {
+			access = "editnew"
+		}
+	}
+	if editAppURLs, ok := p.appURLs[access]; ok {
 		if editAppURL, ok := editAppURLs[ext]; ok {
 			q.Add("appurl", editAppURL)
 		}
 	}
 	if q.Get("appurl") == "" {
-		// assuming that an view action is always available in the /hosting/discovery manifest
+		// assuming that a view action is always available in the /hosting/discovery manifest
 		// eg. Collabora does support viewing jpgs but no editing
 		// eg. OnlyOffice does support viewing pdfs but no editing
 		// there is no known case of supporting edit only without view
@@ -328,6 +333,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 		}
 
 		// register the supported mimetypes in the AppRegistry: this is hardcoded for the time being
+		// TODO(lopresti) move to config
 		switch c.AppName {
 		case "CodiMD":
 			appURLs = getCodimdExtensions(c.AppURL)
@@ -372,7 +378,7 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 			for _, app := range netzone.SelectElements("app") {
 				for _, action := range app.SelectElements("action") {
 					access := action.SelectAttrValue("name", "")
-					if access == "view" || access == "edit" {
+					if access == "view" || access == "edit" || access == "editnew" {
 						ext := action.SelectAttrValue("ext", "")
 						urlString := action.SelectAttrValue("urlsrc", "")
 
