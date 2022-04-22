@@ -199,6 +199,8 @@ func ExtractUserID(u string) *userpb.UserId {
 	t := userpb.UserType_USER_TYPE_PRIMARY
 	if strings.HasPrefix(u, "guest:") {
 		t = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+	} else if strings.Contains(u, "@") {
+		t = userpb.UserType_USER_TYPE_FEDERATED
 	}
 	return &userpb.UserId{OpaqueId: u, Type: t}
 }
@@ -255,7 +257,7 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 	}
 	var expires *typespb.Timestamp
 	if s.Expiration != "" {
-		t, err := time.Parse("2006-01-02 03:04:05", s.Expiration)
+		t, err := time.Parse("2006-01-02 15:04:05", s.Expiration)
 		if err == nil {
 			expires = &typespb.Timestamp{
 				Seconds: uint64(t.Unix()),

@@ -63,7 +63,7 @@ available_checksums = nil
 List of supported mime types and corresponding file extensions. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L61)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
-mimetypes = nil
+custom_mimetypes_json = "nil"
 {{< /highlight >}}
 {{% /dir %}}
 

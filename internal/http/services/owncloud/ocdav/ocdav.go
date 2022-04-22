@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -167,6 +168,8 @@ func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger
 		favoritesManager: fm,
 		LockSystem:       ls,
 	}
+	_ = s.userIdentifierCache.SetTTL(60 * time.Second)
+
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
 		return nil, err

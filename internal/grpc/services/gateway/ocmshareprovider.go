@@ -21,8 +21,11 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path"
+	"strings"
 
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -255,6 +258,124 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 				share := getShareRes.Share
 				if share == nil {
 					panic("gateway: error updating a received share: the share is nil")
+				}
+
+				if share.GetShare().ShareType == ocm.Share_SHARE_TYPE_TRANSFER {
+					srcIdp := share.GetShare().GetOwner().GetIdp()
+					meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+						Domain: srcIdp,
+					})
+					if err != nil {
+						log.Err(err).Msg("gateway: error calling GetInfoByDomain")
+						return &ocm.UpdateReceivedOCMShareResponse{
+							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
+						}, nil
+					}
+					var srcEndpoint string
+					var srcEndpointBaseURI string
+					// target URI scheme will be the webdav endpoint scheme
+					var srcEndpointScheme string
+					for _, s := range meshProvider.ProviderInfo.Services {
+						if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
+							url, err := url.Parse(s.Endpoint.Path)
+							if err != nil {
+								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + s.Endpoint.Path)
+								return &ocm.UpdateReceivedOCMShareResponse{
+									Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
+								}, nil
+							}
+							srcEndpoint = url.Host
+							srcEndpointBaseURI = url.Path
+							srcEndpointScheme = url.Scheme
+							break
+						}
+					}
+
+					var srcToken string
+					srcTokenOpaque, ok := share.GetShare().Grantee.Opaque.Map["token"]
+					if !ok {
+						return &ocm.UpdateReceivedOCMShareResponse{
+							Status: status.NewNotFound(ctx, "token not found"),
+						}, nil
+					}
+					switch srcTokenOpaque.Decoder {
+					case "plain":
+						srcToken = string(srcTokenOpaque.Value)
+					default:
+						err := errtypes.NotSupported("opaque entry decoder not recognized: " + srcTokenOpaque.Decoder)
+						return &ocm.UpdateReceivedOCMShareResponse{
+							Status: status.NewInternal(ctx, err, "error updating received share"),
+						}, nil
+					}
+
+					srcPath := path.Join(srcEndpointBaseURI, share.GetShare().Name)
+					srcTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", srcEndpointScheme, srcToken, srcEndpoint, srcPath)
+
+					// get the webdav endpoint of the grantee's idp
+					var granteeIdp string
+					if share.GetShare().GetGrantee().Type == provider.GranteeType_GRANTEE_TYPE_USER {
+						granteeIdp = share.GetShare().GetGrantee().GetUserId().Idp
+					}
+					if share.GetShare().GetGrantee().Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+						granteeIdp = share.GetShare().GetGrantee().GetGroupId().Idp
+					}
+					destWebdavEndpoint, err := s.getWebdavEndpoint(ctx, granteeIdp)
+					if err != nil {
+						log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
+						return &ocm.UpdateReceivedOCMShareResponse{
+							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
+						}, nil
+					}
+					url, err := url.Parse(destWebdavEndpoint)
+					if err != nil {
+						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + destWebdavEndpoint)
+						return &ocm.UpdateReceivedOCMShareResponse{
+							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
+						}, nil
+					}
+					destEndpoint := url.Host
+					destEndpointBaseURI := url.Path
+					destEndpointScheme := url.Scheme
+					destToken := ctxpkg.ContextMustGetToken(ctx)
+					homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
+					if err != nil {
+						log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
+						return &ocm.UpdateReceivedOCMShareResponse{
+							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
+						}, nil
+					}
+					destPath := path.Join(destEndpointBaseURI, homeRes.Path, s.c.DataTransfersFolder, path.Base(share.GetShare().Name))
+					destTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", destEndpointScheme, destToken, destEndpoint, destPath)
+
+					opaqueObj := &types.Opaque{
+						Map: map[string]*types.OpaqueEntry{
+							"shareId": {
+								Decoder: "plain",
+								Value:   []byte(share.GetShare().GetId().OpaqueId),
+							},
+						},
+					}
+					req := &datatx.PullTransferRequest{
+						SrcTargetUri:  srcTargetURI,
+						DestTargetUri: destTargetURI,
+						Opaque:        opaqueObj,
+					}
+					res, err := s.PullTransfer(ctx, req)
+					if err != nil {
+						log.Err(err).Msg("gateway: error calling PullTransfer")
+						return &ocm.UpdateReceivedOCMShareResponse{
+							Status: &rpc.Status{
+								Code: rpc.Code_CODE_INTERNAL,
+							},
+						}, err
+					}
+
+					log.Info().Msgf("gateway: PullTransfer: %v", res.TxInfo)
+
+					// do not create an OCM reference, just return
+					return &ocm.UpdateReceivedOCMShareResponse{
+						Status: status.NewOK(ctx),
+					}, nil
 				}
 
 				createRefStatus, err := s.createOCMReference(ctx, share.Share)

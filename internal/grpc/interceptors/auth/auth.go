@@ -43,6 +43,7 @@ import (
 )
 
 var userGroupsCache gcache.Cache
+var scopeExpansionCache gcache.Cache
 
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
@@ -76,6 +77,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	conf.GatewayAddr = sharedconf.GetGatewaySVC(conf.GatewayAddr)
 
 	userGroupsCache = gcache.New(1000000).LFU().Build()
+	scopeExpansionCache = gcache.New(1000000).LFU().Build()
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
@@ -142,6 +144,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 	}
 
 	userGroupsCache = gcache.New(1000000).LFU().Build()
+	scopeExpansionCache = gcache.New(1000000).LFU().Build()
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
@@ -224,7 +227,11 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		return nil, nil, err
 	}
 
-	if sharedconf.SkipUserGroupsInToken() && fetchUserGroups {
+	if sharedconf.SkipUserGroupsInToken() {
+		client, err := pool.GetGatewayServiceClient(gatewayAddr)
+		if err != nil {
+			return nil, err
+		}
 		groups, err := getUserGroups(ctx, u, client)
 		if err != nil {
 			return nil, nil, err

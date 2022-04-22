@@ -20,7 +20,6 @@ package rest
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -34,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/user/manager/registry"
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -143,7 +143,7 @@ func (m *manager) getUser(ctx context.Context, url string) (map[string]interface
 
 		t, _ := userData["type"].(string)
 		userType := getUserType(t, userData["upn"].(string))
-		if userType != userpb.UserType_USER_TYPE_APPLICATION && userType != userpb.UserType_USER_TYPE_FEDERATED {
+		if userType != userpb.UserType_USER_TYPE_APPLICATION {
 			users = append(users, userData)
 		}
 	}
@@ -198,8 +198,15 @@ func (m *manager) getInternalUserID(ctx context.Context, uid *userpb.UserId) (st
 	return internalID, nil
 }
 
-func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]interface{}) *userpb.User {
-	upn, _ := userData["upn"].(string)
+func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]interface{}) (*userpb.User, error) {
+	id, ok := userData["id"].(string)
+	if !ok {
+		return nil, errors.New("parseAndCacheUser: Missing id in userData")
+	}
+	upn, ok := userData["upn"].(string)
+	if !ok {
+		return nil, errors.New("parseAndCacheUser: Missing upn in userData")
+	}
 	mail, _ := userData["primaryAccountEmail"].(string)
 	name, _ := userData["displayName"].(string)
 	uidNumber, _ := userData["uid"].(float64)
@@ -225,15 +232,14 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 		log := appctx.GetLogger(ctx)
 		log.Error().Err(err).Msg("rest: error caching user details")
 	}
-	if err := m.cacheInternalID(userID, userData["id"].(string)); err != nil {
+	if err := m.cacheInternalID(userID, id); err != nil {
 		log := appctx.GetLogger(ctx)
-		log.Error().Err(err).Msg("rest: error caching user details")
+		log.Error().Err(err).Msg("rest: error caching internal ID")
 	}
-	return u
-
+	return u, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	u, err := m.fetchCachedUserDetails(uid)
 	if err != nil {
 		var (
@@ -249,22 +255,23 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		if err != nil {
 			return nil, err
 		}
-		u = m.parseAndCacheUser(ctx, userData)
 	}
 
-	userGroups, err := m.GetUserGroups(ctx, uid)
-	if err != nil {
-		return nil, err
+	if !skipFetchingGroups {
+		userGroups, err := m.GetUserGroups(ctx, uid)
+		if err != nil {
+			return nil, err
+		}
+		u.Groups = userGroups
 	}
-	u.Groups = userGroups
 
 	return u, nil
 }
 
-func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	opaqueID, err := m.fetchCachedParam(claim, value)
 	if err == nil {
-		return m.GetUser(ctx, &userpb.UserId{OpaqueId: opaqueID})
+		return m.GetUser(ctx, &userpb.UserId{OpaqueId: opaqueID}, skipFetchingGroups)
 	}
 
 	switch claim {
@@ -278,7 +285,14 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 		return nil, errors.New("rest: invalid field: " + claim)
 	}
 
-	userData, err := m.getUserByParam(ctx, claim, value)
+	var userData map[string]interface{}
+	if claim == "upn" && strings.HasPrefix(value, "guest:") {
+		// Lightweight accounts need to be fetched by email, regardless of the demanded claim
+		userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(value, "guest:"))
+	} else {
+		userData, err = m.getUserByParam(ctx, claim, value)
+	}
+
 	if err != nil {
 		// Lightweight accounts need to be fetched by email
 		if strings.HasPrefix(value, "guest:") {
@@ -287,19 +301,23 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 			}
 		}
 	}
-	u := m.parseAndCacheUser(ctx, userData)
-
-	userGroups, err := m.GetUserGroups(ctx, u.Id)
+	u, err := m.parseAndCacheUser(ctx, userData)
 	if err != nil {
 		return nil, err
 	}
-	u.Groups = userGroups
+
+	if !skipFetchingGroups {
+		userGroups, err := m.GetUserGroups(ctx, u.Id)
+		if err != nil {
+			return nil, err
+		}
+		u.Groups = userGroups
+	}
 
 	return u, nil
-
 }
 
-func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[string]*userpb.User) error {
+func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[string]*userpb.User, skipFetchingGroups bool) error {
 
 	userData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
@@ -312,7 +330,10 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 			continue
 		}
 
-		upn, _ := usrInfo["upn"].(string)
+		upn, ok := usrInfo["upn"].(string)
+		if !ok {
+			continue
+		}
 		mail, _ := usrInfo["primaryAccountEmail"].(string)
 		name, _ := usrInfo["displayName"].(string)
 		uidNumber, _ := usrInfo["uid"].(float64)
@@ -320,7 +341,7 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 		t, _ := usrInfo["type"].(string)
 		userType := getUserType(t, upn)
 
-		if userType == userpb.UserType_USER_TYPE_APPLICATION || userType == userpb.UserType_USER_TYPE_FEDERATED {
+		if userType == userpb.UserType_USER_TYPE_APPLICATION {
 			continue
 		}
 
@@ -329,6 +350,14 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 			Idp:      m.conf.IDProvider,
 			Type:     userType,
 		}
+		var userGroups []string
+		if !skipFetchingGroups {
+			userGroups, err = m.GetUserGroups(ctx, uid)
+			if err != nil {
+				return err
+			}
+		}
+
 		users[uid.OpaqueId] = &userpb.User{
 			Id:          uid,
 			Username:    upn,
@@ -336,17 +365,18 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 			DisplayName: name,
 			UidNumber:   int64(uidNumber),
 			GidNumber:   int64(gidNumber),
+			Groups:      userGroups,
 		}
 	}
 
 	return nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 
 	// Look at namespaces filters. If the query starts with:
 	// "a" => look into primary/secondary/service accounts
-	// "l" => look into lightweight accounts
+	// "l" => look into lightweight/federated accounts
 	// none => look into primary
 
 	parts := strings.SplitN(query, ":", 2)
@@ -372,7 +402,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	for _, f := range filters {
 		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
 			m.conf.APIBaseURL, f, url.QueryEscape(query))
-		err := m.findUsersByFilter(ctx, url, users)
+		err := m.findUsersByFilter(ctx, url, users, skipFetchingGroups)
 		if err != nil {
 			return nil, err
 		}
@@ -387,7 +417,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	case "a":
 		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_PRIMARY, userpb.UserType_USER_TYPE_SECONDARY, userpb.UserType_USER_TYPE_SERVICE}
 	case "l":
-		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_LIGHTWEIGHT}
+		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_LIGHTWEIGHT, userpb.UserType_USER_TYPE_FEDERATED}
 	}
 
 	for _, u := range users {

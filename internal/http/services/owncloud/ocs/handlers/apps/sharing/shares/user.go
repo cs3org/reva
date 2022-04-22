@@ -53,8 +53,9 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 	}
 
 	userRes, err := c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-		Claim: "username",
-		Value: shareWith,
+		Claim:                  "username",
+		Value:                  shareWith,
+		SkipFetchingUserGroups: true,
 	})
 	if err != nil {
 		return nil, &ocsError{

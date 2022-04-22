@@ -106,3 +106,37 @@ func (s *svc) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequ
 
 	return res, nil
 }
+
+func (s *svc) ListTransfers(ctx context.Context, req *datatx.ListTransfersRequest) (*datatx.ListTransfersResponse, error) {
+	c, err := pool.GetDataTxClient(s.c.DataTxEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
+		return &datatx.ListTransfersResponse{
+			Status: status.NewInternal(ctx, err, "error getting data transfer client"),
+		}, nil
+	}
+
+	res, err := c.ListTransfers(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling ListTransfers")
+	}
+
+	return res, nil
+}
+
+func (s *svc) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRequest) (*datatx.RetryTransferResponse, error) {
+	c, err := pool.GetDataTxClient(s.c.DataTxEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
+		return &datatx.RetryTransferResponse{
+			Status: status.NewInternal(ctx, err, "error getting data transfer client"),
+		}, nil
+	}
+
+	res, err := c.RetryTransfer(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling RetryTransfer")
+	}
+
+	return res, nil
+}

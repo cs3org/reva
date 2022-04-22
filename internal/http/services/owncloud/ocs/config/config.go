@@ -65,10 +65,6 @@ func (c *Config) Init() {
 		c.AdditionalInfoAttribute = "{{.Mail}}"
 	}
 
-	if c.ResourceInfoCacheSize == 0 {
-		c.ResourceInfoCacheSize = 1000000
-	}
-
 	if c.UserIdentifierCacheTTL == 0 {
 		c.UserIdentifierCacheTTL = 60
 	}

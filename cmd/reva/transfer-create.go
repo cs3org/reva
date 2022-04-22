@@ -42,8 +42,8 @@ func transferCreateCommand() *command {
 	cmd.Description = func() string { return "create transfer between 2 sites" }
 	cmd.Usage = func() string { return "Usage: transfer-create [-flags] <path>" }
 	grantee := cmd.String("grantee", "", "the grantee, receiver of the transfer")
-	granteeType := cmd.String("granteeType", "user", "the grantee type, one of: user, group")
-	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
+	granteeType := cmd.String("granteeType", "user", "the grantee type, one of: user, group (defaults to user)")
+	idp := cmd.String("idp", "", "the idp of the grantee")
 	userType := cmd.String("user-type", "primary", "the type of user account, defaults to primary")
 
 	cmd.Action = func(w ...io.Writer) error {

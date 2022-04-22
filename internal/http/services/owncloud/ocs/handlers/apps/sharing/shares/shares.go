@@ -79,7 +79,7 @@ type Handler struct {
 	homeNamespace          string
 	additionalInfoTemplate *template.Template
 	userIdentifierCache    *ttlcache.Cache
-	resourceInfoCache      gcache.Cache
+	resourceInfoCache      cache.ResourceInfoCache
 	resourceInfoCacheTTL   time.Duration
 
 	getClient GatewayClientGetter
@@ -99,7 +99,7 @@ type ocsError struct {
 }
 
 func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
-	if f, ok := registry.NewFuncs[c.CacheWarmupDriver]; ok {
+	if f, ok := warmupreg.NewFuncs[c.CacheWarmupDriver]; ok {
 		return f(c.CacheWarmupDrivers[c.CacheWarmupDriver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.CacheWarmupDriver)
@@ -116,13 +116,17 @@ func (h *Handler) Init(c *config.Config) {
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
-	h.resourceInfoCache = gcache.New(c.ResourceInfoCacheSize).LFU().Build()
-	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
+	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))
+
+	cache, err := getCacheManager(c)
+	if err == nil {
+		h.resourceInfoCache = cache
+	}
 
 	if h.resourceInfoCacheTTL > 0 {
 		cwm, err := getCacheWarmupManager(c)
@@ -1109,6 +1113,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 			GroupId: &grouppb.GroupId{
 				OpaqueId: id,
 			},
+			SkipFetchingMembers: true,
 		})
 		if err != nil {
 			sublog.Err(err).Msg("could not look up group")
@@ -1138,6 +1143,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 			UserId: &userpb.UserId{
 				OpaqueId: id,
 			},
+			SkipFetchingUserGroups: true,
 		})
 		if err != nil {
 			sublog.Err(err).Msg("could not look up user")
@@ -1239,11 +1245,16 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 
 	var pinfo *provider.ResourceInfo
 	var status *rpc.Status
-	if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
-		logger.Debug().Msgf("cache hit for resource %+v", key)
-		pinfo = infoIf.(*provider.ResourceInfo)
-		status = &rpc.Status{Code: rpc.Code_CODE_OK}
-	} else {
+	var err error
+	var foundInCache bool
+	if h.resourceInfoCacheTTL > 0 && h.resourceInfoCache != nil {
+		if pinfo, err = h.resourceInfoCache.Get(key); err == nil {
+			logger.Debug().Msgf("cache hit for resource %+v", key)
+			status = &rpc.Status{Code: rpc.Code_CODE_OK}
+			foundInCache = true
+		}
+	}
+	if !foundInCache {
 		logger.Debug().Msgf("cache miss for resource %+v, statting", key)
 		statReq := &provider.StatRequest{
 			Ref: ref,

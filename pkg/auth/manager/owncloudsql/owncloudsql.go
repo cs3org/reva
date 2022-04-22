@@ -144,7 +144,7 @@ func (m *manager) Authenticate(ctx context.Context, login, clientSecret string) 
 	}
 
 	var scopes map[string]*authpb.Scope
-	if userID != nil && userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
+	if userID != nil && (userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT || userID.Type == user.UserType_USER_TYPE_FEDERATED) {
 		scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
 		if err != nil {
 			return nil, nil, err

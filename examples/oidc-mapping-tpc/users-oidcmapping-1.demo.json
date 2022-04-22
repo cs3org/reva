@@ -1,0 +1,12 @@
+[
+	{
+		"oidc_issuer": "http://iam-login-service:8080/",
+		"oidc_group": "Analysis",
+		"username": "einstein"
+	},
+	{
+		"oidc_issuer": "https://iam-escape.cloud.cnaf.infn.it/",
+		"oidc_group": "/escape",
+		"username": "marie"
+	}
+]

@@ -56,3 +56,19 @@ gatewaysvc = ""
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="users_mapping" type="string" default="" %}}
+ The optional OIDC users mapping file path [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L67)
+{{< highlight toml >}}
+[auth.manager.oidc]
+users_mapping = ""
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="group_claim" type="string" default="" %}}
+ The group claim to be looked up to map the user (default to 'groups'). [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L68)
+{{< highlight toml >}}
+[auth.manager.oidc]
+group_claim = ""
+{{< /highlight >}}
+{{% /dir %}}
+

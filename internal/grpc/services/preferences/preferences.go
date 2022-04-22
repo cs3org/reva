@@ -20,7 +20,6 @@ package preferences
 
 import (
 	"context"
-	"sync"
 
 	"google.golang.org/grpc"
 
@@ -32,26 +31,60 @@ import (
 	"github.com/pkg/errors"
 )
 
-type contextUserRequiredErr string
-
-func (err contextUserRequiredErr) Error() string { return string(err) }
-
 func init() {
 	rgrpc.Register("preferences", New)
 }
 
-// m maps user to map of user preferences.
-// m = map[userToken]map[key]value
-var m = make(map[string]map[string]string)
+type config struct {
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+}
 
-var mutex = &sync.Mutex{}
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "memory"
+	}
+}
 
-type service struct{}
+type service struct {
+	conf *config
+	pm   preferences.Manager
+}
+
+func getPreferencesManager(c *config) (preferences.Manager, error) {
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
+	}
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
+}
+
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		err = errors.Wrap(err, "error decoding conf")
+		return nil, err
+	}
+	return c, nil
+}
 
 // New returns a new PreferencesServiceServer
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-	service := &service{}
-	return service, nil
+	c, err := parseConfig(m)
+	if err != nil {
+		return nil, err
+	}
+
+	c.init()
+
+	pm, err := getPreferencesManager(c)
+	if err != nil {
+		return nil, err
+	}
+
+	return &service{
+		conf: c,
+		pm:   pm,
+	}, nil
 }
 
 func (s *service) Close() error {
@@ -63,28 +96,15 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) Register(ss *grpc.Server) {
-	preferences.RegisterPreferencesAPIServer(ss, s)
+	preferencespb.RegisterPreferencesAPIServer(ss, s)
 }
 
-func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := ctxpkg.ContextGetUser(ctx)
-	if !ok {
-		err := errors.Wrap(contextUserRequiredErr("userrequired"), "preferences: error getting user from ctx")
-		return nil, err
-	}
-	return u, nil
-}
-
-func (s *service) SetKey(ctx context.Context, req *preferences.SetKeyRequest) (*preferences.SetKeyResponse, error) {
-	key := req.Key
-	value := req.Val
-
-	u, err := getUser(ctx)
+func (s *service) SetKey(ctx context.Context, req *preferencespb.SetKeyRequest) (*preferencespb.SetKeyResponse, error) {
+	err := s.pm.SetKey(ctx, req.Key.Key, req.Key.Namespace, req.Val)
 	if err != nil {
-		err = errors.Wrap(err, "preferences: failed to call getUser")
-		return &preferences.SetKeyResponse{
-			Status: status.NewUnauthenticated(ctx, err, "user not found or invalid"),
-		}, err
+		return &preferencespb.SetKeyResponse{
+			Status: status.NewInternal(ctx, err, "error setting key"),
+		}, nil
 	}
 
 	name := u.Username
@@ -103,9 +123,8 @@ func (s *service) SetKey(ctx context.Context, req *preferences.SetKeyRequest) (*
 	}, nil
 }
 
-func (s *service) GetKey(ctx context.Context, req *preferences.GetKeyRequest) (*preferences.GetKeyResponse, error) {
-	key := req.Key
-	u, err := getUser(ctx)
+func (s *service) GetKey(ctx context.Context, req *preferencespb.GetKeyRequest) (*preferencespb.GetKeyResponse, error) {
+	val, err := s.pm.GetKey(ctx, req.Key.Key, req.Key.Namespace)
 	if err != nil {
 		err = errors.Wrap(err, "preferences: failed to call getUser")
 		return &preferences.GetKeyResponse{
@@ -124,11 +143,13 @@ func (s *service) GetKey(ctx context.Context, req *preferences.GetKeyRequest) (*
 				Val:    value,
 			}, nil
 		}
+		return &preferencespb.GetKeyResponse{
+			Status: st,
+		}, nil
 	}
 
-	res := &preferences.GetKeyResponse{
-		Status: status.NewNotFound(ctx, "key not found"),
-		Val:    "",
-	}
-	return res, nil
+	return &preferencespb.GetKeyResponse{
+		Status: status.NewOK(ctx),
+		Val:    val,
+	}, nil
 }

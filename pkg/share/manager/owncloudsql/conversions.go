@@ -100,7 +100,8 @@ func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *use
 		return "", err
 	}
 	getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{
-		UserId: userid,
+		UserId:                 userid,
+		SkipFetchingUserGroups: true,
 	})
 	if err != nil {
 		return "", err
@@ -124,8 +125,9 @@ func (c *GatewayUserConverter) UserNameToUserID(ctx context.Context, username st
 		return nil, err
 	}
 	getUserResponse, err := gwConn.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-		Claim: "username",
-		Value: username,
+		Claim:                  "username",
+		Value:                  username,
+		SkipFetchingUserGroups: true,
 	})
 	if err != nil {
 		return nil, err

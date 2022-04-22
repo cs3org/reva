@@ -47,7 +47,7 @@ func init() {
 	global.Register("appprovider", New)
 }
 
-// Config holds the config options that need to be passed down to all ocdav handlers
+// Config holds the config options for the HTTP appprovider service
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
@@ -62,7 +62,8 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	conf *Config
+	conf   *Config
+	router *chi.Mux
 }
 
 // New returns a new ocmd object
@@ -74,10 +75,24 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 	conf.init()
 
+	r := chi.NewRouter()
 	s := &svc{
-		conf: conf,
+		conf:   conf,
+		router: r,
 	}
+
+	if err := s.routerInit(); err != nil {
+		return nil, err
+	}
+
 	return s, nil
+}
+
+func (s *svc) routerInit() error {
+	s.router.Get("/list", s.handleList)
+	s.router.Post("/new", s.handleNew)
+	s.router.Post("/open", s.handleOpen)
+	return nil
 }
 
 // Close performs cleanup.

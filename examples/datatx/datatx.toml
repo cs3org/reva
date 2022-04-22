@@ -1,0 +1,22 @@
+# example data transfer service configuration 
+[grpc.services.datatx]
+# rclone is the default data transfer driver
+txdriver = "rclone"
+# the shares,transfers db file (default: /var/tmp/reva/datatx-shares.json)
+tx_shares_file = ""
+# base folder of the data transfers (default: /home/DataTransfers)
+data_transfers_folder = ""
+
+# rclone data transfer driver
+[grpc.services.datatx.txdrivers.rclone]
+# rclone endpoint
+endpoint = "http://..."
+# basic auth is used
+auth_user = "...rcloneuser"
+auth_pass = "...rcloneusersecret"
+# the transfers(jobs) db file (default: /var/tmp/reva/datatx-transfers.json)
+file = ""
+# check status job interval in milliseconds
+job_status_check_interval = 2000
+# the job timeout in milliseconds (must be long enough for big transfers!)
+job_timeout = 120000
