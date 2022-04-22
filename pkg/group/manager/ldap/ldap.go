@@ -98,8 +98,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-// GetGroup implements the group.Manager interface. Looks up a group by Id and return the group
-func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error) {
+func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId, skipFetchingMembers bool) (*grouppb.Group, error) {
 	log := appctx.GetLogger(ctx)
 	if gid.Idp != "" && gid.Idp != m.c.Idp {
 		return nil, errtypes.NotFound("idp mismatch")
@@ -117,14 +116,18 @@ func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.
 		return nil, err
 	}
 
-	members, err := m.c.LDAPIdentity.GetLDAPGroupMembers(log, m.ldapClient, groupEntry)
-	if err != nil {
-		return nil, err
+	var members []*userpb.UserId
+	if !skipFetchingMembers {
+		members, err = m.GetMembers(ctx, id)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	memberIDs := make([]*userpb.UserId, 0, len(members))
-	for _, member := range members {
-		userid, err := m.ldapEntryToUserID(member)
+	gidNumber := m.c.Nobody
+	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
+	if gidValue != "" {
+		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
 		if err != nil {
 			log.Warn().Err(err).Interface("member", member).Msg("Failed convert member entry to userid")
 			continue
@@ -137,9 +140,21 @@ func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.
 	return g, nil
 }
 
-// GetGroupByClaim implements the group.Manager interface. Looks up a group by
-// claim ('group_name', 'group_id', 'display_name') and returns the group.
-func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*grouppb.Group, error) {
+func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string, skipFetchingMembers bool) (*grouppb.Group, error) {
+	// TODO align supported claims with rest driver and the others, maybe refactor into common mapping
+	switch claim {
+	case "mail":
+		claim = m.c.Schema.Mail
+	case "gid_number":
+		claim = m.c.Schema.GIDNumber
+	case "group_name":
+		claim = m.c.Schema.CN
+	case "groupid":
+		claim = m.c.Schema.GID
+	default:
+		return nil, errors.New("ldap: invalid field " + claim)
+	}
+
 	log := appctx.GetLogger(ctx)
 	groupEntry, err := m.c.LDAPIdentity.GetLDAPGroupByAttribute(log, m.ldapClient, claim, value)
 	if err != nil {
@@ -149,12 +164,20 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 
 	log.Debug().Interface("entry", groupEntry).Msg("entries")
 
-	g, err := m.ldapEntryToGroup(groupEntry)
-	if err != nil {
-		return nil, err
+	id := &grouppb.GroupId{
+		Idp:      m.c.Idp,
+		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GID),
 	}
 
-	members, err := m.c.LDAPIdentity.GetLDAPGroupMembers(log, m.ldapClient, groupEntry)
+	var members []*userpb.UserId
+	if !skipFetchingMembers {
+		members, err = m.GetMembers(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
 	if err != nil {
 		return nil, err
 	}
@@ -174,25 +197,56 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 	return g, nil
 }
 
-// FindGroups implements the group.Manager interface. Searches for groups using
-// a prefix-substring search on the group attributes ('group_name',
-// 'display_name', 'group_id') and returns the groups. FindGroups does NOT expand the
-// members of the Groups.
-func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Group, error) {
-	log := appctx.GetLogger(ctx)
-	entries, err := m.c.LDAPIdentity.GetLDAPGroups(log, m.ldapClient, query)
+func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMembers bool) ([]*grouppb.Group, error) {
+	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
+	if err != nil {
+		return nil, err
+	}
+	defer l.Close()
+
+	// Search for the given clientID
+	searchRequest := ldap.NewSearchRequest(
+		m.c.BaseDN,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		m.getFindFilter(query),
+		[]string{m.c.Schema.DN, m.c.Schema.GID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.GIDNumber},
+		nil,
+	)
+
+	sr, err := l.Search(searchRequest)
 	if err != nil {
 		return nil, err
 	}
 
 	groups := make([]*grouppb.Group, 0, len(entries))
 
-	for _, entry := range entries {
-		g, err := m.ldapEntryToGroup(entry)
+	for _, entry := range sr.Entries {
+		id := &grouppb.GroupId{
+			Idp:      m.c.Idp,
+			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.GID),
+		}
+
+		var members []*userpb.UserId
+		if !skipFetchingMembers {
+			members, err = m.GetMembers(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		gidNumber, err := strconv.ParseInt(entry.GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
 		if err != nil {
 			return nil, err
 		}
 
+		g := &grouppb.Group{
+			Id:          id,
+			GroupName:   entry.GetEqualFoldAttributeValue(m.c.Schema.CN),
+			Members:     members,
+			Mail:        entry.GetEqualFoldAttributeValue(m.c.Schema.Mail),
+			DisplayName: entry.GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
+			GidNumber:   gidNumber,
+		}
 		groups = append(groups, g)
 	}
 

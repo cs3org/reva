@@ -46,11 +46,12 @@ type Options struct {
 	// propagate size changes as treesize
 	TreeSizeAccounting bool `mapstructure:"treesize_accounting"`
 
-	// permissions service to use when checking permissions
-	PermissionsSVC string `mapstructure:"permissionssvc"`
+	// set an owner for the root node
+	Owner     string `mapstructure:"owner"`
+	OwnerIDP  string `mapstructure:"owner_idp"`
+	OwnerType string `mapstructure:"owner_type"`
 
-	PersonalSpaceAliasTemplate string `mapstructure:"personalspacealias_template"`
-	GeneralSpaceAliasTemplate  string `mapstructure:"generalspacealias_template"`
+	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
 // New returns a new Options instance for the given configuration

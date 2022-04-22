@@ -54,21 +54,38 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "copy")
 	defer span.End()
 
+	if s.c.EnableHTTPTpc {
+		if r.Header.Get("Source") != "" {
+			// HTTP Third-Party Copy Pull mode
+			s.handleTPCPull(ctx, w, r, ns)
+			return
+		} else if r.Header.Get("Destination") != "" {
+			// HTTP Third-Party Copy Push mode
+			s.handleTPCPush(ctx, w, r, ns)
+			return
+		}
+	}
+
+	// Local copy: in this case Destination is mandatory
 	src := path.Join(ns, r.URL.Path)
 
 	dh := r.Header.Get(net.HeaderDestination)
 	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
 	dst, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
+		appctx.GetLogger(ctx).Warn().Msg("HTTP COPY: failed to extract destination")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
 	for _, r := range nameRules {
 		if !r.Test(dst) {
+			appctx.GetLogger(ctx).Warn().Msgf("HTTP COPY: destination %s failed validation", dst)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	}
+
 	dst = path.Join(ns, dst)
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()

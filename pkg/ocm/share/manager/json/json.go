@@ -32,13 +32,13 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/ocm/share"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/ocm/share"
 
-	"github.com/cs3org/reva/v2/pkg/ocm/share/manager/registry"
-	"github.com/cs3org/reva/v2/pkg/ocm/share/sender"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
+	"github.com/cs3org/reva/pkg/ocm/share/sender"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -254,28 +254,17 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	}
 
 	if isOwnersMeshProvider {
-		// token, ok := ctxpkg.ContextGetToken(ctx)
-		// if !ok {
-		// 	return nil, errors.New("Could not get token from context")
-		// }
-		var protocol map[string]interface{}
-		if st == ocm.Share_SHARE_TYPE_TRANSFER {
-			protocol = map[string]interface{}{
-				"name": "datatx",
-				"options": map[string]string{
-					"permissions": pm,
-					"token":       token,
-				},
-			}
-		} else {
-			protocol = map[string]interface{}{
-				"name": "webdav",
-				"options": map[string]string{
-					"permissions": pm,
-					"token":       token,
-				},
-			}
+		protocol := map[string]interface{}{
+			"name": "webdav",
+			"options": map[string]string{
+				"permissions": pm,
+				"token":       ctxpkg.ContextMustGetToken(ctx),
+			},
 		}
+		if st == ocm.Share_SHARE_TYPE_TRANSFER {
+			protocol["name"] = "datatx"
+		}
+
 		requestBodyMap := map[string]interface{}{
 			"shareWith":    g.Grantee.GetUserId().OpaqueId,
 			"name":         name,

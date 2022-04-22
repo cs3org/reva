@@ -18,12 +18,24 @@
 
 package data
 
-// Storage defines the interface for accounts storages.
+// Storage defines the interface for sites and accounts storages.
 type Storage interface {
-	// ReadAll reads all stored accounts into the given data object.
-	ReadAll() (*Accounts, error)
-	// WriteAll writes all stored accounts from the given data object.
-	WriteAll(accounts *Accounts) error
+	// ReadSites reads all stored sites into the given data object.
+	ReadSites() (*Sites, error)
+	// WriteSites writes all stored sites from the given data object.
+	WriteSites(sites *Sites) error
+
+	// SiteAdded is called when a site has been added.
+	SiteAdded(site *Site)
+	// SiteUpdated is called when a site has been updated.
+	SiteUpdated(site *Site)
+	// SiteRemoved is called when a site has been removed.
+	SiteRemoved(site *Site)
+
+	// ReadAccounts reads all stored accounts into the given data object.
+	ReadAccounts() (*Accounts, error)
+	// WriteAccounts writes all stored accounts from the given data object.
+	WriteAccounts(accounts *Accounts) error
 
 	// AccountAdded is called when an account has been added.
 	AccountAdded(account *Account)

@@ -31,15 +31,15 @@ import (
 
 	"regexp"
 
-	"github.com/cs3org/reva/v2/internal/http/services/archiver/manager"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/rhttp"
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
-	"github.com/cs3org/reva/v2/pkg/sharedconf"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/downloader"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/walker"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
+	"github.com/cs3org/reva/internal/http/services/archiver/manager"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage/utils/downloader"
+	"github.com/cs3org/reva/pkg/storage/utils/walker"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
@@ -129,8 +129,8 @@ func (s *svc) getResources(ctx context.Context, paths, ids []string) ([]*provide
 	for _, id := range ids {
 		// id is base64 encoded and after decoding has the form <storage_id>:<resource_id>
 
-		decodedID := resourceid.OwnCloudResourceIDUnwrap(id)
-		if decodedID == nil {
+		ref := resourceid.OwnCloudResourceIDUnwrap(id)
+		if ref == nil {
 			return nil, errors.New("could not unwrap given file id")
 		}
 
@@ -143,7 +143,7 @@ func (s *svc) getResources(ctx context.Context, paths, ids []string) ([]*provide
 
 		resp, err := s.gtwClient.Stat(ctx, &provider.StatRequest{
 			Ref: &provider.Reference{
-				Path: p,
+				ResourceId: ref,
 			},
 		})
 

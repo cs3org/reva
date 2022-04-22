@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="insecure" type="bool" default=false %}}
-Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L57)
+Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L59)
 {{< highlight toml >}}
 [auth.manager.oidcmapping]
 insecure = false
@@ -17,7 +17,7 @@ insecure = false
 {{% /dir %}}
 
 {{% dir name="issuer" type="string" default="" %}}
-The issuer of the OIDC token. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L58)
+The issuer of the OIDC token. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L60)
 {{< highlight toml >}}
 [auth.manager.oidcmapping]
 issuer = ""
@@ -25,7 +25,7 @@ issuer = ""
 {{% /dir %}}
 
 {{% dir name="id_claim" type="string" default="sub" %}}
-The claim containing the ID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L59)
+The claim containing the ID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L61)
 {{< highlight toml >}}
 [auth.manager.oidcmapping]
 id_claim = "sub"
@@ -33,7 +33,7 @@ id_claim = "sub"
 {{% /dir %}}
 
 {{% dir name="uid_claim" type="string" default="" %}}
-The claim containing the UID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L60)
+The claim containing the UID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L62)
 {{< highlight toml >}}
 [auth.manager.oidcmapping]
 uid_claim = ""
@@ -41,26 +41,34 @@ uid_claim = ""
 {{% /dir %}}
 
 {{% dir name="gid_claim" type="string" default="" %}}
-The claim containing the GID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L61)
+The claim containing the GID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L63)
 {{< highlight toml >}}
 [auth.manager.oidcmapping]
 gid_claim = ""
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="userprovidersvc" type="string" default="" %}}
-The endpoint at which the GRPC userprovider is exposed. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L62)
+{{% dir name="gatewaysvc" type="string" default="" %}}
+The endpoint at which the GRPC gateway is exposed. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L64)
 {{< highlight toml >}}
 [auth.manager.oidcmapping]
-userprovidersvc = ""
+gatewaysvc = ""
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="usersmapping" type="string" default="" %}}
- The OIDC users mapping file path [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L63)
+{{% dir name="users_mapping" type="string" default="" %}}
+ The optional OIDC users mapping file path [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L65)
 {{< highlight toml >}}
 [auth.manager.oidcmapping]
-usersmapping = ""
+users_mapping = ""
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="group_claim" type="string" default="" %}}
+ The group claim to be looked up to map the user (default to 'groups'). [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidcmapping/oidcmapping.go#L66)
+{{< highlight toml >}}
+[auth.manager.oidcmapping]
+group_claim = ""
 {{< /highlight >}}
 {{% /dir %}}
 

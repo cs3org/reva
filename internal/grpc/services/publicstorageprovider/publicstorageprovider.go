@@ -120,58 +120,22 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 
 // SetLock puts a lock on the given reference
 func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
-	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
-	switch {
-	case err != nil:
-		return nil, err
-	case st != nil:
-		return &provider.SetLockResponse{
-			Status: st,
-		}, nil
-	}
-	return s.gateway.SetLock(ctx, &provider.SetLockRequest{Opaque: req.Opaque, Ref: ref, Lock: req.Lock})
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 // GetLock returns an existing lock on the given reference
 func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
-	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
-	switch {
-	case err != nil:
-		return nil, err
-	case st != nil:
-		return &provider.GetLockResponse{
-			Status: st,
-		}, nil
-	}
-	return s.gateway.GetLock(ctx, &provider.GetLockRequest{Opaque: req.Opaque, Ref: ref})
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference
 func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
-	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
-	switch {
-	case err != nil:
-		return nil, err
-	case st != nil:
-		return &provider.RefreshLockResponse{
-			Status: st,
-		}, nil
-	}
-	return s.gateway.RefreshLock(ctx, &provider.RefreshLockRequest{Opaque: req.Opaque, Ref: ref, Lock: req.Lock})
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 // Unlock removes an existing lock from the given reference
 func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
-	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
-	switch {
-	case err != nil:
-		return nil, err
-	case st != nil:
-		return &provider.UnlockResponse{
-			Status: st,
-		}, nil
-	}
-	return s.gateway.Unlock(ctx, &provider.UnlockRequest{Opaque: req.Opaque, Ref: ref, Lock: req.Lock})
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
@@ -215,23 +179,11 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 		return nil, "", nil, st, nil
 	}
 
-	var path string
-	switch shareInfo.Type {
-	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
-		// folders point to the folder -> path needs to be added
-		path = utils.MakeRelativePath(ref.Path)
-	case provider.ResourceType_RESOURCE_TYPE_FILE:
-		// files already point to the correct id
-		path = "."
-	default:
-		// TODO: can this happen?
-		// path = utils.MakeRelativePath(relativePath)
+	p := shareInfo.Path
+	if shareInfo.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+		p = path.Join("/", shareInfo.Path, relativePath)
 	}
-
-	cs3Ref := &provider.Reference{
-		ResourceId: shareInfo.Id,
-		Path:       path,
-	}
+	cs3Ref := &provider.Reference{Path: p}
 
 	log.Debug().
 		Interface("sourceRef", ref).
@@ -755,8 +707,10 @@ func (s *service) augmentStatResponse(ctx context.Context, res *provider.StatRes
 
 // setPublicStorageID encodes the actual spaceid and nodeid as an opaqueid in the publicstorageprovider space
 func (s *service) setPublicStorageID(info *provider.ResourceInfo, shareToken string) {
-	info.Id.StorageId = utils.PublicStorageProviderID
-	info.Id.OpaqueId = shareToken
+	if s.mountID != "" {
+		info.Id.StorageId = s.mountID
+		info.Id.OpaqueId = shareToken + "/" + info.Id.OpaqueId
+	}
 }
 
 func addShare(i *provider.ResourceInfo, ls *link.PublicShare) error {

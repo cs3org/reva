@@ -29,17 +29,14 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rhttp"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
-	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
+	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
@@ -325,10 +322,10 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	newInfo := sRes.Info
 
-	w.Header().Add(net.HeaderContentType, newInfo.MimeType)
-	w.Header().Set(net.HeaderETag, newInfo.Etag)
-	w.Header().Set(net.HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(newInfo.Id))
-	w.Header().Set(net.HeaderOCETag, newInfo.Etag)
+	w.Header().Add(HeaderContentType, newInfo.MimeType)
+	w.Header().Set(HeaderETag, newInfo.Etag)
+	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(newInfo.Id))
+	w.Header().Set(HeaderOCETag, newInfo.Etag)
 	t := utils.TSToTime(newInfo.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set(net.HeaderLastModified, lastModifiedString)

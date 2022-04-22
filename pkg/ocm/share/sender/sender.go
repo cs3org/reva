@@ -29,7 +29,7 @@ import (
 	"time"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp"
 
 	"github.com/pkg/errors"
 )

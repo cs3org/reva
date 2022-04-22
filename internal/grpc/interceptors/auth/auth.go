@@ -43,6 +43,7 @@ import (
 )
 
 var userGroupsCache gcache.Cache
+var scopeExpansionCache gcache.Cache
 
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
@@ -76,6 +77,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	conf.GatewayAddr = sharedconf.GetGatewaySVC(conf.GatewayAddr)
 
 	userGroupsCache = gcache.New(1000000).LFU().Build()
+	scopeExpansionCache = gcache.New(1000000).LFU().Build()
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
@@ -97,7 +99,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			// to decide the storage provider.
 			tkn, ok := ctxpkg.ContextGetToken(ctx)
 			if ok {
-				u, tokenScope, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, false)
+				u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, true)
 				if err == nil {
 					// store user and scopes in context
 					ctx = ctxpkg.ContextSetUser(ctx, u)
@@ -115,7 +117,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		}
 
 		// validate the token and ensure access to the resource is allowed
-		u, tokenScope, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, true)
+		u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, false)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
 			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
@@ -142,6 +144,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 	}
 
 	userGroupsCache = gcache.New(1000000).LFU().Build()
+	scopeExpansionCache = gcache.New(1000000).LFU().Build()
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
@@ -164,7 +167,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			// to decide the storage provider.
 			tkn, ok := ctxpkg.ContextGetToken(ctx)
 			if ok {
-				u, tokenScope, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, false)
+				u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, true)
 				if err == nil {
 					// store user and scopes in context
 					ctx = ctxpkg.ContextSetUser(ctx, u)
@@ -184,7 +187,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		}
 
 		// validate the token and ensure access to the resource is allowed
-		u, tokenScope, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, true)
+		u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, false)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
 			return status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
@@ -212,19 +215,21 @@ func (ss *wrappedServerStream) Context() context.Context {
 	return ss.newCtx
 }
 
-// dismantleToken extracts the user and scopes from the reva access token
-func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string, fetchUserGroups bool) (*userpb.User, map[string]*authpb.Scope, error) {
+func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string, unprotected bool) (*userpb.User, error) {
 	u, tokenScope, err := mgr.DismantleToken(ctx, tkn)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	client, err := pool.GetGatewayServiceClient(gatewayAddr)
-	if err != nil {
-		return nil, nil, err
+	if unprotected {
+		return u, nil
 	}
 
-	if sharedconf.SkipUserGroupsInToken() && fetchUserGroups {
+	if sharedconf.SkipUserGroupsInToken() {
+		client, err := pool.GetGatewayServiceClient(gatewayAddr)
+		if err != nil {
+			return nil, err
+		}
 		groups, err := getUserGroups(ctx, u, client)
 		if err != nil {
 			return nil, nil, err
@@ -241,8 +246,8 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		return u, tokenScope, nil
 	}
 
-	if err = expandAndVerifyScope(ctx, req, tokenScope, gatewayAddr, mgr); err != nil {
-		return nil, nil, err
+	if err = expandAndVerifyScope(ctx, req, tokenScope, u, gatewayAddr, mgr); err != nil {
+		return nil, err
 	}
 
 	return u, tokenScope, nil

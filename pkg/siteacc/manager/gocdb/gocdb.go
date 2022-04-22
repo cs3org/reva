@@ -75,7 +75,7 @@ func (listener *AccountsListener) updateGOCDB(account *data.Account, forceRemova
 func NewListener(conf *config.Configuration, log *zerolog.Logger) (*AccountsListener, error) {
 	listener := &AccountsListener{}
 	if err := listener.initialize(conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the GOCDB accounts listener")
+		return nil, errors.Wrap(err, "unable to initialize the GOCDB accounts listener")
 	}
 	return listener, nil
 }

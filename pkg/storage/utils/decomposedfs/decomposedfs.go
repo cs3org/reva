@@ -37,21 +37,20 @@ import (
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/logger"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/codes"
 	"google.golang.org/grpc"
@@ -112,6 +111,10 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 	lu.Options = o
 
 	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
+
+	o.GatewayAddr = sharedconf.GetGatewaySVC(o.GatewayAddr)
+	return New(o, lu, p, tp)
+}
 
 	permissionsClient, err := pool.GetPermissionsClient(o.PermissionsSVC)
 	if err != nil {
@@ -577,104 +580,20 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 
 // GetLock returns an existing lock on the given reference
 func (fs *Decomposedfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
-	node, err := fs.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error resolving ref")
-	}
-
-	if !node.Exists {
-		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
-		return nil, err
-	}
-
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.InitiateFileDownload
-	})
-	switch {
-	case err != nil:
-		return nil, errtypes.InternalError(err.Error())
-	case !ok:
-		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
-	}
-	return node.ReadLock(ctx, false)
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // SetLock puts a lock on the given reference
 func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	node, err := fs.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error resolving ref")
-	}
-
-	if !node.Exists {
-		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
-	}
-
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.InitiateFileUpload
-	})
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
-	}
-
-	return node.SetLock(ctx, lock)
+	return errtypes.NotSupported("unimplemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference
 func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	if lock.LockId == "" {
-		return errtypes.BadRequest("missing lockid")
-	}
-
-	node, err := fs.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error resolving ref")
-	}
-
-	if !node.Exists {
-		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
-	}
-
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.InitiateFileUpload
-	})
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
-	}
-
-	return node.RefreshLock(ctx, lock)
+	return errtypes.NotSupported("unimplemented")
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	if lock.LockId == "" {
-		return errtypes.BadRequest("missing lockid")
-	}
-
-	node, err := fs.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error resolving ref")
-	}
-
-	if !node.Exists {
-		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
-	}
-
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.InitiateFileUpload // TODO do we need a dedicated permission?
-	})
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
-	}
-
-	return node.Unlock(ctx, lock)
+func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
 }

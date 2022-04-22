@@ -24,9 +24,9 @@ import (
 
 	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/permission"
-	"github.com/cs3org/reva/v2/pkg/permission/manager/registry"
-	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/pkg/permission"
+	"github.com/cs3org/reva/pkg/permission/manager/registry"
+	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"

@@ -44,20 +44,19 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	"github.com/ReneKroon/ttlcache/v2"
-	"github.com/bluele/gcache"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/publicshare"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/share"
-	"github.com/cs3org/reva/v2/pkg/share/cache"
-	"github.com/cs3org/reva/v2/pkg/share/cache/registry"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/publicshare"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/share"
+	"github.com/cs3org/reva/pkg/share/cache"
+	cachereg "github.com/cs3org/reva/pkg/share/cache/registry"
+	warmupreg "github.com/cs3org/reva/pkg/share/cache/warmup/registry"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/pkg/errors"
 )
 
@@ -79,7 +78,7 @@ type Handler struct {
 	homeNamespace          string
 	additionalInfoTemplate *template.Template
 	userIdentifierCache    *ttlcache.Cache
-	resourceInfoCache      gcache.Cache
+	resourceInfoCache      cache.ResourceInfoCache
 	resourceInfoCacheTTL   time.Duration
 
 	getClient GatewayClientGetter
@@ -99,16 +98,20 @@ type ocsError struct {
 }
 
 func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
-	if f, ok := registry.NewFuncs[c.CacheWarmupDriver]; ok {
+	if f, ok := warmupreg.NewFuncs[c.CacheWarmupDriver]; ok {
 		return f(c.CacheWarmupDrivers[c.CacheWarmupDriver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.CacheWarmupDriver)
 }
 
-// GatewayClientGetter is the function being used to retrieve a gateway client instance
-type GatewayClientGetter func() (gateway.GatewayAPIClient, error)
+func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
+	if f, ok := cachereg.NewFuncs[c.ResourceInfoCacheDriver]; ok {
+		return f(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
+	}
+	return nil, fmt.Errorf("driver not found: %s", c.ResourceInfoCacheDriver)
+}
 
-// Init initializes the handler using default values
+// Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.machineAuthAPIKey = c.MachineAuthAPIKey
@@ -116,13 +119,17 @@ func (h *Handler) Init(c *config.Config) {
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
-	h.resourceInfoCache = gcache.New(c.ResourceInfoCacheSize).LFU().Build()
-	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
+	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))
+
+	cache, err := getCacheManager(c)
+	if err == nil {
+		h.resourceInfoCache = cache
+	}
 
 	if h.resourceInfoCacheTTL > 0 {
 		cwm, err := getCacheWarmupManager(c)
@@ -1109,6 +1116,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 			GroupId: &grouppb.GroupId{
 				OpaqueId: id,
 			},
+			SkipFetchingMembers: true,
 		})
 		if err != nil {
 			sublog.Err(err).Msg("could not look up group")
@@ -1138,6 +1146,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 			UserId: &userpb.UserId{
 				OpaqueId: id,
 			},
+			SkipFetchingUserGroups: true,
 		})
 		if err != nil {
 			sublog.Err(err).Msg("could not look up user")
@@ -1229,7 +1238,7 @@ func (h *Handler) getResourceInfoByReference(ctx context.Context, client gateway
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, resourceid.OwnCloudResourceIDWrap(id), &provider.Reference{ResourceId: id, Path: "."})
+	return h.getResourceInfo(ctx, client, resourceid.OwnCloudResourceIDWrap(id), &provider.Reference{ResourceId: id})
 }
 
 // getResourceInfo retrieves the resource info to a target.
@@ -1239,11 +1248,16 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 
 	var pinfo *provider.ResourceInfo
 	var status *rpc.Status
-	if infoIf, err := h.resourceInfoCache.Get(key); h.resourceInfoCacheTTL > 0 && err == nil {
-		logger.Debug().Msgf("cache hit for resource %+v", key)
-		pinfo = infoIf.(*provider.ResourceInfo)
-		status = &rpc.Status{Code: rpc.Code_CODE_OK}
-	} else {
+	var err error
+	var foundInCache bool
+	if h.resourceInfoCacheTTL > 0 && h.resourceInfoCache != nil {
+		if pinfo, err = h.resourceInfoCache.Get(key); err == nil {
+			logger.Debug().Msgf("cache hit for resource %+v", key)
+			status = &rpc.Status{Code: rpc.Code_CODE_OK}
+			foundInCache = true
+		}
+	}
+	if !foundInCache {
 		logger.Debug().Msgf("cache miss for resource %+v, statting", key)
 		statReq := &provider.StatRequest{
 			Ref: ref,

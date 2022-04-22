@@ -192,7 +192,7 @@ func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]i
 
 }
 
-func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error) {
+func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId, skipFetchingMembers bool) (*grouppb.Group, error) {
 	g, err := m.fetchCachedGroupDetails(gid)
 	if err != nil {
 		groupData, err := m.getGroupByParam(ctx, "groupIdentifier", gid.OpaqueId)
@@ -202,20 +202,22 @@ func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.
 		g = m.parseAndCacheGroup(ctx, groupData)
 	}
 
-	groupMembers, err := m.GetMembers(ctx, gid)
-	if err != nil {
-		return nil, err
+	if !skipFetchingMembers {
+		groupMembers, err := m.GetMembers(ctx, gid)
+		if err != nil {
+			return nil, err
+		}
+		g.Members = groupMembers
 	}
-	g.Members = groupMembers
 
 	return g, nil
 }
 
-func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*grouppb.Group, error) {
+func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string, skipFetchingMembers bool) (*grouppb.Group, error) {
 	value = url.QueryEscape(value)
 	opaqueID, err := m.fetchCachedParam(claim, value)
 	if err == nil {
-		return m.GetGroup(ctx, &grouppb.GroupId{OpaqueId: opaqueID})
+		return m.GetGroup(ctx, &grouppb.GroupId{OpaqueId: opaqueID}, skipFetchingMembers)
 	}
 
 	switch claim {
@@ -236,17 +238,19 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 	}
 	g := m.parseAndCacheGroup(ctx, groupData)
 
-	groupMembers, err := m.GetMembers(ctx, g.Id)
-	if err != nil {
-		return nil, err
+	if !skipFetchingMembers {
+		groupMembers, err := m.GetMembers(ctx, g.Id)
+		if err != nil {
+			return nil, err
+		}
+		g.Members = groupMembers
 	}
-	g.Members = groupMembers
 
 	return g, nil
 
 }
 
-func (m *manager) findGroupsByFilter(ctx context.Context, url string, groups map[string]*grouppb.Group) error {
+func (m *manager) findGroupsByFilter(ctx context.Context, url string, groups map[string]*grouppb.Group, skipFetchingMembers bool) error {
 
 	groupData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
@@ -265,23 +269,33 @@ func (m *manager) findGroupsByFilter(ctx context.Context, url string, groups map
 			OpaqueId: id,
 			Idp:      m.conf.IDProvider,
 		}
+
+		var groupMembers []*userpb.UserId
+		if !skipFetchingMembers {
+			groupMembers, err = m.GetMembers(ctx, groupID)
+			if err != nil {
+				return err
+			}
+		}
 		gid, ok := grpInfo["gid"].(int64)
 		if !ok {
 			gid = 0
 		}
+
 		groups[groupID.OpaqueId] = &grouppb.Group{
 			Id:          groupID,
 			GroupName:   id,
 			Mail:        id + "@cern.ch",
 			DisplayName: name,
 			GidNumber:   gid,
+			Members:     groupMembers,
 		}
 	}
 
 	return nil
 }
 
-func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Group, error) {
+func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMembers bool) ([]*grouppb.Group, error) {
 
 	// Look at namespaces filters. If the query starts with:
 	// "a" or none => get egroups
@@ -308,7 +322,7 @@ func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Grou
 	for _, f := range filters {
 		url := fmt.Sprintf("%s/Group/?filter=%s:contains:%s&field=groupIdentifier&field=displayName&field=gid",
 			m.conf.APIBaseURL, f, url.QueryEscape(query))
-		err := m.findGroupsByFilter(ctx, url, groups)
+		err := m.findGroupsByFilter(ctx, url, groups, skipFetchingMembers)
 		if err != nil {
 			return nil, err
 		}

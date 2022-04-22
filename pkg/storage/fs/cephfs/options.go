@@ -24,7 +24,7 @@ package cephfs
 import (
 	"path/filepath"
 
-	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/sharedconf"
 )
 
 // Options for the cephfs module

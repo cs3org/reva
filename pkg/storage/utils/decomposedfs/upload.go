@@ -314,7 +314,7 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 	info := tusd.FileInfo{}
 	data, err := ioutil.ReadFile(infoPath)
 	if err != nil {
-		if errors.Is(err, iofs.ErrNotExist) {
+		if os.IsNotExist(err) {
 			// Interpret os.ErrNotExist as 404 Not Found
 			err = tusd.ErrNotFound
 		}

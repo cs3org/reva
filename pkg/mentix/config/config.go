@@ -28,10 +28,6 @@ type Configuration struct {
 			Scope   string `mapstructure:"scope"`
 			APIKey  string `mapstructure:"apikey"`
 		} `mapstructure:"gocdb"`
-
-		LocalFile struct {
-			File string `mapstructure:"file"`
-		} `mapstructure:"localfile"`
 	} `mapstructure:"connectors"`
 
 	UpdateInterval string `mapstructure:"update_interval"`
@@ -39,15 +35,6 @@ type Configuration struct {
 	Services struct {
 		CriticalTypes []string `mapstructure:"critical_types"`
 	} `mapstructure:"services"`
-
-	Importers struct {
-		SiteRegistration struct {
-			Endpoint               string   `mapstructure:"endpoint"`
-			EnabledConnectors      []string `mapstructure:"enabled_connectors"`
-			IsProtected            bool     `mapstructure:"is_protected"`
-			IgnoreScienceMeshSites bool     `mapstructure:"ignore_sm_sites"`
-		} `mapstructure:"sitereg"`
-	} `mapstructure:"importers"`
 
 	Exporters struct {
 		WebAPI struct {
@@ -70,9 +57,8 @@ type Configuration struct {
 		} `mapstructure:"siteloc"`
 
 		PrometheusSD struct {
-			MetricsOutputFile  string   `mapstructure:"metrics_output_file"`
-			BlackboxOutputFile string   `mapstructure:"blackbox_output_file"`
-			EnabledConnectors  []string `mapstructure:"enabled_connectors"`
+			OutputPath        string   `mapstructure:"output_path"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"promsd"`
 
 		Metrics struct {

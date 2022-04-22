@@ -30,21 +30,17 @@ import (
 	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
+	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ocsconv "github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
+	ocsconv "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
@@ -308,28 +304,27 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return spaces, nil
 	}
 
-	matches := []string{}
-	for _, spaceType := range spaceTypes {
-		path := filepath.Join(fs.o.Root, "spacetypes", spaceType, nodeID)
-		m, err := filepath.Glob(path)
-		if err != nil {
-			return nil, err
-		}
-		matches = append(matches, m...)
+	client, err := pool.GetGatewayServiceClient(fs.o.GatewayAddr)
+	if err != nil {
+		return nil, err
 	}
 
-	// FIXME if the space does not exist try a node as the space root.
+	checkRes, err := client.CheckPermission(ctx, &permissionsv1beta1.CheckPermissionRequest{
+		Permission: "list-all-spaces",
+		SubjectRef: &permissionsv1beta1.SubjectReference{
+			Spec: &permissionsv1beta1.SubjectReference_UserId{
+				UserId: u.Id,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
 
-	// But then the whole /spaces/{spaceType}/{spaceid} becomes obsolete
-	// we can alway just look up by nodeid
-	// -> no. The /spaces folder is used for efficient lookup by type, otherwise we would have
-	//    to iterate over all nodes and read the type from extended attributes
-	// -> but for lookup by id we can use the node directly.
-	// But what about sharding nodes by space?
-	// an efficient lookup would be possible if we received a spaceid&opaqueid in the request
-	// the personal spaces must also use the nodeid and not the name
-
-	numShares := 0
+	canListAllSpaces := false
+	if checkRes.Status.Code == v1beta11.Code_CODE_OK {
+		canListAllSpaces = true
+	}
 
 	for i := range matches {
 		var err error
@@ -373,16 +368,8 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 		spaces = append(spaces, space)
 
-	}
-	// if there are no matches (or they happened to be spaces for the owner) and the node is a child return a space
-	if len(matches) <= numShares && nodeID != spaceID {
-		// try node id
-		n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID)
-		if err != nil {
-			return nil, err
-		}
-		if n.Exists {
-			space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), canListAllSpaces)
+			// TODO apply more filters
+			space, err := fs.storageSpaceFromNode(ctx, n, matches[i], spaceType, canListAllSpaces)
 			if err != nil {
 				return nil, err
 			}
@@ -415,9 +402,13 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}
 	}
 
-	u, ok := ctxpkg.ContextGetUser(ctx)
-	if !ok {
-		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
+	if len(matches) != 1 {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{
+				Code:    v1beta11.Code_CODE_NOT_FOUND,
+				Message: fmt.Sprintf("update space failed: found %d matching spaces", len(matches)),
+			},
+		}, nil
 	}
 	space.Owner = u
 
@@ -430,33 +421,15 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		metadata[xattrs.QuotaAttr] = strconv.FormatUint(space.Quota.QuotaMaxBytes, 10)
 	}
 
-	// TODO also return values which are not in the request
-	hasDescription := false
-	if space.Opaque != nil {
-		if description, ok := space.Opaque.Map["description"]; ok {
-			metadata[xattrs.SpaceDescriptionAttr] = string(description.Value)
-			hasDescription = true
-		}
-		if alias := utils.ReadPlainFromOpaque(space.Opaque, "spaceAlias"); alias != "" {
-			metadata[xattrs.SpaceAliasAttr] = alias
-		}
-		if image := utils.ReadPlainFromOpaque(space.Opaque, "image"); image != "" {
-			imageID := resourceid.OwnCloudResourceIDUnwrap(image)
-			if imageID == nil {
-				return &provider.UpdateStorageSpaceResponse{
-					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space image resource not found"},
-				}, nil
-			}
-			metadata[xattrs.SpaceImageAttr] = imageID.OpaqueId
-		}
-		if readme := utils.ReadPlainFromOpaque(space.Opaque, "readme"); readme != "" {
-			readmeID := resourceid.OwnCloudResourceIDUnwrap(readme)
-			if readmeID == nil {
-				return &provider.UpdateStorageSpaceResponse{
-					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space readme resource not found"},
-				}, nil
-			}
-			metadata[xattrs.SpaceReadmeAttr] = readmeID.OpaqueId
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
+	}
+	space.Owner = u
+
+	if space.Name != "" {
+		if err := node.SetMetadata(xattrs.SpaceNameAttr, space.Name); err != nil {
+			return nil, err
 		}
 	}
 
@@ -562,43 +535,8 @@ func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType stri
 	return err
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, nodePath string, canListAllSpaces bool) (*provider.StorageSpace, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
-	if !canListAllSpaces {
-		ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
-			return p.Stat
-		})
-		if err != nil || !ok {
-			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %s", user.Username, n.ID))
-		}
-
-		if n.SpaceRoot.IsDisabled() {
-			ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
-				// TODO: Which permission do I need to see the space?
-				return p.AddGrant
-			})
-			if err != nil || !ok {
-				return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %s", user.Username, n.ID))
-			}
-		}
-	}
-
-	var err error
-	// TODO apply more filters
-	var sname string
-	if sname, err = n.SpaceRoot.GetMetadata(xattrs.SpaceNameAttr); err != nil {
-		// FIXME: Is that a severe problem?
-		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a name attribute")
-	}
-
-	/*
-		if err := n.FindStorageSpaceRoot(); err != nil {
-			return nil, err
-		}
-	*/
-
-	// read the grants from the current node, not the root
-	grants, err := n.ListGrants(ctx)
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Node, nodePath, spaceType string, canListAllSpaces bool) (*provider.StorageSpace, error) {
+	owner, err := node.Owner()
 	if err != nil {
 		return nil, err
 	}
@@ -641,12 +579,17 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
 
-	if space.SpaceType, err = n.SpaceRoot.GetMetadata(xattrs.SpaceTypeAttr); err != nil {
-		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a type attribute")
-	}
+	user := ctxpkg.ContextMustGetUser(ctx)
 
-	if n.SpaceRoot.IsDisabled() {
-		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "trashed", "trashed")
+	// filter out spaces user cannot access (currently based on stat permission)
+	if !canListAllSpaces {
+		p, err := node.ReadUserPermissions(ctx, user)
+		if err != nil {
+			return nil, err
+		}
+		if !p.Stat {
+			return nil, errors.New("user is not allowed to Stat the space")
+		}
 	}
 
 	if n.Owner() != nil && n.Owner().OpaqueId != "" {

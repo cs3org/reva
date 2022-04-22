@@ -75,8 +75,9 @@ func (m *RPCClient) Configure(ml map[string]interface{}) error {
 
 // GetUserArg for RPC
 type GetUserArg struct {
-	Ctx map[interface{}]interface{}
-	UID *userpb.UserId
+	Ctx                map[interface{}]interface{}
+	UID                *userpb.UserId
+	SkipFetchingGroups bool
 }
 
 // GetUserReply for RPC
@@ -86,9 +87,9 @@ type GetUserReply struct {
 }
 
 // GetUser RPCClient GetUser method
-func (m *RPCClient) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (m *RPCClient) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
-	args := GetUserArg{Ctx: ctxVal, UID: uid}
+	args := GetUserArg{Ctx: ctxVal, UID: uid, SkipFetchingGroups: skipFetchingGroups}
 	resp := GetUserReply{}
 	err := m.Client.Call("Plugin.GetUser", args, &resp)
 	if err != nil {
@@ -99,9 +100,10 @@ func (m *RPCClient) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.Us
 
 // GetUserByClaimArg for RPC
 type GetUserByClaimArg struct {
-	Ctx   map[interface{}]interface{}
-	Claim string
-	Value string
+	Ctx                map[interface{}]interface{}
+	Claim              string
+	Value              string
+	SkipFetchingGroups bool
 }
 
 // GetUserByClaimReply for RPC
@@ -111,9 +113,9 @@ type GetUserByClaimReply struct {
 }
 
 // GetUserByClaim RPCClient GetUserByClaim method
-func (m *RPCClient) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (m *RPCClient) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
-	args := GetUserByClaimArg{Ctx: ctxVal, Claim: claim, Value: value}
+	args := GetUserByClaimArg{Ctx: ctxVal, Claim: claim, Value: value, SkipFetchingGroups: skipFetchingGroups}
 	resp := GetUserByClaimReply{}
 	err := m.Client.Call("Plugin.GetUserByClaim", args, &resp)
 	if err != nil {
@@ -148,8 +150,9 @@ func (m *RPCClient) GetUserGroups(ctx context.Context, user *userpb.UserId) ([]s
 
 // FindUsersArg for RPC
 type FindUsersArg struct {
-	Ctx   map[interface{}]interface{}
-	Query string
+	Ctx                map[interface{}]interface{}
+	Query              string
+	SkipFetchingGroups bool
 }
 
 // FindUsersReply for RPC
@@ -159,9 +162,9 @@ type FindUsersReply struct {
 }
 
 // FindUsers RPCClient FindUsers method
-func (m *RPCClient) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+func (m *RPCClient) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
-	args := FindUsersArg{Ctx: ctxVal, Query: query}
+	args := FindUsersArg{Ctx: ctxVal, Query: query, SkipFetchingGroups: skipFetchingGroups}
 	resp := FindUsersReply{}
 	err := m.Client.Call("Plugin.FindUsers", args, &resp)
 	if err != nil {
@@ -185,14 +188,14 @@ func (m *RPCServer) Configure(args ConfigureArg, resp *ConfigureReply) error {
 // GetUser RPCServer GetUser method
 func (m *RPCServer) GetUser(args GetUserArg, resp *GetUserReply) error {
 	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
-	resp.User, resp.Err = m.Impl.GetUser(ctx, args.UID)
+	resp.User, resp.Err = m.Impl.GetUser(ctx, args.UID, args.SkipFetchingGroups)
 	return nil
 }
 
 // GetUserByClaim RPCServer GetUserByClaim method
 func (m *RPCServer) GetUserByClaim(args GetUserByClaimArg, resp *GetUserByClaimReply) error {
 	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
-	resp.User, resp.Err = m.Impl.GetUserByClaim(ctx, args.Claim, args.Value)
+	resp.User, resp.Err = m.Impl.GetUserByClaim(ctx, args.Claim, args.Value, args.SkipFetchingGroups)
 	return nil
 }
 
@@ -206,6 +209,6 @@ func (m *RPCServer) GetUserGroups(args GetUserGroupsArg, resp *GetUserGroupsRepl
 // FindUsers RPCServer FindUsers method
 func (m *RPCServer) FindUsers(args FindUsersArg, resp *FindUsersReply) error {
 	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
-	resp.User, resp.Err = m.Impl.FindUsers(ctx, args.Query)
+	resp.User, resp.Err = m.Impl.FindUsers(ctx, args.Query, args.SkipFetchingGroups)
 	return nil
 }

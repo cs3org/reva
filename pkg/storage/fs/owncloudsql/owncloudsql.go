@@ -1062,7 +1062,7 @@ func (fs *owncloudsqlfs) RefreshLock(ctx context.Context, ref *provider.Referenc
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
@@ -1970,6 +1970,16 @@ func (fs *owncloudsqlfs) HashFile(path string) (string, string, string, error) {
 
 		return string(sha1h.Sum(nil)), string(md5h.Sum(nil)), string(adler32h.Sum(nil)), nil
 	}
+}
+
+func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	// TODO(corby): Implement
+	return nil, errtypes.NotSupported("list storage spaces")
+}
+
+// UpdateStorageSpace updates a storage space
+func (fs *owncloudsqlfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errtypes.NotSupported("update storage space")
 }
 
 func readChecksumIntoResourceChecksum(ctx context.Context, checksums, algo string, ri *provider.ResourceInfo) {

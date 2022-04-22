@@ -22,12 +22,13 @@ import (
 	"fmt"
 	"net/http"
 
-	accpanel "github.com/cs3org/reva/v2/pkg/siteacc/account"
-	"github.com/cs3org/reva/v2/pkg/siteacc/admin"
-	"github.com/cs3org/reva/v2/pkg/siteacc/alerting"
-	"github.com/cs3org/reva/v2/pkg/siteacc/config"
-	"github.com/cs3org/reva/v2/pkg/siteacc/html"
-	"github.com/cs3org/reva/v2/pkg/siteacc/manager"
+	accpanel "github.com/cs3org/reva/pkg/siteacc/account"
+	"github.com/cs3org/reva/pkg/siteacc/admin"
+	"github.com/cs3org/reva/pkg/siteacc/alerting"
+	"github.com/cs3org/reva/pkg/siteacc/config"
+	"github.com/cs3org/reva/pkg/siteacc/data"
+	"github.com/cs3org/reva/pkg/siteacc/html"
+	"github.com/cs3org/reva/pkg/siteacc/manager"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -39,6 +40,9 @@ type SiteAccounts struct {
 
 	sessions *html.SessionManager
 
+	storage data.Storage
+
+	sitesManager    *manager.SitesManager
 	accountsManager *manager.AccountsManager
 	usersManager    *manager.UsersManager
 
@@ -66,15 +70,29 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 	}
 	siteacc.sessions = sessions
 
+	// Create the central storage
+	storage, err := siteacc.createStorage(conf.Storage.Driver)
+	if err != nil {
+		return errors.Wrap(err, "unable to create storage")
+	}
+	siteacc.storage = storage
+
+	// Create the sites manager instance
+	smngr, err := manager.NewSitesManager(storage, conf, log)
+	if err != nil {
+		return errors.Wrap(err, "error creating the sites manager")
+	}
+	siteacc.sitesManager = smngr
+
 	// Create the accounts manager instance
-	amngr, err := manager.NewAccountsManager(conf, log)
+	amngr, err := manager.NewAccountsManager(storage, conf, log)
 	if err != nil {
 		return errors.Wrap(err, "error creating the accounts manager")
 	}
 	siteacc.accountsManager = amngr
 
 	// Create the users manager instance
-	umngr, err := manager.NewUsersManager(conf, log, siteacc.accountsManager)
+	umngr, err := manager.NewUsersManager(conf, log, siteacc.sitesManager, siteacc.accountsManager)
 	if err != nil {
 		return errors.Wrap(err, "error creating the users manager")
 	}
@@ -144,6 +162,11 @@ func (siteacc *SiteAccounts) ShowAccountPanel(w http.ResponseWriter, r *http.Req
 	return siteacc.accountPanel.Execute(w, r, session)
 }
 
+// SitesManager returns the central sites manager instance.
+func (siteacc *SiteAccounts) SitesManager() *manager.SitesManager {
+	return siteacc.sitesManager
+}
+
 // AccountsManager returns the central accounts manager instance.
 func (siteacc *SiteAccounts) AccountsManager() *manager.AccountsManager {
 	return siteacc.accountsManager
@@ -171,6 +194,14 @@ func (siteacc *SiteAccounts) GetPublicEndpoints() []string {
 		}
 	}
 	return endpoints
+}
+
+func (siteacc *SiteAccounts) createStorage(driver string) (data.Storage, error) {
+	if driver == "file" {
+		return data.NewFileStorage(siteacc.conf, siteacc.log)
+	}
+
+	return nil, errors.Errorf("unknown storage driver %v", driver)
 }
 
 // New returns a new Site Accounts service instance.

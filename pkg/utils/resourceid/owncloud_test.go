@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 func BenchmarkWrap(b *testing.B) {

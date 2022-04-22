@@ -23,18 +23,17 @@ import (
 	"encoding/json"
 	"path"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/share"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/pkg/errors"
 )
 
@@ -266,27 +265,37 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		}, nil
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Share.Share.ResourceId)
-	return c.UpdateReceivedShare(ctx, req)
-	/*
-		    TODO: Leftover from master merge. Do we need this?
-			if err != nil {
-				appctx.GetLogger(ctx).
-					Err(err).
-					Msg("UpdateReceivedShare: failed to get user share provider")
-				return &collaboration.UpdateReceivedShareResponse{
-					Status: status.NewInternal(ctx, "error getting share provider client"),
-				}, nil
-			}
-			// check if we have a resource id in the update response that we can use to update references
-			if res.GetShare().GetShare().GetResourceId() == nil {
-				log.Err(err).Msg("gateway: UpdateReceivedShare must return a ResourceId")
-				return &collaboration.UpdateReceivedShareResponse{
-					Status: &rpc.Status{
-						Code: rpc.Code_CODE_INTERNAL,
-					},
-				}, nil
-			}
+	res, err := c.UpdateReceivedShare(ctx, req)
+	if err != nil {
+		log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: &rpc.Status{
+				Code: rpc.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+
+	// error failing to update share state.
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return res, nil
+	}
+
+	// if we don't need to create/delete references then we return early.
+	if !s.c.CommitShareToStorageRef ||
+		ctxpkg.ContextMustGetUser(ctx).Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
+		ctxpkg.ContextMustGetUser(ctx).Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+		return res, nil
+	}
+
+	// check if we have a resource id in the update response that we can use to update references
+	if res.GetShare().GetShare().GetResourceId() == nil {
+		log.Err(err).Msg("gateway: UpdateReceivedShare must return a ResourceId")
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: &rpc.Status{
+				Code: rpc.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
 
 			// properties are updated in the order they appear in the field mask
 			// when an error occurs the request ends and no further fields are updated

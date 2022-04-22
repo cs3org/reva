@@ -23,4 +23,6 @@ const (
 	ScopeDefault = ""
 	// ScopeGOCDB is used to access the GOCDB.
 	ScopeGOCDB = "gocdb"
+	// ScopeSite is used to access the global site configuration.
+	ScopeSite = "site"
 )

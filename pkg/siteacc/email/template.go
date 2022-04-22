@@ -21,35 +21,24 @@ package email
 const accountCreatedTemplate = `
 Dear {{.Account.FirstName}} {{.Account.LastName}},
 
-Your ScienceMesh account has been successfully created!
+Your ScienceMesh Site Administrator Account has been successfully created!
 
 Log in to your account by visiting the user account panel:
 {{.AccountsAddress}}
 
-Using this panel, you can modify your information, request an API key or access to the GOCDB, and more. 
+Using this panel, you can modify your information, request access to the GOCDB, and more. 
 
 Kind regards,
 The ScienceMesh Team
 `
 
-const apiKeyAssignedTemplate = `
+const siteAccessGrantedTemplate = `
 Dear {{.Account.FirstName}} {{.Account.LastName}},
 
-An API key has been created for your account!
+You have been granted access to the global configuration of your site.
 
-To view your new API key, log in to your user account panel:
-{{.AccountsAddress}}
-
-Your key will appear on the front page once logged in.
-
-Kind regards,
-The ScienceMesh Team
-`
-
-const accountAuthorizedTemplate = `
-Dear {{.Account.FirstName}} {{.Account.LastName}},
-
-Congratulations - your site registration has been authorized!
+Log in to your account to access this configuration:
+{{.AccountsAddress}} 
 
 Kind regards,
 The ScienceMesh Team
@@ -61,7 +50,7 @@ Dear {{.Account.FirstName}} {{.Account.LastName}},
 You have been granted access to the ScienceMesh GOCDB instance:
 {{.GOCDBAddress}}
 
-Simply use your regular ScienceMesh account credentials to log in to the GOCDB. 
+Simply use your regular ScienceMesh Site Administrator Account credentials to log in to the GOCDB. 
 
 Kind regards,
 The ScienceMesh Team
@@ -89,9 +78,10 @@ const contactFormTemplate = `
 `
 
 const alertFiringNotificationTemplate = `
-Site {{.Params.Site}} has generated an alert:
+Site '{{.Params.Site}}' has generated an alert:
 
   Type:     {{.Params.Name}}
+  Service:  {{.Params.Service}}
   Instance: {{.Params.Instance}}
   Job:      {{.Params.Job}}
   Severity: {{.Params.Severity}}
@@ -102,9 +92,10 @@ Site {{.Params.Site}} has generated an alert:
 `
 
 const alertResolvedNotificationTemplate = `
-Site {{.Params.Site}} has resolved an alert:
+Site '{{.Params.Site}}' has resolved an alert:
 
   Type:     {{.Params.Name}}
+  Service:  {{.Params.Service}}
   Instance: {{.Params.Instance}}
   Job:      {{.Params.Job}}
   Severity: {{.Params.Severity}}

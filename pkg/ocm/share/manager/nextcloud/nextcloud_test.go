@@ -33,8 +33,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 
-	"github.com/cs3org/reva/v2/pkg/ocm/share/manager/nextcloud"
-	jwt "github.com/cs3org/reva/v2/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/pkg/ocm/share/manager/nextcloud"
+	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

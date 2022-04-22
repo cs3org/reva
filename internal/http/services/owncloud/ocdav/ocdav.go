@@ -20,28 +20,34 @@ package ocdav
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path"
 	"strings"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/rhttp"
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
-	"github.com/cs3org/reva/v2/pkg/rhttp/router"
-	"github.com/cs3org/reva/v2/pkg/sharedconf"
-	"github.com/cs3org/reva/v2/pkg/storage/favorite"
-	"github.com/cs3org/reva/v2/pkg/storage/favorite/registry"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage/favorite"
+	"github.com/cs3org/reva/pkg/storage/favorite/registry"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
+)
+
+type ctxKey int
+
+const (
+	ctxKeyBaseURI ctxKey = iota
 )
 
 var (
@@ -85,11 +91,12 @@ type Config struct {
 	// Example: if WebdavNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
-	WebdavNamespace        string                            `mapstructure:"webdav_namespace"`
-	SharesNamespace        string                            `mapstructure:"shares_namespace"`
-	GatewaySvc             string                            `mapstructure:"gatewaysvc"`
-	Timeout                int64                             `mapstructure:"timeout"`
-	Insecure               bool                              `mapstructure:"insecure"`
+	WebdavNamespace string `mapstructure:"webdav_namespace"`
+	GatewaySvc      string `mapstructure:"gatewaysvc"`
+	Timeout         int64  `mapstructure:"timeout"`
+	Insecure        bool   `mapstructure:"insecure"`
+	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
+	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
@@ -105,17 +112,12 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	c                *Config
-	webDavHandler    *WebDavHandler
-	davHandler       *DavHandler
-	favoritesManager favorite.Manager
-	client           *http.Client
-	// LockSystem is the lock management system.
-	LockSystem LockSystem
-}
-
-func (s *svc) Config() *Config {
-	return s.c
+	c                   *Config
+	webDavHandler       *WebDavHandler
+	davHandler          *DavHandler
+	favoritesManager    favorite.Manager
+	client              *http.Client
+	userIdentifierCache *ttlcache.Cache
 }
 
 func getFavoritesManager(c *Config) (favorite.Manager, error) {
@@ -164,9 +166,11 @@ func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
-		favoritesManager: fm,
-		LockSystem:       ls,
+		favoritesManager:    fm,
+		userIdentifierCache: ttlcache.NewCache(),
 	}
+	_ = s.userIdentifierCache.SetTTL(60 * time.Second)
+
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
 		return nil, err
@@ -276,46 +280,6 @@ func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool
 	if !ok || !useLoggedInUserNS {
 		var requestUsernameOrID string
 		requestUsernameOrID, requestPath = router.ShiftPath(requestPath)
-
-		gatewayClient, err := s.getClient()
-		if err != nil {
-			return "", "", err
-		}
-
-		// Check if this is a Userid
-		userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
-			UserId: &userpb.UserId{OpaqueId: requestUsernameOrID},
-		})
-		if err != nil {
-			return "", "", err
-		}
-
-		// If it's not a userid try if it is a user name
-		if userRes.Status.Code != rpc.Code_CODE_OK {
-			res, err := gatewayClient.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-				Claim: "username",
-				Value: requestUsernameOrID,
-			})
-			if err != nil {
-				return "", "", err
-			}
-			userRes.Status = res.Status
-			userRes.User = res.User
-		}
-
-		// If still didn't find a user, fallback
-		if userRes.Status.Code != rpc.Code_CODE_OK {
-			userRes.User = &userpb.User{
-				Username: requestUsernameOrID,
-				Id:       &userpb.UserId{OpaqueId: requestUsernameOrID},
-			}
-		}
-
-		u = userRes.User
-	}
-
-	return templates.WithUser(u, ns), requestPath, nil
-}
 
 func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	headers := w.Header()

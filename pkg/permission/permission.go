@@ -22,13 +22,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-const (
-	// ListAllSpaces is the hardcoded name for the list all spaces permission
-	ListAllSpaces string = "list-all-spaces"
-	// CreateSpace is the hardcoded name for the create space permission
-	CreateSpace string = "create-space"
-)
-
 // Manager defines the interface for the permission service driver
 type Manager interface {
 	CheckPermission(permission string, subject string, ref *provider.Reference) bool
