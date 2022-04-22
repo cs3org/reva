@@ -1040,7 +1040,7 @@ func (fs *owncloudsqlfs) RefreshLock(ctx context.Context, ref *provider.Referenc
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 

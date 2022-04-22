@@ -28,6 +28,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/cs3org/reva/pkg/sdk/common"
@@ -60,9 +61,9 @@ func (session *Session) Initiate(host string, insecure bool) error {
 	return nil
 }
 
-func (session *Session) getConnection(host string, insecure bool) (*grpc.ClientConn, error) {
-	if insecure {
-		return grpc.Dial(host, grpc.WithInsecure())
+func (session *Session) getConnection(host string, ins bool) (*grpc.ClientConn, error) {
+	if ins {
+		return grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	tlsconf := &tls.Config{InsecureSkipVerify: false}
