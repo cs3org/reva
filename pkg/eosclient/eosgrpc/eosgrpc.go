@@ -33,8 +33,8 @@ import (
 	"syscall"
 
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/eosclient"
 
+	"github.com/cs3org/reva/v2/pkg/eosclient"
 	erpc "github.com/cs3org/reva/v2/pkg/eosclient/eosgrpc/eos_grpc"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/logger"
@@ -513,7 +513,7 @@ func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, in
 }
 
 // SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
+func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "SetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -532,11 +532,20 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
+	if errorIfExists {
+		msg.Create = true
+	}
+
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	e := c.getRespError(resp, err)
+
+	if resp != nil && resp.Error != nil && resp.Error.Code == 17 {
+		return eosclient.AttrAlreadyExistsError
+	}
+
 	if e != nil {
 		log.Error().Str("func", "SetAttr").Str("path", path).Str("err", e.Error()).Msg("")
 		return e
@@ -578,6 +587,11 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
+
+	if resp != nil && resp.Error != nil && resp.Error.Code == 61 {
+		return eosclient.AttrNotExistsError
+	}
+
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "UnsetAttr").Str("path", path).Str("err", e.Error()).Msg("")
@@ -596,8 +610,40 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 }
 
 // GetAttr returns the attribute specified by key
-func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, name, path string) (*eosclient.Attribute, error) {
-	return nil, errtypes.NotSupported("GetAttr function not yet implemented")
+func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key, path string) (*eosclient.Attribute, error) {
+	info, err := c.GetFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range info.Attrs {
+		if k == key {
+			attr, err := getAttribute(k, v)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("eosgrpc: cannot parse attribute key=%s value=%s", k, v))
+			}
+			return attr, nil
+		}
+	}
+	return nil, errtypes.NotFound(fmt.Sprintf("key %s not found", key))
+}
+
+func getAttribute(key, val string) (*eosclient.Attribute, error) {
+	// key is in the form sys.forced.checksum
+	type2key := strings.SplitN(key, ".", 2) // type2key = ["sys", "forced.checksum"]
+	if len(type2key) != 2 {
+		return nil, errtypes.InternalError("wrong attr format to deserialize")
+	}
+	t, err := eosclient.AttrStringToType(type2key[0])
+	if err != nil {
+		return nil, err
+	}
+	attr := &eosclient.Attribute{
+		Type: t,
+		Key:  type2key[1],
+		Val:  val,
+	}
+	return attr, nil
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path
