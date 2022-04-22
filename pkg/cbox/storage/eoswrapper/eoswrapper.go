@@ -21,15 +21,24 @@ package eoswrapper
 import (
 	"bytes"
 	"context"
+	"io"
 	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+<<<<<<< HEAD
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/eosfs"
+=======
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
+>>>>>>> master
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -67,6 +76,7 @@ func parseConfig(m map[string]interface{}) (*eosfs.Config, string, error) {
 	// allow recycle operations for project spaces
 	if !c.EnableHome && strings.HasPrefix(c.Namespace, eosProjectsNamespace) {
 		c.AllowPathRecycleOperations = true
+		c.ImpersonateOwnerforRevisions = true
 	}
 
 	t, ok := m["mount_id_template"].(string)
@@ -135,6 +145,30 @@ func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	return res, nil
 }
 
+func (w *wrapper) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
+	if err := w.userIsProjectAdmin(ctx, ref); err != nil {
+		return nil, err
+	}
+
+	return w.FS.ListRevisions(ctx, ref)
+}
+
+func (w *wrapper) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+	if err := w.userIsProjectAdmin(ctx, ref); err != nil {
+		return nil, err
+	}
+
+	return w.FS.DownloadRevision(ctx, ref, revisionKey)
+}
+
+func (w *wrapper) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+	if err := w.userIsProjectAdmin(ctx, ref); err != nil {
+		return err
+	}
+
+	return w.FS.RestoreRevision(ctx, ref, revisionKey)
+}
+
 func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) string {
 	if r == nil {
 		return ""
@@ -172,4 +206,34 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 		}
 	}
 	return nil
+}
+
+func (w *wrapper) userIsProjectAdmin(ctx context.Context, ref *provider.Reference) error {
+	// Check if this storage provider corresponds to a project spaces instance
+	if !strings.HasPrefix(w.conf.Namespace, eosProjectsNamespace) {
+		return nil
+	}
+
+	res, err := w.FS.GetMD(ctx, ref, nil)
+	if err != nil {
+		return err
+	}
+
+	// Extract project name from the path resembling /c/cernbox or /c/cernbox/minutes/..
+	parts := strings.SplitN(res.Path, "/", 4)
+	if len(parts) != 4 && len(parts) != 3 {
+		// The request might be for / or /$letter
+		// Nothing to do in that case
+		return nil
+	}
+	adminGroup := projectSpaceGroupsPrefix + parts[2] + projectSpaceAdminGroupsSuffix
+	user := ctxpkg.ContextMustGetUser(ctx)
+
+	for _, g := range user.Groups {
+		if g == adminGroup {
+			return nil
+		}
+	}
+
+	return errtypes.PermissionDenied("eosfs: project spaces revisions can only be accessed by admins")
 }

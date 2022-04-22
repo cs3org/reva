@@ -1,0 +1,198 @@
+[
+	{
+		"name": "cernbox",
+		"full_name": "CERNBox",
+		"organization": "CERN",
+		"domain": "cernbox.cern.ch",
+		"homepage": "https://cernbox.web.cern.ch",
+		"description": "CERNBox provides cloud data storage to all CERN users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CERNBox Open Cloud Mesh API"
+					},
+					"name": "CERNBox - OCM API",
+					"path": "http://127.0.0.1:19001/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:19001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "CERNBox Webdav API"
+					},
+					"name": "CERNBox - Webdav API",
+					"path": "http://127.0.0.1:19001/remote.php/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:19001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "CERNBox GRPC Gateway"
+					},
+					"name": "CERNBox - GRPC Gateway",
+					"path": "127.0.0.1:19000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:19000"
+			}
+		]
+	},
+	{
+		"name": "oc-cesnet",
+		"full_name": "ownCloud@CESNET",
+		"organization": "CESNET",
+		"domain": "cesnet.cz",
+		"homepage": "https://owncloud.cesnet.cz",
+		"description": "OwnCloud has been designed for individual users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CESNET Open Cloud Mesh API"
+					},
+					"name": "CESNET - OCM API",
+					"path": "http://127.0.0.1:17001/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:17001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "CESNET Webdav API"
+					},
+					"name": "CESNET - Webdav API",
+					"path": "http://127.0.0.1:17001/remote.php/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:17001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "CESNET GRPC Gateway"
+					},
+					"name": "CESNET - GRPC Gateway",
+					"path": "127.0.0.1:17000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:17000"
+			}
+		]
+	},
+	{
+		"name": "example",
+		"full_name": "ownCloud@Example",
+		"organization": "Example",
+		"domain": "example.org",
+		"homepage": "http://example.org",
+		"description": "Example cloud storage.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Example Open Cloud Mesh API"
+					},
+					"name": "Example - OCM API",
+					"path": "http://127.0.0.1:19001/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:19001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "Example Webdav API"
+					},
+					"name": "Example - Webdav API",
+					"path": "http://127.0.0.1:19001/remote.php/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:19001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "Example GRPC Gateway"
+					},
+					"name": "Example - GRPC Gateway",
+					"path": "127.0.0.1:19000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:19000"
+			}
+		]
+	},
+	{
+		"name": "test",
+		"full_name": "ownCloud@Test",
+		"organization": "Test",
+		"domain": "test.org",
+		"homepage": "http://test.org",
+		"description": "Test cloud storage.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Test Open Cloud Mesh API"
+					},
+					"name": "Test - OCM API",
+					"path": "http://127.0.0.1:19001/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:19001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "Test Webdav API"
+					},
+					"name": "Test - Webdav API",
+					"path": "http://127.0.0.1:19001/remote.php/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:19001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "Test GRPC Gateway"
+					},
+					"name": "Test - GRPC Gateway",
+					"path": "127.0.0.1:19000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:19000"
+			}
+		]
+	}
+]

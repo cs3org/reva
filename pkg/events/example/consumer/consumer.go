@@ -23,7 +23,11 @@ import (
 	"fmt"
 	"log"
 
+<<<<<<< HEAD
 	"github.com/cs3org/reva/v2/pkg/events"
+=======
+	"github.com/cs3org/reva/pkg/events"
+>>>>>>> master
 )
 
 // Example consumes events from the queue
@@ -34,6 +38,7 @@ func Example(c events.Consumer) {
 
 	// Step 2 - which events does the consumer listen too?
 	evs := []events.Unmarshaller{
+<<<<<<< HEAD
 		events.ShareCreated{},
 		events.ShareUpdated{},
 		events.ShareRemoved{},
@@ -43,6 +48,10 @@ func Example(c events.Consumer) {
 		events.LinkRemoved{},
 		events.LinkAccessed{},
 		events.LinkAccessFailed{},
+=======
+		// for example created shares
+		events.ShareCreated{},
+>>>>>>> master
 	}
 
 	// Step 3 - create event channel
@@ -60,7 +69,11 @@ func Example(c events.Consumer) {
 		case events.ShareCreated:
 			fmt.Printf("%s) Share created: %+v\n", group, v)
 		default:
+<<<<<<< HEAD
 			fmt.Printf("%s) %T: %+v\n", group, v, v)
+=======
+			fmt.Printf("%s) Unregistered event: %+v\n", group, v)
+>>>>>>> master
 		}
 	}
 

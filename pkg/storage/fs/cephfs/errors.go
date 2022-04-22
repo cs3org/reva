@@ -30,7 +30,11 @@ import "C"
 import (
 	"fmt"
 
+<<<<<<< HEAD
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+=======
+	"github.com/cs3org/reva/pkg/errtypes"
+>>>>>>> master
 )
 
 func wrapErrorMsg(code C.int) string {

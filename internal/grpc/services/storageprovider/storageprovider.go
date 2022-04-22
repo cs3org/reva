@@ -21,6 +21,7 @@ package storageprovider
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -52,6 +53,7 @@ func init() {
 }
 
 type config struct {
+<<<<<<< HEAD
 	Driver           string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
 	Drivers          map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
 	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
@@ -59,6 +61,17 @@ type config struct {
 	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
 	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
 	MimeTypes        map[string]string                 `mapstructure:"mimetypes" docs:"nil;List of supported mime types and corresponding file extensions."`
+=======
+	MountPath           string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
+	MountID             string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
+	Driver              string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
+	Drivers             map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
+	TmpFolder           string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
+	DataServerURL       string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
+	ExposeDataServer    bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
+	AvailableXS         map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+	CustomMimeTypesJSON string                            `mapstructure:"custom_mimetypes_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
+>>>>>>> master
 }
 
 func (c *config) init() {
@@ -83,10 +96,6 @@ func (c *config) init() {
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
-	if c.MimeTypes == nil || len(c.MimeTypes) == 0 {
-		c.MimeTypes = map[string]string{".zmd": "application/compressed-markdown"}
-	}
-
 }
 
 type service struct {
@@ -132,6 +141,25 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
+func registerMimeTypes(mappingFile string) error {
+	if mappingFile != "" {
+		f, err := ioutil.ReadFile(mappingFile)
+		if err != nil {
+			return fmt.Errorf("storageprovider: error reading the custom mime types file: +%v", err)
+		}
+		mimeTypes := map[string]string{}
+		err = json.Unmarshal(f, &mimeTypes)
+		if err != nil {
+			return fmt.Errorf("storageprovider: error unmarshalling the custom mime types file: +%v", err)
+		}
+		// register all mime types that were read
+		for e, m := range mimeTypes {
+			mime.RegisterMime(e, m)
+		}
+	}
+	return nil
+}
+
 // New creates a new storage provider svc
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
@@ -167,7 +195,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, errtypes.NotFound("no available checksum, please set in config")
 	}
 
-	registerMimeTypes(c.MimeTypes)
+	// read and register custom mime types if configured
+	err = registerMimeTypes(c.CustomMimeTypesJSON)
+	if err != nil {
+		return nil, err
+	}
 
 	service := &service{
 		conf:          c,
@@ -178,12 +210,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	return service, nil
-}
-
-func registerMimeTypes(mimes map[string]string) {
-	for k, v := range mimes {
-		mime.RegisterMime(k, v)
-	}
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
@@ -241,6 +267,132 @@ func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 	return &provider.UnlockResponse{
 		Status: status.NewStatusFromErrType(ctx, "unlock", err),
 	}, nil
+}
+
+// SetLock puts a lock on the given reference
+func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
+		return &provider.SetLockResponse{
+			Status: status.NewInternal(ctx, err, "error setting lock"),
+		}, nil
+	}
+
+	if err := s.storage.SetLock(ctx, newRef, req.Lock); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when setting lock")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error setting lock: "+req.Ref.String())
+		}
+		return &provider.SetLockResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.SetLockResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+}
+
+// GetLock returns an existing lock on the given reference
+func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
+		return &provider.GetLockResponse{
+			Status: status.NewInternal(ctx, err, "error getting lock"),
+		}, nil
+	}
+
+	var lock *provider.Lock
+	if lock, err = s.storage.GetLock(ctx, newRef); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when getting lock")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error getting lock: "+req.Ref.String())
+		}
+		return &provider.GetLockResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.GetLockResponse{
+		Status: status.NewOK(ctx),
+		Lock:   lock,
+	}
+	return res, nil
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
+		return &provider.RefreshLockResponse{
+			Status: status.NewInternal(ctx, err, "error refreshing lock"),
+		}, nil
+	}
+
+	if err = s.storage.RefreshLock(ctx, newRef, req.Lock); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when refreshing lock")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error refreshing lock: "+req.Ref.String())
+		}
+		return &provider.RefreshLockResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.RefreshLockResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+}
+
+// Unlock removes an existing lock from the given reference
+func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
+		return &provider.UnlockResponse{
+			Status: status.NewInternal(ctx, err, "error on unlocking"),
+		}, nil
+	}
+
+	if err = s.storage.Unlock(ctx, newRef); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when unlocking")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error unlocking: "+req.Ref.String())
+		}
+		return &provider.UnlockResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.UnlockResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
@@ -537,6 +689,7 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 	return res, nil
 }
 
+<<<<<<< HEAD
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	// FIXME these should be part of the CreateContainerRequest object
 	if req.Opaque != nil {
@@ -558,6 +711,44 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
 			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
 		}
+=======
+func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.TouchFileResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+	if err := s.storage.TouchFile(ctx, newRef); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when touching the file")
+		case errtypes.AlreadyExists:
+			st = status.NewAlreadyExists(ctx, err, "file already exists")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error touching file: "+req.Ref.String())
+		}
+		return &provider.TouchFileResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.TouchFileResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+}
+
+func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.DeleteResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+>>>>>>> master
 	}
 
 	err := s.storage.TouchFile(ctx, req.Ref)
@@ -763,6 +954,15 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 		return &provider.ListRecycleResponse{
 			Status: st,
 		}, nil
+	}
+
+	prefixMountpoint := utils.IsAbsoluteReference(req.Ref)
+	for _, md := range items {
+		if err := s.wrapReference(ctx, md.Ref, prefixMountpoint); err != nil {
+			return &provider.ListRecycleResponse{
+				Status: status.NewInternal(ctx, err, "error wrapping path"),
+			}, nil
+		}
 	}
 
 	res := &provider.ListRecycleResponse{
@@ -1055,6 +1255,62 @@ func getFS(c *config) (storage.FS, error) {
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
+<<<<<<< HEAD
+=======
+func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {
+	// all references with an id can be passed on to the driver
+	// there are two cases:
+	// 1. absolute id references (resource_id is set, path is empty)
+	// 2. relative references (resource_id is set, path starts with a `.`)
+	if ref.GetResourceId() != nil {
+		return ref, nil
+	}
+
+	if !strings.HasPrefix(ref.GetPath(), "/") {
+		// abort, absolute path references must start with a `/`
+		return nil, errtypes.BadRequest("ref is invalid: " + ref.String())
+	}
+
+	// TODO move mount path trimming to the gateway
+	fn, err := s.trimMountPrefix(ref.GetPath())
+	if err != nil {
+		return nil, err
+	}
+	return &provider.Reference{Path: fn}, nil
+}
+
+func (s *service) trimMountPrefix(fn string) (string, error) {
+	if strings.HasPrefix(fn, s.mountPath) {
+		return path.Join("/", strings.TrimPrefix(fn, s.mountPath)), nil
+	}
+	return "", errtypes.BadRequest(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q", fn, s.mountPath))
+}
+
+func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMountpoint bool) error {
+	if ri.Id.StorageId == "" {
+		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
+		ri.Id.StorageId = s.mountID
+	}
+	if prefixMountpoint {
+		// TODO move mount path prefixing to the gateway
+		ri.Path = path.Join(s.mountPath, ri.Path)
+	}
+	return nil
+}
+
+func (s *service) wrapReference(ctx context.Context, ref *provider.Reference, prefixMountpoint bool) error {
+	if ref.ResourceId != nil && ref.ResourceId.StorageId == "" {
+		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
+		ref.ResourceId.StorageId = s.mountID
+	}
+	if prefixMountpoint {
+		// TODO move mount path prefixing to the gateway
+		ref.Path = path.Join(s.mountPath, ref.Path)
+	}
+	return nil
+}
+
+>>>>>>> master
 type descendingMtime []*provider.FileVersion
 
 func (v descendingMtime) Len() int {

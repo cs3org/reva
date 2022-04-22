@@ -93,8 +93,11 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.ResourceInfo.Id}), nil
 	case *gateway.OpenInAppRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
+<<<<<<< HEAD
 	case *permissionsv1beta1.CheckPermissionRequest:
 		return true, nil
+=======
+>>>>>>> master
 
 	// Editor role
 	// need to return appropriate status codes in the ocs/ocdav layers.

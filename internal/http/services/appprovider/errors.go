@@ -22,7 +22,11 @@ import (
 	"encoding/json"
 	"net/http"
 
+<<<<<<< HEAD
 	"github.com/cs3org/reva/v2/pkg/appctx"
+=======
+	"github.com/cs3org/reva/pkg/appctx"
+>>>>>>> master
 )
 
 // appErrorCode stores the type of error encountered

@@ -37,6 +37,7 @@ import (
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+<<<<<<< HEAD
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -52,6 +53,22 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+=======
+	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
+>>>>>>> master
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/codes"
 	"google.golang.org/grpc"
@@ -112,6 +129,13 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 	lu.Options = o
 
 	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
+<<<<<<< HEAD
+=======
+
+	o.GatewayAddr = sharedconf.GetGatewaySVC(o.GatewayAddr)
+	return New(o, lu, p, tp)
+}
+>>>>>>> master
 
 	permissionsClient, err := pool.GetPermissionsClient(o.PermissionsSVC)
 	if err != nil {
@@ -577,6 +601,7 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 
 // GetLock returns an existing lock on the given reference
 func (fs *Decomposedfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+<<<<<<< HEAD
 	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error resolving ref")
@@ -597,10 +622,14 @@ func (fs *Decomposedfs) GetLock(ctx context.Context, ref *provider.Reference) (*
 		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 	return node.ReadLock(ctx, false)
+=======
+	return nil, errtypes.NotSupported("unimplemented")
+>>>>>>> master
 }
 
 // SetLock puts a lock on the given reference
 func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+<<<<<<< HEAD
 	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error resolving ref")
@@ -621,10 +650,14 @@ func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lo
 	}
 
 	return node.SetLock(ctx, lock)
+=======
+	return errtypes.NotSupported("unimplemented")
+>>>>>>> master
 }
 
 // RefreshLock refreshes an existing lock on the given reference
 func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+<<<<<<< HEAD
 	if lock.LockId == "" {
 		return errtypes.BadRequest("missing lockid")
 	}
@@ -677,4 +710,12 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, loc
 	}
 
 	return node.Unlock(ctx, lock)
+=======
+	return errtypes.NotSupported("unimplemented")
+}
+
+// Unlock removes an existing lock from the given reference
+func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+>>>>>>> master
 }

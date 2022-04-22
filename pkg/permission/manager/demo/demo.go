@@ -20,8 +20,13 @@ package demo
 
 import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+<<<<<<< HEAD
 	"github.com/cs3org/reva/v2/pkg/permission"
 	"github.com/cs3org/reva/v2/pkg/permission/manager/registry"
+=======
+	"github.com/cs3org/reva/pkg/permission"
+	"github.com/cs3org/reva/pkg/permission/manager/registry"
+>>>>>>> master
 )
 
 func init() {
@@ -36,6 +41,7 @@ func New(c map[string]interface{}) (permission.Manager, error) {
 type manager struct {
 }
 
+<<<<<<< HEAD
 func (m manager) CheckPermission(perm string, subject string, ref *provider.Reference) bool {
 	switch perm {
 	case permission.CreateSpace:
@@ -50,4 +56,10 @@ func (m manager) CheckPermission(perm string, subject string, ref *provider.Refe
 		// Once we beginn testing roles we need to somehow check the roles of the users here
 		return false
 	}
+=======
+func (m manager) CheckPermission(permission string, subject string, ref *provider.Reference) bool {
+	// We can currently return true all the time.
+	// Once we beginn testing roles we need to somehow check the roles of the users here
+	return true
+>>>>>>> master
 }

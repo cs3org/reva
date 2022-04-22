@@ -20,6 +20,7 @@ package loader
 
 import (
 	// Load core HTTP services
+<<<<<<< HEAD
 	_ "github.com/cs3org/reva/v2/internal/http/services/appprovider"
 	_ "github.com/cs3org/reva/v2/internal/http/services/archiver"
 	_ "github.com/cs3org/reva/v2/internal/http/services/datagateway"
@@ -36,5 +37,24 @@ import (
 	_ "github.com/cs3org/reva/v2/internal/http/services/siteacc"
 	_ "github.com/cs3org/reva/v2/internal/http/services/sysinfo"
 	_ "github.com/cs3org/reva/v2/internal/http/services/wellknown"
+=======
+	_ "github.com/cs3org/reva/internal/http/services/appprovider"
+	_ "github.com/cs3org/reva/internal/http/services/archiver"
+	_ "github.com/cs3org/reva/internal/http/services/datagateway"
+	_ "github.com/cs3org/reva/internal/http/services/dataprovider"
+	_ "github.com/cs3org/reva/internal/http/services/helloworld"
+	_ "github.com/cs3org/reva/internal/http/services/mentix"
+	_ "github.com/cs3org/reva/internal/http/services/meshdirectory"
+	_ "github.com/cs3org/reva/internal/http/services/metrics"
+	_ "github.com/cs3org/reva/internal/http/services/ocmd"
+	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
+	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
+	_ "github.com/cs3org/reva/internal/http/services/preferences"
+	_ "github.com/cs3org/reva/internal/http/services/prometheus"
+	_ "github.com/cs3org/reva/internal/http/services/reverseproxy"
+	_ "github.com/cs3org/reva/internal/http/services/siteacc"
+	_ "github.com/cs3org/reva/internal/http/services/sysinfo"
+	_ "github.com/cs3org/reva/internal/http/services/wellknown"
+>>>>>>> master
 	// Add your own service here
 )

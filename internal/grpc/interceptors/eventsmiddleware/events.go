@@ -25,6 +25,7 @@ import (
 	"go-micro.dev/v4/util/log"
 	"google.golang.org/grpc"
 
+<<<<<<< HEAD
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	v1beta12 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -35,6 +36,13 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/go-micro/plugins/v4/events/natsjs"
+=======
+	"github.com/asim/go-micro/plugins/events/nats/v4"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	"github.com/cs3org/reva/pkg/events"
+	"github.com/cs3org/reva/pkg/events/server"
+	"github.com/cs3org/reva/pkg/rgrpc"
+>>>>>>> master
 )
 
 const (
@@ -63,6 +71,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		var ev interface{}
 		switch v := res.(type) {
 		case *collaboration.CreateShareResponse:
+<<<<<<< HEAD
 			if isSuccess(v) {
 				ev = ShareCreated(v)
 			}
@@ -148,6 +157,9 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 					ev = SpaceDisabled(v, r)
 				}
 			}
+=======
+			ev = ShareCreated(v)
+>>>>>>> master
 		}
 
 		if ev != nil {
@@ -171,6 +183,7 @@ func NewStream() grpc.StreamServerInterceptor {
 	return interceptor
 }
 
+<<<<<<< HEAD
 // common interface to all responses
 type su interface {
 	GetStatus() *v1beta12.Status
@@ -180,6 +193,8 @@ func isSuccess(res su) bool {
 	return res.GetStatus().Code == rpc.Code_CODE_OK
 }
 
+=======
+>>>>>>> master
 func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {
 	typ := m["type"].(string)
 	switch typ {
@@ -188,6 +203,10 @@ func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {
 	case "nats":
 		address := m["address"].(string)
 		cid := m["clusterID"].(string)
+<<<<<<< HEAD
 		return server.NewNatsStream(natsjs.Address(address), natsjs.ClusterID(cid))
+=======
+		return server.NewNatsStream(nats.Address(address), nats.ClusterID(cid))
+>>>>>>> master
 	}
 }

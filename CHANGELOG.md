@@ -1,12 +1,20 @@
+<<<<<<< HEAD
 Changelog for reva 2.2.0 (2022-04-12)
 =======================================
 
 The following sections list the changes in reva 2.2.0 relevant to
+=======
+Changelog for reva 1.18.0 (2022-02-11)
+=======================================
+
+The following sections list the changes in reva 1.18.0 relevant to
+>>>>>>> master
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
+<<<<<<< HEAD
  * Fix #3373: Fix the permissions attribute in propfind responses
  * Fix #2721: Fix locking and public link scope checker to make the WOPI server work
  * Fix #2668: Minor cleanup
@@ -446,12 +454,22 @@ Summary
  * Enh #2460: Add locking support to decomposedfs
  * Enh #2540: Refactored the xattrs package in the decomposedfs
  * Enh #2463: Do not log whole nodes
+=======
+ * Fix #2370: Fixes for apps in public shares, project spaces for EOS driver
+ * Fix #2374: Fix webdav copy of zero byte files
+ * Fix #2478: Use ocs permission objects in the reva GRPC client
+ * Fix #2368: Return wrapped paths for recycled items in storage provider
+ * Chg #2354: Return not found when updating non existent space
+ * Enh #1209: Reva CephFS module v0.2.1
+ * Enh #2341: Use CS3 permissions API
+>>>>>>> master
  * Enh #2350: Add file locking methods to the storage and filesystem interfaces
  * Enh #2379: Add new file url of the app provider to the ocs capabilities
  * Enh #2369: Implement TouchFile from the CS3apis
  * Enh #2385: Allow to create new files with the app provider on public links
  * Enh #2397: Product field in OCS version
  * Enh #2393: Update tus/tusd to version 1.8.0
+<<<<<<< HEAD
  * Enh #2522: Introduce events
  * Enh #2528: Use an exclcusive write lock when writing multiple attributes
  * Enh #2595: Add integration test for the groupprovider
@@ -473,10 +491,17 @@ Summary
  * Enh #2547: Add an if-match check to the storage provider
  * Enh #2486: Update cs3apis to include lock api changes
  * Enh #2526: Upgrade ginkgo to v2
+=======
+ * Enh #2205: Modify group and user managers to skip fetching specified metadata
+ * Enh #2232: Make ocs resource info cache interoperable across drivers
+ * Enh #2233: Populate owner data in the ocs and ocdav services
+ * Enh #2278: OIDC driver changes for lightweight users
+>>>>>>> master
 
 Details
 -------
 
+<<<<<<< HEAD
  * Bugfix #2457: Do not swallow error
 
    Decomposedfs not longer swallows errors when creating a node fails.
@@ -496,10 +521,13 @@ Details
 
    https://github.com/cs3org/reva/pull/2327
 
+=======
+>>>>>>> master
  * Bugfix #2370: Fixes for apps in public shares, project spaces for EOS driver
 
    https://github.com/cs3org/reva/pull/2370
 
+<<<<<<< HEAD
  * Bugfix #2464: Pass spacegrants when adding member to space
 
    When creating a space grant there should not be created a new space. Unfortunately SpaceGrant
@@ -584,6 +612,8 @@ Details
 
    https://github.com/cs3org/reva/pull/2351
 
+=======
+>>>>>>> master
  * Bugfix #2374: Fix webdav copy of zero byte files
 
    We've fixed the webdav copy action of zero byte files, which was not performed because the
@@ -594,6 +624,7 @@ Details
    https://github.com/cs3org/reva/pull/2374
    https://github.com/cs3org/reva/pull/2309
 
+<<<<<<< HEAD
  * Bugfix #2336: Handle sending all permissions when creating public links
 
    For backwards compatability we now reduce permissions to readonly when a create public link
@@ -846,6 +877,18 @@ Details
    spaces registry changes.
 
    https://github.com/cs3org/reva/pull/2370
+=======
+ * Bugfix #2478: Use ocs permission objects in the reva GRPC client
+
+   There was a bug introduced by differing CS3APIs permission definitions for the same role
+   across services. This is a first step in making all services use consistent definitions.
+
+   https://github.com/cs3org/reva/pull/2478
+
+ * Bugfix #2368: Return wrapped paths for recycled items in storage provider
+
+   https://github.com/cs3org/reva/pull/2368
+>>>>>>> master
 
  * Change #2354: Return not found when updating non existent space
 
@@ -853,6 +896,7 @@ Details
 
    https://github.com/cs3org/reva/pull/2354
 
+<<<<<<< HEAD
  * Change #2589: Remove deprecated linter modules
 
    Replaced the deprecated linter modules with the recommended ones.
@@ -872,10 +916,13 @@ Details
 
    https://github.com/cs3org/reva/pull/2591
 
+=======
+>>>>>>> master
  * Enhancement #1209: Reva CephFS module v0.2.1
 
    https://github.com/cs3org/reva/pull/1209
 
+<<<<<<< HEAD
  * Enhancement #2511: Error handling cleanup in decomposed FS
 
    - Avoid inconsensitencies by cleaning up actions in case of err
@@ -895,6 +942,8 @@ Details
 
    https://github.com/cs3org/reva/pull/2512
 
+=======
+>>>>>>> master
  * Enhancement #2341: Use CS3 permissions API
 
    Added calls to the CS3 permissions API to the decomposedfs in order to check the user
@@ -902,6 +951,7 @@ Details
 
    https://github.com/cs3org/reva/pull/2341
 
+<<<<<<< HEAD
  * Enhancement #2343: Allow multiple space type fileters on decomposedfs
 
    The decomposedfs driver now evaluates multiple space type filters when listing storage
@@ -930,6 +980,8 @@ Details
 
    https://github.com/cs3org/reva/pull/2463
 
+=======
+>>>>>>> master
  * Enhancement #2350: Add file locking methods to the storage and filesystem interfaces
 
    We've added the file locking methods from the CS3apis to the storage and filesystem
@@ -976,6 +1028,7 @@ Details
    https://github.com/cs3org/reva/issues/2393
    https://github.com/cs3org/reva/pull/2224
 
+<<<<<<< HEAD
  * Enhancement #2522: Introduce events
 
    This will introduce events into the system. Events are a simple way to bring information from
@@ -1043,11 +1096,25 @@ Details
    whereas pkg/share deals with cs3/sharing/collaboration
 
    https://github.com/cs3org/reva/pull/2163
+=======
+ * Enhancement #2205: Modify group and user managers to skip fetching specified metadata
+
+   https://github.com/cs3org/reva/pull/2205
+
+ * Enhancement #2232: Make ocs resource info cache interoperable across drivers
+
+   https://github.com/cs3org/reva/pull/2232
+
+ * Enhancement #2233: Populate owner data in the ocs and ocdav services
+
+   https://github.com/cs3org/reva/pull/2233
+>>>>>>> master
 
  * Enhancement #2278: OIDC driver changes for lightweight users
 
    https://github.com/cs3org/reva/pull/2278
 
+<<<<<<< HEAD
  * Enhancement #2315: Add new attributes to public link propfinds
 
    Added a new property "oc:signature-auth" to public link propfinds. This is a necessary change
@@ -1116,6 +1183,8 @@ Details
 
    https://github.com/cs3org/reva/pull/2526
 
+=======
+>>>>>>> master
 
 Changelog for reva 1.17.0 (2021-12-09)
 =======================================

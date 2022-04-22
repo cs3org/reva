@@ -131,7 +131,8 @@ var _ = Describe("Nextcloud", func() {
 				Idp:      "some-idp",
 				OpaqueId: "some-opaque-user-id",
 				Type:     1,
-			})
+			},
+				false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(user).To(Equal(&userpb.User{
 				Id: &userpb.UserId{
@@ -158,7 +159,7 @@ var _ = Describe("Nextcloud", func() {
 			um, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			user, err := um.GetUserByClaim(ctx, "claim-string", "value-string")
+			user, err := um.GetUserByClaim(ctx, "claim-string", "value-string", false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(user).To(Equal(&userpb.User{
 				Id: &userpb.UserId{
@@ -202,7 +203,7 @@ var _ = Describe("Nextcloud", func() {
 			um, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			users, err := um.FindUsers(ctx, "some-query")
+			users, err := um.FindUsers(ctx, "some-query", false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(users)).To(Equal(1))
 			Expect(*users[0]).To(Equal(userpb.User{

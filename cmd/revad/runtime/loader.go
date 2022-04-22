@@ -20,6 +20,7 @@ package runtime
 
 import (
 	// These are all the extensions points for REVA
+<<<<<<< HEAD
 	_ "github.com/cs3org/reva/v2/internal/grpc/interceptors/loader"
 	_ "github.com/cs3org/reva/v2/internal/grpc/services/loader"
 	_ "github.com/cs3org/reva/v2/internal/http/interceptors/auth/credential/loader"
@@ -48,4 +49,37 @@ import (
 	_ "github.com/cs3org/reva/v2/pkg/storage/registry/loader"
 	_ "github.com/cs3org/reva/v2/pkg/token/manager/loader"
 	_ "github.com/cs3org/reva/v2/pkg/user/manager/loader"
+=======
+	_ "github.com/cs3org/reva/internal/grpc/interceptors/loader"
+	_ "github.com/cs3org/reva/internal/grpc/services/loader"
+	_ "github.com/cs3org/reva/internal/http/interceptors/auth/credential/loader"
+	_ "github.com/cs3org/reva/internal/http/interceptors/auth/token/loader"
+	_ "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/loader"
+	_ "github.com/cs3org/reva/internal/http/interceptors/loader"
+	_ "github.com/cs3org/reva/internal/http/services/loader"
+	_ "github.com/cs3org/reva/pkg/app/provider/loader"
+	_ "github.com/cs3org/reva/pkg/app/registry/loader"
+	_ "github.com/cs3org/reva/pkg/appauth/manager/loader"
+	_ "github.com/cs3org/reva/pkg/auth/manager/loader"
+	_ "github.com/cs3org/reva/pkg/auth/registry/loader"
+	_ "github.com/cs3org/reva/pkg/cbox/loader"
+	_ "github.com/cs3org/reva/pkg/datatx/manager/loader"
+	_ "github.com/cs3org/reva/pkg/group/manager/loader"
+	_ "github.com/cs3org/reva/pkg/metrics/driver/loader"
+	_ "github.com/cs3org/reva/pkg/ocm/invite/manager/loader"
+	_ "github.com/cs3org/reva/pkg/ocm/provider/authorizer/loader"
+	_ "github.com/cs3org/reva/pkg/ocm/share/manager/loader"
+	_ "github.com/cs3org/reva/pkg/permission/manager/loader"
+	_ "github.com/cs3org/reva/pkg/preferences/loader"
+	_ "github.com/cs3org/reva/pkg/publicshare/manager/loader"
+	_ "github.com/cs3org/reva/pkg/rhttp/datatx/manager/loader"
+	_ "github.com/cs3org/reva/pkg/share/cache/loader"
+	_ "github.com/cs3org/reva/pkg/share/cache/warmup/loader"
+	_ "github.com/cs3org/reva/pkg/share/manager/loader"
+	_ "github.com/cs3org/reva/pkg/storage/favorite/loader"
+	_ "github.com/cs3org/reva/pkg/storage/fs/loader"
+	_ "github.com/cs3org/reva/pkg/storage/registry/loader"
+	_ "github.com/cs3org/reva/pkg/token/manager/loader"
+	_ "github.com/cs3org/reva/pkg/user/manager/loader"
+>>>>>>> master
 )

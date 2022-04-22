@@ -32,10 +32,17 @@ import (
 	cephfs2 "github.com/ceph/go-ceph/cephfs"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+<<<<<<< HEAD
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctx2 "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/utils"
+=======
+	"github.com/cs3org/reva/pkg/appctx"
+	ctx2 "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/utils"
+>>>>>>> master
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"

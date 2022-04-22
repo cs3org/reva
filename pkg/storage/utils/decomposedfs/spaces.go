@@ -30,6 +30,7 @@ import (
 	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+<<<<<<< HEAD
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -45,6 +46,19 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
+=======
+	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
+	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ocsconv "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/pkg/utils"
+>>>>>>> master
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
@@ -308,6 +322,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return spaces, nil
 	}
 
+<<<<<<< HEAD
 	matches := []string{}
 	for _, spaceType := range spaceTypes {
 		path := filepath.Join(fs.o.Root, "spacetypes", spaceType, nodeID)
@@ -330,6 +345,29 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// the personal spaces must also use the nodeid and not the name
 
 	numShares := 0
+=======
+	client, err := pool.GetGatewayServiceClient(fs.o.GatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	checkRes, err := client.CheckPermission(ctx, &permissionsv1beta1.CheckPermissionRequest{
+		Permission: "list-all-spaces",
+		SubjectRef: &permissionsv1beta1.SubjectReference{
+			Spec: &permissionsv1beta1.SubjectReference_UserId{
+				UserId: u.Id,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	canListAllSpaces := false
+	if checkRes.Status.Code == v1beta11.Code_CODE_OK {
+		canListAllSpaces = true
+	}
+>>>>>>> master
 
 	for i := range matches {
 		var err error
@@ -373,6 +411,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 		spaces = append(spaces, space)
 
+<<<<<<< HEAD
 	}
 	// if there are no matches (or they happened to be spaces for the owner) and the node is a child return a space
 	if len(matches) <= numShares && nodeID != spaceID {
@@ -383,6 +422,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 		if n.Exists {
 			space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), canListAllSpaces)
+=======
+			// TODO apply more filters
+			space, err := fs.storageSpaceFromNode(ctx, n, matches[i], spaceType, canListAllSpaces)
+>>>>>>> master
 			if err != nil {
 				return nil, err
 			}
@@ -415,9 +458,19 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}
 	}
 
+<<<<<<< HEAD
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
+=======
+	if len(matches) != 1 {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{
+				Code:    v1beta11.Code_CODE_NOT_FOUND,
+				Message: fmt.Sprintf("update space failed: found %d matching spaces", len(matches)),
+			},
+		}, nil
+>>>>>>> master
 	}
 	space.Owner = u
 
@@ -430,6 +483,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		metadata[xattrs.QuotaAttr] = strconv.FormatUint(space.Quota.QuotaMaxBytes, 10)
 	}
 
+<<<<<<< HEAD
 	// TODO also return values which are not in the request
 	hasDescription := false
 	if space.Opaque != nil {
@@ -457,6 +511,17 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 				}, nil
 			}
 			metadata[xattrs.SpaceReadmeAttr] = readmeID.OpaqueId
+=======
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
+	}
+	space.Owner = u
+
+	if space.Name != "" {
+		if err := node.SetMetadata(xattrs.SpaceNameAttr, space.Name); err != nil {
+			return nil, err
+>>>>>>> master
 		}
 	}
 
@@ -562,6 +627,7 @@ func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType stri
 	return err
 }
 
+<<<<<<< HEAD
 func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, nodePath string, canListAllSpaces bool) (*provider.StorageSpace, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if !canListAllSpaces {
@@ -599,6 +665,10 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 
 	// read the grants from the current node, not the root
 	grants, err := n.ListGrants(ctx)
+=======
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Node, nodePath, spaceType string, canListAllSpaces bool) (*provider.StorageSpace, error) {
+	owner, err := node.Owner()
+>>>>>>> master
 	if err != nil {
 		return nil, err
 	}
@@ -641,12 +711,26 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
 
+<<<<<<< HEAD
 	if space.SpaceType, err = n.SpaceRoot.GetMetadata(xattrs.SpaceTypeAttr); err != nil {
 		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a type attribute")
 	}
 
 	if n.SpaceRoot.IsDisabled() {
 		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "trashed", "trashed")
+=======
+	user := ctxpkg.ContextMustGetUser(ctx)
+
+	// filter out spaces user cannot access (currently based on stat permission)
+	if !canListAllSpaces {
+		p, err := node.ReadUserPermissions(ctx, user)
+		if err != nil {
+			return nil, err
+		}
+		if !p.Stat {
+			return nil, errors.New("user is not allowed to Stat the space")
+		}
+>>>>>>> master
 	}
 
 	if n.Owner() != nil && n.Owner().OpaqueId != "" {

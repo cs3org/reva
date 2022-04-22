@@ -28,6 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+<<<<<<< HEAD
 	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
@@ -37,6 +38,17 @@ import (
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
+=======
+	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
+	"github.com/go-chi/chi/v5"
+>>>>>>> master
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -47,7 +59,7 @@ func init() {
 	global.Register("appprovider", New)
 }
 
-// Config holds the config options that need to be passed down to all ocdav handlers
+// Config holds the config options for the HTTP appprovider service
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
@@ -62,7 +74,8 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	conf *Config
+	conf   *Config
+	router *chi.Mux
 }
 
 // New returns a new ocmd object
@@ -74,10 +87,24 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 	conf.init()
 
+	r := chi.NewRouter()
 	s := &svc{
-		conf: conf,
+		conf:   conf,
+		router: r,
 	}
+
+	if err := s.routerInit(); err != nil {
+		return nil, err
+	}
+
 	return s, nil
+}
+
+func (s *svc) routerInit() error {
+	s.router.Get("/list", s.handleList)
+	s.router.Post("/new", s.handleNew)
+	s.router.Post("/open", s.handleOpen)
+	return nil
 }
 
 // Close performs cleanup.
@@ -95,6 +122,7 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+<<<<<<< HEAD
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
@@ -118,6 +146,9 @@ func (s *svc) Handler() http.Handler {
 		default:
 			writeError(w, r, appErrorUnimplemented, "unsupported method", nil)
 		}
+=======
+		s.router.ServeHTTP(w, r)
+>>>>>>> master
 	})
 }
 
@@ -133,6 +164,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("template") != "" {
 		// TODO in the future we want to create a file out of the given template
 		writeError(w, r, appErrorUnimplemented, "template is not implemented", nil)
+<<<<<<< HEAD
 		return
 	}
 
@@ -181,6 +213,56 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+=======
+		return
+	}
+
+	parentContainerID := r.URL.Query().Get("parent_container_id")
+	if parentContainerID == "" {
+		writeError(w, r, appErrorInvalidParameter, "missing parent container ID", nil)
+		return
+	}
+
+	parentContainerRef := resourceid.OwnCloudResourceIDUnwrap(parentContainerID)
+	if parentContainerRef == nil {
+		writeError(w, r, appErrorInvalidParameter, "invalid parent container ID", nil)
+		return
+	}
+
+	filename := r.URL.Query().Get("filename")
+	if filename == "" {
+		writeError(w, r, appErrorInvalidParameter, "missing filename", nil)
+		return
+	}
+
+	dirPart, filePart := path.Split(filename)
+	if dirPart != "" || filePart != filename {
+		writeError(w, r, appErrorInvalidParameter, "the filename must not contain a path segment", nil)
+		return
+	}
+
+	statParentContainerReq := &provider.StatRequest{
+		Ref: &provider.Reference{
+			ResourceId: parentContainerRef,
+		},
+	}
+	parentContainer, err := client.Stat(ctx, statParentContainerReq)
+	if err != nil {
+		writeError(w, r, appErrorServerError, "error sending a grpc stat request", err)
+		return
+	}
+
+	if parentContainer.Status.Code != rpc.Code_CODE_OK {
+		writeError(w, r, appErrorNotFound, "the parent container is not accessible or does not exist", err)
+		return
+	}
+
+	if parentContainer.Info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		writeError(w, r, appErrorInvalidParameter, "the parent container id does not point to a container", nil)
+		return
+	}
+
+>>>>>>> master
 	fileRef := &provider.Reference{
 		Path: path.Join(parentContainer.Info.Path, utils.MakeRelativePath(filename)),
 	}
@@ -338,6 +420,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 
 	if fileID == "" {
 		writeError(w, r, appErrorInvalidParameter, "missing file ID", nil)
+<<<<<<< HEAD
 		return
 	}
 
@@ -350,6 +433,19 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	fileRef := &provider.Reference{
 		ResourceId: resourceID,
 		Path:       ".",
+=======
+		return
+	}
+
+	resourceID := resourceid.OwnCloudResourceIDUnwrap(fileID)
+	if resourceID == nil {
+		writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
+		return
+	}
+
+	fileRef := &provider.Reference{
+		ResourceId: resourceID,
+>>>>>>> master
 	}
 
 	statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: fileRef})

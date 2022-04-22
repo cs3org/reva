@@ -125,9 +125,13 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	return u, nil
 }
 
+<<<<<<< HEAD
 // GetUserByClaim implements the user.Manager interface. Looks up a user by
 // claim ('mail', 'username', 'userid') and returns the user.
 func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+=======
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
+>>>>>>> master
 	log := appctx.GetLogger(ctx)
 
 	log.Debug().Str("claim", claim).Str("value", value).Msg("GetUserByClaim")
@@ -151,6 +155,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 
 	u.Groups = groups
 
+<<<<<<< HEAD
 	return u, nil
 }
 
@@ -166,6 +171,26 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 
 	for _, entry := range entries {
 		u, err := m.ldapEntryToUser(entry)
+=======
+	id := &userpb.UserId{
+		Idp:      m.c.Idp,
+		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	}
+
+	groups := []string{}
+	if !skipFetchingGroups {
+		groups, err = m.GetUserGroups(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	gidNumber := m.c.Nobody
+	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
+	if gidValue != "" {
+		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+>>>>>>> master
 		if err != nil {
 			return nil, err
 		}
@@ -181,9 +206,29 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	return users, nil
 }
 
+<<<<<<< HEAD
 // GetUserGroups implements the user.Manager interface. Looks up all group membership of
 // the user with the supplied Id. Returns a string slice with the group ids
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
+=======
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
+	// TODO align supported claims with rest driver and the others, maybe refactor into common mapping
+	switch claim {
+	case "mail":
+		claim = m.c.Schema.Mail
+	case "uid":
+		claim = m.c.Schema.UIDNumber
+	case "gid":
+		claim = m.c.Schema.GIDNumber
+	case "username":
+		claim = m.c.Schema.CN
+	case "userid":
+		claim = m.c.Schema.UID
+	default:
+		return nil, errors.New("ldap: invalid field " + claim)
+	}
+
+>>>>>>> master
 	log := appctx.GetLogger(ctx)
 	if uid.Idp != "" && uid.Idp != m.c.Idp {
 		return nil, errtypes.NotFound("idp mismatch")
@@ -195,10 +240,27 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	return m.c.LDAPIdentity.GetLDAPUserGroups(log, m.ldapClient, userEntry)
 }
 
+<<<<<<< HEAD
 func (m *manager) ldapEntryToUser(entry *ldap.Entry) (*userpb.User, error) {
 	id, err := m.ldapEntryToUserID(entry)
 	if err != nil {
 		return nil, err
+=======
+	log.Debug().Interface("entries", sr.Entries).Msg("entries")
+
+	id := &userpb.UserId{
+		Idp:      m.c.Idp,
+		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	}
+
+	groups := []string{}
+	if !skipFetchingGroups {
+		groups, err = m.GetUserGroups(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+>>>>>>> master
 	}
 
 	gidNumber := m.c.Nobody
@@ -228,6 +290,7 @@ func (m *manager) ldapEntryToUser(entry *ldap.Entry) (*userpb.User, error) {
 	return u, nil
 }
 
+<<<<<<< HEAD
 func (m *manager) ldapEntryToUserID(entry *ldap.Entry) (*userpb.UserId, error) {
 	var uid string
 	if m.c.LDAPIdentity.User.Schema.IDIsOctetString {
@@ -239,6 +302,72 @@ func (m *manager) ldapEntryToUserID(entry *ldap.Entry) (*userpb.UserId, error) {
 		}
 	} else {
 		uid = entry.GetEqualFoldAttributeValue(m.c.LDAPIdentity.User.Schema.ID)
+=======
+func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
+	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
+	if err != nil {
+		return nil, err
+	}
+	defer l.Close()
+
+	// Search for the given clientID
+	searchRequest := ldap.NewSearchRequest(
+		m.c.BaseDN,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		m.getFindFilter(query),
+		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.UIDNumber, m.c.Schema.GIDNumber},
+		nil,
+	)
+
+	sr, err := l.Search(searchRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	users := []*userpb.User{}
+
+	for _, entry := range sr.Entries {
+		id := &userpb.UserId{
+			Idp:      m.c.Idp,
+			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.UID),
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		}
+
+		groups := []string{}
+		if !skipFetchingGroups {
+			groups, err = m.GetUserGroups(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		gidNumber := m.c.Nobody
+		gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
+		if gidValue != "" {
+			gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+		}
+		uidNumber := m.c.Nobody
+		uidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)
+		if uidValue != "" {
+			uidNumber, err = strconv.ParseInt(uidValue, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+		}
+		user := &userpb.User{
+			Id:          id,
+			Username:    entry.GetEqualFoldAttributeValue(m.c.Schema.CN),
+			Groups:      groups,
+			Mail:        entry.GetEqualFoldAttributeValue(m.c.Schema.Mail),
+			DisplayName: entry.GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
+			GidNumber:   gidNumber,
+			UidNumber:   uidNumber,
+		}
+		users = append(users, user)
+>>>>>>> master
 	}
 
 	return &userpb.UserId{

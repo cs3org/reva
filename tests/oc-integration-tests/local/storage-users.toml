@@ -42,4 +42,8 @@ temp_folder = "/var/tmp/reva/tmp"
 root = "/var/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
+<<<<<<< HEAD
 permissionssvc = "localhost:10000"
+=======
+gateway_addr = "0.0.0.0:19000"
+>>>>>>> master

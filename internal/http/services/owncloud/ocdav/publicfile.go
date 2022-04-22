@@ -83,6 +83,47 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 	})
 }
 
+<<<<<<< HEAD
+=======
+func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bool {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "adjustResourcePathInURL")
+	defer span.End()
+
+	// find actual file name
+	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
+	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
+
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return false
+	}
+	pathRes, err := client.GetPath(ctx, &provider.GetPathRequest{
+		ResourceId: tokenStatInfo.GetId(),
+	})
+	if err != nil {
+		sublog.Error().Msg("Could not get path of resource")
+		w.WriteHeader(http.StatusInternalServerError)
+		return false
+	}
+	if pathRes.Status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, pathRes.Status)
+		return false
+	}
+	if path.Base(r.URL.Path) != path.Base(pathRes.Path) {
+		sublog.Debug().
+			Str("requestbase", path.Base(r.URL.Path)).
+			Str("pathbase", path.Base(pathRes.Path)).
+			Msg("base paths don't match")
+		w.WriteHeader(http.StatusConflict)
+		return false
+	}
+
+	return true
+}
+
+>>>>>>> master
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns string, onContainer bool) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "token_propfind")
@@ -107,10 +148,40 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		return
 	}
 
+<<<<<<< HEAD
 	// prefix tokenStatInfo.Path with token
 	tokenStatInfo.Path = filepath.Join(r.URL.Path, tokenStatInfo.Path)
 
 	infos := s.getPublicFileInfos(onContainer, depth == net.DepthZero, tokenStatInfo)
+=======
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// find actual file name
+	pathRes, err := client.GetPath(ctx, &provider.GetPathRequest{
+		ResourceId: tokenStatInfo.GetId(),
+	})
+	if err != nil {
+		sublog.Warn().Msg("Could not get path of resource")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if pathRes.Status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, pathRes.Status)
+		return
+	}
+
+	if !onContainer && path.Base(r.URL.Path) != path.Base(pathRes.Path) {
+		// if queried on the wrong path, return not found
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
+>>>>>>> master
 
 	propRes, err := propfind.MultistatusResponse(ctx, &pf, infos, s.c.PublicURL, ns, "", nil)
 	if err != nil {

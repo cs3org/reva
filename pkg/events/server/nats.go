@@ -19,6 +19,7 @@
 package server
 
 import (
+<<<<<<< HEAD
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -51,10 +52,32 @@ func RunNatsServer(opts ...Option) error {
 
 	server.Start()
 	return nil
+=======
+	"fmt"
+
+	"github.com/asim/go-micro/plugins/events/nats/v4"
+	"github.com/cenkalti/backoff"
+	"go-micro.dev/v4/events"
+
+	stanServer "github.com/nats-io/nats-streaming-server/server"
+)
+
+// RunNatsServer runs the nats streaming server
+func RunNatsServer(opts ...Option) error {
+	natsOpts := stanServer.DefaultNatsServerOptions
+	stanOpts := stanServer.GetDefaultOptions()
+
+	for _, o := range opts {
+		o(&natsOpts, stanOpts)
+	}
+	_, err := stanServer.RunServerWithOpts(stanOpts, &natsOpts)
+	return err
+>>>>>>> master
 }
 
 // NewNatsStream returns a streaming client used by `Consume` and `Publish` methods
 // retries exponentially to connect to a nats server
+<<<<<<< HEAD
 func NewNatsStream(opts ...natsjs.Option) (events.Stream, error) {
 	b := backoff.NewExponentialBackOff()
 	var stream events.Stream
@@ -63,6 +86,16 @@ func NewNatsStream(opts ...natsjs.Option) (events.Stream, error) {
 		s, err := natsjs.NewStream(opts...)
 		if err != nil && n > time.Second {
 			logger.New().Error().Err(err).Msgf("can't connect to nats (jetstream) server, retrying in %s", n)
+=======
+func NewNatsStream(opts ...nats.Option) (events.Stream, error) {
+	b := backoff.NewExponentialBackOff()
+	var stream events.Stream
+	o := func() error {
+		s, err := nats.NewStream(opts...)
+		if err != nil {
+			// TODO: should we get the standard logger here? if yes: How?
+			fmt.Printf("can't connect to nats (stan) server, retrying in %s\n", b.NextBackOff())
+>>>>>>> master
 		}
 		stream = s
 		return err

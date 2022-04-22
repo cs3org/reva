@@ -84,12 +84,16 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
+<<<<<<< HEAD
 	return []string{
 		"/v1.php/config",
 		"/v2.php/config",
 		"/v1.php/apps/files_sharing/api/v1/tokeninfo/unprotected",
 		"/v2.php/apps/files_sharing/api/v1/tokeninfo/unprotected",
 	}
+=======
+	return []string{"/v1.php/cloud/capabilities", "/v2.php/cloud/capabilities"}
+>>>>>>> master
 }
 
 func (s *svc) routerInit() error {

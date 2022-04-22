@@ -20,6 +20,10 @@ package loader
 
 import (
 	// Load permission manager drivers
+<<<<<<< HEAD
 	_ "github.com/cs3org/reva/v2/pkg/permission/manager/demo"
+=======
+	_ "github.com/cs3org/reva/pkg/permission/manager/demo"
+>>>>>>> master
 	// Add your own here
 )

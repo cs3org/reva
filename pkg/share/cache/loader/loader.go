@@ -20,6 +20,11 @@ package loader
 
 import (
 	// Load share cache drivers.
+<<<<<<< HEAD
 	_ "github.com/cs3org/reva/v2/pkg/share/cache/cbox"
+=======
+	_ "github.com/cs3org/reva/pkg/share/cache/memory"
+	_ "github.com/cs3org/reva/pkg/share/cache/redis"
+>>>>>>> master
 	// Add your own here
 )

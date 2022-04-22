@@ -19,6 +19,7 @@
 package eventsmiddleware
 
 import (
+<<<<<<< HEAD
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -29,11 +30,21 @@ import (
 // ShareCreated converts the response to an event
 func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
 	return events.ShareCreated{
+=======
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	"github.com/cs3org/reva/pkg/events"
+)
+
+// ShareCreated converts response to event
+func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
+	e := events.ShareCreated{
+>>>>>>> master
 		Sharer:         r.Share.Creator,
 		GranteeUserID:  r.Share.GetGrantee().GetUserId(),
 		GranteeGroupID: r.Share.GetGrantee().GetGroupId(),
 		ItemID:         r.Share.ResourceId,
 		CTime:          r.Share.Ctime,
+<<<<<<< HEAD
 		Permissions:    r.Share.Permissions,
 	}
 }
@@ -254,3 +265,9 @@ func extractOwner(u *user.User) *user.UserId {
 	}
 	return nil
 }
+=======
+	}
+
+	return e
+}
+>>>>>>> master

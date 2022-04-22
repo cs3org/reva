@@ -61,7 +61,11 @@ type FS interface {
 	SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
 	GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error)
 	RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
+<<<<<<< HEAD
 	Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
+=======
+	Unlock(ctx context.Context, ref *provider.Reference) error
+>>>>>>> master
 	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)

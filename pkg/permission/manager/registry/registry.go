@@ -18,7 +18,11 @@
 
 package registry
 
+<<<<<<< HEAD
 import "github.com/cs3org/reva/v2/pkg/permission"
+=======
+import "github.com/cs3org/reva/pkg/permission"
+>>>>>>> master
 
 // NewFunc is the function that permission managers
 // should register at init time.

@@ -30,6 +30,7 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+<<<<<<< HEAD
 	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
@@ -40,6 +41,15 @@ import (
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
+=======
+	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
+>>>>>>> master
 	"github.com/rs/zerolog"
 )
 
@@ -142,12 +152,21 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	info := sRes.Info
 
+<<<<<<< HEAD
 	w.Header().Set(net.HeaderContentType, info.MimeType)
 	w.Header().Set(net.HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
 		path.Base(r.URL.Path)+"; filename=\""+path.Base(r.URL.Path)+"\"")
 	w.Header().Set(net.HeaderETag, info.Etag)
 	w.Header().Set(net.HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
 	w.Header().Set(net.HeaderOCETag, info.Etag)
+=======
+	w.Header().Set(HeaderContentType, info.MimeType)
+	w.Header().Set(HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
+		path.Base(r.URL.Path)+"; filename=\""+path.Base(r.URL.Path)+"\"")
+	w.Header().Set(HeaderETag, info.Etag)
+	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
+	w.Header().Set(HeaderOCETag, info.Etag)
+>>>>>>> master
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set(net.HeaderLastModified, lastModifiedString)

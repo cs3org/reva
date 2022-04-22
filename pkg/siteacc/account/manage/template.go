@@ -19,7 +19,7 @@
 package manage
 
 const tplJavaScript = `
-function handleSettings() {
+function handleAccountSettings() {
 	setState(STATE_STATUS, "Redirecting to the account settings...");
 	window.location.replace("{{getServerAddress}}/account/?path=settings");
 }
@@ -29,14 +29,14 @@ function handleEditAccount() {
 	window.location.replace("{{getServerAddress}}/account/?path=edit");
 }
 
-function handleRequestAccess() {
-	setState(STATE_STATUS, "Redirecting to the contact form...");		
-	window.location.replace("{{getServerAddress}}/account/?path=contact&subject=" + encodeURIComponent("Request GOCDB access"));
+function handleSiteSettings() {
+	setState(STATE_STATUS, "Redirecting to the site settings...");
+	window.location.replace("{{getServerAddress}}/account/?path=site");
 }
 
-function handleRequestKey() {
-	setState(STATE_STATUS, "Redirecting to the contact form...");
-	window.location.replace("{{getServerAddress}}/account/?path=contact&subject=" + encodeURIComponent("Request API key"));
+function handleRequestAccess(scope) {
+	setState(STATE_STATUS, "Redirecting to the contact form...");		
+	window.location.replace("{{getServerAddress}}/account/?path=contact&subject=" + encodeURIComponent("Request " + scope + " access"));
 }
 
 function handleLogout() {
@@ -63,19 +63,15 @@ const tplStyleSheet = `
 html * {
 	font-family: arial !important;
 }
-
-.apikey {
-	font-family: monospace !important;
-	background: antiquewhite;
-	border: 1px solid black;
-	padding: 2px;
+button {
+	min-width: 170px;
 }
 `
 
 const tplBody = `
 <div>
 	<p><strong>Hello {{.Account.FirstName}} {{.Account.LastName}},</strong></p>
-	<p>On this page, you can manage your ScienceMesh user account. This includes editing your personal information, requesting an API key or access to the GOCDB and more.</p>
+	<p>On this page, you can manage your ScienceMesh Site Administrator Account. This includes editing your personal information, requesting access to the GOCDB and more.</p>
 </div>
 <div>&nbsp;</div>
 <div>
@@ -92,20 +88,45 @@ const tplBody = `
 </div>
 <div>
 	<strong>Account data:</strong>
-	<ul style="margin-top: 0em;">
-		<li {{if .Account.Data.APIKey}}style="margin-bottom: 0.2em;"{{end}}>API Key: <em>{{if .Account.Data.APIKey}}<span class="apikey">{{.Account.Data.APIKey}}</span>{{else}}(no key assigned yet){{end}}</em></li>	
-		<li>GOCDB access: <em>{{if .Account.Data.GOCDBAccess}}Granted{{else}}Not granted{{end}}</em></li>
+	<ul style="margin-top: 0em;">	
+		<li>Site access: <em>{{if .Account.Data.SiteAccess}}Granted{{else}}Not granted{{end}}</em></li>
+		<li>GOCDB access: <em>{{if .Account.Data.GOCDBAccess}}Granted{{else}}Not granted{{end}}</em></li>	
 	</ul>
 </div>
 <div>
 	<form id="form" method="POST" class="box" style="width: 100%;">
-		<button type="button" onClick="handleSettings();">Settings</button>
-		<button type="button" onClick="handleEditAccount();">Edit account</button>
-		<span style="width: 25px;">&nbsp;</span>
-		<button type="button" onClick="handleRequestKey();" {{if .Account.Data.APIKey}}disabled{{end}}>Request API Key</button>
-		<button type="button" onClick="handleRequestAccess();" {{if .Account.Data.GOCDBAccess}}disabled{{end}}>Request GOCDB access</button>
-		
-		<button type="button" onClick="handleLogout();" style="float: right;">Logout</button>
+		<div>
+			<button type="button" onClick="handleAccountSettings();">Account settings</button>
+			<button type="button" onClick="handleEditAccount();">Edit account</button>
+			<span style="width: 25px;">&nbsp;</span>
+			
+			{{if .Account.Data.SiteAccess}}
+			<button type="button" onClick="handleSiteSettings();">Site settings</button>
+			<span style="width: 25px;">&nbsp;</span>
+			{{end}}	
+
+			<button type="button" onClick="handleLogout();" style="float: right;">Logout</button>
+		</div>
+		<div style="margin-top: 0.5em;">
+			<button type="button" onClick="handleRequestAccess('Site');" {{if .Account.Data.SiteAccess}}disabled{{end}}>Request Site access</button>
+			<button type="button" onClick="handleRequestAccess('GOCDB');" {{if .Account.Data.GOCDBAccess}}disabled{{end}}>Request GOCDB access</button>	
+		</div>
 	</form>
+</div>
+<div style="font-size: 90%; margin-top: 1em;">
+	<div>
+		<div>Notes:</div>
+		<ul style="margin-top: 0em;">
+			<li>The <em>Site access</em> allows you to access and modify the global configuration of your site.</li>
+			<li>The <em>GOCDB access</em> allows you to log into the central database where all site metadata is stored.</li>
+		</ul>
+	</div>
+	<div>
+		<div>Quick links:</div>
+		<ul style="margin-top: 0em;">
+			<li><a href="https://gocdb.sciencemesh.uni-muenster.de" target="_blank">Central Database (GOCDB)</a></li>
+			<li><a href="https://developer.sciencemesh.io/docs/technical-documentation/central-database/" target="_blank">Central Database documentation</a></li>
+		</ul>
+	</div>
 </div>
 `

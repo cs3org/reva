@@ -31,6 +31,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+<<<<<<< HEAD
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
@@ -40,6 +41,14 @@ import (
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
+=======
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
+>>>>>>> master
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
@@ -325,11 +334,19 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 				isPublic,
 			)
 
+<<<<<<< HEAD
 			w.Header().Set(net.HeaderContentType, info.MimeType)
 			w.Header().Set(net.HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
 			w.Header().Set(net.HeaderOCETag, info.Etag)
 			w.Header().Set(net.HeaderETag, info.Etag)
 			w.Header().Set(net.HeaderOCPermissions, permissions)
+=======
+			w.Header().Set(HeaderContentType, info.MimeType)
+			w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
+			w.Header().Set(HeaderOCETag, info.Etag)
+			w.Header().Set(HeaderETag, info.Etag)
+			w.Header().Set(HeaderOCPermissions, permissions)
+>>>>>>> master
 
 			t := utils.TSToTime(info.Mtime).UTC()
 			lastModifiedString := t.Format(time.RFC1123Z)

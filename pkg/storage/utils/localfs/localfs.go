@@ -76,7 +76,7 @@ func (c *Config) init() {
 	}
 
 	if c.DataTransfersFolder == "" {
-		c.DataTransfersFolder = "/Data-Transfers"
+		c.DataTransfersFolder = "/DataTransfers"
 	}
 
 	// ensure share folder always starts with slash
@@ -731,7 +731,11 @@ func (fs *localfs) RefreshLock(ctx context.Context, ref *provider.Reference, loc
 }
 
 // Unlock removes an existing lock from the given reference
+<<<<<<< HEAD
 func (fs *localfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+=======
+func (fs *localfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+>>>>>>> master
 	return errtypes.NotSupported("unimplemented")
 }
 

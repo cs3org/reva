@@ -27,9 +27,9 @@ import (
 
 // Manager is the interface to implement to manipulate groups.
 type Manager interface {
-	GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error)
-	GetGroupByClaim(ctx context.Context, claim, value string) (*grouppb.Group, error)
-	FindGroups(ctx context.Context, query string) ([]*grouppb.Group, error)
+	GetGroup(ctx context.Context, gid *grouppb.GroupId, skipFetchingMembers bool) (*grouppb.Group, error)
+	GetGroupByClaim(ctx context.Context, claim, value string, skipFetchingMembers bool) (*grouppb.Group, error)
+	FindGroups(ctx context.Context, query string, skipFetchingMembers bool) ([]*grouppb.Group, error)
 	GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*userpb.UserId, error)
 	HasMember(ctx context.Context, gid *grouppb.GroupId, uid *userpb.UserId) (bool, error)
 }

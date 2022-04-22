@@ -20,13 +20,19 @@ package ocdav
 
 import (
 	"context"
+<<<<<<< HEAD
+=======
+	"fmt"
+>>>>>>> master
 	"net/http"
 	"path"
 	"strings"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+<<<<<<< HEAD
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -40,10 +46,32 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/favorite"
 	"github.com/cs3org/reva/v2/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+=======
+	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage/favorite"
+	"github.com/cs3org/reva/pkg/storage/favorite/registry"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
+>>>>>>> master
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
 
+<<<<<<< HEAD
+=======
+type ctxKey int
+
+const (
+	ctxKeyBaseURI ctxKey = iota
+)
+
+>>>>>>> master
 var (
 	nameRules = [...]nameRule{
 		nameNotEmpty{},
@@ -85,11 +113,20 @@ type Config struct {
 	// Example: if WebdavNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
+<<<<<<< HEAD
 	WebdavNamespace        string                            `mapstructure:"webdav_namespace"`
 	SharesNamespace        string                            `mapstructure:"shares_namespace"`
 	GatewaySvc             string                            `mapstructure:"gatewaysvc"`
 	Timeout                int64                             `mapstructure:"timeout"`
 	Insecure               bool                              `mapstructure:"insecure"`
+=======
+	WebdavNamespace string `mapstructure:"webdav_namespace"`
+	GatewaySvc      string `mapstructure:"gatewaysvc"`
+	Timeout         int64  `mapstructure:"timeout"`
+	Insecure        bool   `mapstructure:"insecure"`
+	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
+	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
+>>>>>>> master
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
@@ -105,6 +142,7 @@ func (c *Config) init() {
 }
 
 type svc struct {
+<<<<<<< HEAD
 	c                *Config
 	webDavHandler    *WebDavHandler
 	davHandler       *DavHandler
@@ -116,6 +154,14 @@ type svc struct {
 
 func (s *svc) Config() *Config {
 	return s.c
+=======
+	c                   *Config
+	webDavHandler       *WebDavHandler
+	davHandler          *DavHandler
+	favoritesManager    favorite.Manager
+	client              *http.Client
+	userIdentifierCache *ttlcache.Cache
+>>>>>>> master
 }
 
 func getFavoritesManager(c *Config) (favorite.Manager, error) {
@@ -164,9 +210,16 @@ func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
+<<<<<<< HEAD
 		favoritesManager: fm,
 		LockSystem:       ls,
+=======
+		favoritesManager:    fm,
+		userIdentifierCache: ttlcache.NewCache(),
+>>>>>>> master
 	}
+	_ = s.userIdentifierCache.SetTTL(60 * time.Second)
+
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
 		return nil, err
@@ -277,6 +330,7 @@ func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool
 		var requestUsernameOrID string
 		requestUsernameOrID, requestPath = router.ShiftPath(requestPath)
 
+<<<<<<< HEAD
 		gatewayClient, err := s.getClient()
 		if err != nil {
 			return "", "", err
@@ -317,6 +371,8 @@ func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool
 	return templates.WithUser(u, ns), requestPath, nil
 }
 
+=======
+>>>>>>> master
 func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	headers := w.Header()
 	// the webdav api is accessible from anywhere

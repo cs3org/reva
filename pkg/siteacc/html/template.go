@@ -106,6 +106,9 @@ const panelTemplate = `
 		label {
 			font-weight: bold;
 		}
+		h1 {
+			text-align: center;
+		}
 
 		.box {
 			width: 100%;

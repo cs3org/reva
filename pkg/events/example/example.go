@@ -22,19 +22,31 @@ import (
 	"log"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/example/consumer"
 	"github.com/cs3org/reva/v2/pkg/events/example/publisher"
 	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/go-micro/plugins/v4/events/natsjs"
+=======
+	"github.com/asim/go-micro/plugins/events/nats/v4"
+	"github.com/cs3org/reva/pkg/events"
+	"github.com/cs3org/reva/pkg/events/example/consumer"
+	"github.com/cs3org/reva/pkg/events/example/publisher"
+	"github.com/cs3org/reva/pkg/events/server"
+>>>>>>> master
 )
 
 // Simple example of an event workflow
 func main() {
 	// start a server
+<<<<<<< HEAD
 	go Server()
 
 	time.Sleep(5 * time.Second)
+=======
+	Server()
+>>>>>>> master
 
 	// obtain a client
 	c := Client()
@@ -55,11 +67,15 @@ func main() {
 
 // Server generates a nats server
 func Server() {
+<<<<<<< HEAD
 	err := server.RunNatsServer(
 		server.ClusterID("test-cluster"),
 		server.Host("127.0.0.1"),
 		server.Port(9233),
 	)
+=======
+	err := server.RunNatsServer()
+>>>>>>> master
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -67,10 +83,14 @@ func Server() {
 
 // Client builds a nats client
 func Client() events.Stream {
+<<<<<<< HEAD
 	c, err := server.NewNatsStream(
 		natsjs.Address("127.0.0.1:9233"),
 		natsjs.ClusterID("test-cluster"),
 	)
+=======
+	c, err := server.NewNatsStream(nats.Address("127.0.0.1:4222"), nats.ClusterID("test-cluster"))
+>>>>>>> master
 	if err != nil {
 		log.Fatal(err)
 	}

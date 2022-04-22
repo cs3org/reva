@@ -44,6 +44,49 @@ const (
 	MethodReport    = "REPORT"
 )
 
+<<<<<<< HEAD
+=======
+// Common HTTP headers.
+const (
+	HeaderAcceptRanges               = "Accept-Ranges"
+	HeaderAccessControlAllowHeaders  = "Access-Control-Allow-Headers"
+	HeaderAccessControlExposeHeaders = "Access-Control-Expose-Headers"
+	HeaderContentDisposistion        = "Content-Disposition"
+	HeaderContentLength              = "Content-Length"
+	HeaderContentRange               = "Content-Range"
+	HeaderContentType                = "Content-Type"
+	HeaderETag                       = "ETag"
+	HeaderLastModified               = "Last-Modified"
+	HeaderLocation                   = "Location"
+	HeaderRange                      = "Range"
+	HeaderIfMatch                    = "If-Match"
+)
+
+// Non standard HTTP headers.
+const (
+	HeaderOCFileID             = "OC-FileId"
+	HeaderOCETag               = "OC-ETag"
+	HeaderOCChecksum           = "OC-Checksum"
+	HeaderOCPermissions        = "OC-Perm"
+	HeaderDepth                = "Depth"
+	HeaderDav                  = "DAV"
+	HeaderTusResumable         = "Tus-Resumable"
+	HeaderTusVersion           = "Tus-Version"
+	HeaderTusExtension         = "Tus-Extension"
+	HeaderTusChecksumAlgorithm = "Tus-Checksum-Algorithm"
+	HeaderTusUploadExpires     = "Upload-Expires"
+	HeaderDestination          = "Destination"
+	HeaderOverwrite            = "Overwrite"
+	HeaderUploadChecksum       = "Upload-Checksum"
+	HeaderUploadLength         = "Upload-Length"
+	HeaderUploadMetadata       = "Upload-Metadata"
+	HeaderUploadOffset         = "Upload-Offset"
+	HeaderOCMtime              = "X-OC-Mtime"
+	HeaderExpectedEntityLength = "X-Expected-Entity-Length"
+	HeaderTransferAuth         = "TransferHeaderAuthorization"
+)
+
+>>>>>>> master
 // WebDavHandler implements a dav endpoint
 type WebDavHandler struct {
 	namespace         string
