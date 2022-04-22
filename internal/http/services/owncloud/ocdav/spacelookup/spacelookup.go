@@ -83,6 +83,12 @@ func LookUpStorageSpaceForPath(ctx context.Context, client gateway.GatewayAPICli
 		return nil, status.NewNotFound(ctx, "no space found"), nil
 	case 1:
 		return lSSRes.StorageSpaces[0], lSSRes.Status, nil
+	default:
+		for _, s := range lSSRes.StorageSpaces {
+			if strings.Contains(path, s.Root.GetOpaqueId()) {
+				return s, lSSRes.Status, nil
+			}
+		}
 	}
 
 	return nil, status.NewInternal(ctx, "too many spaces returned"), nil

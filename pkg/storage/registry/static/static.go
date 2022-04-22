@@ -260,12 +260,17 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 
 // findAllProviders returns a list of all storage providers
 func (b *reg) findAllProviders(ctx context.Context) []*registrypb.ProviderInfo {
+	unique := make(map[string]struct{})
 	pis := make([]*registrypb.ProviderInfo, 0, len(b.c.Rules))
 	for _, rule := range b.c.Rules {
 		addr, _ := getProviderAddr(ctx, rule)
+		if _, ok := unique[addr]; ok {
+			continue
+		}
 		pis = append(pis, &registrypb.ProviderInfo{
 			Address: addr,
 		})
+		unique[addr] = struct{}{}
 	}
 	return pis
 }
