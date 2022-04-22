@@ -68,7 +68,6 @@
 ### [no command equivalent to occ](https://github.com/owncloud/ocis/issues/1317)
 - [apiMain/status.feature:5](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/status.feature#L5)
 
-### [ocs config endpoint only accessible by authorized users](https://github.com/owncloud/ocis/issues/1338)
 ### [HTTP 401 Unauthorized responses don't contain a body](https://github.com/owncloud/ocis/issues/1337)
 - [apiAuthOcs/ocsDELETEAuth.feature:9](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsDELETEAuth.feature#L9)
 - [apiAuthOcs/ocsGETAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L10)

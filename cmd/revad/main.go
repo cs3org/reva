@@ -28,10 +28,10 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/cs3org/reva/cmd/revad/internal/config"
-	"github.com/cs3org/reva/cmd/revad/internal/grace"
-	"github.com/cs3org/reva/cmd/revad/runtime"
-	"github.com/cs3org/reva/pkg/sysinfo"
+	"github.com/cs3org/reva/v2/cmd/revad/internal/config"
+	"github.com/cs3org/reva/v2/cmd/revad/internal/grace"
+	"github.com/cs3org/reva/v2/cmd/revad/runtime"
+	"github.com/cs3org/reva/v2/pkg/sysinfo"
 
 	"github.com/google/uuid"
 )

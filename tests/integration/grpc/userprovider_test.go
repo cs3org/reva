@@ -20,16 +20,17 @@ package grpc_test
 
 import (
 	"context"
+	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/v2/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	jwt "github.com/cs3org/reva/v2/pkg/token/manager/jwt"
 	"google.golang.org/grpc/metadata"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -74,7 +75,7 @@ var _ = Describe("user providers", func() {
 
 	AfterEach(func() {
 		for _, r := range revads {
-			Expect(r.Cleanup(CurrentGinkgoTestDescription().Failed))
+			Expect(r.Cleanup(CurrentSpecReport().Failed())).To(Succeed())
 		}
 	})
 
@@ -260,6 +261,23 @@ var _ = Describe("user providers", func() {
 				"users": "userprovider-demo.toml",
 			}
 			existingIdp = "http://localhost:9998"
+		})
+
+		assertGetUserResponses()
+		assertFindUsersResponses()
+		assertGetUserByClaimResponses()
+	})
+
+	Describe("the ldap userprovider", func() {
+		runldap := os.Getenv("RUN_LDAP_TESTS")
+		BeforeEach(func() {
+			if runldap == "" {
+				Skip("Skipping LDAP tests")
+			}
+			dependencies = map[string]string{
+				"users": "userprovider-ldap.toml",
+			}
+			existingIdp = "http://localhost:20080"
 		})
 
 		assertGetUserResponses()

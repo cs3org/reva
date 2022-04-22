@@ -31,7 +31,7 @@ import (
 	"syscall"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 )
 
 // TODO(jfd) get rid of the differences between unix and windows. the inode and dev should never be used for the etag because it interferes with backups
@@ -69,16 +69,17 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	return strings.Trim(etag, "\"")
 }
 
-func (fs *owncloudsqlfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
+func (fs *owncloudsqlfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
 	// TODO quota of which storage space?
 	// we could use the logged in user, but when a user has access to multiple storages this falls short
 	// for now return quota of root
 	stat := syscall.Statfs_t{}
 	err := syscall.Statfs(fs.toInternalPath(ctx, "/"), &stat)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	total := stat.Blocks * uint64(stat.Bsize)                // Total data blocks in filesystem
 	used := (stat.Blocks - stat.Bavail) * uint64(stat.Bsize) // Free blocks available to unprivileged user
-	return total, used, nil
+	remaining := total - used
+	return total, used, remaining, nil
 }

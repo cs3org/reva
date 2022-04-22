@@ -40,9 +40,6 @@ type Options struct {
 	// TODO NodeLayout option to save nodes as eg. nodes/1d/d8/1dd84abf-9466-4e14-bb86-02fc4ea3abcf
 	ShareFolder string `mapstructure:"share_folder"`
 
-	// EnableHome enables the creation of home directories.
-	EnableHome bool `mapstructure:"enable_home"`
-
 	// propagate mtime changes as tmtime (tree modification time) to the parent directory when user.ocis.propagation=1 is set on a node
 	TreeTimeAccounting bool `mapstructure:"treetime_accounting"`
 
@@ -79,6 +76,14 @@ func New(m map[string]interface{}) (*Options, error) {
 
 	// c.DataDirectory should never end in / unless it is the root
 	o.Root = filepath.Clean(o.Root)
+
+	if o.PersonalSpaceAliasTemplate == "" {
+		o.PersonalSpaceAliasTemplate = "{{.SpaceType}}/{{.User.Username}}"
+	}
+
+	if o.GeneralSpaceAliasTemplate == "" {
+		o.GeneralSpaceAliasTemplate = "{{.SpaceType}}/{{.SpaceName | replace \" \" \"-\" | lower}}"
+	}
 
 	return o, nil
 }

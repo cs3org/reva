@@ -25,8 +25,8 @@ import (
 	"path"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/pkg/errors"
 )
 
@@ -40,11 +40,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		return errtypes.PermissionDenied("eos: cannot upload under the virtual share folder")
 	}
 
-	ok, err := chunking.IsChunked(p)
-	if err != nil {
-		return errors.Wrap(err, "eos: error checking path")
-	}
-	if ok {
+	if chunking.IsChunked(p) {
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {

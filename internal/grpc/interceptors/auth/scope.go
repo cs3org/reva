@@ -127,7 +127,6 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 			}
 		}
 	}
-
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
 }
 
@@ -207,7 +206,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 	parentPath := statResponse.Info.Path
 
 	childPath := ref.GetPath()
-	if childPath == "" {
+	if childPath == "" || childPath == "." {
 		// We mint a token as the owner of the public share and try to stat the reference
 		// TODO(ishank011): We need to find a better alternative to this
 
@@ -226,18 +225,17 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 		}
 		ctx = metadata.AppendToOutgoingContext(context.Background(), ctxpkg.TokenHeader, token)
 
-		childStat, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+		gpRes, err := client.GetPath(ctx, &provider.GetPathRequest{ResourceId: ref.ResourceId})
 		if err != nil {
 			return false, err
 		}
-		if childStat.Status.Code != rpc.Code_CODE_OK {
-			return false, statuspkg.NewErrorFromCode(childStat.Status.Code, "auth interceptor")
+		if gpRes.Status.Code != rpc.Code_CODE_OK {
+			return false, statuspkg.NewErrorFromCode(gpRes.Status.Code, "auth interceptor")
 		}
-		childPath = statResponse.Info.Path
+		childPath = gpRes.Path
 	}
 
 	return strings.HasPrefix(childPath, parentPath), nil
-
 }
 
 func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool) {
@@ -245,20 +243,49 @@ func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool)
 	// Read requests
 	case *registry.GetStorageProvidersRequest:
 		return v.GetRef(), true
+	case *registry.ListStorageProvidersRequest:
+		ref := &provider.Reference{}
+		if v.Opaque != nil && v.Opaque.Map != nil {
+			if e, ok := v.Opaque.Map["storage_id"]; ok {
+				ref.ResourceId = &provider.ResourceId{
+					StorageId: string(e.Value),
+				}
+			}
+			if e, ok := v.Opaque.Map["opaque_id"]; ok {
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
+				}
+				ref.ResourceId.OpaqueId = string(e.Value)
+			}
+			if e, ok := v.Opaque.Map["path"]; ok {
+				ref.Path = string(e.Value)
+			}
+		}
+		return ref, true
 	case *provider.StatRequest:
 		return v.GetRef(), true
 	case *provider.ListContainerRequest:
 		return v.GetRef(), true
 	case *provider.InitiateFileDownloadRequest:
 		return v.GetRef(), true
+
+	// Locking
+	case *provider.GetLockRequest:
+		return v.GetRef(), true
+	case *provider.SetLockRequest:
+		return v.GetRef(), true
+	case *provider.RefreshLockRequest:
+		return v.GetRef(), true
+	case *provider.UnlockRequest:
+		return v.GetRef(), true
+
+	// App provider requests
+	case *appregistry.GetAppProvidersRequest:
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	case *appprovider.OpenInAppRequest:
 		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	case *gateway.OpenInAppRequest:
 		return v.GetRef(), true
-
-		// App provider requests
-	case *appregistry.GetAppProvidersRequest:
-		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	}
 
 	if !hasEditorRole {

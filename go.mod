@@ -1,4 +1,4 @@
-module github.com/cs3org/reva
+module github.com/cs3org/reva/v2
 
 require (
 	bou.ke/monkey v1.0.2
@@ -26,6 +26,7 @@ require (
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-ldap/ldap/v3 v3.4.2
 	github.com/go-sql-driver/mysql v1.6.0
+	github.com/gofrs/flock v0.8.1
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang/protobuf v1.5.2
 	github.com/gomodule/redigo v1.8.8

@@ -19,7 +19,7 @@
 package utils
 
 import (
-	"fmt"
+	"errors"
 	"math/rand"
 	"net"
 	"net/http"
@@ -36,10 +36,14 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/registry"
-	"github.com/cs3org/reva/pkg/registry/memory"
+	"github.com/cs3org/reva/v2/pkg/registry"
+	"github.com/cs3org/reva/v2/pkg/registry/memory"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/encoding/protojson"
+)
+
+const (
+	spaceIDDelimiter = "!"
 )
 
 var (
@@ -49,6 +53,17 @@ var (
 	// GlobalRegistry configures a service registry globally accessible. It defaults to a memory registry. The usage of
 	// globals is not encouraged, and this is a workaround until the PR is out of a draft state.
 	GlobalRegistry registry.Registry = memory.New(map[string]interface{}{})
+
+	// ShareStorageProviderID is the id used by the sharestorageprovider
+	ShareStorageProviderID = "a0ca6a90-a365-4782-871e-d44447bbc668"
+
+	// PublicStorageProviderID is the id used by the sharestorageprovider
+	PublicStorageProviderID = "7993447f-687f-490d-875c-ac95e89a62a4"
+
+	// SpaceGrant is used to signal the storageprovider that the grant is on a space
+	SpaceGrant struct{}
+
+	errInvalidSpaceReference = errors.New("invalid storage space reference")
 )
 
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
@@ -135,6 +150,15 @@ func LaterTS(t1 *types.Timestamp, t2 *types.Timestamp) *types.Timestamp {
 		return t1
 	}
 	return t2
+}
+
+// TSNow returns the current UTC timestamp
+func TSNow() *types.Timestamp {
+	t := time.Now().UTC()
+	return &types.Timestamp{
+		Seconds: uint64(t.Unix()),
+		Nanos:   uint32(t.Nanosecond()),
+	}
 }
 
 // ExtractGranteeID returns the ID, user or group, set in the GranteeId object
@@ -302,15 +326,15 @@ func UserTypeToString(accountType userpb.UserType) string {
 	return t
 }
 
-// SplitStorageSpaceID can be used to split `storagespaceid` into `storageid` and `nodeid`
-// Currently they are built using `<storageid>!<nodeid>` in the decomposedfs, but other drivers might return different ids.
-// any place in the code that relies on this function should instead use the storage registry to look up the responsible storage provider.
-// Note: This would in effect change the storage registry into a storage space registry.
+// SplitStorageSpaceID can be used to split `storagespaceid` into `storageid` and `nodeid`.
+// If no specific node is appended with a `!` separator the spaceid is used as nodeid, identifying the root of the space.
 func SplitStorageSpaceID(ssid string) (storageid, nodeid string, err error) {
-	// query that specific storage provider
-	parts := strings.SplitN(ssid, "!", 2)
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("storage space id must be separated by '!'")
+	if ssid == "" {
+		return "", "", errors.New("can't split empty StorageSpaceID")
+	}
+	parts := strings.SplitN(ssid, spaceIDDelimiter, 2)
+	if len(parts) == 1 {
+		return parts[0], parts[0], nil
 	}
 	return parts[0], parts[1], nil
 }
@@ -339,6 +363,35 @@ func ParseStorageSpaceReference(sRef string) (provider.Reference, error) {
 	}, nil
 }
 
+// FormatStorageSpaceReference will format a storage space reference into a string representation.
+// If ref or ref.ResourceId are nil an error will be returned.
+// The function doesn't check if all values are set.
+// The resulting format can be:
+//
+// "storage_id!opaque_id"
+// "storage_id!opaque_id/path"
+// "storage_id/path"
+// "storage_id"
+func FormatStorageSpaceReference(ref *provider.Reference) (string, error) {
+	if ref == nil || ref.ResourceId == nil || ref.ResourceId.StorageId == "" {
+		return "", errInvalidSpaceReference
+	}
+	var ssid string
+	if ref.ResourceId.OpaqueId == "" {
+
+		ssid = ref.ResourceId.StorageId
+	} else {
+		var sb strings.Builder
+		// ssid == storage_id!opaque_id
+		sb.Grow(len(ref.ResourceId.StorageId) + len(ref.ResourceId.OpaqueId) + 1)
+		sb.WriteString(ref.ResourceId.StorageId)
+		sb.WriteString(spaceIDDelimiter)
+		sb.WriteString(ref.ResourceId.OpaqueId)
+		ssid = sb.String()
+	}
+	return path.Join(ssid, ref.Path), nil
+}
+
 // GetViewMode converts a human-readable string to a view mode for opening a resource in an app.
 func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 	switch viewMode {
@@ -351,4 +404,40 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 	default:
 		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
+}
+
+// AppendPlainToOpaque adds a new key value pair as a plain string on the given opaque and returns it
+func AppendPlainToOpaque(o *types.Opaque, key, value string) *types.Opaque {
+	if o == nil {
+		o = &types.Opaque{}
+	}
+	if o.Map == nil {
+		o.Map = map[string]*types.OpaqueEntry{}
+	}
+	o.Map[key] = &types.OpaqueEntry{
+		Decoder: "plain",
+		Value:   []byte(value),
+	}
+	return o
+}
+
+// ReadPlainFromOpaque reads a plain string from the given opaque map
+func ReadPlainFromOpaque(o *types.Opaque, key string) string {
+	if o == nil || o.Map == nil {
+		return ""
+	}
+	if e, ok := o.Map[key]; ok && e.Decoder == "plain" {
+		return string(e.Value)
+	}
+	return ""
+}
+
+// ExistsInOpaque returns true if the key exists in the opaque (ignoring the value)
+func ExistsInOpaque(o *types.Opaque, key string) bool {
+	if o == nil || o.Map == nil {
+		return false
+	}
+
+	_, ok := o.Map[key]
+	return ok
 }

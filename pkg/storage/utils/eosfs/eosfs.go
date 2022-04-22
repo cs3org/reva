@@ -38,21 +38,21 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/eosclient"
-	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
-	"github.com/cs3org/reva/pkg/eosclient/eosgrpc"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/mime"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/utils/acl"
-	"github.com/cs3org/reva/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/pkg/storage/utils/grants"
-	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/eosclient"
+	"github.com/cs3org/reva/v2/pkg/eosclient/eosbinary"
+	"github.com/cs3org/reva/v2/pkg/eosclient/eosgrpc"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/mime"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/pkg/errors"
 )
 
@@ -995,13 +995,13 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 
 // CreateStorageSpace creates a storage space
 func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+	return nil, errtypes.NotSupported("unimplemented: CreateStorageSpace")
 }
 
-func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
+func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
 	u, err := getUser(ctx)
 	if err != nil {
-		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
+		return 0, 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
 	}
 	// lightweight accounts don't have quota nodes, so we're passing an empty string as path
 	auth, err := fs.getUserAuth(ctx, u, "")
@@ -1011,16 +1011,18 @@ func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64,
 
 	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	qi, err := fs.c.GetQuota(ctx, auth.Role.UID, rootAuth, fs.conf.QuotaNode)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
-	return qi.AvailableBytes, qi.UsedBytes, nil
+	remaining := qi.AvailableBytes - qi.UsedBytes
+
+	return qi.AvailableBytes, qi.UsedBytes, remaining, nil
 }
 
 func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
@@ -1225,6 +1227,29 @@ func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	}
 	log.Info().Msgf("eosfs: touch file: path=%s", fn)
 
+	return fs.c.Touch(ctx, auth, fn)
+}
+
+// TouchFile as defined in the storage.FS interface
+func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	log := appctx.GetLogger(ctx)
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+	p, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil
+	}
+
+	auth, err := fs.getUserAuth(ctx, u, p)
+	if err != nil {
+		return err
+	}
+
+	log.Info().Msgf("eosfs: touch file: path=%s", p)
+
+	fn := fs.wrap(ctx, p)
 	return fs.c.Touch(ctx, auth, fn)
 }
 
@@ -1498,11 +1523,11 @@ func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 	return fs.c.RollbackToVersion(ctx, auth, fn, revisionKey)
 }
 
-func (fs *eosfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+func (fs *eosfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	return errtypes.NotSupported("eosfs: operation not supported")
 }
 
-func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
+func (fs *eosfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -1515,14 +1540,14 @@ func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
 	return fs.c.PurgeDeletedEntries(ctx, auth)
 }
 
-func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *eosfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
 	var auth eosclient.Authorization
 
-	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && basePath != "/" {
+	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && ref.Path != "/" {
 		// We need to access the recycle bin for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
-		md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+		md, err := fs.GetMD(ctx, &provider.Reference{Path: ref.Path}, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1566,14 +1591,14 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 	return recycleEntries, nil
 }
 
-func (fs *eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *eosfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	var auth eosclient.Authorization
 
-	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && basePath != "/" {
+	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && ref.Path != "/" {
 		// We need to access the recycle bin for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
-		md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+		md, err := fs.GetMD(ctx, &provider.Reference{Path: ref.Path}, nil)
 		if err != nil {
 			return err
 		}
@@ -1607,6 +1632,11 @@ func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 // UpdateStorageSpace updates a storage space
 func (fs *eosfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
+}
+
+// DeleteStorageSpace deletes a storage space
+func (fs *eosfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	return errtypes.NotSupported("delete storage space")
 }
 
 func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) (*provider.RecycleItem, error) {

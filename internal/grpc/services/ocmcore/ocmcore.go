@@ -118,7 +118,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	permOpaque, ok := req.Protocol.Opaque.Map["permissions"]
 	if !ok {
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, errtypes.BadRequest("resource permissions not set"), ""),
+			Status: status.NewInternal(ctx, "resource permissions not set"),
 		}, nil
 	}
 	switch permOpaque.Decoder {
@@ -126,13 +126,12 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 		err := json.Unmarshal(permOpaque.Value, &resourcePermissions)
 		if err != nil {
 			return &ocmcore.CreateOCMCoreShareResponse{
-				Status: status.NewInternal(ctx, err, "error decoding resource permissions"),
+				Status: status.NewInternal(ctx, "error decoding resource permissions"),
 			}, nil
 		}
 	default:
-		err := errtypes.NotSupported("opaque entry decoder not recognized")
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
+			Status: status.NewInternal(ctx, "invalid opaque entry decoder"),
 		}, nil
 	}
 
@@ -140,16 +139,15 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	tokenOpaque, ok := req.Protocol.Opaque.Map["token"]
 	if !ok {
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, errtypes.PermissionDenied("token not set"), ""),
+			Status: status.NewInternal(ctx, "token not set"),
 		}, nil
 	}
 	switch tokenOpaque.Decoder {
 	case "plain":
 		token = string(tokenOpaque.Value)
 	default:
-		err := errtypes.NotSupported("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
+			Status: status.NewInternal(ctx, "invalid opaque entry decoder"),
 		}, nil
 	}
 
@@ -186,7 +184,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, err, "error creating ocm core share"),
+			Status: status.NewInternal(ctx, "error creating ocm core share"),
 		}, nil
 	}
 

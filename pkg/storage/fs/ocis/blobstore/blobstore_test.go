@@ -24,17 +24,18 @@ import (
 	"os"
 	"path"
 
-	"github.com/cs3org/reva/pkg/storage/fs/ocis/blobstore"
-	"github.com/cs3org/reva/tests/helpers"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis/blobstore"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/tests/helpers"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Blobstore", func() {
 	var (
 		tmpRoot  string
-		key      string
+		blobNode *node.Node
 		blobPath string
 		data     []byte
 
@@ -47,10 +48,13 @@ var _ = Describe("Blobstore", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		data = []byte("1234567890")
-		key = "foo"
-		blobPath = path.Join(tmpRoot, "blobs", key)
+		blobNode = &node.Node{
+			SpaceID: "wonderfullspace",
+			BlobID:  "huuuuugeblob",
+		}
+		blobPath = path.Join(tmpRoot, "spaces", "wo", "nderfullspace", "blobs", "hu", "uu", "uu", "ge", "blob")
 
-		bs, err = blobstore.New(path.Join(tmpRoot, "blobs"))
+		bs, err = blobstore.New(path.Join(tmpRoot))
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -61,13 +65,13 @@ var _ = Describe("Blobstore", func() {
 	})
 
 	It("creates the root directory if it doesn't exist", func() {
-		_, err := os.Stat(path.Join(tmpRoot, "blobs"))
+		_, err := os.Stat(path.Join(tmpRoot))
 		Expect(err).ToNot(HaveOccurred())
 	})
 
 	Describe("Upload", func() {
 		It("writes the blob", func() {
-			err := bs.Upload(key, bytes.NewReader(data))
+			err := bs.Upload(blobNode, bytes.NewReader(data))
 			Expect(err).ToNot(HaveOccurred())
 
 			writtenBytes, err := ioutil.ReadFile(blobPath)
@@ -78,12 +82,13 @@ var _ = Describe("Blobstore", func() {
 
 	Context("with an existing blob", func() {
 		BeforeEach(func() {
+			Expect(os.MkdirAll(path.Dir(blobPath), 0700)).To(Succeed())
 			Expect(ioutil.WriteFile(blobPath, data, 0700)).To(Succeed())
 		})
 
 		Describe("Download", func() {
 			It("cleans the key", func() {
-				reader, err := bs.Download("../" + key)
+				reader, err := bs.Download(blobNode)
 				Expect(err).ToNot(HaveOccurred())
 
 				readData, err := ioutil.ReadAll(reader)
@@ -92,7 +97,7 @@ var _ = Describe("Blobstore", func() {
 			})
 
 			It("returns a reader to the blob", func() {
-				reader, err := bs.Download(key)
+				reader, err := bs.Download(blobNode)
 				Expect(err).ToNot(HaveOccurred())
 
 				readData, err := ioutil.ReadAll(reader)
@@ -106,7 +111,7 @@ var _ = Describe("Blobstore", func() {
 				_, err := os.Stat(blobPath)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = bs.Delete(key)
+				err = bs.Delete(blobNode)
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = os.Stat(blobPath)

@@ -28,14 +28,14 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 
-	"github.com/cs3org/reva/internal/http/services/ocmd"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/internal/http/services/ocmd"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/v2/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 )
 

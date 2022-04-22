@@ -24,6 +24,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/pkg/errors"
 )
 
@@ -45,39 +47,50 @@ func New(root string) (*Blobstore, error) {
 }
 
 // Upload stores some data in the blobstore under the given key
-func (bs *Blobstore) Upload(key string, data io.Reader) error {
-	f, err := os.OpenFile(bs.path(key), os.O_CREATE|os.O_WRONLY, 0700)
+func (bs *Blobstore) Upload(node *node.Node, data io.Reader) error {
+
+	// ensure parent path exists
+	if err := os.MkdirAll(filepath.Dir(bs.path(node)), 0700); err != nil {
+		return errors.Wrap(err, "Decomposedfs: oCIS blobstore: error creating parent folders for blob")
+	}
+
+	f, err := os.OpenFile(bs.path(node), os.O_CREATE|os.O_WRONLY, 0700)
 	if err != nil {
-		return errors.Wrapf(err, "could not open blob '%s' for writing", key)
+		return errors.Wrapf(err, "could not open blob '%s' for writing", bs.path(node))
 	}
 
 	w := bufio.NewWriter(f)
 	_, err = w.ReadFrom(data)
 	if err != nil {
-		return errors.Wrapf(err, "could not write blob '%s'", key)
+		return errors.Wrapf(err, "could not write blob '%s'", bs.path(node))
 	}
 
 	return w.Flush()
 }
 
 // Download retrieves a blob from the blobstore for reading
-func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
-	file, err := os.Open(bs.path(key))
+func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
+	file, err := os.Open(bs.path(node))
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not read blob '%s'", key)
+		return nil, errors.Wrapf(err, "could not read blob '%s'", bs.path(node))
 	}
 	return file, nil
 }
 
 // Delete deletes a blob from the blobstore
-func (bs *Blobstore) Delete(key string) error {
-	err := os.Remove(bs.path(key))
+func (bs *Blobstore) Delete(node *node.Node) error {
+	err := os.Remove(bs.path(node))
 	if err != nil {
-		return errors.Wrapf(err, "could not delete blob '%s'", key)
+		return errors.Wrapf(err, "could not delete blob '%s'", bs.path(node))
 	}
 	return nil
 }
 
-func (bs *Blobstore) path(key string) string {
-	return filepath.Join(bs.root, filepath.Clean(filepath.Join("/", key)))
+func (bs *Blobstore) path(node *node.Node) string {
+	return filepath.Join(
+		bs.root,
+		filepath.Clean(filepath.Join(
+			"/", "spaces", lookup.Pathify(node.SpaceID, 1, 2), "blobs", lookup.Pathify(node.BlobID, 4, 2)),
+		),
+	)
 }

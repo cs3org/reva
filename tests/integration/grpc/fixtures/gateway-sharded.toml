@@ -1,0 +1,39 @@
+[shared]
+jwt_secret = "changemeplease"
+gatewaysvc = "{{grpc_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.gateway]
+# registries
+storageregistrysvc = "{{grpc_address}}"
+stat_cache_ttl = 1
+permissionssvc = "{{permissions_address}}"
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "{{users_address}}"
+
+[grpc.services.storageregistry]
+driver = "spaces"
+
+[grpc.services.storageregistry.drivers.spaces]
+home_template = "/users/{{.Id.OpaqueId}}"
+
+# a sharded /projects folder
+[grpc.services.storageregistry.drivers.spaces.providers."{{storage_address}}".spaces]
+"project" = { "mount_point" = "/projects/[a-k]", "path_template" = "/projects/{{.Space.Name}}" }
+[grpc.services.storageregistry.drivers.spaces.providers."{{storage2_address}}".spaces]
+"project" = { "mount_point" = "/projects/[l-z]", "path_template" = "/projects/{{.Space.Name}}" }
+
+[grpc.services.storageregistry.drivers.spaces.providers."{{homestorage_address}}".spaces]
+"personal" = { "mount_point" = "/users", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}" }
+
+[http]
+address = "{{grpc_address+1}}"
+
+[http.services.datagateway]
+transfer_shared_secret = "replace-me-with-a-transfer-secret"

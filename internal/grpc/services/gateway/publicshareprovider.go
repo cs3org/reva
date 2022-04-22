@@ -23,17 +23,13 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
-	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
-		return nil, errtypes.AlreadyExists("gateway: can't create a public share of the share folder itself")
-	}
-
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
@@ -47,6 +43,7 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 		return nil, err
 	}
 
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.Share.ResourceId)
 	return res, nil
 }
 
@@ -62,6 +59,8 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShare
 	if err != nil {
 		return nil, err
 	}
+	// TODO: How to find out the resourceId?
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), nil)
 	return res, nil
 }
 
@@ -139,5 +138,6 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 	if err != nil {
 		return nil, errors.Wrap(err, "error updating share")
 	}
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.Share.ResourceId)
 	return res, nil
 }

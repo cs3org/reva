@@ -31,7 +31,7 @@ import (
 	"syscall"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 )
 
 // calcEtag will create an etag based on the md5 of
@@ -43,7 +43,7 @@ import (
 func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	log := appctx.GetLogger(ctx)
 	h := md5.New()
-	err := binary.Write(h, binary.BigEndian, fi.ModTime().Unix())
+	err := binary.Write(h, binary.BigEndian, fi.ModTime().UnixNano())
 	if err != nil {
 		log.Error().Err(err).Msg("error writing mtime")
 	}
@@ -67,16 +67,17 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	return fmt.Sprintf("\"%s\"", strings.Trim(etag, "\""))
 }
 
-func (fs *localfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
+func (fs *localfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
 	// TODO quota of which storage space?
 	// we could use the logged in user, but when a user has access to multiple storages this falls short
 	// for now return quota of root
 	stat := syscall.Statfs_t{}
 	err := syscall.Statfs(fs.wrap(ctx, "/"), &stat)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	total := stat.Blocks * uint64(stat.Bsize)                // Total data blocks in filesystem
 	used := (stat.Blocks - stat.Bavail) * uint64(stat.Bsize) // Free blocks available to unprivileged user
-	return total, used, nil
+	remaining := stat.Bavail * uint64(stat.Bsize)
+	return total, used, remaining, nil
 }

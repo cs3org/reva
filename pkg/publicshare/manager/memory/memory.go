@@ -31,11 +31,11 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/publicshare"
-	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/publicshare"
+	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 func init() {
@@ -104,7 +104,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 }
 
 // UpdatePublicShare updates the expiration date, permissions and Mtime
-func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
+func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest) (*link.PublicShare, error) {
 	log := appctx.GetLogger(ctx)
 	share, err := m.GetPublicShare(ctx, u, req.Ref, false)
 	if err != nil {
@@ -167,7 +167,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	return
 }
 
-func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
+func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
 	// TODO(refs) filter out expired shares
 	shares := []*link.PublicShare{}
 	m.shares.Range(func(k, v interface{}) bool {

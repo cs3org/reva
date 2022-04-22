@@ -27,13 +27,19 @@ import (
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc/metadata"
+)
+
+const (
+	_trashbinPath = "trash-bin"
 )
 
 type tokenStatInfoKey struct{}
@@ -48,6 +54,7 @@ type DavHandler struct {
 	SpacesHandler       *SpacesHandler
 	PublicFolderHandler *WebDavHandler
 	PublicFileHandler   *PublicFileHandler
+	SharesHandler       *WebDavHandler
 }
 
 func (h *DavHandler) init(c *Config) error {
@@ -68,6 +75,9 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 	h.TrashbinHandler = new(TrashbinHandler)
+	if err := h.TrashbinHandler.init(c); err != nil {
+		return err
+	}
 
 	h.SpacesHandler = new(SpacesHandler)
 	if err := h.SpacesHandler.init(c); err != nil {
@@ -84,7 +94,7 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 
-	return h.TrashbinHandler.init(c)
+	return nil
 }
 
 func isOwner(userIDorName string, user *userv1beta1.User) bool {
@@ -106,12 +116,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				r.URL.Path = path.Join(r.URL.Path, contextUser.Username)
 			}
 
-			if r.Header.Get("Depth") == "" {
+			if r.Header.Get(net.HeaderDepth) == "" {
 				w.WriteHeader(http.StatusMethodNotAllowed)
-				b, err := Marshal(exception{
-					code:    SabredavMethodNotAllowed,
-					message: "Listing members of this collection is disabled",
-				})
+				b, err := errors.Marshal(http.StatusMethodNotAllowed, "Listing members of this collection is disabled", "")
 				if err != nil {
 					log.Error().Msgf("error marshaling xml response: %s", b)
 					w.WriteHeader(http.StatusInternalServerError)
@@ -144,37 +151,37 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			contextUser, ok := ctxpkg.ContextGetUser(ctx)
 			if ok && isOwner(requestUserID, contextUser) {
 				// use home storage handler when user was detected
-				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
-				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+				base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "files", requestUserID)
+				ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 				r = r.WithContext(ctx)
 
 				h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
 			} else {
 				r.URL.Path = oldPath
-				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
-				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+				base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "files")
+				ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 				r = r.WithContext(ctx)
 
 				h.FilesHandler.Handler(s).ServeHTTP(w, r)
 			}
 		case "meta":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")
-			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
+			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "meta")
+			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.MetaHandler.Handler(s).ServeHTTP(w, r)
 		case "trash-bin":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "trash-bin")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "trash-bin")
+			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
 		case "spaces":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "spaces")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "spaces")
+			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
-			h.SpacesHandler.Handler(s).ServeHTTP(w, r)
+			h.SpacesHandler.Handler(s, h.TrashbinHandler).ServeHTTP(w, r)
 		case "public-files":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
-			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
+			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "public-files")
+			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			c, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
@@ -182,7 +189,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			var res *gatewayv1beta1.AuthenticateResponse
 			token, _ := router.ShiftPath(r.URL.Path)
-			if _, pass, ok := r.BasicAuth(); ok {
+			var hasValidBasicAuthHeader bool
+			var pass string
+			if _, pass, hasValidBasicAuthHeader = r.BasicAuth(); hasValidBasicAuthHeader {
 				res, err = handleBasicAuth(r.Context(), c, token, pass)
 			} else {
 				q := r.URL.Query()
@@ -200,15 +209,22 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case err != nil:
 				w.WriteHeader(http.StatusInternalServerError)
 				return
-			case res.Status.Code == rpcv1beta1.Code_CODE_PERMISSION_DENIED:
+			case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 				fallthrough
-			case res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED:
+			case res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
+				if hasValidBasicAuthHeader {
+					b, err := errors.Marshal(http.StatusUnauthorized, "Username or password was incorrect", "")
+					errors.HandleWebdavError(log, w, b, err)
+					return
+				}
+				b, err := errors.Marshal(http.StatusUnauthorized, "No 'Authorization: Basic' header found", "")
+				errors.HandleWebdavError(log, w, b, err)
 				return
-			case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 				w.WriteHeader(http.StatusNotFound)
 				return
-			case res.Status.Code != rpcv1beta1.Code_CODE_OK:
+			case res.Status.Code != rpc.Code_CODE_OK:
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -253,17 +269,19 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 		default:
 			w.WriteHeader(http.StatusNotFound)
-			b, err := Marshal(exception{
-				code:    SabredavNotFound,
-				message: "File not found in root",
-			})
-			HandleWebdavError(log, w, b, err)
+			b, err := errors.Marshal(http.StatusNotFound, "File not found in root", "")
+			errors.HandleWebdavError(log, w, b, err)
 		}
 	})
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
-	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: path.Join("/public", token)}})
+	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: utils.PublicStorageProviderID,
+			OpaqueId:  token,
+		},
+	}})
 }
 
 func handleBasicAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token, pw string) (*gatewayv1beta1.AuthenticateResponse, error) {

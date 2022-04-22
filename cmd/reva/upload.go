@@ -27,24 +27,24 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
 	"github.com/pkg/errors"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
 	"github.com/studio-b12/gowebdav"
 
 	// TODO(labkode): this should not come from this package.
-	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
-	"github.com/cs3org/reva/pkg/crypto"
-	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/v2/pkg/crypto"
+	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 func uploadCommand() *command {

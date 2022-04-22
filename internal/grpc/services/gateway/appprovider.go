@@ -32,11 +32,11 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -44,41 +44,17 @@ import (
 )
 
 func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-	p, st := s.getPath(ctx, req.Ref)
-	if st.Code != rpc.Code_CODE_OK {
-		if st.Code == rpc.Code_CODE_NOT_FOUND {
-			return &providerpb.OpenInAppResponse{
-				Status: status.NewNotFound(ctx, "gateway: resource not found:"+req.Ref.String()),
-			}, nil
-		}
-		return &providerpb.OpenInAppResponse{
-			Status: st,
-		}, nil
-	}
-
-	if s.isSharedFolder(ctx, p) {
-		return &providerpb.OpenInAppResponse{
-			Status: status.NewInvalid(ctx, "gateway: can't open shared folder"),
-		}, nil
-	}
-
-	resName, resChild := p, ""
-	if s.isShareChild(ctx, p) {
-		resName, resChild = s.splitShare(ctx, p)
-	}
-
-	statRes, err := s.stat(ctx, &storageprovider.StatRequest{
-		Ref: &storageprovider.Reference{Path: resName},
+	statRes, err := s.Stat(ctx, &storageprovider.StatRequest{
+		Ref: req.Ref,
 	})
 	if err != nil {
 		return &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
+			Status: status.NewInternal(ctx, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
 		}, nil
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
 		return &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
+			Status: statRes.Status,
 		}, nil
 	}
 
@@ -89,12 +65,12 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		uri, err := url.Parse(fileInfo.Target)
 		if err != nil {
 			return &providerpb.OpenInAppResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error parsing target uri: "+fileInfo.Target),
+				Status: status.NewInternal(ctx, "gateway: error parsing target uri: "+fileInfo.Target),
 			}, nil
 		}
 		if uri.Scheme == "webdav" {
 			insecure, skipVerify := getGRPCConfig(req.Opaque)
-			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, req.App, insecure, skipVerify, resChild)
+			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, req.App, insecure, skipVerify, "")
 		}
 
 		res, err := s.Stat(ctx, &storageprovider.StatRequest{
@@ -102,13 +78,12 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		})
 		if err != nil {
 			return &providerpb.OpenInAppResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
+				Status: status.NewInternal(ctx, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
 			}, nil
 		}
 		if res.Status.Code != rpc.Code_CODE_OK {
-			err := status.NewErrorFromCode(res.Status.GetCode(), "gateway")
 			return &providerpb.OpenInAppResponse{
-				Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
+				Status: status.NewInternal(ctx, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
 			}, nil
 		}
 		fileInfo = res.Info

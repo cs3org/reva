@@ -22,17 +22,16 @@ import (
 	"context"
 
 	appauthpb "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) GenerateAppPassword(ctx context.Context, req *appauthpb.GenerateAppPasswordRequest) (*appauthpb.GenerateAppPasswordResponse, error) {
 	c, err := pool.GetAppAuthProviderServiceClient(s.c.ApplicationAuthEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")
 		return &appauthpb.GenerateAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error getting app auth provider client"),
+			Status: status.NewInternal(ctx, "error getting app auth provider client"),
 		}, nil
 	}
 
@@ -47,9 +46,8 @@ func (s *svc) GenerateAppPassword(ctx context.Context, req *appauthpb.GenerateAp
 func (s *svc) ListAppPasswords(ctx context.Context, req *appauthpb.ListAppPasswordsRequest) (*appauthpb.ListAppPasswordsResponse, error) {
 	c, err := pool.GetAppAuthProviderServiceClient(s.c.ApplicationAuthEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")
 		return &appauthpb.ListAppPasswordsResponse{
-			Status: status.NewInternal(ctx, err, "error getting app auth provider client"),
+			Status: status.NewInternal(ctx, "error getting app auth provider client"),
 		}, nil
 	}
 
@@ -64,9 +62,8 @@ func (s *svc) ListAppPasswords(ctx context.Context, req *appauthpb.ListAppPasswo
 func (s *svc) InvalidateAppPassword(ctx context.Context, req *appauthpb.InvalidateAppPasswordRequest) (*appauthpb.InvalidateAppPasswordResponse, error) {
 	c, err := pool.GetAppAuthProviderServiceClient(s.c.ApplicationAuthEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")
 		return &appauthpb.InvalidateAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error getting app auth provider client"),
+			Status: status.NewInternal(ctx, "error getting app auth provider client"),
 		}, nil
 	}
 
@@ -81,9 +78,8 @@ func (s *svc) InvalidateAppPassword(ctx context.Context, req *appauthpb.Invalida
 func (s *svc) GetAppPassword(ctx context.Context, req *appauthpb.GetAppPasswordRequest) (*appauthpb.GetAppPasswordResponse, error) {
 	c, err := pool.GetAppAuthProviderServiceClient(s.c.ApplicationAuthEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")
 		return &appauthpb.GetAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error getting app auth provider client"),
+			Status: status.NewInternal(ctx, "error getting app auth provider client"),
 		}, nil
 	}
 

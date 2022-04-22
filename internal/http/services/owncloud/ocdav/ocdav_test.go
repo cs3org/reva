@@ -18,10 +18,6 @@
 package ocdav
 
 import (
-	"context"
-	"errors"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"

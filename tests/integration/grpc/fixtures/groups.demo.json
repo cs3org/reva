@@ -1,0 +1,113 @@
+[
+	{
+		"id": {
+			"opaque_id": "6040aa17-9c64-4fef-9bd0-77234d71bad0",
+			"idp": "http://localhost:20080"
+		},
+		"group_name": "sailing-lovers",
+		"gidNumber" : "30001",
+		"display_name": "Sailing Lovers",
+		"members": [
+			{
+				"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
+				"idp": "http://localhost:20080"
+			}
+		]
+	},
+	{
+		"id": {
+			"opaque_id": "dd58e5ec-842e-498b-8800-61f2ec6f911f",
+			"idp": "http://localhost:20080"
+		},
+		"group_name": "violin-haters",
+		"gidNumber" : "30002",
+		"display_name": "Violin Haters",
+		"members": [
+			{
+				"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
+				"idp": "http://localhost:20080"
+			}
+		]
+	},
+	{
+		"id": {
+			"opaque_id": "7b87fd49-286e-4a5f-bafd-c535d5dd997a",
+			"idp": "http://localhost:20080"
+		},
+		"group_name": "radium-lovers",
+		"gidNumber" : "30003",
+		"display_name": "Radium Lovers",
+		"members": [
+			{
+				"opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				"idp": "http://localhost:20080"
+			}
+		]
+	},
+	{
+		"id": {
+			"opaque_id": "cedc21aa-4072-4614-8676-fa9165f598ff",
+			"idp": "http://localhost:20080"
+		},
+		"group_name": "polonium-lovers",
+		"gidNumber" : "30004",
+		"display_name": "Polonium Lovers",
+		"members": [
+			{
+				"opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				"idp": "http://localhost:20080"
+			}
+		]
+	},
+	{
+		"id": {
+			"opaque_id": "a1726108-01f8-4c30-88df-2b1a9d1cba1a",
+			"idp": "http://localhost:20080"
+		},
+		"group_name": "quantum-lovers",
+		"gidNumber" : "30005",
+		"display_name": "Quantum Lovers",
+		"members": [
+			{
+				"opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
+				"idp": "http://localhost:20080"
+			}
+		]
+	},
+	{
+		"id": {
+			"opaque_id": "167cbee2-0518-455a-bfb2-031fe0621e5d",
+			"idp": "http://localhost:20080"
+		},
+		"group_name": "philosophy-haters",
+		"gidNumber" : "30006",
+		"display_name": "Philosophy Haters",
+		"members": [
+			{
+				"opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
+				"idp": "http://localhost:20080"
+			}
+		]
+	},
+	{
+		"id": {
+			"opaque_id": "262982c1-2362-4afa-bfdf-8cbfef64a06e",
+			"idp": "http://localhost:20080"
+		},
+		"group_name": "physics-lovers",
+		"gidNumber" : "30005",
+		"display_name": "Physics Lovers",
+		"members": [
+			{
+				"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
+				"idp": "http://localhost:20080"
+			},{
+				"opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				"idp": "http://localhost:20080"
+			},{
+				"opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
+				"idp": "http://localhost:20080"
+			}
+		]
+	}
+]

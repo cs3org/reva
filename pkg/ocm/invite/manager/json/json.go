@@ -34,12 +34,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/ocm/invite"
-	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
-	"github.com/cs3org/reva/pkg/ocm/invite/token"
-	"github.com/cs3org/reva/pkg/rhttp"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/ocm/invite"
+	"github.com/cs3org/reva/v2/pkg/ocm/invite/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/ocm/invite/token"
+	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -239,7 +239,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		if e != nil {
 			return errors.Wrap(e, "json: error reading request body")
 		}
-		return errors.Wrap(errors.New(fmt.Sprintf("%s: %s", resp.Status, string(respBody))), "json: error sending accept post request")
+		return errors.Wrap(fmt.Errorf("%s: %s", resp.Status, string(respBody)), "json: error sending accept post request")
 	}
 
 	return nil

@@ -40,20 +40,20 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
-	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/mime"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/owncloudsql/filecache"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
+	conversions "github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/logger"
+	"github.com/cs3org/reva/v2/pkg/mime"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/owncloudsql/filecache"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -397,8 +397,32 @@ func (fs *owncloudsqlfs) getUser(ctx context.Context, usernameOrID string) (id *
 			Str("userprovidersvc", fs.c.UserProviderEndpoint).
 			Str("usernameOrID", usernameOrID).
 			Interface("status", res.Status).
-			Msg("user not found")
-		return nil, fmt.Errorf("user not found")
+			Msg("user not found by id. Trying by name")
+
+		var cres *userpb.GetUserByClaimResponse
+		cres, err = c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+			Claim: "username",
+			Value: usernameOrID,
+		})
+		if err != nil {
+			appctx.GetLogger(ctx).
+				Error().Err(err).
+				Str("userprovidersvc", fs.c.UserProviderEndpoint).
+				Str("usernameOrID", usernameOrID).
+				Msg("could not get user by username")
+			return nil, err
+		}
+		if cres.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			appctx.GetLogger(ctx).
+				Error().
+				Str("userprovidersvc", fs.c.UserProviderEndpoint).
+				Str("usernameOrID", usernameOrID).
+				Interface("status", cres.Status).
+				Msg("user not found by username")
+			return nil, fmt.Errorf("user not found")
+		}
+		res.User = cres.User
+		res.Status = cres.Status
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
@@ -489,11 +513,6 @@ func (fs *owncloudsqlfs) getUserStorage(user string) (int, error) {
 	return id, err
 }
 
-// CreateStorageSpace creates a storage space
-func (fs *owncloudsqlfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
-}
-
 func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filecache.File, ip string, mdKeys []string) (*provider.ResourceInfo, error) {
 	mdKeysMap := make(map[string]struct{})
 	for _, k := range mdKeys {
@@ -507,8 +526,8 @@ func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filec
 
 	isDir := entry.MimeTypeString == "httpd/unix-directory"
 	ri := &provider.ResourceInfo{
-		Id:       &provider.ResourceId{OpaqueId: strconv.Itoa(entry.ID)},
-		Path:     fs.toStoragePath(ctx, ip),
+		Id:       &provider.ResourceId{StorageId: strconv.Itoa(entry.Storage), OpaqueId: strconv.Itoa(entry.ID)},
+		Path:     filepath.Base(ip),
 		Type:     getResourceType(isDir),
 		Etag:     entry.Etag,
 		MimeType: entry.MimeTypeString,
@@ -544,7 +563,7 @@ func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filec
 
 // GetPathByID returns the storage relative path for the file id, without the internal namespace
 func (fs *owncloudsqlfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	ip, err := fs.filecache.Path(id.OpaqueId)
+	ip, err := fs.resolve(ctx, &provider.Reference{ResourceId: id})
 	if err != nil {
 		return "", err
 	}
@@ -579,6 +598,9 @@ func (fs *owncloudsqlfs) resolve(ctx context.Context, ref *provider.Reference) (
 				return "", err
 			}
 			p = filepath.Join(owner, p)
+		}
+		if ref.GetPath() != "" {
+			p = filepath.Join(p, ref.GetPath())
 		}
 		return fs.toInternalPath(ctx, p), nil
 	}
@@ -1604,7 +1626,7 @@ func (fs *owncloudsqlfs) RestoreRevision(ctx context.Context, ref *provider.Refe
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
@@ -1664,7 +1686,7 @@ func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, basePath, key, re
 	return nil
 }
 
-func (fs *owncloudsqlfs) EmptyRecycle(ctx context.Context) error {
+func (fs *owncloudsqlfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -1736,7 +1758,7 @@ func (fs *owncloudsqlfs) convertToRecycleItem(ctx context.Context, md os.FileInf
 	}
 }
 
-func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -1763,7 +1785,7 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativ
 	return items, nil
 }
 
-func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 
 	base, ttime, err := splitTrashKey(key)
@@ -1895,12 +1917,12 @@ func (fs *owncloudsqlfs) propagate(ctx context.Context, leafPath string) error {
 			Str("leafPath", leafPath).
 			Str("currentPath", currentPath).
 			Msg("propagating change")
-		parentFi, err := os.Stat(filepath.Join(currentPath))
+		parentFi, err := os.Stat(currentPath)
 		if err != nil {
 			return err
 		}
 		if fi.ModTime().UnixNano() > parentFi.ModTime().UnixNano() {
-			if err := os.Chtimes(filepath.Join(currentPath), fi.ModTime(), fi.ModTime()); err != nil {
+			if err := os.Chtimes(currentPath, fi.ModTime(), fi.ModTime()); err != nil {
 				appctx.GetLogger(ctx).Error().
 					Err(err).
 					Str("leafPath", leafPath).
@@ -1909,7 +1931,7 @@ func (fs *owncloudsqlfs) propagate(ctx context.Context, leafPath string) error {
 				return err
 			}
 		}
-		fi, err = os.Stat(filepath.Join(currentPath))
+		fi, err = os.Stat(currentPath)
 		if err != nil {
 			return err
 		}

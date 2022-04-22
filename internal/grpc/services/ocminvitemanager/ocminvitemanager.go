@@ -22,11 +22,11 @@ import (
 	"context"
 
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/ocm/invite"
-	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/ocm/invite"
+	"github.com/cs3org/reva/v2/pkg/ocm/invite/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -105,7 +105,7 @@ func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.Generat
 	token, err := s.im.GenerateToken(ctx)
 	if err != nil {
 		return &invitepb.GenerateInviteTokenResponse{
-			Status: status.NewInternal(ctx, err, "error generating invite token"),
+			Status: status.NewInternal(ctx, "error generating invite token"),
 		}, nil
 	}
 
@@ -119,7 +119,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	err := s.im.ForwardInvite(ctx, req.InviteToken, req.OriginSystemProvider)
 	if err != nil {
 		return &invitepb.ForwardInviteResponse{
-			Status: status.NewInternal(ctx, err, "error forwarding invite"),
+			Status: status.NewInternal(ctx, "error forwarding invite"),
 		}, nil
 	}
 
@@ -132,7 +132,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 	err := s.im.AcceptInvite(ctx, req.InviteToken, req.RemoteUser)
 	if err != nil {
 		return &invitepb.AcceptInviteResponse{
-			Status: status.NewInternal(ctx, err, "error accepting invite"),
+			Status: status.NewInternal(ctx, "error accepting invite"),
 		}, nil
 	}
 
@@ -145,7 +145,7 @@ func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAccepted
 	remoteUser, err := s.im.GetAcceptedUser(ctx, req.RemoteUserId)
 	if err != nil {
 		return &invitepb.GetAcceptedUserResponse{
-			Status: status.NewInternal(ctx, err, "error fetching remote user details"),
+			Status: status.NewInternal(ctx, "error fetching remote user details"),
 		}, nil
 	}
 
@@ -159,7 +159,7 @@ func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAccep
 	acceptedUsers, err := s.im.FindAcceptedUsers(ctx, req.Filter)
 	if err != nil {
 		return &invitepb.FindAcceptedUsersResponse{
-			Status: status.NewInternal(ctx, err, "error finding remote users"),
+			Status: status.NewInternal(ctx, "error finding remote users"),
 		}, nil
 	}
 

@@ -19,8 +19,15 @@
 package ocdav
 
 import (
+	"fmt"
 	"net/http"
 	"path"
+
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 )
 
 // Common Webdav methods.
@@ -91,15 +98,54 @@ func (h *WebDavHandler) init(ns string, useLoggedInUserNS bool) error {
 
 // Handler handles requests
 func (h *WebDavHandler) Handler(s *svc) http.Handler {
+	config := s.Config()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
+		ns, newPath, err := s.ApplyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			b, err := errors.Marshal(http.StatusNotFound, fmt.Sprintf("could not get storage for %s", r.URL.Path), "")
+			errors.HandleWebdavError(appctx.GetLogger(r.Context()), w, b, err)
+		}
+		r.URL.Path = newPath
+
 		switch r.Method {
 		case MethodPropfind:
-			s.handlePathPropfind(w, r, ns)
+			p := propfind.NewHandler(config.PublicURL, func() (gateway.GatewayAPIClient, error) {
+				return pool.GetGatewayServiceClient(config.GatewaySvc)
+			})
+			p.HandlePathPropfind(w, r, ns)
 		case MethodLock:
-			s.handleLock(w, r, ns)
+			log := appctx.GetLogger(r.Context())
+			// TODO initialize status with http.StatusBadRequest
+			// TODO initialize err with errors.ErrUnsupportedMethod
+			status, err := s.handleLock(w, r, ns)
+			if status != 0 { // 0 would mean handleLock already sent the response
+				w.WriteHeader(status)
+				if status != http.StatusNoContent {
+					var b []byte
+					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
+						_, err = w.Write(b)
+					}
+				}
+			}
+			if err != nil {
+				log.Error().Err(err).Msg(err.Error())
+			}
 		case MethodUnlock:
-			s.handleUnlock(w, r, ns)
+			log := appctx.GetLogger(r.Context())
+			status, err := s.handleUnlock(w, r, ns)
+			if status != 0 { // 0 would mean handleUnlock already sent the response
+				w.WriteHeader(status)
+				if status != http.StatusNoContent {
+					var b []byte
+					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
+						_, err = w.Write(b)
+					}
+				}
+			}
+			if err != nil {
+				log.Error().Err(err).Msg(err.Error())
+			}
 		case MethodProppatch:
 			s.handlePathProppatch(w, r, ns)
 		case MethodMkcol:

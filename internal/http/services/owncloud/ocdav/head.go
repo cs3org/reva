@@ -32,9 +32,12 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -45,9 +48,25 @@ func (s *svc) handlePathHead(w http.ResponseWriter, r *http.Request, ns string) 
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	ref := &provider.Reference{Path: fn}
-	s.handleHead(ctx, w, r, ref, sublog)
+	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, fn)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handleHead(ctx, w, r, spacelookup.MakeRelativeReference(space, fn, false), sublog)
 }
 
 func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
@@ -67,7 +86,7 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&log, w, res.Status)
+		errors.HandleErrorStatus(&log, w, res.Status)
 		return
 	}
 
@@ -77,14 +96,14 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
 	w.Header().Set(HeaderOCETag, info.Etag)
 	if info.Checksum != nil {
-		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
+		w.Header().Set(net.HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
 	}
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
-	w.Header().Set(HeaderLastModified, lastModifiedString)
-	w.Header().Set(HeaderContentLength, strconv.FormatUint(info.Size, 10))
+	w.Header().Set(net.HeaderLastModified, lastModifiedString)
+	w.Header().Set(net.HeaderContentLength, strconv.FormatUint(info.Size, 10))
 	if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		w.Header().Set(HeaderAcceptRanges, "bytes")
+		w.Header().Set(net.HeaderAcceptRanges, "bytes")
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -94,8 +113,14 @@ func (s *svc) handleSpacesHead(w http.ResponseWriter, r *http.Request, spaceID s
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	spaceRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -103,7 +128,7 @@ func (s *svc) handleSpacesHead(w http.ResponseWriter, r *http.Request, spaceID s
 	}
 
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
 

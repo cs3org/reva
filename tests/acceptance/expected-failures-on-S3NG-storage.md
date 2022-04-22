@@ -1117,6 +1117,10 @@ And other missing implementation of favorites
 - [apiTranslation/translation.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L26)
 - [apiTranslation/translation.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L27)
 - [apiTranslation/translation.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L28)
+- [apiTranslation/translation.feature:33](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L33)
+- [apiTranslation/translation.feature:34](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L34)
+- [apiTranslation/translation.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L35)
+- [apiTranslation/translation.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L36)
 
 #### [Sharing a same file twice to the same group](https://github.com/owncloud/ocis/issues/1710)
 - [apiShareManagementBasicToShares/createShareToSharesFolder.feature:718](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L718)
@@ -1277,14 +1281,14 @@ _ocs: api compatibility, return correct status code_
 - [apiWebdavProperties2/getFileProperties.feature:276](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L276)
 
 #### [Cannot move folder/file from one received share to another](https://github.com/owncloud/ocis/issues/2442)
-- [apiShareUpdateToShares/updateShare.feature:241](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L241)
+- [apiShareUpdateToShares/updateShare.feature:242](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L242)
+- [apiShareUpdateToShares/updateShare.feature:196](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L196)
 
 #### [Sharing folder and sub-folder with same user but different permission,the permission of sub-folder is not obeyed ](https://github.com/owncloud/ocis/issues/2440)
-- [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:264](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L264)
-- [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:296](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L296)
-- [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:328](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L328)
-- [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:423](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L423)
-- [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:455](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L455)
+- [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:304](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L304)
+- [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:344](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L344)
+- [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:470](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L470)
+- [apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature:510](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareReceivedInMultipleWays.feature#L510)
 
 #### [Trying to copy a file into a readonly share gives HTTP 500 error](https://github.com/owncloud/ocis/issues/2166)
 - [apiWebdavProperties1/copyFile.feature:452](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L452)

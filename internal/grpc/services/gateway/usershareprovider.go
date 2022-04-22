@@ -20,7 +20,7 @@ package gateway
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"path"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -39,118 +39,19 @@ import (
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
-
-	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
-		return nil, errtypes.AlreadyExists("gateway: can't share the share folder itself")
+	// Don't use the share manager when sharing a space root
+	if refIsSpaceRoot(req.ResourceInfo.Id) {
+		return s.addSpaceShare(ctx, req)
 	}
-
-	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
-	if err != nil {
-		return &collaboration.CreateShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
-		}, nil
-	}
-
-	// TODO the user share manager needs to be able to decide if the current user is allowed to create that share (and not eg. incerase permissions)
-	// jfd: AFAICT this can only be determined by a storage driver - either the storage provider is queried first or the share manager needs to access the storage using a storage driver
-	res, err := c.CreateShare(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
-	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		return res, nil
-	}
-
-	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
-		return res, nil
-	}
-
-	// TODO(labkode): if both commits are enabled they could be done concurrently.
-	if s.c.CommitShareToStorageGrant {
-		// If the share is a denial we call  denyGrant instead.
-		if grants.PermissionsEqual(req.Grant.Permissions.Permissions, &provider.ResourcePermissions{}) {
-			denyGrantStatus, err := s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee)
-			if err != nil {
-				return nil, errors.Wrap(err, "gateway: error denying grant in storage")
-			}
-			if denyGrantStatus.Code != rpc.Code_CODE_OK {
-				return &collaboration.CreateShareResponse{
-					Status: denyGrantStatus,
-				}, err
-			}
-			return res, nil
-		}
-
-		addGrantStatus, err := s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error adding grant to storage")
-		}
-		if addGrantStatus.Code != rpc.Code_CODE_OK {
-			return &collaboration.CreateShareResponse{
-				Status: addGrantStatus,
-			}, err
-		}
-	}
-
-	return res, nil
+	return s.addShare(ctx, req)
 }
 
 func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
-	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
-	if err != nil {
-		return &collaboration.RemoveShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
-		}, nil
+	key := req.Ref.GetKey()
+	if shareIsSpaceRoot(key) {
+		return s.removeSpaceShare(ctx, key.ResourceId, key.Grantee)
 	}
-
-	// if we need to commit the share, we need the resource it points to.
-	var share *collaboration.Share
-	if s.c.CommitShareToStorageGrant || s.c.CommitShareToStorageRef {
-		getShareReq := &collaboration.GetShareRequest{
-			Ref: req.Ref,
-		}
-		getShareRes, err := c.GetShare(ctx, getShareReq)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error calling GetShare")
-		}
-
-		if getShareRes.Status.Code != rpc.Code_CODE_OK {
-			res := &collaboration.RemoveShareResponse{
-				Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
-					"error getting share when committing to the storage"),
-			}
-			return res, nil
-		}
-		share = getShareRes.Share
-	}
-
-	res, err := c.RemoveShare(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
-	}
-
-	s.removeReference(ctx, share.ResourceId)
-
-	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
-		return res, nil
-	}
-
-	// TODO(labkode): if both commits are enabled they could be done concurrently.
-	if s.c.CommitShareToStorageGrant {
-		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error removing grant from storage")
-		}
-		if removeGrantStatus.Code != rpc.Code_CODE_OK {
-			return &collaboration.RemoveShareResponse{
-				Status: removeGrantStatus,
-			}, err
-		}
-	}
-
-	return res, nil
+	return s.removeShare(ctx, req)
 }
 
 // TODO(labkode): we need to validate share state vs storage grant and storage ref
@@ -163,9 +64,11 @@ func (s *svc) GetShare(ctx context.Context, req *collaboration.GetShareRequest) 
 func (s *svc) getShare(ctx context.Context, req *collaboration.GetShareRequest) (*collaboration.GetShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("getShare: failed to get user share provider")
 		return &collaboration.GetShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -181,9 +84,11 @@ func (s *svc) getShare(ctx context.Context, req *collaboration.GetShareRequest) 
 func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesRequest) (*collaboration.ListSharesResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("ListShares: failed to get user share provider")
 		return &collaboration.ListSharesResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -198,12 +103,13 @@ func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesReque
 func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("UpdateShare: failed to get user share provider")
 		return &collaboration.UpdateShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
 	}
-
 	res, err := c.UpdateShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling UpdateShare")
@@ -233,6 +139,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		}
 	}
 
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.Share.ResourceId)
 	return res, nil
 }
 
@@ -240,11 +147,14 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 // received shares. The display name of the shares should be the a friendly name, like the basename
 // of the original file.
 func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*collaboration.ListReceivedSharesResponse, error) {
+	logger := appctx.GetLogger(ctx)
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
+		logger.Error().
+			Err(err).
+			Msg("ListReceivedShares: failed to get user share provider")
 		return &collaboration.ListReceivedSharesResponse{
-			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
 	}
 
@@ -252,15 +162,59 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListReceivedShares")
 	}
+
+	// TODO: This is a hack for now.
+	// Can we do that cleaner somehow?
+	// The `ListStorageSpaces` method in sharesstorageprovider/sharesstorageprovider.go needs the etags.
+	shareMetaData := make(map[string]share.Metadata, len(res.Shares))
+	for _, rs := range res.Shares {
+		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
+		if err != nil {
+			logger.Error().
+				Err(err).
+				Interface("resourceID", rs.Share.ResourceId).
+				Msg("ListRecievedShares: failed to stat the resource")
+			continue
+		}
+		if sRes.Status.Code != rpc.Code_CODE_OK {
+			logger.Error().
+				Interface("resourceID", rs.Share.ResourceId).
+				Msg("ListRecievedShares: failed to stat the resource")
+			continue
+		}
+		shareMetaData[rs.Share.Id.OpaqueId] = share.Metadata{ETag: sRes.Info.Etag, Mtime: sRes.Info.Mtime}
+	}
+
+	marshalled, err := json.Marshal(shareMetaData)
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("ListRecievedShares: failed marshal share etags")
+	} else {
+		opaque := res.Opaque
+		if opaque == nil {
+			opaque = &typesv1beta1.Opaque{
+				Map: map[string]*typesv1beta1.OpaqueEntry{},
+			}
+		}
+		opaque.Map["shareMetadata"] = &typesv1beta1.OpaqueEntry{
+			Decoder: "json",
+			Value:   marshalled,
+		}
+		res.Opaque = opaque
+	}
+
 	return res, nil
 }
 
 func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceivedShareRequest) (*collaboration.GetReceivedShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err := errors.Wrap(err, "gateway: error getting user share provider client")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("GetReceivedShare: failed to get user share provider")
 		return &collaboration.GetReceivedShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting received share"),
+			Status: status.NewInternal(ctx, "error getting received share"),
 		}, nil
 	}
 
@@ -277,7 +231,9 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceiv
 //   1) if received share is mounted: we also do a rename in the storage
 //   2) if received share is not mounted: we only rename in user share provider.
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
-	log := appctx.GetLogger(ctx)
+	t := rtrace.Provider.Tracer("reva")
+	ctx, span := t.Start(ctx, "Gateway.UpdateReceivedShare")
+	defer span.End()
 
 	// sanity checks
 	switch {
@@ -301,9 +257,11 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("UpdateReceivedShare: failed to get user share provider")
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
 	}
 
@@ -339,75 +297,96 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		}, nil
 	}
 
-	// properties are updated in the order they appear in the field mask
-	// when an error occurs the request ends and no further fields are updated
-	for i := range req.UpdateMask.Paths {
-		switch req.UpdateMask.Paths[i] {
-		case "state":
-			switch req.GetShare().GetState() {
-			case collaboration.ShareState_SHARE_STATE_ACCEPTED:
-				rpcStatus := s.createReference(ctx, res.GetShare().GetShare().GetResourceId())
-				if rpcStatus.Code != rpc.Code_CODE_OK {
-					return &collaboration.UpdateReceivedShareResponse{Status: rpcStatus}, nil
-				}
-			case collaboration.ShareState_SHARE_STATE_REJECTED:
-				rpcStatus := s.removeReference(ctx, res.GetShare().GetShare().ResourceId)
-				if rpcStatus.Code != rpc.Code_CODE_OK && rpcStatus.Code != rpc.Code_CODE_NOT_FOUND {
-					return &collaboration.UpdateReceivedShareResponse{Status: rpcStatus}, nil
+			// properties are updated in the order they appear in the field mask
+			// when an error occurs the request ends and no further fields are updated
+			for i := range req.UpdateMask.Paths {
+				switch req.UpdateMask.Paths[i] {
+				case "state":
+					switch req.GetShare().GetState() {
+					case collaboration.ShareState_SHARE_STATE_ACCEPTED:
+						rpcStatus := s.createReference(ctx, res.GetShare().GetShare().GetResourceId())
+						if rpcStatus.Code != rpc.Code_CODE_OK {
+							return &collaboration.UpdateReceivedShareResponse{Status: rpcStatus}, nil
+						}
+					case collaboration.ShareState_SHARE_STATE_REJECTED:
+						rpcStatus := s.removeReference(ctx, res.GetShare().GetShare().ResourceId)
+						if rpcStatus.Code != rpc.Code_CODE_OK && rpcStatus.Code != rpc.Code_CODE_NOT_FOUND {
+							return &collaboration.UpdateReceivedShareResponse{Status: rpcStatus}, nil
+						}
+					}
+				case "mount_point":
+					// TODO(labkode): implementing updating mount point
+					err = errtypes.NotSupported("gateway: update of mount point is not yet implemented")
+					return &collaboration.UpdateReceivedShareResponse{
+						Status: status.NewUnimplemented(ctx, err, "error updating received share"),
+					}, nil
+				default:
+					return nil, errtypes.NotSupported("updating " + req.UpdateMask.Paths[i] + " is not supported")
 				}
 			}
-		case "mount_point":
-			// TODO(labkode): implementing updating mount point
-			err = errtypes.NotSupported("gateway: update of mount point is not yet implemented")
-			return &collaboration.UpdateReceivedShareResponse{
-				Status: status.NewUnimplemented(ctx, err, "error updating received share"),
-			}, nil
-		default:
-			return nil, errtypes.NotSupported("updating " + req.UpdateMask.Paths[i] + " is not supported")
-		}
-	}
-	return res, nil
+			return res, nil
+	*/
 }
-
 func (s *svc) removeReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
 	log := appctx.GetLogger(ctx)
 
 	idReference := &provider.Reference{ResourceId: resourceID}
-	storageProvider, err := s.find(ctx, idReference)
+	storageProvider, _, err := s.find(ctx, idReference)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", idReference).
+			Msg("removeReference: failed to get storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewInternal(ctx, "error finding storage provider")
 	}
 
 	statRes, err := storageProvider.Stat(ctx, &provider.StatRequest{Ref: idReference})
 	if err != nil {
-		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
+		log.Error().Err(err).Interface("reference", idReference).Msg("removeReference: error calling Stat")
+		return status.NewInternal(ctx, "gateway: error calling Stat for the share resource id: "+resourceID.String())
 	}
 
 	// FIXME how can we delete a reference if the original resource was deleted?
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "could not delete share reference")
+		log.Error().Interface("status", statRes.Status).Interface("reference", idReference).Msg("removeReference: error calling Stat")
+		return status.NewInternal(ctx, "could not delete share reference")
 	}
 
 	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
-		err := errors.Wrap(err, "gateway: error calling GetHome")
-		return status.NewInternal(ctx, err, "could not delete share reference")
+		return status.NewInternal(ctx, "could not delete share reference")
 	}
 
 	sharePath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
 	log.Debug().Str("share_path", sharePath).Msg("remove reference of share")
 
-	homeProvider, err := s.find(ctx, &provider.Reference{Path: sharePath})
+	sharePathRef := &provider.Reference{Path: sharePath}
+	homeProvider, providerInfo, err := s.find(ctx, sharePathRef)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", sharePathRef).
+			Msg("removeReference: failed to get storage provider for share ref")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewInternal(ctx, "error finding storage provider")
 	}
+
+	var (
+		root      *provider.ResourceId
+		mountPath string
+	)
+	for _, space := range decodeSpaces(providerInfo) {
+		mountPath = decodePath(space)
+		root = space.Root
+		break // TODO can there be more than one space for a path?
+	}
+
+	ref := unwrap(sharePathRef, mountPath, root)
 
 	deleteReq := &provider.DeleteRequest{
 		Opaque: &typesv1beta1.Opaque{
@@ -416,12 +395,12 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 				"deleting_shared_resource": {},
 			},
 		},
-		Ref: &provider.Reference{Path: sharePath},
+		Ref: ref,
 	}
 
 	deleteResp, err := homeProvider.Delete(ctx, deleteReq)
 	if err != nil {
-		return status.NewInternal(ctx, err, "could not delete share reference")
+		return status.NewInternal(ctx, "could not delete share reference")
 	}
 
 	switch deleteResp.Status.Code {
@@ -431,8 +410,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		// This is fine, we wanted to delete it anyway
 		return status.NewOK(ctx)
 	default:
-		err := status.NewErrorFromCode(deleteResp.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "could not delete share reference")
+		return status.NewInternal(ctx, "could not delete share reference")
 	}
 
 	log.Debug().Str("share_path", sharePath).Msg("share reference successfully removed")
@@ -440,86 +418,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	return status.NewOK(ctx)
 }
 
-func (s *svc) createReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
-	ref := &provider.Reference{
-		ResourceId: resourceID,
-	}
-	log := appctx.GetLogger(ctx)
-
-	// get the metadata about the share
-	c, err := s.find(ctx, ref)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
-	}
-
-	statReq := &provider.StatRequest{
-		Ref: ref,
-	}
-
-	statRes, err := c.Stat(ctx, statReq)
-	if err != nil {
-		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		log.Err(err).Msg("gateway: Stat failed on the share resource id: " + resourceID.String())
-		return status.NewInternal(ctx, err, "error updating received share")
-	}
-
-	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		err := errors.Wrap(err, "gateway: error calling GetHome")
-		return status.NewInternal(ctx, err, "error updating received share")
-	}
-
-	// reference path is the home path + some name
-	// CreateReferene(cs3://home/MyShares/x)
-	// that can end up in the storage provider like:
-	// /eos/user/.shadow/g/gonzalhu/MyShares/x
-	// A reference can point to any place, for that reason the namespace starts with cs3://
-	// For example, a reference can point also to a dropbox resource:
-	// CreateReference(dropbox://x/y/z)
-	// It is the responsibility of the gateway to resolve these references and merge the response back
-	// from the main request.
-	// TODO(labkode): the name of the share should be the filename it points to by default.
-	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
-	log.Info().Msg("mount path will be:" + refPath)
-
-	createRefReq := &provider.CreateReferenceRequest{
-		Ref: &provider.Reference{Path: refPath},
-		// cs3 is the Scheme and %s/%s is the Opaque parts of a net.URL.
-		TargetUri: fmt.Sprintf("cs3:%s/%s", resourceID.GetStorageId(), resourceID.GetOpaqueId()),
-	}
-
-	c, err = s.findByPath(ctx, refPath)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
-	}
-
-	createRefRes, err := c.CreateReference(ctx, createRefReq)
-	if err != nil {
-		log.Err(err).Msg("gateway: error calling GetHome")
-		return &rpc.Status{
-			Code: rpc.Code_CODE_INTERNAL,
-		}
-	}
-
-	if createRefRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(createRefRes.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "error updating received share")
-	}
-
-	return status.NewOK(ctx)
-}
-
-func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee) (*rpc.Status, error) {
+func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, opaque *typesv1beta1.Opaque) (*rpc.Status, error) {
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
@@ -527,29 +426,29 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 	grantReq := &provider.DenyGrantRequest{
 		Ref:     ref,
 		Grantee: g,
+		Opaque:  opaque,
 	}
 
-	c, err := s.find(ctx, ref)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", ref).
+			Msg("denyGrant: failed to get storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewInternal(ctx, "error finding storage provider"), nil
 	}
 
 	grantRes, err := c.DenyGrant(ctx, grantReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling DenyGrant")
 	}
-	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
-			"error committing share to storage grant"), nil
-	}
-
-	return status.NewOK(ctx), nil
+	return grantRes.Status, nil
 }
 
-func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions, opaque *typesv1beta1.Opaque) (*rpc.Status, error) {
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
@@ -560,26 +459,26 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 			Grantee:     g,
 			Permissions: p,
 		},
+		Opaque: opaque,
 	}
 
-	c, err := s.find(ctx, ref)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", ref).
+			Msg("addGrant: failed to get storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewInternal(ctx, "error finding storage provider"), nil
 	}
 
 	grantRes, err := c.AddGrant(ctx, grantReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling AddGrant")
 	}
-	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
-			"error committing share to storage grant"), nil
-	}
-
-	return status.NewOK(ctx), nil
+	return grantRes.Status, nil
 }
 
 func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
@@ -594,12 +493,16 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		},
 	}
 
-	c, err := s.find(ctx, ref)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", ref).
+			Msg("updateGrant: failed to get storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewInternal(ctx, "error finding storage provider"), nil
 	}
 
 	grantRes, err := c.UpdateGrant(ctx, grantReq)
@@ -607,7 +510,7 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		return nil, errors.Wrap(err, "gateway: error calling UpdateGrant")
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
+		return status.NewInternal(ctx,
 			"error committing share to storage grant"), nil
 	}
 
@@ -627,12 +530,16 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		},
 	}
 
-	c, err := s.find(ctx, ref)
+	c, _, err := s.find(ctx, ref)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", ref).
+			Msg("removeGrant: failed to get storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found"), nil
 		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewInternal(ctx, "error finding storage provider"), nil
 	}
 
 	grantRes, err := c.RemoveGrant(ctx, grantReq)
@@ -640,9 +547,274 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		return nil, errors.Wrap(err, "gateway: error calling RemoveGrant")
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
+		return status.NewInternal(ctx,
 			"error removing storage grant"), nil
 	}
 
 	return status.NewOK(ctx), nil
+}
+
+func (s *svc) listGrants(ctx context.Context, id *provider.ResourceId) (*provider.ListGrantsResponse, error) {
+	ref := &provider.Reference{
+		ResourceId: id,
+	}
+
+	grantReq := &provider.ListGrantsRequest{
+		Ref: ref,
+	}
+
+	c, _, err := s.find(ctx, ref)
+	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Interface("reference", ref).
+			Msg("listGrants: failed to get storage provider")
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &provider.ListGrantsResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &provider.ListGrantsResponse{
+			Status: status.NewInternal(ctx, "error finding storage provider"),
+		}, nil
+	}
+
+	grantRes, err := c.ListGrants(ctx, grantReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling ListGrants")
+	}
+	if grantRes.Status.Code != rpc.Code_CODE_OK {
+		return &provider.ListGrantsResponse{Status: status.NewInternal(ctx,
+				"error listing storage grants"),
+			},
+			nil
+	}
+	return grantRes, nil
+}
+
+func (s *svc) addShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
+	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
+	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("CreateShare: failed to get user share provider")
+		return &collaboration.CreateShareResponse{
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
+		}, nil
+	}
+	// TODO the user share manager needs to be able to decide if the current user is allowed to create that share (and not eg. incerase permissions)
+	// jfd: AFAICT this can only be determined by a storage driver - either the storage provider is queried first or the share manager needs to access the storage using a storage driver
+	res, err := c.CreateShare(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return res, nil
+	}
+	// if we don't need to commit we return earlier
+	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
+		return res, nil
+	}
+
+	// TODO(labkode): if both commits are enabled they could be done concurrently.
+	if s.c.CommitShareToStorageGrant {
+		// If the share is a denial we call  denyGrant instead.
+		var status *rpc.Status
+		if grants.PermissionsEqual(req.Grant.Permissions.Permissions, &provider.ResourcePermissions{}) {
+			status, err = s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, nil)
+			if err != nil {
+				return nil, errors.Wrap(err, "gateway: error denying grant in storage")
+			}
+		} else {
+			status, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, nil)
+			if err != nil {
+				return nil, errors.Wrap(err, "gateway: error adding grant to storage")
+			}
+		}
+
+		switch status.Code {
+		case rpc.Code_CODE_OK:
+			s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.ResourceInfo.Id)
+		case rpc.Code_CODE_UNIMPLEMENTED:
+			appctx.GetLogger(ctx).Debug().Interface("status", status).Interface("req", req).Msg("storing grants not supported, ignoring")
+		default:
+			return &collaboration.CreateShareResponse{
+				Status: status,
+			}, err
+		}
+	}
+	return res, nil
+}
+
+func (s *svc) addSpaceShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
+	// If the share is a denial we call  denyGrant instead.
+	var st *rpc.Status
+	var err error
+	// TODO: change CS3 APIs
+	opaque := typesv1beta1.Opaque{
+		Map: map[string]*typesv1beta1.OpaqueEntry{
+			"spacegrant": {},
+		},
+	}
+	if grants.PermissionsEqual(req.Grant.Permissions.Permissions, &provider.ResourcePermissions{}) {
+		st, err = s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, &opaque)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error denying grant in storage")
+		}
+	} else {
+		st, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, &opaque)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error adding grant to storage")
+		}
+	}
+
+	switch st.Code {
+	case rpc.Code_CODE_OK:
+		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.ResourceInfo.Id)
+		s.cache.RemoveListStorageProviders(req.ResourceInfo.Id)
+	case rpc.Code_CODE_UNIMPLEMENTED:
+		appctx.GetLogger(ctx).Debug().Interface("status", st).Interface("req", req).Msg("storing grants not supported, ignoring")
+	default:
+		return &collaboration.CreateShareResponse{
+			Status: st,
+		}, err
+	}
+
+	return &collaboration.CreateShareResponse{
+		Status: status.NewOK(ctx),
+		Share: &collaboration.Share{
+			ResourceId:  req.ResourceInfo.Id,
+			Permissions: &collaboration.SharePermissions{Permissions: req.Grant.Permissions.GetPermissions()},
+			Grantee:     req.Grant.Grantee,
+		},
+	}, nil
+}
+
+func (s *svc) removeShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
+	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
+	if err != nil {
+		appctx.GetLogger(ctx).
+			Err(err).
+			Msg("RemoveShare: failed to get user share provider")
+		return &collaboration.RemoveShareResponse{
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
+		}, nil
+	}
+
+	// if we need to commit the share, we need the resource it points to.
+	var share *collaboration.Share
+	if s.c.CommitShareToStorageGrant || s.c.CommitShareToStorageRef {
+		getShareReq := &collaboration.GetShareRequest{
+			Ref: req.Ref,
+		}
+		getShareRes, err := c.GetShare(ctx, getShareReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error calling GetShare")
+		}
+
+		if getShareRes.Status.Code != rpc.Code_CODE_OK {
+			res := &collaboration.RemoveShareResponse{
+				Status: status.NewInternal(ctx,
+					"error getting share when committing to the storage"),
+			}
+			return res, nil
+		}
+		share = getShareRes.Share
+	}
+
+	res, err := c.RemoveShare(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
+	}
+
+	s.removeReference(ctx, share.ResourceId)
+
+	// if we don't need to commit we return earlier
+	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
+		return res, nil
+	}
+
+	// TODO(labkode): if both commits are enabled they could be done concurrently.
+	if s.c.CommitShareToStorageGrant {
+		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error removing grant from storage")
+		}
+		if removeGrantStatus.Code != rpc.Code_CODE_OK {
+			return &collaboration.RemoveShareResponse{
+				Status: removeGrantStatus,
+			}, err
+		}
+	}
+
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), share.ResourceId)
+	return res, nil
+}
+
+func (s *svc) removeSpaceShare(ctx context.Context, ref *provider.ResourceId, grantee *provider.Grantee) (*collaboration.RemoveShareResponse, error) {
+	listGrantRes, err := s.listGrants(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error getting grant to remove from storage")
+	}
+	var permissions *provider.ResourcePermissions
+	for _, g := range listGrantRes.Grants {
+		if isEqualGrantee(g.Grantee, grantee) {
+			permissions = g.Permissions
+		}
+	}
+	if permissions == nil {
+		return nil, errors.New("gateway: error getting grant to remove from storage")
+	}
+	removeGrantStatus, err := s.removeGrant(ctx, ref, grantee, permissions)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error removing grant from storage")
+	}
+	if removeGrantStatus.Code != rpc.Code_CODE_OK {
+		return &collaboration.RemoveShareResponse{
+			Status: removeGrantStatus,
+		}, err
+	}
+	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), ref)
+	s.cache.RemoveListStorageProviders(ref)
+	return &collaboration.RemoveShareResponse{Status: status.NewOK(ctx)}, nil
+}
+
+func refIsSpaceRoot(ref *provider.ResourceId) bool {
+	if ref == nil {
+		return false
+	}
+	if ref.StorageId == "" || ref.OpaqueId == "" {
+		return false
+	}
+	if ref.StorageId != ref.OpaqueId {
+		return false
+	}
+	return true
+}
+
+func shareIsSpaceRoot(key *collaboration.ShareKey) bool {
+	if key == nil {
+		return false
+	}
+	return refIsSpaceRoot(key.ResourceId)
+}
+
+func isEqualGrantee(a, b *provider.Grantee) bool {
+	// Ideally we would want to use utils.GranteeEqual()
+	// but the grants stored in the decomposedfs aren't complete (missing usertype and idp)
+	// because of that the check would fail so we can only check the ... for now.
+	if a.Type != b.Type {
+		return false
+	}
+
+	var aID, bID string
+	switch a.Type {
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		aID = a.GetGroupId().OpaqueId
+		bID = b.GetGroupId().OpaqueId
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		aID = a.GetUserId().OpaqueId
+		bID = b.GetUserId().OpaqueId
+	}
+	return aID == bID
 }

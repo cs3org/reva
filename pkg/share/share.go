@@ -24,12 +24,25 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/pkg/utils"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/genproto/protobuf/field_mask"
 )
 
-//go:generate mockery -name Manager
+const (
+	// StorageIDFilterType defines a new filter type for storage id.
+	// TODO: Remove once this filter type is in the CS3 API.
+	StorageIDFilterType collaboration.Filter_Type = 7
+)
+
+//go:generate make --no-print-directory -C ../.. mockery NAME=Manager
+
+// Metadata contains Metadata for a share
+type Metadata struct {
+	ETag  string
+	Mtime *types.Timestamp
+}
 
 // Manager is the interface that manipulates shares.
 type Manager interface {
@@ -89,6 +102,18 @@ func ResourceIDFilter(id *provider.ResourceId) *collaboration.Filter {
 	}
 }
 
+// StorageIDFilter is an abstraction for creating filter by storage id.
+func StorageIDFilter(id string) *collaboration.Filter {
+	return &collaboration.Filter{
+		Type: StorageIDFilterType,
+		Term: &collaboration.Filter_ResourceId{
+			ResourceId: &provider.ResourceId{
+				StorageId: id,
+			},
+		},
+	}
+}
+
 // IsCreatedByUser checks if the user is the owner or creator of the share.
 func IsCreatedByUser(share *collaboration.Share, user *userv1beta1.User) bool {
 	return utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator)
@@ -121,6 +146,8 @@ func MatchesFilter(share *collaboration.Share, filter *collaboration.Filter) boo
 		// This filter type is used to filter out "denial shares". These are currently implemented by having the permission "0".
 		// I.e. if the permission is 0 we don't want to show it.
 		return int(conversions.RoleFromResourcePermissions(share.Permissions.Permissions).OCSPermissions()) != 0
+	case StorageIDFilterType:
+		return share.ResourceId.StorageId == filter.GetResourceId().GetStorageId()
 	default:
 		return false
 	}
@@ -141,6 +168,9 @@ func MatchesAnyFilter(share *collaboration.Share, filters []*collaboration.Filte
 // Here is an example:
 // (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP)
 func MatchesFilters(share *collaboration.Share, filters []*collaboration.Filter) bool {
+	if len(filters) == 0 {
+		return true
+	}
 	grouped := GroupFiltersByType(filters)
 	for _, f := range grouped {
 		if !MatchesAnyFilter(share, f) {

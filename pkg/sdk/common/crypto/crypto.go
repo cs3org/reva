@@ -24,8 +24,8 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
-	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
-	"github.com/cs3org/reva/pkg/crypto"
+	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/v2/pkg/crypto"
 )
 
 // ComputeChecksum calculates the checksum of the given data using the specified checksum type.

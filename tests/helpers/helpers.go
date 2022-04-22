@@ -28,7 +28,7 @@ import (
 	"runtime"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage"
 )
 
 // TempDir creates a temporary directory in tmp/ and returns its path

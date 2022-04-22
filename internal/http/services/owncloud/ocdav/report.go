@@ -22,13 +22,15 @@ import (
 	"encoding/xml"
 	"io"
 	"net/http"
-	"strings"
+	"path"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 )
 
 const (
@@ -107,31 +109,22 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 				continue
 			}
 
-			// If global URLs are not supported, return only the file path
-			if s.c.WebdavNamespace != "" {
-				// The paths we receive have the format /user/<username>/<filepath>
-				// We only want the `<filepath>` part. Thus we remove the /user/<username>/ part.
-				parts := strings.SplitN(statRes.Info.Path, "/", 4)
-				if len(parts) != 4 {
-					log.Error().Str("path", statRes.Info.Path).Msg("path doesn't have the expected format")
-					continue
-				}
-				statRes.Info.Path = parts[3]
-			}
+			// TODO: implement GetPath on storage provider to fix this
+			statRes.Info.Path = path.Join("/users/"+currentUser.Id.OpaqueId, statRes.Info.Path)
 
 			infos = append(infos, statRes.Info)
 		}
 
-		responsesXML, err := s.multistatusResponse(ctx, &propfindXML{Prop: ff.Prop}, infos, namespace, nil)
+		responsesXML, err := propfind.MultistatusResponse(ctx, &propfind.XML{Prop: ff.Prop}, infos, s.c.PublicURL, namespace, "", nil)
 		if err != nil {
 			log.Error().Err(err).Msg("error formatting propfind")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
-		w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+		w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
+		w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 		w.WriteHeader(http.StatusMultiStatus)
-		if _, err := w.Write([]byte(responsesXML)); err != nil {
+		if _, err := w.Write(responsesXML); err != nil {
 			log.Err(err).Msg("error writing response")
 		}
 	}
@@ -145,7 +138,7 @@ type report struct {
 type reportSearchFiles struct {
 	XMLName xml.Name                `xml:"search-files"`
 	Lang    string                  `xml:"xml:lang,attr,omitempty"`
-	Prop    propfindProps           `xml:"DAV: prop"`
+	Prop    propfind.Props          `xml:"DAV: prop"`
 	Search  reportSearchFilesSearch `xml:"search"`
 }
 type reportSearchFilesSearch struct {
@@ -157,7 +150,7 @@ type reportSearchFilesSearch struct {
 type reportFilterFiles struct {
 	XMLName xml.Name               `xml:"filter-files"`
 	Lang    string                 `xml:"xml:lang,attr,omitempty"`
-	Prop    propfindProps          `xml:"DAV: prop"`
+	Prop    propfind.Props         `xml:"DAV: prop"`
 	Rules   reportFilterFilesRules `xml:"filter-rules"`
 }
 

@@ -4,6 +4,10 @@
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
+[log]
+#level = "warn"
+#mode = "json"
+
 [grpc]
 address = "0.0.0.0:17000"
 
@@ -18,3 +22,4 @@ gateway_addr = "0.0.0.0:19000"
 
 [grpc.services.publicshareprovider.drivers.json]
 file = "/var/tmp/reva/publicshares.json"
+gateway_addr = "0.0.0.0:19000"

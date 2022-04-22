@@ -21,14 +21,13 @@ package decomposedfs_test
 import (
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	. "github.com/onsi/ginkgo"
+	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
@@ -51,8 +50,6 @@ var _ = Describe("Grants", func() {
 	)
 
 	BeforeEach(func() {
-		ref = &provider.Reference{Path: "/dir1"}
-
 		grant = &provider.Grant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER,
@@ -72,8 +69,14 @@ var _ = Describe("Grants", func() {
 
 	JustBeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv()
+		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
+
+		ref = &provider.Reference{
+			ResourceId: env.SpaceRootRes,
+			Path:       "/dir1",
+		}
+
 	})
 
 	AfterEach(func() {
@@ -102,14 +105,17 @@ var _ = Describe("Grants", func() {
 
 		Describe("AddGrant", func() {
 			It("adds grants", func() {
-				n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1", false)
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1",
+				})
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Fs.AddGrant(env.Ctx, ref, grant)
 				Expect(err).ToNot(HaveOccurred())
 
-				localPath := path.Join(env.Root, "nodes", n.ID)
-				attr, err := xattr.Get(localPath, xattrs.GrantPrefix+xattrs.UserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
+				localPath := n.InternalPath()
+				attr, err := xattr.Get(localPath, xattrs.GrantUserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(attr)).To(Equal("\x00t=A:f=:p=rw"))
 			})
@@ -118,8 +124,8 @@ var _ = Describe("Grants", func() {
 				err := env.Fs.AddGrant(env.Ctx, ref, grant)
 				Expect(err).ToNot(HaveOccurred())
 
-				spacesPath := filepath.Join(env.Root, "spaces")
-				tfs.root = spacesPath
+				spaceTypesPath := filepath.Join(env.Root, "spacetypes")
+				tfs.root = spaceTypesPath
 				entries, err := fs.ReadDir(tfs, "share")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(entries)).To(BeNumerically(">=", 1))

@@ -3,8 +3,6 @@ address = "0.0.0.0:16000"
 
 [grpc.services.publicstorageprovider]
 driver = "localhome"
-mount_path = "/public"
-mount_id = "123e4567-e89b-12d3-a456-426655440000"
 data_server_url = "http://localhost:16001/data"
 gateway_addr = "localhost:19000"
 

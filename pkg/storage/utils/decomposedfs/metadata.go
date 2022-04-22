@@ -23,13 +23,14 @@ import (
 	"fmt"
 	"path/filepath"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -56,6 +57,11 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		return errtypes.InternalError(err.Error())
 	case !ok:
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
+	// check lock
+	if err := n.CheckLock(ctx); err != nil {
+		return err
 	}
 
 	nodePath := n.InternalPath()
@@ -146,46 +152,53 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
+	// check lock
+	if err := n.CheckLock(ctx); err != nil {
+		return err
+	}
+
 	nodePath := n.InternalPath()
 	errs := []error{}
 	for _, k := range keys {
 		switch k {
 		case node.FavoriteKey:
-			if u, ok := ctxpkg.ContextGetUser(ctx); ok {
-				// the favorite flag is specific to the user, so we need to incorporate the userid
-				if uid := u.GetId(); uid != nil {
-					fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
-					if err := xattr.Remove(nodePath, fa); err != nil {
-						sublog.Error().Err(err).
-							Interface("user", u).
-							Str("key", fa).
-							Msg("could not unset favorite flag")
-						errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
-					}
-				} else {
-					sublog.Error().
-						Interface("user", u).
-						Msg("user has no id")
-					errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
-				}
-			} else {
+			// the favorite flag is specific to the user, so we need to incorporate the userid
+			var u *userpb.User
+			if u, ok = ctxpkg.ContextGetUser(ctx); !ok {
 				sublog.Error().
 					Interface("user", u).
 					Msg("error getting user from ctx")
 				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx"))
+				continue
+			}
+			var uid *userpb.UserId
+			if uid = u.GetId(); uid == nil || uid.OpaqueId == "" {
+				sublog.Error().
+					Interface("user", u).
+					Msg("user has no id")
+				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
+				continue
+			}
+			fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
+			if err := xattrs.Remove(nodePath, fa); err != nil {
+				if xattrs.IsAttrUnset(err) {
+					continue // already gone, ignore
+				}
+				sublog.Error().Err(err).
+					Interface("user", u).
+					Str("key", fa).
+					Msg("could not unset favorite flag")
+				errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
 			}
 		default:
-			if err = xattr.Remove(nodePath, xattrs.MetadataPrefix+k); err != nil {
-				// a non-existing attribute will return an error, which we can ignore
-				// (using string compare because the error type is syscall.Errno and not wrapped/recognizable)
-				if e, ok := err.(*xattr.Error); !ok || !(e.Err.Error() == "no data available" ||
-					// darwin
-					e.Err.Error() == "attribute not found") {
-					sublog.Error().Err(err).
-						Str("key", k).
-						Msg("could not unset metadata")
-					errs = append(errs, errors.Wrap(err, "could not unset metadata"))
+			if err = xattrs.Remove(nodePath, xattrs.MetadataPrefix+k); err != nil {
+				if xattrs.IsAttrUnset(err) {
+					continue // already gone, ignore
 				}
+				sublog.Error().Err(err).
+					Str("key", k).
+					Msg("could not unset metadata")
+				errs = append(errs, errors.Wrap(err, "could not unset metadata"))
 			}
 		}
 	}

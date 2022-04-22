@@ -16,6 +16,10 @@ LITMUS_USERNAME="einstein"
 LITMUS_PASSWORD="relativity"
 TESTS="basic http copymove props"
 
+ifneq (, $(shell which go 2> /dev/null)) # suppress `command not found warnings` for non go targets in CI
+include .bingo/Variables.mk
+endif
+
 default: build test lint gen-doc check-changelog
 release: deps build test lint gen-doc
 
@@ -47,7 +51,7 @@ build-reva: imports
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 test: off
-	go test -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration)
+	go test -v -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration)
 
 test-integration: build-ci
 	cd tests/integration && go test -race ./...
@@ -95,10 +99,10 @@ gen-doc:
 
 check-changelog: release-deps
 	`go env GOPATH`/bin/calens > /dev/null
-	go run tools/check-changelog/main.go
+	go run tools/check-changelog/main.go -branch edge
 
 check-changelog-drone:
-	go run tools/check-changelog/main.go -repo origin -pr "$(PR)"
+	go run tools/check-changelog/main.go -repo origin -branch edge -pr "$(PR)"
 
 # to be run in CI platform
 ci: build-ci test  lint-ci
@@ -141,3 +145,12 @@ vendor-bin/behat/composer.lock: vendor-bin/behat/composer.json
 
 composer.lock: composer.json
 	@echo composer.lock is not up to date.
+
+.PHONY: mockery
+mockery: $(MOCKERY)
+	$(MOCKERY) --dir $(PWD) --output $(PWD)/mocks --boilerplate-file ./.templates/mockery.go.tmpl --name $(NAME)
+	@echo ""
+
+.PHONY: go-generate
+go-generate:
+	go generate ./...

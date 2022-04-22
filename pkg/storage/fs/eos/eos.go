@@ -19,9 +19,9 @@
 package eos
 
 import (
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
+	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/eosfs"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )

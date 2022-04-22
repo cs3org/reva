@@ -29,8 +29,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 )
 
 // VersionsHandler handles version requests
@@ -86,7 +86,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Logger()
 
-	pf, status, err := readPropfind(r.Body)
+	pf, status, err := propfind.ReadPropfind(r.Body)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
@@ -108,16 +108,13 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED || res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
-			b, err := Marshal(exception{
-				code:    SabredavNotFound,
-				message: "Resource not found",
-			})
-			HandleWebdavError(&sublog, w, b, err)
+			b, err := errors.Marshal(http.StatusNotFound, "Resource not found", "")
+			errors.HandleWebdavError(&sublog, w, b, err)
 			return
 		}
-		HandleErrorStatus(&sublog, w, res.Status)
+		errors.HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 
@@ -130,7 +127,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if lvRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, lvRes.Status)
+		errors.HandleErrorStatus(&sublog, w, lvRes.Status)
 		return
 	}
 
@@ -165,16 +162,16 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		infos = append(infos, vi)
 	}
 
-	propRes, err := s.multistatusResponse(ctx, &pf, infos, "", nil)
+	propRes, err := propfind.MultistatusResponse(ctx, &pf, infos, s.c.PublicURL, "", "", nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
-	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
-	_, err = w.Write([]byte(propRes))
+	_, err = w.Write(propRes)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error writing body")
 		return
@@ -207,7 +204,7 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, res.Status)
+		errors.HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

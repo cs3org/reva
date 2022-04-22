@@ -21,54 +21,73 @@ package decomposedfs_test
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
+	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	ruser "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
-	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/tests/helpers"
+	ruser "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/mocks"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
+	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("File uploads", func() {
 	var (
-		ref  *provider.Reference
-		fs   storage.FS
-		user *userpb.User
-		ctx  context.Context
+		ref     *provider.Reference
+		rootRef *provider.Reference
+		fs      storage.FS
+		user    *userpb.User
+		ctx     context.Context
+		spaceID string
 
-		o           *options.Options
-		lookup      *decomposedfs.Lookup
-		permissions *mocks.PermissionsChecker
-		bs          *treemocks.Blobstore
+		o                    *options.Options
+		lu                   *lookup.Lookup
+		permissions          *mocks.PermissionsChecker
+		cs3permissionsclient *mocks.CS3PermissionsClient
+		bs                   *treemocks.Blobstore
 	)
 
 	BeforeEach(func() {
-		ref = &provider.Reference{Path: "/foo"}
+		ref = &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: "u-s-e-r-id",
+			},
+			Path: "/foo",
+		}
+
 		user = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "idp",
-				OpaqueId: "userid",
+				OpaqueId: "u-s-e-r-id",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username: "username",
 		}
+
+		rootRef = &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: "u-s-e-r-id",
+			},
+			Path: "/",
+		}
+
 		ctx = ruser.ContextSetUser(context.Background(), user)
 
 		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
@@ -78,8 +97,9 @@ var _ = Describe("File uploads", func() {
 			"root": tmpRoot,
 		})
 		Expect(err).ToNot(HaveOccurred())
-		lookup = &decomposedfs.Lookup{Options: o}
+		lu = &lookup.Lookup{Options: o}
 		permissions = &mocks.PermissionsChecker{}
+		cs3permissionsclient = &mocks.CS3PermissionsClient{}
 		bs = &treemocks.Blobstore{}
 	})
 
@@ -90,11 +110,20 @@ var _ = Describe("File uploads", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	BeforeEach(func() {
+		cs3permissionsclient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{
+			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
+		}, nil)
 		var err error
-		tree := tree.New(o.Root, true, true, lookup, bs)
-		fs, err = decomposedfs.New(o, lookup, permissions, tree)
+		tree := tree.New(o.Root, true, true, lu, bs)
+		fs, err = decomposedfs.New(o, lu, permissions, tree, cs3permissionsclient)
 		Expect(err).ToNot(HaveOccurred())
+
+		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(resp.Status.Code).To(Equal(v1beta11.Code_CODE_OK))
+		spaceID = resp.StorageSpace.Id.OpaqueId
+		ref.ResourceId = &provider.ResourceId{StorageId: spaceID}
 	})
 
 	Context("the user's quota is exceeded", func() {
@@ -118,24 +147,18 @@ var _ = Describe("File uploads", func() {
 
 		When("the user wants to initiate a file upload", func() {
 			It("fails", func() {
+				msg := "error: permission denied: u-s-e-r-id/foo"
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError("error: permission denied: root/foo"))
+				Expect(err).To(MatchError(msg))
 			})
 		})
 	})
 
 	Context("with insufficient permissions, home node", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			var err error
-			// recreate the fs with home enabled
-			o.EnableHome = true
-			tree := tree.New(o.Root, true, true, lookup, bs)
-			fs, err = decomposedfs.New(o, lookup, permissions, tree)
-			Expect(err).ToNot(HaveOccurred())
-			err = fs.CreateHome(ctx)
-			Expect(err).ToNot(HaveOccurred())
 			// the space name attribute is the stop condition in the lookup
-			h, err := lookup.HomeNode(ctx)
+			h, err := lu.NodeFromResource(ctx, rootRef)
 			Expect(err).ToNot(HaveOccurred())
 			err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username"))
 			Expect(err).ToNot(HaveOccurred())
@@ -144,10 +167,8 @@ var _ = Describe("File uploads", func() {
 
 		When("the user wants to initiate a file upload", func() {
 			It("fails", func() {
-				h, err := lookup.HomeNode(ctx)
-				Expect(err).ToNot(HaveOccurred())
-				msg := fmt.Sprintf("error: permission denied: %s/foo", h.ID)
-				_, err = fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				msg := "error: permission denied: u-s-e-r-id/foo"
+				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).To(MatchError(msg))
 			})
 		})
@@ -171,7 +192,6 @@ var _ = Describe("File uploads", func() {
 				Expect(uploadIds["simple"]).ToNot(BeEmpty())
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 
-				rootRef := &provider.Reference{Path: "/"}
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
@@ -188,7 +208,6 @@ var _ = Describe("File uploads", func() {
 				Expect(uploadIds["simple"]).ToNot(BeEmpty())
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 
-				rootRef := &provider.Reference{Path: "/"}
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
@@ -211,7 +230,7 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("*os.File")).
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("*os.File")).
 					Return(nil).
 					Run(func(args mock.Arguments) {
 						reader := args.Get(1).(io.Reader)
@@ -226,7 +245,6 @@ var _ = Describe("File uploads", func() {
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
 
-				rootRef := &provider.Reference{Path: "/"}
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
@@ -250,7 +268,7 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("*os.File")).
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("*os.File")).
 					Return(nil).
 					Run(func(args mock.Arguments) {
 						reader := args.Get(1).(io.Reader)
@@ -265,7 +283,6 @@ var _ = Describe("File uploads", func() {
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
 
-				rootRef := &provider.Reference{Path: "/"}
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
@@ -285,7 +302,6 @@ var _ = Describe("File uploads", func() {
 
 				Expect(err).To(HaveOccurred())
 
-				rootRef := &provider.Reference{Path: "/"}
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())

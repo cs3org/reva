@@ -87,8 +87,6 @@ driver = "static"
 
 [grpc.services.storageprovider]
 driver = "nextcloud"
-mount_path = "/home"
-mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://127.0.0.1:19001/data"
 enable_home_creation = true
@@ -111,8 +109,6 @@ driver = "nextcloud"
 endpoint = "http://localhost/apps/sciencemesh/"
 
 [http]
-enabled_services = ["ocmd"]
-enabled_middlewares = ["providerauthorizer", "cors"]
 address = "0.0.0.0:19001"
 
 [http.services.dataprovider]

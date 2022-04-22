@@ -23,30 +23,32 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strconv"
-	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/datagateway"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
 type copy struct {
+	source      *provider.Reference
 	sourceInfo  *provider.ResourceInfo
 	destination *provider.Reference
-	depth       string
+	depth       net.Depth
 	successCode int
 }
-
-type intermediateDirRefFunc func() (*provider.Reference, *rpc.Status, error)
 
 func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "copy")
@@ -66,7 +68,10 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 
 	// Local copy: in this case Destination is mandatory
 	src := path.Join(ns, r.URL.Path)
-	dst, err := extractDestination(r)
+
+	dh := r.Header.Get(net.HeaderDestination)
+	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
+	dst, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
 		appctx.GetLogger(ctx).Warn().Msg("HTTP COPY: failed to extract destination")
 		w.WriteHeader(http.StatusBadRequest)
@@ -85,22 +90,6 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
 
-	srcRef := &provider.Reference{Path: src}
-
-	// check dst exists
-	dstRef := &provider.Reference{Path: dst}
-
-	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
-		intermediateDir := path.Dir(dst)
-		ref := &provider.Reference{Path: intermediateDir}
-		return ref, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
-	}
-
-	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
-	if cp == nil {
-		return
-	}
-
 	client, err := s.getClient()
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
@@ -108,8 +97,34 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
+	srcSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, src)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", src).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(&sublog, w, status)
+		return
+	}
+	dstSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, dst)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", dst).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	cp := s.prepareCopy(ctx, w, r, spacelookup.MakeRelativeReference(srcSpace, src, false), spacelookup.MakeRelativeReference(dstSpace, dst, false), &sublog)
+	if cp == nil {
+		return
+	}
+
 	if err := s.executePathCopy(ctx, client, w, r, cp); err != nil {
-		sublog.Error().Err(err).Str("depth", cp.depth).Msg("error executing path copy")
+		sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error executing path copy")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.WriteHeader(cp.successCode)
@@ -132,24 +147,21 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 			if createRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 				w.WriteHeader(http.StatusForbidden)
 				m := fmt.Sprintf("Permission denied to create %v", createReq.Ref.Path)
-				b, err := Marshal(exception{
-					code:    SabredavPermissionDenied,
-					message: m,
-				})
-				HandleWebdavError(log, w, b, err)
+				b, err := errors.Marshal(http.StatusForbidden, m, "")
+				errors.HandleWebdavError(log, w, b, err)
 			}
 			return nil
 		}
 
 		// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
 
-		if cp.depth != "infinity" {
+		if cp.depth != net.DepthInfinity {
 			return nil
 		}
 
 		// descend for children
 		listReq := &provider.ListContainerRequest{
-			Ref: &provider.Reference{Path: cp.sourceInfo.Path},
+			Ref: cp.source,
 		}
 		res, err := client.ListContainer(ctx, listReq)
 		if err != nil {
@@ -161,8 +173,16 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		}
 
 		for i := range res.Infos {
-			childDst := &provider.Reference{Path: path.Join(cp.destination.Path, path.Base(res.Infos[i].Path))}
-			err := s.executePathCopy(ctx, client, w, r, &copy{sourceInfo: res.Infos[i], destination: childDst, depth: cp.depth, successCode: cp.successCode})
+			child := filepath.Base(res.Infos[i].Path)
+			src := &provider.Reference{
+				ResourceId: cp.source.ResourceId,
+				Path:       utils.MakeRelativePath(filepath.Join(cp.source.Path, child)),
+			}
+			childDst := &provider.Reference{
+				ResourceId: cp.destination.ResourceId,
+				Path:       utils.MakeRelativePath(filepath.Join(cp.destination.Path, child)),
+			}
+			err := s.executePathCopy(ctx, client, w, r, &copy{source: src, sourceInfo: res.Infos[i], destination: childDst, depth: cp.depth, successCode: cp.successCode})
 			if err != nil {
 				return err
 			}
@@ -174,7 +194,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		// 1. get download url
 
 		dReq := &provider.InitiateFileDownloadRequest{
-			Ref: &provider.Reference{Path: cp.sourceInfo.Path},
+			Ref: cp.source,
 		}
 
 		dRes, err := client.InitiateFileDownload(ctx, dReq)
@@ -188,7 +208,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		var downloadEP, downloadToken string
 		for _, p := range dRes.Protocols {
-			if p.Protocol == "simple" {
+			if p.Protocol == "spaces" {
 				downloadEP, downloadToken = p.DownloadEndpoint, p.Token
 			}
 		}
@@ -217,14 +237,11 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 			if uRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 				w.WriteHeader(http.StatusForbidden)
 				m := fmt.Sprintf("Permissions denied to create %v", uReq.Ref.Path)
-				b, err := Marshal(exception{
-					code:    SabredavPermissionDenied,
-					message: m,
-				})
-				HandleWebdavError(log, w, b, err)
+				b, err := errors.Marshal(http.StatusForbidden, m, "")
+				errors.HandleWebdavError(log, w, b, err)
 				return nil
 			}
-			HandleErrorStatus(log, w, uRes.Status)
+			errors.HandleErrorStatus(log, w, uRes.Status)
 			return nil
 		}
 
@@ -277,7 +294,9 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_copy")
 	defer span.End()
 
-	dst, err := extractDestination(r)
+	dh := r.Header.Get(net.HeaderDestination)
+	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
+	dst, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -285,43 +304,6 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Str("destination", dst).Logger()
 
-	// retrieve a specific storage space
-	srcRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
-		return
-	}
-
-	dstSpaceID, dstRelPath := router.ShiftPath(dst)
-
-	// retrieve a specific storage space
-	dstRef, status, err := s.lookUpStorageSpaceReference(ctx, dstSpaceID, dstRelPath)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
-		return
-	}
-
-	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
-		intermediateDir := path.Dir(dstRelPath)
-		return s.lookUpStorageSpaceReference(ctx, dstSpaceID, intermediateDir)
-	}
-
-	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
-	if cp == nil {
-		return
-	}
 	client, err := s.getClient()
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
@@ -329,9 +311,42 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 		return
 	}
 
+	// retrieve a specific storage space
+	srcRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	dstSpaceID, dstRelPath := router.ShiftPath(dst)
+
+	// retrieve a specific storage space
+	dstRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, dstSpaceID, dstRelPath, true)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, &sublog)
+	if cp == nil {
+		return
+	}
+
 	err = s.executeSpacesCopy(ctx, w, client, cp)
 	if err != nil {
-		sublog.Error().Err(err).Str("depth", cp.depth).Msg("error descending directory")
+		sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error descending directory")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.WriteHeader(cp.successCode)
@@ -356,18 +371,15 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 				w.WriteHeader(http.StatusForbidden)
 				// TODO path could be empty or relative...
 				m := fmt.Sprintf("Permission denied to create %v", createReq.Ref.Path)
-				b, err := Marshal(exception{
-					code:    SabredavPermissionDenied,
-					message: m,
-				})
-				HandleWebdavError(log, w, b, err)
+				b, err := errors.Marshal(http.StatusForbidden, m, "")
+				errors.HandleWebdavError(log, w, b, err)
 			}
 			return nil
 		}
 
 		// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
 
-		if cp.depth != "infinity" {
+		if cp.depth != net.DepthInfinity {
 			return nil
 		}
 
@@ -416,7 +428,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 			Ref: cp.destination,
 			Opaque: &typespb.Opaque{
 				Map: map[string]*typespb.OpaqueEntry{
-					HeaderUploadLength: {
+					net.HeaderUploadLength: {
 						Decoder: "plain",
 						// TODO: handle case where size is not known in advance
 						Value: []byte(strconv.FormatUint(cp.sourceInfo.GetSize(), 10)),
@@ -435,14 +447,11 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 				w.WriteHeader(http.StatusForbidden)
 				// TODO path can be empty or relative
 				m := fmt.Sprintf("Permissions denied to create %v", uReq.Ref.Path)
-				b, err := Marshal(exception{
-					code:    SabredavPermissionDenied,
-					message: m,
-				})
-				HandleWebdavError(log, w, b, err)
+				b, err := errors.Marshal(http.StatusForbidden, m, "")
+				errors.HandleWebdavError(log, w, b, err)
 				return nil
 			}
-			HandleErrorStatus(log, w, uRes.Status)
+			errors.HandleErrorStatus(log, w, uRes.Status)
 			return nil
 		}
 
@@ -491,31 +500,33 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 	return nil
 }
 
-func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, intermediateDirRef intermediateDirRefFunc, log *zerolog.Logger) *copy {
-	overwrite, err := extractOverwrite(w, r)
+func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, log *zerolog.Logger) *copy {
+	oh := r.Header.Get(net.HeaderOverwrite)
+	overwrite, err := net.ParseOverwrite(oh)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Overwrite header is set to incorrect value %v", overwrite)
-		b, err := Marshal(exception{
-			code:    SabredavBadRequest,
-			message: m,
-		})
-		HandleWebdavError(log, w, b, err)
+		b, err := errors.Marshal(http.StatusBadRequest, m, "")
+		errors.HandleWebdavError(log, w, b, err)
 		return nil
 	}
-	depth, err := extractDepth(w, r)
+	dh := r.Header.Get(net.HeaderDepth)
+	depth, err := net.ParseDepth(dh)
+
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		m := fmt.Sprintf("Depth header is set to incorrect value %v", depth)
-		b, err := Marshal(exception{
-			code:    SabredavBadRequest,
-			message: m,
-		})
-		HandleWebdavError(log, w, b, err)
+		m := fmt.Sprintf("Depth header is set to incorrect value %v", dh)
+		b, err := errors.Marshal(http.StatusBadRequest, m, "")
+		errors.HandleWebdavError(log, w, b, err)
 		return nil
 	}
+	if dh == "" {
+		// net.ParseDepth returns "1" for an empty value but copy expects "infinity"
+		// so we overwrite it here
+		depth = net.DepthInfinity
+	}
 
-	log.Debug().Str("overwrite", overwrite).Str("depth", depth).Msg("copy")
+	log.Debug().Bool("overwrite", overwrite).Str("depth", depth.String()).Msg("copy")
 
 	client, err := s.getClient()
 	if err != nil {
@@ -536,13 +547,10 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
-			b, err := Marshal(exception{
-				code:    SabredavNotFound,
-				message: m,
-			})
-			HandleWebdavError(log, w, b, err)
+			b, err := errors.Marshal(http.StatusNotFound, m, "")
+			errors.HandleWebdavError(log, w, b, err)
 		}
-		HandleErrorStatus(log, w, srcStatRes.Status)
+		errors.HandleErrorStatus(log, w, srcStatRes.Status)
 		return nil
 	}
 
@@ -554,7 +562,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return nil
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(log, w, srcStatRes.Status)
+		errors.HandleErrorStatus(log, w, srcStatRes.Status)
 		return nil
 	}
 
@@ -562,15 +570,12 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 
-		if overwrite == "F" {
-			log.Warn().Str("overwrite", overwrite).Msg("dst already exists")
+		if !overwrite {
+			log.Warn().Bool("overwrite", overwrite).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed)
 			m := fmt.Sprintf("Could not overwrite Resource %v", dstRef.Path)
-			b, err := Marshal(exception{
-				code:    SabredavPreconditionFailed,
-				message: m,
-			})
-			HandleWebdavError(log, w, b, err) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+			b, err := errors.Marshal(http.StatusPreconditionFailed, m, "")
+			errors.HandleWebdavError(log, w, b, err) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 			return nil
 		}
 
@@ -584,23 +589,16 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 
 		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-			HandleErrorStatus(log, w, delRes.Status)
+			errors.HandleErrorStatus(log, w, delRes.Status)
 			return nil
 		}
-	} else {
+	} else if p := path.Dir(dstRef.Path); p != "" {
 		// check if an intermediate path / the parent exists
-		intermediateRef, status, err := intermediateDirRef()
-		if err != nil {
-			log.Error().Err(err).Msg("error sending a grpc request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return nil
+		pRef := &provider.Reference{
+			ResourceId: dstRef.ResourceId,
+			Path:       utils.MakeRelativePath(p),
 		}
-
-		if status.Code != rpc.Code_CODE_OK {
-			HandleErrorStatus(log, w, status)
-			return nil
-		}
-		intStatReq := &provider.StatRequest{Ref: intermediateRef}
+		intStatReq := &provider.StatRequest{Ref: pRef}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
@@ -610,40 +608,15 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		if intStatRes.Status.Code != rpc.Code_CODE_OK {
 			if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
-				log.Debug().Interface("parent", intermediateRef).Interface("status", intStatRes.Status).Msg("conflict")
+				log.Debug().Interface("parent", pRef).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
 			} else {
-				HandleErrorStatus(log, w, srcStatRes.Status)
+				errors.HandleErrorStatus(log, w, intStatRes.Status)
 			}
 			return nil
 		}
 		// TODO what if intermediate is a file?
 	}
 
-	return &copy{sourceInfo: srcStatRes.Info, depth: depth, successCode: successCode, destination: dstRef}
-}
-
-func extractOverwrite(w http.ResponseWriter, r *http.Request) (string, error) {
-	overwrite := r.Header.Get(HeaderOverwrite)
-	overwrite = strings.ToUpper(overwrite)
-	if overwrite == "" {
-		overwrite = "T"
-	}
-
-	if overwrite != "T" && overwrite != "F" {
-		return "", errInvalidValue
-	}
-
-	return overwrite, nil
-}
-
-func extractDepth(w http.ResponseWriter, r *http.Request) (string, error) {
-	depth := r.Header.Get(HeaderDepth)
-	if depth == "" {
-		depth = "infinity"
-	}
-	if depth != "infinity" && depth != "0" {
-		return "", errInvalidValue
-	}
-	return depth, nil
+	return &copy{source: srcRef, sourceInfo: srcStatRes.Info, depth: depth, successCode: successCode, destination: dstRef}
 }

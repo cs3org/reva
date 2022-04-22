@@ -36,11 +36,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/mime"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/mime"
+	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -268,8 +268,8 @@ func (fs *s3FS) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pro
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
-func (fs *s3FS) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
-	return 0, 0, nil
+func (fs *s3FS) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
+	return 0, 0, 0, nil
 }
 
 func (fs *s3FS) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
@@ -410,7 +410,7 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 
 // CreateStorageSpace creates a storage space
 func (fs *s3FS) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+	return nil, errtypes.NotSupported("unimplemented: CreateStorageSpace")
 }
 
 func (fs *s3FS) moveObject(ctx context.Context, oldKey string, newKey string) error {
@@ -686,19 +686,19 @@ func (fs *s3FS) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return errtypes.NotSupported("restore revision")
 }
 
-func (fs *s3FS) PurgeRecycleItem(ctx context.Context, kbasePath, key, relativePath string) error {
+func (fs *s3FS) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	return errtypes.NotSupported("purge recycle item")
 }
 
-func (fs *s3FS) EmptyRecycle(ctx context.Context) error {
+func (fs *s3FS) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 	return errtypes.NotSupported("empty recycle")
 }
 
-func (fs *s3FS) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *s3FS) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
 	return nil, errtypes.NotSupported("list recycle")
 }
 
-func (fs *s3FS) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *s3FS) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	return errtypes.NotSupported("restore recycle")
 }
 
@@ -709,4 +709,9 @@ func (fs *s3FS) ListStorageSpaces(ctx context.Context, filter []*provider.ListSt
 // UpdateStorageSpace updates a storage space
 func (fs *s3FS) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
+}
+
+// DeleteStorageSpace deletes a storage space
+func (fs *s3FS) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	return errtypes.NotSupported("delete storage space")
 }

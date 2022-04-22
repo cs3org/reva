@@ -30,14 +30,14 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/mime"
-	"github.com/cs3org/reva/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	conversions "github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/logger"
+	"github.com/cs3org/reva/v2/pkg/mime"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -55,11 +55,7 @@ func (fs *owncloudsqlfs) Upload(ctx context.Context, ref *provider.Reference, r 
 	uploadInfo := upload.(*fileUpload)
 
 	p := uploadInfo.info.Storage["InternalDestination"]
-	ok, err := chunking.IsChunked(p)
-	if err != nil {
-		return errors.Wrap(err, "owncloudsql: error checking path")
-	}
-	if ok {
+	if chunking.IsChunked(p) {
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {

@@ -27,10 +27,10 @@ import (
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	utils "github.com/cs3org/reva/pkg/cbox/utils"
-	"github.com/cs3org/reva/pkg/user"
-	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	utils "github.com/cs3org/reva/v2/pkg/cbox/utils"
+	"github.com/cs3org/reva/v2/pkg/user"
+	"github.com/cs3org/reva/v2/pkg/user/manager/registry"
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -298,7 +298,12 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 	}
 
 	if err != nil {
-		return nil, err
+		// Lightweight accounts need to be fetched by email
+		if strings.HasPrefix(value, "guest:") {
+			if userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(value, "guest:")); err != nil {
+				return nil, err
+			}
+		}
 	}
 	u, err := m.parseAndCacheUser(ctx, userData)
 	if err != nil {

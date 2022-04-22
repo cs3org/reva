@@ -48,8 +48,24 @@ func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Str("svc", "ocdav").Str("handler", "get").Logger()
 
-	ref := &provider.Reference{Path: fn}
-	s.handleGet(ctx, w, r, ref, "simple", sublog)
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, fn)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handleGet(ctx, w, r, spacelookup.MakeRelativeReference(space, fn, false), "spaces", sublog)
 }
 
 func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, dlProtocol string, log zerolog.Logger) {
@@ -68,7 +84,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	case sRes.Status.Code != rpc.Code_CODE_OK:
-		HandleErrorStatus(&log, w, sRes.Status)
+		errors.HandleErrorStatus(&log, w, sRes.Status)
 		return
 	case sRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER:
 		log.Warn().Msg("resource is a folder and cannot be downloaded")
@@ -83,7 +99,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	} else if dRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&log, w, dRes.Status)
+		errors.HandleErrorStatus(&log, w, dRes.Status)
 		return
 	}
 
@@ -102,8 +118,8 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-	if r.Header.Get(HeaderRange) != "" {
-		httpReq.Header.Set(HeaderRange, r.Header.Get(HeaderRange))
+	if r.Header.Get(net.HeaderRange) != "" {
+		httpReq.Header.Set(net.HeaderRange, r.Header.Get(net.HeaderRange))
 	}
 
 	httpClient := s.client
@@ -131,26 +147,26 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	w.Header().Set(HeaderOCETag, info.Etag)
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
-	w.Header().Set(HeaderLastModified, lastModifiedString)
+	w.Header().Set(net.HeaderLastModified, lastModifiedString)
 
 	if httpRes.StatusCode == http.StatusPartialContent {
-		w.Header().Set(HeaderContentRange, httpRes.Header.Get(HeaderContentRange))
-		w.Header().Set(HeaderContentLength, httpRes.Header.Get(HeaderContentLength))
+		w.Header().Set(net.HeaderContentRange, httpRes.Header.Get(net.HeaderContentRange))
+		w.Header().Set(net.HeaderContentLength, httpRes.Header.Get(net.HeaderContentLength))
 		w.WriteHeader(http.StatusPartialContent)
 	} else {
-		w.Header().Set(HeaderContentLength, strconv.FormatUint(info.Size, 10))
+		w.Header().Set(net.HeaderContentLength, strconv.FormatUint(info.Size, 10))
 	}
 	if info.Checksum != nil {
-		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
+		w.Header().Set(net.HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
 	}
 	var c int64
 	if c, err = io.Copy(w, httpRes.Body); err != nil {
 		log.Error().Err(err).Msg("error finishing copying data to response")
 	}
-	if httpRes.Header.Get(HeaderContentLength) != "" {
-		i, err := strconv.ParseInt(httpRes.Header.Get(HeaderContentLength), 10, 64)
+	if httpRes.Header.Get(net.HeaderContentLength) != "" {
+		i, err := strconv.ParseInt(httpRes.Header.Get(net.HeaderContentLength), 10, 64)
 		if err != nil {
-			log.Error().Err(err).Str("content-length", httpRes.Header.Get(HeaderContentLength)).Msg("invalid content length in datagateway response")
+			log.Error().Err(err).Str("content-length", httpRes.Header.Get(net.HeaderContentLength)).Msg("invalid content length in datagateway response")
 		}
 		if i != c {
 			log.Error().Int64("content-length", i).Int64("transferred-bytes", c).Msg("content length vs transferred bytes mismatch")
@@ -164,9 +180,15 @@ func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID st
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "get").Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	// retrieve a specific storage space
-	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	ref, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -174,7 +196,7 @@ func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID st
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		errors.HandleErrorStatus(&sublog, w, rpcStatus)
 		return
 	}
 	s.handleGet(ctx, w, r, ref, "spaces", sublog)

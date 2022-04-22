@@ -1,0 +1,32 @@
+[grpc]
+address = "{{grpc_address}}"
+
+[log]
+level = "debug"
+
+[grpc.services.userprovider]
+driver = "ldap"
+
+[grpc.services.userprovider.drivers.ldap]
+uri="ldaps://openldap:636"
+insecure=true
+user_base_dn="ou=users,dc=owncloud,dc=com"
+group_base_dn="ou=groups,dc=owncloud,dc=com"
+user_filter=""
+user_objectclass="posixAccount"
+group_filter=""
+group_objectclass="groupOfNames"
+bind_username="cn=admin,dc=owncloud,dc=com"
+bind_password="admin"
+idp="http://localhost:20080"
+
+[grpc.services.userprovider.drivers.ldap.user_schema]
+id="ownclouduuid"
+displayName="displayName"
+userName="cn"
+
+[grpc.services.userprovider.drivers.ldap.group_schema]
+id="cn"
+displayName="cn"
+groupName="cn"
+member="member"

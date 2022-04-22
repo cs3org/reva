@@ -22,11 +22,11 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
-	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
-	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
+	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -37,14 +37,15 @@ var _ = Describe("Decomposed", func() {
 		ref *provider.Reference
 	)
 
-	BeforeEach(func() {
-		ref = &provider.Reference{Path: "/dir1"}
-	})
-
 	JustBeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv()
+		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
+
+		ref = &provider.Reference{
+			ResourceId: env.SpaceRootRes,
+			Path:       "/dir1",
+		}
 	})
 
 	AfterEach(func() {
