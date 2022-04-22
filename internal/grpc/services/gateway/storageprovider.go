@@ -1053,19 +1053,7 @@ func (s *svc) findAndUnwrapUnique(ctx context.Context, ref *provider.Reference) 
 		return nil, nil, nil, err
 	}
 
-	var (
-		root      *provider.ResourceId
-		mountPath string
-	)
-	for _, space := range decodeSpaces(p) {
-		mountPath = decodePath(space)
-		root = space.Root
-		break // TODO can there be more than one space for a path?
-	}
-
-	relativeReference := unwrap(ref, mountPath, root)
-
-	return c, p, relativeReference, nil
+	return c, p, unwrap(ref, p.ProviderPath, nil), nil
 }
 
 func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
@@ -1205,12 +1193,18 @@ func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceI
 		return providerRef
 	}
 
+	path := ref.Path
+	// cut mountpoint
+	path = strings.TrimPrefix(path, "."+mountPoint)
+	// cut spaceid
+	path = strings.TrimPrefix(path, "/"+ref.ResourceId.OpaqueId)
+
 	return &provider.Reference{
 		ResourceId: &provider.ResourceId{
 			StorageId: ref.ResourceId.StorageId,
 			OpaqueId:  ref.ResourceId.OpaqueId,
 		},
-		Path: ref.Path,
+		Path: path,
 	}
 }
 
