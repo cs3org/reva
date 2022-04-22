@@ -23,7 +23,10 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/pkg/errors"
@@ -60,38 +63,50 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 }
 
 // Upload stores some data in the blobstore under the given key
-func (bs *Blobstore) Upload(key string, reader io.Reader) error {
+func (bs *Blobstore) Upload(node *node.Node, reader io.Reader) error {
 	size := int64(-1)
 	if file, ok := reader.(*os.File); ok {
 		info, err := file.Stat()
 		if err != nil {
-			return errors.Wrapf(err, "could not determine file size for object '%s'", key)
+			return errors.Wrapf(err, "could not determine file size for object '%s'", bs.path(node))
 		}
 		size = info.Size()
 	}
 
-	_, err := bs.client.PutObject(context.Background(), bs.bucket, key, reader, size, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+	_, err := bs.client.PutObject(context.Background(), bs.bucket, bs.path(node), reader, size, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 
 	if err != nil {
-		return errors.Wrapf(err, "could not store object '%s' into bucket '%s'", key, bs.bucket)
+		return errors.Wrapf(err, "could not store object '%s' into bucket '%s'", bs.path(node), bs.bucket)
 	}
 	return nil
 }
 
 // Download retrieves a blob from the blobstore for reading
-func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
-	reader, err := bs.client.GetObject(context.Background(), bs.bucket, key, minio.GetObjectOptions{})
+func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
+	reader, err := bs.client.GetObject(context.Background(), bs.bucket, bs.path(node), minio.GetObjectOptions{})
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", key, bs.bucket)
+		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", bs.path(node), bs.bucket)
 	}
 	return reader, nil
 }
 
 // Delete deletes a blob from the blobstore
-func (bs *Blobstore) Delete(key string) error {
-	err := bs.client.RemoveObject(context.Background(), bs.bucket, key, minio.RemoveObjectOptions{})
+func (bs *Blobstore) Delete(node *node.Node) error {
+	err := bs.client.RemoveObject(context.Background(), bs.bucket, bs.path(node), minio.RemoveObjectOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "could not delete object '%s' from bucket '%s'", key, bs.bucket)
+		return errors.Wrapf(err, "could not delete object '%s' from bucket '%s'", bs.path(node), bs.bucket)
 	}
 	return nil
+}
+
+func (bs *Blobstore) path(node *node.Node) string {
+	// https://aws.amazon.com/de/premiumsupport/knowledge-center/s3-prefix-nested-folders-difference/
+	// Prefixes are used to partion a bucket. A prefix is everything except the filename.
+	// For a file `BucketName/foo/bar/lorem.ipsum`, `BucketName/foo/bar/` is the prefix.
+	// There are request limits per prefix, therefore you should have many prefixes.
+	// There are no limits to prefixes per bucket, so in general it's better to have more then less.
+	//
+	// Since the spaceID is always the same for a space, we don't need to pathify that, because it would
+	// not yield any performance gains
+	return filepath.Clean(filepath.Join(node.SpaceID, lookup.Pathify(node.BlobID, 4, 2)))
 }
