@@ -326,8 +326,7 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 	}
 }
 
-// TODO this is just a stat -> rename
-func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient, space *provider.StorageSpace, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
+func (p *Handler) stat(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
 	req := &provider.StatRequest{
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,
@@ -383,14 +382,16 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	spaceInfos := make([]*provider.ResourceInfo, 0, len(spaces))
 	spaceMap := map[*provider.ResourceInfo]*provider.Reference{}
 	for _, space := range spaces {
-		if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
-			continue // not mounted
+		var spacePath string
+		if space.Opaque != nil && space.Opaque.Map != nil && space.Opaque.Map["path"] != nil && space.Opaque.Map["path"].Decoder == "plain" {
+			spacePath = string(space.Opaque.Map["path"].Value)
 		}
-		spacePath := string(space.Opaque.Map["path"].Value)
 		// TODO separate stats to the path or to the children, after statting all children update the mtime/etag
 		// TODO get mtime, and size from space as well, so we no longer have to stat here?
-		spaceRef := spacelookup.MakeRelativeReference(space, requestPath, spacesPropfind)
-		info, status, err := p.statSpace(ctx, client, space, spaceRef, metadataKeys)
+		//spaceRef := spacelookup.MakeRelativeReference(space, requestPath, spacesPropfind)
+		spaceRef := &provider.Reference{ResourceId: space.Root}
+
+		info, status, err := p.stat(ctx, client, spaceRef, metadataKeys)
 		if err != nil || status.GetCode() != rpc.Code_CODE_OK {
 			continue
 		}
@@ -421,6 +422,10 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 				mostRecentChildInfo = info
 			}
 		}
+	}
+
+	if rootInfo == nil && len(spaceInfos) > 0 {
+		rootInfo = spaceInfos[0]
 	}
 
 	if len(spaceInfos) == 0 || rootInfo == nil {

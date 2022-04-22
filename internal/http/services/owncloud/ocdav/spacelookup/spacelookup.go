@@ -158,10 +158,11 @@ func LookUpStorageSpaceReference(ctx context.Context, client gateway.GatewayAPIC
 
 // MakeRelativeReference returns a relative reference for the given space and path
 func MakeRelativeReference(space *storageProvider.StorageSpace, relativePath string, spacesDavRequest bool) *storageProvider.Reference {
-	if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
-		return nil // not mounted
+	spacePath := ""
+	if space.Opaque != nil && space.Opaque.Map != nil && space.Opaque.Map["path"] != nil && space.Opaque.Map["path"].Decoder == "plain" {
+		spacePath = string(space.Opaque.Map["path"].Value)
+		// return nil // not mounted
 	}
-	spacePath := string(space.Opaque.Map["path"].Value)
 	relativeSpacePath := "."
 	if strings.HasPrefix(relativePath, spacePath) {
 		if space.Root == nil {
