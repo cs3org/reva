@@ -29,12 +29,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
-	"github.com/cs3org/reva/pkg/auth/manager/nextcloud"
-	"github.com/cs3org/reva/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/v2/pkg/auth/manager/nextcloud"
+	"github.com/cs3org/reva/v2/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	jwt "github.com/cs3org/reva/v2/pkg/token/manager/jwt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

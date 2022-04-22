@@ -28,12 +28,14 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
@@ -44,9 +46,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	// find auth provider
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
-		err = errtypes.NotFound("gateway: error finding auth provider for type: " + req.Type)
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error getting auth provider client"),
+			Status: status.NewInternal(ctx, "error getting auth provider client"),
 		}, nil
 	}
 
@@ -58,7 +59,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	switch {
 	case err != nil:
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, fmt.Sprintf("gateway: error calling Authenticate for type: %s", req.Type)),
+			Status: status.NewInternal(ctx, fmt.Sprintf("gateway: error calling Authenticate for type: %s", req.Type)),
 		}, nil
 	case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 		fallthrough
@@ -70,9 +71,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			Status: res.Status,
 		}, nil
 	case res.Status.Code != rpc.Code_CODE_OK:
-		err := status.NewErrorFromCode(res.Status.Code, "gateway")
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, fmt.Sprintf("error authenticating credentials to auth provider for type: %s", req.Type)),
+			Status: status.NewInternal(ctx, fmt.Sprintf("error authenticating credentials to auth provider for type: %s", req.Type)),
 		}, nil
 	}
 
@@ -81,7 +81,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		err := errtypes.NotFound("gateway: user after Authenticate is nil")
 		log.Err(err).Msg("user is nil")
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "user is nil"),
+			Status: status.NewInternal(ctx, "user is nil"),
 		}, nil
 	}
 
@@ -89,7 +89,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		err := errtypes.NotFound("gateway: uid after Authenticate is nil")
 		log.Err(err).Msg("user id is nil")
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "user id is nil"),
+			Status: status.NewInternal(ctx, "user id is nil"),
 		}, nil
 	}
 
@@ -116,9 +116,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	ctx = ctxpkg.ContextSetUser(ctx, res.User)
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token)
 
-	// Commenting out as the token size can get too big
-	// For now, we'll try to resolve all resources on every request and cache those
-	/* scope, err := s.expandScopes(ctx, res.TokenScope)
+	// TODO(ishank011): Add a cache for these
+	scope, err := s.expandScopes(ctx, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error expanding token scope")
 		return &gateway.AuthenticateResponse{
@@ -127,6 +126,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	}
 	*/
 	scope := res.TokenScope
+
+	// scope := res.TokenScope
 
 	token, err = s.tokenmgr.MintToken(ctx, &u, scope)
 	if err != nil {
@@ -153,25 +154,20 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
-	if _, err = s.createHomeCache.Get(res.User.Id.OpaqueId); err != nil {
-		createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
-		if err != nil {
-			log.Err(err).Msg("error calling CreateHome")
-			return &gateway.AuthenticateResponse{
-				Status: status.NewInternal(ctx, err, "error creating user home"),
-			}, nil
-		}
+	createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
+	if err != nil {
+		log.Err(err).Msg("error calling CreateHome")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewInternal(ctx, "error creating user home"),
+		}, nil
+	}
 
-		if createHomeRes.Status.Code != rpc.Code_CODE_OK {
-			err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
-			log.Err(err).Msg("error calling Createhome")
-			return &gateway.AuthenticateResponse{
-				Status: status.NewInternal(ctx, err, "error creating user home"),
-			}, nil
-		}
-		if s.c.CreateHomeCacheTTL > 0 {
-			_ = s.createHomeCache.Set(res.User.Id.OpaqueId, true)
-		}
+	if createHomeRes.Status.Code != rpc.Code_CODE_OK && createHomeRes.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
+		err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
+		log.Err(err).Msg("error calling Createhome")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewInternal(ctx, "error creating user home"),
+		}, nil
 	}
 
 	gwRes := &gateway.AuthenticateResponse{

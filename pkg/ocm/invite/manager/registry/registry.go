@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/ocm/invite"
+import "github.com/cs3org/reva/v2/pkg/ocm/invite"
 
 // NewFunc is the function that invite managers
 // should register at init time.

@@ -31,12 +31,15 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
-	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/utils"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/rhttp"
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
@@ -46,7 +49,7 @@ func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns strin
 	defer span.End()
 
 	// read filename from metadata
-	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
+	meta := tusd.ParseMetadataHeader(r.Header.Get(net.HeaderUploadMetadata))
 	for _, r := range nameRules {
 		if !r.Test(meta["filename"]) {
 			w.WriteHeader(http.StatusPreconditionFailed)
@@ -60,7 +63,10 @@ func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns strin
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 	// check tus headers?
 
-	ref := &provider.Reference{Path: fn}
+	ref := &provider.Reference{
+		// FIXME ResourceId?
+		Path: fn,
+	}
 	s.handleTusPost(ctx, w, r, meta, ref, sublog)
 }
 
@@ -69,22 +75,28 @@ func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceI
 	defer span.End()
 
 	// read filename from metadata
-	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
+	meta := tusd.ParseMetadataHeader(r.Header.Get(net.HeaderUploadMetadata))
 	if meta["filename"] == "" {
 		w.WriteHeader(http.StatusPreconditionFailed)
 		return
 	}
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, path.Join(r.URL.Path, meta["filename"]))
+	spaceRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, path.Join(r.URL.Path, meta["filename"]), true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
 
@@ -92,24 +104,24 @@ func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceI
 }
 
 func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.Request, meta map[string]string, ref *provider.Reference, log zerolog.Logger) {
-	w.Header().Add(HeaderAccessControlAllowHeaders, strings.Join([]string{HeaderTusResumable, HeaderUploadLength, HeaderUploadMetadata, HeaderIfMatch}, ", "))
-	w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderLocation}, ", "))
-	w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
+	w.Header().Add(net.HeaderAccessControlAllowHeaders, strings.Join([]string{net.HeaderTusResumable, net.HeaderUploadLength, net.HeaderUploadMetadata, net.HeaderIfMatch}, ", "))
+	w.Header().Add(net.HeaderAccessControlExposeHeaders, strings.Join([]string{net.HeaderTusResumable, net.HeaderLocation}, ", "))
+	w.Header().Set(net.HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
 
-	w.Header().Set(HeaderTusResumable, "1.0.0")
+	w.Header().Set(net.HeaderTusResumable, "1.0.0")
 
 	// Test if the version sent by the client is supported
 	// GET methods are not checked since a browser may visit this URL and does
 	// not include this header. This request is not part of the specification.
-	if r.Header.Get(HeaderTusResumable) != "1.0.0" {
+	if r.Header.Get(net.HeaderTusResumable) != "1.0.0" {
 		w.WriteHeader(http.StatusPreconditionFailed)
 		return
 	}
-	if r.Header.Get(HeaderUploadLength) == "" {
+	if r.Header.Get(net.HeaderUploadLength) == "" {
 		w.WriteHeader(http.StatusPreconditionFailed)
 		return
 	}
-	// r.Header.Get("OC-Checksum")
+	// r.Header.Get(net.HeaderOCChecksum)
 	// TODO must be SHA1, ADLER32 or MD5 ... in capital letters????
 	// curl -X PUT https://demo.owncloud.com/remote.php/webdav/testcs.bin -u demo:demo -d '123' -v -H 'OC-Checksum: SHA1:40bd001563085fc35165329ea1ff5c5ecbdbbeef'
 
@@ -134,7 +146,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&log, w, sRes.Status)
+		errors.HandleErrorStatus(&log, w, sRes.Status)
 		return
 	}
 
@@ -146,7 +158,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	if info != nil {
-		clientETag := r.Header.Get(HeaderIfMatch)
+		clientETag := r.Header.Get(net.HeaderIfMatch)
 		serverETag := info.Etag
 		if clientETag != "" {
 			if clientETag != serverETag {
@@ -158,15 +170,15 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	opaqueMap := map[string]*typespb.OpaqueEntry{
-		HeaderUploadLength: {
+		net.HeaderUploadLength: {
 			Decoder: "plain",
-			Value:   []byte(r.Header.Get(HeaderUploadLength)),
+			Value:   []byte(r.Header.Get(net.HeaderUploadLength)),
 		},
 	}
 
 	mtime := meta["mtime"]
 	if mtime != "" {
-		opaqueMap[HeaderOCMtime] = &typespb.OpaqueEntry{
+		opaqueMap[net.HeaderOCMtime] = &typespb.OpaqueEntry{
 			Decoder: "plain",
 			Value:   []byte(mtime),
 		}
@@ -192,7 +204,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 			w.WriteHeader(http.StatusPreconditionFailed)
 			return
 		}
-		HandleErrorStatus(&log, w, uRes.Status)
+		errors.HandleErrorStatus(&log, w, uRes.Status)
 		return
 	}
 
@@ -212,13 +224,13 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 		ep += token
 	}
 
-	w.Header().Set(HeaderLocation, ep)
+	w.Header().Set(net.HeaderLocation, ep)
 
 	// for creation-with-upload extension forward bytes to dataprovider
 	// TODO check this really streams
-	if r.Header.Get(HeaderContentType) == "application/offset+octet-stream" {
+	if r.Header.Get(net.HeaderContentType) == "application/offset+octet-stream" {
 
-		length, err := strconv.ParseInt(r.Header.Get(HeaderContentLength), 10, 64)
+		length, err := strconv.ParseInt(r.Header.Get(net.HeaderContentLength), 10, 64)
 		if err != nil {
 			log.Debug().Err(err).Msg("wrong request")
 			w.WriteHeader(http.StatusBadRequest)
@@ -234,14 +246,14 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 			return
 		}
 
-		httpReq.Header.Set(HeaderContentType, r.Header.Get(HeaderContentType))
-		httpReq.Header.Set(HeaderContentLength, r.Header.Get(HeaderContentLength))
-		if r.Header.Get(HeaderUploadOffset) != "" {
-			httpReq.Header.Set(HeaderUploadOffset, r.Header.Get(HeaderUploadOffset))
+		httpReq.Header.Set(net.HeaderContentType, r.Header.Get(net.HeaderContentType))
+		httpReq.Header.Set(net.HeaderContentLength, r.Header.Get(net.HeaderContentLength))
+		if r.Header.Get(net.HeaderUploadOffset) != "" {
+			httpReq.Header.Set(net.HeaderUploadOffset, r.Header.Get(net.HeaderUploadOffset))
 		} else {
-			httpReq.Header.Set(HeaderUploadOffset, "0")
+			httpReq.Header.Set(net.HeaderUploadOffset, "0")
 		}
-		httpReq.Header.Set(HeaderTusResumable, r.Header.Get(HeaderTusResumable))
+		httpReq.Header.Set(net.HeaderTusResumable, r.Header.Get(net.HeaderTusResumable))
 
 		httpRes, err = s.client.Do(httpReq)
 		if err != nil {
@@ -251,16 +263,16 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 		}
 		defer httpRes.Body.Close()
 
-		w.Header().Set(HeaderUploadOffset, httpRes.Header.Get(HeaderUploadOffset))
-		w.Header().Set(HeaderTusResumable, httpRes.Header.Get(HeaderTusResumable))
-		w.Header().Set(HeaderTusUploadExpires, httpRes.Header.Get(HeaderTusUploadExpires))
+		w.Header().Set(net.HeaderUploadOffset, httpRes.Header.Get(net.HeaderUploadOffset))
+		w.Header().Set(net.HeaderTusResumable, httpRes.Header.Get(net.HeaderTusResumable))
+		w.Header().Set(net.HeaderTusUploadExpires, httpRes.Header.Get(net.HeaderTusUploadExpires))
 		if httpRes.StatusCode != http.StatusNoContent {
 			w.WriteHeader(httpRes.StatusCode)
 			return
 		}
 
 		// check if upload was fully completed
-		if length == 0 || httpRes.Header.Get(HeaderUploadOffset) == r.Header.Get(HeaderUploadLength) {
+		if length == 0 || httpRes.Header.Get(net.HeaderUploadOffset) == r.Header.Get(net.HeaderUploadLength) {
 			// get uploaded file metadata
 
 			sRes, err := client.Stat(ctx, sReq)
@@ -280,7 +292,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 					return
 				}
 
-				HandleErrorStatus(&log, w, sRes.Status)
+				errors.HandleErrorStatus(&log, w, sRes.Status)
 				return
 			}
 
@@ -290,9 +302,9 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			if httpRes != nil && httpRes.Header != nil && httpRes.Header.Get(HeaderOCMtime) != "" {
+			if httpRes != nil && httpRes.Header != nil && httpRes.Header.Get(net.HeaderOCMtime) != "" {
 				// set the "accepted" value if returned in the upload response headers
-				w.Header().Set(HeaderOCMtime, httpRes.Header.Get(HeaderOCMtime))
+				w.Header().Set(net.HeaderOCMtime, httpRes.Header.Get(net.HeaderOCMtime))
 			}
 
 			// get WebDav permissions for file
@@ -304,7 +316,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 					isPublic = ls != nil
 				}
 			}
-			isShared := !isCurrentUserOwner(ctx, info.Owner)
+			isShared := !net.IsCurrentUserOwner(ctx, info.Owner)
 			role := conversions.RoleFromResourcePermissions(info.PermissionSet)
 			permissions := role.WebDAVPermissions(
 				info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
@@ -313,15 +325,15 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 				isPublic,
 			)
 
-			w.Header().Set(HeaderContentType, info.MimeType)
-			w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
-			w.Header().Set(HeaderOCETag, info.Etag)
-			w.Header().Set(HeaderETag, info.Etag)
-			w.Header().Set(HeaderOCPermissions, permissions)
+			w.Header().Set(net.HeaderContentType, info.MimeType)
+			w.Header().Set(net.HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
+			w.Header().Set(net.HeaderOCETag, info.Etag)
+			w.Header().Set(net.HeaderETag, info.Etag)
+			w.Header().Set(net.HeaderOCPermissions, permissions)
 
 			t := utils.TSToTime(info.Mtime).UTC()
 			lastModifiedString := t.Format(time.RFC1123Z)
-			w.Header().Set(HeaderLastModified, lastModifiedString)
+			w.Header().Set(net.HeaderLastModified, lastModifiedString)
 		}
 	}
 

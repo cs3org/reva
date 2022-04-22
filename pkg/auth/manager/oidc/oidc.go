@@ -24,7 +24,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"strings"
 	"time"
 
@@ -32,16 +31,12 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth"
-	"github.com/cs3org/reva/pkg/auth/manager/registry"
-	"github.com/cs3org/reva/pkg/auth/scope"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/juliangruber/go-intersect"
+	"github.com/cs3org/reva/v2/pkg/auth"
+	"github.com/cs3org/reva/v2/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/auth/scope"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
@@ -180,6 +175,13 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	if claims["preferred_username"] == nil {
 		claims["preferred_username"] = claims[am.c.IDClaim]
 	}
+	if claims["name"] == nil {
+		claims["name"] = claims[am.c.IDClaim]
+	}
+
+	if claims["email"] == nil {
+		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
+	}
 	if claims["preferred_username"] == nil {
 		claims["preferred_username"] = claims["email"]
 	}
@@ -200,7 +202,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	userID := &user.UserId{
 		OpaqueId: claims[am.c.IDClaim].(string), // a stable non reassignable id
-		Idp:      claims["iss"].(string),        // in the scope of this issuer
+		Idp:      claims["issuer"].(string),     // in the scope of this issuer
 		Type:     getUserType(claims[am.c.IDClaim].(string)),
 	}
 
@@ -291,64 +293,6 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	return am.provider, nil
 }
 
-func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) error {
-	if len(am.oidcUsersMapping) > 0 {
-		var username string
-
-		// map and discover the user's username when a mapping is defined
-		if claims[am.c.GroupClaim] == nil {
-			// we are required to perform a user mapping but the group claim is not available
-			return fmt.Errorf("no \"%s\" claim found in userinfo to map user", am.c.GroupClaim)
-		}
-		mappings := make([]string, 0, len(am.oidcUsersMapping))
-		for _, m := range am.oidcUsersMapping {
-			if m.OIDCIssuer == claims["iss"] {
-				mappings = append(mappings, m.OIDCGroup)
-			}
-		}
-
-		intersection := intersect.Simple(claims[am.c.GroupClaim], mappings)
-		if len(intersection) > 1 {
-			// multiple mappings are not implemented as we cannot decide which one to choose
-			return errtypes.PermissionDenied("more than one user mapping entry exists for the given group claims")
-		}
-		if len(intersection) == 0 {
-			return errtypes.PermissionDenied("no user mapping found for the given group claim(s)")
-		}
-		for _, m := range intersection {
-			username = am.oidcUsersMapping[m.(string)].Username
-		}
-
-		upsc, err := pool.GetUserProviderServiceClient(am.c.GatewaySvc)
-		if err != nil {
-			return errors.Wrap(err, "error getting user provider grpc client")
-		}
-		getUserByClaimResp, err := upsc.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
-			Claim: "username",
-			Value: username,
-		})
-		if err != nil {
-			return errors.Wrapf(err, "error getting user by username '%v'", username)
-		}
-		if getUserByClaimResp.Status.Code != rpc.Code_CODE_OK {
-			return status.NewErrorFromCode(getUserByClaimResp.Status.Code, "oidc")
-		}
-
-		// take the properties of the mapped target user to override the claims
-		claims["preferred_username"] = username
-		claims[am.c.IDClaim] = getUserByClaimResp.GetUser().GetId().OpaqueId
-		claims["iss"] = getUserByClaimResp.GetUser().GetId().Idp
-		if am.c.UIDClaim != "" {
-			claims[am.c.UIDClaim] = getUserByClaimResp.GetUser().UidNumber
-		}
-		if am.c.GIDClaim != "" {
-			claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
-		}
-		appctx.GetLogger(ctx).Debug().Str("username", username).Interface("claims", claims).Msg("resolveUser: claims overridden from mapped user")
-	}
-	return nil
-}
-
 func getUserType(upn string) user.UserType {
 	var t user.UserType
 	switch {
@@ -360,4 +304,5 @@ func getUserType(upn string) user.UserType {
 		t = user.UserType_USER_TYPE_PRIMARY
 	}
 	return t
+
 }

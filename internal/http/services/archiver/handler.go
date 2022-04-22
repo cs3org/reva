@@ -31,15 +31,15 @@ import (
 
 	"regexp"
 
-	"github.com/cs3org/reva/internal/http/services/archiver/manager"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/storage/utils/downloader"
-	"github.com/cs3org/reva/pkg/storage/utils/walker"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
+	"github.com/cs3org/reva/v2/internal/http/services/archiver/manager"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/downloader"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/walker"
+	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
@@ -119,24 +119,31 @@ func (c *Config) init() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
-func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, error) {
-	if len(files) == 0 && len(ids) == 0 {
-		return nil, errtypes.BadRequest("file and id lists are both empty")
+func (s *svc) getResources(ctx context.Context, paths, ids []string) ([]*provider.ResourceId, error) {
+	if len(paths) == 0 && len(ids) == 0 {
+		return nil, errtypes.BadRequest("path and id lists are both empty")
 	}
 
-	f := make([]string, 0, len(files)+len(ids))
+	resources := make([]*provider.ResourceId, 0, len(paths)+len(ids))
 
 	for _, id := range ids {
 		// id is base64 encoded and after decoding has the form <storage_id>:<resource_id>
 
-		ref := resourceid.OwnCloudResourceIDUnwrap(id)
-		if ref == nil {
+		decodedID := resourceid.OwnCloudResourceIDUnwrap(id)
+		if decodedID == nil {
 			return nil, errors.New("could not unwrap given file id")
 		}
 
+		resources = append(resources, decodedID)
+
+	}
+
+	for _, p := range paths {
+		// id is base64 encoded and after decoding has the form <storage_id>:<resource_id>
+
 		resp, err := s.gtwClient.Stat(ctx, &provider.StatRequest{
 			Ref: &provider.Reference{
-				ResourceId: ref,
+				Path: p,
 			},
 		})
 
@@ -144,27 +151,28 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 		case err != nil:
 			return nil, err
 		case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
-			return nil, errtypes.NotFound(id)
+			return nil, errtypes.NotFound(p)
 		case resp.Status.Code != rpc.Code_CODE_OK:
-			return nil, errtypes.InternalError(fmt.Sprintf("error getting stats from %s", id))
+			return nil, errtypes.InternalError(fmt.Sprintf("error stating %s", p))
 		}
 
-		f = append(f, resp.Info.Path)
+		resources = append(resources, resp.Info.Id)
 
 	}
 
-	f = append(f, files...)
-
 	// check if all the folders are allowed to be archived
-	err := s.allAllowed(f)
+	/* FIXME bring back filtering
+	err := s.allAllowed(resources)
 	if err != nil {
 		return nil, err
 	}
+	*/
 
-	return f, nil
+	return resources, nil
 }
 
 // return true if path match with at least with one allowed folder regex
+/*
 func (s *svc) isPathAllowed(path string) bool {
 	for _, reg := range s.allowedFolders {
 		if reg.MatchString(path) {
@@ -187,6 +195,7 @@ func (s *svc) allAllowed(paths []string) error {
 	}
 	return nil
 }
+*/
 
 func (s *svc) writeHTTPError(rw http.ResponseWriter, err error) {
 	s.log.Error().Msg(err.Error())
@@ -220,13 +229,13 @@ func (s *svc) Handler() http.Handler {
 			ids = []string{}
 		}
 
-		files, err := s.getFiles(ctx, paths, ids)
+		resources, err := s.getResources(ctx, paths, ids)
 		if err != nil {
 			s.writeHTTPError(rw, err)
 			return
 		}
 
-		arch, err := manager.NewArchiver(files, s.walker, s.downloader, manager.Config{
+		arch, err := manager.NewArchiver(resources, s.walker, s.downloader, manager.Config{
 			MaxNumFiles: s.config.MaxNumFiles,
 			MaxSize:     s.config.MaxSize,
 		})
@@ -244,7 +253,7 @@ func (s *svc) Handler() http.Handler {
 			archName += ".tar"
 		}
 
-		s.log.Debug().Msg("Requested the following files/folders to archive: " + render.Render(files))
+		s.log.Debug().Msg("Requested the following resoucres to archive: " + render.Render(resources))
 
 		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
 		rw.Header().Set("Content-Transfer-Encoding", "binary")

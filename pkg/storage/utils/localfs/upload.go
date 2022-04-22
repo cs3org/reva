@@ -28,11 +28,11 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -49,11 +49,7 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	uploadInfo := upload.(*fileUpload)
 
 	p := uploadInfo.info.Storage["InternalDestination"]
-	ok, err := chunking.IsChunked(p)
-	if err != nil {
-		return errors.Wrap(err, "localfs: error checking path")
-	}
-	if ok {
+	if chunking.IsChunked(p) {
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {

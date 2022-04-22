@@ -29,19 +29,22 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/datagateway"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/storage/utils/chunking"
-	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/utils"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
+	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
 func sufferMacOSFinder(r *http.Request) bool {
-	return r.Header.Get(HeaderExpectedEntityLength) != ""
+	return r.Header.Get(net.HeaderExpectedEntityLength) != ""
 }
 
 func handleMacOSFinder(w http.ResponseWriter, r *http.Request) error {
@@ -63,8 +66,8 @@ func handleMacOSFinder(w http.ResponseWriter, r *http.Request) error {
 	*/
 
 	log := appctx.GetLogger(r.Context())
-	content := r.Header.Get(HeaderContentLength)
-	expected := r.Header.Get(HeaderExpectedEntityLength)
+	content := r.Header.Get(net.HeaderContentLength)
+	expected := r.Header.Get(net.HeaderExpectedEntityLength)
 	log.Warn().Str("content-length", content).Str("x-expected-entity-length", expected).Msg("Mac OS Finder corner-case detected")
 
 	// The best mitigation to this problem is to tell users to not use crappy Finder.
@@ -102,7 +105,7 @@ func isContentRange(r *http.Request) bool {
 		   in unexpected behaviour (cf PEAR::HTTP_WebDAV_Client 1.0.1), we reject
 		   all PUT requests with a Content-Range for now.
 	*/
-	return r.Header.Get(HeaderContentRange) != ""
+	return r.Header.Get(net.HeaderContentRange) != ""
 }
 
 func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
@@ -112,10 +115,24 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, fn)
+	if err != nil {
+		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(&sublog, w, status)
+		return
+	}
 
-	ref := &provider.Reference{Path: fn}
-
-	s.handlePut(ctx, w, r, ref, sublog)
+	s.handlePut(ctx, w, r, spacelookup.MakeRelativeReference(space, fn, false), sublog)
 }
 
 func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
@@ -145,7 +162,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&log, w, sRes.Status)
+		errors.HandleErrorStatus(&log, w, sRes.Status)
 		return
 	}
 
@@ -156,7 +173,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
-		clientETag := r.Header.Get(HeaderIfMatch)
+		clientETag := r.Header.Get(net.HeaderIfMatch)
 		serverETag := info.Etag
 		if clientETag != "" {
 			if clientETag != serverETag {
@@ -168,27 +185,27 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	opaqueMap := map[string]*typespb.OpaqueEntry{
-		HeaderUploadLength: {
+		net.HeaderUploadLength: {
 			Decoder: "plain",
 			Value:   []byte(strconv.FormatInt(length, 10)),
 		},
 	}
 
-	if mtime := r.Header.Get(HeaderOCMtime); mtime != "" {
-		opaqueMap[HeaderOCMtime] = &typespb.OpaqueEntry{
+	if mtime := r.Header.Get(net.HeaderOCMtime); mtime != "" {
+		opaqueMap[net.HeaderOCMtime] = &typespb.OpaqueEntry{
 			Decoder: "plain",
 			Value:   []byte(mtime),
 		}
 
 		// TODO: find a way to check if the storage really accepted the value
-		w.Header().Set(HeaderOCMtime, "accepted")
+		w.Header().Set(net.HeaderOCMtime, "accepted")
 	}
 
 	// curl -X PUT https://demo.owncloud.com/remote.php/webdav/testcs.bin -u demo:demo -d '123' -v -H 'OC-Checksum: SHA1:40bd001563085fc35165329ea1ff5c5ecbdbbeef'
 
 	var cparts []string
 	// TUS Upload-Checksum header takes precedence
-	if checksum := r.Header.Get(HeaderUploadChecksum); checksum != "" {
+	if checksum := r.Header.Get(net.HeaderUploadChecksum); checksum != "" {
 		cparts = strings.SplitN(checksum, " ", 2)
 		if len(cparts) != 2 {
 			log.Debug().Str("upload-checksum", checksum).Msg("invalid Upload-Checksum format, expected '[algorithm] [checksum]'")
@@ -196,7 +213,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			return
 		}
 		// Then try owncloud header
-	} else if checksum := r.Header.Get(HeaderOCChecksum); checksum != "" {
+	} else if checksum := r.Header.Get(net.HeaderOCChecksum); checksum != "" {
 		cparts = strings.SplitN(checksum, ":", 2)
 		if len(cparts) != 2 {
 			log.Debug().Str("oc-checksum", checksum).Msg("invalid OC-Checksum format, expected '[algorithm]:[checksum]'")
@@ -207,7 +224,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	// we do not check the algorithm here, because it might depend on the storage
 	if len(cparts) == 2 {
 		// Translate into TUS style Upload-Checksum header
-		opaqueMap[HeaderUploadChecksum] = &typespb.OpaqueEntry{
+		opaqueMap[net.HeaderUploadChecksum] = &typespb.OpaqueEntry{
 			Decoder: "plain",
 			// algorithm is always lowercase, checksum is separated by space
 			Value: []byte(strings.ToLower(cparts[0]) + " " + cparts[1]),
@@ -231,18 +248,18 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		switch uRes.Status.Code {
 		case rpc.Code_CODE_PERMISSION_DENIED:
 			w.WriteHeader(http.StatusForbidden)
-			b, err := Marshal(exception{
-				code:    SabredavPermissionDenied,
-				message: "permission denied: you have no permission to upload content",
-			})
-			HandleWebdavError(&log, w, b, err)
+			b, err := errors.Marshal(http.StatusForbidden, "permission denied: you have no permission to upload content", "")
+			errors.HandleWebdavError(&log, w, b, err)
 		case rpc.Code_CODE_NOT_FOUND:
 			w.WriteHeader(http.StatusConflict)
 		default:
-			HandleErrorStatus(&log, w, uRes.Status)
+			errors.HandleErrorStatus(&log, w, uRes.Status)
 		}
 		return
 	}
+
+	// ony send actual PUT request if file has bytes. Otherwise the initiate file upload request creates the file
+	// if length != 0 { // FIXME bring back 0 byte file upload handling, see https://github.com/owncloud/ocis/issues/2609
 
 	var ep, token string
 	for _, p := range uRes.Protocols {
@@ -272,11 +289,8 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		}
 		if httpRes.StatusCode == errtypes.StatusChecksumMismatch {
 			w.WriteHeader(http.StatusBadRequest)
-			b, err := Marshal(exception{
-				code:    SabredavBadRequest,
-				message: "The computed checksum does not match the one received from the client.",
-			})
-			HandleWebdavError(&log, w, b, err)
+			b, err := errors.Marshal(http.StatusBadRequest, "The computed checksum does not match the one received from the client.", "")
+			errors.HandleWebdavError(&log, w, b, err)
 			return
 		}
 		log.Error().Err(err).Msg("PUT request to data server failed")
@@ -284,18 +298,16 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	ok, err := chunking.IsChunked(ref.Path)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if ok {
+	if chunking.IsChunked(ref.Path) {
 		chunk, err := chunking.GetChunkBLOBInfo(ref.Path)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		sReq = &provider.StatRequest{Ref: &provider.Reference{Path: chunk.Path}}
+		sReq = &provider.StatRequest{Ref: &provider.Reference{
+			ResourceId: ref.ResourceId,
+			Path:       chunk.Path,
+		}}
 	}
 
 	// stat again to check the new file's metadata
@@ -307,19 +319,19 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&log, w, sRes.Status)
+		errors.HandleErrorStatus(&log, w, sRes.Status)
 		return
 	}
 
 	newInfo := sRes.Info
 
-	w.Header().Add(HeaderContentType, newInfo.MimeType)
-	w.Header().Set(HeaderETag, newInfo.Etag)
-	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(newInfo.Id))
-	w.Header().Set(HeaderOCETag, newInfo.Etag)
+	w.Header().Add(net.HeaderContentType, newInfo.MimeType)
+	w.Header().Set(net.HeaderETag, newInfo.Etag)
+	w.Header().Set(net.HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(newInfo.Id))
+	w.Header().Set(net.HeaderOCETag, newInfo.Etag)
 	t := utils.TSToTime(newInfo.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
-	w.Header().Set(HeaderLastModified, lastModifiedString)
+	w.Header().Set(net.HeaderLastModified, lastModifiedString)
 
 	// file was new
 	if info == nil {
@@ -336,8 +348,14 @@ func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID st
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	spaceRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -345,7 +363,7 @@ func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID st
 	}
 
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
 
@@ -371,10 +389,10 @@ func checkPreconditions(w http.ResponseWriter, r *http.Request, log zerolog.Logg
 }
 
 func getContentLength(w http.ResponseWriter, r *http.Request) (int64, error) {
-	length, err := strconv.ParseInt(r.Header.Get(HeaderContentLength), 10, 64)
+	length, err := strconv.ParseInt(r.Header.Get(net.HeaderContentLength), 10, 64)
 	if err != nil {
 		// Fallback to Upload-Length
-		length, err = strconv.ParseInt(r.Header.Get(HeaderUploadLength), 10, 64)
+		length, err = strconv.ParseInt(r.Header.Get(net.HeaderUploadLength), 10, 64)
 		if err != nil {
 			return 0, err
 		}

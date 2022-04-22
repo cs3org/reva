@@ -27,9 +27,9 @@ import (
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/group"
-	"github.com/cs3org/reva/pkg/group/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/group"
+	"github.com/cs3org/reva/v2/pkg/group/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -89,12 +89,8 @@ func New(m map[string]interface{}) (group.Manager, error) {
 
 func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId, skipFetchingMembers bool) (*grouppb.Group, error) {
 	for _, g := range m.groups {
-		if g.Id.GetOpaqueId() == gid.OpaqueId || g.GroupName == gid.OpaqueId {
-			group := *g
-			if skipFetchingMembers {
-				group.Members = nil
-			}
-			return &group, nil
+		if (g.Id.GetOpaqueId() == gid.OpaqueId || g.GroupName == gid.OpaqueId) && (gid.Idp == "" || gid.Idp == g.Id.GetIdp()) {
+			return g, nil
 		}
 	}
 	return nil, errtypes.NotFound(gid.OpaqueId)

@@ -30,12 +30,12 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	conversions "github.com/cs3org/reva/pkg/cbox/utils"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/share"
-	"github.com/cs3org/reva/pkg/share/manager/registry"
-	"github.com/cs3org/reva/pkg/utils"
+	conversions "github.com/cs3org/reva/v2/pkg/cbox/utils"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/share"
+	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
@@ -469,6 +469,8 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.Rece
 		switch fieldMask.Paths[i] {
 		case "state":
 			rs.State = share.State
+		case "mount_point":
+			rs.MountPoint = share.MountPoint
 		default:
 			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
 		}

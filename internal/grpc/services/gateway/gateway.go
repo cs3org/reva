@@ -22,16 +22,13 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-
-	"github.com/ReneKroon/ttlcache/v2"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/token"
-	"github.com/cs3org/reva/pkg/token/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/token"
+	"github.com/cs3org/reva/v2/pkg/token/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -65,6 +62,7 @@ type config struct {
 	TransferExpires               int64  `mapstructure:"transfer_expires"`
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
+	// FIXME get rid of ShareFolder, there are findByPath calls in the ocmshareporvider.go and usershareprovider.go
 	ShareFolder         string                            `mapstructure:"share_folder"`
 	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
 	HomeMapping         string                            `mapstructure:"home_mapping"`
@@ -72,6 +70,9 @@ type config struct {
 	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
 	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
 	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
+	ProviderCacheTTL    int                               `mapstructure:"provider_cache_ttl"`
+	StatCacheTTL        int                               `mapstructure:"stat_cache_ttl"`
+	// MountCacheTTL       int                               `mapstructure:"mount_cache_ttl"`
 }
 
 // sets defaults
@@ -119,11 +120,10 @@ func (c *config) init() {
 }
 
 type svc struct {
-	c               *config
-	dataGatewayURL  url.URL
-	tokenmgr        token.Manager
-	etagCache       *ttlcache.Cache `mapstructure:"etag_cache"`
-	createHomeCache *ttlcache.Cache `mapstructure:"create_home_cache"`
+	c              *config
+	dataGatewayURL url.URL
+	tokenmgr       token.Manager
+	cache          Caches
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -148,20 +148,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	etagCache := ttlcache.NewCache()
-	_ = etagCache.SetTTL(time.Duration(c.EtagCacheTTL) * time.Second)
-	etagCache.SkipTTLExtensionOnHit(true)
-
-	createHomeCache := ttlcache.NewCache()
-	_ = createHomeCache.SetTTL(time.Duration(c.CreateHomeCacheTTL) * time.Second)
-	createHomeCache.SkipTTLExtensionOnHit(true)
-
 	s := &svc{
-		c:               c,
-		dataGatewayURL:  *u,
-		tokenmgr:        tokenManager,
-		etagCache:       etagCache,
-		createHomeCache: createHomeCache,
+		c:              c,
+		dataGatewayURL: *u,
+		tokenmgr:       tokenManager,
+		cache:          NewCaches(c.StatCacheTTL, c.CreateHomeCacheTTL, c.ProviderCacheTTL),
 	}
 
 	return s, nil
@@ -172,7 +163,7 @@ func (s *svc) Register(ss *grpc.Server) {
 }
 
 func (s *svc) Close() error {
-	s.etagCache.Close()
+	s.cache.Close()
 	return nil
 }
 

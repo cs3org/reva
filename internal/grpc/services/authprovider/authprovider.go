@@ -24,13 +24,13 @@ import (
 	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth"
-	"github.com/cs3org/reva/pkg/auth/manager/registry"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/plugin"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/auth"
+	"github.com/cs3org/reva/v2/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/plugin"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -138,7 +138,7 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 	u, scope, err := s.authmgr.Authenticate(ctx, username, password)
 	switch v := err.(type) {
 	case nil:
-		log.Info().Msgf("user %s authenticated", u.Id)
+		log.Info().Str("user", u.String()).Msg("user authenticated")
 		return &provider.AuthenticateResponse{
 			Status:     status.NewOK(ctx),
 			User:       u,
@@ -149,6 +149,7 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 			Status: status.NewPermissionDenied(ctx, v, "wrong password"),
 		}, nil
 	case errtypes.NotFound:
+		log.Debug().Str("client_id", username).Msg("unknown client id")
 		return &provider.AuthenticateResponse{
 			Status: status.NewNotFound(ctx, "unknown client id"),
 		}, nil

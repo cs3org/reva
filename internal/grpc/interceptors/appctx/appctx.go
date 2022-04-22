@@ -21,8 +21,8 @@ package appctx
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"

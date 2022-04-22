@@ -29,21 +29,19 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
-	tokenregistry "github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
-	tokenwriterregistry "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth"
-	"github.com/cs3org/reva/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/token"
-	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/internal/http/interceptors/auth/credential/registry"
+	tokenregistry "github.com/cs3org/reva/v2/internal/http/interceptors/auth/token/registry"
+	tokenwriterregistry "github.com/cs3org/reva/v2/internal/http/interceptors/auth/tokenwriter/registry"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/auth"
+	"github.com/cs3org/reva/v2/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	tokenmgr "github.com/cs3org/reva/v2/pkg/token/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -303,15 +301,12 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, unpr
 	ctx = ctxpkg.ContextSetToken(ctx, tkn)
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, r.UserAgent())
+			// store scopes in context
+			ctx = ctxpkg.ContextSetScopes(ctx, tokenScope)
 
-	return ctx, nil
-}
-
-func logError(isUnprotectedEndpoint bool, log *zerolog.Logger, err error, msg string, status int, w http.ResponseWriter) {
-	if !isUnprotectedEndpoint {
-		log.Error().Err(err).Msg(msg)
-		w.WriteHeader(status)
+			r = r.WithContext(ctx)
+			h.ServeHTTP(w, r)
+		})
 	}
 }
 

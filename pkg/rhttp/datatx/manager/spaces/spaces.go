@@ -24,14 +24,14 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rhttp/datatx"
-	"github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
-	"github.com/cs3org/reva/pkg/rhttp/datatx/utils/download"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
+	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -68,7 +68,6 @@ func New(m map[string]interface{}) (datatx.DataTX, error) {
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-
 		var spaceID string
 		spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
 
@@ -82,20 +81,12 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			fn := path.Clean(strings.TrimLeft(r.URL.Path, "/"))
 			defer r.Body.Close()
 
-			// TODO refactor: pass Reference to Upload & GetOrHeadFile
-			// build a storage space reference
-			storageid, opaqeid, err := utils.SplitStorageSpaceID(spaceID)
-			if err != nil {
-				sublog.Error().Msg("space id must be separated by !")
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
+			storageid, opaqeid, _ := utils.SplitStorageSpaceID(spaceID)
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
 				Path:       fn,
 			}
-			err = fs.Upload(ctx, ref, r.Body)
+			err := fs.Upload(ctx, ref, r.Body)
 			switch v := err.(type) {
 			case nil:
 				w.WriteHeader(http.StatusOK)
@@ -111,6 +102,8 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				w.WriteHeader(http.StatusUnauthorized)
 			case errtypes.InsufficientStorage:
 				w.WriteHeader(http.StatusInsufficientStorage)
+			case errtypes.PreconditionFailed:
+				w.WriteHeader(http.StatusPreconditionFailed)
 			default:
 				sublog.Error().Err(v).Msg("error uploading file")
 				w.WriteHeader(http.StatusInternalServerError)

@@ -32,12 +32,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
-	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/v2/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/nextcloud"
+	jwt "github.com/cs3org/reva/v2/pkg/token/manager/jwt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -578,7 +578,7 @@ var _ = Describe("Nextcloud", func() {
 			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			results, err := nc.ListRecycle(ctx, "/", "asdf", "/some/file.txt")
+			results, err := nc.ListRecycle(ctx, nil, "asdf", "/some/file.txt")
 			Expect(err).ToNot(HaveOccurred())
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1085-L1110
 			Expect(len(results)).To(Equal(1))
@@ -617,7 +617,7 @@ var _ = Describe("Nextcloud", func() {
 			}
 			path := "original/location/when/deleted.txt"
 			key := "asdf"
-			err := nc.RestoreRecycleItem(ctx, "/", key, path, restoreRef)
+			err := nc.RestoreRecycleItem(ctx, nil, key, path, restoreRef)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/RestoreRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt","restoreRef":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}}`)
 		})
@@ -629,7 +629,7 @@ var _ = Describe("Nextcloud", func() {
 			defer teardown()
 			path := "original/location/when/deleted.txt"
 			key := "asdf"
-			err := nc.PurgeRecycleItem(ctx, "/", key, path)
+			err := nc.PurgeRecycleItem(ctx, nil, key, path)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/PurgeRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt"}`)
 		})
@@ -640,7 +640,7 @@ var _ = Describe("Nextcloud", func() {
 		It("calls the EmpytRecycle endpoint", func() {
 			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			err := nc.EmptyRecycle(ctx)
+			err := nc.EmptyRecycle(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/EmptyRecycle `)
 		})
@@ -875,10 +875,11 @@ var _ = Describe("Nextcloud", func() {
 		It("calls the GetQuota endpoint", func() {
 			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			maxBytes, maxFiles, err := nc.GetQuota(ctx, nil)
+			maxBytes, maxFiles, remaining, err := nc.GetQuota(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(maxBytes).To(Equal(uint64(456)))
 			Expect(maxFiles).To(Equal(uint64(123)))
+			Expect(remaining).To(Equal(uint64(333)))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/GetQuota `)
 		})
 	})

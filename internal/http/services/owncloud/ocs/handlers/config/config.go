@@ -20,10 +20,11 @@ package ocs
 
 import (
 	"net/http"
+	"net/url"
 
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/data"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
 )
 
 // Handler renders the config endpoint
@@ -49,6 +50,11 @@ func (h *Handler) Init(c *config.Config) {
 	}
 	if h.c.SSL == "" {
 		h.c.SSL = "false" // TODO get from context?
+	}
+
+	// ensure that host has no protocol
+	if url, err := url.Parse(h.c.Host); err == nil {
+		h.c.Host = url.Host + url.Path
 	}
 }
 

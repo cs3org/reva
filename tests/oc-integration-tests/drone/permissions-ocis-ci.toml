@@ -9,4 +9,4 @@ address = "0.0.0.0:10000"
 [grpc.services.permissions]
 driver = "demo"
 
-[grpc.services.publicshareprovider.drivers.ocisci]
+[grpc.services.permissions.drivers.demo]

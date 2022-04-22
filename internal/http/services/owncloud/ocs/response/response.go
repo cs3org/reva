@@ -26,7 +26,7 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -150,7 +150,11 @@ func WriteOCSData(w http.ResponseWriter, r *http.Request, m Meta, d interface{},
 // WriteOCSResponse handles writing ocs responses in json and xml
 func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res Response, err error) {
 	if err != nil {
-		appctx.GetLogger(r.Context()).Error().Err(err).Msg(res.OCS.Meta.Message)
+		appctx.GetLogger(r.Context()).
+			Debug().
+			Err(err).
+			Str("ocs_msg", res.OCS.Meta.Message).
+			Msg("writing ocs error response")
 	}
 
 	version := APIVersion(r.Context())
@@ -189,7 +193,7 @@ func encodeXML(res Response) ([]byte, error) {
 		return nil, err
 	}
 	b := new(bytes.Buffer)
-	b.Write([]byte(xml.Header))
+	b.WriteString(xml.Header)
 	b.Write(marshalled)
 	return b.Bytes(), nil
 }

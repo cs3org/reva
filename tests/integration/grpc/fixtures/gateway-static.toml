@@ -1,0 +1,38 @@
+[shared]
+jwt_secret = "changemeplease"
+gatewaysvc = "{{grpc_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.gateway]
+# registries
+storageregistrysvc = "{{grpc_address}}"
+stat_cache_ttl = 1
+permissionssvc = "{{permissions_address}}"
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "{{users_address}}"
+
+[grpc.services.storageregistry]
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = {"mapping" = "/home-{{substr 0 1 .Id.OpaqueId}}", "aliases" = {"/home-[0-9a-e]" = {"address" = "{{storage_address}}", "provider_id" = "{{storage_id}}"}, "/home-[f-z]" = {"address" = "{{storage2_address}}", "provider_id" = "{{storage2_id}}"}}}
+
+"/users/[0-9a-e]" = {address = "{{storage_address}}", "provider_id" = "{{storage_id}}", "provider_path" = "/users"}
+"{{storage_id}}" = {address = "{{storage_address}}", "provider_id" = "{{storage_id}}"}
+"/users/[f-z]" = {address = "{{storage2_address}}", "provider_id" = "{{storage2_id}}", "provider_path" = "/users"}
+"{{storage2_id}}" = {address = "{{storage2_address}}", "provider_id" = "{{storage2_id}}"}
+
+[http]
+address = "{{grpc_address+1}}"
+
+[http.services.datagateway]
+transfer_shared_secret = "replace-me-with-a-transfer-secret"

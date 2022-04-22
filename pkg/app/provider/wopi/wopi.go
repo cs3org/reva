@@ -38,14 +38,14 @@ import (
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/app"
-	"github.com/cs3org/reva/pkg/app/provider/registry"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/mime"
-	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/app"
+	"github.com/cs3org/reva/v2/pkg/app/provider/registry"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/mime"
+	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -140,7 +140,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if ok { // else defaults to "Guest xyz"
-		if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+		if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
 			q.Add("userid", resource.Owner.OpaqueId+"@"+resource.Owner.Idp)
 		} else {
 			q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
@@ -154,6 +154,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 		if !isPublicShare {
 			q.Add("username", u.Username)
+			q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
 		}
 	}
 

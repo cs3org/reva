@@ -20,7 +20,6 @@ package scope
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -28,14 +27,19 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
+
+// PublicStorageProviderID is the space id used for the public links storage space
+const PublicStorageProviderID = "7993447f-687f-490d-875c-ac95e89a62a4"
 
 func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
 	var share link.PublicShare
@@ -48,7 +52,38 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 	// Viewer role
 	case *registry.GetStorageProvidersRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *registry.ListStorageProvidersRequest:
+		ref := &provider.Reference{}
+		if v.Opaque != nil && v.Opaque.Map != nil {
+			if e, ok := v.Opaque.Map["storage_id"]; ok {
+				ref.ResourceId = &provider.ResourceId{
+					StorageId: string(e.Value),
+				}
+			}
+			if e, ok := v.Opaque.Map["opaque_id"]; ok {
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
+				}
+				ref.ResourceId.OpaqueId = string(e.Value)
+			}
+			if e, ok := v.Opaque.Map["path"]; ok {
+				ref.Path = string(e.Value)
+			}
+		}
+		return checkStorageRef(ctx, &share, ref), nil
+	case *provider.CreateHomeRequest:
+		return false, nil
+	case *provider.GetPathRequest:
+		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.GetResourceId()}), nil
 	case *provider.StatRequest:
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.GetLockRequest:
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.UnlockRequest:
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.RefreshLockRequest:
+		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *provider.SetLockRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
 	case *provider.ListContainerRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
@@ -58,6 +93,8 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		return checkStorageRef(ctx, &share, &provider.Reference{ResourceId: v.ResourceInfo.Id}), nil
 	case *gateway.OpenInAppRequest:
 		return checkStorageRef(ctx, &share, v.GetRef()), nil
+	case *permissionsv1beta1.CheckPermissionRequest:
+		return true, nil
 
 	// Editor role
 	// need to return appropriate status codes in the ocs/ocdav layers.
@@ -80,31 +117,54 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 	case *appregistry.GetDefaultAppProviderForMimeTypeRequest:
 		return true, nil
 
+	case *appregistry.GetAppProvidersRequest:
+		return true, nil
 	case *userv1beta1.GetUserByClaimRequest:
 		return true, nil
+	case *userv1beta1.GetUserRequest:
+		return true, nil
 
+	case *provider.ListStorageSpacesRequest:
+		return true, nil
 	case *link.GetPublicShareRequest:
 		return checkPublicShareRef(&share, v.GetRef()), nil
+	case *link.ListPublicSharesRequest:
+		// public links must not leak info about other links
+		return false, nil
+
+	case *collaboration.ListReceivedSharesRequest:
+		// public links must not leak info about collaborative shares
+		return false, nil
 	case string:
 		return checkResourcePath(v), nil
 	}
 
-	msg := fmt.Sprintf("resource type assertion failed: %+v", resource)
-	logger.Debug().Str("scope", "publicshareScope").Msg(msg)
+	msg := "public resource type assertion failed"
+	logger.Debug().Str("scope", "publicshareScope").Interface("resource", resource).Msg(msg)
 	return false, errtypes.InternalError(msg)
 }
 
 func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Reference) bool {
-	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> >
-	// OR
-	// r: <resource_id:<storage_id:$public-storage-mount-ID opaque_id:$token/$relative-path> >
-	if r.ResourceId != nil && r.Path == "" { // path must be empty
-		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) || strings.HasPrefix(r.ResourceId.OpaqueId, s.Token)
+	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> path:$path > >
+	if utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) {
+		return true
 	}
 
 	// r: <path:"/public/$token" >
-	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) {
+	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) || strings.HasPrefix(r.GetPath(), "./"+s.Token) {
 		return true
+	}
+
+	// r: <resource_id:<storage_id: opaque_id:$token> path:$path>
+	if id := r.GetResourceId(); id.GetStorageId() == PublicStorageProviderID {
+		// access to /public
+		if id.GetOpaqueId() == PublicStorageProviderID {
+			return true
+		}
+		// access relative to /public/$token
+		if id.GetOpaqueId() == s.Token {
+			return true
+		}
 	}
 	return false
 }

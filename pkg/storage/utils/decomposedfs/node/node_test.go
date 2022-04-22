@@ -19,13 +19,14 @@
 package node_test
 
 import (
+	"encoding/json"
 	"time"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
-	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -39,7 +40,7 @@ var _ = Describe("Node", func() {
 
 	BeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv()
+		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 
 		id = "fooId"
@@ -54,8 +55,8 @@ var _ = Describe("Node", func() {
 
 	Describe("New", func() {
 		It("generates unique blob ids if none are given", func() {
-			n1 := node.New(id, "", name, 10, "", env.Owner.Id, env.Lookup)
-			n2 := node.New(id, "", name, 10, "", env.Owner.Id, env.Lookup)
+			n1 := node.New(env.SpaceRootRes.StorageId, id, "", name, 10, "", env.Owner.Id, env.Lookup)
+			n2 := node.New(env.SpaceRootRes.StorageId, id, "", name, 10, "", env.Owner.Id, env.Lookup)
 
 			Expect(len(n1.BlobID)).To(Equal(36))
 			Expect(n1.BlobID).ToNot(Equal(n2.BlobID))
@@ -64,10 +65,13 @@ var _ = Describe("Node", func() {
 
 	Describe("ReadNode", func() {
 		It("reads the blobID from the xattrs", func() {
-			lookupNode, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1", false)
+			lookupNode, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "./dir1/file1",
+			})
 			Expect(err).ToNot(HaveOccurred())
 
-			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.ID)
+			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.SpaceID, lookupNode.ID)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.BlobID).To(Equal("file1-blobid"))
 		})
@@ -75,22 +79,21 @@ var _ = Describe("Node", func() {
 
 	Describe("WriteMetadata", func() {
 		It("writes all xattrs", func() {
-			n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1", false)
+			ref := &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/file1",
+			}
+			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
 
 			blobsize := 239485734
 			n.Name = "TestName"
 			n.BlobID = "TestBlobID"
 			n.Blobsize = int64(blobsize)
-			owner := &userpb.UserId{
-				Idp:      "testidp",
-				OpaqueId: "testuserid",
-				Type:     userpb.UserType_USER_TYPE_PRIMARY,
-			}
 
-			err = n.WriteMetadata(owner)
+			err = n.WriteAllNodeMetadata()
 			Expect(err).ToNot(HaveOccurred())
-			n2, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1", false)
+			n2, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n2.Name).To(Equal("TestName"))
 			Expect(n2.BlobID).To(Equal("TestBlobID"))
@@ -100,7 +103,10 @@ var _ = Describe("Node", func() {
 
 	Describe("Parent", func() {
 		It("returns the parent node", func() {
-			child, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/subdir1", false)
+			child, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/subdir1",
+			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(child).ToNot(BeNil())
 
@@ -116,9 +122,12 @@ var _ = Describe("Node", func() {
 			parent *node.Node
 		)
 
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			var err error
-			parent, err = env.Lookup.NodeFromPath(env.Ctx, "/dir1", false)
+			parent, err = env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1",
+			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(parent).ToNot(BeNil())
 		})
@@ -165,7 +174,10 @@ var _ = Describe("Node", func() {
 
 		BeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, "dir1/file1", false)
+			n, err = env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "dir1/file1",
+			})
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -184,12 +196,34 @@ var _ = Describe("Node", func() {
 				Expect(len(ri.Etag)).To(Equal(34))
 				before := ri.Etag
 
-				Expect(n.SetTMTime(time.Now().UTC())).To(Succeed())
+				tmtime := time.Now()
+				Expect(n.SetTMTime(&tmtime)).To(Succeed())
 
 				ri, err = n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				Expect(ri.Etag).ToNot(Equal(before))
+			})
+
+			It("includes the lock in the Opaque", func() {
+				lock := &provider.Lock{
+					Type:   provider.LockType_LOCK_TYPE_EXCL,
+					User:   env.Owner.Id,
+					LockId: "foo",
+				}
+				err := n.SetLock(env.Ctx, lock)
+				Expect(err).ToNot(HaveOccurred())
+
+				perms := node.OwnerPermissions()
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ri.Opaque).ToNot(BeNil())
+				Expect(ri.Opaque.Map["lock"]).ToNot(BeNil())
+
+				storedLock := &provider.Lock{}
+				err = json.Unmarshal(ri.Opaque.Map["lock"].Value, storedLock)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(storedLock).To(Equal(lock))
 			})
 		})
 	})

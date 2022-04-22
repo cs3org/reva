@@ -33,15 +33,14 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	statuspkg "github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/token"
-	"github.com/cs3org/reva/pkg/utils"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/auth/scope"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	statuspkg "github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/token"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -66,29 +65,64 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 	}
 
 	if ref, ok := extractRef(req, hasEditorRole); ok {
-		// The request is for a storage reference. This can be the case for multiple scenarios:
-		// - If the path is not empty, the request might be coming from a share where the accessor is
-		//   trying to impersonate the owner, since the share manager doesn't know the
-		//   share path.
-		// - If the ID not empty, the request might be coming from
-		//   - a resource present inside a shared folder, or
-		//   - a share created for a lightweight account after the token was minted.
-		log.Info().Msgf("resolving storage reference to check token scope %s", ref.String())
-		for k := range tokenScope {
-			switch {
-			case strings.HasPrefix(k, "publicshare"):
-				if err = resolvePublicShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
-					return nil
-				}
+		// Check if req is of type *provider.Reference_Path
+		// If yes, the request might be coming from a share where the accessor is
+		// trying to impersonate the owner, since the share manager doesn't know the
+		// share path.
+		if ref.GetPath() != "" {
+			log.Info().Str("path", ref.GetPath()).Msg("resolving path reference to ID to check token scope")
+			for k := range tokenScope {
+				switch {
+				case strings.HasPrefix(k, "publicshare"):
+					var share link.PublicShare
+					err := utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
+					if err != nil {
+						continue
+					}
+					if ok, err := checkIfNestedResource(ctx, ref, share.ResourceId, client, mgr); err == nil && ok {
+						return nil
+					}
 
 			case strings.HasPrefix(k, "share"):
 				if err = resolveUserShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
 					return nil
 				}
+			}
+		} else {
+			// ref has ID present
+			// The request might be coming from
+			// - a resource present inside a shared folder, or
+			// - a share created for a lightweight account after the token was minted.
 
-			case strings.HasPrefix(k, "lightweight"):
-				if err = resolveLightweightScope(ctx, ref, tokenScope[k], user, client, mgr); err == nil {
-					return nil
+			client, err := pool.GetGatewayServiceClient(gatewayAddr)
+			if err != nil {
+				return err
+			}
+			for k := range tokenScope {
+				if strings.HasPrefix(k, "lightweight") {
+					log.Info().Msgf("resolving ID reference against received shares to verify token scope %+v", ref.GetResourceId())
+					shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+					if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
+						log.Warn().Err(err).Msg("error listing received shares")
+						continue
+					}
+					for _, share := range shares.Shares {
+						if utils.ResourceIDEqual(share.Share.ResourceId, ref.GetResourceId()) {
+							return nil
+						}
+						if ok, err := checkIfNestedResource(ctx, ref, share.Share.ResourceId, client, mgr); err == nil && ok {
+							return nil
+						}
+					}
+				} else if strings.HasPrefix(k, "publicshare") {
+					var share link.PublicShare
+					err := utils.UnmarshalJSONToProtoV1(tokenScope[k].Resource.Value, &share)
+					if err != nil {
+						continue
+					}
+					if ok, err := checkIfNestedResource(ctx, ref, share.ResourceId, client, mgr); err == nil && ok {
+						return nil
+					}
 				}
 			}
 			log.Err(err).Msgf("error resolving reference %s under scope %+v", ref.String(), k)
@@ -98,7 +132,11 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 		// It's a share ref
 		// The request might be coming from a share created for a lightweight account
 		// after the token was minted.
-		log.Info().Msgf("resolving share reference against received shares to verify token scope %+v", ref.String())
+		log.Info().Interface("reference", ref).Msg("resolving share reference against received shares to verify token scope")
+		client, err := pool.GetGatewayServiceClient(gatewayAddr)
+		if err != nil {
+			return err
+		}
 		for k := range tokenScope {
 			if strings.HasPrefix(k, "lightweight") {
 				// Check if this ID is cached
@@ -127,7 +165,6 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 			}
 		}
 	}
-
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
 }
 
@@ -207,7 +244,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 	parentPath := statResponse.Info.Path
 
 	childPath := ref.GetPath()
-	if childPath == "" {
+	if childPath == "" || childPath == "." {
 		// We mint a token as the owner of the public share and try to stat the reference
 		// TODO(ishank011): We need to find a better alternative to this
 
@@ -226,18 +263,17 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 		}
 		ctx = metadata.AppendToOutgoingContext(context.Background(), ctxpkg.TokenHeader, token)
 
-		childStat, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+		gpRes, err := client.GetPath(ctx, &provider.GetPathRequest{ResourceId: ref.ResourceId})
 		if err != nil {
 			return false, err
 		}
-		if childStat.Status.Code != rpc.Code_CODE_OK {
-			return false, statuspkg.NewErrorFromCode(childStat.Status.Code, "auth interceptor")
+		if gpRes.Status.Code != rpc.Code_CODE_OK {
+			return false, statuspkg.NewErrorFromCode(gpRes.Status.Code, "auth interceptor")
 		}
-		childPath = statResponse.Info.Path
+		childPath = gpRes.Path
 	}
 
 	return strings.HasPrefix(childPath, parentPath), nil
-
 }
 
 func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool) {
@@ -245,20 +281,49 @@ func extractRef(req interface{}, hasEditorRole bool) (*provider.Reference, bool)
 	// Read requests
 	case *registry.GetStorageProvidersRequest:
 		return v.GetRef(), true
+	case *registry.ListStorageProvidersRequest:
+		ref := &provider.Reference{}
+		if v.Opaque != nil && v.Opaque.Map != nil {
+			if e, ok := v.Opaque.Map["storage_id"]; ok {
+				ref.ResourceId = &provider.ResourceId{
+					StorageId: string(e.Value),
+				}
+			}
+			if e, ok := v.Opaque.Map["opaque_id"]; ok {
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
+				}
+				ref.ResourceId.OpaqueId = string(e.Value)
+			}
+			if e, ok := v.Opaque.Map["path"]; ok {
+				ref.Path = string(e.Value)
+			}
+		}
+		return ref, true
 	case *provider.StatRequest:
 		return v.GetRef(), true
 	case *provider.ListContainerRequest:
 		return v.GetRef(), true
 	case *provider.InitiateFileDownloadRequest:
 		return v.GetRef(), true
+
+	// Locking
+	case *provider.GetLockRequest:
+		return v.GetRef(), true
+	case *provider.SetLockRequest:
+		return v.GetRef(), true
+	case *provider.RefreshLockRequest:
+		return v.GetRef(), true
+	case *provider.UnlockRequest:
+		return v.GetRef(), true
+
+	// App provider requests
+	case *appregistry.GetAppProvidersRequest:
+		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	case *appprovider.OpenInAppRequest:
 		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	case *gateway.OpenInAppRequest:
 		return v.GetRef(), true
-
-		// App provider requests
-	case *appregistry.GetAppProvidersRequest:
-		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	}
 
 	if !hasEditorRole {

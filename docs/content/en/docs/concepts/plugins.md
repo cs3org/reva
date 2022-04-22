@@ -45,9 +45,9 @@ Basic example of serving your component is shown below. This example consists of
 // main.go
 
 import (
-   	"github.com/cs3org/reva/pkg/user"
+   	"github.com/cs3org/reva/v2/pkg/user"
     "github.com/hashicorp/go-plugin"
-	revaPlugin "github.com/cs3org/reva/pkg/plugin"
+	revaPlugin "github.com/cs3org/reva/v2/pkg/plugin"
 )
 
 // Assume this implements the user.Manager interface

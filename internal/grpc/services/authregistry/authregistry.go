@@ -22,11 +22,11 @@ import (
 	"context"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
-	"github.com/cs3org/reva/pkg/auth"
-	"github.com/cs3org/reva/pkg/auth/registry/registry"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/auth"
+	"github.com/cs3org/reva/v2/pkg/auth/registry/registry"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
@@ -105,7 +105,7 @@ func (s *service) ListAuthProviders(ctx context.Context, req *registrypb.ListAut
 	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListAuthProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error getting list of auth providers"),
+			Status: status.NewInternal(ctx, "error getting list of auth providers"),
 		}, nil
 	}
 
@@ -120,13 +120,15 @@ func (s *service) GetAuthProviders(ctx context.Context, req *registrypb.GetAuthP
 	pinfo, err := s.reg.GetProvider(ctx, req.Type)
 	if err != nil {
 		return &registrypb.GetAuthProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error getting auth provider for type: "+req.Type),
+			Status: status.NewInternal(ctx, "error getting auth provider for type: "+req.Type),
 		}, nil
 	}
 
 	res := &registrypb.GetAuthProvidersResponse{
-		Status:    status.NewOK(ctx),
-		Providers: []*registrypb.ProviderInfo{pinfo},
+		Status: status.NewOK(ctx),
+		Providers: []*registrypb.ProviderInfo{
+			pinfo,
+		},
 	}
 	return res, nil
 }

@@ -22,8 +22,8 @@ import (
 	"context"
 
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
@@ -31,7 +31,7 @@ func (s *svc) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCore
 	c, err := pool.GetOCMCoreClient(s.c.OCMCoreEndpoint)
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting ocm core client"),
+			Status: status.NewInternal(ctx, "error getting ocm core client"),
 		}, nil
 	}
 

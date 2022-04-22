@@ -26,16 +26,16 @@ import (
 	"net/http"
 	"strings"
 
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/user"
-	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/user"
+	"github.com/cs3org/reva/v2/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	// "github.com/cs3org/reva/pkg/errtypes"
+	// "github.com/cs3org/reva/v2/pkg/errtypes"
 )
 
 func init() {
@@ -150,7 +150,7 @@ func (um *Manager) Configure(ml map[string]interface{}) error {
 }
 
 // GetUser method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
+func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	bodyStr, _ := json.Marshal(uid)
 	_, respBody, err := um.do(ctx, Action{"GetUser", string(bodyStr)}, "unauthenticated")
 	if err != nil {
@@ -216,7 +216,7 @@ func (um *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]str
 }
 
 // FindUsers method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (um *Manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
+func (um *Manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 	user, err := getUser(ctx)
 	if err != nil {
 		return nil, err

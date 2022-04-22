@@ -34,12 +34,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/ocm/invite"
-	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
-	"github.com/cs3org/reva/pkg/ocm/invite/token"
-	"github.com/cs3org/reva/pkg/rhttp"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/ocm/invite"
+	"github.com/cs3org/reva/v2/pkg/ocm/invite/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/ocm/invite/token"
+	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -202,6 +202,13 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	contextUser := ctxpkg.ContextMustGetUser(ctx)
 	recipientProvider := contextUser.GetId().GetIdp()
 
+	// recipientProvider should be a URL, see https://github.com/cs3org/OCM-API/pull/41/files#diff-9cfca4a1b73e1e28e30fb9b0b984aad6d4caaf0819c61ed40ad338600531f745R569
+	// And going forward, UserId Idp will also include the https:// prefix, see https://github.com/cs3org/cs3apis/pull/159
+	// But historically, reva used UserId Idps that were domains instead of full URLs, so we need to support that case too, see
+	// https://github.com/cs3org/reva/issues/2288
+	if !(strings.Contains(recipientProvider, "://")) {
+		recipientProvider = "https://" + recipientProvider
+	}
 	requestBody := url.Values{
 		"token":             {invite.GetToken()},
 		"userID":            {contextUser.GetId().GetOpaqueId()},
@@ -239,7 +246,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		if e != nil {
 			return errors.Wrap(e, "json: error reading request body")
 		}
-		return errors.Wrap(errors.New(fmt.Sprintf("%s: %s", resp.Status, string(respBody))), "json: error sending accept post request")
+		return errors.Wrap(fmt.Errorf("%s: %s", resp.Status, string(respBody)), "json: error sending accept post request")
 	}
 
 	return nil

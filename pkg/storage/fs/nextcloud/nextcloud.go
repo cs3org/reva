@@ -29,11 +29,11 @@ import (
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -455,7 +455,7 @@ func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Refe
 }
 
 // ListRecycle as defined in the storage.FS interface
-func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key string, relativePath string) ([]*provider.RecycleItem, error) {
+func (nc *StorageDriver) ListRecycle(ctx context.Context, ref *provider.Reference, key string, relativePath string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("ListRecycle")
 	type paramsObj struct {
@@ -486,7 +486,7 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key string, 
 }
 
 // RestoreRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	type paramsObj struct {
 		Key        string              `json:"key"`
 		Path       string              `json:"path"`
@@ -508,7 +508,7 @@ func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, basePath, key, 
 }
 
 // PurgeRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	type paramsObj struct {
 		Key  string `json:"key"`
 		Path string `json:"path"`
@@ -526,7 +526,7 @@ func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, basePath, key, re
 }
 
 // EmptyRecycle as defined in the storage.FS interface
-func (nc *StorageDriver) EmptyRecycle(ctx context.Context) error {
+func (nc *StorageDriver) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("EmptyRecycle")
 
@@ -692,21 +692,25 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 }
 
 // GetQuota as defined in the storage.FS interface
-func (nc *StorageDriver) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
+func (nc *StorageDriver) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("GetQuota")
 
 	_, respBody, err := nc.do(ctx, Action{"GetQuota", ""})
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	var respMap map[string]interface{}
 	err = json.Unmarshal(respBody, &respMap)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	return uint64(respMap["totalBytes"].(float64)), uint64(respMap["usedBytes"].(float64)), err
+
+	total := uint64(respMap["totalBytes"].(float64))
+	used := uint64(respMap["usedBytes"].(float64))
+	remaining := total - used
+	return total, used, remaining, err
 }
 
 // CreateReference as defined in the storage.FS interface
@@ -786,7 +790,7 @@ func (nc *StorageDriver) RefreshLock(ctx context.Context, ref *provider.Referenc
 }
 
 // Unlock removes an existing lock from the given reference
-func (nc *StorageDriver) Unlock(ctx context.Context, ref *provider.Reference) error {
+func (nc *StorageDriver) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
@@ -839,4 +843,19 @@ func (nc *StorageDriver) UpdateStorageSpace(ctx context.Context, req *provider.U
 		return nil, err
 	}
 	return &respObj, nil
+}
+
+// DeleteStorageSpace deletes a storage space
+func (nc *StorageDriver) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	bodyStr, _ := json.Marshal(req)
+	_, respBody, err := nc.do(ctx, Action{"DeleteStorageSpace", string(bodyStr)})
+	if err != nil {
+		return err
+	}
+	var respObj provider.DeleteStorageSpaceResponse
+	err = json.Unmarshal(respBody, &respObj)
+	if err != nil {
+		return err
+	}
+	return nil
 }

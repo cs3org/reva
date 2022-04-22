@@ -26,9 +26,9 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/cs3org/reva/pkg/storage/fs/owncloudsql/filecache"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/owncloudsql/filecache"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -61,6 +61,58 @@ var _ = Describe("Filecache", func() {
 
 	AfterEach(func() {
 		os.Remove(testDbFile.Name())
+	})
+
+	Describe("ListStorages", func() {
+		It("returns all storages", func() {
+			storages, err := cache.ListStorages(false)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(storages)).To(Equal(2))
+			ids := []string{}
+			numericIDs := []int{}
+			for _, s := range storages {
+				ids = append(ids, s.ID)
+				numericIDs = append(numericIDs, s.NumericID)
+			}
+			Expect(numericIDs).To(ConsistOf([]int{1, 2}))
+			Expect(ids).To(ConsistOf([]string{"home::admin", "local::/mnt/data/files/"}))
+		})
+
+		It("returns all home storages", func() {
+			storages, err := cache.ListStorages(true)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(storages)).To(Equal(1))
+			Expect(storages[0].ID).To(Equal("home::admin"))
+			Expect(storages[0].NumericID).To(Equal(1))
+		})
+	})
+
+	Describe("GetStorage", func() {
+		It("returns an error when the id is invalid", func() {
+			s, err := cache.GetStorage("foo")
+			Expect(err).To(HaveOccurred())
+			Expect(s).To(BeNil())
+		})
+
+		It("returns an error when the id doesn't exist", func() {
+			s, err := cache.GetStorage(100)
+			Expect(err).To(HaveOccurred())
+			Expect(s).To(BeNil())
+		})
+
+		It("returns the storage", func() {
+			s, err := cache.GetStorage(1)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(s.ID).To(Equal("home::admin"))
+			Expect(s.NumericID).To(Equal(1))
+		})
+
+		It("takes string ids", func() {
+			s, err := cache.GetStorage("1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(s.ID).To(Equal("home::admin"))
+			Expect(s.NumericID).To(Equal(1))
+		})
 	})
 
 	Describe("GetNumericStorageID", func() {

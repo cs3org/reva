@@ -23,7 +23,7 @@ package datatx
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage"
 )
 
 // DataTX provides an abstraction around various data transfer protocols.

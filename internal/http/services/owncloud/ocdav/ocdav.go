@@ -20,42 +20,32 @@ package ocdav
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"net/url"
 	"path"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/storage/favorite"
-	"github.com/cs3org/reva/pkg/storage/favorite/registry"
-	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/storage/favorite"
+	"github.com/cs3org/reva/v2/pkg/storage/favorite/registry"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
-type ctxKey int
-
-const (
-	ctxKeyBaseURI ctxKey = iota
-)
-
 var (
-	errInvalidValue = errors.New("invalid value")
-
 	nameRules = [...]nameRule{
 		nameNotEmpty{},
 		nameDoesNotContain{chars: "\f\r\n\\"},
@@ -96,12 +86,11 @@ type Config struct {
 	// Example: if WebdavNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
-	WebdavNamespace string `mapstructure:"webdav_namespace"`
-	GatewaySvc      string `mapstructure:"gatewaysvc"`
-	Timeout         int64  `mapstructure:"timeout"`
-	Insecure        bool   `mapstructure:"insecure"`
-	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
-	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
+	WebdavNamespace        string                            `mapstructure:"webdav_namespace"`
+	SharesNamespace        string                            `mapstructure:"shares_namespace"`
+	GatewaySvc             string                            `mapstructure:"gatewaysvc"`
+	Timeout                int64                             `mapstructure:"timeout"`
+	Insecure               bool                              `mapstructure:"insecure"`
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
@@ -117,12 +106,17 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	c                   *Config
-	webDavHandler       *WebDavHandler
-	davHandler          *DavHandler
-	favoritesManager    favorite.Manager
-	client              *http.Client
-	userIdentifierCache *ttlcache.Cache
+	c                *Config
+	webDavHandler    *WebDavHandler
+	davHandler       *DavHandler
+	favoritesManager favorite.Manager
+	client           *http.Client
+	// LockSystem is the lock management system.
+	LockSystem LockSystem
+}
+
+func (s *svc) Config() *Config {
+	return s.c
 }
 
 func getFavoritesManager(c *Config) (favorite.Manager, error) {
@@ -131,8 +125,16 @@ func getFavoritesManager(c *Config) (favorite.Manager, error) {
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.FavoriteStorageDriver)
 }
+func getLockSystem(c *Config) (LockSystem, error) {
+	// TODO in memory implementation
+	client, err := pool.GetGatewayServiceClient(c.GatewaySvc)
+	if err != nil {
+		return nil, err
+	}
+	return NewCS3LS(client), nil
+}
 
-// New returns a new ocdav
+// New returns a new ocdav service
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
@@ -145,7 +147,16 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	if err != nil {
 		return nil, err
 	}
+	ls, err := getLockSystem(conf)
+	if err != nil {
+		return nil, err
+	}
 
+	return NewWith(conf, fm, ls, log)
+}
+
+// NewWith returns a new ocdav service
+func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger) (global.Service, error) {
 	s := &svc{
 		c:             conf,
 		webDavHandler: new(WebDavHandler),
@@ -154,8 +165,8 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
-		favoritesManager:    fm,
-		userIdentifierCache: ttlcache.NewCache(),
+		favoritesManager: fm,
+		LockSystem:       ls,
 	}
 	_ = s.userIdentifierCache.SetTTL(60 * time.Second)
 
@@ -190,7 +201,7 @@ func (s *svc) Handler() http.Handler {
 
 		// TODO(jfd): do we need this?
 		// fake litmus testing for empty namespace: see https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/litmus_test_server.go#L58-L89
-		if r.Header.Get("X-Litmus") == "props: 3 (propfind_invalid2)" {
+		if r.Header.Get(net.HeaderLitmus) == "props: 3 (propfind_invalid2)" {
 			http.Error(w, "400 Bad Request", http.StatusBadRequest)
 			return
 		}
@@ -234,7 +245,7 @@ func (s *svc) Handler() http.Handler {
 			// for oc we need to prepend /home as the path that will be passed to the home storage provider
 			// will not contain the username
 			base = path.Join(base, "webdav")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			s.webDavHandler.Handler(s).ServeHTTP(w, r)
 			return
@@ -244,7 +255,7 @@ func (s *svc) Handler() http.Handler {
 			// for oc we need to prepend the path to user homes
 			// or we take the path starting at /dav and allow rewriting it?
 			base = path.Join(base, "dav")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			s.davHandler.Handler(s).ServeHTTP(w, r)
 			return
@@ -258,7 +269,7 @@ func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(s.c.GatewaySvc)
 }
 
-func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {
+func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) (string, string, error) {
 	// If useLoggedInUserNS is false, that implies that the request is coming from
 	// the FilesHandler method invoked by a /dav/files/fileOwner where fileOwner
 	// is not the same as the logged in user. In that case, we'll treat fileOwner
@@ -266,12 +277,47 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 	// namespace template.
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok || !useLoggedInUserNS {
-		requestUserID, _ := router.ShiftPath(requestPath)
-		u = &userpb.User{
-			Username: requestUserID,
+		var requestUsernameOrID string
+		requestUsernameOrID, requestPath = router.ShiftPath(requestPath)
+
+		gatewayClient, err := s.getClient()
+		if err != nil {
+			return "", "", err
 		}
+
+		// Check if this is a Userid
+		userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: &userpb.UserId{OpaqueId: requestUsernameOrID},
+		})
+		if err != nil {
+			return "", "", err
+		}
+
+		// If it's not a userid try if it is a user name
+		if userRes.Status.Code != rpc.Code_CODE_OK {
+			res, err := gatewayClient.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+				Claim: "username",
+				Value: requestUsernameOrID,
+			})
+			if err != nil {
+				return "", "", err
+			}
+			userRes.Status = res.Status
+			userRes.User = res.User
+		}
+
+		// If still didn't find a user, fallback
+		if userRes.Status.Code != rpc.Code_CODE_OK {
+			userRes.User = &userpb.User{
+				Username: requestUsernameOrID,
+				Id:       &userpb.UserId{OpaqueId: requestUsernameOrID},
+			}
+		}
+
+		u = userRes.User
 	}
-	return templates.WithUser(u, ns)
+
+	return templates.WithUser(u, ns), requestPath, nil
 }
 
 func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
@@ -296,58 +342,4 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	if r.TLS != nil {
 		headers.Set("Strict-Transport-Security", "max-age=63072000")
 	}
-}
-
-func extractDestination(r *http.Request) (string, error) {
-	dstHeader := r.Header.Get(HeaderDestination)
-	if dstHeader == "" {
-		return "", errors.Wrap(errInvalidValue, "destination header is empty")
-	}
-	dstURL, err := url.ParseRequestURI(dstHeader)
-	if err != nil {
-		return "", errors.Wrap(errInvalidValue, err.Error())
-	}
-
-	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
-	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
-	// Strip the base URI from the destination. The destination might contain redirection prefixes which need to be handled
-	urlSplit := strings.Split(dstURL.Path, baseURI)
-	if len(urlSplit) != 2 {
-		return "", errors.Wrap(errInvalidValue, "destination path does not contain base URI")
-	}
-
-	return urlSplit[1], nil
-}
-
-// replaceAllStringSubmatchFunc is taken from 'Go: Replace String with Regular Expression Callback'
-// see: https://elliotchance.medium.com/go-replace-string-with-regular-expression-callback-f89948bad0bb
-func replaceAllStringSubmatchFunc(re *regexp.Regexp, str string, repl func([]string) string) string {
-	result := ""
-	lastIndex := 0
-	for _, v := range re.FindAllSubmatchIndex([]byte(str), -1) {
-		groups := []string{}
-		for i := 0; i < len(v); i += 2 {
-			groups = append(groups, str[v[i]:v[i+1]])
-		}
-		result += str[lastIndex:v[0]] + repl(groups)
-		lastIndex = v[1]
-	}
-	return result + str[lastIndex:]
-}
-
-var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@!$])`)
-
-// encodePath encodes the path of a url.
-//
-// slashes (/) are treated as path-separators.
-// ported from https://github.com/sabre-io/http/blob/bb27d1a8c92217b34e778ee09dcf79d9a2936e84/lib/functions.php#L369-L379
-func encodePath(path string) string {
-	return replaceAllStringSubmatchFunc(hrefre, path, func(groups []string) string {
-		b := groups[1]
-		var sb strings.Builder
-		for i := 0; i < len(b); i++ {
-			sb.WriteString(fmt.Sprintf("%%%x", b[i]))
-		}
-		return sb.String()
-	})
 }

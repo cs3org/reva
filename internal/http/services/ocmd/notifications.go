@@ -21,8 +21,8 @@ package ocmd
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 )
 
 type notificationsHandler struct {

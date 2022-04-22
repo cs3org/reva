@@ -26,15 +26,18 @@ import (
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/utils"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -86,28 +89,27 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 		return
 	}
 
-	ref := &provider.Reference{ResourceId: info.Id}
-
-	providers, err := h.findProviders(ctx, ref)
+	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider", err)
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting gateway client", err)
 		return
 	}
 
-	providerClient, err := h.getStorageProviderClient(providers[0])
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider", err)
-		return
-	}
+	permissions := role.CS3ResourcePermissions()
+	// All members of a space should be able to list shares inside that space.
+	// The viewer role doesn't have the ListGrants permission so we set it here.
+	permissions.ListGrants = true
 
-	addGrantRes, err := providerClient.AddGrant(ctx, &provider.AddGrantRequest{
-		Ref: ref,
-		Grant: &provider.Grant{
-			Grantee:     &grantee,
-			Permissions: role.CS3ResourcePermissions(),
+	createShareRes, err := client.CreateShare(ctx, &collaborationv1beta1.CreateShareRequest{
+		ResourceInfo: info,
+		Grant: &collaborationv1beta1.ShareGrant{
+			Permissions: &collaborationv1beta1.SharePermissions{
+				Permissions: permissions,
+			},
+			Grantee: &grantee,
 		},
 	})
-	if err != nil || addGrantRes.Status.Code != rpc.Code_CODE_OK {
+	if err != nil || createShareRes.Status.Code != rpc.Code_CODE_OK {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not add space member", err)
 		return
 	}
@@ -136,29 +138,50 @@ func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spac
 		return
 	}
 
-	providers, err := h.findProviders(ctx, &ref)
+	p, err := h.findProvider(ctx, &ref)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider", err)
 		return
 	}
 
-	providerClient, err := h.getStorageProviderClient(providers[0])
+	providerClient, err := h.getStorageProviderClient(p)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider", err)
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider client", err)
 		return
 	}
 
-	removeGrantRes, err := providerClient.RemoveGrant(ctx, &provider.RemoveGrantRequest{
-		Ref: &ref,
-		Grant: &provider.Grant{
-			Grantee: &grantee,
+	lgRes, err := providerClient.ListGrants(ctx, &provider.ListGrantsRequest{Ref: &ref})
+	if err != nil || lgRes.Status.Code != rpc.Code_CODE_OK {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error listing space grants", err)
+		return
+	}
+
+	if len(lgRes.Grants) == 1 || !isSpaceManagerRemaining(lgRes.Grants, grantee) {
+		response.WriteOCSError(w, r, http.StatusForbidden, "can't remove the last manager", nil)
+		return
+	}
+
+	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting gateway client", err)
+		return
+	}
+
+	removeShareRes, err := gatewayClient.RemoveShare(ctx, &collaborationv1beta1.RemoveShareRequest{
+		Ref: &collaborationv1beta1.ShareReference{
+			Spec: &collaborationv1beta1.ShareReference_Key{
+				Key: &collaborationv1beta1.ShareKey{
+					ResourceId: ref.ResourceId,
+					Grantee:    &grantee,
+				},
+			},
 		},
 	})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error removing grant", err)
 		return
 	}
-	if removeGrantRes.Status.Code != rpc.Code_CODE_OK {
+	if removeShareRes.Status.Code != rpc.Code_CODE_OK {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error removing grant", err)
 		return
 	}
@@ -169,45 +192,89 @@ func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spac
 func (h *Handler) getStorageProviderClient(p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
 	c, err := pool.GetStorageProviderServiceClient(p.Address)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting a storage provider client")
+		err = errors.Wrap(err, "shares spaces: error getting a storage provider client")
 		return nil, err
 	}
 
 	return c, nil
 }
 
-func (h *Handler) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
+func (h *Handler) findProvider(ctx context.Context, ref *provider.Reference) (*registry.ProviderInfo, error) {
 	c, err := pool.GetStorageRegistryClient(h.storageRegistryAddr)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
+		return nil, errors.Wrap(err, "shares spaces: error getting storage registry client")
 	}
 
-	res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
-		Ref: ref,
-	})
+	filters := map[string]string{}
+	if ref.Path != "" {
+		filters["path"] = ref.Path
+	}
+	if ref.ResourceId != nil {
+		filters["storage_id"] = ref.ResourceId.StorageId
+		filters["opaque_id"] = ref.ResourceId.OpaqueId
+	}
+
+	listReq := &registry.ListStorageProvidersRequest{
+		Opaque: &types.Opaque{},
+	}
+	sdk.EncodeOpaqueMap(listReq.Opaque, filters)
+
+	res, err := c.ListStorageProviders(ctx, listReq)
 
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling GetStorageProvider")
+		return nil, errors.Wrap(err, "shares spaces: error calling ListStorageProviders")
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
 		switch res.Status.Code {
 		case rpc.Code_CODE_NOT_FOUND:
-			return nil, errtypes.NotFound("gateway: storage provider not found for reference:" + ref.String())
+			return nil, errtypes.NotFound("shares spaces: storage provider not found for reference:" + ref.String())
 		case rpc.Code_CODE_PERMISSION_DENIED:
-			return nil, errtypes.PermissionDenied("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.PermissionDenied("shares spaces: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
 		case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_FAILED_PRECONDITION, rpc.Code_CODE_OUT_OF_RANGE:
-			return nil, errtypes.BadRequest("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.BadRequest("shares spaces: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
 		case rpc.Code_CODE_UNIMPLEMENTED:
-			return nil, errtypes.NotSupported("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.NotSupported("shares spaces: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
 		default:
-			return nil, status.NewErrorFromCode(res.Status.Code, "gateway")
+			return nil, status.NewErrorFromCode(res.Status.Code, "shares spaces")
 		}
 	}
 
-	if res.Providers == nil {
-		return nil, errtypes.NotFound("gateway: provider is nil")
+	if len(res.Providers) < 1 {
+		return nil, errtypes.NotFound("shares spaces: no provider found")
 	}
 
-	return res.Providers, nil
+	return res.Providers[0], nil
+}
+
+func isSpaceManagerRemaining(grants []*provider.Grant, grantee provider.Grantee) bool {
+	for _, g := range grants {
+		// AddGrant is currently the way to check for the manager role
+		// If it is not set than the current grant is not for a manager and
+		// we can just continue with the next one.
+		if g.Permissions.AddGrant && !isEqualGrantee(*g.Grantee, grantee) {
+			return true
+		}
+	}
+	return false
+}
+
+func isEqualGrantee(a, b provider.Grantee) bool {
+	// Ideally we would want to use utils.GranteeEqual()
+	// but the grants stored in the decomposedfs aren't complete (missing usertype and idp)
+	// because of that the check would fail so we can only check the ... for now.
+	if a.Type != b.Type {
+		return false
+	}
+
+	var aID, bID string
+	switch a.Type {
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		aID = a.GetGroupId().OpaqueId
+		bID = b.GetGroupId().OpaqueId
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		aID = a.GetUserId().OpaqueId
+		bID = b.GetUserId().OpaqueId
+	}
+	return aID == bID
 }

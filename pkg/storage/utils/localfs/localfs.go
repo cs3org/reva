@@ -35,15 +35,15 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/mime"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/utils/acl"
-	"github.com/cs3org/reva/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/pkg/storage/utils/grants"
-	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/utils"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/mime"
+	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -432,7 +432,11 @@ func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.ResourceId) (s
 			return "", err
 		}
 	}
-	return url.QueryUnescape(strings.TrimPrefix(ref.OpaqueId, "fileid-"+layout))
+	unescapedID, err := url.QueryUnescape(ref.OpaqueId)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimPrefix(unescapedID, "fileid-"+layout), nil
 }
 
 func (fs *localfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
@@ -566,7 +570,7 @@ func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *
 
 // CreateStorageSpace creates a storage space
 func (fs *localfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+	return nil, errtypes.NotSupported("unimplemented: CreateStorageSpace")
 }
 
 func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
@@ -727,7 +731,7 @@ func (fs *localfs) RefreshLock(ctx context.Context, ref *provider.Reference, loc
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *localfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+func (fs *localfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
@@ -1172,7 +1176,7 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 	return fs.propagate(ctx, np)
 }
 
-func (fs *localfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+func (fs *localfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	rp := fs.wrapRecycleBin(ctx, key)
 
 	if err := os.Remove(rp); err != nil {
@@ -1181,7 +1185,7 @@ func (fs *localfs) PurgeRecycleItem(ctx context.Context, basePath, key, relative
 	return nil
 }
 
-func (fs *localfs) EmptyRecycle(ctx context.Context) error {
+func (fs *localfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 	rp := fs.wrapRecycleBin(ctx, "/")
 
 	if err := os.RemoveAll(rp); err != nil {
@@ -1222,7 +1226,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 }
 
-func (fs *localfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *localfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
 
 	rp := fs.wrapRecycleBin(ctx, "/")
 
@@ -1240,7 +1244,7 @@ func (fs *localfs) ListRecycle(ctx context.Context, basePath, key, relativePath 
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 
 	suffix := path.Ext(key)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
@@ -1293,6 +1297,11 @@ func (fs *localfs) ListStorageSpaces(ctx context.Context, filter []*provider.Lis
 // UpdateStorageSpace updates a storage space
 func (fs *localfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
+}
+
+// DeleteStorageSpace deletes a storage space
+func (fs *localfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+	return errtypes.NotSupported("delete storage space")
 }
 
 func (fs *localfs) propagate(ctx context.Context, leafPath string) error {

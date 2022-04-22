@@ -25,11 +25,16 @@ import (
 	"go-micro.dev/v4/util/log"
 	"google.golang.org/grpc"
 
-	"github.com/asim/go-micro/plugins/events/nats/v4"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	v1beta12 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	"github.com/cs3org/reva/pkg/events"
-	"github.com/cs3org/reva/pkg/events/server"
-	"github.com/cs3org/reva/pkg/rgrpc"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events/server"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/go-micro/plugins/v4/events/natsjs"
 )
 
 const (
@@ -58,7 +63,91 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		var ev interface{}
 		switch v := res.(type) {
 		case *collaboration.CreateShareResponse:
-			ev = ShareCreated(v)
+			if isSuccess(v) {
+				ev = ShareCreated(v)
+			}
+		case *collaboration.RemoveShareResponse:
+			if isSuccess(v) {
+				ev = ShareRemoved(v, req.(*collaboration.RemoveShareRequest))
+			}
+		case *collaboration.UpdateShareResponse:
+			if isSuccess(v) {
+				ev = ShareUpdated(v, req.(*collaboration.UpdateShareRequest))
+			}
+		case *collaboration.UpdateReceivedShareResponse:
+			if isSuccess(v) {
+				ev = ReceivedShareUpdated(v)
+			}
+		case *link.CreatePublicShareResponse:
+			if isSuccess(v) {
+				ev = LinkCreated(v)
+			}
+		case *link.UpdatePublicShareResponse:
+			if isSuccess(v) {
+				ev = LinkUpdated(v, req.(*link.UpdatePublicShareRequest))
+			}
+		case *link.RemovePublicShareResponse:
+			if isSuccess(v) {
+				ev = LinkRemoved(v, req.(*link.RemovePublicShareRequest))
+			}
+		case *link.GetPublicShareByTokenResponse:
+			if isSuccess(v) {
+				ev = LinkAccessed(v)
+			} else {
+				ev = LinkAccessFailed(v, req.(*link.GetPublicShareByTokenRequest))
+			}
+		case *provider.InitiateFileUploadResponse:
+			if isSuccess(v) {
+				ev = FileUploaded(v, req.(*provider.InitiateFileUploadRequest))
+			}
+		case *provider.InitiateFileDownloadResponse:
+			if isSuccess(v) {
+				ev = FileDownloaded(v, req.(*provider.InitiateFileDownloadRequest))
+			}
+		case *provider.DeleteResponse:
+			if isSuccess(v) {
+				ev = ItemTrashed(v, req.(*provider.DeleteRequest))
+			}
+		case *provider.MoveResponse:
+			if isSuccess(v) {
+				ev = ItemMoved(v, req.(*provider.MoveRequest))
+			}
+		case *provider.PurgeRecycleResponse:
+			if isSuccess(v) {
+				ev = ItemPurged(v, req.(*provider.PurgeRecycleRequest))
+			}
+		case *provider.RestoreRecycleItemResponse:
+			if isSuccess(v) {
+				ev = ItemRestored(v, req.(*provider.RestoreRecycleItemRequest))
+			}
+		case *provider.RestoreFileVersionResponse:
+			if isSuccess(v) {
+				ev = FileVersionRestored(v, req.(*provider.RestoreFileVersionRequest))
+			}
+		case *provider.CreateStorageSpaceResponse:
+			if isSuccess(v) && v.StorageSpace != nil { // TODO: Why are there CreateStorageSpaceResponses with nil StorageSpace?
+				ev = SpaceCreated(v)
+			}
+		case *provider.UpdateStorageSpaceResponse:
+			if isSuccess(v) {
+				r := req.(*provider.UpdateStorageSpaceRequest)
+				if r.StorageSpace.Name != "" {
+					ev = SpaceRenamed(v, r)
+				}
+
+				if utils.ExistsInOpaque(r.Opaque, "restore") {
+					ev = SpaceEnabled(v, r)
+				}
+			}
+		case *provider.DeleteStorageSpaceResponse:
+			if isSuccess(v) {
+				r := req.(*provider.DeleteStorageSpaceRequest)
+				if utils.ExistsInOpaque(r.Opaque, "purge") {
+					ev = SpaceDeleted(v, r)
+				} else {
+					ev = SpaceDisabled(v, r)
+				}
+			}
 		}
 
 		if ev != nil {
@@ -82,6 +171,15 @@ func NewStream() grpc.StreamServerInterceptor {
 	return interceptor
 }
 
+// common interface to all responses
+type su interface {
+	GetStatus() *v1beta12.Status
+}
+
+func isSuccess(res su) bool {
+	return res.GetStatus().Code == rpc.Code_CODE_OK
+}
+
 func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {
 	typ := m["type"].(string)
 	switch typ {
@@ -90,6 +188,6 @@ func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {
 	case "nats":
 		address := m["address"].(string)
 		cid := m["clusterID"].(string)
-		return server.NewNatsStream(nats.Address(address), nats.ClusterID(cid))
+		return server.NewNatsStream(natsjs.Address(address), natsjs.ClusterID(cid))
 	}
 }

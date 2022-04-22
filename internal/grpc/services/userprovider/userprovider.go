@@ -25,12 +25,12 @@ import (
 	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/plugin"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/user"
-	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/plugin"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/user"
+	"github.com/cs3org/reva/v2/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -131,8 +131,7 @@ func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*use
 		if _, ok := err.(errtypes.NotFound); ok {
 			res.Status = status.NewNotFound(ctx, "user not found")
 		} else {
-			err = errors.Wrap(err, "userprovidersvc: error getting user")
-			res.Status = status.NewInternal(ctx, err, "error getting user")
+			res.Status = status.NewInternal(ctx, "error getting user")
 		}
 		return res, nil
 	}
@@ -151,8 +150,7 @@ func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaim
 		if _, ok := err.(errtypes.NotFound); ok {
 			res.Status = status.NewNotFound(ctx, fmt.Sprintf("user not found %s %s", req.Claim, req.Value))
 		} else {
-			err = errors.Wrap(err, "userprovidersvc: error getting user by claim")
-			res.Status = status.NewInternal(ctx, err, "error getting user by claim")
+			res.Status = status.NewInternal(ctx, "error getting user by claim")
 		}
 		return res, nil
 	}
@@ -167,9 +165,8 @@ func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaim
 func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (*userpb.FindUsersResponse, error) {
 	users, err := s.usermgr.FindUsers(ctx, req.Filter, req.SkipFetchingUserGroups)
 	if err != nil {
-		err = errors.Wrap(err, "userprovidersvc: error finding users")
 		res := &userpb.FindUsersResponse{
-			Status: status.NewInternal(ctx, err, "error finding users"),
+			Status: status.NewInternal(ctx, "error finding users"),
 		}
 		return res, nil
 	}
@@ -189,9 +186,8 @@ func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (
 func (s *service) GetUserGroups(ctx context.Context, req *userpb.GetUserGroupsRequest) (*userpb.GetUserGroupsResponse, error) {
 	groups, err := s.usermgr.GetUserGroups(ctx, req.UserId)
 	if err != nil {
-		err = errors.Wrap(err, "userprovidersvc: error getting user groups")
 		res := &userpb.GetUserGroupsResponse{
-			Status: status.NewInternal(ctx, err, "error getting user groups"),
+			Status: status.NewInternal(ctx, "error getting user groups"),
 		}
 		return res, nil
 	}

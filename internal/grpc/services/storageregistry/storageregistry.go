@@ -20,14 +20,20 @@ package storageregistry
 
 import (
 	"context"
+	"encoding/json"
+	"encoding/xml"
+	"fmt"
 
+	"github.com/BurntSushi/toml"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/registry/registry"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
+	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/registry/registry"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
@@ -100,10 +106,10 @@ func getRegistry(c *config) (storage.Registry, error) {
 }
 
 func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.ListStorageProvidersRequest) (*registrypb.ListStorageProvidersResponse, error) {
-	pinfos, err := s.reg.ListProviders(ctx)
+	pinfos, err := s.reg.ListProviders(ctx, sdk.DecodeOpaqueMap(req.Opaque))
 	if err != nil {
 		return &registrypb.ListStorageProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error getting list of storage providers"),
+			Status: status.NewInternal(ctx, "error getting list of storage providers"),
 		}, nil
 	}
 
@@ -115,7 +121,13 @@ func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.List
 }
 
 func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetStorageProvidersRequest) (*registrypb.GetStorageProvidersResponse, error) {
-	p, err := s.reg.FindProviders(ctx, req.Ref)
+	space, err := decodeSpace(req.Opaque)
+	if err != nil {
+		return &registrypb.GetStorageProvidersResponse{
+			Status: status.NewInvalidArg(ctx, err.Error()),
+		}, nil
+	}
+	p, err := s.reg.GetProvider(ctx, space)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -124,32 +136,41 @@ func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetSt
 			}, nil
 		default:
 			return &registrypb.GetStorageProvidersResponse{
-				Status: status.NewInternal(ctx, err, "error finding storage provider"),
+				Status: status.NewInternal(ctx, "error finding storage provider"),
 			}, nil
 		}
 	}
 
 	res := &registrypb.GetStorageProvidersResponse{
 		Status:    status.NewOK(ctx),
-		Providers: p,
+		Providers: []*registrypb.ProviderInfo{p},
 	}
 	return res, nil
 }
 
-func (s *service) GetHome(ctx context.Context, req *registrypb.GetHomeRequest) (*registrypb.GetHomeResponse, error) {
-	log := appctx.GetLogger(ctx)
-	p, err := s.reg.GetHome(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("error getting home")
-		res := &registrypb.GetHomeResponse{
-			Status: status.NewInternal(ctx, err, "error getting home"),
+func decodeSpace(o *typespb.Opaque) (*provider.StorageSpace, error) {
+	if entry, ok := o.Map["space"]; ok {
+		var unmarshal func([]byte, interface{}) error
+		switch entry.Decoder {
+		case "json":
+			unmarshal = json.Unmarshal
+		case "toml":
+			unmarshal = toml.Unmarshal
+		case "xml":
+			unmarshal = xml.Unmarshal
 		}
-		return res, nil
+
+		space := &provider.StorageSpace{}
+		return space, unmarshal(entry.Value, space)
 	}
 
+	return nil, fmt.Errorf("missing space in opaque property")
+}
+
+func (s *service) GetHome(ctx context.Context, req *registrypb.GetHomeRequest) (*registrypb.GetHomeResponse, error) {
 	res := &registrypb.GetHomeResponse{
-		Status:   status.NewOK(ctx),
-		Provider: p,
+		Status: status.NewUnimplemented(ctx, nil, "getHome is no longer used. use List"),
 	}
 	return res, nil
+
 }

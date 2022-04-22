@@ -22,11 +22,11 @@ import (
 	"context"
 
 	appauthpb "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
-	"github.com/cs3org/reva/pkg/appauth"
-	"github.com/cs3org/reva/pkg/appauth/manager/registry"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/appauth"
+	"github.com/cs3org/reva/v2/pkg/appauth/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -106,7 +106,7 @@ func (s *service) GenerateAppPassword(ctx context.Context, req *appauthpb.Genera
 	pwd, err := s.am.GenerateAppPassword(ctx, req.TokenScope, req.Label, req.Expiration)
 	if err != nil {
 		return &appauthpb.GenerateAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error generating app password"),
+			Status: status.NewInternal(ctx, "error generating app password"),
 		}, nil
 	}
 
@@ -120,7 +120,7 @@ func (s *service) ListAppPasswords(ctx context.Context, req *appauthpb.ListAppPa
 	pwds, err := s.am.ListAppPasswords(ctx)
 	if err != nil {
 		return &appauthpb.ListAppPasswordsResponse{
-			Status: status.NewInternal(ctx, err, "error listing app passwords"),
+			Status: status.NewInternal(ctx, "error listing app passwords"),
 		}, nil
 	}
 
@@ -134,7 +134,7 @@ func (s *service) InvalidateAppPassword(ctx context.Context, req *appauthpb.Inva
 	err := s.am.InvalidateAppPassword(ctx, req.Password)
 	if err != nil {
 		return &appauthpb.InvalidateAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error invalidating app password"),
+			Status: status.NewInternal(ctx, "error invalidating app password"),
 		}, nil
 	}
 
@@ -147,7 +147,7 @@ func (s *service) GetAppPassword(ctx context.Context, req *appauthpb.GetAppPassw
 	pwd, err := s.am.GetAppPassword(ctx, req.User, req.Password)
 	if err != nil {
 		return &appauthpb.GetAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error getting app password via username/password"),
+			Status: status.NewInternal(ctx, "error getting app password via username/password"),
 		}, nil
 	}
 

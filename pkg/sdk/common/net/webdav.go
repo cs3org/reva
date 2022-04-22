@@ -27,7 +27,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/studio-b12/gowebdav"
 
-	"github.com/cs3org/reva/pkg/sdk/common"
+	"github.com/cs3org/reva/v2/pkg/sdk/common"
 )
 
 const (

@@ -20,8 +20,8 @@ package demo
 
 import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/permission"
-	"github.com/cs3org/reva/pkg/permission/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/permission"
+	"github.com/cs3org/reva/v2/pkg/permission/manager/registry"
 )
 
 func init() {
@@ -36,8 +36,18 @@ func New(c map[string]interface{}) (permission.Manager, error) {
 type manager struct {
 }
 
-func (m manager) CheckPermission(permission string, subject string, ref *provider.Reference) bool {
-	// We can currently return true all the time.
-	// Once we beginn testing roles we need to somehow check the roles of the users here
-	return true
+func (m manager) CheckPermission(perm string, subject string, ref *provider.Reference) bool {
+	switch perm {
+	case permission.CreateSpace:
+		// TODO Users can only create their own personal space
+		// TODO guest accounts cannot create spaces
+		return true
+	case permission.ListAllSpaces:
+		// TODO introduce an admin role to allow listing all spaces
+		return false
+	default:
+		// We can currently return false all the time.
+		// Once we beginn testing roles we need to somehow check the roles of the users here
+		return false
+	}
 }

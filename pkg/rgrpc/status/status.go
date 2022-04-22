@@ -24,10 +24,10 @@ package status
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -41,10 +41,8 @@ func NewOK(ctx context.Context) *rpc.Status {
 	}
 }
 
-// NewNotFound returns a Status with CODE_NOT_FOUND and logs the msg.
+// NewNotFound returns a Status with CODE_NOT_FOUND.
 func NewNotFound(ctx context.Context, msg string) *rpc.Status {
-	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	log.Warn().Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_NOT_FOUND,
 		Message: msg,
@@ -52,10 +50,8 @@ func NewNotFound(ctx context.Context, msg string) *rpc.Status {
 	}
 }
 
-// NewInvalid returns a Status with CODE_INVALID_ARGUMENT and logs the msg.
+// NewInvalid returns a Status with CODE_INVALID_ARGUMENT.
 func NewInvalid(ctx context.Context, msg string) *rpc.Status {
-	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	log.Warn().Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INVALID_ARGUMENT,
 		Message: msg,
@@ -63,16 +59,8 @@ func NewInvalid(ctx context.Context, msg string) *rpc.Status {
 	}
 }
 
-// NewInternal returns a Status with CODE_INTERNAL and logs the msg.
-// In this case, err MUST be filled for tracking purposes.
-func NewInternal(ctx context.Context, err error, msg string) *rpc.Status {
-	if err == nil {
-		panic("Internal error triggered without an error context")
-	}
-
-	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	log.Err(err).Msg(msg)
-
+// NewInternal returns a Status with CODE_INTERNAL.
+func NewInternal(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INTERNAL,
 		Message: msg,
@@ -80,10 +68,8 @@ func NewInternal(ctx context.Context, err error, msg string) *rpc.Status {
 	}
 }
 
-// NewUnauthenticated returns a Status with CODE_UNAUTHENTICATED and logs the msg.
+// NewUnauthenticated returns a Status with CODE_UNAUTHENTICATED.
 func NewUnauthenticated(ctx context.Context, err error, msg string) *rpc.Status {
-	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	log.Warn().Err(err).Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_UNAUTHENTICATED,
 		Message: msg,
@@ -91,11 +77,8 @@ func NewUnauthenticated(ctx context.Context, err error, msg string) *rpc.Status 
 	}
 }
 
-// NewPermissionDenied returns a Status with PERMISSION_DENIED and logs the msg.
+// NewPermissionDenied returns a Status with PERMISSION_DENIED.
 func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status {
-	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	log.Err(err).Msg(msg)
-
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_PERMISSION_DENIED,
 		Message: msg,
@@ -103,11 +86,17 @@ func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status
 	}
 }
 
-// NewInsufficientStorage returns a Status with INSUFFICIENT_STORAGE and logs the msg.
-func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Status {
-	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	log.Err(err).Msg(msg)
+// NewFailedPrecondition returns a Status with FAILED_PRECONDITION.
+func NewFailedPrecondition(ctx context.Context, err error, msg string) *rpc.Status {
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_FAILED_PRECONDITION,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
 
+// NewInsufficientStorage returns a Status with INSUFFICIENT_STORAGE.
+func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INSUFFICIENT_STORAGE,
 		Message: msg,
@@ -115,10 +104,8 @@ func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Sta
 	}
 }
 
-// NewUnimplemented returns a Status with CODE_UNIMPLEMENTED and logs the msg.
+// NewUnimplemented returns a Status with CODE_UNIMPLEMENTED.
 func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
-	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	log.Error().Err(err).Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_UNIMPLEMENTED,
 		Message: msg,
@@ -126,10 +113,8 @@ func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 	}
 }
 
-// NewAlreadyExists returns a Status with CODE_ALREADY_EXISTS and logs the msg.
+// NewAlreadyExists returns a Status with CODE_ALREADY_EXISTS.
 func NewAlreadyExists(ctx context.Context, err error, msg string) *rpc.Status {
-	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	log.Error().Err(err).Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ALREADY_EXISTS,
 		Message: msg,
@@ -145,7 +130,7 @@ func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 	}
 }
 
-// NewConflict returns a Status with Code_CODE_ABORTED and logs the msg.
+// NewConflict returns a Status with Code_CODE_ABORTED.
 func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ABORTED,
@@ -158,18 +143,25 @@ func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
 func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Status {
 	switch e := err.(type) {
 	case nil:
-		NewOK(ctx)
+		return NewOK(ctx)
 	case errtypes.IsNotFound:
-		return NewNotFound(ctx, "gateway: "+msg+": "+err.Error())
+		return NewNotFound(ctx, msg+": "+err.Error())
+	case errtypes.AlreadyExists:
+		return NewAlreadyExists(ctx, err, msg+": "+err.Error())
 	case errtypes.IsInvalidCredentials:
 		// TODO this maps badly
-		return NewUnauthenticated(ctx, err, "gateway: "+msg+": "+err.Error())
+		return NewUnauthenticated(ctx, err, msg+": "+err.Error())
 	case errtypes.PermissionDenied:
-		return NewPermissionDenied(ctx, e, "gateway: "+msg+": "+err.Error())
+		return NewPermissionDenied(ctx, e, msg+": "+err.Error())
+	case errtypes.Locked:
+		// FIXME a locked error returns the current lockid
+		return NewPermissionDenied(ctx, e, msg+": "+err.Error())
+	case errtypes.PreconditionFailed:
+		return NewFailedPrecondition(ctx, e, msg+": "+err.Error())
 	case errtypes.IsNotSupported:
-		return NewUnimplemented(ctx, err, "gateway: "+msg+":"+err.Error())
+		return NewUnimplemented(ctx, err, msg+":"+err.Error())
 	case errtypes.BadRequest:
-		return NewInvalidArg(ctx, "gateway: "+msg+":"+err.Error())
+		return NewInvalidArg(ctx, msg+":"+err.Error())
 	}
 
 	// map GRPC status codes coming from the auth middleware
@@ -179,11 +171,13 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		if ok {
 			switch st.Code() {
 			case codes.NotFound:
-				return NewNotFound(ctx, "gateway: "+msg+": "+err.Error())
+				return NewNotFound(ctx, msg+": "+err.Error())
 			case codes.Unauthenticated:
-				return NewUnauthenticated(ctx, err, "gateway: "+msg+": "+err.Error())
+				return NewUnauthenticated(ctx, err, msg+": "+err.Error())
 			case codes.PermissionDenied:
-				return NewPermissionDenied(ctx, err, "gateway: "+msg+": "+err.Error())
+				return NewPermissionDenied(ctx, err, msg+": "+err.Error())
+			case codes.Unimplemented:
+				return NewUnimplemented(ctx, err, msg+": "+err.Error())
 			}
 		}
 		// the actual error can be wrapped multiple times
@@ -193,7 +187,7 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		}
 	}
 
-	return NewInternal(ctx, err, "gateway: "+msg+":"+err.Error())
+	return NewInternal(ctx, msg+":"+err.Error())
 }
 
 // NewErrorFromCode returns a standardized Error for a given RPC code.
@@ -205,4 +199,37 @@ func NewErrorFromCode(code rpc.Code, pkgname string) error {
 func getTrace(ctx context.Context) string {
 	span := trace.SpanFromContext(ctx)
 	return span.SpanContext().TraceID().String()
+}
+
+// a mapping from the CS3 status codes to http codes
+var httpStatusCode = map[rpc.Code]int{
+	rpc.Code_CODE_ABORTED:              http.StatusConflict,
+	rpc.Code_CODE_ALREADY_EXISTS:       http.StatusConflict,
+	rpc.Code_CODE_CANCELLED:            499, // Client Closed Request
+	rpc.Code_CODE_DATA_LOSS:            http.StatusInternalServerError,
+	rpc.Code_CODE_DEADLINE_EXCEEDED:    http.StatusGatewayTimeout,
+	rpc.Code_CODE_FAILED_PRECONDITION:  http.StatusPreconditionFailed,
+	rpc.Code_CODE_INSUFFICIENT_STORAGE: http.StatusInsufficientStorage,
+	rpc.Code_CODE_INTERNAL:             http.StatusInternalServerError,
+	rpc.Code_CODE_INVALID:              http.StatusInternalServerError,
+	rpc.Code_CODE_INVALID_ARGUMENT:     http.StatusBadRequest,
+	rpc.Code_CODE_NOT_FOUND:            http.StatusNotFound,
+	rpc.Code_CODE_OK:                   http.StatusOK,
+	rpc.Code_CODE_OUT_OF_RANGE:         http.StatusBadRequest,
+	rpc.Code_CODE_PERMISSION_DENIED:    http.StatusForbidden,
+	rpc.Code_CODE_REDIRECTION:          http.StatusTemporaryRedirect, // or permanent?
+	rpc.Code_CODE_RESOURCE_EXHAUSTED:   http.StatusTooManyRequests,
+	rpc.Code_CODE_UNAUTHENTICATED:      http.StatusUnauthorized,
+	rpc.Code_CODE_UNAVAILABLE:          http.StatusServiceUnavailable,
+	rpc.Code_CODE_UNIMPLEMENTED:        http.StatusNotImplemented,
+	rpc.Code_CODE_UNKNOWN:              http.StatusInternalServerError,
+}
+
+// HTTPStatusFromCode returns an HTTP status code for the rpc code. It returns
+// an internal server error (500) if the code is unknown
+func HTTPStatusFromCode(code rpc.Code) int {
+	if s, ok := httpStatusCode[code]; ok {
+		return s
+	}
+	return http.StatusInternalServerError
 }

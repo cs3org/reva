@@ -24,7 +24,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/cs3org/reva/pkg/storage/utils/downloader"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/downloader"
+
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 type mockDownloader struct{}
@@ -36,8 +38,8 @@ func NewDownloader() downloader.Downloader {
 }
 
 // Download copies the content of a local file into the dst Writer
-func (m *mockDownloader) Download(ctx context.Context, path string, dst io.Writer) error {
-	f, err := os.Open(path)
+func (m *mockDownloader) Download(ctx context.Context, id *providerv1beta1.ResourceId, dst io.Writer) error {
+	f, err := os.Open(id.OpaqueId)
 	if err != nil {
 		return err
 	}

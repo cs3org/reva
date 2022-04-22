@@ -19,22 +19,20 @@
 package ldap
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
-	"text/template"
 
-	"github.com/Masterminds/sprig"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/group"
-	"github.com/cs3org/reva/pkg/group/manager/registry"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/group"
+	"github.com/cs3org/reva/v2/pkg/group/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/utils"
+	ldapIdentity "github.com/cs3org/reva/v2/pkg/utils/ldap"
 	"github.com/go-ldap/ldap/v3"
+	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -44,51 +42,21 @@ func init() {
 }
 
 type manager struct {
-	c            *config
-	groupfilter  *template.Template
-	memberfilter *template.Template
+	c          *config
+	ldapClient ldap.Client
 }
 
 type config struct {
-	utils.LDAPConn  `mapstructure:",squash"`
-	BaseDN          string     `mapstructure:"base_dn"`
-	GroupFilter     string     `mapstructure:"groupfilter"`
-	MemberFilter    string     `mapstructure:"memberfilter"`
-	AttributeFilter string     `mapstructure:"attributefilter"`
-	FindFilter      string     `mapstructure:"findfilter"`
-	Idp             string     `mapstructure:"idp"`
-	Schema          attributes `mapstructure:"schema"`
-	Nobody          int64      `mapstructure:"nobody"`
-}
-
-type attributes struct {
-	// DN is the distinguished name in ldap, e.g. `cn=admins,ou=groups,dc=example,dc=org`
-	DN string `mapstructure:"dn"`
-	// GID is an immutable group id, see https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
-	GID string `mapstructure:"gid"`
-	// CN is the group name, typically `cn`, `gid` or `samaccountname`
-	CN string `mapstructure:"cn"`
-	// Mail is the email address of a group
-	Mail string `mapstructure:"mail"`
-	// Displayname is the Human readable name, e.g. `Database Admins`
-	DisplayName string `mapstructure:"displayName"`
-	// GIDNumber is a numeric id that maps to a filesystem gid, eg. 654321
-	GIDNumber string `mapstructure:"gidNumber"`
-}
-
-// Default attributes (Active Directory)
-var ldapDefaults = attributes{
-	DN:          "dn",
-	GID:         "objectGUID", // you can fall back to samaccountname but you will run into trouble when group names change. You have been warned.
-	CN:          "cn",
-	Mail:        "mail",
-	DisplayName: "displayName",
-	GIDNumber:   "gidNumber",
+	utils.LDAPConn `mapstructure:",squash"`
+	LDAPIdentity   ldapIdentity.Identity `mapstructure:",squash"`
+	Idp            string                `mapstructure:"idp"`
+	// Nobody specifies the fallback gid number for groups that don't have a gidNumber set in LDAP
+	Nobody int64 `mapstructure:"nobody"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := config{
-		Schema: ldapDefaults,
+		LDAPIdentity: ldapIdentity.New(),
 	}
 	if err := mapstructure.Decode(m, &c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
@@ -100,260 +68,176 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns a group manager implementation that connects to a LDAP server to provide group metadata.
 func New(m map[string]interface{}) (group.Manager, error) {
-	c, err := parseConfig(m)
+	mgr := &manager{}
+	err := mgr.Configure(m)
 	if err != nil {
 		return nil, err
 	}
 
-	c.GroupFilter = strings.ReplaceAll(c.GroupFilter, "%s", "{{.OpaqueId}}")
-	if c.FindFilter == "" {
-		c.FindFilter = c.GroupFilter
-	}
-	c.MemberFilter = strings.ReplaceAll(c.MemberFilter, "%s", "{{.OpaqueId}}")
-
-	mgr := &manager{
-		c: c,
-	}
-
-	mgr.groupfilter, err = template.New("gf").Funcs(sprig.TxtFuncMap()).Parse(c.GroupFilter)
+	mgr.ldapClient, err = utils.GetLDAPClientWithReconnect(&mgr.c.LDAPConn)
 	if err != nil {
-		err := errors.Wrap(err, fmt.Sprintf("error parsing groupfilter tpl:%s", c.GroupFilter))
-		panic(err)
+		return nil, err
 	}
-	mgr.memberfilter, err = template.New("uf").Funcs(sprig.TxtFuncMap()).Parse(c.MemberFilter)
-	if err != nil {
-		err := errors.Wrap(err, fmt.Sprintf("error parsing memberfilter tpl:%s", c.MemberFilter))
-		panic(err)
-	}
-
 	return mgr, nil
 }
 
-func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId, skipFetchingMembers bool) (*grouppb.Group, error) {
+// Configure initializes the configuration of the group manager from the supplied config map
+func (m *manager) Configure(ml map[string]interface{}) error {
+	c, err := parseConfig(ml)
+	if err != nil {
+		return err
+	}
+	if c.Nobody == 0 {
+		c.Nobody = 99
+	}
+
+	if err = c.LDAPIdentity.Setup(); err != nil {
+		return fmt.Errorf("error setting up Identity config: %w", err)
+	}
+	m.c = c
+	return nil
+}
+
+// GetGroup implements the group.Manager interface. Looks up a group by Id and return the group
+func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error) {
 	log := appctx.GetLogger(ctx)
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
-	if err != nil {
-		return nil, err
+	if gid.Idp != "" && gid.Idp != m.c.Idp {
+		return nil, errtypes.NotFound("idp mismatch")
 	}
-	defer l.Close()
 
-	// Search for the given clientID
-	searchRequest := ldap.NewSearchRequest(
-		m.c.BaseDN,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		m.getGroupFilter(gid),
-		[]string{m.c.Schema.DN, m.c.Schema.GID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.GIDNumber},
-		nil,
-	)
-
-	sr, err := l.Search(searchRequest)
+	groupEntry, err := m.c.LDAPIdentity.GetLDAPGroupByID(log, m.ldapClient, gid.OpaqueId)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(sr.Entries) != 1 {
-		return nil, errtypes.NotFound(gid.OpaqueId)
+	log.Debug().Interface("entry", groupEntry).Msg("entries")
+
+	g, err := m.ldapEntryToGroup(groupEntry)
+	if err != nil {
+		return nil, err
 	}
 
-	log.Debug().Interface("entries", sr.Entries).Msg("entries")
-
-	id := &grouppb.GroupId{
-		Idp:      m.c.Idp,
-		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GID),
+	members, err := m.c.LDAPIdentity.GetLDAPGroupMembers(log, m.ldapClient, groupEntry)
+	if err != nil {
+		return nil, err
 	}
 
-	var members []*userpb.UserId
-	if !skipFetchingMembers {
-		members, err = m.GetMembers(ctx, id)
+	memberIDs := make([]*userpb.UserId, 0, len(members))
+	for _, member := range members {
+		userid, err := m.ldapEntryToUserID(member)
 		if err != nil {
-			return nil, err
+			log.Warn().Err(err).Interface("member", member).Msg("Failed convert member entry to userid")
+			continue
 		}
+		memberIDs = append(memberIDs, userid)
 	}
 
-	gidNumber := m.c.Nobody
-	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)
-	if gidValue != "" {
-		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	g := &grouppb.Group{
-		Id:          id,
-		GroupName:   sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.CN),
-		Members:     members,
-		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.Mail),
-		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
-		GidNumber:   gidNumber,
-	}
+	g.Members = memberIDs
 
 	return g, nil
 }
 
-func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string, skipFetchingMembers bool) (*grouppb.Group, error) {
-	// TODO align supported claims with rest driver and the others, maybe refactor into common mapping
-	switch claim {
-	case "mail":
-		claim = m.c.Schema.Mail
-	case "gid_number":
-		claim = m.c.Schema.GIDNumber
-	case "group_name":
-		claim = m.c.Schema.CN
-	case "groupid":
-		claim = m.c.Schema.GID
-	default:
-		return nil, errors.New("ldap: invalid field " + claim)
-	}
-
+// GetGroupByClaim implements the group.Manager interface. Looks up a group by
+// claim ('group_name', 'group_id', 'display_name') and returns the group.
+func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*grouppb.Group, error) {
 	log := appctx.GetLogger(ctx)
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
+	groupEntry, err := m.c.LDAPIdentity.GetLDAPGroupByAttribute(log, m.ldapClient, claim, value)
 	if err != nil {
+		log.Debug().Err(err).Msg("GetGroupByClaim")
 		return nil, err
 	}
-	defer l.Close()
 
-	// Search for the given clientID
-	searchRequest := ldap.NewSearchRequest(
-		m.c.BaseDN,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		m.getAttributeFilter(claim, value),
-		[]string{m.c.Schema.DN, m.c.Schema.GID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.GIDNumber},
-		nil,
-	)
+	log.Debug().Interface("entry", groupEntry).Msg("entries")
 
-	sr, err := l.Search(searchRequest)
+	g, err := m.ldapEntryToGroup(groupEntry)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(sr.Entries) != 1 {
-		return nil, errtypes.NotFound(claim + ": " + value)
+	members, err := m.c.LDAPIdentity.GetLDAPGroupMembers(log, m.ldapClient, groupEntry)
+	if err != nil {
+		return nil, err
 	}
 
-	log.Debug().Interface("entries", sr.Entries).Msg("entries")
-
-	id := &grouppb.GroupId{
-		Idp:      m.c.Idp,
-		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GID),
-	}
-
-	var members []*userpb.UserId
-	if !skipFetchingMembers {
-		members, err = m.GetMembers(ctx, id)
+	memberIDs := make([]*userpb.UserId, 0, len(members))
+	for _, member := range members {
+		userid, err := m.ldapEntryToUserID(member)
 		if err != nil {
-			return nil, err
+			log.Warn().Err(err).Interface("member", member).Msg("Failed convert member entry to userid")
+			continue
 		}
+		memberIDs = append(memberIDs, userid)
 	}
 
-	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
-	if err != nil {
-		return nil, err
-	}
-
-	g := &grouppb.Group{
-		Id:          id,
-		GroupName:   sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.CN),
-		Members:     members,
-		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.Mail),
-		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
-		GidNumber:   gidNumber,
-	}
+	g.Members = memberIDs
 
 	return g, nil
 }
 
-func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMembers bool) ([]*grouppb.Group, error) {
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
-	if err != nil {
-		return nil, err
-	}
-	defer l.Close()
-
-	// Search for the given clientID
-	searchRequest := ldap.NewSearchRequest(
-		m.c.BaseDN,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		m.getFindFilter(query),
-		[]string{m.c.Schema.DN, m.c.Schema.GID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.GIDNumber},
-		nil,
-	)
-
-	sr, err := l.Search(searchRequest)
+// FindGroups implements the group.Manager interface. Searches for groups using
+// a prefix-substring search on the group attributes ('group_name',
+// 'display_name', 'group_id') and returns the groups. FindGroups does NOT expand the
+// members of the Groups.
+func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Group, error) {
+	log := appctx.GetLogger(ctx)
+	entries, err := m.c.LDAPIdentity.GetLDAPGroups(log, m.ldapClient, query)
 	if err != nil {
 		return nil, err
 	}
 
-	groups := []*grouppb.Group{}
+	groups := make([]*grouppb.Group, 0, len(entries))
 
-	for _, entry := range sr.Entries {
-		id := &grouppb.GroupId{
-			Idp:      m.c.Idp,
-			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.GID),
-		}
-
-		var members []*userpb.UserId
-		if !skipFetchingMembers {
-			members, err = m.GetMembers(ctx, id)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		gidNumber, err := strconv.ParseInt(entry.GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
+	for _, entry := range entries {
+		g, err := m.ldapEntryToGroup(entry)
 		if err != nil {
 			return nil, err
 		}
 
-		g := &grouppb.Group{
-			Id:          id,
-			GroupName:   entry.GetEqualFoldAttributeValue(m.c.Schema.CN),
-			Members:     members,
-			Mail:        entry.GetEqualFoldAttributeValue(m.c.Schema.Mail),
-			DisplayName: entry.GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
-			GidNumber:   gidNumber,
-		}
 		groups = append(groups, g)
 	}
 
 	return groups, nil
 }
 
+// GetMembers implements the group.Manager interface. It returns all the userids of the members
+// of the group identified by the supplied id.
 func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*userpb.UserId, error) {
-	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
-	if err != nil {
-		return nil, err
+	log := appctx.GetLogger(ctx)
+	if gid.Idp != "" && gid.Idp != m.c.Idp {
+		return nil, errtypes.NotFound("idp mismatch")
 	}
-	defer l.Close()
 
-	// Search for the given clientID
-	searchRequest := ldap.NewSearchRequest(
-		m.c.BaseDN,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		m.getMemberFilter(gid),
-		[]string{m.c.Schema.CN}, // TODO use DN to look up user id
-		nil,
-	)
-
-	sr, err := l.Search(searchRequest)
+	groupEntry, err := m.c.LDAPIdentity.GetLDAPGroupByID(log, m.ldapClient, gid.OpaqueId)
 	if err != nil {
 		return nil, err
 	}
 
-	users := []*userpb.UserId{}
-	for _, entry := range sr.Entries {
-		// FIXME this makes the group members use the cn, not an immutable id
-		users = append(users, &userpb.UserId{
-			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.CN),
-			Idp:      m.c.Idp,
-			Type:     userpb.UserType_USER_TYPE_PRIMARY,
-		})
+	log.Debug().Interface("entry", groupEntry).Msg("entries")
+
+	members, err := m.c.LDAPIdentity.GetLDAPGroupMembers(log, m.ldapClient, groupEntry)
+	if err != nil {
+		return nil, err
 	}
 
-	return users, nil
+	memberIDs := make([]*userpb.UserId, 0, len(members))
+	for _, member := range members {
+		userid, err := m.ldapEntryToUserID(member)
+		if err != nil {
+			log.Warn().Err(err).Interface("member", member).Msg("Failed convert member entry to userid")
+			continue
+		}
+		memberIDs = append(memberIDs, userid)
+	}
+
+	return memberIDs, nil
 }
 
+// HasMember implements the group.Member interface. Checks whether the supplied userid is a member
+// of the supplied groupid.
 func (m *manager) HasMember(ctx context.Context, gid *grouppb.GroupId, uid *userpb.UserId) (bool, error) {
+	// It might be possible to do a somewhat more clever LDAP search here. (First lookup the user and then
+	// search for (&(objectclass=<groupoc>)(<groupid>=gid)(member=<username/userdn>)
+	// The GetMembers call used below can be quiet ineffecient for large groups
 	members, err := m.GetMembers(ctx, gid)
 	if err != nil {
 		return false, err
@@ -367,29 +251,68 @@ func (m *manager) HasMember(ctx context.Context, gid *grouppb.GroupId, uid *user
 	return false, nil
 }
 
-func (m *manager) getGroupFilter(gid *grouppb.GroupId) string {
-	b := bytes.Buffer{}
-	if err := m.groupfilter.Execute(&b, gid); err != nil {
-		err := errors.Wrap(err, fmt.Sprintf("error executing group template: groupid: %+v", gid))
-		panic(err)
+func (m *manager) ldapEntryToGroup(entry *ldap.Entry) (*grouppb.Group, error) {
+	id, err := m.ldapEntryToGroupID(entry)
+	if err != nil {
+		return nil, err
 	}
-	return b.String()
-}
 
-func (m *manager) getMemberFilter(gid *grouppb.GroupId) string {
-	b := bytes.Buffer{}
-	if err := m.memberfilter.Execute(&b, gid); err != nil {
-		err := errors.Wrap(err, fmt.Sprintf("error executing member template: groupid: %+v", gid))
-		panic(err)
+	gidNumber := m.c.Nobody
+	gidValue := entry.GetEqualFoldAttributeValue(m.c.LDAPIdentity.Group.Schema.GIDNumber)
+	if gidValue != "" {
+		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return b.String()
+
+	g := &grouppb.Group{
+		Id:          id,
+		GroupName:   entry.GetEqualFoldAttributeValue(m.c.LDAPIdentity.Group.Schema.Groupname),
+		Mail:        entry.GetEqualFoldAttributeValue(m.c.LDAPIdentity.Group.Schema.Mail),
+		DisplayName: entry.GetEqualFoldAttributeValue(m.c.LDAPIdentity.Group.Schema.DisplayName),
+		GidNumber:   gidNumber,
+	}
+
+	return g, nil
 }
 
-func (m *manager) getAttributeFilter(attribute, value string) string {
-	attr := strings.ReplaceAll(m.c.AttributeFilter, "{{attr}}", ldap.EscapeFilter(attribute))
-	return strings.ReplaceAll(attr, "{{value}}", ldap.EscapeFilter(value))
+func (m *manager) ldapEntryToGroupID(entry *ldap.Entry) (*grouppb.GroupId, error) {
+	var id string
+	if m.c.LDAPIdentity.Group.Schema.IDIsOctetString {
+		rawValue := entry.GetEqualFoldRawAttributeValue(m.c.LDAPIdentity.Group.Schema.ID)
+		if value, err := uuid.FromBytes(rawValue); err == nil {
+			id = value.String()
+		} else {
+			return nil, err
+		}
+	} else {
+		id = entry.GetEqualFoldAttributeValue(m.c.LDAPIdentity.Group.Schema.ID)
+	}
+
+	return &grouppb.GroupId{
+		Idp:      m.c.Idp,
+		OpaqueId: id,
+	}, nil
 }
 
-func (m *manager) getFindFilter(query string) string {
-	return strings.ReplaceAll(m.c.FindFilter, "{{query}}", ldap.EscapeFilter(query))
+func (m *manager) ldapEntryToUserID(entry *ldap.Entry) (*userpb.UserId, error) {
+	var uid string
+	if m.c.LDAPIdentity.User.Schema.IDIsOctetString {
+		rawValue := entry.GetEqualFoldRawAttributeValue(m.c.LDAPIdentity.User.Schema.ID)
+		var value uuid.UUID
+		var err error
+		if value, err = uuid.FromBytes(rawValue); err != nil {
+			return nil, err
+		}
+		uid = value.String()
+	} else {
+		uid = entry.GetEqualFoldAttributeValue(m.c.LDAPIdentity.User.Schema.ID)
+	}
+
+	return &userpb.UserId{
+		Idp:      m.c.Idp,
+		OpaqueId: uid,
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	}, nil
 }

@@ -29,12 +29,9 @@ import (
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	txdriver "github.com/cs3org/reva/pkg/datatx"
-	txregistry "github.com/cs3org/reva/pkg/datatx/manager/registry"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -157,56 +154,9 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest) (*datatx.PullTransferResponse, error) {
-	srcEp, err := s.extractEndpointInfo(ctx, req.SrcTargetUri)
-	if err != nil {
-		return nil, err
-	}
-	srcRemote := fmt.Sprintf("%s://%s", srcEp.endpointScheme, srcEp.endpoint)
-	srcPath := srcEp.filePath
-	srcToken := srcEp.token
-
-	destEp, err := s.extractEndpointInfo(ctx, req.DestTargetUri)
-	if err != nil {
-		return nil, err
-	}
-	dstRemote := fmt.Sprintf("%s://%s", destEp.endpointScheme, destEp.endpoint)
-	dstPath := destEp.filePath
-	dstToken := destEp.token
-
-	txInfo, startTransferErr := s.txManager.StartTransfer(ctx, srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
-
-	// we always save the transfer regardless of start transfer outcome
-	// only then, if starting fails, can we try to restart it
-	txShare := &txShare{
-		TxID:          txInfo.GetId().OpaqueId,
-		SrcTargetURI:  req.SrcTargetUri,
-		DestTargetURI: req.DestTargetUri,
-		Opaque:        req.Opaque,
-	}
-	s.txShareDriver.Lock()
-	defer s.txShareDriver.Unlock()
-
-	s.txShareDriver.model.TxShares[txInfo.GetId().OpaqueId] = txShare
-	if err := s.txShareDriver.model.saveTxShare(); err != nil {
-		err = errors.Wrap(err, "datatx service: error saving transfer share: "+datatx.Status_STATUS_INVALID.String())
-		return &datatx.PullTransferResponse{
-			Status: status.NewInvalid(ctx, "error pulling transfer"),
-		}, err
-	}
-
-	// now check start transfer outcome
-	if startTransferErr != nil {
-		startTransferErr = errors.Wrap(startTransferErr, "datatx service: error starting transfer job")
-		return &datatx.PullTransferResponse{
-			Status: status.NewInvalid(ctx, "datatx service: error pulling transfer"),
-			TxInfo: txInfo,
-		}, startTransferErr
-	}
-
 	return &datatx.PullTransferResponse{
-		Status: status.NewOK(ctx),
-		TxInfo: txInfo,
-	}, err
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("PullTransfer not implemented"), "PullTransfer not implemented"),
+	}, nil
 }
 
 func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
@@ -232,24 +182,19 @@ func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransfer
 	}, nil
 }
 
-func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
-	txShare, ok := s.txShareDriver.model.TxShares[req.GetTxId().GetOpaqueId()]
-	if !ok {
-		return nil, errtypes.InternalError("datatx service: transfer not found")
-	}
+func (s *service) ListTransfers(ctx context.Context, in *datatx.ListTransfersRequest) (*datatx.ListTransfersResponse, error) {
+	return &datatx.ListTransfersResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("ListTransfers not implemented"), "ListTransfers not implemented"),
+	}, nil
+}
 
-	txInfo, err := s.txManager.CancelTransfer(ctx, req.GetTxId().OpaqueId)
-	if err != nil {
-		txInfo.ShareId = &ocm.ShareId{OpaqueId: string(txShare.Opaque.Map["shareId"].Value)}
-		err = errors.Wrap(err, "datatx service: error cancelling transfer")
-		return &datatx.CancelTransferResponse{
-			Status: status.NewInternal(ctx, err, "error cancelling transfer"),
-			TxInfo: txInfo,
-		}, err
-	}
+func (s *service) RetryTransfer(ctx context.Context, in *datatx.RetryTransferRequest) (*datatx.RetryTransferResponse, error) {
+	return &datatx.RetryTransferResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("RetryTransfer not implemented"), "RetryTransfer not implemented"),
+	}, nil
+}
 
-	txInfo.ShareId = &ocm.ShareId{OpaqueId: string(txShare.Opaque.Map["shareId"].Value)}
-
+func (s *service) CancelTransfer(ctx context.Context, in *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
 	return &datatx.CancelTransferResponse{
 		Status: status.NewOK(ctx),
 		TxInfo: txInfo,

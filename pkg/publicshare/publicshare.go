@@ -30,15 +30,22 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/utils"
+	"golang.org/x/crypto/bcrypt"
+)
+
+const (
+	// StorageIDFilterType defines a new filter type for storage id.
+	// TODO: Remove this once the filter type is in the CS3 API.
+	StorageIDFilterType link.ListPublicSharesRequest_Filter_Type = 4
 )
 
 // Manager manipulates public shares.
 type Manager interface {
 	CreatePublicShare(ctx context.Context, u *user.User, md *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error)
-	UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error)
+	UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest) (*link.PublicShare, error)
 	GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error)
-	ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error)
+	ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error)
 	RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error
 	GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error)
 }
@@ -95,18 +102,32 @@ func ResourceIDFilter(id *provider.ResourceId) *link.ListPublicSharesRequest_Fil
 	}
 }
 
+// StorageIDFilter is an abstraction for creating filter by storage id.
+func StorageIDFilter(id string) *link.ListPublicSharesRequest_Filter {
+	return &link.ListPublicSharesRequest_Filter{
+		Type: StorageIDFilterType,
+		Term: &link.ListPublicSharesRequest_Filter_ResourceId{
+			ResourceId: &provider.ResourceId{
+				StorageId: id,
+			},
+		},
+	}
+}
+
 // MatchesFilter tests if the share passes the filter.
-func MatchesFilter(share *link.PublicShare, filter *link.ListPublicSharesRequest_Filter) bool {
+func MatchesFilter(share link.PublicShare, filter *link.ListPublicSharesRequest_Filter) bool {
 	switch filter.Type {
 	case link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID:
 		return utils.ResourceIDEqual(share.ResourceId, filter.GetResourceId())
+	case StorageIDFilterType:
+		return share.ResourceId.StorageId == filter.GetResourceId().GetStorageId()
 	default:
 		return false
 	}
 }
 
 // MatchesAnyFilter checks if the share passes at least one of the given filters.
-func MatchesAnyFilter(share *link.PublicShare, filters []*link.ListPublicSharesRequest_Filter) bool {
+func MatchesAnyFilter(share link.PublicShare, filters []*link.ListPublicSharesRequest_Filter) bool {
 	for _, f := range filters {
 		if MatchesFilter(share, f) {
 			return true
@@ -119,7 +140,10 @@ func MatchesAnyFilter(share *link.PublicShare, filters []*link.ListPublicSharesR
 // Filters of the same type form a disjuntion, a logical OR. Filters of separate type form a conjunction, a logical AND.
 // Here is an example:
 // (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP)
-func MatchesFilters(share *link.PublicShare, filters []*link.ListPublicSharesRequest_Filter) bool {
+func MatchesFilters(share link.PublicShare, filters []*link.ListPublicSharesRequest_Filter) bool {
+	if len(filters) == 0 {
+		return true
+	}
 	grouped := GroupFiltersByType(filters)
 	for _, f := range grouped {
 		if !MatchesAnyFilter(share, f) {
@@ -139,7 +163,35 @@ func GroupFiltersByType(filters []*link.ListPublicSharesRequest_Filter) map[link
 }
 
 // IsExpired tests whether a public share is expired
-func IsExpired(s *link.PublicShare) bool {
+func IsExpired(s link.PublicShare) bool {
 	expiration := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos()))
 	return s.Expiration != nil && expiration.Before(time.Now())
+}
+
+// Authenticate checks the signature or password authentication for a public share
+func Authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuthentication) bool {
+	switch {
+	case auth.GetPassword() != "":
+		if err := bcrypt.CompareHashAndPassword([]byte(pw), []byte(auth.GetPassword())); err == nil {
+			return true
+		}
+	case auth.GetSignature() != nil:
+		sig := auth.GetSignature()
+		now := time.Now()
+		expiration := time.Unix(int64(sig.GetSignatureExpiration().GetSeconds()), int64(sig.GetSignatureExpiration().GetNanos()))
+		if now.After(expiration) {
+			return false
+		}
+		s, err := CreateSignature(share.Token, pw, expiration)
+		if err != nil {
+			return false
+		}
+		return sig.GetSignature() == s
+	}
+	return false
+}
+
+// IsCreatedByUser checks if a share was created by the user.
+func IsCreatedByUser(share link.PublicShare, user *user.User) bool {
+	return utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator)
 }

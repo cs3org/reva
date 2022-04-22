@@ -22,17 +22,16 @@ import (
 	"context"
 
 	registry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) GetAppProviders(ctx context.Context, req *registry.GetAppProvidersRequest) (*registry.GetAppProvidersResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.GetAppProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error getting app registry client"),
+			Status: status.NewInternal(ctx, "error getting app registry client"),
 		}, nil
 	}
 
@@ -47,9 +46,8 @@ func (s *svc) GetAppProviders(ctx context.Context, req *registry.GetAppProviders
 func (s *svc) AddAppProvider(ctx context.Context, req *registry.AddAppProviderRequest) (*registry.AddAppProviderResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.AddAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error getting app registry client"),
+			Status: status.NewInternal(ctx, "error getting app registry client"),
 		}, nil
 	}
 
@@ -64,9 +62,8 @@ func (s *svc) AddAppProvider(ctx context.Context, req *registry.AddAppProviderRe
 func (s *svc) ListAppProviders(ctx context.Context, req *registry.ListAppProvidersRequest) (*registry.ListAppProvidersResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.ListAppProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error getting app registry client"),
+			Status: status.NewInternal(ctx, "error getting app registry client"),
 		}, nil
 	}
 
@@ -81,9 +78,8 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registry.ListAppProvide
 func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registry.ListSupportedMimeTypesRequest) (*registry.ListSupportedMimeTypesResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.ListSupportedMimeTypesResponse{
-			Status: status.NewInternal(ctx, err, "error getting app registry client"),
+			Status: status.NewInternal(ctx, "error getting app registry client"),
 		}, nil
 	}
 
@@ -98,9 +94,8 @@ func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registry.ListSupp
 func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registry.GetDefaultAppProviderForMimeTypeRequest) (*registry.GetDefaultAppProviderForMimeTypeResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.GetDefaultAppProviderForMimeTypeResponse{
-			Status: status.NewInternal(ctx, err, "error getting app registry client"),
+			Status: status.NewInternal(ctx, "error getting app registry client"),
 		}, nil
 	}
 
@@ -115,9 +110,8 @@ func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registr
 func (s *svc) SetDefaultAppProviderForMimeType(ctx context.Context, req *registry.SetDefaultAppProviderForMimeTypeRequest) (*registry.SetDefaultAppProviderForMimeTypeResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.SetDefaultAppProviderForMimeTypeResponse{
-			Status: status.NewInternal(ctx, err, "error getting app registry client"),
+			Status: status.NewInternal(ctx, "error getting app registry client"),
 		}, nil
 	}
 

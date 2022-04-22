@@ -25,13 +25,13 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/share"
-	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/share"
+	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -150,7 +150,7 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewInternal(ctx, err, "error creating share"),
+			Status: status.NewInternal(ctx, "error creating share"),
 		}, nil
 	}
 
@@ -165,7 +165,7 @@ func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShar
 	err := s.sm.Unshare(ctx, req.Ref)
 	if err != nil {
 		return &collaboration.RemoveShareResponse{
-			Status: status.NewInternal(ctx, err, "error removing share"),
+			Status: status.NewInternal(ctx, "error removing share"),
 		}, nil
 	}
 
@@ -178,7 +178,7 @@ func (s *service) GetShare(ctx context.Context, req *collaboration.GetShareReque
 	share, err := s.sm.GetShare(ctx, req.Ref)
 	if err != nil {
 		return &collaboration.GetShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting share"),
+			Status: status.NewInternal(ctx, "error getting share"),
 		}, nil
 	}
 
@@ -192,7 +192,7 @@ func (s *service) ListShares(ctx context.Context, req *collaboration.ListSharesR
 	shares, err := s.sm.ListShares(ctx, req.Filters) // TODO(labkode): add filter to share manager
 	if err != nil {
 		return &collaboration.ListSharesResponse{
-			Status: status.NewInternal(ctx, err, "error listing shares"),
+			Status: status.NewInternal(ctx, "error listing shares"),
 		}, nil
 	}
 
@@ -207,7 +207,7 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 	share, err := s.sm.UpdateShare(ctx, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateShareResponse{
-			Status: status.NewInternal(ctx, err, "error updating share"),
+			Status: status.NewInternal(ctx, "error updating share"),
 		}, nil
 	}
 
@@ -233,7 +233,7 @@ func (s *service) ListReceivedShares(ctx context.Context, req *collaboration.Lis
 	shares, err := s.sm.ListReceivedShares(ctx, req.Filters) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.ListReceivedSharesResponse{
-			Status: status.NewInternal(ctx, err, "error listing received shares"),
+			Status: status.NewInternal(ctx, "error listing received shares"),
 		}, nil
 	}
 
@@ -251,7 +251,7 @@ func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetRe
 	if err != nil {
 		log.Err(err).Msg("error getting received share")
 		return &collaboration.GetReceivedShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting received share"),
+			Status: status.NewInternal(ctx, "error getting received share"),
 		}, nil
 	}
 
@@ -263,10 +263,32 @@ func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetRe
 }
 
 func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
-	share, err := s.sm.UpdateReceivedShare(ctx, req.Share, req.UpdateMask) // TODO(labkode): check what to update
+
+	if req.Share == nil {
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewInvalidArg(ctx, "updating requires a received share object"),
+		}, nil
+	}
+	if req.Share.Share == nil {
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewInvalidArg(ctx, "share missing"),
+		}, nil
+	}
+	if req.Share.Share.Id == nil {
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewInvalidArg(ctx, "share id missing"),
+		}, nil
+	}
+	if req.Share.Share.Id.OpaqueId == "" {
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewInvalidArg(ctx, "share id empty"),
+		}, nil
+	}
+
+	share, err := s.sm.UpdateReceivedShare(ctx, req.Share, req.UpdateMask)
 	if err != nil {
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInternal(ctx, err, "error updating received share"),
+			Status: status.NewInternal(ctx, "error updating received share"),
 		}, nil
 	}
 

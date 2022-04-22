@@ -40,8 +40,6 @@ const (
 	RoleEditor = "editor"
 	// RoleFileEditor grants editor permission on a single file.
 	RoleFileEditor = "file-editor"
-	// RoleCoowner grants co-owner permissions on a resource.
-	RoleCoowner = "coowner"
 	// RoleUploader grants uploader permission to upload onto a resource.
 	RoleUploader = "uploader"
 	// RoleManager grants manager permissions on a resource. Semantically equivalent to co-owner.
@@ -107,7 +105,10 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 		fmt.Fprintf(&b, "D") // TODO oc10 shows received shares as deletable
 	}
 	if r.ocsPermissions.Contain(PermissionWrite) {
-		fmt.Fprintf(&b, "NV")
+		// Single file public link shares cannot be renamed
+		if !isPublic || (isPublic && r.cS3ResourcePermissions != nil && r.cS3ResourcePermissions.Move) {
+			fmt.Fprintf(&b, "NV")
+		}
 		if !isDir {
 			fmt.Fprintf(&b, "W")
 		}
@@ -127,8 +128,6 @@ func RoleFromName(name string) *Role {
 		return NewEditorRole()
 	case RoleFileEditor:
 		return NewFileEditorRole()
-	case RoleCoowner:
-		return NewCoownerRole()
 	case RoleUploader:
 		return NewUploaderRole()
 	case RoleManager:
@@ -211,34 +210,6 @@ func NewFileEditorRole() *Role {
 	}
 }
 
-// NewCoownerRole creates a coowner role
-func NewCoownerRole() *Role {
-	return &Role{
-		Name: RoleCoowner,
-		cS3ResourcePermissions: &provider.ResourcePermissions{
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			ListGrants:           true,
-			ListContainer:        true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			InitiateFileUpload:   true,
-			RestoreFileVersion:   true,
-			RestoreRecycleItem:   true,
-			CreateContainer:      true,
-			Delete:               true,
-			Move:                 true,
-			PurgeRecycle:         true,
-			AddGrant:             true,
-			UpdateGrant:          true,
-			RemoveGrant:          true,
-		},
-		ocsPermissions: PermissionAll,
-	}
-}
-
 // NewUploaderRole creates an uploader role
 func NewUploaderRole() *Role {
 	return &Role{
@@ -254,7 +225,16 @@ func NewUploaderRole() *Role {
 	}
 }
 
-// NewManagerRole creates an editor role
+// NewNoneRole creates a role with no permissions
+func NewNoneRole() *Role {
+	return &Role{
+		Name:                   "none",
+		cS3ResourcePermissions: &provider.ResourcePermissions{},
+		ocsPermissions:         PermissionInvalid,
+	}
+}
+
+// NewManagerRole creates an manager role
 func NewManagerRole() *Role {
 	return &Role{
 		Name: RoleManager,
@@ -286,10 +266,14 @@ func NewManagerRole() *Role {
 
 // RoleFromOCSPermissions tries to map ocs permissions to a role
 func RoleFromOCSPermissions(p Permissions) *Role {
+	if p == PermissionInvalid {
+		return NewNoneRole()
+	}
+
 	if p.Contain(PermissionRead) {
 		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) {
 			if p.Contain(PermissionShare) {
-				return NewCoownerRole()
+				return NewManagerRole()
 			}
 			return NewEditorRole()
 		}
@@ -394,9 +378,9 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		if r.ocsPermissions.Contain(PermissionWrite) && r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) {
 			r.Name = RoleEditor
 			if r.ocsPermissions.Contain(PermissionShare) {
-				r.Name = RoleCoowner
+				r.Name = RoleManager
 			}
-			return r // editor or coowner
+			return r // editor or manager
 		}
 		if r.ocsPermissions == PermissionRead {
 			r.Name = RoleViewer

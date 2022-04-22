@@ -23,14 +23,13 @@ import (
 	"regexp"
 
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/publicshare"
-	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/publicshare"
+	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -166,7 +165,7 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 	err := s.sm.RevokePublicShare(ctx, user, req.Ref)
 	if err != nil {
 		return &link.RemovePublicShareResponse{
-			Status: status.NewInternal(ctx, err, "error deleting public share"),
+			Status: status.NewInternal(ctx, "error deleting public share"),
 		}, err
 	}
 	return &link.RemovePublicShareResponse{
@@ -196,7 +195,7 @@ func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublic
 		}, nil
 	default:
 		return &link.GetPublicShareByTokenResponse{
-			Status: status.NewInternal(ctx, v, "unexpected error"),
+			Status: status.NewInternal(ctx, "unexpected error"),
 		}, nil
 	}
 }
@@ -226,11 +225,11 @@ func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicShar
 	log.Info().Str("publicshareprovider", "list").Msg("list public share")
 	user, _ := ctxpkg.ContextGetUser(ctx)
 
-	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, &provider.ResourceInfo{}, req.GetSign())
+	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, req.GetSign())
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &link.ListPublicSharesResponse{
-			Status: status.NewInternal(ctx, err, "error listing public shares"),
+			Status: status.NewInternal(ctx, "error listing public shares"),
 		}, nil
 	}
 
@@ -250,7 +249,7 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 		log.Error().Msg("error getting user from context")
 	}
 
-	updateR, err := s.sm.UpdatePublicShare(ctx, u, req, nil)
+	updateR, err := s.sm.UpdatePublicShare(ctx, u, req)
 	if err != nil {
 		log.Err(err).Msgf("error updating public shares: %v", err)
 	}

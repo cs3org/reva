@@ -28,6 +28,7 @@ import (
 	"hash"
 	"hash/adler32"
 	"io"
+	iofs "io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -36,13 +37,15 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/logger"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -63,11 +66,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 	uploadInfo := upload.(*fileUpload)
 
 	p := uploadInfo.info.Storage["NodeName"]
-	ok, err := chunking.IsChunked(p) // check chunking v1
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error checking path")
-	}
-	if ok {
+	if chunking.IsChunked(p) { // check chunking v1
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {
@@ -115,10 +114,13 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, err
 	}
 
+	lockID, _ := ctxpkg.ContextGetLockID(ctx)
+
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
 			"filename": filepath.Base(relative),
 			"dir":      filepath.Dir(relative),
+			"lockid":   lockID,
 		},
 		Size: uploadLength,
 		Storage: map[string]string{
@@ -127,23 +129,26 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	if metadata != nil {
-		if metadata["mtime"] != "" {
-			info.MetaData["mtime"] = metadata["mtime"]
+		if mtime, ok := metadata["mtime"]; ok {
+			info.MetaData["mtime"] = mtime
 		}
 		if _, ok := metadata["sizedeferred"]; ok {
 			info.SizeIsDeferred = true
 		}
-		if metadata["checksum"] != "" {
-			parts := strings.SplitN(metadata["checksum"], " ", 2)
+		if checksum, ok := metadata["checksum"]; ok {
+			parts := strings.SplitN(checksum, " ", 2)
 			if len(parts) != 2 {
 				return nil, errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
 			}
 			switch parts[0] {
 			case "sha1", "md5", "adler32":
-				info.MetaData["checksum"] = metadata["checksum"]
+				info.MetaData["checksum"] = checksum
 			default:
 				return nil, errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
 			}
+		}
+		if ifMatch, ok := metadata["if-match"]; ok {
+			info.MetaData["if-match"] = ifMatch
 		}
 	}
 
@@ -185,21 +190,23 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("Decomposedfs: NewUpload")
 
-	fn := info.MetaData["filename"]
-	if fn == "" {
+	if info.MetaData["filename"] == "" {
 		return nil, errors.New("Decomposedfs: missing filename in metadata")
 	}
-	info.MetaData["filename"] = filepath.Clean(info.MetaData["filename"])
-
-	dir := info.MetaData["dir"]
-	if dir == "" {
+	if info.MetaData["dir"] == "" {
 		return nil, errors.New("Decomposedfs: missing dir in metadata")
 	}
-	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	n, err := fs.lookupNode(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	n, err := fs.lu.NodeFromSpaceID(ctx, &provider.ResourceId{
+		StorageId: info.Storage["SpaceRoot"],
+	})
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error wrapping filename")
+		return nil, errors.Wrap(err, "Decomposedfs: error getting space root node")
+	}
+
+	n, err = fs.lookupNode(ctx, n, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	if err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: error walking path")
 	}
 
 	log.Debug().Interface("info", info).Interface("node", n).Msg("Decomposedfs: resolved filename")
@@ -230,6 +237,14 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
+	// check lock
+	if info.MetaData["lockid"] != "" {
+		ctx = ctxpkg.ContextSetLockID(ctx, info.MetaData["lockid"])
+	}
+	if err := n.CheckLock(ctx); err != nil {
+		return nil, err
+	}
+
 	info.ID = uuid.New().String()
 
 	binPath, err := fs.getUploadPath(ctx, info.ID)
@@ -238,10 +253,6 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 	usr := ctxpkg.ContextMustGetUser(ctx)
 
-	owner, err := p.Owner()
-	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error determining owner")
-	}
 	var spaceRoot string
 	if info.Storage != nil {
 		if spaceRoot, ok = info.Storage["SpaceRoot"]; !ok {
@@ -264,9 +275,6 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		"UserId":   usr.Id.OpaqueId,
 		"UserType": utils.UserTypeToString(usr.Id.Type),
 		"UserName": usr.Username,
-
-		"OwnerIdp": owner.Idp,
-		"OwnerId":  owner.OpaqueId,
 
 		"LogLevel": log.GetLevel().String(),
 	}
@@ -306,7 +314,7 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 	info := tusd.FileInfo{}
 	data, err := ioutil.ReadFile(infoPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, iofs.ErrNotExist) {
 			// Interpret os.ErrNotExist as 404 Not Found
 			err = tusd.ErrNotFound
 		}
@@ -355,12 +363,9 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 
 // lookupNode looks up nodes by path.
 // This method can also handle lookups for paths which contain chunking information.
-func (fs *Decomposedfs) lookupNode(ctx context.Context, path string) (*node.Node, error) {
+func (fs *Decomposedfs) lookupNode(ctx context.Context, spaceRoot *node.Node, path string) (*node.Node, error) {
 	p := path
-	isChunked, err := chunking.IsChunked(path)
-	if err != nil {
-		return nil, err
-	}
+	isChunked := chunking.IsChunked(path)
 	if isChunked {
 		chunkInfo, err := chunking.GetChunkBLOBInfo(path)
 		if err != nil {
@@ -369,9 +374,9 @@ func (fs *Decomposedfs) lookupNode(ctx context.Context, path string) (*node.Node
 		p = chunkInfo.Path
 	}
 
-	n, err := fs.lu.NodeFromPath(ctx, p, false)
+	n, err := fs.lu.WalkPath(ctx, spaceRoot, p, true, func(ctx context.Context, n *node.Node) error { return nil })
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Decomposedfs: error walking path")
 	}
 
 	if isChunked {
@@ -455,7 +460,9 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return
 	}
 
+	spaceID := upload.info.Storage["SpaceRoot"]
 	n := node.New(
+		spaceID,
 		upload.info.Storage["NodeId"],
 		upload.info.Storage["NodeParentId"],
 		upload.info.Storage["NodeName"],
@@ -464,7 +471,15 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		nil,
 		upload.fs.lu,
 	)
-	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
+	n.SpaceRoot = node.New(spaceID, spaceID, "", "", 0, "", nil, upload.fs.lu)
+
+	// check lock
+	if upload.info.MetaData["lockid"] != "" {
+		ctx = ctxpkg.ContextSetLockID(ctx, upload.info.MetaData["lockid"])
+	}
+	if err := n.CheckLock(ctx); err != nil {
+		return err
+	}
 
 	_, err = node.CheckQuota(n.SpaceRoot, uint64(fi.Size()))
 	if err != nil {
@@ -530,10 +545,27 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// defer writing the checksums until the node is in place
 
 	// if target exists create new version
+	versionsPath := ""
 	if fi, err = os.Stat(targetPath); err == nil {
-		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := upload.fs.lu.InternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
+		// When the if-match header was set we need to check if the
+		// etag still matches before finishing the upload.
+		if ifMatch, ok := upload.info.MetaData["if-match"]; ok {
+			var targetEtag string
+			targetEtag, err = node.CalculateEtag(n.ID, fi.ModTime())
+			if err != nil {
+				return errtypes.InternalError(err.Error())
+			}
+			if ifMatch != targetEtag {
+				return errtypes.PreconditionFailed("etag doesn't match")
+			}
+		}
 
+		// FIXME move versioning to blobs ... no need to copy all the metadata! well ... it does if we want to version metadata...
+		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
+		versionsPath = upload.fs.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
+
+		// This move drops all metadata!!! We copy it below with CopyMetadata
+		// FIXME the node must remain the same. otherwise we might restore share metadata
 		if err = os.Rename(targetPath, versionsPath); err != nil {
 			sublog.Err(err).
 				Str("binPath", upload.binPath).
@@ -541,6 +573,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 				Msg("Decomposedfs: could not create version")
 			return
 		}
+
 	}
 
 	// upload the data to the blobstore
@@ -549,7 +582,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return err
 	}
 	defer file.Close()
-	err = upload.fs.tp.WriteBlob(n.BlobID, file)
+	err = upload.fs.tp.WriteBlob(n, file)
 	if err != nil {
 		return errors.Wrap(err, "failed to upload file to blostore")
 	}
@@ -562,10 +595,29 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			Msg("Decomposedfs: could not truncate")
 		return
 	}
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0700); err != nil {
+		sublog.Warn().Err(err).Msg("Decomposedfs: could not create node dir, trying to write file anyway")
+	}
 	if err = os.Rename(upload.binPath, targetPath); err != nil {
-		sublog.Err(err).
-			Msg("Decomposedfs: could not rename")
+		sublog.Error().Err(err).Msg("Decomposedfs: could not rename")
 		return
+	}
+	if versionsPath != "" {
+		// copy grant and arbitrary metadata
+		// FIXME ... now restoring an older revision might bring back a grant that was removed!
+		err = xattrs.CopyMetadata(versionsPath, targetPath, func(attributeName string) bool {
+			return true
+			// TODO determine all attributes that must be copied, currently we just copy all and overwrite changed properties
+			/*
+				return strings.HasPrefix(attributeName, xattrs.GrantPrefix) || // for grants
+					strings.HasPrefix(attributeName, xattrs.MetadataPrefix) || // for arbitrary metadata
+					strings.HasPrefix(attributeName, xattrs.FavPrefix) || // for favorites
+					strings.HasPrefix(attributeName, xattrs.SpaceNameAttr) || // for a shared file
+			*/
+		})
+		if err != nil {
+			sublog.Info().Err(err).Msg("Decomposedfs: failed to copy xattrs")
+		}
 	}
 
 	// now try write all checksums
@@ -574,16 +626,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	tryWritingChecksum(&sublog, n, "adler32", adler32h)
 
 	// who will become the owner?  the owner of the parent actually ... not the currently logged in user
-	err = n.WriteMetadata(&userpb.UserId{
-		Idp:      upload.info.Storage["OwnerIdp"],
-		OpaqueId: upload.info.Storage["OwnerId"],
-	})
+	err = n.WriteAllNodeMetadata()
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(upload.fs.lu.InternalPath(n.ParentID), n.Name)
+	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
 	var link string
 	link, err = os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {
@@ -597,15 +646,16 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			return errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
 		}
 	}
-	if os.IsNotExist(err) || link != "../"+n.ID {
-		if err = os.Symlink("../"+n.ID, childNameLink); err != nil {
+	if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
+		relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")
 		}
 	}
 
 	// only delete the upload if it was successfully written to the storage
 	if err = os.Remove(upload.infoPath); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, iofs.ErrNotExist) {
 			sublog.Err(err).Msg("Decomposedfs: could not delete upload info")
 			return
 		}
@@ -643,13 +693,13 @@ func tryWritingChecksum(log *zerolog.Logger, n *node.Node, algo string, h hash.H
 
 func (upload *fileUpload) discardChunk() {
 	if err := os.Remove(upload.binPath); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, iofs.ErrNotExist) {
 			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("binPath", upload.binPath).Interface("info", upload.info).Msg("Decomposedfs: could not discard chunk")
 			return
 		}
 	}
 	if err := os.Remove(upload.infoPath); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, iofs.ErrNotExist) {
 			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("infoPath", upload.infoPath).Interface("info", upload.info).Msg("Decomposedfs: could not discard chunk info")
 			return
 		}
@@ -668,12 +718,12 @@ func (fs *Decomposedfs) AsTerminatableUpload(upload tusd.Upload) tusd.Terminatab
 // Terminate terminates the upload
 func (upload *fileUpload) Terminate(ctx context.Context) error {
 	if err := os.Remove(upload.infoPath); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, iofs.ErrNotExist) {
 			return err
 		}
 	}
 	if err := os.Remove(upload.binPath); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, iofs.ErrNotExist) {
 			return err
 		}
 	}

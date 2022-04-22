@@ -23,16 +23,16 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/sharees"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud/capabilities"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud/user"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud/users"
-	configHandler "github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/config"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/sharees"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/cloud/capabilities"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/cloud/user"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/cloud/users"
+	configHandler "github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/config"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/rhttp/global"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
@@ -48,6 +48,7 @@ type svc struct {
 	warmupCacheTracker *ttlcache.Cache
 }
 
+// New initializes the service
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config.Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
@@ -83,7 +84,12 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/v1.php/cloud/capabilities", "/v2.php/cloud/capabilities"}
+	return []string{
+		"/v1.php/config",
+		"/v2.php/config",
+		"/v1.php/apps/files_sharing/api/v1/tokeninfo/unprotected",
+		"/v2.php/apps/files_sharing/api/v1/tokeninfo/unprotected",
+	}
 }
 
 func (s *svc) routerInit() error {
@@ -121,6 +127,10 @@ func (s *svc) routerInit() error {
 				r.Delete("/{shareid}", sharesHandler.RemoveShare)
 			})
 			r.Get("/sharees", shareesHandler.FindSharees)
+			r.Route("/tokeninfo", func(r chi.Router) {
+				r.Get("/protected/{tkn}", shareesHandler.TokenInfo(true))
+				r.Get("/unprotected/{tkn}", shareesHandler.TokenInfo(false))
+			})
 		})
 
 		// placeholder for notifications

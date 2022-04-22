@@ -16,6 +16,8 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package publicstorageprovider provides a CS3 storageprovider implementation for public links.
+// It will list spaces with type `grant` and `mountpoint` when a public scope is present.
 package publicstorageprovider
 
 import (
@@ -25,17 +27,18 @@ import (
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/attribute"
@@ -49,16 +52,12 @@ func init() {
 }
 
 type config struct {
-	MountPath   string `mapstructure:"mount_path"`
-	MountID     string `mapstructure:"mount_id"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
 type service struct {
-	conf      *config
-	mountPath string
-	mountID   string
-	gateway   gateway.GatewayAPIClient
+	conf    *config
+	gateway gateway.GatewayAPIClient
 }
 
 func (s *service) Close() error {
@@ -82,15 +81,12 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new IsPublic Storage Provider service.
+// New creates a new publicstorageprovider service.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
-
-	mountPath := c.MountPath
-	mountID := c.MountID
 
 	gateway, err := pool.GetGatewayServiceClient(c.GatewayAddr)
 	if err != nil {
@@ -98,10 +94,8 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	service := &service{
-		conf:      c,
-		mountPath: mountPath,
-		mountID:   mountID,
-		gateway:   gateway,
+		conf:    c,
+		gateway: gateway,
 	}
 
 	return service, nil
@@ -126,22 +120,58 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 
 // SetLock puts a lock on the given reference
 func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
+		return nil, err
+	case st != nil:
+		return &provider.SetLockResponse{
+			Status: st,
+		}, nil
+	}
+	return s.gateway.SetLock(ctx, &provider.SetLockRequest{Opaque: req.Opaque, Ref: ref, Lock: req.Lock})
 }
 
 // GetLock returns an existing lock on the given reference
 func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
+		return nil, err
+	case st != nil:
+		return &provider.GetLockResponse{
+			Status: st,
+		}, nil
+	}
+	return s.gateway.GetLock(ctx, &provider.GetLockRequest{Opaque: req.Opaque, Ref: ref})
 }
 
 // RefreshLock refreshes an existing lock on the given reference
 func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
+		return nil, err
+	case st != nil:
+		return &provider.RefreshLockResponse{
+			Status: st,
+		}, nil
+	}
+	return s.gateway.RefreshLock(ctx, &provider.RefreshLockRequest{Opaque: req.Opaque, Ref: ref, Lock: req.Lock})
 }
 
 // Unlock removes an existing lock from the given reference
 func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
+		return nil, err
+	case st != nil:
+		return &provider.UnlockResponse{
+			Status: st,
+		}, nil
+	}
+	return s.gateway.Unlock(ctx, &provider.UnlockRequest{Opaque: req.Opaque, Ref: ref, Lock: req.Lock})
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
@@ -149,18 +179,17 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	statRes, err := s.Stat(ctx, statReq)
 	if err != nil {
 		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, "InitiateFileDownload: error stating ref:"+req.Ref.String()),
 		}, nil
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			return &provider.InitiateFileDownloadResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found"),
+				Status: status.NewNotFound(ctx, "InitiateFileDownload: file not found"),
 			}, nil
 		}
-		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating ref"),
+			Status: status.NewInternal(ctx, "InitiateFileDownload: error stating ref"),
 		}, nil
 	}
 
@@ -170,12 +199,15 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 
 func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.Reference) (*provider.Reference, string, *link.PublicShare, *rpc.Status, error) {
 	log := appctx.GetLogger(ctx)
-	tkn, relativePath, err := s.unwrap(ctx, ref)
-	if err != nil {
-		return nil, "", nil, nil, err
+
+	share, _, ok := extractLinkAndInfo(ctx)
+	if !ok {
+		return nil, "", nil, nil, gstatus.Errorf(codes.NotFound, "share or token not found")
 	}
 
-	ls, shareInfo, st, err := s.resolveToken(ctx, tkn)
+	// the share is minimally populated, we need more than the token
+	// look up complete share
+	ls, shareInfo, st, err := s.resolveToken(ctx, share.Token)
 	switch {
 	case err != nil:
 		return nil, "", nil, nil, err
@@ -183,29 +215,34 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 		return nil, "", nil, st, nil
 	}
 
-	p := shareInfo.Path
-	if shareInfo.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-		p = path.Join("/", shareInfo.Path, relativePath)
+	var path string
+	switch shareInfo.Type {
+	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		// folders point to the folder -> path needs to be added
+		path = utils.MakeRelativePath(ref.Path)
+	case provider.ResourceType_RESOURCE_TYPE_FILE:
+		// files already point to the correct id
+		path = "."
+	default:
+		// TODO: can this happen?
+		// path = utils.MakeRelativePath(relativePath)
 	}
-	cs3Ref := &provider.Reference{Path: p}
+
+	cs3Ref := &provider.Reference{
+		ResourceId: shareInfo.Id,
+		Path:       path,
+	}
 
 	log.Debug().
 		Interface("sourceRef", ref).
 		Interface("cs3Ref", cs3Ref).
 		Interface("share", ls).
-		Str("tkn", tkn).
+		Str("tkn", share.Token).
 		Str("originalPath", shareInfo.Path).
-		Str("relativePath", relativePath).
+		Str("relativePath", path).
 		Msg("translatePublicRefToCS3Ref")
-	return cs3Ref, tkn, ls, nil, nil
+	return cs3Ref, share.Token, ls, nil, nil
 }
-
-// Both, t.dir and tokenPath paths need to be merged:
-// tokenPath   = /oc/einstein/public-links
-// t.dir       = /public/ausGxuUePCOi/foldera/folderb/
-// res         = /public-links/foldera/folderb/
-// this `res` will get then expanded taking into account the authenticated user and the storage:
-// end         = /einstein/files/public-links/foldera/folderb/
 
 func (s *service) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
@@ -228,7 +265,7 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 	dRes, err := s.gateway.InitiateFileDownload(ctx, dReq)
 	if err != nil {
 		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileDownload"),
+			Status: status.NewInternal(ctx, "initiateFileDownload: error calling InitiateFileDownload"),
 		}, nil
 	}
 
@@ -281,7 +318,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	uRes, err := s.gateway.InitiateFileUpload(ctx, uReq)
 	if err != nil {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileUpload"),
+			Status: status.NewInternal(ctx, "InitiateFileUpload: error calling InitiateFileUpload"),
 		}, nil
 	}
 
@@ -331,8 +368,146 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
+// ListStorageSpaces returns storage spaces when a public scope is present
+// in the context.
+//
+// On the one hand, it lists a `mountpoint` space that can be used by the
+// registry to construct a mount path. These spaces have their root
+// storageid set to 7993447f-687f-490d-875c-ac95e89a62a4 and the
+// opaqueid set to the link token.
+//
+// On the other hand, it lists a `grant` space for the shared resource id,
+// so id based requests can find the correct storage provider. These spaces
+// have their root set to the shared resource.
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	spaceTypes := map[string]struct{}{}
+	var exists = struct{}{}
+	appendTypes := []string{}
+	var spaceID *provider.ResourceId
+	for _, f := range req.Filters {
+		switch f.Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			spaceType := f.GetSpaceType()
+			if spaceType == "+mountpoint" || spaceType == "+grant" {
+				appendTypes = append(appendTypes, strings.TrimPrefix(spaceType, "+"))
+				continue
+			}
+			spaceTypes[spaceType] = exists
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			spaceid, shareid, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			if err != nil {
+				continue
+			}
+			if spaceid != utils.PublicStorageProviderID {
+				return &provider.ListStorageSpacesResponse{
+					// a specific id was requested, return not found instead of empty list
+					Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND},
+				}, nil
+			}
+			spaceID = &provider.ResourceId{StorageId: spaceid, OpaqueId: shareid}
+		}
+	}
+
+	// if there is no public scope there are no publicstorage spaces
+	share, _, ok := extractLinkAndInfo(ctx)
+	if !ok {
+		return &provider.ListStorageSpacesResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+		}, nil
+	}
+
+	if len(spaceTypes) == 0 {
+		spaceTypes["mountpoint"] = exists
+	}
+	for _, s := range appendTypes {
+		spaceTypes[s] = exists
+	}
+
+	res := &provider.ListStorageSpacesResponse{
+		Status: status.NewOK(ctx),
+	}
+	for k := range spaceTypes {
+		switch k {
+		case "grant":
+			// when a list storage space with the resourceid of an external
+			// resource is made we may have a grant for it
+			root := share.ResourceId
+			if spaceID != nil && !utils.ResourceIDEqual(spaceID, root) {
+				// none of our business
+				continue
+			}
+			// we know a grant for this resource
+			space := &provider.StorageSpace{
+				Id: &provider.StorageSpaceId{
+					OpaqueId: root.StorageId + "!" + root.OpaqueId,
+				},
+				SpaceType: "grant",
+				Owner:     &userv1beta1.User{Id: share.Owner},
+				// the publicstorageprovider keeps track of mount points
+				Root: root,
+			}
+
+			res.StorageSpaces = append(res.StorageSpaces, space)
+		case "mountpoint":
+			root := &provider.ResourceId{
+				StorageId: utils.PublicStorageProviderID,
+				OpaqueId:  share.Token, // the link share has no id, only the token
+			}
+			if spaceID != nil {
+				switch {
+				case utils.ResourceIDEqual(spaceID, root):
+					// we have a virtual node
+				case utils.ResourceIDEqual(spaceID, share.ResourceId):
+					// we have a mount point
+					root = share.ResourceId
+				default:
+					// none of our business
+					continue
+				}
+			}
+			space := &provider.StorageSpace{
+				Id: &provider.StorageSpaceId{
+					OpaqueId: root.StorageId + "!" + root.OpaqueId,
+				},
+				SpaceType: "mountpoint",
+				Owner:     &userv1beta1.User{Id: share.Owner}, // FIXME actually, the mount point belongs to no one?
+				// the publicstorageprovider keeps track of mount points
+				Root: root,
+			}
+
+			res.StorageSpaces = append(res.StorageSpaces, space)
+		}
+	}
+	return res, nil
+}
+
+func extractLinkAndInfo(ctx context.Context) (*link.PublicShare, *provider.ResourceInfo, bool) {
+	scopes, ok := ctxpkg.ContextGetScopes(ctx)
+	if !ok {
+		return nil, nil, false
+	}
+	var share *link.PublicShare
+	var info *provider.ResourceInfo
+	for k, v := range scopes {
+		switch {
+		case strings.HasPrefix(k, "publicshare:") && v.Resource.Decoder == "json":
+			share = &link.PublicShare{}
+			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, share)
+			if err != nil {
+				continue
+			}
+		case strings.HasPrefix(k, "resourceinfo:") && v.Resource.Decoder == "json":
+			info = &provider.ResourceInfo{}
+			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, info)
+			if err != nil {
+				continue
+			}
+		}
+	}
+	if share == nil || info == nil || !utils.ResourceIDEqual(share.ResourceId, info.Id) {
+		return nil, nil, false
+	}
+	return share, info, true
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
@@ -373,7 +548,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	})
 	if err != nil {
 		return &provider.CreateContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling CreateContainer for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, "createContainer: error calling CreateContainer for ref:"+req.Ref.String()),
 		}, nil
 	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
@@ -426,7 +601,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	})
 	if err != nil {
 		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Delete for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, "Delete: error calling Delete for ref:"+req.Ref.String()),
 		}, nil
 	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
@@ -489,7 +664,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	})
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Move for source ref "+req.Source.String()+" to destination ref "+req.Destination.String()),
+			Status: status.NewInternal(ctx, "Move: error calling Move for source ref "+req.Source.String()+" to destination ref "+req.Destination.String()),
 		}, nil
 	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
@@ -509,27 +684,16 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Value: attribute.StringValue(req.Ref.String()),
 		})
 
-	var (
-		tkn          string
-		relativePath string
-		nodeID       string
-	)
-
-	if req.Ref.ResourceId != nil {
-		// Id based request.
-		// The OpaqueId in the public storage has the format `{shareToken}/{uuid}`
-		parts := strings.Split(req.Ref.ResourceId.OpaqueId, "/")
-		tkn = parts[0]
-		nodeID = parts[1]
-	} else if req.Ref.Path != "" {
-		var err error
-		tkn, relativePath, err = s.unwrap(ctx, req.Ref)
-		if err != nil {
-			return nil, err
-		}
+	share, _, ok := extractLinkAndInfo(ctx)
+	if !ok {
+		return &provider.StatResponse{
+			Status: status.NewNotFound(ctx, "share or token not found"),
+		}, nil
 	}
 
-	share, shareInfo, st, err := s.resolveToken(ctx, tkn)
+	// the share is minimally populated, we need more than the token
+	// look up complete share
+	share, shareInfo, st, err := s.resolveToken(ctx, share.Token)
 	switch {
 	case err != nil:
 		return nil, err
@@ -543,34 +707,28 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	if shareInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE || (relativePath == "" && nodeID == "") || shareInfo.Id.OpaqueId == nodeID {
+	if shareInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE || req.Ref.Path == "" {
 		res := &provider.StatResponse{
 			Status: status.NewOK(ctx),
 			Info:   shareInfo,
 		}
-		s.augmentStatResponse(ctx, res, shareInfo, share, tkn)
+		s.augmentStatResponse(ctx, res, shareInfo, share, share.Token)
 		return res, nil
 	}
 
-	var ref *provider.Reference
-	if req.Ref.ResourceId != nil {
-		ref = &provider.Reference{ResourceId: &provider.ResourceId{
-			StorageId: share.ResourceId.StorageId,
-			OpaqueId:  nodeID,
-		}}
-	} else if req.Ref.Path != "" {
-		p := path.Join("/", shareInfo.Path, relativePath)
-		ref = &provider.Reference{Path: p}
+	ref := &provider.Reference{
+		ResourceId: share.ResourceId,
+		Path:       utils.MakeRelativePath(req.Ref.Path),
 	}
 
 	statResponse, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: ref})
 	if err != nil {
 		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Stat for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, "Stat: error calling Stat for ref:"+req.Ref.String()),
 		}, nil
 	}
 
-	s.augmentStatResponse(ctx, statResponse, shareInfo, share, tkn)
+	s.augmentStatResponse(ctx, statResponse, shareInfo, share, share.Token)
 
 	return statResponse, nil
 }
@@ -589,17 +747,16 @@ func (s *service) augmentStatResponse(ctx context.Context, res *provider.StatRes
 			sharePath = strings.TrimPrefix(res.Info.Path, shareInfo.Path)
 		}
 
-		res.Info.Path = path.Join(s.mountPath, "/", tkn, sharePath)
+		res.Info.Path = path.Join("/", sharePath)
 		s.setPublicStorageID(res.Info, tkn)
 		filterPermissions(res.Info.PermissionSet, share.GetPermissions().Permissions)
 	}
 }
 
+// setPublicStorageID encodes the actual spaceid and nodeid as an opaqueid in the publicstorageprovider space
 func (s *service) setPublicStorageID(info *provider.ResourceInfo, shareToken string) {
-	if s.mountID != "" {
-		info.Id.StorageId = s.mountID
-		info.Id.OpaqueId = shareToken + "/" + info.Id.OpaqueId
-	}
+	info.Id.StorageId = utils.PublicStorageProviderID
+	info.Id.OpaqueId = shareToken
 }
 
 func addShare(i *provider.ResourceInfo, ls *link.PublicShare) error {
@@ -622,12 +779,16 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
-	if err != nil {
-		return nil, err
-	}
 
-	share, shareInfo, st, err := s.resolveToken(ctx, tkn)
+	share, _, ok := extractLinkAndInfo(ctx)
+	if !ok {
+		return &provider.ListContainerResponse{
+			Status: status.NewNotFound(ctx, "share or token not found"),
+		}, nil
+	}
+	// the share is minimally populated, we need more than the token
+	// look up complete share
+	share, _, st, err := s.resolveToken(ctx, share.Token)
 	switch {
 	case err != nil:
 		return nil, err
@@ -644,18 +805,24 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 	listContainerR, err := s.gateway.ListContainer(
 		ctx,
-		&provider.ListContainerRequest{Ref: &provider.Reference{Path: path.Join("/", shareInfo.Path, relativePath)}},
+		&provider.ListContainerRequest{
+			Ref: &provider.Reference{
+				ResourceId: share.ResourceId,
+				// prefix relative path with './' to make it a CS3 relative path
+				Path: utils.MakeRelativePath(req.Ref.Path),
+			},
+		},
 	)
 	if err != nil {
 		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling ListContainer for ref:"+req.Ref.String()),
+			Status: status.NewInternal(ctx, "ListContainer: error calling ListContainer for ref:"+req.Ref.String()),
 		}, nil
 	}
 
 	for i := range listContainerR.Infos {
+		// FIXME how do we reduce permissions to what is granted by the public link?
+		// only a problem for id based access -> middleware
 		filterPermissions(listContainerR.Infos[i].PermissionSet, share.GetPermissions().Permissions)
-		listContainerR.Infos[i].Path = path.Join(s.mountPath, "/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
-		s.setPublicStorageID(listContainerR.Infos[i], tkn)
 		if err := addShare(listContainerR.Infos[i], share); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("share", share).Interface("info", listContainerR.Infos[i]).Msg("error when adding share")
 		}
@@ -683,33 +850,6 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 	l.RestoreRecycleItem = l.RestoreRecycleItem && r.RestoreRecycleItem
 	l.Stat = l.Stat && r.Stat
 	l.UpdateGrant = l.UpdateGrant && r.UpdateGrant
-}
-
-func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token string, relativePath string, err error) {
-	if ref.ResourceId != nil {
-		return "", "", errtypes.BadRequest("need absolute path ref: got " + ref.String())
-	}
-
-	if !utils.IsAbsolutePathReference(ref) {
-		// abort, no valid id nor path
-		return "", "", errtypes.BadRequest("invalid ref: " + ref.String())
-	}
-
-	// i.e path: /public/{token}/path/to/subfolders
-	fn := ref.GetPath()
-	// fsfn: /{token}/path/to/subfolders
-	fsfn, err := s.trimMountPrefix(fn)
-	if err != nil {
-		return "", "", err
-	}
-
-	parts := strings.SplitN(fsfn, "/", 3)
-	token = parts[1]
-	if len(parts) > 2 {
-		relativePath = parts[2]
-	}
-
-	return
 }
 
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
@@ -766,13 +906,6 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
-}
-
-func (s *service) trimMountPrefix(fn string) (string, error) {
-	if strings.HasPrefix(fn, s.mountPath) {
-		return path.Join("/", strings.TrimPrefix(fn, s.mountPath)), nil
-	}
-	return "", errors.Errorf("path=%q does not belong to this storage provider mount path=%q"+fn, s.mountPath)
 }
 
 // resolveToken returns the path and share for the publicly shared resource.

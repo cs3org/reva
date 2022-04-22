@@ -19,7 +19,7 @@
 package runtime
 
 import (
-	"github.com/cs3org/reva/pkg/registry"
+	"github.com/cs3org/reva/v2/pkg/registry"
 	"github.com/rs/zerolog"
 )
 

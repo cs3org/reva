@@ -19,28 +19,28 @@
 package config
 
 import (
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
-	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/data"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
 )
 
 // Config holds the config options that need to be passed down to all ocs handlers
 type Config struct {
-	Prefix                   string                            `mapstructure:"prefix"`
-	Config                   data.ConfigData                   `mapstructure:"config"`
-	Capabilities             data.CapabilitiesData             `mapstructure:"capabilities"`
-	GatewaySvc               string                            `mapstructure:"gatewaysvc"`
-	StorageregistrySvc       string                            `mapstructure:"storage_registry_svc"`
-	DefaultUploadProtocol    string                            `mapstructure:"default_upload_protocol"`
-	UserAgentChunkingMap     map[string]string                 `mapstructure:"user_agent_chunking_map"`
-	SharePrefix              string                            `mapstructure:"share_prefix"`
-	HomeNamespace            string                            `mapstructure:"home_namespace"`
-	AdditionalInfoAttribute  string                            `mapstructure:"additional_info_attribute"`
-	CacheWarmupDriver        string                            `mapstructure:"cache_warmup_driver"`
-	CacheWarmupDrivers       map[string]map[string]interface{} `mapstructure:"cache_warmup_drivers"`
-	ResourceInfoCacheDriver  string                            `mapstructure:"resource_info_cache_type"`
-	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
-	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
-	UserIdentifierCacheTTL   int                               `mapstructure:"user_identifier_cache_ttl"`
+	Prefix                  string                            `mapstructure:"prefix"`
+	Config                  data.ConfigData                   `mapstructure:"config"`
+	Capabilities            data.CapabilitiesData             `mapstructure:"capabilities"`
+	GatewaySvc              string                            `mapstructure:"gatewaysvc"`
+	StorageregistrySvc      string                            `mapstructure:"storage_registry_svc"`
+	DefaultUploadProtocol   string                            `mapstructure:"default_upload_protocol"`
+	UserAgentChunkingMap    map[string]string                 `mapstructure:"user_agent_chunking_map"`
+	SharePrefix             string                            `mapstructure:"share_prefix"`
+	HomeNamespace           string                            `mapstructure:"home_namespace"`
+	AdditionalInfoAttribute string                            `mapstructure:"additional_info_attribute"`
+	CacheWarmupDriver       string                            `mapstructure:"cache_warmup_driver"`
+	CacheWarmupDrivers      map[string]map[string]interface{} `mapstructure:"cache_warmup_drivers"`
+	ResourceInfoCacheSize   int                               `mapstructure:"resource_info_cache_size"`
+	ResourceInfoCacheTTL    int                               `mapstructure:"resource_info_cache_ttl"`
+	UserIdentifierCacheTTL  int                               `mapstructure:"user_identifier_cache_ttl"`
+	MachineAuthAPIKey       string                            `mapstructure:"machine_auth_apikey"`
 }
 
 // Init sets sane defaults
@@ -58,7 +58,7 @@ func (c *Config) Init() {
 	}
 
 	if c.HomeNamespace == "" {
-		c.HomeNamespace = "/home"
+		c.HomeNamespace = "/users/{{.Id.OpaqueId}}"
 	}
 
 	if c.AdditionalInfoAttribute == "" {

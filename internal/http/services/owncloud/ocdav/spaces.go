@@ -19,28 +19,37 @@
 package ocdav
 
 import (
-	"context"
-	"fmt"
 	"net/http"
+	"path"
 
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/utils"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 // SpacesHandler handles trashbin requests
 type SpacesHandler struct {
-	gatewaySvc string
+	gatewaySvc        string
+	namespace         string
+	useLoggedInUserNS bool
 }
 
 func (h *SpacesHandler) init(c *Config) error {
 	h.gatewaySvc = c.GatewaySvc
+	h.namespace = path.Join("/", c.WebdavNamespace)
+	h.useLoggedInUserNS = true
 	return nil
 }
 
 // Handler handles requests
-func (h *SpacesHandler) Handler(s *svc) http.Handler {
+func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.Handler {
+	config := s.Config()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ctx := r.Context()
 		// log := appctx.GetLogger(ctx)
@@ -50,24 +59,67 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		var spaceID string
-		spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-		if spaceID == "" {
+		var segment string
+		segment, r.URL.Path = router.ShiftPath(r.URL.Path)
+		if segment == "" {
 			// listing is disabled, no auth will change that
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
 
+		if segment == _trashbinPath {
+			h.handleSpacesTrashbin(w, r, s, trashbinHandler)
+			return
+		}
+
+		spaceID := segment
+
 		switch r.Method {
 		case MethodPropfind:
-			s.handleSpacesPropfind(w, r, spaceID)
+			p := propfind.NewHandler(config.PublicURL, func() (gateway.GatewayAPIClient, error) {
+				return pool.GetGatewayServiceClient(config.GatewaySvc)
+			})
+			p.HandleSpacesPropfind(w, r, spaceID)
 		case MethodProppatch:
 			s.handleSpacesProppatch(w, r, spaceID)
 		case MethodLock:
-			s.handleLock(w, r, spaceID)
+			log := appctx.GetLogger(r.Context())
+			// TODO initialize status with http.StatusBadRequest
+			// TODO initialize err with errors.ErrUnsupportedMethod
+			status, err := s.handleSpacesLock(w, r, spaceID)
+			if err != nil {
+				log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+			}
+			if status != 0 { // 0 would mean handleLock already sent the response
+				w.WriteHeader(status)
+				if status != http.StatusNoContent {
+					var b []byte
+					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
+						_, err = w.Write(b)
+					}
+					if err != nil {
+						log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+					}
+				}
+			}
 		case MethodUnlock:
-			s.handleUnlock(w, r, spaceID)
+			log := appctx.GetLogger(r.Context())
+			status, err := s.handleUnlock(w, r, spaceID)
+			if err != nil {
+				log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+			}
+			if status != 0 { // 0 would mean handleUnlock already sent the response
+				w.WriteHeader(status)
+				if status != http.StatusNoContent {
+					var b []byte
+					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
+						_, err = w.Write(b)
+					}
+					if err != nil {
+						log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
+					}
+				}
+			}
 		case MethodMkcol:
 			s.handleSpacesMkCol(w, r, spaceID)
 		case MethodMove:
@@ -94,39 +146,55 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string) (*storageProvider.Reference, *rpc.Status, error) {
-	// Get the getway client
-	gatewayClient, err := s.getClient()
-	if err != nil {
-		return nil, nil, err
+func (h *SpacesHandler) handleSpacesTrashbin(w http.ResponseWriter, r *http.Request, s *svc, trashbinHandler *TrashbinHandler) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	var spaceID string
+	spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
+	if spaceID == "" {
+		// listing is disabled, no auth will change that
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
 	}
 
-	// retrieve a specific storage space
-	lSSReq := &storageProvider.ListStorageSpacesRequest{
-		Filters: []*storageProvider.ListStorageSpacesRequest_Filter{
-			{
-				Type: storageProvider.ListStorageSpacesRequest_Filter_TYPE_ID,
-				Term: &storageProvider.ListStorageSpacesRequest_Filter_Id{
-					Id: &storageProvider.StorageSpaceId{
-						OpaqueId: spaceID,
-					},
-				},
-			},
+	ref := &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: spaceID,
+			OpaqueId:  spaceID,
 		},
 	}
 
-	lSSRes, err := gatewayClient.ListStorageSpaces(ctx, lSSReq)
-	if err != nil || lSSRes.Status.Code != rpc.Code_CODE_OK {
-		return nil, lSSRes.Status, err
-	}
+	var key string
+	key, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-	if len(lSSRes.StorageSpaces) != 1 {
-		return nil, nil, fmt.Errorf("unexpected number of spaces")
-	}
-	space := lSSRes.StorageSpaces[0]
+	switch r.Method {
+	case MethodPropfind:
+		trashbinHandler.listTrashbin(w, r, s, ref, path.Join(_trashbinPath, spaceID), key, r.URL.Path)
+	case MethodMove:
+		if key == "" {
+			http.Error(w, "501 Not implemented", http.StatusNotImplemented)
+			break
+		}
+		// find path in url relative to trash base
+		baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
+		baseURI = path.Join(baseURI, spaceID)
 
-	return &storageProvider.Reference{
-		ResourceId: space.Root,
-		Path:       utils.MakeRelativePath(relativePath),
-	}, lSSRes.Status, nil
+		dh := r.Header.Get(net.HeaderDestination)
+		dst, err := net.ParseDestination(baseURI, dh)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		log.Debug().Str("key", key).Str("path", r.URL.Path).Str("dst", dst).Msg("spaces restore")
+
+		dstRef := ref
+		dstRef.Path = utils.MakeRelativePath(dst)
+
+		trashbinHandler.restore(w, r, s, ref, dstRef, key, r.URL.Path)
+	case http.MethodDelete:
+		trashbinHandler.delete(w, r, s, ref, key, r.URL.Path)
+	default:
+		http.Error(w, "501 Not implemented", http.StatusNotImplemented)
+	}
 }

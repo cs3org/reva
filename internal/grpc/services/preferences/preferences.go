@@ -23,13 +23,11 @@ import (
 
 	"google.golang.org/grpc"
 
-	preferencespb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/preferences"
-	"github.com/cs3org/reva/pkg/preferences/registry"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/mitchellh/mapstructure"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/pkg/errors"
 )
 
@@ -109,7 +107,18 @@ func (s *service) SetKey(ctx context.Context, req *preferencespb.SetKeyRequest) 
 		}, nil
 	}
 
-	return &preferencespb.SetKeyResponse{
+	name := u.Username
+
+	mutex.Lock()
+	defer mutex.Unlock()
+	if len(m[name]) == 0 {
+		m[name] = map[string]string{key.Key: value}
+	} else {
+		usersettings := m[name]
+		usersettings[key.Key] = value
+	}
+
+	return &preferences.SetKeyResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }
@@ -117,9 +126,22 @@ func (s *service) SetKey(ctx context.Context, req *preferencespb.SetKeyRequest) 
 func (s *service) GetKey(ctx context.Context, req *preferencespb.GetKeyRequest) (*preferencespb.GetKeyResponse, error) {
 	val, err := s.pm.GetKey(ctx, req.Key.Key, req.Key.Namespace)
 	if err != nil {
-		st := status.NewInternal(ctx, err, "error retrieving key")
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			st = status.NewNotFound(ctx, "key not found")
+		err = errors.Wrap(err, "preferences: failed to call getUser")
+		return &preferences.GetKeyResponse{
+			Status: status.NewUnauthenticated(ctx, err, "user not found or invalid"),
+		}, err
+	}
+
+	name := u.Username
+
+	mutex.Lock()
+	defer mutex.Unlock()
+	if len(m[name]) != 0 {
+		if value, ok := m[name][key.Key]; ok {
+			return &preferences.GetKeyResponse{
+				Status: status.NewOK(ctx),
+				Val:    value,
+			}, nil
 		}
 		return &preferencespb.GetKeyResponse{
 			Status: st,

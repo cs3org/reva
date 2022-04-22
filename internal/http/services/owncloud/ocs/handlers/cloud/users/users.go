@@ -26,13 +26,13 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -119,21 +119,47 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
+	res, err := gc.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
+		Filters: []*provider.ListStorageSpacesRequest_Filter{
+			{
+				Type: provider.ListStorageSpacesRequest_Filter_TYPE_OWNER,
+				Term: &provider.ListStorageSpacesRequest_Filter_Owner{
+					Owner: u.Id,
+				},
+			},
+			{
+				Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
+					SpaceType: "personal",
+				},
+			},
+		},
+	})
 	if err != nil {
-		sublog.Error().Err(err).Msg("error calling GetHome")
+		sublog.Error().Err(err).Msg("error calling ListStorageSpaces")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		ocdav.HandleErrorStatus(sublog, w, getHomeRes.Status)
+	if res.Status.Code != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(sublog, w, res.Status)
 		return
 	}
+
+	if len(res.StorageSpaces) == 0 {
+		sublog.Error().Err(err).Msg("list spaces returned empty list")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+
+	}
+
 	var total, used uint64
 	var relative float32
-	// lightweight and federated accounts don't have access to their storage space
-	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT && u.Id.Type != userpb.UserType_USER_TYPE_FEDERATED {
-		getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
+	// lightweight accounts don't have access to their storage space
+	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: &provider.Reference{
+			ResourceId: res.StorageSpaces[0].Root,
+			Path:       ".",
+		}})
 		if err != nil {
 			sublog.Error().Err(err).Msg("error calling GetQuota")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -141,7 +167,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if getQuotaRes.Status.Code != rpc.Code_CODE_OK {
-			ocdav.HandleErrorStatus(sublog, w, getQuotaRes.Status)
+			errors.HandleErrorStatus(sublog, w, getQuotaRes.Status)
 			return
 		}
 		total = getQuotaRes.TotalBytes

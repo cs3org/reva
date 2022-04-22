@@ -21,10 +21,10 @@ package ocis_test
 import (
 	"os"
 
-	"github.com/cs3org/reva/pkg/storage/fs/ocis"
-	"github.com/cs3org/reva/tests/helpers"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis"
+	"github.com/cs3org/reva/v2/tests/helpers"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

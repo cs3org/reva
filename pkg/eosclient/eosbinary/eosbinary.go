@@ -33,11 +33,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/eosclient"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/eosclient"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/acl"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/trace"
@@ -598,34 +597,13 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
-
-	var info *eosclient.FileInfo
-	var err error
-	// We need to set the attrs on the version folder as they are not persisted across writes
-	// Except for the sys.eval.useracl attr as EOS uses that to determine if it needs to obey
-	// the user ACLs set on the file
-	if !(attr.Type == SystemAttr && attr.Key == userACLEvalKey) {
-		info, err = c.getRawFileInfoByPath(ctx, auth, path)
-		if err != nil {
-			return err
-		}
-		if !info.IsDir {
-			path = getVersionFolder(path)
-		}
-	}
-
-	// Favorites need to be stored per user so handle these separately
-	if attr.Type == UserAttr && attr.Key == favoritesKey {
-		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, false)
-	}
-
 	var args []string
 	if recursive {
 		args = []string{"attr", "-r", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
 	} else {
 		args = []string{"attr", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
 	}
-	_, _, err = c.executeEOS(ctx, args, auth)
+	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return err
 	}

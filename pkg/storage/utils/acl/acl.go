@@ -164,6 +164,24 @@ func ParseLWEntry(singleSysACL string) (*Entry, error) {
 	}, nil
 }
 
+// ParseLWEntry parses a single lightweight ACL
+func ParseLWEntry(singleSysACL string) (*Entry, error) {
+	if !strings.HasPrefix(singleSysACL, TypeLightweight+":") {
+		return nil, errInvalidACL
+	}
+	singleSysACL = strings.TrimPrefix(singleSysACL, TypeLightweight+":")
+
+	tokens := strings.Split(singleSysACL, "=")
+	if len(tokens) != 2 {
+		return nil, errInvalidACL
+	}
+	return &Entry{
+		Type:        TypeLightweight,
+		Qualifier:   tokens[0],
+		Permissions: tokens[1],
+	}, nil
+}
+
 // CitrineSerialize serializes an ACL entry for citrine EOS ACLs
 func (a *Entry) CitrineSerialize() string {
 	return fmt.Sprintf("%s:%s=%s", a.Type, a.Qualifier, a.Permissions)

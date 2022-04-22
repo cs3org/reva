@@ -21,13 +21,15 @@ package ocdav
 import (
 	"net/http"
 	"path"
+	"path/filepath"
 
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 )
 
 // PublicFileHandler handles requests on a shared file. it needs to be wrapped in a collection
@@ -50,10 +52,6 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 
 		if relativePath != "" && relativePath != "/" {
 			// accessing the file
-			// PROPFIND has an implicit call
-			if r.Method != MethodPropfind && !s.adjustResourcePathInURL(w, r) {
-				return
-			}
 
 			switch r.Method {
 			case MethodPropfind:
@@ -85,44 +83,6 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bool {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "adjustResourcePathInURL")
-	defer span.End()
-
-	// find actual file name
-	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
-	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
-
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return false
-	}
-	pathRes, err := client.GetPath(ctx, &provider.GetPathRequest{
-		ResourceId: tokenStatInfo.GetId(),
-	})
-	if err != nil {
-		sublog.Error().Msg("Could not get path of resource")
-		w.WriteHeader(http.StatusInternalServerError)
-		return false
-	}
-	if pathRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, pathRes.Status)
-		return false
-	}
-	if path.Base(r.URL.Path) != path.Base(pathRes.Path) {
-		sublog.Debug().
-			Str("requestbase", path.Base(r.URL.Path)).
-			Str("pathbase", path.Base(pathRes.Path)).
-			Msg("base paths don't match")
-		w.WriteHeader(http.StatusConflict)
-		return false
-	}
-
-	return true
-}
-
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns string, onContainer bool) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "token_propfind")
@@ -132,64 +92,37 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
 	sublog.Debug().Msg("handlePropfindOnToken")
 
-	depth := r.Header.Get(HeaderDepth)
-	if depth == "" {
-		depth = "1"
-	}
-
-	// see https://tools.ietf.org/html/rfc4918#section-10.2
-	if depth != "0" && depth != "1" && depth != "infinity" {
-		sublog.Debug().Msgf("invalid Depth header value %s", depth)
+	dh := r.Header.Get(net.HeaderDepth)
+	depth, err := net.ParseDepth(dh)
+	if err != nil {
+		sublog.Debug().Msg(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	pf, status, err := readPropfind(r.Body)
+	pf, status, err := propfind.ReadPropfind(r.Body)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
 		return
 	}
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	// prefix tokenStatInfo.Path with token
+	tokenStatInfo.Path = filepath.Join(r.URL.Path, tokenStatInfo.Path)
 
-	// find actual file name
-	pathRes, err := client.GetPath(ctx, &provider.GetPathRequest{
-		ResourceId: tokenStatInfo.GetId(),
-	})
-	if err != nil {
-		sublog.Warn().Msg("Could not get path of resource")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if pathRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, pathRes.Status)
-		return
-	}
+	infos := s.getPublicFileInfos(onContainer, depth == net.DepthZero, tokenStatInfo)
 
-	if !onContainer && path.Base(r.URL.Path) != path.Base(pathRes.Path) {
-		// if queried on the wrong path, return not found
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
-
-	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, nil)
+	propRes, err := propfind.MultistatusResponse(ctx, &pf, infos, s.c.PublicURL, ns, "", nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
-	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
-	if _, err := w.Write([]byte(propRes)); err != nil {
+	if _, err := w.Write(propRes); err != nil {
 		sublog.Err(err).Msg("error writing response")
 	}
 }

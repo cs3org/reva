@@ -35,10 +35,10 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 type sharesHandler struct {
@@ -141,9 +141,9 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var shareWithParts []string = strings.Split(shareWith, "@")
+	shareWithParts := strings.Split(shareWith, "@")
 	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{OpaqueId: shareWithParts[0]}, SkipFetchingUserGroups: true,
+		UserId: &userpb.UserId{OpaqueId: shareWithParts[0]},
 	})
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error searching recipient", err)

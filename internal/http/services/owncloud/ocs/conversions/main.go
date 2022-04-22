@@ -26,8 +26,8 @@ import (
 	"path"
 	"time"
 
-	"github.com/cs3org/reva/pkg/publicshare"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/v2/pkg/publicshare"
+	"github.com/cs3org/reva/v2/pkg/user"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -35,8 +35,8 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
-	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
+	publicsharemgr "github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
+	usermgr "github.com/cs3org/reva/v2/pkg/user/manager/registry"
 )
 
 const (
@@ -142,6 +142,8 @@ type ShareData struct {
 	URL string `json:"url,omitempty" xml:"url,omitempty"`
 	// Attributes associated
 	Attributes string `json:"attributes,omitempty" xml:"attributes,omitempty"`
+	// Quicklink indicates if the link is the quicklink
+	Quicklink bool `json:"quicklink,omitempty" xml:"quicklink,omitempty"`
 	// PasswordProtected represents a public share is password protected
 	// PasswordProtected bool `json:"password_protected,omitempty" xml:"password_protected,omitempty"`
 }
@@ -152,6 +154,24 @@ type ShareeData struct {
 	Users   []*MatchData      `json:"users" xml:"users>element"`
 	Groups  []*MatchData      `json:"groups" xml:"groups>element"`
 	Remotes []*MatchData      `json:"remotes" xml:"remotes>element"`
+}
+
+// TokenInfo holds token information
+type TokenInfo struct {
+	// for all callers
+	Token             string `json:"token" xml:"token"`
+	LinkURL           string `json:"link_url" xml:"link_url"`
+	PasswordProtected bool   `json:"password_protected" xml:"password_protected"`
+
+	// if not password protected
+	StorageID string `json:"storage_id" xml:"storage_id"`
+	OpaqueID  string `json:"opaque_id" xml:"opaque_id"`
+	Path      string `json:"path" xml:"path"`
+
+	// if native access
+	SpacePath  string `json:"space_path" xml:"space_path"`
+	SpaceAlias string `json:"space_alias" xml:"space_alias"`
+	SpaceURL   string `json:"space_url" xml:"space_url"`
 }
 
 // ExactMatchesData hold exact matches
@@ -215,6 +235,7 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 		URL:          publicURL + path.Join("/", "s/"+share.Token),
 		UIDOwner:     LocalUserIDToString(share.Creator),
 		UIDFileOwner: LocalUserIDToString(share.Owner),
+		Quicklink:    share.Quicklink,
 	}
 	if share.Id != nil {
 		sd.ID = share.Id.OpaqueId

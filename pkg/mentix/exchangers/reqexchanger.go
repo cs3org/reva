@@ -26,8 +26,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/v2/pkg/mentix/config"
+	"github.com/cs3org/reva/v2/pkg/mentix/meshdata"
 )
 
 // RequestExchanger is the interface implemented by exchangers that offer an HTTP endpoint.

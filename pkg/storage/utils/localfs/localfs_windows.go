@@ -30,7 +30,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	"golang.org/x/sys/windows"
 )
 
@@ -56,7 +56,7 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	return fmt.Sprintf("\"%s\"", strings.Trim(etag, "\""))
 }
 
-func (fs *localfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
+func (fs *localfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
 	// TODO quota of which storage space?
 	// we could use the logged in user, but when a user has access to multiple storages this falls short
 	// for now return quota of root
@@ -64,13 +64,13 @@ func (fs *localfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint6
 
 	pathPtr, err := windows.UTF16PtrFromString(fs.wrap(ctx, "/"))
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	err = windows.GetDiskFreeSpaceEx(pathPtr, &avail, &total, &free)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	used := total - free
-	return total, used, nil
+	return total, used, free, nil
 }

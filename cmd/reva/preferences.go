@@ -56,10 +56,7 @@ var preferencesCommand = func() *command {
 			}
 			value := cmd.Args()[3]
 			req := &preferences.SetKeyRequest{
-				Key: &preferences.PreferenceKey{
-					Namespace: ns,
-					Key:       key,
-				},
+				Key: &preferences.PreferenceKey{Key: key},
 				Val: value,
 			}
 
@@ -74,10 +71,7 @@ var preferencesCommand = func() *command {
 
 		case "get":
 			req := &preferences.GetKeyRequest{
-				Key: &preferences.PreferenceKey{
-					Namespace: ns,
-					Key:       key,
-				},
+				Key: &preferences.PreferenceKey{Key: key},
 			}
 
 			res, err := client.GetKey(ctx, req)
