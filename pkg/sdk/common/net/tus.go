@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eventials/go-tus"
+	tus "github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
 
 	"github.com/cs3org/reva/pkg/sdk/common"

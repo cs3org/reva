@@ -22,7 +22,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/asim/go-micro/plugins/events/nats/v4"
+	nats "github.com/asim/go-micro/plugins/events/nats/v4"
 	"github.com/cs3org/reva/pkg/events"
 	"github.com/cs3org/reva/pkg/events/example/consumer"
 	"github.com/cs3org/reva/pkg/events/example/publisher"
