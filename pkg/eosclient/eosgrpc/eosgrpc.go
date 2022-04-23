@@ -155,6 +155,7 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 		tlsconf := &tls.Config{InsecureSkipVerify: opt.SkipVerify}
 		creds = credentials.NewTLS(tlsconf)
 	}
+
 	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		log.Warn().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")

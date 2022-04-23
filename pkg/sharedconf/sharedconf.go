@@ -113,7 +113,7 @@ func Insecure() bool {
 // GetMaxCallRecvMsgSize returns maximum reciever message size
 func GetMaxCallRecvMsgSize() int {
 	if sharedConf.MaxCallRecvMsgSize == 0 {
-		return 10240000 
+		return 10240000
 	}
 	return sharedConf.MaxCallRecvMsgSize
 }

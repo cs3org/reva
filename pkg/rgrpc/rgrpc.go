@@ -38,6 +38,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -101,6 +102,12 @@ type config struct {
 	Services         map[string]map[string]interface{} `mapstructure:"services"`
 	Interceptors     map[string]map[string]interface{} `mapstructure:"interceptors"`
 	EnableReflection bool                              `mapstructure:"enable_reflection"`
+
+	// If the URL is https, then we need to configure this client
+	// with the usual TLS stuff
+	// Defaults are /etc/grid-security/hostcert.pem and /etc/grid-security/hostkey.pem
+	ClientCertFile string `mapstructure:"http_client_certfile"`
+	ClientKeyFile  string `mapstructure:"http_client_keyfile"`
 }
 
 func (c *config) init() {
@@ -111,6 +118,14 @@ func (c *config) init() {
 	if c.Address == "" {
 		c.Address = sharedconf.GetGatewaySVC("0.0.0.0:19000")
 	}
+
+	if c.ClientCertFile == "" {
+		c.ClientCertFile = "/etc/grid-security/hostcert.pem"
+	}
+	if c.ClientKeyFile == "" {
+		c.ClientKeyFile = "/etc/grid-security/hostkey.pem"
+	}
+
 }
 
 // Server is a gRPC server.
@@ -197,6 +212,12 @@ func (s *Server) registerServices() error {
 	if err != nil {
 		return err
 	}
+	creds, err := credentials.NewServerTLSFromFile(s.conf.ClientCertFile, s.conf.ClientKeyFile)
+	if err != nil {
+		return err
+	}
+	opts = append(opts, grpc.Creds(creds))
+
 	grpcServer := grpc.NewServer(opts...)
 
 	for _, svc := range s.services {

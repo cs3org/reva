@@ -19,8 +19,6 @@
 package pool
 
 import (
-	// "crypto/tls"
-
 	"crypto/tls"
 	"sync"
 
