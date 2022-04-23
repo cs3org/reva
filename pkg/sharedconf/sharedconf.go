@@ -32,6 +32,9 @@ type conf struct {
 	GatewaySVC            string `mapstructure:"gatewaysvc"`
 	DataGateway           string `mapstructure:"datagateway"`
 	SkipUserGroupsInToken bool   `mapstructure:"skip_user_groups_in_token"`
+	Insecure              bool   `mapstructure:"insecure"`
+	SkipVerify            bool   `mapstructure:"skip_verify"`
+	MaxCallRecvMsgSize    int    `mapstructure:"max_call_recv_msg_size"`
 }
 
 // Decode decodes the configuration.
@@ -59,6 +62,10 @@ func Decode(v interface{}) error {
 	// it on init time.
 	if sharedConf.JWTSecret == "" {
 		sharedConf.JWTSecret = "changemeplease"
+	}
+
+	if sharedConf.MaxCallRecvMsgSize == 0 {
+		sharedConf.MaxCallRecvMsgSize = 10240000
 	}
 
 	return nil
@@ -91,4 +98,22 @@ func GetDataGateway(val string) string {
 // SkipUserGroupsInToken returns whether to skip encoding user groups in the access tokens.
 func SkipUserGroupsInToken() bool {
 	return sharedConf.SkipUserGroupsInToken
+}
+
+// SkipVerify return whether a client verifies the server's certificate chain and host name.
+func SkipVerify() bool {
+	return sharedConf.SkipVerify
+}
+
+// Insecure returns whether to disable transport security for new GRPC connections.
+func Insecure() bool {
+	return sharedConf.Insecure
+}
+
+// GetMaxCallRecvMsgSize returns maximum reciever message size
+func GetMaxCallRecvMsgSize() int {
+	if sharedConf.MaxCallRecvMsgSize == 0 {
+		return 10240000 
+	}
+	return sharedConf.MaxCallRecvMsgSize
 }
