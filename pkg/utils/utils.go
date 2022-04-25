@@ -19,6 +19,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"math/rand"
 	"net"
@@ -430,6 +431,25 @@ func ReadPlainFromOpaque(o *types.Opaque, key string) string {
 		return string(e.Value)
 	}
 	return ""
+}
+
+// ReadJSONFromOpaque reads a json from the given opaque map and unmarshals it into val
+func ReadJSONFromOpaque(o *types.Opaque, key string, val interface{}) error {
+	m := o.GetMap()
+	if m == nil {
+		return errors.New("map nil")
+	}
+
+	v, ok := o.Map[key]
+	if !ok {
+		return errors.New("key not in map")
+	}
+
+	if v.Decoder != "json" {
+		return errors.New("decoder is not json")
+	}
+
+	return json.Unmarshal(v.Value, val)
 }
 
 // ExistsInOpaque returns true if the key exists in the opaque (ignoring the value)
