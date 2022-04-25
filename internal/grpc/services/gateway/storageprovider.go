@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -1032,19 +1033,7 @@ func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provi
 		return nil, nil, nil, err
 	}
 
-	var (
-		root      *provider.ResourceId
-		mountPath string
-	)
-	for _, space := range decodeSpaces(p) {
-		mountPath = decodePath(space)
-		root = space.Root
-		break // TODO can there be more than one space for a path?
-	}
-
-	relativeReference := unwrap(ref, mountPath, root)
-
-	return c, p, relativeReference, nil
+	return c, p, unwrap(ref, p.ProviderPath, nil), nil
 }
 
 func (s *svc) findAndUnwrapUnique(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *registry.ProviderInfo, *provider.Reference, error) {
@@ -1181,6 +1170,18 @@ func (s *svc) statSpaces(ctx context.Context, i *registry.ProviderInfo, req *pro
 
 // unwrap takes a reference and builds a reference for the provider. can be absolute or relative to a root node
 func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceId) *provider.Reference {
+	// TODO: gateway shouldn't know about "/public" mountpoint - needs to be fixed before merge
+	if mountPoint == "/public" {
+		tkn, path := router.ShiftPath(strings.TrimPrefix(ref.Path, mountPoint))
+		return &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: utils.PublicStorageProviderID,
+				OpaqueId:  tkn,
+			},
+			Path: path,
+		}
+
+	}
 	if utils.IsAbsolutePathReference(ref) {
 		providerRef := &provider.Reference{
 			Path: strings.TrimPrefix(ref.Path, mountPoint),
