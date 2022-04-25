@@ -52,7 +52,7 @@ bearer = "localhost:20099" # started with the frontend.toml
 machine = "localhost:21000" # started with the machine-auth.toml
 
 [grpc.services.storageregistry]
-driver = "static"
+driver = "spaces"
 
 [grpc.services.storageregistry.drivers.static.home_provider]
 home_provider = "home"
