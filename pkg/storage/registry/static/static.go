@@ -165,7 +165,13 @@ func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*
 					Address:      addr,
 					ProviderPath: rule.ProviderPath,
 				}}, nil
-
+			}
+			if sid != "" && sid == rule.ProviderID {
+				return []*registrypb.ProviderInfo{{
+					ProviderId:   sid,
+					Address:      addr,
+					ProviderPath: rule.ProviderPath,
+				}}, nil
 			}
 
 			r, err := regexp.Compile("^" + prefix + "$")
