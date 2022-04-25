@@ -119,34 +119,23 @@ func getProviderAddr(ctx context.Context, r rule) (string, string) {
 }
 
 func (b *reg) GetProvider(ctx context.Context, space *provider.StorageSpace) (*registrypb.ProviderInfo, error) {
-	// Assume that HomeProvider is not a regexp
-	if space.SpaceType == "personal" {
-		if r, ok := b.c.Rules[b.c.HomeProvider]; ok {
-			if addr, id := getProviderAddr(ctx, r); addr != "" {
-				return &registrypb.ProviderInfo{
-					ProviderPath: b.c.HomeProvider,
-					ProviderId:   id,
-					Address:      addr,
-				}, nil
-			}
-		}
-		return nil, errors.New("static: home not found")
+	if space.SpaceType == "" {
+		return nil, errors.New("need spacetype to figure out storage provider")
 	}
-	return nil, errors.New("static: only personal home is supported")
-	/*provider := []*registrypb.ProviderInfo{}
-	for k, v := range b.c.Rules {
-		if addr := getProviderAddr(ctx, v); addr != "" {
-			combs := generateRegexCombinations(k)
-			for _, c := range combs {
-				providers = append(providers, &registrypb.ProviderInfo{
-					ProviderPath: c,
-					Address:      addr,
-				})
-			}
+	for _, rule := range b.c.Rules {
+		if rule.SpaceType != space.SpaceType {
+			continue
+		}
+		// TODO: Multiple providers per spacetype
+		if addr, id := getProviderAddr(ctx, rule); addr != "" {
+			return &registrypb.ProviderInfo{
+				ProviderPath: b.c.HomeProvider,
+				ProviderId:   id,
+				Address:      addr,
+			}, nil
 		}
 	}
-	return providers, nil
-	*/
+	return nil, fmt.Errorf("no provider found for spacetype '%s'", space.SpaceType)
 }
 
 func (b *reg) ListProviders(ctx context.Context, filters map[string]string) ([]*registrypb.ProviderInfo, error) {
