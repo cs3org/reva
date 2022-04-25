@@ -52,7 +52,10 @@ bearer = "localhost:20099" # started with the frontend.toml
 machine = "localhost:21000" # started with the machine-auth.toml
 
 [grpc.services.storageregistry]
-driver = "spaces"
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static.rules]
+personal = {"address": "localhost:1100", "provider_id": "1284d238-aa92-42ce-bdc4-0b0000009157", "provider_path": "/personal", "space_type": "personal"}
 
 [grpc.services.storageregistry.drivers.spaces]
 home_template = "/users/{{.Id.OpaqueId}}"
