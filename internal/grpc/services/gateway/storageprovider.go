@@ -1195,10 +1195,14 @@ func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceI
 	}
 
 	path := ref.Path
+	// cut "."
+	path = strings.TrimPrefix(path, ".")
 	// cut mountpoint
-	path = strings.TrimPrefix(path, "."+mountPoint)
+	path = strings.TrimPrefix(path, mountPoint)
 	// cut spaceid
 	path = strings.TrimPrefix(path, "/"+ref.ResourceId.OpaqueId)
+	// add . again
+	path = "." + path
 
 	return &provider.Reference{
 		ResourceId: &provider.ResourceId{
