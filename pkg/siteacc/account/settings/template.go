@@ -66,19 +66,19 @@ input[type="checkbox"] {
 
 const tplBody = `
 <div>
-	<p>Configure your ScienceMesh account below.</p>	
+	<p>Configure your ScienceMesh Site Administrator Account below.</p>	
 </div>
 <div>&nbsp;</div>
 <div>
-	<form id="form" method="POST" class="box container-inline" style="width: 100%;"  onSubmit="handleAction('configure?invoker=user'); return false;">
+	<form id="form" method="POST" class="box container-inline" style="width: 100%;" onSubmit="handleAction('configure?invoker=user'); return false;">
 		<div style="grid-row: 1; grid-column: 1 / span 2;">
 			<h3>Notification settings</h3>
 			<hr>
 		</div>
 	
 		<div style="grid-row: 2; grid-column: 1 / span 2;">
-			<input type="checkbox" id="rcvAlerts" name="rcvAlerts" value="on" {{if .Account.Settings.ReceiveAlerts}}checked{{end}}/>
-			<label for="rcvAlerts" style="font-weight: normal;">Receive email notifications about site alerts</label>
+			<input type="checkbox" id="rcvAlerts" name="rcvAlerts" value="on" checked disabled/>
+			<label for="rcvAlerts" style="font-weight: normal;">Receive email notifications about site alerts <em>(mandatory; always on)</em></label>
 		</div>
 
 		<div style="grid-row: 3; grid-column: 2; text-align: right;">

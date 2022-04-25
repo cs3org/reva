@@ -95,7 +95,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 }
 
 // GetUser implements the user.Manager interface. Looks up a user by Id and return the user
-func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
 
 	log.Debug().Interface("id", uid).Msg("GetUser")
@@ -116,6 +116,10 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		return nil, err
 	}
 
+	if skipFetchingGroups {
+		return u, nil
+	}
+
 	groups, err := m.c.LDAPIdentity.GetLDAPUserGroups(log, m.ldapClient, userEntry)
 	if err != nil {
 		return nil, err
@@ -127,7 +131,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 
 // GetUserByClaim implements the user.Manager interface. Looks up a user by
 // claim ('mail', 'username', 'userid') and returns the user.
-func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
 
 	log.Debug().Str("claim", claim).Str("value", value).Msg("GetUserByClaim")
@@ -144,6 +148,10 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 		return nil, err
 	}
 
+	if skipFetchingGroups {
+		return u, nil
+	}
+
 	groups, err := m.c.LDAPIdentity.GetLDAPUserGroups(log, m.ldapClient, userEntry)
 	if err != nil {
 		return nil, err
@@ -156,7 +164,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 
 // FindUser implements the user.Manager interface. Searches for users using a prefix-substring search on
 // the user attributes ('mail', 'username', 'displayname', 'userid') and returns the users.
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
 	entries, err := m.c.LDAPIdentity.GetLDAPUsers(log, m.ldapClient, query)
 	if err != nil {
@@ -170,11 +178,14 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 			return nil, err
 		}
 
-		groups, err := m.c.LDAPIdentity.GetLDAPUserGroups(log, m.ldapClient, entry)
-		if err != nil {
-			return nil, err
+		if !skipFetchingGroups {
+			groups, err := m.c.LDAPIdentity.GetLDAPUserGroups(log, m.ldapClient, entry)
+			if err != nil {
+				return nil, err
+			}
+			u.Groups = groups
 		}
-		u.Groups = groups
+
 		users = append(users, u)
 	}
 

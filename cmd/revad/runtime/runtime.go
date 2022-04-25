@@ -149,7 +149,7 @@ func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[strin
 }
 
 func initTracing(conf *coreConf) {
-	rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint)
+	rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint, conf.TracingServiceName)
 }
 
 func initCPUCount(conf *coreConf, log *zerolog.Logger) {
@@ -309,6 +309,15 @@ func parseCoreConfOrDie(v interface{}) *coreConf {
 	if err := mapstructure.Decode(v, c); err != nil {
 		fmt.Fprintf(os.Stderr, "error decoding core config: %s\n", err.Error())
 		os.Exit(1)
+	}
+
+	// tracing defaults to enabled if not explicitly configured
+	if v == nil {
+		c.TracingEnabled = true
+		c.TracingEndpoint = "localhost:6831"
+	} else if _, ok := v.(map[string]interface{})["tracing_enabled"]; !ok {
+		c.TracingEnabled = true
+		c.TracingEndpoint = "localhost:6831"
 	}
 
 	return c

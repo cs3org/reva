@@ -99,7 +99,7 @@ html * {
 
 const tplBody = `
 <div>
-	<p>Edit your ScienceMesh account information below.</p>
+	<p>Edit your ScienceMesh Site Administrator Account information below.</p>
 	<p>Please note that you cannot modify your email address using this form.</p>
 </div>
 <div>&nbsp;</div>

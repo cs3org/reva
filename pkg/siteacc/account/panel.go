@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/siteacc/account/manage"
 	"github.com/cs3org/reva/v2/pkg/siteacc/account/registration"
 	"github.com/cs3org/reva/v2/pkg/siteacc/account/settings"
+	"github.com/cs3org/reva/v2/pkg/siteacc/account/site"
 	"github.com/cs3org/reva/v2/pkg/siteacc/config"
 	"github.com/cs3org/reva/v2/pkg/siteacc/data"
 	"github.com/cs3org/reva/v2/pkg/siteacc/html"
@@ -50,6 +51,7 @@ const (
 	templateManage       = "manage"
 	templateSettings     = "settings"
 	templateEdit         = "edit"
+	templateSite         = "site"
 	templateContact      = "contact"
 	templateRegistration = "register"
 )
@@ -84,6 +86,10 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 		return errors.Wrap(err, "unable to create the account editing template")
 	}
 
+	if err := panel.htmlPanel.AddTemplate(templateSite, &site.PanelTemplate{}); err != nil {
+		return errors.Wrap(err, "unable to create the site template")
+	}
+
 	if err := panel.htmlPanel.AddTemplate(templateContact, &contact.PanelTemplate{}); err != nil {
 		return errors.Wrap(err, "unable to create the contact template")
 	}
@@ -97,7 +103,7 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 
 // GetActiveTemplate returns the name of the active template.
 func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string {
-	validPaths := []string{templateLogin, templateManage, templateSettings, templateEdit, templateContact, templateRegistration}
+	validPaths := []string{templateLogin, templateManage, templateSettings, templateEdit, templateSite, templateContact, templateRegistration}
 	template := templateLogin
 
 	// Only allow valid template paths; redirect to the login page otherwise
@@ -113,18 +119,28 @@ func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string
 
 // PreExecute is called before the actual template is being executed.
 func (panel *Panel) PreExecute(session *html.Session, path string, w http.ResponseWriter, r *http.Request) (html.ExecutionResult, error) {
-	protectedPaths := []string{templateManage, templateSettings, templateEdit, templateContact}
+	protectedPaths := []string{templateManage, templateSettings, templateEdit, templateSite, templateContact}
 
-	if session.LoggedInUser == nil {
+	if user := session.LoggedInUser(); user != nil {
+		switch path {
+		case templateSite:
+			// If the logged in user doesn't have site access, redirect him back to the main account page
+			if !user.Account.Data.SiteAccess {
+				return panel.redirect(templateManage, w, r), nil
+			}
+
+		case templateLogin:
+		case templateRegistration:
+			// If a user is logged in and tries to login or register again, redirect to the main account page
+			return panel.redirect(templateManage, w, r), nil
+		}
+	} else {
 		// If no user is logged in, redirect protected paths to the login page
 		for _, protected := range protectedPaths {
 			if protected == path {
 				return panel.redirect(templateLogin, w, r), nil
 			}
 		}
-	} else if path == templateLogin || path == templateRegistration {
-		// If a user is logged in and tries to login or register again, redirect to the main account page
-		return panel.redirect(templateManage, w, r), nil
 	}
 
 	return html.ContinueExecution, nil
@@ -144,6 +160,7 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 		}
 
 		type TemplateData struct {
+			Site    *data.Site
 			Account *data.Account
 			Params  map[string]string
 
@@ -151,12 +168,18 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 			Sites  []data.SiteInformation
 		}
 
-		return TemplateData{
-			Account: session.LoggedInUser,
+		tplData := TemplateData{
+			Site:    nil,
+			Account: nil,
 			Params:  flatValues,
 			Titles:  []string{"Mr", "Mrs", "Ms", "Prof", "Dr"},
 			Sites:   availSites,
 		}
+		if user := session.LoggedInUser(); user != nil {
+			tplData.Site = panel.cloneUserSite(user.Site)
+			tplData.Account = user.Account
+		}
+		return tplData
 	}
 	return panel.htmlPanel.Execute(w, r, session, dataProvider)
 }
@@ -179,11 +202,22 @@ func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request
 	return html.AbortExecution
 }
 
+func (panel *Panel) cloneUserSite(site *data.Site) *data.Site {
+	// Clone the user's site and decrypt the credentials for the panel
+	siteClone := site.Clone(true)
+	id, secret, err := site.Config.TestClientCredentials.Get(panel.conf.Security.CredentialsPassphrase)
+	if err == nil {
+		siteClone.Config.TestClientCredentials.ID = id
+		siteClone.Config.TestClientCredentials.Secret = secret
+	}
+	return siteClone
+}
+
 // NewPanel creates a new account panel.
 func NewPanel(conf *config.Configuration, log *zerolog.Logger) (*Panel, error) {
 	form := &Panel{}
 	if err := form.initialize(conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the account panel")
+		return nil, errors.Wrap(err, "unable to initialize the account panel")
 	}
 	return form, nil
 }

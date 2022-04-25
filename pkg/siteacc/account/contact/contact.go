@@ -32,7 +32,7 @@ func (template *PanelTemplate) GetTitle() string {
 
 // GetCaption returns the caption which is displayed on the panel.
 func (template *PanelTemplate) GetCaption() string {
-	return "Contact the ScienceMesh administration"
+	return "Contact the ScienceMesh administration!"
 }
 
 // GetContentJavaScript delivers additional JavaScript code.

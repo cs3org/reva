@@ -99,7 +99,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 }
 
 // GetGroup implements the group.Manager interface. Looks up a group by Id and return the group
-func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error) {
+func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId, skipFetchingMembers bool) (*grouppb.Group, error) {
 	log := appctx.GetLogger(ctx)
 	if gid.Idp != "" && gid.Idp != m.c.Idp {
 		return nil, errtypes.NotFound("idp mismatch")
@@ -115,6 +115,10 @@ func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.
 	g, err := m.ldapEntryToGroup(groupEntry)
 	if err != nil {
 		return nil, err
+	}
+
+	if skipFetchingMembers {
+		return g, nil
 	}
 
 	members, err := m.c.LDAPIdentity.GetLDAPGroupMembers(log, m.ldapClient, groupEntry)
@@ -139,7 +143,7 @@ func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.
 
 // GetGroupByClaim implements the group.Manager interface. Looks up a group by
 // claim ('group_name', 'group_id', 'display_name') and returns the group.
-func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*grouppb.Group, error) {
+func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string, skipFetchingMembers bool) (*grouppb.Group, error) {
 	log := appctx.GetLogger(ctx)
 	groupEntry, err := m.c.LDAPIdentity.GetLDAPGroupByAttribute(log, m.ldapClient, claim, value)
 	if err != nil {
@@ -152,6 +156,10 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 	g, err := m.ldapEntryToGroup(groupEntry)
 	if err != nil {
 		return nil, err
+	}
+
+	if skipFetchingMembers {
+		return g, nil
 	}
 
 	members, err := m.c.LDAPIdentity.GetLDAPGroupMembers(log, m.ldapClient, groupEntry)
@@ -178,7 +186,7 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 // a prefix-substring search on the group attributes ('group_name',
 // 'display_name', 'group_id') and returns the groups. FindGroups does NOT expand the
 // members of the Groups.
-func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Group, error) {
+func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMembers bool) ([]*grouppb.Group, error) {
 	log := appctx.GetLogger(ctx)
 	entries, err := m.c.LDAPIdentity.GetLDAPGroups(log, m.ldapClient, query)
 	if err != nil {

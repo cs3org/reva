@@ -109,7 +109,7 @@ html * {
 
 const tplBody = `
 <div>
-	<p>Login to your ScienceMesh account using the form below.</p>
+	<p>Login to your ScienceMesh Site Administrator Account using the form below.</p>
 </div>
 <div>&nbsp;</div>
 <div>

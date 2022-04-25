@@ -125,10 +125,8 @@ func (s *service) GetAuthProviders(ctx context.Context, req *registrypb.GetAuthP
 	}
 
 	res := &registrypb.GetAuthProvidersResponse{
-		Status: status.NewOK(ctx),
-		Providers: []*registrypb.ProviderInfo{
-			pinfo,
-		},
+		Status:    status.NewOK(ctx),
+		Providers: []*registrypb.ProviderInfo{pinfo},
 	}
 	return res, nil
 }

@@ -10,19 +10,11 @@ description: >
 When using the Prometheus SD exporter, the output filenames have to be configured first.
 {{% /pageinfo %}}
 
-{{% dir name="metrics_output_file" type="string" default="" %}}
-The target filename of the generated Prometheus File SD scrape config for metrics.
+{{% dir name="output_path" type="string" default="" %}}
+The target path of the generated Prometheus File SD scrape configs for metrics.
 {{< highlight toml >}}
 [http.services.mentix.exporters.promsd]
-metrics_output_file = "/var/shared/prometheus/sciencemesh.json"
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="blackbox_output_file" type="string" default="" %}}
-The target filename of the generated Prometheus File SD scrape config for the blackbox exporter.
-{{< highlight toml >}}
-[http.services.mentix.exporters.promsd]
-blackbox_output_file = "/var/shared/prometheus/blackbox.json"
+output_path = "/var/shared/prometheus/sciencemesh"
 {{< /highlight >}}
 {{% /dir %}}
 
