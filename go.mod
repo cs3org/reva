@@ -45,7 +45,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.24
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
-	github.com/mitchellh/mapstructure v1.4.3
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats-server/v2 v2.8.0
 	github.com/nats-io/nats-streaming-server v0.24.3
 	github.com/onsi/ginkgo v1.16.5
