@@ -26,6 +26,7 @@ import (
 	_ "github.com/cs3org/reva/v2/pkg/auth/manager/json"
 	_ "github.com/cs3org/reva/v2/pkg/auth/manager/ldap"
 	_ "github.com/cs3org/reva/v2/pkg/auth/manager/machine"
+	_ "github.com/cs3org/reva/v2/pkg/auth/manager/memory"
 	_ "github.com/cs3org/reva/v2/pkg/auth/manager/nextcloud"
 	_ "github.com/cs3org/reva/v2/pkg/auth/manager/oidc"
 	_ "github.com/cs3org/reva/v2/pkg/auth/manager/owncloudsql"
