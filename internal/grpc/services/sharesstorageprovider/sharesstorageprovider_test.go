@@ -30,11 +30,11 @@ import (
 	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	provider "github.com/cs3org/reva/v2/internal/grpc/services/sharesstorageprovider"
-	mocks "github.com/cs3org/reva/v2/internal/grpc/services/sharesstorageprovider/mocks"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	_ "github.com/cs3org/reva/v2/pkg/share/manager/loader"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 	"google.golang.org/grpc"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -125,14 +125,14 @@ var _ = Describe("Sharesstorageprovider", func() {
 		})
 
 		s                    sprovider.ProviderAPIServer
-		gw                   *mocks.GatewayClient
-		sharesProviderClient *mocks.SharesProviderClient
+		gw                   *cs3mocks.GatewayAPIClient
+		sharesProviderClient *cs3mocks.CollaborationAPIClient
 	)
 
 	BeforeEach(func() {
-		sharesProviderClient = &mocks.SharesProviderClient{}
+		sharesProviderClient = &cs3mocks.CollaborationAPIClient{}
 
-		gw = &mocks.GatewayClient{}
+		gw = &cs3mocks.GatewayAPIClient{}
 
 		// mock stat requests
 		gw.On("Stat", mock.Anything, mock.AnythingOfType("*providerv1beta1.StatRequest")).Return(

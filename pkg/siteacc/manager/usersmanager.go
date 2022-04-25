@@ -32,6 +32,7 @@ type UsersManager struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
+	sitesManager    *SitesManager
 	accountsManager *AccountsManager
 }
 
@@ -39,7 +40,7 @@ const (
 	defaultPasswordLength = 12
 )
 
-func (mngr *UsersManager) initialize(conf *config.Configuration, log *zerolog.Logger, accountsManager *AccountsManager) error {
+func (mngr *UsersManager) initialize(conf *config.Configuration, log *zerolog.Logger, sitesManager *SitesManager, accountsManager *AccountsManager) error {
 	if conf == nil {
 		return errors.Errorf("no configuration provided")
 	}
@@ -49,6 +50,11 @@ func (mngr *UsersManager) initialize(conf *config.Configuration, log *zerolog.Lo
 		return errors.Errorf("no logger provided")
 	}
 	mngr.log = log
+
+	if sitesManager == nil {
+		return errors.Errorf("no sites manager provided")
+	}
+	mngr.sitesManager = sitesManager
 
 	if accountsManager == nil {
 		return errors.Errorf("no accounts manager provided")
@@ -75,11 +81,17 @@ func (mngr *UsersManager) LoginUser(name, password string, scope string, session
 		return "", errors.Errorf("no access to the specified scope granted")
 	}
 
+	// Get the site the account belongs to
+	site, err := mngr.sitesManager.GetSite(account.Site, false)
+	if err != nil {
+		return "", errors.Wrap(err, "no site with the specified ID exists")
+	}
+
 	// Store the user account in the session
-	session.LoggedInUser = account
+	session.LoginUser(account, site)
 
 	// Generate a token that can be used as a "ticket"
-	token, err := generateUserToken(session.LoggedInUser.Email, scope, mngr.conf.Webserver.SessionTimeout)
+	token, err := generateUserToken(session.LoggedInUser().Account.Email, scope, mngr.conf.Webserver.SessionTimeout)
 	if err != nil {
 		return "", errors.Wrap(err, "unable to generate user token")
 	}
@@ -90,7 +102,7 @@ func (mngr *UsersManager) LoginUser(name, password string, scope string, session
 // LogoutUser logs the current user out.
 func (mngr *UsersManager) LogoutUser(session *html.Session) {
 	// Just unset the user account stored in the session
-	session.LoggedInUser = nil
+	session.LogoutUser()
 }
 
 // VerifyUserToken is used to verify a user token against the current session.
@@ -129,10 +141,10 @@ func (mngr *UsersManager) VerifyUserToken(token string, user string, scope strin
 }
 
 // NewUsersManager creates a new users manager instance.
-func NewUsersManager(conf *config.Configuration, log *zerolog.Logger, accountsManager *AccountsManager) (*UsersManager, error) {
+func NewUsersManager(conf *config.Configuration, log *zerolog.Logger, sitesManager *SitesManager, accountsManager *AccountsManager) (*UsersManager, error) {
 	mngr := &UsersManager{}
-	if err := mngr.initialize(conf, log, accountsManager); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the users manager")
+	if err := mngr.initialize(conf, log, sitesManager, accountsManager); err != nil {
+		return nil, errors.Wrap(err, "unable to initialize the users manager")
 	}
 	return mngr, nil
 }

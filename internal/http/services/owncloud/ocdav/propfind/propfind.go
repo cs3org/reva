@@ -54,8 +54,6 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
-//go:generate make --no-print-directory -C ../../../../../.. mockery NAME=GatewayClient
-
 const (
 	_spaceTypeProject = "project"
 )
@@ -155,13 +153,8 @@ func NewMultiStatusResponseXML() *MultiStatusResponseXML {
 	}
 }
 
-// GatewayClient is the interface that's being used to interact with the gateway
-type GatewayClient interface {
-	gateway.GatewayAPIClient
-}
-
 // GetGatewayServiceClientFunc is a callback used to pass in a StorageProviderClient during testing
-type GetGatewayServiceClientFunc func() (GatewayClient, error)
+type GetGatewayServiceClientFunc func() (gateway.GatewayAPIClient, error)
 
 // Handler handles propfind requests
 type Handler struct {

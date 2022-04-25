@@ -44,12 +44,12 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
 	versionPrefix = ".sys.v#."
 	// lwShareAttrKey = "reva.lwshare"
-	userACLEvalKey = "eval.useracl"
 )
 
 const (
@@ -135,7 +135,7 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("Setting up GRPC towards ", "'"+opt.GrpcURI+"'").Msg("")
 
-	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithInsecure())
+	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Warn().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
 	}
@@ -499,22 +499,6 @@ func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, in
 			info.SysACL.Entries = append(info.SysACL.Entries, a.Entries...)
 		} else {
 			info.SysACL = a
-		}
-	}
-
-	// Read user ACLs if sys.eval.useracl is set
-	if userACLEval, ok := info.Attrs["sys."+userACLEvalKey]; ok && userACLEval == "1" {
-		if userACL, ok := info.Attrs["user.acl"]; ok {
-			userAcls, err := acl.Parse(userACL, acl.ShortTextForm)
-			if err != nil {
-				return nil
-			}
-			for _, e := range userAcls.Entries {
-				err = info.SysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
-				if err != nil {
-					return nil
-				}
-			}
 		}
 	}
 

@@ -318,6 +318,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 			return res, nil
 	*/
 }
+
 func (s *svc) removeReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
 	log := appctx.GetLogger(ctx)
 

@@ -66,10 +66,13 @@ providers = "/etc/revad/providers.json"
 driver = "memory"
 
 [grpc.services.appprovider]
-driver = "demo"
-iopsecret = "testsecret"
-wopiurl = "http://0.0.0.0:8880/"
-wopibridgeurl = "http://localhost:8000/wopib"
+driver = "wopi"
+
+[grpc.services.appprovider.drivers.wopi]
+iop_secret = "hello"
+wopi_url = "http://0.0.0.0:8880/"
+app_name = "Collabora"
+app_url = "https://your-collabora-server.org:9980"
 
 [grpc.services.appregistry]
 driver = "static"
@@ -88,9 +91,7 @@ expose_data_server = true
 data_server_url = "http://127.0.0.1:19001/data"
 enable_home_creation = true
 disable_tus = true
-
-[grpc.services.storageprovider.mimetypes]
-".zmd" = "application/compressed-markdown"
+custom_mime_types_json = "custom-mime-types-demo.json"
 
 [grpc.services.storageprovider.drivers.nextcloud]
 endpoint = "http://localhost/apps/sciencemesh/"

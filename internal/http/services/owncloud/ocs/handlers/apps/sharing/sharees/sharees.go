@@ -59,7 +59,7 @@ func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway grpc client", err)
 		return
 	}
-	usersRes, err := gwc.FindUsers(r.Context(), &userpb.FindUsersRequest{Filter: term})
+	usersRes, err := gwc.FindUsers(r.Context(), &userpb.FindUsersRequest{Filter: term, SkipFetchingUserGroups: true})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching users", err)
 		return
@@ -73,7 +73,7 @@ func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 		userMatches = append(userMatches, match)
 	}
 
-	groupsRes, err := gwc.FindGroups(r.Context(), &grouppb.FindGroupsRequest{Filter: term})
+	groupsRes, err := gwc.FindGroups(r.Context(), &grouppb.FindGroupsRequest{Filter: term, SkipFetchingMembers: true})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching groups", err)
 		return

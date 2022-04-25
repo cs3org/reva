@@ -202,13 +202,6 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	contextUser := ctxpkg.ContextMustGetUser(ctx)
 	recipientProvider := contextUser.GetId().GetIdp()
 
-	// recipientProvider should be a URL, see https://github.com/cs3org/OCM-API/pull/41/files#diff-9cfca4a1b73e1e28e30fb9b0b984aad6d4caaf0819c61ed40ad338600531f745R569
-	// And going forward, UserId Idp will also include the https:// prefix, see https://github.com/cs3org/cs3apis/pull/159
-	// But historically, reva used UserId Idps that were domains instead of full URLs, so we need to support that case too, see
-	// https://github.com/cs3org/reva/issues/2288
-	if !(strings.Contains(recipientProvider, "://")) {
-		recipientProvider = "https://" + recipientProvider
-	}
 	requestBody := url.Values{
 		"token":             {invite.GetToken()},
 		"userID":            {contextUser.GetId().GetOpaqueId()},

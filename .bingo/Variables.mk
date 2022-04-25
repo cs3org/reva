@@ -23,9 +23,9 @@ $(BINGO): $(BINGO_DIR)/bingo.mod
 	@echo "(re)installing $(GOBIN)/bingo-v0.5.2"
 	@cd $(BINGO_DIR) && $(GO) build -mod=mod -modfile=bingo.mod -o=$(GOBIN)/bingo-v0.5.2 "github.com/bwplotka/bingo"
 
-MOCKERY := $(GOBIN)/mockery-v2.9.4
+MOCKERY := $(GOBIN)/mockery-v2.11.0
 $(MOCKERY): $(BINGO_DIR)/mockery.mod
 	@# Install binary/ries using Go 1.14+ build command. This is using bwplotka/bingo-controlled, separate go module with pinned dependencies.
-	@echo "(re)installing $(GOBIN)/mockery-v2.9.4"
-	@cd $(BINGO_DIR) && $(GO) build -mod=mod -modfile=mockery.mod -o=$(GOBIN)/mockery-v2.9.4 "github.com/vektra/mockery/v2"
+	@echo "(re)installing $(GOBIN)/mockery-v2.11.0"
+	@cd $(BINGO_DIR) && $(GO) build -mod=mod -modfile=mockery.mod -o=$(GOBIN)/mockery-v2.11.0 "github.com/vektra/mockery/v2"
 

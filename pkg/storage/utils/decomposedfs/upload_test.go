@@ -230,7 +230,7 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("*os.File")).
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("*os.File")).
 					Return(nil).
 					Run(func(args mock.Arguments) {
 						reader := args.Get(1).(io.Reader)
@@ -268,7 +268,7 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("*os.File")).
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("*os.File")).
 					Return(nil).
 					Run(func(args mock.Arguments) {
 						reader := args.Get(1).(io.Reader)

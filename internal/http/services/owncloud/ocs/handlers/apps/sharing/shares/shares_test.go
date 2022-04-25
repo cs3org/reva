@@ -31,9 +31,9 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/mocks"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -43,7 +43,7 @@ import (
 var _ = Describe("The ocs API", func() {
 	var (
 		h      *shares.Handler
-		client *mocks.GatewayClient
+		client *cs3mocks.GatewayAPIClient
 
 		user = &userpb.User{
 			Id: &userpb.UserId{
@@ -56,11 +56,11 @@ var _ = Describe("The ocs API", func() {
 
 	BeforeEach(func() {
 		h = &shares.Handler{}
-		client = &mocks.GatewayClient{}
+		client = &cs3mocks.GatewayAPIClient{}
 
 		c := &config.Config{}
 		c.Init()
-		h.InitWithGetter(c, func() (shares.GatewayClient, error) {
+		h.InitWithGetter(c, func() (gateway.GatewayAPIClient, error) {
 			return client, nil
 		})
 	})

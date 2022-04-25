@@ -19,6 +19,9 @@
 package meshdata
 
 const (
+	// EndpointRevad identifies the main Reva Daemon endpoint
+	EndpointRevad = "REVAD"
+
 	// EndpointGateway identifies the Gateway endpoint
 	EndpointGateway = "GATEWAY"
 	// EndpointMetrics identifies the Metrics endpoint
@@ -27,4 +30,19 @@ const (
 	EndpointWebdav = "WEBDAV"
 	// EndpointOCM identifies the OCM endpoint
 	EndpointOCM = "OCM"
+	// EndpointMeshDir identifies the Mesh Directory endpoint
+	EndpointMeshDir = "MESHDIR"
 )
+
+// GetServiceEndpoints returns an array of all service endpoint identifiers.
+func GetServiceEndpoints() []string {
+	return []string{
+		EndpointRevad,
+
+		EndpointGateway,
+		EndpointMetrics,
+		EndpointWebdav,
+		EndpointOCM,
+		EndpointMeshDir,
+	}
+}

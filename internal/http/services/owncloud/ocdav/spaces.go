@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"path"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
@@ -75,7 +76,7 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 
 		switch r.Method {
 		case MethodPropfind:
-			p := propfind.NewHandler(config.PublicURL, func() (propfind.GatewayClient, error) {
+			p := propfind.NewHandler(config.PublicURL, func() (gateway.GatewayAPIClient, error) {
 				return pool.GetGatewayServiceClient(config.GatewaySvc)
 			})
 			p.HandleSpacesPropfind(w, r, spaceID)

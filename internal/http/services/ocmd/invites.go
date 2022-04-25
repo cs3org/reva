@@ -26,7 +26,6 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -237,10 +236,6 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
 		return
-	}
-
-	if !(strings.Contains(recipientProvider, "://")) {
-		recipientProvider = "https://" + recipientProvider
 	}
 
 	recipientProviderURL, err := url.Parse(recipientProvider)

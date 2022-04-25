@@ -97,14 +97,14 @@ func TestUserManager(t *testing.T) {
 		Mail:        "einstein@example.org",
 		DisplayName: "Albert Einstein",
 	}
+	userEinsteinWithoutGroups := &userpb.User{
+		Id:          uidEinstein,
+		Username:    "einstein",
+		Mail:        "einstein@example.org",
+		DisplayName: "Albert Einstein",
+	}
 	userFake := &userpb.UserId{Idp: "localhost", OpaqueId: "fakeUser", Type: userpb.UserType_USER_TYPE_PRIMARY}
 	groupsEinstein := []string{"sailing-lovers", "violin-haters", "physics-lovers"}
-
-	// positive test GetUserGroups
-	resGroups, _ := manager.GetUserGroups(ctx, uidEinstein)
-	if !reflect.DeepEqual(resGroups, groupsEinstein) {
-		t.Fatalf("groups differ: expected=%v got=%v", resGroups, groupsEinstein)
-	}
 
 	// negative test GetUserGroups
 	expectedErr := errtypes.NotFound(userFake.OpaqueId)
@@ -114,20 +114,32 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// positive test GetUserByClaim by mail
-	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org")
+	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", false)
 	if !reflect.DeepEqual(resUserByEmail, userEinstein) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByEmail)
 	}
 
 	// negative test GetUserByClaim by mail
 	expectedErr = errtypes.NotFound("abc@example.com")
-	_, err = manager.GetUserByClaim(ctx, "mail", "abc@example.com")
+	_, err = manager.GetUserByClaim(ctx, "mail", "abc@example.com", false)
 	if !reflect.DeepEqual(err, expectedErr) {
 		t.Fatalf("user not found error differs: expected='%v' got='%v'", expectedErr, err)
 	}
 
+	// positive test GetUserByClaim by mail without groups
+	resUserByEmailWithoutGroups, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", true)
+	if !reflect.DeepEqual(resUserByEmailWithoutGroups, userEinsteinWithoutGroups) {
+		t.Fatalf("user differs: expected=%v got=%v", userEinsteinWithoutGroups, resUserByEmailWithoutGroups)
+	}
+
+	// positive test GetUserGroups
+	resGroups, _ := manager.GetUserGroups(ctx, uidEinstein)
+	if !reflect.DeepEqual(resGroups, groupsEinstein) {
+		t.Fatalf("groups differ: expected=%v got=%v", resGroups, groupsEinstein)
+	}
+
 	// test FindUsers
-	resUser, _ := manager.FindUsers(ctx, "stein")
+	resUser, _ := manager.FindUsers(ctx, "stein", false)
 	if len(resUser) != 1 {
 		t.Fatalf("too many users found: expected=%d got=%d", 1, len(resUser))
 	}
