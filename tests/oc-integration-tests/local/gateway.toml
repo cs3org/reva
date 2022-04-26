@@ -60,7 +60,7 @@ machine = "localhost:21000" # started with the machine-auth.toml
 [grpc.services.storageregistry]
 driver = "static"
 
-[grpc.services.storageregistry.drivers.static.home_provider]
+[grpc.services.storageregistry.drivers.static]
 home_provider = "/users"
 
 [grpc.services.storageregistry.drivers.static.rules]
