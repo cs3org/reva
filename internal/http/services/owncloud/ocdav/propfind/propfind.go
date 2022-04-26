@@ -381,8 +381,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		}
 		// TODO separate stats to the path or to the children, after statting all children update the mtime/etag
 		// TODO get mtime, and size from space as well, so we no longer have to stat here?
-		//spaceRef := spacelookup.MakeRelativeReference(space, requestPath, spacesPropfind)
-		spaceRef := &provider.Reference{ResourceId: space.Root}
+		spaceRef := spacelookup.MakeRelativeReference(space, requestPath, spacesPropfind)
 
 		info, status, err := p.stat(ctx, client, spaceRef, metadataKeys)
 		if err != nil || status.GetCode() != rpc.Code_CODE_OK {

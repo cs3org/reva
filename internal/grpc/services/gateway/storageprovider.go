@@ -24,6 +24,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -267,7 +268,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 	spaces := []*provider.StorageSpace{}
 	for _, providerInfo := range res.Providers {
-		sps := decodeSpaces(providerInfo)
+		sps := decodeSpaces(providerInfo) // TODO this no longer happens with the static registry, get rid of it
 		if len(sps) == 0 || sps[0].Id.GetOpaqueId() == "" {
 			sps, err = s.statSpaces(ctx, providerInfo, req)
 			if err != nil {
@@ -1164,6 +1165,10 @@ func (s *svc) statSpaces(ctx context.Context, i *registry.ProviderInfo, req *pro
 	res, err := c.ListStorageSpaces(ctx, req)
 	if err != nil {
 		return nil, err
+	}
+
+	for _, space := range res.StorageSpaces {
+		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "path", path.Join(i.ProviderPath, space.Root.OpaqueId))
 	}
 	return res.StorageSpaces, nil
 }
