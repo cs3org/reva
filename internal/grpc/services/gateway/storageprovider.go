@@ -233,6 +233,8 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 			filters["owner_id"] = f.GetOwner().OpaqueId
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			filters["space_type"] = f.GetSpaceType()
+		case provider.ListStorageSpacesRequest_Filter_TYPE_PATH:
+			filters["path"] = f.GetPath()
 		default:
 			return &provider.ListStorageSpacesResponse{
 				Status: status.NewInvalidArg(ctx, fmt.Sprintf("unknown filter %v", f.Type)),
@@ -1160,6 +1162,15 @@ func (s *svc) statSpaces(ctx context.Context, i *registry.ProviderInfo, req *pro
 	c, err := s.getStorageProviderClient(ctx, i)
 	if err != nil {
 		return nil, err
+	}
+
+	// cut provider path
+	for _, f := range req.Filters {
+		if f.GetType() == provider.ListStorageSpacesRequest_Filter_TYPE_PATH {
+			f.Term = &provider.ListStorageSpacesRequest_Filter_Path{
+				Path: strings.TrimPrefix(f.GetPath(), i.ProviderPath),
+			}
+		}
 	}
 
 	res, err := c.ListStorageSpaces(ctx, req)

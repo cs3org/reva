@@ -68,6 +68,12 @@ func LookUpStorageSpaceForPath(ctx context.Context, client gateway.GatewayAPICli
 				},
 			},
 		},
+		Filters: []*storageProvider.ListStorageSpacesRequest_Filter{
+			{
+				Type: storageProvider.ListStorageSpacesRequest_Filter_TYPE_PATH,
+				Term: &storageProvider.ListStorageSpacesRequest_Filter_Path{Path: path},
+			},
+		},
 	}
 
 	lSSRes, err := client.ListStorageSpaces(ctx, lSSReq)
@@ -107,7 +113,14 @@ func LookUpStorageSpacesForPathWithChildren(ctx context.Context, client gateway.
 			Map: map[string]*typesv1beta1.OpaqueEntry{
 				"path":            {Decoder: "plain", Value: []byte(path)},
 				"withChildMounts": {Decoder: "plain", Value: []byte("true")},
-			}},
+			},
+		},
+		Filters: []*storageProvider.ListStorageSpacesRequest_Filter{
+			{
+				Type: storageProvider.ListStorageSpacesRequest_Filter_TYPE_PATH,
+				Term: &storageProvider.ListStorageSpacesRequest_Filter_Path{Path: path},
+			},
+		},
 	}
 
 	lSSRes, err := client.ListStorageSpaces(ctx, lSSReq)

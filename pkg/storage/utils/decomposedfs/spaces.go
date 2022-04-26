@@ -34,6 +34,7 @@ import (
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	ocsconv "github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
@@ -270,6 +271,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			if strings.Contains(nodeID, "/") {
 				return []*provider.StorageSpace{}, nil
 			}
+		case provider.ListStorageSpacesRequest_Filter_TYPE_PATH:
+			// if a path is set assume the first part is the spaceid
+			s, _ := router.ShiftPath(filter[i].GetPath())
+			spaceID, nodeID = s, s
 		}
 	}
 	if len(spaceTypes) == 0 {
