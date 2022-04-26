@@ -58,14 +58,14 @@ bearer = "localhost:20099" # started with the frontend.toml
 machine = "localhost:21000" # started with the machine-auth.toml
 
 [grpc.services.storageregistry]
-driver = "spaces"
+driver = "static"
 
-[grpc.services.storageregistry.drivers.spaces]
-home_template = "/users/{{.Id.OpaqueId}}"
+[grpc.services.storageregistry.drivers.static.home_provider]
+home_provider = "/users"
 
-## obviously, we do not want to define a rule for every user and space, which is why we can define naming rules:
-[grpc.services.storageregistry.drivers.spaces.providers."localhost:11000".spaces]
-"personal" = { "mount_point" = "/users", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}" }
+[grpc.services.storageregistry.drivers.static.rules]
+"/users" = {"address": "localhost:1100", "provider_id": "1284d238-aa92-42ce-bdc4-0b0000009157", "provider_path": "/users", "space_type": "personal"}
+"1284d238-aa92-42ce-bdc4-0b0000009157" = {"address": "localhost:1100", "provider_id": "1284d238-aa92-42ce-bdc4-0b0000009157", "provider_path": "/users", "space_type": "personal"}
 
 ## users can be spread over multiple providers like this:
 #"localhost:11000" = {"mount_path" = "/users/[0-9]", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces 0-9"}
