@@ -480,21 +480,11 @@ func (c *Client) getRawFileInfoByPath(ctx context.Context, auth eosclient.Author
 
 func (c *Client) mergeACLsAndAttrsForFiles(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
 	// We need to inherit the ACLs for the parent directory as these are not available for files
-	// And the attributes from the version folders
 	if !info.IsDir {
 		parentInfo, err := c.getRawFileInfoByPath(ctx, auth, path.Dir(info.File))
 		// Even if this call fails, at least return the current file object
 		if err == nil {
 			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
-		}
-
-		// We need to merge attrs set for the version folders, so get those resolved for the current user
-		versionFolderInfo, err := c.GetFileInfoByPath(ctx, auth, getVersionFolder(info.File))
-		if err == nil {
-			info.SysACL.Entries = append(info.SysACL.Entries, versionFolderInfo.SysACL.Entries...)
-			for k, v := range versionFolderInfo.Attrs {
-				info.Attrs[k] = v
-			}
 		}
 	}
 
@@ -509,16 +499,12 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 
 	var info *eosclient.FileInfo
 	var err error
-	// We need to set the attrs on the version folder as they are not persisted across writes
 	// Except for the sys.eval.useracl attr as EOS uses that to determine if it needs to obey
 	// the user ACLs set on the file
 	if !(attr.Type == eosclient.SystemAttr && attr.Key == userACLEvalKey) {
 		info, err = c.getRawFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
-		}
-		if !info.IsDir {
-			path = getVersionFolder(path)
 		}
 	}
 
@@ -585,16 +571,12 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 
 	var info *eosclient.FileInfo
 	var err error
-	// We need to set the attrs on the version folder as they are not persisted across writes
 	// Except for the sys.eval.useracl attr as EOS uses that to determine if it needs to obey
 	// the user ACLs set on the file
 	if !(attr.Type == eosclient.SystemAttr && attr.Key == userACLEvalKey) {
 		info, err = c.getRawFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
-		}
-		if !info.IsDir {
-			path = getVersionFolder(path)
 		}
 	}
 
@@ -622,17 +604,6 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 
 // GetAttr returns the attribute specified by key
 func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key, path string) (*eosclient.Attribute, error) {
-
-	// As SetAttr set the attr on the version folder, we will read the attribute on it
-	// if the resource is not a folder
-	info, err := c.getRawFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.IsDir {
-		path = getVersionFolder(path)
-	}
-
 	args := []string{"attr", "get", key, path}
 	attrOut, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
@@ -686,7 +657,7 @@ func (c *Client) SetQuota(ctx context.Context, rootAuth eosclient.Authorization,
 	return nil
 }
 
-// Touch creates a 0-size,0-replica file in the EOS namespace.
+// Touch creates a 0-size file in the EOS namespace.
 func (c *Client) Touch(ctx context.Context, auth eosclient.Authorization, path string) error {
 	args := []string{"file", "touch", path}
 	_, _, err := c.executeEOS(ctx, args, auth)
@@ -960,7 +931,6 @@ func getMap(partsBySpace []string) map[string]string {
 
 func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, dirPath, raw string) ([]*eosclient.FileInfo, error) {
 	finfos := []*eosclient.FileInfo{}
-	versionFolders := map[string]*eosclient.FileInfo{}
 	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
 		return c == '\n'
 	})
@@ -982,34 +952,14 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 			continue
 		}
 
-		// If it's a version folder, store it in a map, so that for the corresponding file,
-		// we can return its inode instead
-		if isVersionFolder(fi.File) {
-			versionFolders[fi.File] = fi
-		}
-
 		finfos = append(finfos, fi)
 	}
 
 	for _, fi := range finfos {
 		// For files, inherit ACLs from the parent
-		// And set the inode to that of their version folder
 		if !fi.IsDir && !isVersionFolder(dirPath) {
 			if parent != nil {
 				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
-			}
-			versionFolderPath := getVersionFolder(fi.File)
-			if vf, ok := versionFolders[versionFolderPath]; ok {
-				fi.Inode = vf.Inode
-				fi.SysACL.Entries = append(fi.SysACL.Entries, vf.SysACL.Entries...)
-				for k, v := range vf.Attrs {
-					fi.Attrs[k] = v
-				}
-
-			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
-				if md, err := c.getRawFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
-					fi.Inode = md.Inode
-				}
 			}
 		}
 	}
