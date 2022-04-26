@@ -265,7 +265,8 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 				spaceTypes = append(spaceTypes, filter[i].GetSpaceType())
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, nodeID, _ = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
+			ssid, _ := resourceid.StorageIDUnwrap(filter[i].GetId().GetOpaqueId())
+			spaceID, nodeID, _ = utils.SplitStorageSpaceID(ssid)
 			if strings.Contains(nodeID, "/") {
 				return []*provider.StorageSpace{}, nil
 			}
