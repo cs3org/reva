@@ -19,11 +19,8 @@
 package rgrpc
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"sort"
 
@@ -214,18 +211,18 @@ func (s *Server) registerServices() error {
 	if err != nil {
 		return err
 	}
-	// creds, err := credentials.NewServerTLSFromFile(s.conf.ClientCertFile, s.conf.ClientKeyFile)
-	// if err != nil {
-	// 	return err
-	// }
-	// opts = append(opts, grpc.Creds(creds))
 
 	if !sharedconf.Insecure() {
-		tlsCredentials, err := loadTLSCredentials(s.conf.ClientCACertFile, s.conf.ServerCertFile, s.conf.ServerKeyFile)
+		creds, err := credentials.NewServerTLSFromFile(s.conf.ServerCertFile, s.conf.ServerKeyFile)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "failed to add client CA's certificate")
 		}
-		opts = append(opts, grpc.Creds(tlsCredentials))
+		opts = append(opts, grpc.Creds(creds))
+		// tlsCredentials, err := loadTLSCredentials(s.conf.ClientCACertFile, s.conf.ServerCertFile, s.conf.ServerKeyFile)
+		// if err != nil {
+		// 	return err
+		// }
+		// opts = append(opts, grpc.Creds(tlsCredentials))
 	}
 	grpcServer := grpc.NewServer(opts...)
 
@@ -377,30 +374,30 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	return opts, nil
 }
 
-func loadTLSCredentials(ClientCACertFile string, ServerCertFile string, ServerKeyFile string) (credentials.TransportCredentials, error) {
-	// Load certificate of the CA who signed client's certificate
-	pemClientCA, err := ioutil.ReadFile(ClientCACertFile)
-	if err != nil {
-		return nil, err
-	}
+// func loadTLSCredentials(ClientCACertFile string, ServerCertFile string, ServerKeyFile string) (credentials.TransportCredentials, error) {
+// 	// Load certificate of the CA who signed client's certificate
+// 	pemClientCA, err := ioutil.ReadFile(ClientCACertFile)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(pemClientCA) {
-		return nil, errors.Wrap(err, "failed to add client CA's certificate")
-	}
+// 	certPool := x509.NewCertPool()
+// 	if !certPool.AppendCertsFromPEM(pemClientCA) {
+// 		return nil, errors.Wrap(err, "failed to add client CA's certificate")
+// 	}
 
-	// Load server's certificate and private key
-	serverCert, err := tls.LoadX509KeyPair(ServerCertFile, ServerKeyFile)
-	if err != nil {
-		return nil, err
-	}
+// 	// Load server's certificate and private key
+// 	serverCert, err := tls.LoadX509KeyPair(ServerCertFile, ServerKeyFile)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	// Create the credentials and return it
-	config := &tls.Config{
-		Certificates: []tls.Certificate{serverCert},
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    certPool,
-	}
+// 	// Create the credentials and return it
+// 	config := &tls.Config{
+// 		Certificates: []tls.Certificate{serverCert},
+// 		ClientAuth:   tls.RequireAndVerifyClientCert,
+// 		ClientCAs:    certPool,
+// 	}
 
-	return credentials.NewTLS(config), nil
-}
+// 	return credentials.NewTLS(config), nil
+// }
