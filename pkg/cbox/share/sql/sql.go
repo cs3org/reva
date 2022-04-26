@@ -286,14 +286,10 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 				coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type,
 			  	id, stime, permissions, share_type
 			  FROM oc_share
-			  WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner=? or uid_initiator=?)`
-	params := []interface{}{uid, uid}
+			  WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner=? or uid_initiator=?) AND (share_type=? OR share_type=?)`
+	params := []interface{}{uid, uid, shareTypeUser, shareTypeGroup}
 
-	if len(filters) == 0 {
-		query += " AND (share_type=? OR share_type=?)"
-		params = append(params, shareTypeUser)
-		params = append(params, shareTypeGroup)
-	} else {
+	if len(filters) > 0 {
 		filterQuery, filterParams, err := translateFilters(filters)
 		if err != nil {
 			return nil, err

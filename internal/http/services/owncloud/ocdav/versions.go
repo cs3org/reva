@@ -165,7 +165,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		infos = append(infos, vi)
 	}
 
-	propRes, err := s.multistatusResponse(ctx, &pf, infos, "", nil)
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, "", nil, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
