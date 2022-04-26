@@ -64,8 +64,8 @@ driver = "static"
 home_provider = "/users"
 
 [grpc.services.storageregistry.drivers.static.rules]
-"/users" = {"address": "localhost:11000", "provider_id": "1284d238-aa92-42ce-bdc4-0b0000009157", "provider_path": "/users", "space_type": "personal"}
-"1284d238-aa92-42ce-bdc4-0b0000009157" = {"address": "localhost:11000", "provider_id": "1284d238-aa92-42ce-bdc4-0b0000009157", "provider_path": "/users", "space_type": "personal"}
+"/users" = { "address" = "localhost:11000", "provider_id" = "1284d238-aa92-42ce-bdc4-0b0000009157", "provider_path" = "/users", "space_type" = "personal"}
+"1284d238-aa92-42ce-bdc4-0b0000009157" = { "address" = "localhost:11000", "provider_id" = "1284d238-aa92-42ce-bdc4-0b0000009157", "provider_path" = "/users", "space_type" = "personal"}
 
 ## users can be spread over multiple providers like this:
 #"localhost:11000" = {"mount_path" = "/users/[0-9]", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces 0-9"}
