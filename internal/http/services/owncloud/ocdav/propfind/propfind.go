@@ -34,6 +34,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
@@ -46,6 +47,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -290,10 +292,11 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(ctx, "propfind_response")
 	defer span.End()
 
-	filters := make([]*link.ListPublicSharesRequest_Filter, 0, len(resourceInfos))
+	linkFilters := make([]*link.ListPublicSharesRequest_Filter, 0, len(resourceInfos))
+	shareFilters := make([]*collaboration.Filter, 0, len(resourceInfos))
 	for i := range resourceInfos {
-		// the list of filters grows with every public link in a folder
-		filters = append(filters, publicshare.ResourceIDFilter(resourceInfos[i].Id))
+		linkFilters = append(linkFilters, publicshare.ResourceIDFilter(resourceInfos[i].Id))
+		shareFilters = append(shareFilters, share.ResourceIDFilter(resourceInfos[i].Id))
 	}
 
 	client, err := p.getClient()
@@ -306,11 +309,11 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 	var linkshares map[string]struct{}
 	// public link access does not show share-types
 	if namespace != "/public" {
-		listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
+		listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: linkFilters})
 		if err == nil {
 			linkshares = make(map[string]struct{}, len(listResp.Share))
 			for i := range listResp.Share {
-				linkshares[listResp.Share[i].ResourceId.OpaqueId] = struct{}{}
+				linkshares[storagespace.FormatResourceID(*listResp.Share[i].ResourceId)] = struct{}{}
 			}
 		} else {
 			log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
@@ -318,7 +321,19 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, spaceType, linkshares)
+	var usershares map[string]struct{}
+	listSharesResp, err := client.ListShares(ctx, &collaboration.ListSharesRequest{Filters: shareFilters})
+	if err == nil {
+		usershares = make(map[string]struct{}, len(listSharesResp.Shares))
+		for i := range listSharesResp.Shares {
+			usershares[storagespace.FormatResourceID(*listSharesResp.Shares[i].ResourceId)] = struct{}{}
+		}
+	} else {
+		log.Error().Err(err).Msg("propfindResponse: couldn't list user shares")
+		span.SetStatus(codes.Error, err.Error())
+	}
+
+	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, spaceType, usershares, linkshares)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -672,10 +687,10 @@ func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 }
 
 // MultistatusResponse converts a list of resource infos into a multistatus response string
-func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns, spaceType string, linkshares map[string]struct{}) ([]byte, error) {
+func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns, spaceType string, usershares, linkshares map[string]struct{}) ([]byte, error) {
 	responses := make([]*ResponseXML, 0, len(mds))
 	for i := range mds {
-		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, spaceType, linkshares)
+		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, spaceType, usershares, linkshares)
 		if err != nil {
 			return nil, err
 		}
@@ -694,7 +709,7 @@ func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceI
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
-func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns, spaceType string, linkshares map[string]struct{}) (*ResponseXML, error) {
+func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns, spaceType string, usershares, linkshares map[string]struct{}) (*ResponseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
@@ -1036,10 +1051,14 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 						types.WriteString("<oc:share-type>")
 						types.WriteString(amdv)
 						types.WriteString("</oc:share-type>")
+					} else if md.Id != nil {
+						if _, ok := usershares[storagespace.FormatResourceID(*md.Id)]; ok {
+							types.WriteString("<oc:share-type>0</oc:share-type>")
+						}
 					}
 
 					if md.Id != nil {
-						if _, ok := linkshares[md.Id.OpaqueId]; ok {
+						if _, ok := linkshares[storagespace.FormatResourceID(*md.Id)]; ok {
 							types.WriteString("<oc:share-type>3</oc:share-type>")
 						}
 					}
