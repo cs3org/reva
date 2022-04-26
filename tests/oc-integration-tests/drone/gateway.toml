@@ -60,6 +60,10 @@ home_provider = "/users"
 [grpc.services.storageregistry.drivers.static.rules]
 "/users" = { "address" = "localhost:11000", "provider_id" = "1284d238-aa92-42ce-bdc4-0b0000009157", "provider_path" = "/users", "space_type" = "personal"}
 "1284d238-aa92-42ce-bdc4-0b0000009157" = { "address" = "localhost:11000", "provider_id" = "1284d238-aa92-42ce-bdc4-0b0000009157", "provider_path" = "/users", "space_type" = "personal"}
+"/public" = { "address" = "localhost:13000", "provider_id" = "7993447f-687f-490d-875c-ac95e89a62a4", "provider_path" = "/public"}
+"7993447f-687f-490d-875c-ac95e89a62a4" = { "address" = "localhost:13000", "provider_id" = "7993447f-687f-490d-875c-ac95e89a62a4", "provider_path" = "/public"}
+"/shares" = { "address" = "localhost:14000", "provider_id" = "a0ca6a90-a365-4782-871e-d44447bbc668", "provider_path" = "/shares"}
+"a0ca6a90-a365-4782-871e-d44447bbc668" = { "address" = "localhost:14000", "provider_id" = "a0ca6a90-a365-4782-871e-d44447bbc668", "provider_path" = "/shares"}
 
 ## users can be spread over multiple providers like this:
 #"localhost:11000" = {"mount_path" = "/users/[0-9]", "space_type" = "personal", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}", "description" = "personal spaces 0-9"}
