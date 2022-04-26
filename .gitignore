@@ -50,3 +50,6 @@ tmp/
 
 # drone
 .drone.yml
+
+# certificates
+cert/

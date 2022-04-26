@@ -19,8 +19,11 @@
 package rgrpc
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"sort"
 
@@ -102,12 +105,9 @@ type config struct {
 	Services         map[string]map[string]interface{} `mapstructure:"services"`
 	Interceptors     map[string]map[string]interface{} `mapstructure:"interceptors"`
 	EnableReflection bool                              `mapstructure:"enable_reflection"`
-
-	// If the URL is https, then we need to configure this client
-	// with the usual TLS stuff
-	// Defaults are /etc/grid-security/hostcert.pem and /etc/grid-security/hostkey.pem
-	ClientCertFile string `mapstructure:"http_client_certfile"`
-	ClientKeyFile  string `mapstructure:"http_client_keyfile"`
+	ServerCertFile   string                            `mapstructure:"grpc_server_certfile"`
+	ServerKeyFile    string                            `mapstructure:"grpc_server_keyfile"`
+	ClientCACertFile string                            `mapstructure:"grpc_clientca_certfile"`
 }
 
 func (c *config) init() {
@@ -119,13 +119,15 @@ func (c *config) init() {
 		c.Address = sharedconf.GetGatewaySVC("0.0.0.0:19000")
 	}
 
-	if c.ClientCertFile == "" {
-		c.ClientCertFile = "/etc/grid-security/hostcert.pem"
+	if c.ServerCertFile == "" {
+		c.ServerCertFile = "/home/amal/Documents/gh/reva/cert/server-cert.pem"
 	}
-	if c.ClientKeyFile == "" {
-		c.ClientKeyFile = "/etc/grid-security/hostkey.pem"
+	if c.ServerKeyFile == "" {
+		c.ServerKeyFile = "/home/amal/Documents/gh/reva/cert/server-key.pem"
 	}
-
+	if c.ClientCACertFile == "" {
+		c.ClientCACertFile = "/home/amal/Documents/gh/reva/cert/ca-cert.pem"
+	}
 }
 
 // Server is a gRPC server.
@@ -212,12 +214,19 @@ func (s *Server) registerServices() error {
 	if err != nil {
 		return err
 	}
-	creds, err := credentials.NewServerTLSFromFile(s.conf.ClientCertFile, s.conf.ClientKeyFile)
-	if err != nil {
-		return err
-	}
-	opts = append(opts, grpc.Creds(creds))
+	// creds, err := credentials.NewServerTLSFromFile(s.conf.ClientCertFile, s.conf.ClientKeyFile)
+	// if err != nil {
+	// 	return err
+	// }
+	// opts = append(opts, grpc.Creds(creds))
 
+	if !sharedconf.Insecure() {
+		tlsCredentials, err := loadTLSCredentials(s.conf.ClientCACertFile, s.conf.ServerCertFile, s.conf.ServerKeyFile)
+		if err != nil {
+			return err
+		}
+		opts = append(opts, grpc.Creds(tlsCredentials))
+	}
 	grpcServer := grpc.NewServer(opts...)
 
 	for _, svc := range s.services {
@@ -366,4 +375,32 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	}
 
 	return opts, nil
+}
+
+func loadTLSCredentials(ClientCACertFile string, ServerCertFile string, ServerKeyFile string) (credentials.TransportCredentials, error) {
+	// Load certificate of the CA who signed client's certificate
+	pemClientCA, err := ioutil.ReadFile(ClientCACertFile)
+	if err != nil {
+		return nil, err
+	}
+
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(pemClientCA) {
+		return nil, errors.Wrap(err, "failed to add client CA's certificate")
+	}
+
+	// Load server's certificate and private key
+	serverCert, err := tls.LoadX509KeyPair(ServerCertFile, ServerKeyFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the credentials and return it
+	config := &tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    certPool,
+	}
+
+	return credentials.NewTLS(config), nil
 }
