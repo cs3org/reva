@@ -16,6 +16,7 @@ address = "0.0.0.0:11000"
 driver = "s3ng"
 expose_data_server = true
 data_server_url = "http://revad-services:11001/data"
+mount_id = "1284d238-aa92-42ce-bdc4-0b0000009157"
 
 [grpc.services.storageprovider.drivers.s3ng]
 root = "/drone/src/tmp/reva/data"
