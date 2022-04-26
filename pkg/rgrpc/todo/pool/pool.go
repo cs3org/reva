@@ -126,21 +126,33 @@ func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
 			),
 		),
 	}
-	creds := getCredentials(options)
+	creds, err := getCredentials(options)
+	if err != nil {
+		return nil, err
+	}
 	opts = append(opts, grpc.WithTransportCredentials(creds))
 	return opts, nil
 }
 
-func getCredentials(options Options) credentials.TransportCredentials {
+func getCredentials(options Options) (credentials.TransportCredentials, error) {
 	var creds credentials.TransportCredentials
 	if sharedconf.Insecure() {
 		creds = insecure.NewCredentials()
 	} else {
-		tlsconf := &tls.Config{InsecureSkipVerify: sharedconf.SkipVerify()}
+		// b, _ := ioutil.ReadFile("/home/amal/Documents/gh/reva/ca.cert")
+		// cp := x509.NewCertPool()
+		// if !cp.AppendCertsFromPEM(b) {
+		// 	return nil, errors.New("credentials: failed to append certificates")
+		// }
+		tlsconf := &tls.Config{
+			InsecureSkipVerify: false,
+			// RootCAs:            cp,
+		}
 		creds = credentials.NewTLS(tlsconf)
 
 	}
-	return creds
+
+	return creds, nil
 }
 
 // GetGatewayServiceClient returns a GatewayServiceClient.

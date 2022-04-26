@@ -117,10 +117,10 @@ func (c *config) init() {
 	}
 
 	if c.ServerCertFile == "" {
-		c.ServerCertFile = "/home/amal/Documents/gh/reva/cert/server-cert.pem"
+		c.ServerCertFile = "/home/amal/Documents/gh/reva/service.pem"
 	}
 	if c.ServerKeyFile == "" {
-		c.ServerKeyFile = "/home/amal/Documents/gh/reva/cert/server-key.pem"
+		c.ServerKeyFile = "/home/amal/Documents/gh/reva/service.key"
 	}
 	if c.ClientCACertFile == "" {
 		c.ClientCACertFile = "/home/amal/Documents/gh/reva/cert/ca-cert.pem"
