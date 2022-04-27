@@ -107,6 +107,10 @@ type streamInterceptorTriple struct {
 	Interceptor grpc.StreamServerInterceptor
 }
 
+type RSA struct {
+	bits int
+}
+
 type config struct {
 	Network          string                            `mapstructure:"network"`
 	Address          string                            `mapstructure:"address"`
@@ -114,19 +118,21 @@ type config struct {
 	Services         map[string]map[string]interface{} `mapstructure:"services"`
 	Interceptors     map[string]map[string]interface{} `mapstructure:"interceptors"`
 	EnableReflection bool                              `mapstructure:"enable_reflection"`
-	ServerCertFile   string                            `mapstructure:"grpc_server_certfile"`
-	ServerKeyFile    string                            `mapstructure:"grpc_server_keyfile"`
-	ClientCACertFile string                            `mapstructure:"grpc_clientca_certfile"`
-	CertifyCA        bool                              `mapstructure:"certifyca"`
-	SelfSignedCert   bool                              `mapstructure:"self_signed_cert"`
-	VaultScheme      string                            `mapstructure:"vault_scheme"`
-	VaultHost        string                            `mapstructure:"vault_host"`
-	VaultToken       string                            `mapstructure:"vault_token"`
-	VaultRole        string                            `mapstructure:"vault_role"`
-}
 
-type RSA struct {
-	bits int
+	Insecure   bool `mapstructure:"insecure"`
+	SkipVerify bool `mapstructure:"SkipVerify"`
+
+	CertFile       string `mapstructure:"certfile"`
+	KeyFile        string `mapstructure:"keyfile"`
+	CACertFile     string `mapstructure:"ca_certfile"`
+	CertifyCA      bool   `mapstructure:"certifyca"`
+	SelfSignedCert bool   `mapstructure:"self_signed_cert"`
+
+	VaultScheme   string `mapstructure:"vault_scheme"`
+	VaultHost     string `mapstructure:"vault_host"`
+	VaultToken    string `mapstructure:"vault_token"`
+	VaultRole     string `mapstructure:"vault_role"`
+	VaultCertFile string `mapstructure:"vault_certfile"`
 }
 
 func (c *config) init() {
@@ -138,14 +144,14 @@ func (c *config) init() {
 		c.Address = sharedconf.GetGatewaySVC("0.0.0.0:19000")
 	}
 
-	if c.ServerCertFile == "" {
-		c.ServerCertFile = "/home/amal/vault/vault.pem"
+	if c.CertFile == "" {
+		c.CertFile = "/home/amal/vault/vault.pem"
 	}
-	if c.ServerKeyFile == "" {
-		c.ServerKeyFile = "/home/amal/vault/vault.key"
+	if c.KeyFile == "" {
+		c.KeyFile = "/home/amal/vault/vault.key"
 	}
-	if c.ClientCACertFile == "" {
-		c.ClientCACertFile = "/home/amal/Documents/gh/reva/cert/ca-cert.pem"
+	if c.CACertFile == "" {
+		c.CACertFile = "/home/amal/Documents/gh/reva/cert/ca-cert.pem"
 	}
 	if c.VaultHost == "" {
 		c.VaultHost = "localhost:8200"
@@ -156,6 +162,12 @@ func (c *config) init() {
 	if c.VaultScheme == "" {
 		c.VaultScheme = "https"
 	}
+	if c.VaultCertFile == "" {
+		c.VaultCertFile = "/home/amal/Documents/gh/reva/ca-vault.cert"
+	}
+
+	sharedconf.SetInsecure(c.Insecure)
+	sharedconf.SetSkipVerify(c.SkipVerify)
 }
 
 // Server is a gRPC server.
@@ -399,22 +411,36 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	return opts, nil
 }
 
+func certFilesExist(s *Server) bool {
+	if _, err := os.Stat(s.conf.CertFile); errors.Is(err, os.ErrNotExist) {
+		s.log.Error().Msg("certificate file doesn't exist at specified path.")
+		return false
+	}
+	if _, err := os.Stat(s.conf.KeyFile); errors.Is(err, os.ErrNotExist) {
+		s.log.Error().Msg("key file doesn't exist at specified path.")
+		return false
+	}
+	return true
+}
+
 func getCredentials(s *Server) (credentials.TransportCredentials, error) {
+	var selfSignedCert bool = certFilesExist(s)
+
 	switch {
 	// Certificates signed by Vault via Certify
-	case s.conf.SelfSignedCert && s.conf.CertifyCA:
-		s.log.Error().Msg("can't choose self-signed and Certify at the same time")
+	case selfSignedCert && s.conf.CertifyCA:
+		s.log.Error().Msg("can't choose self-signed files and Certify at the same time")
 		os.Exit(1)
 	// Self-signed cetificates
-	case s.conf.SelfSignedCert:
-		creds, err := credentials.NewServerTLSFromFile(s.conf.ServerCertFile, s.conf.ServerKeyFile)
+	case selfSignedCert:
+		creds, err := credentials.NewServerTLSFromFile(s.conf.CertFile, s.conf.KeyFile)
 		if err != nil {
 			s.log.Error().Msg("failed to setup TLS with local files")
 			os.Exit(1)
 		}
 		return creds, nil
 	case s.conf.CertifyCA:
-		creds, err := vaultCert("/home/amal/Documents/gh/reva/ca-vault.cert", s)
+		creds, err := vaultCert(s.conf)
 		if err != nil {
 			s.log.Error().Msg("failed to setup TLS with Certify")
 			os.Exit(1)
@@ -433,8 +459,8 @@ func (r RSA) Generate() (crypto.PrivateKey, error) {
 	return rsa.GenerateKey(rand.Reader, r.bits)
 }
 
-func vaultCert(f string, s *Server) (credentials.TransportCredentials, error) {
-	b, err := ioutil.ReadFile(f)
+func vaultCert(conf *config) (credentials.TransportCredentials, error) {
+	b, err := ioutil.ReadFile(conf.VaultCertFile)
 	if err != nil {
 		return nil, fmt.Errorf("vaultCert: problem with input file")
 	}
@@ -444,14 +470,14 @@ func vaultCert(f string, s *Server) (credentials.TransportCredentials, error) {
 	}
 	issuer := &vault.Issuer{
 		URL: &url.URL{
-			Scheme: s.conf.VaultScheme,
-			Host:   s.conf.VaultHost,
+			Scheme: conf.VaultScheme,
+			Host:   conf.VaultHost,
 		},
 		TLSConfig: &tls.Config{
 			RootCAs: cp,
 		},
-		Token: s.conf.VaultToken,
-		Role:  s.conf.VaultRole,
+		Token: conf.VaultToken,
+		Role:  conf.VaultRole,
 	}
 	cfg := certify.CertConfig{
 		SubjectAlternativeNames: []string{"localhost"},

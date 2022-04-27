@@ -110,6 +110,16 @@ func Insecure() bool {
 	return sharedConf.Insecure
 }
 
+// Sets Insecure which determines whether to disable transport security for new GRPC connections.
+func SetInsecure(insecure bool) {
+	sharedConf.Insecure = insecure
+}
+
+// Sets SkipVerify return whether a client verifies the server's certificate chain and host name.
+func SetSkipVerify(skipVerify bool) {
+	sharedConf.SkipVerify = skipVerify
+}
+
 // GetMaxCallRecvMsgSize returns maximum reciever message size
 func GetMaxCallRecvMsgSize() int {
 	if sharedConf.MaxCallRecvMsgSize == 0 {
