@@ -19,10 +19,19 @@
 package rgrpc
 
 import (
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
+	"net/url"
+	"os"
 	"sort"
+	"time"
 
 	"github.com/cs3org/reva/internal/grpc/interceptors/appctx"
 	"github.com/cs3org/reva/internal/grpc/interceptors/auth"
@@ -33,6 +42,8 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/johanbrandhorst/certify"
+	"github.com/johanbrandhorst/certify/issuers/vault"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -212,18 +223,12 @@ func (s *Server) registerServices() error {
 		return err
 	}
 
-	if !sharedconf.Insecure() {
-		creds, err := credentials.NewServerTLSFromFile(s.conf.ServerCertFile, s.conf.ServerKeyFile)
-		if err != nil {
-			return errors.Wrap(err, "failed to add client CA's certificate")
-		}
-		opts = append(opts, grpc.Creds(creds))
-		// tlsCredentials, err := loadTLSCredentials(s.conf.ClientCACertFile, s.conf.ServerCertFile, s.conf.ServerKeyFile)
-		// if err != nil {
-		// 	return err
-		// }
-		// opts = append(opts, grpc.Creds(tlsCredentials))
+	creds, err := getCertificates(s)
+	if err != nil {
+		return err
 	}
+	opts = append(opts, creds)
+
 	grpcServer := grpc.NewServer(opts...)
 
 	for _, svc := range s.services {
@@ -238,6 +243,37 @@ func (s *Server) registerServices() error {
 	s.s = grpcServer
 
 	return nil
+}
+
+func getCertificates(s *Server) (grpc.ServerOption, error) {
+	switch {
+	case *self && *cefy:
+		s.log.Error().Msg("can't choose self-signed and Certify at the same time")
+		os.Exit(1)
+	// Self-signed cetificates
+	case *self:
+		creds, err := credentials.NewServerTLSFromFile(s.conf.ServerCertFile, s.conf.ServerKeyFile)
+		if err != nil {
+			s.log.Error().Msg("failed to setup TLS with local files")
+			os.Exit(1)
+		}
+		return grpc.Creds(creds), nil
+	// Certificates signed by Vault via Certify
+	case *cefy:
+		creds, err := vaultCert("ca-org.cert", s)
+		if err != nil {
+			s.log.Error().Msg("failed to setup TLS with Certify")
+			os.Exit(1)
+		}
+		return grpc.Creds(creds), nil
+	// Insecure
+	default:
+	}
+	// if !sharedconf.Insecure() {
+	// 	if err != nil {
+	// 	}
+	// 	opts = append(opts, grpc.Creds(creds))
+	// }
 }
 
 // TODO(labkode): make closing with deadline.
@@ -374,30 +410,60 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	return opts, nil
 }
 
-// func loadTLSCredentials(ClientCACertFile string, ServerCertFile string, ServerKeyFile string) (credentials.TransportCredentials, error) {
-// 	// Load certificate of the CA who signed client's certificate
-// 	pemClientCA, err := ioutil.ReadFile(ClientCACertFile)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+type RSA struct {
+	bits int
+}
 
-// 	certPool := x509.NewCertPool()
-// 	if !certPool.AppendCertsFromPEM(pemClientCA) {
-// 		return nil, errors.Wrap(err, "failed to add client CA's certificate")
-// 	}
+func (r RSA) Generate() (crypto.PrivateKey, error) {
+	return rsa.GenerateKey(rand.Reader, r.bits)
+}
 
-// 	// Load server's certificate and private key
-// 	serverCert, err := tls.LoadX509KeyPair(ServerCertFile, ServerKeyFile)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+func vaultCert(f string, s *Server) (credentials.TransportCredentials, error) {
+	b, err := ioutil.ReadFile(f)
+	if err != nil {
+		return nil, fmt.Errorf("vaultCert: problem with input file")
+	}
+	cp := x509.NewCertPool()
+	if !cp.AppendCertsFromPEM(b) {
+		return nil, fmt.Errorf("vaultCert: failed to append certificates")
+	}
+	issuer := &vault.Issuer{
+		URL: &url.URL{
+			Scheme: "https",
+			Host:   "localhost:8200",
+		},
+		TLSConfig: &tls.Config{
+			RootCAs: cp,
+		},
+		Token: getenv("TOKEN", s),
+		Role:  "my-role",
+	}
+	cfg := certify.CertConfig{
+		SubjectAlternativeNames: []string{"localhost"},
+		IPSubjectAlternativeNames: []net.IP{
+			net.ParseIP("127.0.0.1"),
+			net.ParseIP("::1"),
+		},
+		KeyGenerator: RSA{bits: 2048},
+	}
+	c := &certify.Certify{
+		CommonName:  "localhost",
+		Issuer:      issuer,
+		Cache:       certify.NewMemCache(),
+		CertConfig:  &cfg,
+		RenewBefore: 24 * time.Hour,
+	}
+	tlsConfig := &tls.Config{
+		GetCertificate: c.GetCertificate,
+	}
+	return credentials.NewTLS(tlsConfig), nil
+}
 
-// 	// Create the credentials and return it
-// 	config := &tls.Config{
-// 		Certificates: []tls.Certificate{serverCert},
-// 		ClientAuth:   tls.RequireAndVerifyClientCert,
-// 		ClientCAs:    certPool,
-// 	}
-
-// 	return credentials.NewTLS(config), nil
-// }
+func getenv(name string, s *Server) string {
+	v := os.Getenv(name)
+	if v == "" {
+		s.log.Fatal().Msg("environment variable not set")
+		os.Exit(1)
+	}
+	return v
+}

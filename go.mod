@@ -24,6 +24,7 @@ require (
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-chi/chi/v5 v5.0.7
+	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/go-ldap/ldap/v3 v3.4.3
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
@@ -38,6 +39,7 @@ require (
 	github.com/hashicorp/go-plugin v1.4.3
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
+	github.com/johanbrandhorst/certify v1.9.0 // indirect
 	github.com/juliangruber/go-intersect v1.1.0
 	github.com/mattn/go-sqlite3 v1.14.10
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
