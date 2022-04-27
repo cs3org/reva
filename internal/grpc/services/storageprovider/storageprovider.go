@@ -695,8 +695,9 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	var providerID string
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		req.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
 	}
 
 	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "stat")
@@ -714,7 +715,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	md.Id.StorageId = resourceid.StorageIDWrap(md.Id.GetStorageId(), s.conf.MountID)
+	md.Id.StorageId = resourceid.StorageIDWrap(md.Id.GetStorageId(), providerID)
 	return &provider.StatResponse{
 		Status: status.NewOK(ctx),
 		Info:   md,
