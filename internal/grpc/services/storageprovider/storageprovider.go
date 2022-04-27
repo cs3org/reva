@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/attribute"
@@ -405,6 +406,9 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 }
 
 func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
+	// TODO refactor unwrapping & wrapping as middleware
+	req.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.ResourceId.StorageId)
+
 	// TODO(labkode): check that the storage ID is the same as the storage provider id.
 	fn, err := s.storage.GetPathByID(ctx, req.ResourceId)
 	if err != nil {

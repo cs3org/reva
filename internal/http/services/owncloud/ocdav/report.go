@@ -22,7 +22,6 @@ import (
 	"encoding/xml"
 	"io"
 	"net/http"
-	"path"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -109,8 +108,18 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 				continue
 			}
 
-			// TODO: implement GetPath on storage provider to fix this
-			statRes.Info.Path = path.Join("/users/"+currentUser.Id.OpaqueId, statRes.Info.Path)
+			gpRes, err := client.GetPath(ctx, &providerv1beta1.GetPathRequest{
+				ResourceId: statRes.Info.Id,
+			})
+			if err != nil {
+				log.Error().Err(err).Msg("error getting resource path")
+				continue
+			}
+			if gpRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+				log.Error().Interface("getpath_response", statRes).Msg("error getting resource path")
+				continue
+			}
+			statRes.Info.Path = gpRes.Path
 
 			infos = append(infos, statRes.Info)
 		}
