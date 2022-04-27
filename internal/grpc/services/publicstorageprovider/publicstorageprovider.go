@@ -740,15 +740,8 @@ func (s *service) augmentStatResponse(ctx context.Context, res *provider.StatRes
 		}
 
 		res.Info.Path = path.Join("/", sharePath)
-		s.setPublicStorageID(res.Info, tkn)
 		filterPermissions(res.Info.PermissionSet, share.GetPermissions().Permissions)
 	}
-}
-
-// setPublicStorageID encodes the actual spaceid and nodeid as an opaqueid in the publicstorageprovider space
-func (s *service) setPublicStorageID(info *provider.ResourceInfo, shareToken string) {
-	info.Id.StorageId = utils.PublicStorageProviderID
-	info.Id.OpaqueId = shareToken
 }
 
 func addShare(i *provider.ResourceInfo, ls *link.PublicShare) error {
