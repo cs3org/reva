@@ -53,7 +53,11 @@ type User struct {
 
 func (fs *cephfs) makeUser(ctx context.Context) *User {
 	u := ctx2.ContextMustGetUser(ctx)
-	home := filepath.Join(fs.conf.Root, templates.WithUser(u, fs.conf.UserLayout))
+	home := fs.conf.Root
+	if !fs.conf.DisableHome {
+		home = filepath.Join(fs.conf.Root, templates.WithUser(u, fs.conf.UserLayout))
+	}
+
 	return &User{u, fs, ctx, home}
 }
 

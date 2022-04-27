@@ -179,7 +179,7 @@ func (fs *cephfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 	user.op(func(cv *cacheVal) {
 		var f *cephfs2.File
 		defer closeFile(f)
-		f, err = cv.mount.Open(binPath, os.O_CREATE|os.O_WRONLY, filePermDefault)
+		f, err = cv.mount.Open(binPath, os.O_CREATE|os.O_WRONLY, fs.conf.FilePerms)
 		if err != nil {
 			return
 		}
@@ -332,7 +332,7 @@ func (upload *fileUpload) writeInfo() error {
 	user := upload.fs.makeUser(upload.ctx)
 	user.op(func(cv *cacheVal) {
 		var file io.WriteCloser
-		if file, err = cv.mount.Open(upload.infoPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, filePermDefault); err != nil {
+		if file, err = cv.mount.Open(upload.infoPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, upload.fs.conf.FilePerms); err != nil {
 			return
 		}
 		defer file.Close()

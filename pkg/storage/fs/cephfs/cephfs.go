@@ -77,7 +77,7 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 		return nil, errors.New("cephfs: can't create caches")
 	}
 
-	adminConn := newAdminConn(c.IndexPool)
+	adminConn := newAdminConn(c)
 	if adminConn == nil {
 		return nil, errors.Wrap(err, "cephfs: Couldn't create admin connections")
 	}
@@ -119,7 +119,7 @@ func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
 	}
 
 	err = walkPath(user.home, func(path string) error {
-		return fs.adminConn.adminMount.MakeDir(path, dirPermDefault)
+		return fs.adminConn.adminMount.MakeDir(path, fs.conf.DirPerms)
 	}, false)
 	if err != nil {
 		return getRevaError(err)
@@ -136,7 +136,7 @@ func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
 	}
 
 	user.op(func(cv *cacheVal) {
-		err = cv.mount.MakeDir(removeLeadingSlash(fs.conf.ShareFolder), dirPermDefault)
+		err = cv.mount.MakeDir(removeLeadingSlash(fs.conf.ShareFolder), fs.conf.DirPerms)
 		if err != nil && err.Error() == errFileExists {
 			err = nil
 		}
@@ -153,7 +153,7 @@ func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error 
 	}
 
 	user.op(func(cv *cacheVal) {
-		if err = cv.mount.MakeDir(path, dirPermDefault); err != nil {
+		if err = cv.mount.MakeDir(path, fs.conf.DirPerms); err != nil {
 			return
 		}
 
@@ -494,7 +494,7 @@ func (fs *cephfs) CreateReference(ctx context.Context, path string, targetURI *u
 		if !strings.HasPrefix(strings.TrimPrefix(path, user.home), fs.conf.ShareFolder) {
 			err = errors.New("cephfs: can't create reference outside a share folder")
 		} else {
-			err = cv.mount.MakeDir(path, dirPermDefault)
+			err = cv.mount.MakeDir(path, fs.conf.DirPerms)
 		}
 	})
 	if err != nil {
@@ -562,30 +562,66 @@ func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 	return getRevaError(err)
 }
 
+func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	user := fs.makeUser(ctx)
+	path, err := user.resolveRef(ref)
+	if err != nil {
+		return getRevaError(err)
+	}
+
+	user.op(func(cv *cacheVal) {
+		var file *cephfs2.File
+		defer closeFile(file)
+		if file, err = cv.mount.Open(path, os.O_CREATE | os.O_WRONLY, fs.conf.FilePerms); err != nil {
+			return
+		}
+
+		//TODO(tmourati): Add entry id logic
+	})
+
+	return getRevaError(err)
+}
+
 func (fs *cephfs) EmptyRecycle(ctx context.Context) error {
-	return errtypes.NotSupported("cephfs: empty recycle not supported")
+	return errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (r *provider.CreateStorageSpaceResponse, err error) {
-	return nil, errors.New("cephfs: createStorageSpace not supported")
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
-	panic("implement me")
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
-	return errors.New("cephfs: restoreRecycleItem not supported")
+	return errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
-	return errors.New("cephfs: purgeRecycleItem not supported")
+	return errtypes.NotSupported("unimplemented")
 }
 
-func (fs *cephfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, permissions map[string]struct{}) ([]*provider.StorageSpace, error) {
-	return nil, errors.New("cephfs: listStorageSpaces not supported")
+func (fs *cephfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	return nil, errors.New("cephfs: updateStorageSpace not supported")
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+func (fs *cephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+func (fs *cephfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
 }
