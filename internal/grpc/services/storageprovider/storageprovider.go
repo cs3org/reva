@@ -715,6 +715,9 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
+	if providerID == "" {
+		providerID = s.conf.MountID
+	}
 	md.Id.StorageId = resourceid.StorageIDWrap(md.Id.GetStorageId(), providerID)
 	return &provider.StatResponse{
 		Status: status.NewOK(ctx),
