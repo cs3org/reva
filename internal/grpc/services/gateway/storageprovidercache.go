@@ -184,8 +184,8 @@ func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *reg
 
 	storageID := sdk.DecodeOpaqueMap(in.Opaque)["storage_id"]
 
-	key := user.GetId().GetOpaqueId() + storageID
-	if key != "" {
+	key := user.GetId().GetOpaqueId() + "!" + storageID
+	if key != "!" {
 		s := &registry.ListStorageProvidersResponse{}
 		if err := pullFromCache(cache, key, s); err == nil {
 			return s, nil
@@ -199,6 +199,8 @@ func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *reg
 	case resp.Status.Code != rpc.Code_CODE_OK:
 		return resp, nil
 	case storageID == "":
+		return resp, nil
+	case storageID == utils.ShareStorageProviderID:
 		return resp, nil
 	default:
 		return resp, pushToCache(cache, key, resp)
