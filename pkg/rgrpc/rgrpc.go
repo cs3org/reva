@@ -50,6 +50,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -116,6 +117,16 @@ type config struct {
 	ServerCertFile   string                            `mapstructure:"grpc_server_certfile"`
 	ServerKeyFile    string                            `mapstructure:"grpc_server_keyfile"`
 	ClientCACertFile string                            `mapstructure:"grpc_clientca_certfile"`
+	CertifyCA        bool                              `mapstructure:"certifyca"`
+	SelfSignedCert   bool                              `mapstructure:"self_signed_cert"`
+	VaultScheme      string                            `mapstructure:"vault_scheme"`
+	VaultHost        string                            `mapstructure:"vault_host"`
+	VaultToken       string                            `mapstructure:"vault_token"`
+	VaultRole        string                            `mapstructure:"vault_role"`
+}
+
+type RSA struct {
+	bits int
 }
 
 func (c *config) init() {
@@ -135,6 +146,15 @@ func (c *config) init() {
 	}
 	if c.ClientCACertFile == "" {
 		c.ClientCACertFile = "/home/amal/Documents/gh/reva/cert/ca-cert.pem"
+	}
+	if c.VaultHost == "" {
+		c.VaultHost = "localhost:8200"
+	}
+	if c.VaultRole == "" {
+		c.VaultRole = "my-role"
+	}
+	if c.VaultScheme == "" {
+		c.VaultScheme = "https"
 	}
 }
 
@@ -223,11 +243,11 @@ func (s *Server) registerServices() error {
 		return err
 	}
 
-	creds, err := getCertificates(s)
+	creds, err := getCredentials(s)
 	if err != nil {
 		return err
 	}
-	opts = append(opts, creds)
+	opts = append(opts, grpc.Creds(creds))
 
 	grpcServer := grpc.NewServer(opts...)
 
@@ -243,37 +263,6 @@ func (s *Server) registerServices() error {
 	s.s = grpcServer
 
 	return nil
-}
-
-func getCertificates(s *Server) (grpc.ServerOption, error) {
-	switch {
-	case *self && *cefy:
-		s.log.Error().Msg("can't choose self-signed and Certify at the same time")
-		os.Exit(1)
-	// Self-signed cetificates
-	case *self:
-		creds, err := credentials.NewServerTLSFromFile(s.conf.ServerCertFile, s.conf.ServerKeyFile)
-		if err != nil {
-			s.log.Error().Msg("failed to setup TLS with local files")
-			os.Exit(1)
-		}
-		return grpc.Creds(creds), nil
-	// Certificates signed by Vault via Certify
-	case *cefy:
-		creds, err := vaultCert("ca-org.cert", s)
-		if err != nil {
-			s.log.Error().Msg("failed to setup TLS with Certify")
-			os.Exit(1)
-		}
-		return grpc.Creds(creds), nil
-	// Insecure
-	default:
-	}
-	// if !sharedconf.Insecure() {
-	// 	if err != nil {
-	// 	}
-	// 	opts = append(opts, grpc.Creds(creds))
-	// }
 }
 
 // TODO(labkode): make closing with deadline.
@@ -410,8 +399,34 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	return opts, nil
 }
 
-type RSA struct {
-	bits int
+func getCredentials(s *Server) (credentials.TransportCredentials, error) {
+	switch {
+	// Certificates signed by Vault via Certify
+	case s.conf.SelfSignedCert && s.conf.CertifyCA:
+		s.log.Error().Msg("can't choose self-signed and Certify at the same time")
+		os.Exit(1)
+	// Self-signed cetificates
+	case s.conf.SelfSignedCert:
+		creds, err := credentials.NewServerTLSFromFile(s.conf.ServerCertFile, s.conf.ServerKeyFile)
+		if err != nil {
+			s.log.Error().Msg("failed to setup TLS with local files")
+			os.Exit(1)
+		}
+		return creds, nil
+	case s.conf.CertifyCA:
+		creds, err := vaultCert("/home/amal/Documents/gh/reva/ca-vault.cert", s)
+		if err != nil {
+			s.log.Error().Msg("failed to setup TLS with Certify")
+			os.Exit(1)
+		}
+		return creds, nil
+	// Insecure
+	default:
+		creds := insecure.NewCredentials()
+		s.log.Info().Msg("Setting up insecure connection.")
+		return creds, nil
+	}
+	return nil, errors.New("could not setup tls")
 }
 
 func (r RSA) Generate() (crypto.PrivateKey, error) {
@@ -429,14 +444,14 @@ func vaultCert(f string, s *Server) (credentials.TransportCredentials, error) {
 	}
 	issuer := &vault.Issuer{
 		URL: &url.URL{
-			Scheme: "https",
-			Host:   "localhost:8200",
+			Scheme: s.conf.VaultScheme,
+			Host:   s.conf.VaultHost,
 		},
 		TLSConfig: &tls.Config{
 			RootCAs: cp,
 		},
-		Token: getenv("TOKEN", s),
-		Role:  "my-role",
+		Token: s.conf.VaultToken,
+		Role:  s.conf.VaultRole,
 	}
 	cfg := certify.CertConfig{
 		SubjectAlternativeNames: []string{"localhost"},
@@ -457,13 +472,4 @@ func vaultCert(f string, s *Server) (credentials.TransportCredentials, error) {
 		GetCertificate: c.GetCertificate,
 	}
 	return credentials.NewTLS(tlsConfig), nil
-}
-
-func getenv(name string, s *Server) string {
-	v := os.Getenv(name)
-	if v == "" {
-		s.log.Fatal().Msg("environment variable not set")
-		os.Exit(1)
-	}
-	return v
 }
