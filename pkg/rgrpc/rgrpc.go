@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/grpc/interceptors/auth"
 	"github.com/cs3org/reva/v2/internal/grpc/interceptors/log"
 	"github.com/cs3org/reva/v2/internal/grpc/interceptors/recovery"
+	"github.com/cs3org/reva/v2/internal/grpc/interceptors/storageproviderid"
 	"github.com/cs3org/reva/v2/internal/grpc/interceptors/token"
 	"github.com/cs3org/reva/v2/internal/grpc/interceptors/useragent"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
@@ -289,6 +290,7 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	)
 
 	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
+		storageproviderid.NewUnary(),
 		appctx.NewUnary(s.log),
 		token.NewUnary(),
 		useragent.NewUnary(),
