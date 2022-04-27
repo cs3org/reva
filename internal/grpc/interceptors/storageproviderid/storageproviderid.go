@@ -42,16 +42,104 @@ func NewUnary() grpc.UnaryServerInterceptor {
 		switch v := req.(type) {
 		case *provider.GetPathRequest:
 			v.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.ResourceId.StorageId)
+		case *provider.SetArbitraryMetadataRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.UnsetArbitraryMetadataRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.SetLockRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.GetLockRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.RefreshLockRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.UnlockRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.InitiateFileDownloadRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.InitiateFileUploadRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.ListStorageSpacesRequest:
+			for i, f := range v.Filters {
+				if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
+					id, pid := resourceid.StorageIDUnwrap(f.GetId().GetOpaqueId())
+					v.Filters[i].Term = &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: id}}
+					providerID = pid
+					break
+				}
+			}
+		case *provider.UpdateStorageSpaceRequest:
+			v.StorageSpace.Id.OpaqueId, providerID = resourceid.StorageIDUnwrap(v.StorageSpace.Id.OpaqueId)
+		case *provider.DeleteStorageSpaceRequest:
+			v.Id.OpaqueId, providerID = resourceid.StorageIDUnwrap(v.Id.OpaqueId)
+		case *provider.CreateContainerRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.TouchFileRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.DeleteRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.MoveRequest:
+			v.Source.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Source.ResourceId.StorageId)
+			v.Destination.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Destination.ResourceId.StorageId)
+		case *provider.StatRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.ListContainerRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.ListFileVersionsRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.RestoreFileVersionRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.ListRecycleRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.RestoreRecycleItemRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.PurgeRecycleRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.ListGrantsRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.DenyGrantRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.AddGrantRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.UpdateGrantRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.RemoveGrantRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.CreateReferenceRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.CreateSymlinkRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		case *provider.GetQuotaRequest:
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+
 		}
 
 		res, err := handler(ctx, req)
 		if err != nil {
 			return res, err
 		}
+
+		// we can stop if we weren't successful
+		if s, ok := res.(su); ok && !isSuccess(s) {
+			return res, nil
+		}
+
 		switch v := res.(type) {
-		case *provider.GetPathRequest:
-			// nothing to change
-			_, _ = v, providerID
+		case *provider.ListStorageSpacesResponse:
+			for _, s := range v.StorageSpaces {
+				s.Id.OpaqueId = resourceid.StorageIDWrap(s.Id.GetOpaqueId(), providerID)
+			}
+		case *provider.UpdateStorageSpaceResponse:
+			v.StorageSpace.Id.OpaqueId = resourceid.StorageIDWrap(v.StorageSpace.Id.GetOpaqueId(), providerID)
+		case *provider.StatResponse:
+			v.Info.Id.StorageId = resourceid.StorageIDWrap(v.Info.Id.GetStorageId(), providerID)
+		case *provider.ListContainerResponse:
+			for _, i := range v.Infos {
+				i.Id.StorageId = resourceid.StorageIDWrap(i.Id.GetStorageId(), providerID)
+			}
+		case *provider.ListRecycleResponse:
+			for _, i := range v.RecycleItems {
+				i.Ref.ResourceId.StorageId = resourceid.StorageIDWrap(i.Ref.GetResourceId().GetStorageId(), providerID)
+			}
 		}
 
 		return res, nil
@@ -63,6 +151,9 @@ func NewUnary() grpc.UnaryServerInterceptor {
 func NewStream() grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		// TODO: Use ss.RecvMsg() and ss.SendMsg() to send events from a stream
+		// Handle:
+		//	*provider.ListContainerStreamRequest
+		//	*provider.ListRecycleStreamRequest
 		return handler(srv, ss)
 	}
 	return interceptor
