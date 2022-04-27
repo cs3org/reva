@@ -58,6 +58,15 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		}
 
 		did := resourceid.OwnCloudResourceIDUnwrap(id)
+		if did == nil {
+			logger := appctx.GetLogger(r.Context())
+			logger.Debug().Str("prop", net.PropOcMetaPathForUser).Msg("invalid resource id")
+			w.WriteHeader(http.StatusBadRequest)
+			m := fmt.Sprintf("Invalid resource id %v", id)
+			b, err := errors.Marshal(http.StatusBadRequest, m, "")
+			errors.HandleWebdavError(logger, w, b, err)
+			return
+		}
 
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
