@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/attribute"
@@ -102,6 +103,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
+
 	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -120,6 +125,10 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 
 // SetLock puts a lock on the given reference
 func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
+
 	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -134,6 +143,10 @@ func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*p
 
 // GetLock returns an existing lock on the given reference
 func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
+
 	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -148,6 +161,10 @@ func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*p
 
 // RefreshLock refreshes an existing lock on the given reference
 func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
+
 	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -162,6 +179,10 @@ func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequ
 
 // Unlock removes an existing lock from the given reference
 func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
+
 	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -175,6 +196,10 @@ func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
+
 	statReq := &provider.StatRequest{Ref: req.Ref}
 	statRes, err := s.Stat(ctx, statReq)
 	if err != nil {
@@ -297,6 +322,10 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
+
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -380,6 +409,14 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 // so id based requests can find the correct storage provider. These spaces
 // have their root set to the shared resource.
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+	for i, f := range req.Filters {
+		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
+			id, _ := resourceid.StorageIDUnwrap(f.GetId().GetOpaqueId())
+			req.Filters[i].Term = &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: id}}
+			break
+		}
+	}
+
 	spaceTypes := map[string]struct{}{}
 	var exists = struct{}{}
 	appendTypes := []string{}
@@ -511,6 +548,10 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
+
 	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "CreateContainer")
 	defer span.End()
 
@@ -551,6 +592,10 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 }
 
 func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
+
 	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -564,6 +609,10 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
+
 	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Delete")
 	defer span.End()
 
@@ -604,6 +653,13 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
+	if req.Source.GetResourceId() != nil {
+		req.Source.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Source.ResourceId.StorageId)
+	}
+	if req.Destination.GetResourceId() != nil {
+		req.Destination.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Destination.ResourceId.StorageId)
+	}
+
 	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Move")
 	defer span.End()
 
@@ -667,6 +723,10 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
+
 	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Stat")
 	defer span.End()
 
@@ -771,6 +831,9 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	if req.Ref.GetResourceId() != nil {
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+	}
 
 	share, ok := extractLinkFromScope(ctx)
 	if !ok {
