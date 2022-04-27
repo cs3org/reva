@@ -50,6 +50,8 @@ const (
 	PropQuotaUnknown = "-2"
 	// PropOcFavorite is the favorite ns property
 	PropOcFavorite = "http://owncloud.org/ns/favorite"
+	// PropOcMetaPathForUser is the meta-path-for-user ns property
+	PropOcMetaPathForUser = "http://owncloud.org/ns/meta-path-for-user"
 
 	// DepthZero represents the webdav zero depth value
 	DepthZero Depth = "0"
