@@ -135,6 +135,8 @@ func extractClaim(u *User, claim string) (string, error) {
 		return u.Mail, nil
 	case "username":
 		return u.Username, nil
+	case "userid":
+		return u.ID.OpaqueId, nil
 	case "uid":
 		if u.UIDNumber != 0 {
 			return strconv.FormatInt(u.UIDNumber, 10), nil
