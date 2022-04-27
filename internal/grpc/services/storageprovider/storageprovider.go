@@ -509,12 +509,10 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 }
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	var providerID string
 	for i, f := range req.Filters {
 		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
-			id, p := resourceid.StorageIDUnwrap(f.GetId().GetOpaqueId())
+			id, _ := resourceid.StorageIDUnwrap(f.GetId().GetOpaqueId())
 			req.Filters[i].Term = &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: id}}
-			providerID = p
 			break
 		}
 	}
@@ -549,8 +547,8 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			log.Error().Str("service", "storageprovider").Str("driver", s.conf.Driver).Interface("space", sp).Msg("space is missing space id and root id")
 			continue
 		}
-		sp.Id.OpaqueId = resourceid.StorageIDWrap(sp.Id.GetOpaqueId(), providerID)
-		sp.Root.StorageId = resourceid.StorageIDWrap(sp.Id.GetOpaqueId(), providerID)
+		sp.Id.OpaqueId = resourceid.StorageIDWrap(sp.Id.GetOpaqueId(), s.conf.MountID)
+		sp.Root.StorageId = resourceid.StorageIDWrap(sp.Root.GetStorageId(), s.conf.MountID)
 	}
 
 	return &provider.ListStorageSpacesResponse{
@@ -560,9 +558,8 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	var providerID string
 	if req.GetStorageSpace().GetId() != nil {
-		req.StorageSpace.Id.OpaqueId, providerID = resourceid.StorageIDUnwrap(req.StorageSpace.Id.OpaqueId)
+		req.StorageSpace.Id.OpaqueId, _ = resourceid.StorageIDUnwrap(req.StorageSpace.Id.OpaqueId)
 		req.StorageSpace.Root.StorageId, _ = resourceid.StorageIDUnwrap(req.StorageSpace.Root.StorageId)
 	}
 
@@ -575,7 +572,7 @@ func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 			Msg("failed to update storage space")
 		return nil, err
 	}
-	res.StorageSpace.Id.OpaqueId = resourceid.StorageIDWrap(res.StorageSpace.Id.GetOpaqueId(), providerID)
+	res.StorageSpace.Id.OpaqueId = resourceid.StorageIDWrap(res.StorageSpace.Id.GetOpaqueId(), s.conf.MountID)
 	return res, nil
 }
 
@@ -698,9 +695,8 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	var providerID string
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
 	}
 
 	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "stat")
@@ -718,7 +714,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	md.Id.StorageId = resourceid.StorageIDWrap(md.Id.GetStorageId(), providerID)
+	md.Id.StorageId = resourceid.StorageIDWrap(md.Id.GetStorageId(), s.conf.MountID)
 	return &provider.StatResponse{
 		Status: status.NewOK(ctx),
 		Info:   md,
@@ -774,9 +770,8 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	var providerID string
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
 	}
 
 	mds, err := s.storage.ListFolder(ctx, req.Ref, req.ArbitraryMetadataKeys)
@@ -789,7 +784,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	}
 
 	for _, i := range res.Infos {
-		i.Id.StorageId = resourceid.StorageIDWrap(i.Id.GetStorageId(), providerID)
+		i.Id.StorageId = resourceid.StorageIDWrap(i.Id.GetStorageId(), s.conf.MountID)
 	}
 	return res, nil
 }
@@ -874,9 +869,8 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 }
 
 func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	var providerID string
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
 	}
 
 	key, itemPath := router.ShiftPath(req.Key)
@@ -904,7 +898,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 	}
 
 	for _, i := range items {
-		i.Ref.ResourceId.StorageId = resourceid.StorageIDWrap(i.Ref.GetResourceId().GetStorageId(), providerID)
+		i.Ref.ResourceId.StorageId = resourceid.StorageIDWrap(i.Ref.GetResourceId().GetStorageId(), s.conf.MountID)
 	}
 	res := &provider.ListRecycleResponse{
 		Status:       status.NewOK(ctx),
