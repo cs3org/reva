@@ -29,89 +29,11 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 )
 
-const (
-	defaultPriority = 200
-)
-
 // NewUnary returns a new unary interceptor that trims storageprovider ids from incoming requests and prefixes it in responses
 //nolint:gocritic
 func NewUnary() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-
-		var providerID string
-		switch v := req.(type) {
-		case *provider.GetPathRequest:
-			v.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.ResourceId.StorageId)
-		case *provider.SetArbitraryMetadataRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.UnsetArbitraryMetadataRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.SetLockRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.GetLockRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.RefreshLockRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.UnlockRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.InitiateFileDownloadRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.InitiateFileUploadRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.ListStorageSpacesRequest:
-			for i, f := range v.Filters {
-				if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
-					id, pid := resourceid.StorageIDUnwrap(f.GetId().GetOpaqueId())
-					v.Filters[i].Term = &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: id}}
-					providerID = pid
-					break
-				}
-			}
-		case *provider.UpdateStorageSpaceRequest:
-			v.StorageSpace.Id.OpaqueId, providerID = resourceid.StorageIDUnwrap(v.StorageSpace.Id.OpaqueId)
-		case *provider.DeleteStorageSpaceRequest:
-			v.Id.OpaqueId, providerID = resourceid.StorageIDUnwrap(v.Id.OpaqueId)
-		case *provider.CreateContainerRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.TouchFileRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.DeleteRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.MoveRequest:
-			v.Source.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Source.ResourceId.StorageId)
-			v.Destination.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Destination.ResourceId.StorageId)
-		case *provider.StatRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.ListContainerRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.ListFileVersionsRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.RestoreFileVersionRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.ListRecycleRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.RestoreRecycleItemRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.PurgeRecycleRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.ListGrantsRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.DenyGrantRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.AddGrantRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.UpdateGrantRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.RemoveGrantRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.CreateReferenceRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.CreateSymlinkRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-		case *provider.GetQuotaRequest:
-			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
-
-		}
+		req, providerID := adjustRequestStorageID(req)
 
 		res, err := handler(ctx, req)
 		if err != nil {
@@ -123,26 +45,7 @@ func NewUnary() grpc.UnaryServerInterceptor {
 			return res, nil
 		}
 
-		switch v := res.(type) {
-		case *provider.ListStorageSpacesResponse:
-			for _, s := range v.StorageSpaces {
-				s.Id.OpaqueId = resourceid.StorageIDWrap(s.Id.GetOpaqueId(), providerID)
-			}
-		case *provider.UpdateStorageSpaceResponse:
-			v.StorageSpace.Id.OpaqueId = resourceid.StorageIDWrap(v.StorageSpace.Id.GetOpaqueId(), providerID)
-		case *provider.StatResponse:
-			v.Info.Id.StorageId = resourceid.StorageIDWrap(v.Info.Id.GetStorageId(), providerID)
-		case *provider.ListContainerResponse:
-			for _, i := range v.Infos {
-				i.Id.StorageId = resourceid.StorageIDWrap(i.Id.GetStorageId(), providerID)
-			}
-		case *provider.ListRecycleResponse:
-			for _, i := range v.RecycleItems {
-				i.Ref.ResourceId.StorageId = resourceid.StorageIDWrap(i.Ref.GetResourceId().GetStorageId(), providerID)
-			}
-		}
-
-		return res, nil
+		return adjustResponseStorageID(res, providerID), nil
 	}
 }
 
@@ -166,4 +69,168 @@ type su interface {
 
 func isSuccess(res su) bool {
 	return res.GetStatus().Code == rpc.Code_CODE_OK
+}
+
+func adjustResponseStorageID(res interface{}, providerID string) interface{} {
+	switch v := res.(type) {
+	case *provider.ListStorageSpacesResponse:
+		for _, s := range v.StorageSpaces {
+			s.Id.OpaqueId = resourceid.StorageIDWrap(s.Id.GetOpaqueId(), providerID)
+		}
+	case *provider.UpdateStorageSpaceResponse:
+		v.StorageSpace.Id.OpaqueId = resourceid.StorageIDWrap(v.StorageSpace.Id.GetOpaqueId(), providerID)
+	case *provider.StatResponse:
+		v.Info.Id.StorageId = resourceid.StorageIDWrap(v.Info.Id.GetStorageId(), providerID)
+	case *provider.ListContainerResponse:
+		for _, i := range v.Infos {
+			i.Id.StorageId = resourceid.StorageIDWrap(i.Id.GetStorageId(), providerID)
+		}
+	case *provider.ListRecycleResponse:
+		for _, i := range v.RecycleItems {
+			i.Ref.ResourceId.StorageId = resourceid.StorageIDWrap(i.Ref.GetResourceId().GetStorageId(), providerID)
+		}
+	}
+
+	return res
+}
+
+func adjustRequestStorageID(req interface{}) (interface{}, string) {
+	var providerID string
+	switch v := req.(type) {
+	case *provider.GetPathRequest:
+		if v.GetResourceId() != nil {
+			v.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.ResourceId.StorageId)
+		}
+	case *provider.SetArbitraryMetadataRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.UnsetArbitraryMetadataRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.SetLockRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.GetLockRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.RefreshLockRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.UnlockRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.InitiateFileDownloadRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.InitiateFileUploadRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.ListStorageSpacesRequest:
+		for i, f := range v.Filters {
+			if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
+				id, pid := resourceid.StorageIDUnwrap(f.GetId().GetOpaqueId())
+				v.Filters[i].Term = &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: id}}
+				providerID = pid
+				break
+			}
+		}
+	case *provider.UpdateStorageSpaceRequest:
+		if v.GetStorageSpace().GetId() != nil {
+			v.StorageSpace.Id.OpaqueId, providerID = resourceid.StorageIDUnwrap(v.StorageSpace.Id.OpaqueId)
+		}
+	case *provider.DeleteStorageSpaceRequest:
+		if v.GetId() != nil {
+			v.Id.OpaqueId, providerID = resourceid.StorageIDUnwrap(v.Id.OpaqueId)
+		}
+	case *provider.CreateContainerRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.TouchFileRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.DeleteRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.MoveRequest:
+		if v.Source.GetResourceId() != nil {
+			v.Source.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Source.ResourceId.StorageId)
+		}
+		if v.Destination.GetResourceId() != nil {
+			v.Destination.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Destination.ResourceId.StorageId)
+		}
+	case *provider.StatRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.ListContainerRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.ListFileVersionsRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.RestoreFileVersionRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.ListRecycleRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.RestoreRecycleItemRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.PurgeRecycleRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.ListGrantsRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.DenyGrantRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.AddGrantRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.UpdateGrantRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.RemoveGrantRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.CreateReferenceRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.CreateSymlinkRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+	case *provider.GetQuotaRequest:
+		if v.Ref.GetResourceId() != nil {
+			v.Ref.ResourceId.StorageId, providerID = resourceid.StorageIDUnwrap(v.Ref.ResourceId.StorageId)
+		}
+
+	}
+
+	return req, providerID
 }
