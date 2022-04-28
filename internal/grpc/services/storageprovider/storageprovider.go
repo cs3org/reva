@@ -918,6 +918,9 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 	if req.Ref.GetResourceId() != nil {
 		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
 	}
+	if req.RestoreRef.GetResourceId() != nil {
+		req.RestoreRef.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.RestoreRef.ResourceId.StorageId)
+	}
 
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
