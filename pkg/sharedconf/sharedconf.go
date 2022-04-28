@@ -107,20 +107,22 @@ func Insecure() bool {
 	return sharedConf.Insecure
 }
 
-// Sets Insecure which determines whether to disable transport security for new GRPC connections.
+// SetInsecure which determines whether to disable transport security for new GRPC connections.
 func SetInsecure(insecure bool) {
 	sharedConf.Insecure = insecure
 }
 
-// Sets SkipVerify return whether a client verifies the server's certificate chain and host name.
+// SetSkipVerify return whether a client verifies the server's certificate chain and host name.
 func SetSkipVerify(skipVerify bool) {
 	sharedConf.SkipVerify = skipVerify
 }
 
+// SetCAFilePath sets the file path for the CA file
 func SetCAFilePath(CAFile string) {
 	sharedConf.CAFile = CAFile
 }
 
+// GetCAFilePath sets the file path for the CA file
 func GetCAFilePath() string {
 	if sharedConf.CAFile == "" {
 		projectRoot, _ := utils.RootPath()

@@ -108,6 +108,7 @@ type streamInterceptorTriple struct {
 	Interceptor grpc.StreamServerInterceptor
 }
 
+// RSA is a private key based on RSA algorithm
 type RSA struct {
 	bits int
 }
@@ -422,10 +423,10 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 
 func certFilesExist(conf *config) (bool, error) {
 	if _, err := os.Stat(conf.CertFile); errors.Is(err, os.ErrNotExist) {
-		return false, errors.New("certificate file doesn't exist at specified path.")
+		return false, errors.New("certificate file doesn't exist at specified path")
 	}
 	if _, err := os.Stat(conf.KeyFile); errors.Is(err, os.ErrNotExist) {
-		return false, errors.New("key file doesn't exist at specified path.")
+		return false, errors.New("key file doesn't exist at specified path")
 	}
 	return true, nil
 }
@@ -435,12 +436,12 @@ func getCredentials(s *Server) (credentials.TransportCredentials, error) {
 
 	switch {
 	case selfSignedCert && s.conf.CertifyCA:
-		return nil, errors.New("can't choose self-signed files and Certify at the same time.")
+		return nil, errors.New("can't choose self-signed files and Certify at the same time")
 	// Certificates signed by Vault via Certify
 	case s.conf.CertifyCA:
 		creds, err := getVaultCredentials(s.conf)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("failed to setup TLS with Certify: %s", err))
+			return nil, fmt.Errorf("failed to setup TLS with Certify: %s", err)
 		}
 		return creds, nil
 	// Self-signed cetificates
@@ -451,18 +452,19 @@ func getCredentials(s *Server) (credentials.TransportCredentials, error) {
 		}
 		creds, err := credentials.NewServerTLSFromFile(s.conf.CertFile, s.conf.KeyFile)
 		if err != nil {
-			return nil, errors.New("failed to setup TLS with local files.")
+			return nil, errors.New("failed to setup TLS with local files")
 		}
 		return creds, nil
 	// Insecure
 	case s.conf.Insecure:
 		creds := insecure.NewCredentials()
-		s.log.Info().Msg("setting up insecure connection.")
+		s.log.Info().Msg("setting up insecure connection")
 		return creds, nil
 	}
-	return nil, errors.New("wrong grpc security configurations.")
+	return nil, errors.New("wrong grpc security configurations")
 }
 
+// Generate generates an RSA keypair of the given bit size using the random source random (for example, crypto/rand.Reader).
 func (r RSA) Generate() (crypto.PrivateKey, error) {
 	return rsa.GenerateKey(rand.Reader, r.bits)
 }
@@ -470,11 +472,11 @@ func (r RSA) Generate() (crypto.PrivateKey, error) {
 func getVaultCredentials(conf *config) (credentials.TransportCredentials, error) {
 	b, err := ioutil.ReadFile(conf.VaultCertFile)
 	if err != nil {
-		return nil, errors.New("problem with vault certificate file.")
+		return nil, errors.New("problem with vault certificate file")
 	}
 	cp := x509.NewCertPool()
 	if !cp.AppendCertsFromPEM(b) {
-		return nil, errors.New("failed to append vault certificates.")
+		return nil, errors.New("failed to append vault certificates")
 	}
 	issuer := &vault.Issuer{
 		URL: &url.URL{
