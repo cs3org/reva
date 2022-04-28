@@ -15,6 +15,7 @@ LITMUS_URL_NEW="http://localhost:20080/remote.php/dav/files/4c510ada-c86b-4815-8
 LITMUS_USERNAME="einstein"
 LITMUS_PASSWORD="relativity"
 TESTS="basic http copymove props"
+CERT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))cert
 
 default: build test lint gen-doc check-changelog
 release: deps build test lint gen-doc
@@ -32,15 +33,13 @@ imports: off
 
 # Create certificates to encrypt the gRPC connection
 cert: 
-	openssl genrsa -out ca.key 4096
-	openssl req -new -x509 -key ca.key -sha256 -subj "/C=US/ST=NJ/O=CA, Inc." -days 365 -out ca.cert
-	openssl genrsa -out vault.key 4096
-	openssl req -new -key vault.key -out vault.csr -config certificate.conf
-	openssl x509 -req -in vault.csr -CA ca.cert -CAkey ca.key -CAcreateserial \
-		-out vault.pem -days 365 -sha256 -extfile certificate.conf -extensions req_ext
-	mkdir --parents /home/amal/vault/ 
-	mv vault.pem /home/amal/vault/
-	mv vault.key /home/amal/vault/
+	mkdir -p ${CERT_DIR}
+	openssl genrsa -out cert/ca.key 4096
+	openssl req -new -x509 -key cert/ca.key -sha256 -subj "/C=CH/ST=GE/O=CERN" -days 365 -out cert/ca.cert
+	openssl genrsa -out cert/vault.key 4096
+	openssl req -new -key cert/vault.key -out cert/vault.csr -config certificate.conf
+	openssl x509 -req -in cert/vault.csr -CA cert/ca.cert -CAkey cert/ca.key -CAcreateserial \
+		-out cert/vault.pem -days 365 -sha256 -extfile certificate.conf -extensions req_ext
 
 build: build-revad build-reva test-go-version
 

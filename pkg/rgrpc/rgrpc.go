@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/internal/grpc/interceptors/recovery"
 	"github.com/cs3org/reva/internal/grpc/interceptors/token"
 	"github.com/cs3org/reva/internal/grpc/interceptors/useragent"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/utils"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -125,11 +126,10 @@ type config struct {
 }
 
 type certConfig struct {
-	CertFile       string `mapstructure:"certfile"`
-	KeyFile        string `mapstructure:"keyfile"`
-	CACertFile     string `mapstructure:"ca_certfile"`
-	CertifyCA      bool   `mapstructure:"certifyca"`
-	SelfSignedCert bool   `mapstructure:"self_signed_cert"`
+	CertFile  string `mapstructure:"certfile"`
+	KeyFile   string `mapstructure:"keyfile"`
+	CAFile    string `mapstructure:"ca_certfile"`
+	CertifyCA bool   `mapstructure:"certifyca"`
 }
 
 type vaultConfig struct {
@@ -140,23 +140,22 @@ type vaultConfig struct {
 	VaultCertFile string `mapstructure:"vault_certfile"`
 }
 
-func (c *config) init() {
+func (c *config) init(projectRoot string) {
+
 	if c.Network == "" {
 		c.Network = "tcp"
 	}
-
 	if c.Address == "" {
 		c.Address = sharedconf.GetGatewaySVC("0.0.0.0:19000")
 	}
-
 	if c.CertFile == "" {
-		c.CertFile = "/home/amal/vault/vault.pem"
+		c.CertFile = projectRoot + "/cert/vault.pem"
 	}
 	if c.KeyFile == "" {
-		c.KeyFile = "/home/amal/vault/vault.key"
+		c.KeyFile = projectRoot + "/cert/vault.key"
 	}
-	if c.CACertFile == "" {
-		c.CACertFile = "/home/amal/Documents/gh/reva/cert/ca-cert.pem"
+	if c.CAFile == "" {
+		c.CAFile = projectRoot + "/cert/ca.cert"
 	}
 	if c.VaultHost == "" {
 		c.VaultHost = "localhost:8200"
@@ -168,10 +167,11 @@ func (c *config) init() {
 		c.VaultScheme = "https"
 	}
 	if c.VaultCertFile == "" {
-		c.VaultCertFile = "/home/amal/Documents/gh/reva/ca-vault.cert"
+		c.VaultCertFile = projectRoot + "/cert/ca-vault.cert"
 	}
 	sharedconf.SetInsecure(c.Insecure)
 	sharedconf.SetSkipVerify(c.SkipVerify)
+	sharedconf.SetCAFilePath(c.CAFile)
 }
 
 // Server is a gRPC server.
@@ -190,7 +190,12 @@ func NewServer(m interface{}, log zerolog.Logger) (*Server, error) {
 		return nil, err
 	}
 
-	conf.init()
+	projectRoot, err := utils.RootPath()
+	if err != nil {
+		return nil, err
+	}
+
+	conf.init(projectRoot)
 
 	server := &Server{conf: conf, log: log, services: map[string]Service{}}
 

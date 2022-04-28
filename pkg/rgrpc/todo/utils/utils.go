@@ -33,3 +33,12 @@ func UnixNanoToTS(epoch uint64) *types.Timestamp {
 	}
 	return ts
 }
+
+func RootPath() (string, error) {
+	// path, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	// if err != nil {
+	// 	return "", err
+	// }
+	// return strings.TrimSpace(string(path)), nil
+	return "/home/amal/Documents/gh/reva", nil
+}

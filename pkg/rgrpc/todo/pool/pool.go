@@ -20,6 +20,9 @@ package pool
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"io/ioutil"
 	"sync"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -83,6 +86,7 @@ var (
 	userProviders          = newProvider()
 	groupProviders         = newProvider()
 	dataTxs                = newProvider()
+	maxCallRecvMsgSize     = 10240000
 )
 
 // NewConn creates a new connection to a grpc server
@@ -139,11 +143,15 @@ func getCredentials(options Options) (credentials.TransportCredentials, error) {
 	if sharedconf.Insecure() {
 		creds = insecure.NewCredentials()
 	} else {
-		// b, _ := ioutil.ReadFile("/home/amal/Documents/gh/reva/ca.cert")
-		// cp := x509.NewCertPool()
-		// if !cp.AppendCertsFromPEM(b) {
-		// 	return nil, errors.New("credentials: failed to append certificates")
-		// }
+		caCertFile, err := ioutil.ReadFile(sharedconf.GetCAFilePath())
+		if err != nil {
+			return nil, err
+		}
+
+		cp := x509.NewCertPool()
+		if !cp.AppendCertsFromPEM(caCertFile) {
+			return nil, errors.New("credentials: failed to append certificates")
+		}
 		tlsconf := &tls.Config{
 			InsecureSkipVerify: false,
 			// RootCAs:            cp,

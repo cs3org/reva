@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cs3org/reva/pkg/rgrpc/todo/utils"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -34,7 +35,7 @@ type conf struct {
 	SkipUserGroupsInToken bool   `mapstructure:"skip_user_groups_in_token"`
 	Insecure              bool   `mapstructure:"insecure"`
 	SkipVerify            bool   `mapstructure:"skip_verify"`
-	MaxCallRecvMsgSize    int    `mapstructure:"max_call_recv_msg_size"`
+	CAFile                string `mapstructure:"ca_file"`
 }
 
 // Decode decodes the configuration.
@@ -62,10 +63,6 @@ func Decode(v interface{}) error {
 	// it on init time.
 	if sharedConf.JWTSecret == "" {
 		sharedConf.JWTSecret = "changemeplease"
-	}
-
-	if sharedConf.MaxCallRecvMsgSize == 0 {
-		sharedConf.MaxCallRecvMsgSize = 10240000
 	}
 
 	return nil
@@ -120,10 +117,14 @@ func SetSkipVerify(skipVerify bool) {
 	sharedConf.SkipVerify = skipVerify
 }
 
-// GetMaxCallRecvMsgSize returns maximum reciever message size
-func GetMaxCallRecvMsgSize() int {
-	if sharedConf.MaxCallRecvMsgSize == 0 {
-		return 10240000
+func SetCAFilePath(CAFile string) {
+	sharedConf.CAFile = CAFile
+}
+
+func GetCAFilePath() string {
+	if sharedConf.CAFile == "" {
+		projectRoot, _ := utils.RootPath()
+		sharedConf.CAFile = projectRoot + "/cert/ca.cert"
 	}
-	return sharedConf.MaxCallRecvMsgSize
+	return sharedConf.CAFile
 }
