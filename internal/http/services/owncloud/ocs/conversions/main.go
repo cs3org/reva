@@ -54,6 +54,12 @@ const (
 
 	// ShareTypeSpaceMembership represents an action regarding space members
 	ShareTypeSpaceMembership ShareType = 7
+
+	// ShareWithUserTypeUser represents a normal user
+	ShareWithUserTypeUser ShareWithUserType = 0
+
+	// ShareWithUserTypeGuest represents a guest user
+	ShareWithUserTypeGuest ShareWithUserType = 1
 )
 
 // ResourceType indicates the OCS type of the resource
@@ -77,6 +83,9 @@ func (rt ResourceType) String() (s string) {
 
 // ShareType denotes a type of share
 type ShareType int
+
+// ShareWithUserType denotes a type of user
+type ShareWithUserType int
 
 // ShareData represents https://doc.owncloud.com/server/developer_manual/core/ocs-share-api.html#response-attributes-1
 type ShareData struct {
@@ -130,6 +139,10 @@ type ShareData struct {
 	// - a UID (user id) if the share is shared with a user.
 	// - a password for public links
 	ShareWith string `json:"share_with,omitempty" xml:"share_with,omitempty"`
+	// The type of user
+	// - 0 = normal user
+	// - 1 = guest account
+	ShareWithUserType ShareWithUserType `json:"share_with_user_type" xml:"share_with_user_type"`
 	// The display name of the share recipient
 	ShareWithDisplayname string `json:"share_with_displayname,omitempty" xml:"share_with_displayname,omitempty"`
 	// Additional info to identify the share recipient, eg. the email or username
@@ -206,6 +219,11 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
 		sd.ShareType = ShareTypeUser
 		sd.ShareWith = LocalUserIDToString(share.Grantee.GetUserId())
+		if share.GetGrantee().GetUserId().Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+			sd.ShareWithUserType = ShareWithUserTypeGuest
+		} else {
+			sd.ShareWithUserType = ShareWithUserTypeUser
+		}
 	} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		sd.ShareType = ShareTypeGroup
 		sd.ShareWith = LocalGroupIDToString(share.Grantee.GetGroupId())
