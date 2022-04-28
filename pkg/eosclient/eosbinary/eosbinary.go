@@ -852,7 +852,7 @@ func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization
 	expiration := strconv.FormatInt(time.Now().Add(time.Duration(c.opt.TokenExpiry)*time.Second).Unix(), 10)
 	args := []string{"token", "--permission", a.Permissions, "--tree", "--path", p, "--expires", expiration}
 	stdout, _, err := c.executeEOS(ctx, args, auth)
-	return stdout, err
+	return strings.TrimSpace(stdout), err
 }
 
 func (c *Client) getVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {

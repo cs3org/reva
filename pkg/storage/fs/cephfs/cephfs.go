@@ -572,7 +572,7 @@ func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error 
 	user.op(func(cv *cacheVal) {
 		var file *cephfs2.File
 		defer closeFile(file)
-		if file, err = cv.mount.Open(path, os.O_CREATE | os.O_WRONLY, fs.conf.FilePerms); err != nil {
+		if file, err = cv.mount.Open(path, os.O_CREATE|os.O_WRONLY, fs.conf.FilePerms); err != nil {
 			return
 		}
 
@@ -622,6 +622,6 @@ func (fs *cephfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock
 	return errtypes.NotSupported("unimplemented")
 }
 
-func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }

@@ -29,8 +29,8 @@ import (
 
 // Options for the cephfs module
 type Options struct {
-	ClientID string `mapstructure:"client_id"`
-	Config   string `mapstructure:"config"`
+	ClientID     string `mapstructure:"client_id"`
+	Config       string `mapstructure:"config"`
 	GatewaySvc   string `mapstructure:"gatewaysvc"`
 	IndexPool    string `mapstructure:"index_pool"`
 	Keyring      string `mapstructure:"keyring"`

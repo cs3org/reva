@@ -100,7 +100,7 @@ func (fs *cephfs) getFIDPath(cv *cacheVal, path string) (fid string, err error) 
 
 	return fs.makeFIDPath(string(buffer)), err
 }
- */
+*/
 
 func calcChecksum(filepath string, mt Mount, stat Statx) (checksum string, err error) {
 	file, err := mt.Open(filepath, os.O_RDONLY, 0)
@@ -247,4 +247,4 @@ func (fs *cephfs) resolveIndex(oid string) (fullPath string, err error) {
 		currPath.Reset()
 	}
 }
- */
+*/

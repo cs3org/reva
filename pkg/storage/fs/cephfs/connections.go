@@ -109,9 +109,9 @@ func (c *connections) clearCache() {
 
 type adminConn struct {
 	// indexPoolName string
-	subvolAdmin   *admin.FSAdmin
-	adminMount    Mount
-	radosConn     *rados2.Conn
+	subvolAdmin *admin.FSAdmin
+	adminMount  Mount
+	radosConn   *rados2.Conn
 	// radosIO       *rados2.IOContext
 }
 
@@ -134,32 +134,32 @@ func newAdminConn(conf *Options) *adminConn {
 
 	// TODO: May use later for file ids
 	/*
-	pools, err := rados.ListPools()
-	if err != nil {
-		rados.Shutdown()
-		return nil
-	}
+		pools, err := rados.ListPools()
+		if err != nil {
+			rados.Shutdown()
+			return nil
+		}
 
-	var radosIO *rados2.IOContext
-	poolName := conf.IndexPool
-	if in(poolName, pools) {
-		radosIO, err = rados.OpenIOContext(poolName)
-		if err != nil {
-			rados.Shutdown()
-			return nil
+		var radosIO *rados2.IOContext
+		poolName := conf.IndexPool
+		if in(poolName, pools) {
+			radosIO, err = rados.OpenIOContext(poolName)
+			if err != nil {
+				rados.Shutdown()
+				return nil
+			}
+		} else {
+			err = rados.MakePool(poolName)
+			if err != nil {
+				rados.Shutdown()
+				return nil
+			}
+			radosIO, err = rados.OpenIOContext(poolName)
+			if err != nil {
+				rados.Shutdown()
+				return nil
+			}
 		}
-	} else {
-		err = rados.MakePool(poolName)
-		if err != nil {
-			rados.Shutdown()
-			return nil
-		}
-		radosIO, err = rados.OpenIOContext(poolName)
-		if err != nil {
-			rados.Shutdown()
-			return nil
-		}
-	}
 	*/
 
 	mount, err := cephfs2.CreateFromRados(rados)
@@ -174,7 +174,7 @@ func newAdminConn(conf *Options) *adminConn {
 		return nil
 	}
 
-	return &adminConn {
+	return &adminConn{
 		// poolName,
 		admin.NewFromConn(rados),
 		mount,
