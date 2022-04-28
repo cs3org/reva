@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 func BenchmarkWrap(b *testing.B) {
@@ -106,8 +105,12 @@ func TestUnwrapResourceID(t *testing.T) {
 			if rid != nil {
 				t.Errorf("Expected unwrap to return nil, got %v", rid)
 			}
-		case !utils.ResourceIDEqual(rid, tt.expected):
-			t.Errorf("StorageID or OpaqueID doesn't match. Expected %v, got %v", tt.expected, rid)
+		case rid == nil:
+			t.Errorf("ResourceID should not be nil. Expected %v", tt.expected)
+		case rid.StorageId != tt.expected.StorageId:
+			t.Errorf("StorageIDs don't match. Expected %v, got %v", tt.expected, rid)
+		case rid.OpaqueId != tt.expected.OpaqueId:
+			t.Errorf("StorageIDs don't match. Expected %v, got %v", tt.expected, rid)
 		}
 	}
 
