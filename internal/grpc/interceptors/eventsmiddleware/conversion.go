@@ -24,6 +24,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 // ShareCreated converts the response to an event
@@ -163,9 +164,15 @@ func FileDownloaded(r *provider.InitiateFileDownloadResponse, req *provider.Init
 }
 
 // ItemTrashed converts the response to an event
-func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest) events.ItemTrashed {
+func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, executant *user.UserId) events.ItemTrashed {
+	opaqueId := utils.ReadPlainFromOpaque(r.Opaque, "opaque_id")
 	return events.ItemTrashed{
-		FileID: req.Ref,
+		Executant: executant,
+		Ref:       req.Ref,
+		Id: &provider.ResourceId{
+			StorageId: req.Ref.GetResourceId().GetOpaqueId(),
+			OpaqueId:  opaqueId,
+		},
 	}
 }
 
