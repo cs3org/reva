@@ -14,3 +14,4 @@ address = "0.0.0.0:14000"
 # we have a locally running dataprovider
 [grpc.services.sharesstorageprovider]
 usershareprovidersvc = "0.0.0.0:17000"
+mount_id = "a0ca6a90-a365-4782-871e-d44447bbc668"

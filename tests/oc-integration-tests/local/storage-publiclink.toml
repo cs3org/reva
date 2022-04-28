@@ -16,3 +16,4 @@ address = "0.0.0.0:13000"
 # we have a locally running dataprovider
 [grpc.services.publicstorageprovider]
 gateway_addr = "0.0.0.0:19000"
+mount_id = "7993447f-687f-490d-875c-ac95e89a62a4"

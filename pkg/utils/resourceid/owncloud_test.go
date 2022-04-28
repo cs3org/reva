@@ -21,18 +21,17 @@ import (
 	"testing"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 func BenchmarkWrap(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_ = wrap("storageid", "opaqueid")
+		_ = wrap("storageid", "opaqueid", "!")
 	}
 }
 
 func TestWrap(t *testing.T) {
-	expected := "storageid" + idDelimiter + "opaqueid"
-	wrapped := wrap("storageid", "opaqueid")
+	expected := "storageid!opaqueid"
+	wrapped := wrap("storageid", "opaqueid", "!")
 
 	if wrapped != expected {
 		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
@@ -40,7 +39,7 @@ func TestWrap(t *testing.T) {
 }
 
 func TestWrapResourceID(t *testing.T) {
-	expected := "storageid" + idDelimiter + "opaqueid"
+	expected := "storageid" + _idDelimiter + "opaqueid"
 	wrapped := OwnCloudResourceIDWrap(&providerv1beta1.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"})
 
 	if wrapped != expected {
@@ -48,20 +47,46 @@ func TestWrapResourceID(t *testing.T) {
 	}
 }
 
-func BenchmarkUnwrap(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_, _ = unwrap("storageid" + idDelimiter + "opaqueid")
+func TestWrapStorageID(t *testing.T) {
+	expected := "providerid" + _providerDelimiter + "storageid"
+	wrapped := StorageIDWrap("storageid", "providerid")
+
+	if wrapped != expected {
+		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
 	}
 }
 
 func TestUnwrap(t *testing.T) {
+	expected := []string{"storageid", "opaqueid"}
+	sid, oid, err := unwrap("storageid!opaqueid", "!")
+	if err != nil {
+		t.Errorf("unwrap returned an error: %v", err)
+	}
+
+	if sid != expected[0] || oid != expected[1] {
+		t.Errorf("wrapped id doesn't have the expected format: got (%s, %s) expected %s", sid, oid, expected)
+	}
+}
+
+func BenchmarkUnwrap(b *testing.B) {
+	delimiter := "!"
+	for i := 0; i < b.N; i++ {
+		_, _, _ = unwrap("storageid"+delimiter+"opaqueid", delimiter)
+	}
+}
+
+func TestUnwrapResourceID(t *testing.T) {
 	tests := []struct {
 		input    string
 		expected *providerv1beta1.ResourceId
 	}{
 		{
-			"storageid" + idDelimiter + "opaqueid",
+			"storageid" + _idDelimiter + "opaqueid",
 			&providerv1beta1.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"},
+		},
+		{
+			"providerid" + _providerDelimiter + "storageid" + _idDelimiter + "opaqueid",
+			&providerv1beta1.ResourceId{StorageId: "providerid$storageid", OpaqueId: "opaqueid"},
 		},
 		{
 			"",
@@ -75,13 +100,54 @@ func TestUnwrap(t *testing.T) {
 
 	for _, tt := range tests {
 		rid := OwnCloudResourceIDUnwrap(tt.input)
-
-		if tt.expected == nil {
+		switch {
+		case tt.expected == nil:
 			if rid != nil {
 				t.Errorf("Expected unwrap to return nil, got %v", rid)
 			}
-		} else if !utils.ResourceIDEqual(rid, tt.expected) {
-			t.Error("StorageID or OpaqueID doesn't match")
+		case rid == nil:
+			t.Errorf("ResourceID should not be nil. Expected %v", tt.expected)
+		case rid.StorageId != tt.expected.StorageId:
+			t.Errorf("StorageIDs don't match. Expected %v, got %v", tt.expected, rid)
+		case rid.OpaqueId != tt.expected.OpaqueId:
+			t.Errorf("StorageIDs don't match. Expected %v, got %v", tt.expected, rid)
+		}
+	}
+
+}
+
+func TestUnwrapStorageID(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []string
+	}{
+		{
+			"providerid" + _providerDelimiter + "storageid",
+			[]string{"storageid", "providerid"},
+		},
+		{
+			"",
+			nil,
+		},
+		{
+			"storageid",
+			[]string{"storageid", ""},
+		},
+	}
+
+	for _, tt := range tests {
+		sid, spid := StorageIDUnwrap(tt.input)
+		switch {
+		case tt.expected == nil:
+			if sid != "" || spid != "" {
+				t.Errorf("Expected unwrap to return nil, got '%s' '%s'", sid, spid)
+			}
+		case len(tt.expected) != 2:
+			t.Error("testcase won't work with len(expected) != 2. Avoiding panic")
+		case sid != tt.expected[0]:
+			t.Errorf("StorageID doesn't match, expected '%s' got '%s'", tt.expected[0], sid)
+		case spid != tt.expected[1]:
+			t.Errorf("ProviderID doesn't match, expected '%s' got '%s'", tt.expected[1], spid)
 		}
 	}
 

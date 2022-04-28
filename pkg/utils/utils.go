@@ -38,6 +38,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/registry"
 	"github.com/cs3org/reva/v2/pkg/registry/memory"
+	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -334,7 +335,8 @@ func SplitStorageSpaceID(ssid string) (storageid, nodeid string, err error) {
 	}
 	parts := strings.SplitN(ssid, spaceIDDelimiter, 2)
 	if len(parts) == 1 {
-		return parts[0], parts[0], nil
+		p, _ := resourceid.StorageIDUnwrap(parts[0])
+		return parts[0], p, nil
 	}
 	return parts[0], parts[1], nil
 }
