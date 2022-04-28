@@ -31,10 +31,10 @@ import (
 )
 
 var (
-	conf                                   *config
-	host                                   string
-	insecure, skipverify, disableargprompt bool
-	timeout                                int64
+	conf                                                        *config
+	host                                                        string
+	insecure, skipverify, disableargprompt, insecuredatagateway bool
+	timeout                                                     int64
 
 	helpCommandOutput string
 
@@ -97,9 +97,10 @@ var (
 func init() {
 	flag.StringVar(&host, "host", "", "address of the GRPC gateway host")
 	flag.BoolVar(&insecure, "insecure", false, "disables grpc transport security")
+	flag.BoolVar(&insecuredatagateway, "insecure-data-gateway", false, "disables grpc transport security for data gateway service")
 	flag.BoolVar(&skipverify, "skip-verify", false, "whether to skip verifying the server's certificate chain and host name")
 	flag.BoolVar(&disableargprompt, "disable-arg-prompt", false, "whether to disable prompts for command arguments")
-	flag.Int64Var(&timeout, "timout", -1, "the timeout in seconds for executing the commands, -1 means no timeout")
+	flag.Int64Var(&timeout, "timeout", -1, "the timeout in seconds for executing the commands, -1 means no timeout")
 	flag.Parse()
 }
 
@@ -114,7 +115,7 @@ func main() {
 	}
 
 	client = rhttp.GetHTTPClient(
-		rhttp.Insecure(insecure),
+		rhttp.Insecure(insecuredatagateway),
 		rhttp.Timeout(time.Duration(timeout*int64(time.Hour))),
 	)
 
