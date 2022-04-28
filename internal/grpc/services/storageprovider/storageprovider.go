@@ -903,7 +903,9 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 	}
 
 	for _, i := range items {
-		i.Ref.ResourceId.StorageId = resourceid.StorageIDWrap(i.Ref.GetResourceId().GetStorageId(), s.conf.MountID)
+		if i.Ref != nil && i.Ref.ResourceId != nil {
+			i.Ref.ResourceId.StorageId = resourceid.StorageIDWrap(i.Ref.GetResourceId().GetStorageId(), s.conf.MountID)
+		}
 	}
 	res := &provider.ListRecycleResponse{
 		Status:       status.NewOK(ctx),
