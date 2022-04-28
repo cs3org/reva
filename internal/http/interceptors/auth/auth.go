@@ -56,6 +56,10 @@ import (
 // name is the Tracer name used to identify this instrumentation library.
 const tracerName = "auth"
 
+// attribute string to specify the username of the user making the request.
+// See https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/#general-identity-attributes
+const usernameAttr = "enduser.id"
+
 var userGroupsCache gcache.Cache
 
 type config struct {
@@ -198,7 +202,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 
 			u, ok := ctxpkg.ContextGetUser(ctx)
 			if ok {
-				span.SetAttributes(attribute.String("enduser.id", u.Id.OpaqueId))
+				span.SetAttributes(attribute.String(usernameAttr, u.Id.OpaqueId))
 			}
 		})
 	}

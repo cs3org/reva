@@ -47,6 +47,10 @@ import (
 // name is the Tracer name used to identify this instrumentation library.
 const tracerName = "auth"
 
+// attribute string to specify the username of the user making the request.
+// See https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/#general-identity-attributes
+const usernameAttr = "enduser.id"
+
 var userGroupsCache gcache.Cache
 var scopeExpansionCache gcache.Cache
 
@@ -113,7 +117,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 				u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, true)
 				if err == nil {
 					ctx = ctxpkg.ContextSetUser(ctx, u)
-					span.SetAttributes(attribute.String("enduser.id", u.Id.OpaqueId))
+					span.SetAttributes(attribute.String(usernameAttr, u.Id.OpaqueId))
 				}
 			}
 			return handler(ctx, req)
@@ -135,7 +139,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 
 		ctx = ctxpkg.ContextSetUser(ctx, u)
 
-		span.SetAttributes(attribute.String("enduser.id", u.Id.OpaqueId))
+		span.SetAttributes(attribute.String(usernameAttr, u.Id.OpaqueId))
 
 		return handler(ctx, req)
 	}
@@ -189,7 +193,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 					ctx = ctxpkg.ContextSetUser(ctx, u)
 					ss = newWrappedServerStream(ctx, ss)
 
-					span.SetAttributes(attribute.String("enduser.id", u.Id.OpaqueId))
+					span.SetAttributes(attribute.String(usernameAttr, u.Id.OpaqueId))
 				}
 			}
 
@@ -214,7 +218,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		ctx = ctxpkg.ContextSetUser(ctx, u)
 		wrapped := newWrappedServerStream(ctx, ss)
 
-		span.SetAttributes(attribute.String("enduser.id", u.Id.OpaqueId))
+		span.SetAttributes(attribute.String(usernameAttr, u.Id.OpaqueId))
 
 		return handler(srv, wrapped)
 	}

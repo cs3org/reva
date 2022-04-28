@@ -66,12 +66,12 @@ require (
 	github.com/wk8/go-ordered-map v0.2.0
 	go-micro.dev/v4 v4.3.1-0.20211108085239-0c2041e43908
 	go.opencensus.io v0.23.0
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.29.0
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.31.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.31.0
-	go.opentelemetry.io/otel v1.6.1
-	go.opentelemetry.io/otel/exporters/jaeger v1.4.1
-	go.opentelemetry.io/otel/sdk v1.4.1
-	go.opentelemetry.io/otel/trace v1.6.1
+	go.opentelemetry.io/otel v1.6.3
+	go.opentelemetry.io/otel/exporters/jaeger v1.6.3
+	go.opentelemetry.io/otel/sdk v1.6.3
+	go.opentelemetry.io/otel/trace v1.6.3
 	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29
 	golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
