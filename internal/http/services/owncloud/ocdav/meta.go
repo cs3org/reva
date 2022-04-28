@@ -142,6 +142,9 @@ func (h *MetaHandler) handlePathForUser(w http.ResponseWriter, r *http.Request, 
 		Status: "HTTP/1.1 200 OK",
 		Prop: []prop.PropertyXML{
 			prop.Escaped("oc:meta-path-for-user", pathRes.Path),
+			prop.Escaped("oc:id", id),
+			prop.Escaped("oc:fileid", id),
+			prop.Escaped("oc:spaceid", rid.GetStorageId()),
 		},
 	}
 	baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
