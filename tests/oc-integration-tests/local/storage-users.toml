@@ -21,6 +21,7 @@ address = "0.0.0.0:11000"
 driver = "ocis"
 expose_data_server = true
 data_server_url = "http://localhost:11001/data"
+mount_id = "1284d238-aa92-42ce-bdc4-0b0000009157"
 
 [grpc.services.storageprovider.drivers.ocis]
 root = "/var/tmp/reva/data"
