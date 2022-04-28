@@ -25,11 +25,13 @@ import (
 	"go-micro.dev/v4/util/log"
 	"google.golang.org/grpc"
 
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	v1beta12 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	revactx "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
@@ -58,6 +60,12 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		res, err := handler(ctx, req)
 		if err != nil {
 			return res, err
+		}
+
+		var executantID *user.UserId
+		u, ok := revactx.ContextGetUser(ctx)
+		if ok {
+			executantID = u.Id
 		}
 
 		var ev interface{}
@@ -98,7 +106,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		case *provider.InitiateFileUploadResponse:
 			if isSuccess(v) {
-				ev = FileUploaded(v, req.(*provider.InitiateFileUploadRequest))
+				ev = FileUploaded(v, req.(*provider.InitiateFileUploadRequest), executantID)
 			}
 		case *provider.InitiateFileDownloadResponse:
 			if isSuccess(v) {
@@ -106,11 +114,11 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		case *provider.DeleteResponse:
 			if isSuccess(v) {
-				ev = ItemTrashed(v, req.(*provider.DeleteRequest))
+				ev = ItemTrashed(v, req.(*provider.DeleteRequest), executantID)
 			}
 		case *provider.MoveResponse:
 			if isSuccess(v) {
-				ev = ItemMoved(v, req.(*provider.MoveRequest))
+				ev = ItemMoved(v, req.(*provider.MoveRequest), executantID)
 			}
 		case *provider.PurgeRecycleResponse:
 			if isSuccess(v) {
@@ -118,11 +126,11 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		case *provider.RestoreRecycleItemResponse:
 			if isSuccess(v) {
-				ev = ItemRestored(v, req.(*provider.RestoreRecycleItemRequest))
+				ev = ItemRestored(v, req.(*provider.RestoreRecycleItemRequest), executantID)
 			}
 		case *provider.RestoreFileVersionResponse:
 			if isSuccess(v) {
-				ev = FileVersionRestored(v, req.(*provider.RestoreFileVersionRequest))
+				ev = FileVersionRestored(v, req.(*provider.RestoreFileVersionRequest), executantID)
 			}
 		case *provider.CreateStorageSpaceResponse:
 			if isSuccess(v) && v.StorageSpace != nil { // TODO: Why are there CreateStorageSpaceResponses with nil StorageSpace?
