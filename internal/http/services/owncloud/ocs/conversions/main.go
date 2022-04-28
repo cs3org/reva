@@ -219,7 +219,7 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
 		sd.ShareType = ShareTypeUser
 		sd.ShareWith = LocalUserIDToString(share.Grantee.GetUserId())
-		if share.GetGrantee().GetUserId().Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		if share.GetGrantee().GetUserId().GetType() == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
 			sd.ShareWithUserType = ShareWithUserTypeGuest
 		} else {
 			sd.ShareWithUserType = ShareWithUserTypeUser
