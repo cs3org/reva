@@ -600,7 +600,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		var checksums strings.Builder
 		if md.Checksum != nil {
 			checksums.WriteString("<oc:checksum>")
-			checksums.WriteString(strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))))
+			checksums.WriteString(storageprovider.GRPC2PKGXS(md.Checksum.Type).String())
 			checksums.WriteString(":")
 			checksums.WriteString(md.Checksum.Sum)
 		}
@@ -615,9 +615,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			}
 			if e, ok := md.Opaque.Map["adler32"]; ok {
 				if checksums.Len() == 0 {
-					checksums.WriteString("<oc:checksum>ADLER32:")
+					checksums.WriteString("<oc:checksum>Adler32:")
 				} else {
-					checksums.WriteString(" ADLER32:")
+					checksums.WriteString(" Adler32:")
 				}
 				checksums.WriteString(string(e.Value))
 			}
@@ -768,7 +768,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					var checksums strings.Builder
 					if md.Checksum != nil {
 						checksums.WriteString("<oc:checksum>")
-						checksums.WriteString(strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))))
+						checksums.WriteString(storageprovider.GRPC2PKGXS(md.Checksum.Type).String())
 						checksums.WriteString(":")
 						checksums.WriteString(md.Checksum.Sum)
 					}
@@ -783,9 +783,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						}
 						if e, ok := md.Opaque.Map["adler32"]; ok {
 							if checksums.Len() == 0 {
-								checksums.WriteString("<oc:checksum>ADLER32:")
+								checksums.WriteString("<oc:checksum>Adler32:")
 							} else {
-								checksums.WriteString(" ADLER32:")
+								checksums.WriteString(" Adler32:")
 							}
 							checksums.WriteString(string(e.Value))
 						}
